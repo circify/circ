@@ -11,3 +11,4 @@ hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing" }
 rug = "1.11"
 fnv = "1.0.7"
 lazy_static = "1.4"
+rand = "0.8"
