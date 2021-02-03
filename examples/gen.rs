@@ -1,7 +1,6 @@
-mod ir;
-mod util;
-
+use circ::ir;
 use rand::distributions::Distribution;
+
 
 fn main() {
     let mut rng = rand::thread_rng();
