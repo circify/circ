@@ -10,7 +10,7 @@ pub enum Op {
     Eq,
     Let(String),
     Var(String, Sort),
-    Const(Const),
+    Const(Value),
 
     BvBinOp(BvBinOp),
     BvBinPred(BvBinPred),
@@ -210,7 +210,7 @@ pub struct BitVector {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum Const {
+pub enum Value {
     BitVector(BitVector),
     F32(f32),
     F64(f64),
@@ -219,16 +219,16 @@ pub enum Const {
     Bool(bool),
 }
 
-impl std::cmp::Eq for Const {}
-impl std::hash::Hash for Const {
+impl std::cmp::Eq for Value {}
+impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            Const::BitVector(bv) => bv.hash(state),
-            Const::F32(bv) => bv.to_bits().hash(state),
-            Const::F64(bv) => bv.to_bits().hash(state),
-            Const::Int(bv) => bv.hash(state),
-            Const::Field(bv) => bv.hash(state),
-            Const::Bool(bv) => bv.hash(state),
+            Value::BitVector(bv) => bv.hash(state),
+            Value::F32(bv) => bv.to_bits().hash(state),
+            Value::F64(bv) => bv.to_bits().hash(state),
+            Value::Int(bv) => bv.hash(state),
+            Value::Field(bv) => bv.hash(state),
+            Value::Bool(bv) => bv.hash(state),
         }
     }
 }
@@ -256,15 +256,15 @@ lazy_static! {
     static ref TERM_TYPES: RwLock<HashMap<TTerm, Sort>> = RwLock::new(HashMap::new());
 }
 
-impl Const {
+impl Value {
     fn sort(&self) -> Sort {
         match &self {
-            Const::Bool(_) => Sort::Bool,
-            Const::Field(f) => Sort::Field(f.modulus.clone()),
-            Const::Int(_) => Sort::Int,
-            Const::F64(_) => Sort::F64,
-            Const::F32(_) => Sort::F32,
-            Const::BitVector(b) => Sort::BitVector(b.width),
+            Value::Bool(_) => Sort::Bool,
+            Value::Field(f) => Sort::Field(f.modulus.clone()),
+            Value::Int(_) => Sort::Int,
+            Value::F64(_) => Sort::F64,
+            Value::F32(_) => Sort::F32,
+            Value::BitVector(b) => Sort::BitVector(b.width),
         }
     }
 }
@@ -529,7 +529,6 @@ macro_rules! term {
 // All subterms are booleans.
 pub struct BoolDist(pub usize);
 
-
 // A distribution of n usizes that sum to this value.
 // (n, sum)
 pub struct FixedAdditionPartition(usize, usize);
@@ -560,29 +559,71 @@ impl rand::distributions::Distribution<Term> for BoolDist {
         use rand::distributions::Alphanumeric;
         use rand::seq::SliceRandom;
         let ops = &[
-            Op::Const(Const::Bool(rng.gen())),
+            Op::Const(Value::Bool(rng.gen())),
             Op::Var(Alphanumeric.sample(rng).to_string(), Sort::Bool),
             Op::BoolUnOp(BoolUnOp::Not),
             Op::BoolBinOp(BoolBinOp::Implies),
             Op::BoolNaryOp(BoolNaryOp::Or),
             Op::BoolNaryOp(BoolNaryOp::And),
-            Op::BoolNaryOp(BoolNaryOp::Xor)
+            Op::BoolNaryOp(BoolNaryOp::Xor),
         ];
         let o = match self.0 {
-            1 => ops[..2].choose(rng), // arity 0
+            1 => ops[..2].choose(rng),  // arity 0
             2 => ops[2..3].choose(rng), // arity 1
-            _ => ops[2..].choose(rng), // others
-        }.unwrap().clone();
+            _ => ops[2..].choose(rng),  // others
+        }
+        .unwrap()
+        .clone();
         // Now, self.0 is a least arity+1
         let a = o.arity().unwrap_or_else(|| rng.gen_range(2..self.0));
-        let excess = self.0-1-a;
+        let excess = self.0 - 1 - a;
         let ns = FixedAdditionPartition(a, excess).sample(rng);
-        let subterms = ns.into_iter().map(|n| BoolDist(n+1).sample(rng)).collect::<Vec<_>>();
+        let subterms = ns
+            .into_iter()
+            .map(|n| BoolDist(n + 1).sample(rng))
+            .collect::<Vec<_>>();
         term(o, subterms)
     }
 }
 
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
+pub type TermSet = hashconsing::coll::HConSet<Term>;
+
+pub struct PostOrderIter {
+    // (children stacked, term)
+    stack: Vec<(bool, Term)>,
+    visited: TermSet,
+}
+
+impl PostOrderIter {
+    pub fn new(t: Term) -> Self {
+        Self {
+            stack: vec![(false, t)],
+            visited: TermSet::new(),
+        }
+    }
+}
+
+impl std::iter::Iterator for PostOrderIter {
+    type Item = Term;
+    fn next(&mut self) -> Option<Term> {
+        while let Some((children_pushed, t)) = self.stack.last() {
+            if self.visited.contains(&t) {
+                self.stack.pop();
+            } else if !children_pushed {
+                self.stack.last_mut().unwrap().0 = true;
+                let cs = self.stack.last().unwrap().1.children.clone();
+                self.stack.extend(cs.into_iter().map(|c| (false, c)));
+            } else {
+                break;
+            }
+        }
+        self.stack.pop().map(|(_, t)| {
+            self.visited.insert(t.clone());
+            t
+        })
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -601,21 +642,43 @@ mod test {
     mod type_ {
         use super::*;
 
-        #[test]
-        fn vars() {
-            let v = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
-            assert_eq!(check(v), Ok(Sort::Bool));
+        fn t() -> Term {
             let v = leaf_term(Op::Var("b".to_owned(), Sort::BitVector(4)));
-            assert_eq!(check(v.clone()), Ok(Sort::BitVector(4)));
-            let v = term![
+            term![
                 Op::BvBit(4);
                 term![
                     Op::BvConcat;
                     v,
                     term![Op::BoolToBv; leaf_term(Op::Var("c".to_owned(), Sort::Bool))]
                 ]
-            ];
+            ]
+        }
+
+        #[test]
+        fn vars() {
+            let v = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
             assert_eq!(check(v), Ok(Sort::Bool));
+            let v = leaf_term(Op::Var("b".to_owned(), Sort::BitVector(4)));
+            assert_eq!(check(v.clone()), Ok(Sort::BitVector(4)));
+            let v = t();
+            assert_eq!(check(v), Ok(Sort::Bool));
+        }
+
+        #[test]
+        fn traversal() {
+            let tt = t();
+            assert_eq!(
+                vec![
+                    Op::Var("c".to_owned(), Sort::Bool),
+                    Op::BoolToBv,
+                    Op::Var("b".to_owned(), Sort::BitVector(4)),
+                    Op::BvConcat,
+                    Op::BvBit(4),
+                ],
+                PostOrderIter::new(tt)
+                    .map(|t| t.op.clone())
+                    .collect::<Vec<_>>()
+            );
         }
     }
 }

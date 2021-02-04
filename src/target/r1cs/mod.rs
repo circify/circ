@@ -24,8 +24,16 @@ pub struct Lc {
 impl std::ops::Add<&Lc> for Lc {
     type Output = Lc;
     fn add(mut self, other: &Lc) -> Lc {
+        self += other;
+        self
+    }
+}
+
+impl std::ops::AddAssign<&Lc> for Lc {
+    fn add_assign(&mut self, other: &Lc) {
         assert_eq!(&self.modulus, &other.modulus);
-        self.constant = (self.constant + &other.constant) % &*self.modulus;
+        self.constant += &other.constant;
+        self.constant %= &*self.modulus;
         for (i, v) in &other.monomials {
             self.monomials
                 .entry(*i)
@@ -35,14 +43,103 @@ impl std::ops::Add<&Lc> for Lc {
                 })
                 .or_insert_with(|| v.clone());
         }
-        self
     }
 }
 
 impl std::ops::Add<&Integer> for Lc {
     type Output = Lc;
     fn add(mut self, other: &Integer) -> Lc {
-        self.constant = (self.constant + other) % &*self.modulus;
+        self += other;
+        self
+    }
+}
+
+impl std::ops::AddAssign<&Integer> for Lc {
+    fn add_assign(&mut self, other: &Integer) {
+        self.constant += other;
+        self.constant %= &*self.modulus;
+    }
+}
+
+impl std::ops::Add<isize> for Lc {
+    type Output = Lc;
+    fn add(mut self, other: isize) -> Lc {
+        self += other;
+        self
+    }
+}
+
+impl std::ops::AddAssign<isize> for Lc {
+    fn add_assign(&mut self, other: isize) {
+        self.constant += Integer::from(other);
+        self.constant %= &*self.modulus;
+    }
+}
+
+impl std::ops::Sub<&Lc> for Lc {
+    type Output = Lc;
+    fn sub(mut self, other: &Lc) -> Lc {
+        self -= other;
+        self
+    }
+}
+
+impl std::ops::SubAssign<&Lc> for Lc {
+    fn sub_assign(&mut self, other: &Lc) {
+        assert_eq!(&self.modulus, &other.modulus);
+        self.constant -= &other.constant;
+        self.constant %= &*self.modulus;
+        for (i, v) in &other.monomials {
+            self.monomials
+                .entry(*i)
+                .and_modify(|u| {
+                    *u -= v;
+                    *u %= &*other.modulus;
+                })
+                .or_insert_with(|| v.clone());
+        }
+    }
+}
+
+impl std::ops::Sub<&Integer> for Lc {
+    type Output = Lc;
+    fn sub(mut self, other: &Integer) -> Lc {
+        self -= other;
+        self
+    }
+}
+
+impl std::ops::SubAssign<&Integer> for Lc {
+    fn sub_assign(&mut self, other: &Integer) {
+        self.constant -= other;
+        self.constant %= &*self.modulus;
+    }
+}
+
+impl std::ops::Sub<isize> for Lc {
+    type Output = Lc;
+    fn sub(mut self, other: isize) -> Lc {
+        self -= other;
+        self
+    }
+}
+
+impl std::ops::SubAssign<isize> for Lc {
+    fn sub_assign(&mut self, other: isize) {
+        self.constant -= Integer::from(other);
+        self.constant %= &*self.modulus;
+    }
+}
+
+impl std::ops::Neg for Lc {
+    type Output = Lc;
+    fn neg(mut self) -> Lc {
+        self.constant = -self.constant;
+        self.constant %= &*self.modulus;
+        for (_, v) in &mut self.monomials {
+            *v *= Integer::from(-1);
+            *v %= &*self.modulus;
+        }
         self
     }
 }
@@ -50,12 +147,38 @@ impl std::ops::Add<&Integer> for Lc {
 impl std::ops::Mul<&Integer> for Lc {
     type Output = Lc;
     fn mul(mut self, other: &Integer) -> Lc {
-        self.constant = (self.constant * other) % &*self.modulus;
+        self *= other;
+        self
+    }
+}
+
+impl std::ops::MulAssign<&Integer> for Lc {
+    fn mul_assign(&mut self, other: &Integer) {
+        self.constant *= other;
+        self.constant %= &*self.modulus;
         for (_, v) in &mut self.monomials {
             *v *= other;
             *v %= &*self.modulus;
         }
+    }
+}
+
+impl std::ops::Mul<isize> for Lc {
+    type Output = Lc;
+    fn mul(mut self, other: isize) -> Lc {
+        self *= other;
         self
+    }
+}
+
+impl std::ops::MulAssign<isize> for Lc {
+    fn mul_assign(&mut self, other: isize) {
+        self.constant *= Integer::from(other);
+        self.constant %= &*self.modulus;
+        for (_, v) in &mut self.monomials {
+            *v *= Integer::from(other);
+            *v %= &*self.modulus;
+        }
     }
 }
 
@@ -117,10 +240,7 @@ impl<S: Clone + Hash + Eq> R1cs<S> {
             .signal_idxs
             .get(s)
             .expect("Missing signal in signal_lc");
-        self.values
-            .as_mut()
-            .expect("Missing values")
-            .insert(idx, v);
+        self.values.as_mut().expect("Missing values").insert(idx, v);
     }
 }
 
