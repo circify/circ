@@ -210,17 +210,19 @@ impl<S: Clone + Hash + Eq> R1cs<S> {
         lc.monomials.insert(*idx, Integer::from(1));
         lc
     }
-    pub fn add_signal(&mut self, s: S) {
-        self.signal_idxs.insert(s.clone(), self.next_idx);
-        self.idxs_signals.insert(
-            self.next_idx,
-            std::iter::once(s.clone()).collect::<HashSet<_>>(),
-        );
+    pub fn add_signal(&mut self, s: S, v: Option<Integer>) {
+        let n = self.next_idx;
         self.next_idx += 1;
-    }
-    pub fn ensure_signal(&mut self, s: S) {
-        if !self.signal_idxs.contains_key(&s) {
-            self.add_signal(s)
+        self.signal_idxs.insert(s.clone(), n);
+        self.idxs_signals
+            .insert(n, std::iter::once(s.clone()).collect::<HashSet<_>>());
+        match (self.values.as_mut(), v) {
+            (Some(vs), Some(v)) => {
+                vs.insert(n, v);
+            }
+            (None, None) => {}
+            (Some(_), _) => panic!("R1cs is storing values, but none provided"),
+            (_, Some(_)) => panic!("R1cs is not storing values, but one provided"),
         }
     }
     pub fn publicize(&mut self, s: &S) {
@@ -235,12 +237,22 @@ impl<S: Clone + Hash + Eq> R1cs<S> {
         assert_eq!(&self.modulus, &c.modulus);
         self.constraints.push((a, b, c));
     }
-    pub fn set_value(&mut self, s: &S, v: Integer) {
-        let idx = *self
-            .signal_idxs
-            .get(s)
-            .expect("Missing signal in signal_lc");
-        self.values.as_mut().expect("Missing values").insert(idx, v);
+    pub fn eval(&self, lc: &Lc) -> Option<Integer> {
+        self.values.as_ref().map(|values| {
+            let mut acc = lc.constant.clone();
+            for (var, coeff) in &lc.monomials {
+                let val = values
+                    .get(var)
+                    .expect("Missing value in R1cs::eval")
+                    .clone();
+                acc += val * coeff;
+                acc %= &*self.modulus;
+            }
+            acc
+        })
+    }
+    pub fn modulus(&self) -> &Integer {
+        &self.modulus
     }
 }
 
