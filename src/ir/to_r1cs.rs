@@ -121,6 +121,22 @@ impl ToR1cs {
         bits
     }
 
+    /// Given a sequence of `bits`, returns a wire which represents their sum,
+    /// `\sum_{i>0} b_i2^i`.
+    ///
+    /// If `signed` is set, then the MSB is negated; i.e., the two's-complement sum is returned.
+    fn debitify<I: ExactSizeIterator<Item = Lc>>(&self, bits: I, signed: bool) -> Lc {
+        let n = bits.len();
+        bits.enumerate().fold(self.r1cs.zero(), |sum, (i, bit)| {
+            let summand = bit * &Integer::from(2).pow(i as u32);
+            if signed && i + 1 == n {
+                sum - &summand
+            } else {
+                sum + &summand
+            }
+        })
+    }
+
     /// Given `xs`, an iterator of bit-valued wires, returns the XOR of all of them.
     fn nary_xor<I: IntoIterator<Item = Lc>>(&mut self, xs: I) -> Lc {
         let (sum, n) = xs
