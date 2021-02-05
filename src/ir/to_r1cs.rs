@@ -25,6 +25,8 @@ impl ToR1cs {
         }
     }
 
+    /// Get a new variable, with name dependent on `d`.
+    /// If values are being recorded, `value` must be provided.
     fn fresh_var<D: Display>(&mut self, ctx: &D, value: Option<Integer>) -> Lc {
         let n = format!("{}_v{}", ctx, self.next_idx);
         self.next_idx += 1;
@@ -37,6 +39,8 @@ impl ToR1cs {
         self.r1cs.constraint(b.clone(), b - 1, self.r1cs.zero());
     }
 
+    /// Get a new bit-valued variable, with name dependent on `d`.
+    /// If values are being recorded, `value` must be provided.
     fn fresh_bit<D: Display>(&mut self, ctx: &D, value: Option<Integer>) -> Lc {
         let v = self.fresh_var(ctx, value);
         self.enforce_bit(v.clone());
@@ -140,6 +144,7 @@ impl ToR1cs {
         c
     }
 
+    /// Given a bit-values `a`, returns its (boolean) not.
     fn bool_not(&mut self, a: &Lc) -> Lc {
         self.r1cs.zero() + 1 - a
     }
@@ -171,6 +176,8 @@ impl ToR1cs {
         }
     }
 
+    /// Given a bit-valued `c`, and branches `t` and `f`, returns a wire which is `t` iff `c`, else
+    /// `f`.
     fn ite(&mut self, c: Lc, t: Lc, f: &Lc) -> Lc {
         self.mul(c, t - f) + f
     }
