@@ -1,6 +1,7 @@
 use rug::Integer;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -96,7 +97,7 @@ impl std::ops::SubAssign<&Lc> for Lc {
                     *u -= v;
                     *u %= &*other.modulus;
                 })
-                .or_insert_with(|| v.clone());
+                .or_insert_with(|| -v.clone());
         }
     }
 }
@@ -182,7 +183,7 @@ impl std::ops::MulAssign<isize> for Lc {
     }
 }
 
-impl<S: Clone + Hash + Eq> R1cs<S> {
+impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     pub fn new(modulus: Integer, values: bool) -> Self {
         R1cs {
             modulus: Rc::new(modulus),
@@ -218,6 +219,7 @@ impl<S: Clone + Hash + Eq> R1cs<S> {
             .insert(n, std::iter::once(s.clone()).collect::<HashSet<_>>());
         match (self.values.as_mut(), v) {
             (Some(vs), Some(v)) => {
+                //println!("{} -> {}", &s, &v);
                 vs.insert(n, v);
             }
             (None, None) => {}
@@ -235,7 +237,51 @@ impl<S: Clone + Hash + Eq> R1cs<S> {
         assert_eq!(&self.modulus, &a.modulus);
         assert_eq!(&self.modulus, &b.modulus);
         assert_eq!(&self.modulus, &c.modulus);
-        self.constraints.push((a, b, c));
+        self.constraints.push((a.clone(), b.clone(), c.clone()));
+        self.check(&a, &b, &c);
+    }
+    pub fn format_lc(&self, a: &Lc) -> String {
+        let mut s = String::new();
+        let half_m: Integer = self.modulus().clone() / 2;
+        let abs = |i: &Integer| {
+            if i < &half_m {
+                i.clone()
+            } else {
+                self.modulus() - i.clone()
+            }
+        };
+        let sign = |i: &Integer| if i < &half_m { "+" } else { "-" };
+        let format_i = |i: &Integer| format!("{}{}", sign(i), abs(i));
+
+        s.extend(format_i(&a.constant).chars());
+        for (idx, coeff) in &a.monomials {
+            s.extend(
+                format!(
+                    " {} {}{}",
+                    sign(coeff),
+                    abs(coeff),
+                    self.idxs_signals.get(idx).unwrap().iter().next().unwrap()
+                )
+                .chars(),
+            );
+        }
+        s
+    }
+    pub fn check(&self, a: &Lc, b: &Lc, c: &Lc) {
+        let av = self.eval(a).unwrap();
+        let bv = self.eval(b).unwrap();
+        let cv = self.eval(c).unwrap();
+        if &(av.clone() * &bv % &*self.modulus) != &cv {
+            panic!(
+                "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
+                self.format_lc(a),
+                av,
+                self.format_lc(b),
+                bv,
+                self.format_lc(c),
+                cv
+            )
+        }
     }
     pub fn eval(&self, lc: &Lc) -> Option<Integer> {
         self.values.as_ref().map(|values| {
@@ -253,6 +299,13 @@ impl<S: Clone + Hash + Eq> R1cs<S> {
     }
     pub fn modulus(&self) -> &Integer {
         &self.modulus
+    }
+    pub fn check_all(&self) {
+        if self.values.is_some() {
+            for (a, b, c) in &self.constraints {
+                self.check(a, b, c)
+            }
+        }
     }
 }
 

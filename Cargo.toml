@@ -12,3 +12,7 @@ rug = "1.11"
 fnv = "1.0.7"
 lazy_static = "1.4"
 rand = "0.8"
+
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"

@@ -2,7 +2,9 @@ use hashconsing::{consign, HConsed, WHConsed};
 use lazy_static::lazy_static;
 use rug::Integer;
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::collections::HashSet;
+use std::fmt::{self, Display, Formatter};
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Op {
@@ -24,9 +26,9 @@ pub enum Op {
     BvUext(usize),
     BvSext(usize),
 
-    BoolBinOp(BoolBinOp),
+    Implies,
     BoolNaryOp(BoolNaryOp),
-    BoolUnOp(BoolUnOp),
+    Not,
     BvBit(usize),
 
     FpBinOp(FpBinOp),
@@ -66,9 +68,9 @@ impl Op {
             Op::BvConcat => None,
             Op::BvUext(_) => Some(1),
             Op::BvSext(_) => Some(1),
-            Op::BoolBinOp(_) => Some(2),
+            Op::Implies => Some(2),
             Op::BoolNaryOp(_) => None,
-            Op::BoolUnOp(_) => Some(1),
+            Op::Not => Some(1),
             Op::BvBit(_) => Some(1),
             Op::FpBinOp(_) => Some(2),
             Op::FpBinPred(_) => Some(2),
@@ -87,9 +89,42 @@ impl Op {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum BoolBinOp {
-    Implies,
+impl Display for Op {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Op::Ite => write!(f, "ite"),
+            Op::Eq => write!(f, "="),
+            Op::Let(a) => write!(f, "let {}", a),
+            Op::Var(n, _) => write!(f, "{}", n),
+            Op::Const(c) => write!(f, "{}", c),
+            Op::BvBinOp(a) => write!(f, "{}", a),
+            Op::BvBinPred(a) => write!(f, "{}", a),
+            Op::BvNaryOp(a) => write!(f, "{}", a),
+            Op::BvUnOp(a) => write!(f, "{}", a),
+            Op::BoolToBv => write!(f, "bool2bv"),
+            Op::BvExtract(a, b) => write!(f, "extract {} {}", a, b),
+            Op::BvConcat => write!(f, "concat"),
+            Op::BvUext(a) => write!(f, "uext {}", a),
+            Op::BvSext(a) => write!(f, "sext {}", a),
+            Op::Implies => write!(f, "=>"),
+            Op::BoolNaryOp(a) => write!(f, "{}", a),
+            Op::Not => write!(f, "not"),
+            Op::BvBit(a) => write!(f, "bit {}", a),
+            Op::FpBinOp(a) => write!(f, "{}", a),
+            Op::FpBinPred(a) => write!(f, "{}", a),
+            Op::FpUnPred(a) => write!(f, "{}", a),
+            Op::FpUnOp(a) => write!(f, "{}", a),
+            Op::BvToFp => write!(f, "bv2fp"),
+            Op::UbvToFp(a) => write!(f, "ubv2fp {}", a),
+            Op::SbvToFp(a) => write!(f, "sbv2fp {}", a),
+            Op::FpToFp(a) => write!(f, "fp2fp {}", a),
+            Op::PfUnOp(a) => write!(f, "{}", a),
+            Op::PfNaryOp(a) => write!(f, "{}", a),
+            Op::ConstArray(_) => write!(f, "const-array"),
+            Op::Select => write!(f, "select"),
+            Op::Store => write!(f, "store"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -99,9 +134,14 @@ pub enum BoolNaryOp {
     Or,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum BoolUnOp {
-    Not,
+impl Display for BoolNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BoolNaryOp::And => write!(f, "and"),
+            BoolNaryOp::Or => write!(f, "or"),
+            BoolNaryOp::Xor => write!(f, "xor"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -112,6 +152,19 @@ pub enum BvBinOp {
     Shl,
     Ashr,
     Lshr,
+}
+
+impl Display for BvBinOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BvBinOp::Sub => write!(f, "bvsub"),
+            BvBinOp::Udiv => write!(f, "bvudiv"),
+            BvBinOp::Urem => write!(f, "bvurem"),
+            BvBinOp::Shl => write!(f, "bvshl"),
+            BvBinOp::Ashr => write!(f, "bvashr"),
+            BvBinOp::Lshr => write!(f, "bvlshr"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -126,6 +179,21 @@ pub enum BvBinPred {
     Sge,
 }
 
+impl Display for BvBinPred {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BvBinPred::Ult => write!(f, "bvult"),
+            BvBinPred::Ugt => write!(f, "bvugt"),
+            BvBinPred::Ule => write!(f, "bvule"),
+            BvBinPred::Uge => write!(f, "bvuge"),
+            BvBinPred::Slt => write!(f, "bvslt"),
+            BvBinPred::Sgt => write!(f, "bvsgt"),
+            BvBinPred::Sle => write!(f, "bvsle"),
+            BvBinPred::Sge => write!(f, "bvsge"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BvNaryOp {
     Add,
@@ -135,11 +203,33 @@ pub enum BvNaryOp {
     Xor,
 }
 
+impl Display for BvNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BvNaryOp::Add => write!(f, "bvadd"),
+            BvNaryOp::Mul => write!(f, "bvmul"),
+            BvNaryOp::Or => write!(f, "bvor"),
+            BvNaryOp::And => write!(f, "bvand"),
+            BvNaryOp::Xor => write!(f, "bvxor"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BvUnOp {
     Not,
     Neg,
 }
+
+impl Display for BvUnOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            BvUnOp::Not => write!(f, "bvnot"),
+            BvUnOp::Neg => write!(f, "bvneg"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum FpBinOp {
     Add,
@@ -151,12 +241,37 @@ pub enum FpBinOp {
     Min,
 }
 
+impl Display for FpBinOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            FpBinOp::Add => write!(f, "fpadd"),
+            FpBinOp::Mul => write!(f, "fpmul"),
+            FpBinOp::Sub => write!(f, "fpsub"),
+            FpBinOp::Div => write!(f, "fpdiv"),
+            FpBinOp::Rem => write!(f, "fprem"),
+            FpBinOp::Max => write!(f, "fpmax"),
+            FpBinOp::Min => write!(f, "fpmin"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum FpUnOp {
     Neg,
     Abs,
     Sqrt,
     Round,
+}
+
+impl Display for FpUnOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            FpUnOp::Neg => write!(f, "fpneg"),
+            FpUnOp::Abs => write!(f, "fpabs"),
+            FpUnOp::Sqrt => write!(f, "fpsqrt"),
+            FpUnOp::Round => write!(f, "fpround"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -166,6 +281,17 @@ pub enum FpBinPred {
     Eq,
     Ge,
     Gt,
+}
+impl Display for FpBinPred {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            FpBinPred::Le => write!(f, "fple"),
+            FpBinPred::Lt => write!(f, "fplt"),
+            FpBinPred::Eq => write!(f, "fpeq"),
+            FpBinPred::Ge => write!(f, "fpge"),
+            FpBinPred::Gt => write!(f, "fpgt"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -179,10 +305,33 @@ pub enum FpUnPred {
     Positive,
 }
 
+impl Display for FpUnPred {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            FpUnPred::Normal => write!(f, "fpnormal"),
+            FpUnPred::Subnormal => write!(f, "fpsubnormal"),
+            FpUnPred::Zero => write!(f, "fpzero"),
+            FpUnPred::Infinite => write!(f, "fpinfinite"),
+            FpUnPred::Nan => write!(f, "fpnan"),
+            FpUnPred::Negative => write!(f, "fpnegative"),
+            FpUnPred::Positive => write!(f, "fppositive"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum PfNaryOp {
     Add,
     Mul,
+}
+
+impl Display for PfNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            PfNaryOp::Add => write!(f, "+"),
+            PfNaryOp::Mul => write!(f, "*"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -191,22 +340,133 @@ pub enum PfUnOp {
     Recip,
 }
 
+impl Display for PfUnOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            PfUnOp::Neg => write!(f, "-"),
+            PfUnOp::Recip => write!(f, "pfrecip"),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TermData {
     pub op: Op,
     pub children: Vec<Term>,
 }
 
+impl Display for TermData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if let Op::Var(..) = &self.op {
+            write!(f, "{}", self.op)
+        } else {
+            write!(f, "({}", self.op)?;
+            for c in &self.children {
+                write!(f, " {}", c)?;
+            }
+            write!(f, ")")
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FieldElem {
     pub i: Integer,
-    pub modulus: Integer,
+    pub modulus: Arc<Integer>,
+}
+
+impl Display for FieldElem {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if self.i.significant_bits() + 1 < self.modulus.significant_bits() {
+            write!(f, "{}", self.i)
+        } else {
+            write!(f, "-{}", (*self.modulus).clone() - &self.i)
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BitVector {
     pub uint: Integer,
     pub width: usize,
+}
+
+macro_rules! bv_arith_impl {
+    ($Trait:path, $fn:ident) => {
+        impl $Trait for BitVector {
+            type Output = Self;
+            fn $fn(self, other: Self) -> Self {
+                assert_eq!(self.width, other.width);
+                BitVector {
+                    uint: (self.uint.$fn(other.uint)).keep_bits(self.width as u32),
+                    width: self.width,
+                }
+            }
+        }
+    };
+}
+
+bv_arith_impl!(std::ops::Add, add);
+bv_arith_impl!(std::ops::Sub, sub);
+bv_arith_impl!(std::ops::Mul, mul);
+bv_arith_impl!(std::ops::Div, div);
+bv_arith_impl!(std::ops::Rem, rem);
+
+impl std::ops::Shl for BitVector {
+    type Output = Self;
+    fn shl(self, other: Self) -> Self {
+        assert_eq!(self.width, other.width);
+        BitVector {
+            uint: (self.uint.shl(other.uint.to_u32().unwrap())).keep_bits(self.width as u32),
+            width: self.width,
+        }
+    }
+}
+
+impl BitVector {
+    pub fn ashr(mut self, other: Self) -> Self {
+        assert_eq!(self.width, other.width);
+        let n = other.uint.to_u32().unwrap();
+        let b = self.uint.get_bit(self.width as u32 - 1);
+        self.uint >>= n;
+        for i in 0..n {
+            self.uint.set_bit(self.width as u32 - 1 - i, b);
+        }
+        self
+    }
+    pub fn lshr(self, other: Self) -> Self {
+        assert_eq!(self.width, other.width);
+        BitVector {
+            uint: (self.uint >> other.uint.to_u32().unwrap()).keep_bits(self.width as u32),
+            width: self.width,
+        }
+    }
+    pub fn concat(self, other: Self) -> Self {
+        BitVector {
+            uint: (self.uint << other.width as u32) | other.uint,
+            width: self.width + other.width,
+        }
+    }
+    pub fn extract(self, high: usize, low: usize) -> Self {
+        BitVector {
+            uint: (self.uint >> low as u32).keep_bits((high - low + 1) as u32),
+            width: high - low + 1,
+        }
+    }
+}
+
+impl Display for BitVector {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "#b")?;
+        for i in 0..self.width {
+            write!(
+                f,
+                "#{}",
+                self.uint.get_bit((self.width - i - 1) as u32) as u8
+            )?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -217,6 +477,19 @@ pub enum Value {
     Int(Integer),
     Field(FieldElem),
     Bool(bool),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::F32(b) => write!(f, "{}", b),
+            Value::F64(b) => write!(f, "{}", b),
+            Value::Int(b) => write!(f, "{}", b),
+            Value::Field(b) => write!(f, "{}", b),
+            Value::BitVector(b) => write!(f, "{}", b),
+        }
+    }
 }
 
 impl std::cmp::Eq for Value {}
@@ -239,7 +512,7 @@ pub enum Sort {
     F32,
     F64,
     Int,
-    Field(Integer),
+    Field(Arc<Integer>),
     Bool,
     Array(Box<Sort>, Box<Sort>),
 }
@@ -257,7 +530,7 @@ lazy_static! {
 }
 
 impl Value {
-    fn sort(&self) -> Sort {
+    pub fn sort(&self) -> Sort {
         match &self {
             Value::Bool(_) => Sort::Bool,
             Value::Field(f) => Sort::Field(f.modulus.clone()),
@@ -265,6 +538,20 @@ impl Value {
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
             Value::BitVector(b) => Sort::BitVector(b.width),
+        }
+    }
+    pub fn as_bool(&self) -> bool {
+        if let Value::Bool(b) = self {
+            *b
+        } else {
+            panic!("Not a bool: {}", self)
+        }
+    }
+    pub fn as_bv(&self) -> &BitVector {
+        if let Value::BitVector(b) = self {
+            b
+        } else {
+            panic!("Not a bit-vec: {}", self)
         }
     }
 }
@@ -408,7 +695,7 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
                         .map(Sort::BitVector),
                     (Op::BvSext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
                     (Op::BvUext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
-                    (Op::BoolBinOp(_), &[a, b]) => {
+                    (Op::Implies, &[a, b]) => {
                         let ctx = "bool binary op";
                         bool_or(a, ctx)
                             .and_then(|_| eq_or(a, b, ctx))
@@ -420,7 +707,7 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
                             .and_then(|t| bool_or(t, ctx))
                             .map(|a| a.clone())
                     }
-                    (Op::BoolUnOp(_), &[a]) => bool_or(a, "bool unary op").map(|a| a.clone()),
+                    (Op::Not, &[a]) => bool_or(a, "bool unary op").map(|a| a.clone()),
                     (Op::BvBit(i), &[Sort::BitVector(w)]) => {
                         if i < w {
                             Ok(Sort::Bool)
@@ -489,6 +776,61 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
         .clone())
 }
 
+pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
+    let mut vs = TermMap::<Value>::new();
+    for c in PostOrderIter::new(t.clone()) {
+        let v = match &c.op {
+            Op::Var(n, _) => h.get(n).unwrap().clone(),
+            Op::Eq => {
+                Value::Bool(vs.get(&c.children[0]).unwrap() == vs.get(&c.children[1]).unwrap())
+            }
+            Op::Not => Value::Bool(!vs.get(&c.children[0]).unwrap().as_bool()),
+            Op::Implies => Value::Bool(
+                !vs.get(&c.children[0]).unwrap().as_bool()
+                    || vs.get(&c.children[1]).unwrap().as_bool(),
+            ),
+            Op::BoolNaryOp(BoolNaryOp::Or) => {
+                Value::Bool(c.children.iter().any(|c| vs.get(c).unwrap().as_bool()))
+            }
+            Op::BoolNaryOp(BoolNaryOp::And) => {
+                Value::Bool(c.children.iter().all(|c| vs.get(c).unwrap().as_bool()))
+            }
+            Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
+                c.children
+                    .iter()
+                    .map(|c| vs.get(c).unwrap().as_bool())
+                    .fold(false, std::ops::BitXor::bitxor),
+            ),
+            Op::BvBit(i) => Value::Bool(
+                vs.get(&c.children[0])
+                    .unwrap()
+                    .as_bv()
+                    .uint
+                    .get_bit(*i as u32),
+            ),
+            Op::BvConcat => Value::BitVector({
+                let mut it = c
+                    .children
+                    .iter()
+                    .map(|c| vs.get(c).unwrap().as_bv().clone());
+                let f = it.next().unwrap();
+                it.fold(f, BitVector::concat)
+            }),
+            Op::BvExtract(h, l) => Value::BitVector(
+                vs.get(&c.children[0])
+                    .unwrap()
+                    .as_bv()
+                    .clone()
+                    .extract(*h, *l),
+            ),
+            Op::Const(v) => v.clone(),
+            o => unimplemented!("eval: {:?}", o),
+        };
+        vs.insert(c.clone(), v);
+    }
+    vs.get(t).unwrap().clone()
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct TypeError {
     op: Op,
@@ -519,6 +861,7 @@ pub fn term(op: Op, children: Vec<Term>) -> Term {
     t
 }
 
+#[macro_export]
 macro_rules! term {
     ($x:expr; $($y:expr),+) => {
         term($x, vec![$($y),+])
@@ -531,8 +874,8 @@ pub struct BoolDist(pub usize);
 
 // A distribution of n usizes that sum to this value.
 // (n, sum)
-pub struct FixedAdditionPartition(usize, usize);
-impl rand::distributions::Distribution<Vec<usize>> for FixedAdditionPartition {
+pub struct Sum(usize, usize);
+impl rand::distributions::Distribution<Vec<usize>> for Sum {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Vec<usize> {
         use rand::seq::SliceRandom;
         let mut acc = self.1;
@@ -556,13 +899,17 @@ impl rand::distributions::Distribution<Vec<usize>> for FixedAdditionPartition {
 
 impl rand::distributions::Distribution<Term> for BoolDist {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Term {
-        use rand::distributions::Alphanumeric;
         use rand::seq::SliceRandom;
         let ops = &[
             Op::Const(Value::Bool(rng.gen())),
-            Op::Var(Alphanumeric.sample(rng).to_string(), Sort::Bool),
-            Op::BoolUnOp(BoolUnOp::Not),
-            Op::BoolBinOp(BoolBinOp::Implies),
+            Op::Var(
+                std::str::from_utf8(&[b'a' + rng.gen_range(0..26)])
+                    .unwrap()
+                    .to_owned(),
+                Sort::Bool,
+            ),
+            Op::Not,
+            Op::Implies,
             Op::BoolNaryOp(BoolNaryOp::Or),
             Op::BoolNaryOp(BoolNaryOp::And),
             Op::BoolNaryOp(BoolNaryOp::Xor),
@@ -577,7 +924,7 @@ impl rand::distributions::Distribution<Term> for BoolDist {
         // Now, self.0 is a least arity+1
         let a = o.arity().unwrap_or_else(|| rng.gen_range(2..self.0));
         let excess = self.0 - 1 - a;
-        let ns = FixedAdditionPartition(a, excess).sample(rng);
+        let ns = Sum(a, excess).sample(rng);
         let subterms = ns
             .into_iter()
             .map(|n| BoolDist(n + 1).sample(rng))
@@ -623,6 +970,13 @@ impl std::iter::Iterator for PostOrderIter {
             t
         })
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Constraints {
+    pub assertions: Vec<Term>,
+    pub public_inputs: HashSet<String>,
+    pub values: Option<HashMap<String, Value>>,
 }
 
 #[cfg(test)]
