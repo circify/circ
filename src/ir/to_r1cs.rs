@@ -357,7 +357,7 @@ impl ToR1cs {
 
     /// Shift `x` left by `2^y`, if bit-valued `c` is true.
     fn const_pow_shift_bv(&mut self, x: &Lc, y: usize, c: Lc) -> Lc {
-        self.ite(c, x.clone() * (1 << y), x)
+        self.ite(c, x.clone() * (1 << (1 << y)), x)
     }
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
@@ -385,6 +385,7 @@ impl ToR1cs {
 
     fn embed_bv(&mut self, bv: Term) {
         //println!("Embed: {}", bv);
+        //let bv2=  bv.clone();
         if let Sort::BitVector(n) = check(bv.clone()).unwrap() {
             if !self.bvs.contains_key(&bv) {
                 match &bv.op {
@@ -532,7 +533,7 @@ impl ToR1cs {
                                 let q = self.fresh_var("div_q", q_v);
                                 let r = self.fresh_var("div_q", r_v);
                                 let qb = self.bitify("div_q", &q, n, false);
-                                let rb = self.bitify("div_r", &q, n, false);
+                                let rb = self.bitify("div_r", &r, n, false);
                                 self.r1cs.constraint(q.clone(), b.clone(), a - &r);
                                 let is_gt = self.bv_ge(b - 1, &r, n);
                                 let is_not_ge = self.bool_not(&is_gt);
@@ -579,11 +580,20 @@ impl ToR1cs {
                     _ => panic!("Non-bv in embed_bv: {}", bv),
                 }
             }
-        //            self.r1cs.eval(self.get_bv_uint(&bv2)).map(|v| {
-        //                println!("-> {:b}", v);
-        //            });
+        //self.r1cs.eval(self.get_bv_uint(&bv2)).map(|v| {
+        //    println!("-> {:b}", v);
+        //});
         } else {
             panic!("{} is not a bit-vector in embed_bv", bv);
+        }
+    }
+
+    #[allow(dead_code)]
+    fn debug_lc<D: Display + ?Sized>(&self, tag: &D, lc: &Lc) {
+        if let Some(v) = self.r1cs.eval(lc) {
+            println!("{}: {} (value {},{:b})", tag, self.r1cs.format_lc(lc), v, v);
+        } else {
+            println!("{}: {} (novalue)", tag, self.r1cs.format_lc(lc));
         }
     }
 
@@ -806,12 +816,105 @@ mod test {
                 .into_iter()
                 .collect(),
             ),
-            assertions: vec![
-                term![Op::Not; term![Op::Eq; leaf_term(Op::Const(Value::BitVector(BitVector::new(Integer::from(0b10110), 8)))),
-                              term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]],
-            ],
+            assertions: vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
+                              term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
         };
         let r1cs = to_r1cs(cs, Integer::from(1014088787));
         r1cs.check_all();
+    }
+
+    fn bv(u: usize, w: usize) -> Term {
+        leaf_term(Op::Const(Value::BitVector(BitVector::new(
+            Integer::from(u),
+            w,
+        ))))
+    }
+
+    fn const_test(term: Term) {
+        let cs = Constraints {
+            public_inputs: HashSet::new(),
+            values: Some(HashMap::new()),
+            assertions: vec![term],
+        };
+        let r1cs = to_r1cs(cs, Integer::from(1014088787));
+        r1cs.check_all();
+    }
+
+    #[test]
+    fn div_test() {
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b1111,4)],
+            bv(0b0001, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b0001,4)],
+            bv(0b1111, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b0111,4), bv(0b0000,4)],
+            bv(0b1111, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b0010,4)],
+            bv(0b0111, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Urem); bv(0b1111,4), bv(0b1111,4)],
+            bv(0b0000, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Urem); bv(0b1111,4), bv(0b0001,4)],
+            bv(0b0000, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Urem); bv(0b0111,4), bv(0b0000,4)],
+            bv(0b0111, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Urem); bv(0b1111,4), bv(0b0010,4)],
+            bv(0b0001, 4)
+        ]);
+    }
+
+    #[test]
+    fn sh_test() {
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Shl); bv(0b1111,4), bv(0b0011,4)],
+            bv(0b1000, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Shl); bv(0b1101,4), bv(0b0010,4)],
+            bv(0b0100, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv(0b1111,4), bv(0b0011,4)],
+            bv(0b1111, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv(0b0111,4), bv(0b0010,4)],
+            bv(0b0001, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Lshr); bv(0b0111,4), bv(0b0010,4)],
+            bv(0b0001, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Lshr); bv(0b1111,4), bv(0b0011,4)],
+            bv(0b0001, 4)
+        ]);
     }
 }

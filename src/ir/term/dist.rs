@@ -172,6 +172,8 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
                     Op::BvUext(rng.gen_range(0..w)),
                     Op::BvSext(rng.gen_range(0..w)),
                     Op::BvBinOp(BvBinOp::Sub),
+                    Op::BvBinOp(BvBinOp::Udiv),
+                    Op::BvBinOp(BvBinOp::Urem),
                     Op::BvNaryOp(BvNaryOp::Or),
                     Op::BvNaryOp(BvNaryOp::And),
                     Op::BvNaryOp(BvNaryOp::Xor),

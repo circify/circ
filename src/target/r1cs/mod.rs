@@ -1,5 +1,5 @@
-use rug::Integer;
 use rug::ops::{RemRounding, RemRoundingAssign};
+use rug::Integer;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -272,7 +272,6 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let av = self.eval(a).unwrap();
         let bv = self.eval(b).unwrap();
         let cv = self.eval(c).unwrap();
-        dbg!(&av, &bv, &cv, &self.modulus);
         if &((av.clone() * &bv).rem_floor(&*self.modulus)) != &cv {
             panic!(
                 "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
