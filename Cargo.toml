@@ -16,3 +16,6 @@ rand = "0.8"
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
+
+[profile.release]
+#debug = true
