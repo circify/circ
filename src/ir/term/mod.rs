@@ -6,6 +6,11 @@ use std::collections::HashSet;
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, RwLock};
 
+pub mod bv;
+pub mod dist;
+
+pub use bv::BitVector;
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Op {
     Ite,
@@ -352,16 +357,16 @@ impl Display for PfUnOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TermData {
     pub op: Op,
-    pub children: Vec<Term>,
+    pub cs: Vec<Term>,
 }
 
 impl Display for TermData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if let Op::Var(..) = &self.op {
+        if self.op.arity() == Some(0) {
             write!(f, "{}", self.op)
         } else {
             write!(f, "({}", self.op)?;
-            for c in &self.children {
+            for c in &self.cs {
                 write!(f, " {}", c)?;
             }
             write!(f, ")")
@@ -382,90 +387,6 @@ impl Display for FieldElem {
         } else {
             write!(f, "-{}", (*self.modulus).clone() - &self.i)
         }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct BitVector {
-    pub uint: Integer,
-    pub width: usize,
-}
-
-macro_rules! bv_arith_impl {
-    ($Trait:path, $fn:ident) => {
-        impl $Trait for BitVector {
-            type Output = Self;
-            fn $fn(self, other: Self) -> Self {
-                assert_eq!(self.width, other.width);
-                BitVector {
-                    uint: (self.uint.$fn(other.uint)).keep_bits(self.width as u32),
-                    width: self.width,
-                }
-            }
-        }
-    };
-}
-
-bv_arith_impl!(std::ops::Add, add);
-bv_arith_impl!(std::ops::Sub, sub);
-bv_arith_impl!(std::ops::Mul, mul);
-bv_arith_impl!(std::ops::Div, div);
-bv_arith_impl!(std::ops::Rem, rem);
-
-impl std::ops::Shl for BitVector {
-    type Output = Self;
-    fn shl(self, other: Self) -> Self {
-        assert_eq!(self.width, other.width);
-        BitVector {
-            uint: (self.uint.shl(other.uint.to_u32().unwrap())).keep_bits(self.width as u32),
-            width: self.width,
-        }
-    }
-}
-
-impl BitVector {
-    pub fn ashr(mut self, other: Self) -> Self {
-        assert_eq!(self.width, other.width);
-        let n = other.uint.to_u32().unwrap();
-        let b = self.uint.get_bit(self.width as u32 - 1);
-        self.uint >>= n;
-        for i in 0..n {
-            self.uint.set_bit(self.width as u32 - 1 - i, b);
-        }
-        self
-    }
-    pub fn lshr(self, other: Self) -> Self {
-        assert_eq!(self.width, other.width);
-        BitVector {
-            uint: (self.uint >> other.uint.to_u32().unwrap()).keep_bits(self.width as u32),
-            width: self.width,
-        }
-    }
-    pub fn concat(self, other: Self) -> Self {
-        BitVector {
-            uint: (self.uint << other.width as u32) | other.uint,
-            width: self.width + other.width,
-        }
-    }
-    pub fn extract(self, high: usize, low: usize) -> Self {
-        BitVector {
-            uint: (self.uint >> low as u32).keep_bits((high - low + 1) as u32),
-            width: high - low + 1,
-        }
-    }
-}
-
-impl Display for BitVector {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "#b")?;
-        for i in 0..self.width {
-            write!(
-                f,
-                "#{}",
-                self.uint.get_bit((self.width - i - 1) as u32) as u8
-            )?;
-        }
-        Ok(())
     }
 }
 
@@ -517,6 +438,30 @@ pub enum Sort {
     Array(Box<Sort>, Box<Sort>),
 }
 
+impl Sort {
+    pub fn as_bv(&self) -> usize {
+        if let Sort::BitVector(w) = self {
+            *w
+        } else {
+            panic!("{} is not a bit-vector", self)
+        }
+    }
+}
+
+impl Display for Sort {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Sort::Bool => write!(f, "bool"),
+            Sort::BitVector(n) => write!(f, "(bv {})", n),
+            Sort::Int => write!(f, "int"),
+            Sort::F32 => write!(f, "f32"),
+            Sort::F64 => write!(f, "f64"),
+            Sort::Field(i) => write!(f, "(mod {})", i),
+            Sort::Array(k, v) => write!(f, "(array {} {})", k, v),
+        }
+    }
+}
+
 pub type Term = HConsed<TermData>;
 // "Temporary" terms.
 pub type TTerm = WHConsed<TermData>;
@@ -537,9 +482,10 @@ impl Value {
             Value::Int(_) => Sort::Int,
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
-            Value::BitVector(b) => Sort::BitVector(b.width),
+            Value::BitVector(b) => Sort::BitVector(b.width()),
         }
     }
+    #[track_caller]
     pub fn as_bool(&self) -> bool {
         if let Value::Bool(b) = self {
             *b
@@ -547,6 +493,7 @@ impl Value {
             panic!("Not a bool: {}", self)
         }
     }
+    #[track_caller]
     pub fn as_bv(&self) -> &BitVector {
         if let Value::BitVector(b) = self {
             b
@@ -621,7 +568,7 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
     }
     {
         let mut term_tys = TERM_TYPES.write().unwrap();
-        // to_check is a stack of (node, children checked) pairs.
+        // to_check is a stack of (node, cs checked) pairs.
         let mut to_check = vec![(t.clone(), false)];
         while to_check.len() > 0 {
             let back = to_check.last_mut().unwrap();
@@ -640,13 +587,13 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
             }
             if !back.1 {
                 back.1 = true;
-                for c in back.0.children.clone() {
+                for c in back.0.cs.clone() {
                     to_check.push((c, false));
                 }
             } else {
                 let tys = back
                     .0
-                    .children
+                    .cs
                     .iter()
                     .map(|c| term_tys.get(&c.to_weak()).unwrap())
                     .collect::<Vec<_>>();
@@ -781,51 +728,101 @@ pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
     for c in PostOrderIter::new(t.clone()) {
         let v = match &c.op {
             Op::Var(n, _) => h.get(n).unwrap().clone(),
-            Op::Eq => {
-                Value::Bool(vs.get(&c.children[0]).unwrap() == vs.get(&c.children[1]).unwrap())
-            }
-            Op::Not => Value::Bool(!vs.get(&c.children[0]).unwrap().as_bool()),
+            Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
+            Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
             Op::Implies => Value::Bool(
-                !vs.get(&c.children[0]).unwrap().as_bool()
-                    || vs.get(&c.children[1]).unwrap().as_bool(),
+                !vs.get(&c.cs[0]).unwrap().as_bool() || vs.get(&c.cs[1]).unwrap().as_bool(),
             ),
             Op::BoolNaryOp(BoolNaryOp::Or) => {
-                Value::Bool(c.children.iter().any(|c| vs.get(c).unwrap().as_bool()))
+                Value::Bool(c.cs.iter().any(|c| vs.get(c).unwrap().as_bool()))
             }
             Op::BoolNaryOp(BoolNaryOp::And) => {
-                Value::Bool(c.children.iter().all(|c| vs.get(c).unwrap().as_bool()))
+                Value::Bool(c.cs.iter().all(|c| vs.get(c).unwrap().as_bool()))
             }
             Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
-                c.children
-                    .iter()
+                c.cs.iter()
                     .map(|c| vs.get(c).unwrap().as_bool())
                     .fold(false, std::ops::BitXor::bitxor),
             ),
-            Op::BvBit(i) => Value::Bool(
-                vs.get(&c.children[0])
-                    .unwrap()
-                    .as_bv()
-                    .uint
-                    .get_bit(*i as u32),
-            ),
+            Op::BvBit(i) => {
+                Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32))
+            }
             Op::BvConcat => Value::BitVector({
-                let mut it = c
-                    .children
-                    .iter()
-                    .map(|c| vs.get(c).unwrap().as_bv().clone());
+                let mut it = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
                 let f = it.next().unwrap();
                 it.fold(f, BitVector::concat)
             }),
-            Op::BvExtract(h, l) => Value::BitVector(
-                vs.get(&c.children[0])
-                    .unwrap()
-                    .as_bv()
-                    .clone()
-                    .extract(*h, *l),
-            ),
+            Op::BvExtract(h, l) => {
+                Value::BitVector(vs.get(&c.cs[0]).unwrap().as_bv().clone().extract(*h, *l))
+            }
             Op::Const(v) => v.clone(),
+            Op::BvBinOp(o) => Value::BitVector({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+                let b = vs.get(&c.cs[1]).unwrap().as_bv().clone();
+                match o {
+                    BvBinOp::Udiv => a / &b,
+                    BvBinOp::Urem => a % &b,
+                    BvBinOp::Sub => a - b,
+                    BvBinOp::Ashr => a.ashr(b),
+                    BvBinOp::Lshr => a.lshr(b),
+                    BvBinOp::Shl => a << b,
+                }
+            }),
+            Op::BvUnOp(o) => Value::BitVector({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+                match o {
+                    BvUnOp::Not => !a,
+                    BvUnOp::Neg => -a,
+                }
+            }),
+            Op::BvNaryOp(o) => Value::BitVector({
+                let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
+                let f = xs.next().unwrap();
+                xs.fold(
+                    f,
+                    match o {
+                        BvNaryOp::Add => std::ops::Add::add,
+                        BvNaryOp::Mul => std::ops::Mul::mul,
+                        BvNaryOp::Xor => std::ops::BitXor::bitxor,
+                        BvNaryOp::Or => std::ops::BitOr::bitor,
+                        BvNaryOp::And => std::ops::BitAnd::bitand,
+                    },
+                )
+            }),
+            Op::BvSext(w) => Value::BitVector({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+                let mask = ((Integer::from(1) << *w as u32) - 1)
+                    * Integer::from(a.uint().get_bit(a.width() as u32 - 1));
+                BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
+            }),
+            Op::BvUext(w) => Value::BitVector({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+                BitVector::new(a.uint().clone(), a.width() + w)
+            }),
+            Op::Ite => if vs.get(&c.cs[0]).unwrap().as_bool() {
+                vs.get(&c.cs[1])
+            } else {
+                vs.get(&c.cs[2])
+            }
+            .unwrap()
+            .clone(),
+            Op::BvBinPred(o) => Value::Bool({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv();
+                let b = vs.get(&c.cs[1]).unwrap().as_bv();
+                match o {
+                    BvBinPred::Sge => a.as_sint() >= b.as_sint(),
+                    BvBinPred::Sgt => a.as_sint() > b.as_sint(),
+                    BvBinPred::Sle => a.as_sint() <= b.as_sint(),
+                    BvBinPred::Slt => a.as_sint() < b.as_sint(),
+                    BvBinPred::Uge => a.uint() >= b.uint(),
+                    BvBinPred::Ugt => a.uint() > b.uint(),
+                    BvBinPred::Ule => a.uint() <= b.uint(),
+                    BvBinPred::Ult => a.uint() < b.uint(),
+                }
+            }),
             o => unimplemented!("eval: {:?}", o),
         };
+        //println!("Eval {}\nAs   {}", c, v);
         vs.insert(c.clone(), v);
     }
     vs.get(t).unwrap().clone()
@@ -854,9 +851,9 @@ pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
-pub fn term(op: Op, children: Vec<Term>) -> Term {
+pub fn term(op: Op, cs: Vec<Term>) -> Term {
     use hashconsing::HashConsign;
-    let t = TERM_FACTORY.mk(TermData { op, children });
+    let t = TERM_FACTORY.mk(TermData { op, cs });
     check(t.clone()).unwrap();
     t
 }
@@ -868,76 +865,11 @@ macro_rules! term {
     };
 }
 
-// A distribution of boolean terms with some size.
-// All subterms are booleans.
-pub struct BoolDist(pub usize);
-
-// A distribution of n usizes that sum to this value.
-// (n, sum)
-pub struct Sum(usize, usize);
-impl rand::distributions::Distribution<Vec<usize>> for Sum {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Vec<usize> {
-        use rand::seq::SliceRandom;
-        let mut acc = self.1;
-        let mut ns = Vec::new();
-        assert!(acc == 0 || self.0 > 0);
-        while acc > 0 && ns.len() < self.0 {
-            let x = rng.gen_range(0..acc);
-            acc -= x;
-            ns.push(x);
-        }
-        while ns.len() < self.0 {
-            ns.push(0);
-        }
-        if acc > 0 {
-            *ns.last_mut().unwrap() += acc;
-        }
-        ns.shuffle(rng);
-        ns
-    }
-}
-
-impl rand::distributions::Distribution<Term> for BoolDist {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Term {
-        use rand::seq::SliceRandom;
-        let ops = &[
-            Op::Const(Value::Bool(rng.gen())),
-            Op::Var(
-                std::str::from_utf8(&[b'a' + rng.gen_range(0..26)])
-                    .unwrap()
-                    .to_owned(),
-                Sort::Bool,
-            ),
-            Op::Not,
-            Op::Implies,
-            Op::BoolNaryOp(BoolNaryOp::Or),
-            Op::BoolNaryOp(BoolNaryOp::And),
-            Op::BoolNaryOp(BoolNaryOp::Xor),
-        ];
-        let o = match self.0 {
-            1 => ops[..2].choose(rng),  // arity 0
-            2 => ops[2..3].choose(rng), // arity 1
-            _ => ops[2..].choose(rng),  // others
-        }
-        .unwrap()
-        .clone();
-        // Now, self.0 is a least arity+1
-        let a = o.arity().unwrap_or_else(|| rng.gen_range(2..self.0));
-        let excess = self.0 - 1 - a;
-        let ns = Sum(a, excess).sample(rng);
-        let subterms = ns
-            .into_iter()
-            .map(|n| BoolDist(n + 1).sample(rng))
-            .collect::<Vec<_>>();
-        term(o, subterms)
-    }
-}
-
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
 pub type TermSet = hashconsing::coll::HConSet<Term>;
 
 pub struct PostOrderIter {
-    // (children stacked, term)
+    // (cs stacked, term)
     stack: Vec<(bool, Term)>,
     visited: TermSet,
 }
@@ -959,7 +891,7 @@ impl std::iter::Iterator for PostOrderIter {
                 self.stack.pop();
             } else if !children_pushed {
                 self.stack.last_mut().unwrap().0 = true;
-                let cs = self.stack.last().unwrap().1.children.clone();
+                let cs = self.stack.last().unwrap().1.cs.clone();
                 self.stack.extend(cs.into_iter().map(|c| (false, c)));
             } else {
                 break;

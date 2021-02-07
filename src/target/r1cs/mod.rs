@@ -1,4 +1,5 @@
 use rug::Integer;
+use rug::ops::{RemRounding, RemRoundingAssign};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -34,13 +35,13 @@ impl std::ops::AddAssign<&Lc> for Lc {
     fn add_assign(&mut self, other: &Lc) {
         assert_eq!(&self.modulus, &other.modulus);
         self.constant += &other.constant;
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
         for (i, v) in &other.monomials {
             self.monomials
                 .entry(*i)
                 .and_modify(|u| {
                     *u += v;
-                    *u %= &*other.modulus;
+                    u.rem_floor_assign(&*other.modulus);
                 })
                 .or_insert_with(|| v.clone());
         }
@@ -58,7 +59,7 @@ impl std::ops::Add<&Integer> for Lc {
 impl std::ops::AddAssign<&Integer> for Lc {
     fn add_assign(&mut self, other: &Integer) {
         self.constant += other;
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
     }
 }
 
@@ -73,7 +74,7 @@ impl std::ops::Add<isize> for Lc {
 impl std::ops::AddAssign<isize> for Lc {
     fn add_assign(&mut self, other: isize) {
         self.constant += Integer::from(other);
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
     }
 }
 
@@ -89,13 +90,13 @@ impl std::ops::SubAssign<&Lc> for Lc {
     fn sub_assign(&mut self, other: &Lc) {
         assert_eq!(&self.modulus, &other.modulus);
         self.constant -= &other.constant;
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
         for (i, v) in &other.monomials {
             self.monomials
                 .entry(*i)
                 .and_modify(|u| {
                     *u -= v;
-                    *u %= &*other.modulus;
+                    u.rem_floor_assign(&*other.modulus);
                 })
                 .or_insert_with(|| -v.clone());
         }
@@ -113,7 +114,7 @@ impl std::ops::Sub<&Integer> for Lc {
 impl std::ops::SubAssign<&Integer> for Lc {
     fn sub_assign(&mut self, other: &Integer) {
         self.constant -= other;
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
     }
 }
 
@@ -128,7 +129,7 @@ impl std::ops::Sub<isize> for Lc {
 impl std::ops::SubAssign<isize> for Lc {
     fn sub_assign(&mut self, other: isize) {
         self.constant -= Integer::from(other);
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
     }
 }
 
@@ -136,10 +137,10 @@ impl std::ops::Neg for Lc {
     type Output = Lc;
     fn neg(mut self) -> Lc {
         self.constant = -self.constant;
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
         for (_, v) in &mut self.monomials {
             *v *= Integer::from(-1);
-            *v %= &*self.modulus;
+            v.rem_floor_assign(&*self.modulus);
         }
         self
     }
@@ -156,10 +157,10 @@ impl std::ops::Mul<&Integer> for Lc {
 impl std::ops::MulAssign<&Integer> for Lc {
     fn mul_assign(&mut self, other: &Integer) {
         self.constant *= other;
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
         for (_, v) in &mut self.monomials {
             *v *= other;
-            *v %= &*self.modulus;
+            v.rem_floor_assign(&*self.modulus);
         }
     }
 }
@@ -175,10 +176,10 @@ impl std::ops::Mul<isize> for Lc {
 impl std::ops::MulAssign<isize> for Lc {
     fn mul_assign(&mut self, other: isize) {
         self.constant *= Integer::from(other);
-        self.constant %= &*self.modulus;
+        self.constant.rem_floor_assign(&*self.modulus);
         for (_, v) in &mut self.monomials {
             *v *= Integer::from(other);
-            *v %= &*self.modulus;
+            v.rem_floor_assign(&*self.modulus);
         }
     }
 }
@@ -253,7 +254,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let sign = |i: &Integer| if i < &half_m { "+" } else { "-" };
         let format_i = |i: &Integer| format!("{}{}", sign(i), abs(i));
 
-        s.extend(format_i(&a.constant).chars());
+        s.extend(format_i(&Integer::from(&a.constant)).chars());
         for (idx, coeff) in &a.monomials {
             s.extend(
                 format!(
@@ -271,7 +272,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let av = self.eval(a).unwrap();
         let bv = self.eval(b).unwrap();
         let cv = self.eval(c).unwrap();
-        if &(av.clone() * &bv % &*self.modulus) != &cv {
+        dbg!(&av, &bv, &cv, &self.modulus);
+        if &((av.clone() * &bv).rem_floor(&*self.modulus)) != &cv {
             panic!(
                 "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
                 self.format_lc(a),
@@ -292,7 +294,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
                     .expect("Missing value in R1cs::eval")
                     .clone();
                 acc += val * coeff;
-                acc %= &*self.modulus;
+                acc.rem_floor_assign(&*self.modulus);
             }
             acc
         })

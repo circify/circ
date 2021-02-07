@@ -2,5 +2,5 @@
 
 #[macro_use]
 pub mod ir;
-pub mod util;
 pub mod target;
+pub mod util;
