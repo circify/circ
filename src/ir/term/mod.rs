@@ -57,7 +57,7 @@ pub enum Op {
 }
 
 impl Op {
-    fn arity(&self) -> Option<usize> {
+    pub fn arity(&self) -> Option<usize> {
         match self {
             Op::Ite => Some(3),
             Op::Eq => Some(2),

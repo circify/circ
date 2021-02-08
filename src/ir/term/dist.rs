@@ -207,3 +207,40 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
         }
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    use quickcheck::{Arbitrary, Gen};
+    use rand::distributions::Distribution;
+    use rand::SeedableRng;
+
+    #[derive(Clone)]
+    pub struct ArbitraryTerm(pub Term);
+
+    impl std::fmt::Debug for ArbitraryTerm {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Arbitrary for ArbitraryTerm {
+        fn arbitrary(g: &mut Gen) -> Self {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
+            let d = FixedSizeDist {
+                bv_width: 8,
+                size: g.size(),
+                sort: Sort::Bool,
+            };
+            let t = d.sample(&mut rng);
+            ArbitraryTerm(t)
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+
+            Box::new(ts.into_iter().rev().skip(1).map(ArbitraryTerm))
+        }
+    }
+}
