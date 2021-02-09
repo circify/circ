@@ -678,6 +678,7 @@ fn bitsize(mut n: usize) -> usize {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ir::term::dist::test::*;
     use crate::ir::term::dist::*;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
@@ -753,46 +754,8 @@ mod test {
         r1cs.check_all();
     }
 
-    #[derive(Clone, Debug)]
-    struct Bool(Term, HashMap<String, Value>);
-
-    impl Arbitrary for Bool {
-        fn arbitrary(g: &mut Gen) -> Self {
-            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
-            let d = FixedSizeDist {
-                bv_width: 8,
-                size: g.size(),
-                sort: Sort::Bool,
-            };
-            let t = d.sample(&mut rng);
-            let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
-                .filter_map(|c| match &c.op {
-                    Op::Var(n, Sort::Bool) => Some((n.clone(), Value::Bool(bool::arbitrary(g)))),
-                    Op::Var(n, Sort::BitVector(w)) => Some((
-                        n.clone(),
-                        Value::BitVector(UniformBitVector(*w).sample(&mut rng)),
-                    )),
-                    _ => None,
-                })
-                .collect();
-            Bool(t, values)
-        }
-
-        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let vs = self.1.clone();
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
-
-            Box::new(
-                ts.into_iter()
-                    .rev()
-                    .skip(1)
-                    .map(move |t| Bool(t, vs.clone())),
-            )
-        }
-    }
-
     #[quickcheck]
-    fn random_bool(Bool(t, values): Bool) {
+    fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Constraints {

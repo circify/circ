@@ -67,6 +67,12 @@ mod test {
         is_flat(flatten_nary_ops(t))
     }
 
+    #[quickcheck]
+    fn flatten_semantics_random(ArbitraryTermEnv(t, vs): ArbitraryTermEnv) -> bool {
+        let tt = flatten_nary_ops(t.clone());
+        eval(&t, &vs) == eval(&tt, &vs)
+    }
+
     #[test]
     fn simple_bool() {
         for o in vec![B_AND, B_OR, B_XOR] {

@@ -243,4 +243,49 @@ pub mod test {
             Box::new(ts.into_iter().rev().skip(1).map(ArbitraryTerm))
         }
     }
+
+    #[derive(Clone)]
+    /// A term and an environment in which it can be evaluated.
+    pub struct ArbitraryTermEnv(pub Term, pub HashMap<String, Value>);
+
+    impl Arbitrary for ArbitraryTermEnv {
+        fn arbitrary(g: &mut Gen) -> Self {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
+            let d = FixedSizeDist {
+                bv_width: 8,
+                size: g.size(),
+                sort: Sort::Bool,
+            };
+            let t = d.sample(&mut rng);
+            let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
+                .filter_map(|c| match &c.op {
+                    Op::Var(n, Sort::Bool) => Some((n.clone(), Value::Bool(bool::arbitrary(g)))),
+                    Op::Var(n, Sort::BitVector(w)) => Some((
+                        n.clone(),
+                        Value::BitVector(UniformBitVector(*w).sample(&mut rng)),
+                    )),
+                    _ => None,
+                })
+                .collect();
+            ArbitraryTermEnv(t, values)
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let vs = self.1.clone();
+
+            Box::new(
+                ts.into_iter()
+                    .rev()
+                    .skip(1)
+                    .map(move |t| ArbitraryTermEnv(t, vs.clone())),
+            )
+        }
+    }
+
+    impl std::fmt::Debug for ArbitraryTermEnv {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{}\nin\n{:?}", self.0, self.1)
+        }
+    }
 }
