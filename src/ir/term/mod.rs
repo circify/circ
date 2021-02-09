@@ -474,6 +474,23 @@ lazy_static! {
     static ref TERM_TYPES: RwLock<HashMap<TTerm, Sort>> = RwLock::new(HashMap::new());
 }
 
+impl TermData {
+    pub fn as_bool_opt(&self) -> Option<bool> {
+        if let Op::Const(Value::Bool(b)) = &self.op {
+            Some(*b)
+        } else {
+            None
+        }
+    }
+    pub fn as_bv_opt(&self) -> Option<&BitVector> {
+        if let Op::Const(Value::BitVector(b)) = &self.op {
+            Some(b)
+        } else {
+            None
+        }
+    }
+}
+
 impl Value {
     pub fn sort(&self) -> Sort {
         match &self {
@@ -499,6 +516,20 @@ impl Value {
             b
         } else {
             panic!("Not a bit-vec: {}", self)
+        }
+    }
+    pub fn as_bool_opt(&self) -> Option<bool> {
+        if let Value::Bool(b) = self {
+            Some(*b)
+        } else {
+            None
+        }
+    }
+    pub fn as_bv_opt(&self) -> Option<&BitVector> {
+        if let Value::BitVector(b) = self {
+            Some(b)
+        } else {
+            None
         }
     }
 }

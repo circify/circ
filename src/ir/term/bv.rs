@@ -191,6 +191,9 @@ impl BitVector {
         r.check("new");
         r
     }
+    pub fn bit(&self, i: usize) -> bool {
+        self.uint.get_bit(i as u32)
+    }
 }
 
 impl Display for BitVector {
