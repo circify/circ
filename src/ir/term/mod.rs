@@ -8,8 +8,10 @@ use std::sync::{Arc, RwLock};
 
 pub mod bv;
 pub mod dist;
+pub mod field;
 
 pub use bv::BitVector;
+pub use field::FieldElem;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Op {
@@ -174,6 +176,7 @@ impl Display for BvBinOp {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum BvBinPred {
+    // TODO: add overflow predicates.
     Ult,
     Ugt,
     Ule,
@@ -374,22 +377,6 @@ impl Display for TermData {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct FieldElem {
-    pub i: Integer,
-    pub modulus: Arc<Integer>,
-}
-
-impl Display for FieldElem {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.i.significant_bits() + 1 < self.modulus.significant_bits() {
-            write!(f, "{}", self.i)
-        } else {
-            write!(f, "-{}", (*self.modulus).clone() - &self.i)
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum Value {
     BitVector(BitVector),
@@ -489,13 +476,20 @@ impl TermData {
             None
         }
     }
+    pub fn as_pf_opt(&self) -> Option<&FieldElem> {
+        if let Op::Const(Value::Field(b)) = &self.op {
+            Some(b)
+        } else {
+            None
+        }
+    }
 }
 
 impl Value {
     pub fn sort(&self) -> Sort {
         match &self {
             Value::Bool(_) => Sort::Bool,
-            Value::Field(f) => Sort::Field(f.modulus.clone()),
+            Value::Field(f) => Sort::Field(f.modulus().clone()),
             Value::Int(_) => Sort::Int,
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
@@ -518,6 +512,15 @@ impl Value {
             panic!("Not a bit-vec: {}", self)
         }
     }
+    #[track_caller]
+    pub fn as_pf(&self) -> &FieldElem {
+        if let Value::Field(b) = self {
+            b
+        } else {
+            panic!("Not a field-elem: {}", self)
+        }
+    }
+
     pub fn as_bool_opt(&self) -> Option<bool> {
         if let Value::Bool(b) = self {
             Some(*b)
@@ -794,8 +797,8 @@ pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
                     BvBinOp::Udiv => a / &b,
                     BvBinOp::Urem => a % &b,
                     BvBinOp::Sub => a - b,
-                    BvBinOp::Ashr => a.ashr(b),
-                    BvBinOp::Lshr => a.lshr(b),
+                    BvBinOp::Ashr => a.ashr(&b),
+                    BvBinOp::Lshr => a.lshr(&b),
                     BvBinOp::Shl => a << b,
                 }
             }),
@@ -850,6 +853,28 @@ pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
                     BvBinPred::Ule => a.uint() <= b.uint(),
                     BvBinPred::Ult => a.uint() < b.uint(),
                 }
+            }),
+            Op::BoolToBv => Value::BitVector(BitVector::new(
+                Integer::from(vs.get(&c.cs[0]).unwrap().as_bool()),
+                1,
+            )),
+            Op::PfUnOp(o) => Value::Field({
+                let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
+                match o {
+                    PfUnOp::Recip => a.recip(),
+                    PfUnOp::Neg => -a,
+                }
+            }),
+            Op::PfNaryOp(o) => Value::Field({
+                let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_pf().clone());
+                let f = xs.next().unwrap();
+                xs.fold(
+                    f,
+                    match o {
+                        PfNaryOp::Add => std::ops::Add::add,
+                        PfNaryOp::Mul => std::ops::Mul::mul,
+                    },
+                )
             }),
             o => unimplemented!("eval: {:?}", o),
         };

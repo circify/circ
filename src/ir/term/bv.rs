@@ -136,7 +136,7 @@ impl BitVector {
             location
         );
     }
-    pub fn ashr(mut self, other: Self) -> Self {
+    pub fn ashr(mut self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
         let n = other.uint.to_u32().unwrap();
         let b = self.uint.get_bit(self.width as u32 - 1);
@@ -147,7 +147,7 @@ impl BitVector {
         self.check("ashr");
         self
     }
-    pub fn lshr(self, other: Self) -> Self {
+    pub fn lshr(self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
         let r = BitVector {
             uint: (self.uint >> other.uint.to_u32().unwrap()).keep_bits(self.width as u32),
@@ -193,6 +193,18 @@ impl BitVector {
     }
     pub fn bit(&self, i: usize) -> bool {
         self.uint.get_bit(i as u32)
+    }
+    pub fn ones(n: usize) -> BitVector {
+        BitVector {
+            uint: (Integer::from(1) << n as u32) - 1,
+            width: n,
+        }
+    }
+    pub fn zeros(n: usize) -> BitVector {
+        BitVector {
+            uint: Integer::from(0),
+            width: n,
+        }
     }
 }
 

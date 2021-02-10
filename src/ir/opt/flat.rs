@@ -6,7 +6,7 @@ pub fn flatten_nary_ops(term_: Term) -> Term {
     let mut rewritten = TermMap::<Term>::new();
     for t in PostOrderIter::new(term_.clone()) {
         let new_t = match &t.op {
-            Op::BoolNaryOp(_) | Op::BvNaryOp(_) => {
+            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => {
                 let mut children = Vec::new();
                 for c in &t.cs {
                     let new_c = rewritten.get(c).unwrap();

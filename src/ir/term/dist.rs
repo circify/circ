@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 
 // A distribution of boolean terms with some size.
 // All subterms are booleans.
@@ -68,6 +69,7 @@ impl rand::distributions::Distribution<Term> for PureBoolDist {
 pub struct FixedSizeDist {
     pub size: usize,
     pub bv_width: usize,
+    pub pf_mod: Arc<Integer>,
     pub sort: Sort,
 }
 
@@ -76,12 +78,14 @@ impl FixedSizeDist {
         FixedSizeDist {
             size,
             sort: self.sort.clone(),
+            pf_mod: self.pf_mod.clone(),
             bv_width: self.bv_width,
         }
     }
     fn with_sort(&self, sort: Sort) -> Self {
         FixedSizeDist {
             size: self.size,
+            pf_mod: self.pf_mod.clone(),
             sort,
             bv_width: self.bv_width,
         }
@@ -97,6 +101,19 @@ impl rand::distributions::Distribution<BitVector> for UniformBitVector {
         BitVector::new(
             Integer::from(Integer::random_bits(self.0 as u32, &mut rug_rng)),
             self.0,
+        )
+    }
+}
+
+pub struct UniformFieldElem(pub Arc<Integer>);
+
+impl rand::distributions::Distribution<FieldElem> for UniformFieldElem {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> FieldElem {
+        let mut rug_rng = rug::rand::RandState::new_mersenne_twister();
+        rug_rng.seed(&Integer::from(rng.next_u32()));
+        FieldElem::new(
+            Integer::from(self.0.random_below_ref(&mut rug_rng)),
+            self.0.clone(),
         )
     }
 }
@@ -143,10 +160,14 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
                 let excess = self.size - 1 - a;
                 let ns = Sum(a, excess).sample(rng);
                 let sort = match o {
-                    Op::Eq => [Sort::Bool, Sort::BitVector(self.bv_width)]
-                        .choose(rng)
-                        .unwrap()
-                        .clone(),
+                    Op::Eq => [
+                        Sort::Bool,
+                        Sort::BitVector(self.bv_width),
+                        Sort::Field(self.pf_mod.clone()),
+                    ]
+                    .choose(rng)
+                    .unwrap()
+                    .clone(),
                     Op::BvBinPred(_) => Sort::BitVector(self.bv_width),
                     _ => Sort::Bool,
                 };
@@ -203,6 +224,40 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
                     .collect::<Vec<_>>();
                 term(o, subterms)
             }
+            Sort::Field(m) => {
+                let ops = &[
+                    Op::Const(Value::Field(UniformFieldElem(m.clone()).sample(rng))),
+                    Op::Var(
+                        format!(
+                            "{}_pf",
+                            std::str::from_utf8(&[b'a' + rng.gen_range(0..26)]).unwrap(),
+                        ),
+                        Sort::Field(m.clone()),
+                    ),
+                    Op::PfUnOp(PfUnOp::Neg),
+                    // Can error
+                    // Op::PfUnOp(PfUnOp::Recip),
+                    Op::PfNaryOp(PfNaryOp::Add),
+                    Op::PfNaryOp(PfNaryOp::Mul),
+                ];
+                let o = match self.size {
+                    1 => ops[..2].choose(rng),  // arity 0
+                    2 => ops[2..3].choose(rng), // arity 1
+                    _ => ops[2..].choose(rng),  // others
+                }
+                .unwrap()
+                .clone();
+                let sort = Sort::Field(m);
+                // Now, self.0 is a least arity+1
+                let a = o.arity().unwrap_or_else(|| rng.gen_range(2..self.size));
+                let excess = self.size - 1 - a;
+                let ns = Sum(a, excess).sample(rng);
+                let subterms = ns
+                    .into_iter()
+                    .map(|n| self.with_size(n + 1).with_sort(sort.clone()).sample(rng))
+                    .collect::<Vec<_>>();
+                term(o, subterms)
+            }
             s => panic!("Unsampleabl sort: {}", s),
         }
     }
@@ -230,6 +285,7 @@ pub mod test {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             let d = FixedSizeDist {
                 bv_width: 8,
+                pf_mod: Arc::new(Integer::from(super::field::TEST_FIELD)),
                 size: g.size(),
                 sort: Sort::Bool,
             };
@@ -254,6 +310,7 @@ pub mod test {
             let d = FixedSizeDist {
                 bv_width: 8,
                 size: g.size(),
+                pf_mod: Arc::new(Integer::from(super::field::TEST_FIELD)),
                 sort: Sort::Bool,
             };
             let t = d.sample(&mut rng);
@@ -263,6 +320,10 @@ pub mod test {
                     Op::Var(n, Sort::BitVector(w)) => Some((
                         n.clone(),
                         Value::BitVector(UniformBitVector(*w).sample(&mut rng)),
+                    )),
+                    Op::Var(n, Sort::Field(w)) => Some((
+                        n.clone(),
+                        Value::Field(UniformFieldElem(w.clone()).sample(&mut rng)),
                     )),
                     _ => None,
                 })

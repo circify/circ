@@ -19,6 +19,7 @@ struct ToR1cs {
     r1cs: R1cs<String>,
     bools: TermMap<Lc>,
     bvs: TermMap<BvEntry>,
+    fields: TermMap<Lc>,
     values: Option<HashMap<String, Value>>,
     public_inputs: HashSet<String>,
     next_idx: usize,
@@ -34,6 +35,7 @@ impl ToR1cs {
             r1cs: R1cs::new(modulus, values.is_some()),
             bools: TermMap::new(),
             bvs: TermMap::new(),
+            fields: TermMap::new(),
             values,
             public_inputs,
             next_idx: 0,
@@ -119,7 +121,18 @@ impl ToR1cs {
             .as_ref()
             .map(|vs| match vs.get(var).expect("missing value") {
                 Value::BitVector(b) => b.uint().clone(),
-                v => panic!("{} should be a bool, but is {:?}", var, v),
+                v => panic!("{} should be a bit-vector, but is {:?}", var, v),
+            })
+    }
+
+    /// Evaluate `var`'s value as an (integer-casted) field element
+    /// Returns `None` if values are not stored.
+    fn eval_pf(&self, var: &str) -> Option<Integer> {
+        self.values
+            .as_ref()
+            .map(|vs| match vs.get(var).expect("missing value") {
+                Value::Field(b) => b.i().clone(),
+                v => panic!("{} should be a field element, but is {:?}", var, v),
             })
     }
 
@@ -242,6 +255,9 @@ impl ToR1cs {
                 Sort::BitVector(_) => {
                     self.embed_bv(c);
                 }
+                Sort::Field(_) => {
+                    self.embed_pf(c);
+                }
                 s => panic!("Unsupported sort in embed: {:?}", s),
             }
         }
@@ -257,6 +273,11 @@ impl ToR1cs {
             Sort::BitVector(_) => {
                 let a = self.get_bv_uint(a).clone();
                 let b = self.get_bv_uint(b).clone();
+                self.are_equal(a, &b)
+            }
+            Sort::Field(_) => {
+                let a = self.get_pf(a).clone();
+                let b = self.get_pf(b).clone();
                 self.are_equal(a, &b)
             }
             s => panic!("Unimplemented sort for Eq: {:?}", s),
@@ -647,6 +668,44 @@ impl ToR1cs {
         &self.bvs.get(t).unwrap().bits
     }
 
+    fn get_pf(&self, t: &Term) -> &Lc {
+        self.fields
+            .get(t)
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+    }
+
+    fn embed_pf(&mut self, c: Term) -> &Lc {
+        //println!("Embed: {}", c);
+        // TODO: skip if already embedded
+        if !self.fields.contains_key(&c) {
+            let lc = match &c.op {
+                Op::Var(name, Sort::Field(_)) => self.fresh_var(name, self.eval_pf(name)),
+                Op::Const(Value::Field(r)) => self.r1cs.zero() + r.i(),
+                Op::PfNaryOp(o) => {
+                    let args = c.cs.iter().map(|c| self.get_pf(c));
+                    match o {
+                        PfNaryOp::Add => args.fold(self.r1cs.zero(), std::ops::Add::add),
+                        PfNaryOp::Mul => {
+                            let args = args.cloned().collect::<Vec<_>>();
+                            args.into_iter()
+                                .fold(self.r1cs.zero() + 1, |a, b| self.mul(a, b.clone()))
+                        }
+                    }
+                }
+                Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
+                Op::PfUnOp(PfUnOp::Recip) => {
+                    let x = self.get_pf(&c.cs[0]).clone();
+                    let inv_x = self.fresh_var("recip", self.r1cs.eval(&x));
+                    self.r1cs.constraint(x, inv_x.clone(), self.r1cs.zero() + 1);
+                    inv_x
+                }
+                _ => panic!("Non-field in embed_pf: {:?}", c),
+            };
+            self.fields.insert(c.clone(), lc);
+        }
+        self.fields.get(&c).unwrap()
+    }
+
     fn assert_zero(&mut self, x: Lc) {
         self.r1cs.constraint(self.r1cs.zero(), self.r1cs.zero(), x);
     }
@@ -750,7 +809,7 @@ mod test {
             values: Some(values),
             assertions: vec![t],
         };
-        let r1cs = to_r1cs(cs, Integer::from(1014088787));
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
 
@@ -763,7 +822,7 @@ mod test {
             values: Some(values),
             assertions: vec![t],
         };
-        let r1cs = to_r1cs(cs, Integer::from(1014088787));
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
 
@@ -782,7 +841,7 @@ mod test {
             assertions: vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
         };
-        let r1cs = to_r1cs(cs, Integer::from(1014088787));
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
 
@@ -799,7 +858,7 @@ mod test {
             values: Some(HashMap::new()),
             assertions: vec![term],
         };
-        let r1cs = to_r1cs(cs, Integer::from(1014088787));
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
 
