@@ -419,11 +419,6 @@ mod test {
     const B_AND: Op = Op::BoolNaryOp(BoolNaryOp::And);
     const B_OR: Op = Op::BoolNaryOp(BoolNaryOp::Or);
     const B_XOR: Op = Op::BoolNaryOp(BoolNaryOp::Xor);
-    const BV_AND: Op = Op::BvNaryOp(BvNaryOp::And);
-    const BV_OR: Op = Op::BvNaryOp(BvNaryOp::Or);
-    const BV_XOR: Op = Op::BvNaryOp(BvNaryOp::Xor);
-    const BV_ADD: Op = Op::BvNaryOp(BvNaryOp::Add);
-    const BV_MUL: Op = Op::BvNaryOp(BvNaryOp::Mul);
     const BV_SHL: Op = Op::BvBinOp(BvBinOp::Shl);
     const BV_ASHR: Op = Op::BvBinOp(BvBinOp::Ashr);
     const BV_LSHR: Op = Op::BvBinOp(BvBinOp::Lshr);
