@@ -52,8 +52,9 @@ pub enum Op {
     PfUnOp(PfUnOp),
     PfNaryOp(PfNaryOp),
 
-    // key sort
-    ConstArray(Sort),
+    // key sort, size
+    // Note that "size" assumes an order and starting point for keys.
+    ConstArray(Sort, usize),
     Select,
     Store,
 }
@@ -89,7 +90,7 @@ impl Op {
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
-            Op::ConstArray(_) => Some(1),
+            Op::ConstArray(_, _) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
         }
@@ -127,7 +128,7 @@ impl Display for Op {
             Op::FpToFp(a) => write!(f, "fp2fp {}", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::ConstArray(_) => write!(f, "const-array"),
+            Op::ConstArray(_, s) => write!(f, "const-array {}", s),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
         }
@@ -422,10 +423,13 @@ pub enum Sort {
     Int,
     Field(Arc<Integer>),
     Bool,
-    Array(Box<Sort>, Box<Sort>),
+    // key, value, size
+    // size presumes an order, and zero, for the keys.
+    Array(Box<Sort>, Box<Sort>, usize),
 }
 
 impl Sort {
+    #[track_caller]
     pub fn as_bv(&self) -> usize {
         if let Sort::BitVector(w) = self {
             *w
@@ -444,7 +448,7 @@ impl Display for Sort {
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
             Sort::Field(i) => write!(f, "(mod {})", i),
-            Sort::Array(k, v) => write!(f, "(array {} {})", k, v),
+            Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
         }
     }
 }
@@ -728,16 +732,15 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
                             .map(|a| a.clone())
                     }
                     (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
-                    (Op::ConstArray(s), &[a]) => {
-                        Ok(Sort::Array(Box::new(s.clone()), Box::new(a.clone())))
+                    (Op::ConstArray(s, n), &[a]) => {
+                        Ok(Sort::Array(Box::new(s.clone()), Box::new(a.clone()), *n))
                     }
-                    (Op::Select, &[Sort::Array(k, v), a]) => {
+                    (Op::Select, &[Sort::Array(k, v, _), a]) => {
                         eq_or(k, a, "select").map(|_| (**v).clone())
                     }
-                    (Op::Store, &[Sort::Array(k, v), a, b]) => eq_or(k, a, "store")
+                    (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
                         .and_then(|_| eq_or(v, b, "store"))
-                        .map(|_| Sort::Array(k.clone(), v.clone())),
-
+                        .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
                     (_, _) => Err(TypeErrorReason::Custom(format!("other"))),
                 })
                 .map_err(|reason| TypeError {
