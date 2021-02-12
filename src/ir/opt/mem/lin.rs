@@ -1,3 +1,14 @@
+//! Linear Memory implementation.
+//!
+//! The idea is to replace each array with a term sequence and use ITEs to linearly scan the array
+//! when needed. A SELECT produces an ITE reduce chain, a STORE produces an ITE map over the
+//! sequence.
+//!
+//! E.g., for length-3 arrays.
+//!
+//! (select A k) => (ite (= k 2) A2 (ite (= k 1) A1 A0))
+//! (store A k v) => (ite (= k 0) v A0), (ite (= k 1) v A1), (ite (= k 2))
+
 use super::visit::MemVisitor;
 use crate::ir::term::*;
 
@@ -88,12 +99,14 @@ impl MemVisitor for ArrayLinearizer {
     }
     fn visit_var(&mut self, orig: &Term, name: &String, s: &Sort) {
         if let Sort::Array(_k, v, size) = s {
-            self.sequences.insert(
-                orig.clone(),
-                (0..*size)
-                    .map(|i| leaf_term(Op::Var(format!("{}_{}", name, i), (**v).clone())))
-                    .collect(),
-            );
+            if *size <= self.size_thresh {
+                self.sequences.insert(
+                    orig.clone(),
+                    (0..*size)
+                        .map(|i| leaf_term(Op::Var(format!("{}_{}", name, i), (**v).clone())))
+                        .collect(),
+                );
+            }
         } else {
             unreachable!("should only visit array vars")
         }
@@ -108,14 +121,9 @@ pub fn linearize(t: &Term, size_thresh: usize) -> Term {
     pass.traverse(t)
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
-
-    fn v_bv(n: &str, w: usize) -> Term {
-        leaf_term(Op::Var(n.to_owned(), Sort::BitVector(w)))
-    }
 
     fn bv(u: usize, w: usize) -> Term {
         leaf_term(Op::Const(Value::BitVector(BitVector::new(
@@ -127,18 +135,20 @@ mod test {
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
             if let Sort::Array(..) = check(c).unwrap() {
-                return false
+                return false;
             }
         }
         true
     }
 
     fn count_ites(t: &Term) -> usize {
-        PostOrderIter::new(t.clone()).filter(|t| &t.op == &Op::Ite).count()
+        PostOrderIter::new(t.clone())
+            .filter(|t| &t.op == &Op::Ite)
+            .count()
     }
 
     #[test]
-    fn doesnt_crash() {
+    fn select_ite_stores() {
         let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv(0, 4)];
         let t = term![Op::Select;
             term![Op::Ite;

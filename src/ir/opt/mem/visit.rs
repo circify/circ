@@ -83,3 +83,16 @@ pub trait MemVisitor {
         cache.remove(node).unwrap()
     }
 }
+
+pub trait ProgressVisitor: MemVisitor {
+    fn reset_progress(&mut self);
+    fn check_progress(&self) -> bool;
+
+    fn traverse_to_fixpoint(&mut self, a: &Term) {
+        self.traverse(a);
+        while self.check_progress() {
+            self.reset_progress();
+            self.traverse(a);
+        }
+    }
+}
