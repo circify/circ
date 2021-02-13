@@ -1,7 +1,7 @@
 use hashconsing::{consign, HConsed, WHConsed};
 use lazy_static::lazy_static;
 use rug::Integer;
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, RwLock};
 
@@ -397,7 +397,9 @@ impl Display for Value {
             Value::Int(b) => write!(f, "{}", b),
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
-            Value::Array(_s, d, map, size) => write!(f, "(map default:{} size:{} {:?})", d, size, map),
+            Value::Array(_s, d, map, size) => {
+                write!(f, "(map default:{} size:{} {:?})", d, size, map)
+            }
         }
     }
 }

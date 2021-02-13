@@ -1,6 +1,6 @@
-mod visit;
 pub mod lin;
 pub mod obliv;
+mod visit;
 
 use crate::ir::term::*;
 

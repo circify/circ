@@ -12,6 +12,8 @@ rug = "1.11"
 fnv = "1.0.7"
 lazy_static = "1.4"
 rand = "0.8"
+rsmt2 = "0.11"
+ieee754 = "0.2"
 
 [dev-dependencies]
 quickcheck = "1"

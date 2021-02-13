@@ -1,4 +1,3 @@
-
 use crate::ir::term::*;
 
 use std::collections::HashMap;
