@@ -58,7 +58,7 @@ impl MemVisitor for ArrayLinearizer {
     fn visit_store(&mut self, orig: &Term, _a: &Term, k: &Term, v: &Term) {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
             // TODO: check for bv-indices better.  let w = check(k.clone()).unwrap().as_bv();
-            let w = check(k.clone()).unwrap().as_bv();
+            let w = check(k).as_bv();
             let ites: Vec<Term> = a_seq
                 .iter()
                 .enumerate()
@@ -77,7 +77,7 @@ impl MemVisitor for ArrayLinearizer {
     fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
             // TODO: check for bv-indices better.
-            let w = check(k.clone()).unwrap().as_bv();
+            let w = check(k).as_bv();
             let first = a_seq.first().expect("empty array in visit_select").clone();
             Some(
                 a_seq
@@ -125,16 +125,9 @@ pub fn linearize(t: &Term, size_thresh: usize) -> Term {
 mod test {
     use super::*;
 
-    fn bv(u: usize, w: usize) -> Term {
-        leaf_term(Op::Const(Value::BitVector(BitVector::new(
-            Integer::from(u),
-            w,
-        ))))
-    }
-
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
-            if let Sort::Array(..) = check(c).unwrap() {
+            if let Sort::Array(..) = check(&c) {
                 return false;
             }
         }
@@ -149,14 +142,14 @@ mod test {
 
     #[test]
     fn select_ite_stores() {
-        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv(0, 4)];
+        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), bv(3, 4), bv(1, 4)],
-              term![Op::Store; z.clone(), bv(2, 4), bv(1, 4)]
+              term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
+              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
             ],
-            bv(3, 4)
+            bv_lit(3, 4)
         ];
         let tt = linearize(&t, 6);
         assert!(array_free(&tt));

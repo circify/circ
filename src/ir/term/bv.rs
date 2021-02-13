@@ -2,7 +2,7 @@ use rug::Integer;
 
 use std::fmt::{self, Display, Formatter};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct BitVector {
     uint: Integer,
     width: usize,

@@ -35,14 +35,6 @@ mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use quickcheck_macros::quickcheck;
-    use rug::Integer;
-
-    fn bv(u: usize, w: usize) -> Term {
-        leaf_term(Op::Const(Value::BitVector(BitVector::new(
-            Integer::from(u),
-            w,
-        ))))
-    }
 
     fn bool(b: bool) -> Term {
         leaf_term(Op::Const(Value::Bool(b)))
@@ -85,8 +77,8 @@ mod test {
     #[test]
     fn simple_bv() {
         for o in vec![BV_AND, BV_OR, BV_XOR, BV_ADD, BV_MUL] {
-            let t = term![o.clone(); term![o.clone(); bv(3,5), bv(3,5)], bv(3,5)];
-            let tt = term![o.clone(); bv(3, 5), bv(3, 5), bv(3, 5)];
+            let t = term![o.clone(); term![o.clone(); bv_lit(3,5), bv_lit(3,5)], bv_lit(3,5)];
+            let tt = term![o.clone(); bv_lit(3, 5), bv_lit(3, 5), bv_lit(3, 5)];
             assert_eq!(flatten_nary_ops(t), tt);
         }
     }

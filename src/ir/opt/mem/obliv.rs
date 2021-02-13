@@ -230,14 +230,6 @@ pub fn elim_obliv(t: &Term) -> Term {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rug::Integer;
-
-    fn bv(u: usize, w: usize) -> Term {
-        leaf_term(Op::Const(Value::BitVector(BitVector::new(
-            Integer::from(u),
-            w,
-        ))))
-    }
 
     fn v_bv(n: &str, w: usize) -> Term {
         leaf_term(Op::Var(n.to_owned(), Sort::BitVector(w)))
@@ -254,14 +246,14 @@ mod test {
 
     #[test]
     fn obliv() {
-        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv(0, 4)];
+        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), bv(3, 4), bv(1, 4)],
-              term![Op::Store; z.clone(), bv(2, 4), bv(1, 4)]
+              term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
+              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
             ],
-            bv(3, 4)
+            bv_lit(3, 4)
         ];
         let tt = elim_obliv(&t);
         assert!(array_free(&tt));
@@ -269,14 +261,14 @@ mod test {
 
     #[test]
     fn not_obliv() {
-        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv(0, 4)];
+        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), v_bv("a", 4), bv(1, 4)],
-              term![Op::Store; z.clone(), bv(2, 4), bv(1, 4)]
+              term![Op::Store; z.clone(), v_bv("a", 4), bv_lit(1, 4)],
+              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
             ],
-            bv(3, 4)
+            bv_lit(3, 4)
         ];
         let tt = elim_obliv(&t);
         assert!(!array_free(&tt));

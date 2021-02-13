@@ -44,7 +44,7 @@ pub trait MemVisitor {
             let c_get = |x: &Term| cache.get(x).unwrap();
             let get = |i: usize| c_get(&t.cs[i]);
             let new_t_opt = {
-                let s = check(t.clone()).unwrap();
+                let s = check(&t);
                 match &s {
                     Sort::Array(_, _, _) => {
                         match &t.op {
@@ -67,7 +67,7 @@ pub trait MemVisitor {
                     _ => match &t.op {
                         Op::Eq => {
                             let a = get(0);
-                            if let Sort::Array(_, _, _) = check(a.clone()).unwrap() {
+                            if let Sort::Array(_, _, _) = check(&a) {
                                 self.visit_eq(&t, a, get(1))
                             } else {
                                 None

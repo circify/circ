@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 pub const TEST_FIELD: usize = 1014088787;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct FieldElem {
     i: Integer,
     modulus: Arc<Integer>,

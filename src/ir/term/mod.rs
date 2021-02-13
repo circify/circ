@@ -1,8 +1,7 @@
 use hashconsing::{consign, HConsed, WHConsed};
 use lazy_static::lazy_static;
 use rug::Integer;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, RwLock};
 
@@ -378,7 +377,7 @@ impl Display for TermData {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, PartialOrd)]
 pub enum Value {
     BitVector(BitVector),
     F32(f32),
@@ -386,6 +385,7 @@ pub enum Value {
     Int(Integer),
     Field(FieldElem),
     Bool(bool),
+    Array(Sort, Box<Value>, BTreeMap<Value, Value>, usize),
 }
 
 impl Display for Value {
@@ -397,11 +397,17 @@ impl Display for Value {
             Value::Int(b) => write!(f, "{}", b),
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
+            Value::Array(_s, d, map, size) => write!(f, "(map default:{} size:{} {:?})", d, size, map),
         }
     }
 }
 
 impl std::cmp::Eq for Value {}
+impl std::cmp::Ord for Value {
+    fn cmp(&self, o: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(o).expect("broken Value cmp")
+    }
+}
 impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
@@ -411,11 +417,17 @@ impl std::hash::Hash for Value {
             Value::Int(bv) => bv.hash(state),
             Value::Field(bv) => bv.hash(state),
             Value::Bool(bv) => bv.hash(state),
+            Value::Array(s, d, a, size) => {
+                s.hash(state);
+                d.hash(state);
+                a.hash(state);
+                size.hash(state);
+            }
         }
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub enum Sort {
     BitVector(usize),
     F32,
@@ -498,6 +510,7 @@ impl Value {
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
             Value::BitVector(b) => Sort::BitVector(b.width()),
+            Value::Array(s, _, _, _) => s.clone(),
         }
     }
     #[track_caller]
@@ -600,7 +613,7 @@ fn all_eq_or<'a, I: Iterator<Item = &'a Sort>>(
 
 /// Type-check this term, recursively as needed.
 /// All results are stored in the global type table.
-pub fn check(t: Term) -> Result<Sort, TypeError> {
+pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
     if let Some(s) = TERM_TYPES.read().unwrap().get(&t.to_weak()) {
         return Ok(s.clone());
     }
@@ -760,6 +773,11 @@ pub fn check(t: Term) -> Result<Sort, TypeError> {
         .clone())
 }
 
+#[track_caller]
+pub fn check(t: &Term) -> Sort {
+    check_raw(t).unwrap()
+}
+
 pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
@@ -913,8 +931,18 @@ pub fn leaf_term(op: Op) -> Term {
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
     use hashconsing::HashConsign;
     let t = TERM_FACTORY.mk(TermData { op, cs });
-    check(t.clone()).unwrap();
+    check(&t);
     t
+}
+
+pub fn bv_lit<T>(uint: T, width: usize) -> Term
+where
+    Integer: From<T>,
+{
+    leaf_term(Op::Const(Value::BitVector(BitVector::new(
+        uint.into(),
+        width,
+    ))))
 }
 
 #[macro_export]
@@ -970,6 +998,15 @@ pub struct Constraints {
     pub values: Option<HashMap<String, Value>>,
 }
 
+impl Constraints {
+    pub fn eval_and_save(&mut self, name: &str, term: &Term) {
+        if let Some(vs) = self.values.as_mut() {
+            let v = eval(term, vs);
+            vs.insert(name.to_owned(), v);
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1002,11 +1039,11 @@ mod test {
         #[test]
         fn vars() {
             let v = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
-            assert_eq!(check(v), Ok(Sort::Bool));
+            assert_eq!(check(&v), Ok(Sort::Bool));
             let v = leaf_term(Op::Var("b".to_owned(), Sort::BitVector(4)));
-            assert_eq!(check(v.clone()), Ok(Sort::BitVector(4)));
+            assert_eq!(check(&v), Ok(Sort::BitVector(4)));
             let v = t();
-            assert_eq!(check(v), Ok(Sort::Bool));
+            assert_eq!(check(&v), Ok(Sort::Bool));
         }
 
         #[test]

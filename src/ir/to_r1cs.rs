@@ -248,7 +248,7 @@ impl ToR1cs {
 
     fn embed(&mut self, t: Term) {
         for c in PostOrderIter::new(t) {
-            match check(c.clone()).expect("type-check error in embed") {
+            match check(&c) {
                 Sort::Bool => {
                     self.embed_bool(c);
                 }
@@ -264,7 +264,7 @@ impl ToR1cs {
     }
 
     fn embed_eq(&mut self, a: &Term, b: &Term) -> Lc {
-        match check(a.clone()).expect("type error in embed_eq") {
+        match check(a) {
             Sort::Bool => {
                 let a = self.get_bool(a).clone();
                 let b = self.get_bool(b).clone();
@@ -286,7 +286,7 @@ impl ToR1cs {
 
     fn embed_bool(&mut self, c: Term) -> &Lc {
         //println!("Embed: {}", c);
-        debug_assert!(check(c.clone()) == Ok(Sort::Bool));
+        debug_assert!(check(&c) == Sort::Bool);
         // TODO: skip if already embedded
         if !self.bools.contains_key(&c) {
             let lc = match &c.op {
@@ -329,7 +329,7 @@ impl ToR1cs {
                     a[*i].clone()
                 }
                 Op::BvBinPred(o) => {
-                    let n = check(c.cs[0].clone()).unwrap().as_bv();
+                    let n = check(&c.cs[0]).as_bv();
                     use BvBinPred::*;
                     match o {
                         Sge => self.bv_cmp(n, true, false, &c.cs[0], &c.cs[1]),
@@ -407,7 +407,7 @@ impl ToR1cs {
     fn embed_bv(&mut self, bv: Term) {
         //println!("Embed: {}", bv);
         //let bv2=  bv.clone();
-        if let Sort::BitVector(n) = check(bv.clone()).unwrap() {
+        if let Sort::BitVector(n) = check(&bv) {
             if !self.bvs.contains_key(&bv) {
                 match &bv.op {
                     Op::Var(name, Sort::BitVector(_)) => {

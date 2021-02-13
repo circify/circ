@@ -399,14 +399,6 @@ mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use quickcheck_macros::quickcheck;
-    //    use rug::Integer;
-
-    fn bv(u: usize, w: usize) -> Term {
-        leaf_term(Op::Const(Value::BitVector(BitVector::new(
-            Integer::from(u),
-            w,
-        ))))
-    }
 
     fn v_bv(n: &str, w: usize) -> Term {
         leaf_term(Op::Var(n.to_owned(), Sort::BitVector(w)))
@@ -449,15 +441,15 @@ mod test {
     #[test]
     fn shl() {
         assert_eq!(
-            fold(&term![BV_SHL; v_bv("a", 8), bv(2, 8)]),
-            term![Op::BvConcat; term![Op::BvExtract(5, 0); v_bv("a", 8)], bv(0, 2)],
+            fold(&term![BV_SHL; v_bv("a", 8), bv_lit(2, 8)]),
+            term![Op::BvConcat; term![Op::BvExtract(5, 0); v_bv("a", 8)], bv_lit(0, 2)],
         );
     }
 
     #[test]
     fn ashr() {
         assert_eq!(
-            fold(&term![BV_ASHR; v_bv("a", 8), bv(2, 8)]),
+            fold(&term![BV_ASHR; v_bv("a", 8), bv_lit(2, 8)]),
             term![Op::BvSext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
     }
@@ -465,7 +457,7 @@ mod test {
     #[test]
     fn lshr() {
         assert_eq!(
-            fold(&term![BV_LSHR; v_bv("a", 8), bv(2, 8)]),
+            fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)]),
             term![Op::BvUext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
     }

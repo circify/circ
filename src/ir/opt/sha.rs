@@ -19,8 +19,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                         && b.cs[0].op == Op::BvUnOp(BvUnOp::Not)
                         && b.cs[0].cs[0] == a.cs[0]
                     {
-                        println!("applies");
-                        if let Sort::BitVector(w) = check(t.clone()).unwrap() {
+                        if let Sort::BitVector(w) = check(&t) {
                             Some(term(
                                 Op::BvConcat,
                                 (0..w)
@@ -60,14 +59,6 @@ mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use quickcheck_macros::quickcheck;
-    use rug::Integer;
-
-    fn bv(u: usize, w: usize) -> Term {
-        leaf_term(Op::Const(Value::BitVector(BitVector::new(
-            Integer::from(u),
-            w,
-        ))))
-    }
 
     const BV_AND: Op = Op::BvNaryOp(BvNaryOp::And);
     const BV_OR: Op = Op::BvNaryOp(BvNaryOp::Or);
@@ -76,9 +67,9 @@ mod test {
 
     #[test]
     fn with_or() {
-        let a = bv(0, 1);
-        let b = bv(0, 1);
-        let c = bv(0, 1);
+        let a = bv_lit(0, 1);
+        let b = bv_lit(0, 1);
+        let c = bv_lit(0, 1);
         let t = term![BV_OR; term![BV_AND; a.clone(), b.clone()], term![BV_AND; term![BV_NOT; a.clone()], c.clone()]];
         let tt = term![Op::BvConcat; term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]];
         assert_eq!(tt, sha_rewrites(&t));
@@ -86,9 +77,9 @@ mod test {
 
     #[test]
     fn with_xor() {
-        let a = bv(0, 1);
-        let b = bv(0, 1);
-        let c = bv(0, 1);
+        let a = bv_lit(0, 1);
+        let b = bv_lit(0, 1);
+        let c = bv_lit(0, 1);
         let t = term![BV_XOR; term![BV_AND; a.clone(), b.clone()], term![BV_AND; term![BV_NOT; a.clone()], c.clone()]];
         let tt = term![Op::BvConcat; term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]];
         assert_eq!(tt, sha_rewrites(&t));
@@ -96,9 +87,9 @@ mod test {
 
     #[test]
     fn length_2() {
-        let a = bv(0, 2);
-        let b = bv(0, 2);
-        let c = bv(0, 2);
+        let a = bv_lit(0, 2);
+        let b = bv_lit(0, 2);
+        let c = bv_lit(0, 2);
         let t = term![BV_OR; term![BV_AND; a.clone(), b.clone()], term![BV_AND; term![BV_NOT; a.clone()], c.clone()]];
         let tt = term![Op::BvConcat;
         term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(1); a.clone()], term![Op::BvBit(1); b.clone()], term![Op::BvBit(1); c.clone()]]],
