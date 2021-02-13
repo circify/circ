@@ -1039,11 +1039,11 @@ mod test {
         #[test]
         fn vars() {
             let v = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
-            assert_eq!(check(&v), Ok(Sort::Bool));
+            assert_eq!(check(&v), Sort::Bool);
             let v = leaf_term(Op::Var("b".to_owned(), Sort::BitVector(4)));
-            assert_eq!(check(&v), Ok(Sort::BitVector(4)));
+            assert_eq!(check(&v), Sort::BitVector(4));
             let v = t();
-            assert_eq!(check(&v), Ok(Sort::Bool));
+            assert_eq!(check(&v), Sort::Bool);
         }
 
         #[test]

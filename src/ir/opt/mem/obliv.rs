@@ -237,7 +237,7 @@ mod test {
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
-            if let Sort::Array(..) = check(c).unwrap() {
+            if let Sort::Array(..) = check(&c) {
                 return false;
             }
         }
