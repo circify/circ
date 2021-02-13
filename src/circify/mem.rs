@@ -166,3 +166,28 @@ impl MemManager {
         term![Op::BvBinPred(BvBinPred::Ult); offset, bv_lit(alloc.size, alloc.addr_width)]
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::target::smt::check_sat;
+
+    fn bv_var(s: &str, w: usize) -> Term {
+        leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
+    }
+
+    #[test]
+    fn sat_test() {
+        let cs = Rc::new(RefCell::new(Constraints::new(false)));
+        let mut mem = MemManager::new(cs.clone());
+        let id0 = mem.zero_allocate(6, 4, 8);
+        let _id1 = mem.zero_allocate(6, 4, 8);
+        mem.store(id0, bv_lit(3, 4), bv_lit(2, 8));
+        let a = mem.load(id0, bv_lit(3, 4));
+        let b = mem.load(id0, bv_lit(1, 4));
+        let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
+        cs.borrow_mut().assertions.push(t);
+        let sys = term(Op::BoolNaryOp(BoolNaryOp::And), cs.borrow().assertions.clone());
+        assert!(check_sat(&sys))
+    }
+}

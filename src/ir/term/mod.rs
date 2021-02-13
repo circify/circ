@@ -1007,6 +1007,13 @@ impl Constraints {
             vs.insert(name.to_owned(), v);
         }
     }
+    pub fn new(values: bool) -> Self {
+        Self {
+            assertions: Vec::new(),
+            public_inputs: HashSet::new(),
+            values: if values { Some(HashMap::new()) } else { None }
+        }
+    }
 }
 
 #[cfg(test)]
