@@ -1,27 +1,8 @@
 use crate::ir::term::*;
 
-use rug::Integer;
-
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
-
-/// All-ones bv
-fn ones(width: usize) -> Term {
-    bv_lit((Integer::from(1) << width as u32) - 1, width)
-}
-
-/// Convert `t` to width `w`, though unsigned extension or extraction
-fn to_width(t: &Term, w: usize) -> Term {
-    let old_w = check(t).as_bv();
-    if old_w < w {
-        term![Op::BvUext(w - old_w); t.clone()]
-    } else if old_w == w {
-        t.clone()
-    } else {
-        term![Op::BvExtract(w - 1, 0); t.clone()]
-    }
-}
 
 type AllocId = usize;
 

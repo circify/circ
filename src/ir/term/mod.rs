@@ -7,6 +7,7 @@ use std::sync::{Arc, RwLock};
 
 pub mod bv;
 pub mod dist;
+pub mod extras;
 pub mod field;
 
 pub use bv::BitVector;
@@ -1011,8 +1012,29 @@ impl Constraints {
         Self {
             assertions: Vec::new(),
             public_inputs: HashSet::new(),
-            values: if values { Some(HashMap::new()) } else { None }
+            values: if values { Some(HashMap::new()) } else { None },
         }
+    }
+    pub fn new_var<F: FnOnce() -> Value>(
+        &mut self,
+        name: &str,
+        s: Sort,
+        val_fn: F,
+        public: bool,
+    ) -> Term {
+        if public {
+            assert!(
+                !self.public_inputs.insert(name.to_owned()),
+                "{} already a public input",
+                name
+            );
+        }
+        if let Some(vs) = self.values.as_mut() {
+            if let Some(v) = vs.insert(name.to_owned(), val_fn()) {
+                panic!("{} already had a value: {}", name, v);
+            }
+        }
+        leaf_term(Op::Var(name.to_string(), s))
     }
 }
 

@@ -221,3 +221,4 @@ impl Display for BitVector {
         Ok(())
     }
 }
+
