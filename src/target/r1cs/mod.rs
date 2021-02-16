@@ -1,11 +1,14 @@
 use rug::ops::{RemRounding, RemRoundingAssign};
 use rug::Integer;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
 
+pub mod opt;
+
+#[derive(Clone, Debug)]
 pub struct R1cs<S: Hash + Eq> {
     modulus: Rc<Integer>,
     signal_idxs: HashMap<S, usize>,
@@ -16,11 +19,33 @@ pub struct R1cs<S: Hash + Eq> {
     constraints: Vec<(Lc, Lc, Lc)>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Lc {
     modulus: Rc<Integer>,
     constant: Integer,
     monomials: HashMap<usize, Integer>,
+}
+
+impl Lc {
+    pub fn is_zero(&self) -> bool {
+        self.monomials.len() == 0 && &self.constant == &0
+    }
+    pub fn clear(&mut self) {
+        self.monomials.clear();
+        self.constant = Integer::from(0);
+    }
+    pub fn take(&mut self) -> Self {
+        let monomials = std::mem::take(&mut self.monomials);
+        let constant = std::mem::take(&mut self.constant);
+        Self {
+            monomials,
+            constant,
+            modulus: self.modulus.clone(),
+        }
+    }
+    pub fn as_const(&self) -> Option<&Integer> {
+        (self.monomials.len() == 0).then(|| &self.constant)
+    }
 }
 
 impl std::ops::Add<&Lc> for Lc {
@@ -37,13 +62,19 @@ impl std::ops::AddAssign<&Lc> for Lc {
         self.constant += &other.constant;
         self.constant.rem_floor_assign(&*self.modulus);
         for (i, v) in &other.monomials {
-            self.monomials
-                .entry(*i)
-                .and_modify(|u| {
-                    *u += v;
-                    u.rem_floor_assign(&*other.modulus);
-                })
-                .or_insert_with(|| v.clone());
+            match self.monomials.entry(*i) {
+                Entry::Occupied(mut e) => {
+                    let m = e.get_mut();
+                    *m += v;
+                    m.rem_floor_assign(&*other.modulus);
+                    if e.get() == &Integer::from(0) {
+                        e.remove_entry();
+                    }
+                }
+                Entry::Vacant(e) => {
+                    e.insert(v.clone());
+                }
+            }
         }
     }
 }
@@ -92,13 +123,20 @@ impl std::ops::SubAssign<&Lc> for Lc {
         self.constant -= &other.constant;
         self.constant.rem_floor_assign(&*self.modulus);
         for (i, v) in &other.monomials {
-            self.monomials
-                .entry(*i)
-                .and_modify(|u| {
-                    *u -= v;
-                    u.rem_floor_assign(&*other.modulus);
-                })
-                .or_insert_with(|| -v.clone());
+            match self.monomials.entry(*i) {
+                Entry::Occupied(mut e) => {
+                    let m = e.get_mut();
+                    *m -= v;
+                    m.rem_floor_assign(&*other.modulus);
+                    if e.get() == &Integer::from(0) {
+                        e.remove_entry();
+                    }
+                }
+                Entry::Vacant(e) => {
+                    let m = e.insert(-v.clone());
+                    m.rem_floor_assign(&*other.modulus);
+                }
+            }
         }
     }
 }
@@ -158,9 +196,13 @@ impl std::ops::MulAssign<&Integer> for Lc {
     fn mul_assign(&mut self, other: &Integer) {
         self.constant *= other;
         self.constant.rem_floor_assign(&*self.modulus);
-        for (_, v) in &mut self.monomials {
-            *v *= other;
-            v.rem_floor_assign(&*self.modulus);
+        if other == &Integer::from(0) {
+            self.monomials.clear();
+        } else {
+            for (_, v) in &mut self.monomials {
+                *v *= other;
+                v.rem_floor_assign(&*self.modulus);
+            }
         }
     }
 }
@@ -177,9 +219,13 @@ impl std::ops::MulAssign<isize> for Lc {
     fn mul_assign(&mut self, other: isize) {
         self.constant *= Integer::from(other);
         self.constant.rem_floor_assign(&*self.modulus);
-        for (_, v) in &mut self.monomials {
-            *v *= Integer::from(other);
-            v.rem_floor_assign(&*self.modulus);
+        if other == 0 {
+            self.monomials.clear();
+        } else {
+            for (_, v) in &mut self.monomials {
+                *v *= Integer::from(other);
+                v.rem_floor_assign(&*self.modulus);
+            }
         }
     }
 }
@@ -268,6 +314,23 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         }
         s
     }
+
+    pub fn format_qeq(&self, (a, b, c): &(Lc, Lc, Lc)) -> String {
+        format!(
+            "({})({}) = {}",
+            self.format_lc(a),
+            self.format_lc(b),
+            self.format_lc(c)
+        )
+    }
+
+    pub fn check_i(&self, i: usize) {
+        self.check(
+            &self.constraints[i].0,
+            &self.constraints[i].1,
+            &self.constraints[i].2,
+        );
+    }
     pub fn check(&self, a: &Lc, b: &Lc, c: &Lc) {
         let av = self.eval(a).unwrap();
         let bv = self.eval(b).unwrap();
@@ -309,5 +372,3 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         }
     }
 }
-
-pub struct Qeq(Lc, Lc, Lc);

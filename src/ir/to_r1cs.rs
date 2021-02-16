@@ -210,7 +210,7 @@ impl ToR1cs {
 
     /// Given a bit-values `a`, returns its (boolean) not.
     fn bool_not(&self, a: &Lc) -> Lc {
-        self.r1cs.zero() + 1 - a
+        dbg!(self.r1cs.zero() + 1 - dbg!(a))
     }
 
     /// Given `xs`, an iterator of bit-valued wires, returns the AND of all of them.
@@ -347,6 +347,8 @@ impl ToR1cs {
             };
             self.bools.insert(c.clone(), lc);
         }
+        //println!("=> {}", self.r1cs.format_lc(self.bools.get(&c).unwrap()));
+
         //        self.r1cs.eval(self.bools.get(&c).unwrap()).map(|v| {
         //            println!("-> {}", v);
         //        });
@@ -743,6 +745,7 @@ mod test {
     use quickcheck_macros::quickcheck;
     use rand::distributions::Distribution;
     use rand::SeedableRng;
+    use crate::target::r1cs::opt::reduce_linearities;
 
     #[test]
     fn bool() {
@@ -826,6 +829,36 @@ mod test {
         r1cs.check_all();
     }
 
+    #[quickcheck]
+    fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
+        let v = eval(&t, &values);
+        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let cs = Constraints {
+            public_inputs: HashSet::new(),
+            values: Some(values),
+            assertions: vec![t],
+        };
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        r1cs.check_all();
+        let r1cs2 = reduce_linearities(r1cs);
+        r1cs2.check_all();
+    }
+
+    #[quickcheck]
+    fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
+        let v = eval(&t, &values);
+        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let cs = Constraints {
+            public_inputs: HashSet::new(),
+            values: Some(values),
+            assertions: vec![t],
+        };
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        r1cs.check_all();
+        let r1cs2 = reduce_linearities(r1cs);
+        r1cs2.check_all();
+    }
+
     #[test]
     fn eq_test() {
         let cs = Constraints {
@@ -843,6 +876,29 @@ mod test {
         };
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
+    }
+
+    #[test]
+    fn not_opt_test() {
+        let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
+        let values: HashMap<String, Value> = 
+                vec![(
+                    "b".to_owned(),
+                    Value::Bool(true),
+                )]
+                .into_iter()
+                .collect();
+        let v = eval(&t, &values);
+        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let cs = Constraints {
+            public_inputs: HashSet::new(),
+            values: Some(values),
+            assertions: vec![t],
+        };
+        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        r1cs.check_all();
+        let r1cs2 = reduce_linearities(r1cs);
+        r1cs2.check_all();
     }
 
     fn bv(u: usize, w: usize) -> Term {

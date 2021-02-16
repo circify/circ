@@ -34,7 +34,9 @@ impl<T: Display> Display for Val<T> {
 pub struct Loc {
     name: VarName,
     /// Optional (fn, lex) scope indices
-    idx: Option<ScopeIdx>,
+    /// The outer option indicates whether this is a local or absolute location.
+    /// The inner indicates whether this is a global variable.
+    idx: Option<Option<ScopeIdx>>,
 }
 
 impl Loc {
@@ -250,16 +252,15 @@ pub trait Embeddable {
     /// Terms for this language
     type T: Display + Clone;
 
-    // TODO: memory?
     fn declare(
         &self,
         ctx: &mut CirCtx,
-        ty: Self::Ty,
+        ty: &Self::Ty,
         raw_name: String,
         user_name: Option<String>,
     ) -> Self::T;
     fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T;
-    fn assign(&self, ctx: &mut CirCtx, ty: Self::Ty, name: &str, t: Self::T) -> Self::T;
+    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T) -> Self::T;
     fn values(&self) -> bool;
 }
 
@@ -291,7 +292,7 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Declares a new (unconstrained) value of
-    pub fn declare(&mut self, name: VarName, ty: E::Ty, input: bool) {
+    pub fn declare(&mut self, name: VarName, ty: &E::Ty, input: bool) {
         let ssa_name = if let Some(back) = self.fn_stack.last_mut() {
             back.declare(name.clone(), ty.clone())
         } else {
@@ -363,12 +364,12 @@ impl<E: Embeddable> Circify<E> {
     }
 
     fn get_lex_mut(&mut self, loc: &Loc) -> &mut LexScope<E::Ty> {
-        let idx = loc.idx.clone().or_else(|| self.mk_abs(&loc.name));
+        let idx = loc.idx.clone().unwrap_or_else(|| self.mk_abs(&loc.name));
         self.get_scope_mut(idx)
     }
 
     fn get_lex_ref(&self, loc: &Loc) -> &LexScope<E::Ty> {
-        let idx = loc.idx.clone().or_else(|| self.mk_abs(&loc.name));
+        let idx = loc.idx.clone().unwrap_or_else(|| self.mk_abs(&loc.name));
         self.get_scope_ref(idx)
     }
 
@@ -382,7 +383,11 @@ impl<E: Embeddable> Circify<E> {
             (Val::Term(old), Val::Term(new)) => {
                 let guard = self.condition();
                 let ite_val = self.e.ite(&mut self.cir_ctx, guard, (*old).clone(), new);
-                let new_val = Val::Term(self.e.assign(&mut self.cir_ctx, ty, &new_name, ite_val));
+                let new_val =
+                    Val::Term(
+                        self.e
+                            .assign(&mut self.cir_ctx, &ty, new_name.clone(), ite_val),
+                    );
                 assert!(self.vals.insert(new_name, new_val.clone()).is_none());
                 new_val
             }
@@ -453,7 +458,7 @@ impl<E: Embeddable> Circify<E> {
         self.fn_ctr += 1;
         self.fn_stack.push(FnFrame::new(prefix, ret_ty.is_some()));
         if let Some(ty) = ret_ty {
-            self.declare(RET_NAME.to_owned(), ty, false);
+            self.declare(RET_NAME.to_owned(), &ty, false);
         }
     }
 
@@ -486,7 +491,164 @@ impl<E: Embeddable> Circify<E> {
         let l = self.get_lex_ref(&loc);
         self.vals.get(l.get_name(&loc.name)).unwrap().clone()
     }
+
+    pub fn deref(&self, v: &Val<E::T>) -> Loc {
+        match v {
+            Val::Ref(l) => l.clone(),
+            Val::Term(_) => panic!("{} is not dereferencable", v),
+        }
+    }
+    pub fn ref_(&self, name: &VarName) -> Val<E::T> {
+        let idx = self.mk_abs(name);
+        Val::Ref(Loc {
+            name: name.to_owned(),
+            idx: Some(idx),
+        })
+    }
 }
 
 const RET_NAME: &str = "return";
 const RET_BREAK_NAME: &str = "return";
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    mod bool_pair {
+        use super::*;
+
+        #[derive(Clone)]
+        enum T {
+            Base(Term),
+            Pair(Box<T>, Box<T>),
+        }
+
+        impl Display for T {
+            fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+                match self {
+                    T::Base(t) => write!(f, "{}", t),
+                    T::Pair(a, b) => write!(f, "({}, {})", a, b),
+                }
+            }
+        }
+
+        #[derive(Clone)]
+        enum Ty {
+            Bool,
+            Pair(Box<Ty>, Box<Ty>),
+        }
+
+        impl Display for Ty {
+            fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+                match self {
+                    Ty::Bool => write!(f, "bool"),
+                    Ty::Pair(a, b) => write!(f, "({}, {})", a, b),
+                }
+            }
+        }
+
+        #[derive(Clone)]
+        enum Val {
+            Base(bool),
+            Pair(Box<T>, Box<T>),
+        }
+
+        struct BoolPair {
+            values: Option<HashMap<String, bool>>,
+        }
+
+        impl Embeddable for BoolPair {
+            type T = T;
+            type Ty = Ty;
+            fn declare(
+                &self,
+                ctx: &mut CirCtx,
+                ty: &Self::Ty,
+                raw_name: String,
+                user_name: Option<String>,
+            ) -> Self::T {
+                match ty {
+                    Ty::Bool => T::Base(ctx.cs.borrow_mut().new_var(
+                        &raw_name,
+                        Sort::Bool,
+                        || {
+                            Value::Bool(
+                                user_name
+                                    .as_ref()
+                                    .and_then(|v| {
+                                        self.values.as_ref().and_then(|vs| vs.get(v).cloned())
+                                    })
+                                    .unwrap_or(false),
+                            )
+                        },
+                        user_name.is_some(),
+                    )),
+                    Ty::Pair(a, b) => T::Pair(
+                        Box::new(self.declare(
+                            ctx,
+                            &**a,
+                            format!("{}.0", raw_name),
+                            user_name.as_ref().map(|u| format!("{}.0", u)),
+                        )),
+                        Box::new(self.declare(
+                            ctx,
+                            &**b,
+                            format!("{}.1", raw_name),
+                            user_name.as_ref().map(|u| format!("{}.1", u)),
+                        )),
+                    ),
+                }
+            }
+            fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+                match (t, f) {
+                    (T::Base(a), T::Base(b)) => T::Base(term![Op::Ite; cond, a, b]),
+                    (T::Pair(a0, a1), T::Pair(b0, b1)) => T::Pair(
+                        Box::new(self.ite(ctx, cond.clone(), *a0, *b0)),
+                        Box::new(self.ite(ctx, cond, *a1, *b1)),
+                    ),
+                    (a, b) => panic!("Cannot ITE {}, {}", a, b),
+                }
+            }
+            fn assign(
+                &self,
+                ctx: &mut CirCtx,
+                _ty: &Self::Ty,
+                name: String,
+                t: Self::T,
+            ) -> Self::T {
+                match t {
+                    T::Base(a) => {
+                        ctx.cs.borrow_mut().eval_and_save(&name, &a);
+                        let v = leaf_term(Op::Var(name, Sort::Bool));
+                        ctx.cs
+                            .borrow_mut()
+                            .assertions
+                            .push(term![Op::Eq; v.clone(), a]);
+                        T::Base(v)
+                    }
+                    T::Pair(a, b) => T::Pair(
+                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a)),
+                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b)),
+                    ),
+                }
+            }
+            fn values(&self) -> bool {
+                self.values.is_some()
+            }
+        }
+
+        #[test]
+        fn trial() {
+            let values: HashMap<String, bool> = vec![
+                ("a".to_owned(), false),
+                ("b.0".to_owned(), false),
+                ("b.1".to_owned(), false),
+            ].into_iter().collect();
+            let e = BoolPair { values: Some(values) };
+            let mut c = Circify::new(e);
+            c.declare("a".to_owned(), &Ty::Bool, true);
+            c.declare("b".to_owned(), &Ty::Pair(Box::new(Ty::Bool), Box::new(Ty::Bool)), true);
+
+        }
+    }
+}

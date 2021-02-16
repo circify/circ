@@ -1024,7 +1024,7 @@ impl Constraints {
     ) -> Term {
         if public {
             assert!(
-                !self.public_inputs.insert(name.to_owned()),
+                self.public_inputs.insert(name.to_owned()),
                 "{} already a public input",
                 name
             );
