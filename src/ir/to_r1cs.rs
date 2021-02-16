@@ -459,6 +459,11 @@ impl ToR1cs {
 
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }
+                    Op::PfToBv(nbits) => {
+                        let lc = self.get_pf(&bv.cs[0]).clone();
+                        let bits = self.bitify("pf2bv", &lc, *nbits, false);
+                        self.set_bv_bits(bv.clone(), bits);
+                    }
                     Op::BoolToBv => {
                         let b = self.get_bool(&bv.cs[0]).clone();
                         self.set_bv_bits(bv, vec![b]);
@@ -746,6 +751,7 @@ mod test {
     use rand::distributions::Distribution;
     use rand::SeedableRng;
     use crate::target::r1cs::opt::reduce_linearities;
+    use std::sync::Arc;
 
     #[test]
     fn bool() {
@@ -908,6 +914,13 @@ mod test {
         ))))
     }
 
+    fn pf(i: isize) -> Term {
+        leaf_term(Op::Const(Value::Field(FieldElem::new(
+            Integer::from(i),
+            Arc::new(Integer::from(crate::ir::term::field::TEST_FIELD)),
+        ))))
+    }
+
     fn const_test(term: Term) {
         let cs = Constraints {
             public_inputs: HashSet::new(),
@@ -993,6 +1006,25 @@ mod test {
             Op::Eq;
             term![Op::BvBinOp(BvBinOp::Lshr); bv(0b1111,4), bv(0b0011,4)],
             bv(0b0001, 4)
+        ]);
+    }
+
+    #[test]
+    fn pf2bv() {
+        const_test(term![
+            Op::Eq;
+            term![Op::PfToBv(4); pf(8)],
+            bv(0b1000, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::PfToBv(4); pf(15)],
+            bv(0b1111, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::PfToBv(8); pf(15)],
+            bv(0b1111, 8)
         ]);
     }
 }

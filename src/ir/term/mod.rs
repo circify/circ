@@ -32,6 +32,8 @@ pub enum Op {
     // number of extra bits
     BvUext(usize),
     BvSext(usize),
+    // number of bits the element should fit in.
+    PfToBv(usize),
 
     Implies,
     BoolNaryOp(BoolNaryOp),
@@ -76,6 +78,7 @@ impl Op {
             Op::BvConcat => None,
             Op::BvUext(_) => Some(1),
             Op::BvSext(_) => Some(1),
+            Op::PfToBv(_) => Some(1),
             Op::Implies => Some(2),
             Op::BoolNaryOp(_) => None,
             Op::Not => Some(1),
@@ -114,6 +117,7 @@ impl Display for Op {
             Op::BvConcat => write!(f, "concat"),
             Op::BvUext(a) => write!(f, "uext {}", a),
             Op::BvSext(a) => write!(f, "sext {}", a),
+            Op::PfToBv(a) => write!(f, "pf2bv {}", a),
             Op::Implies => write!(f, "=>"),
             Op::BoolNaryOp(a) => write!(f, "{}", a),
             Op::Not => write!(f, "not"),
@@ -695,6 +699,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                         })
                         .map(Sort::BitVector),
                     (Op::BvSext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
+                    (Op::PfToBv(a), &[Sort::Field(_)]) => Ok(Sort::BitVector(*a)),
                     (Op::BvUext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
                     (Op::Implies, &[a, b]) => {
                         let ctx = "bool binary op";
@@ -852,6 +857,11 @@ pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
                 let mask = ((Integer::from(1) << *w as u32) - 1)
                     * Integer::from(a.uint().get_bit(a.width() as u32 - 1));
                 BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
+            }),
+            Op::PfToBv(w) => Value::BitVector({
+                let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
+                assert!(a.i() < &(Integer::from(1) << 1));
+                BitVector::new(a.i().clone(), *w)
             }),
             Op::BvUext(w) => Value::BitVector({
                 let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
