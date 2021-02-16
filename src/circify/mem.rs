@@ -168,7 +168,10 @@ mod test {
         let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
         cs.borrow_mut().assertions.push(t);
-        let sys = term(Op::BoolNaryOp(BoolNaryOp::And), cs.borrow().assertions.clone());
+        let sys = term(
+            Op::BoolNaryOp(BoolNaryOp::And),
+            cs.borrow().assertions.clone(),
+        );
         assert!(check_sat(&sys))
     }
 }

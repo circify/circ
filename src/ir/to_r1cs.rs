@@ -746,11 +746,11 @@ mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use crate::ir::term::dist::*;
+    use crate::target::r1cs::opt::reduce_linearities;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::distributions::Distribution;
     use rand::SeedableRng;
-    use crate::target::r1cs::opt::reduce_linearities;
     use std::sync::Arc;
 
     #[test]
@@ -887,13 +887,9 @@ mod test {
     #[test]
     fn not_opt_test() {
         let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
-        let values: HashMap<String, Value> = 
-                vec![(
-                    "b".to_owned(),
-                    Value::Bool(true),
-                )]
-                .into_iter()
-                .collect();
+        let values: HashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
+            .into_iter()
+            .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Constraints {

@@ -11,4 +11,3 @@ pub fn to_width(t: &Term, w: usize) -> Term {
         term(Op::BvExtract(w - 1, 0), vec![t.clone()])
     }
 }
-

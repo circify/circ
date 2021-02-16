@@ -643,12 +643,19 @@ mod test {
                 ("a".to_owned(), false),
                 ("b.0".to_owned(), false),
                 ("b.1".to_owned(), false),
-            ].into_iter().collect();
-            let e = BoolPair { values: Some(values) };
+            ]
+            .into_iter()
+            .collect();
+            let e = BoolPair {
+                values: Some(values),
+            };
             let mut c = Circify::new(e);
             c.declare("a".to_owned(), &Ty::Bool, true);
-            c.declare("b".to_owned(), &Ty::Pair(Box::new(Ty::Bool), Box::new(Ty::Bool)), true);
-
+            c.declare(
+                "b".to_owned(),
+                &Ty::Pair(Box::new(Ty::Bool), Box::new(Ty::Bool)),
+                true,
+            );
         }
     }
 }
