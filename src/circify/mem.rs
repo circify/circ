@@ -174,4 +174,22 @@ mod test {
         );
         assert!(check_sat(&sys))
     }
+
+    #[test]
+    fn unsat_test() {
+        let cs = Rc::new(RefCell::new(Constraints::new(false)));
+        let mut mem = MemManager::new(cs.clone());
+        let id0 = mem.zero_allocate(6, 4, 8);
+        let _id1 = mem.zero_allocate(6, 4, 8);
+        mem.store(id0, bv_lit(3, 4), bv_var("a", 8));
+        let a = mem.load(id0, bv_lit(3, 4));
+        let b = mem.load(id0, bv_lit(3, 4));
+        let t = term![Op::Not; term![Op::Eq; a, b]];
+        cs.borrow_mut().assertions.push(t);
+        let sys = term(
+            Op::BoolNaryOp(BoolNaryOp::And),
+            cs.borrow().assertions.clone(),
+        );
+        assert!(!check_sat(&sys))
+    }
 }

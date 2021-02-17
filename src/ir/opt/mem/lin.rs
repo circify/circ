@@ -113,6 +113,7 @@ pub fn linearize(t: &Term, size_thresh: usize) -> Term {
 mod test {
     use super::*;
     use std::sync::Arc;
+    use rug::Integer;
     use crate::ir::term::field::TEST_FIELD;
 
     fn array_free(t: &Term) -> bool {
