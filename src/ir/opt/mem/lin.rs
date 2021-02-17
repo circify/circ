@@ -14,8 +14,6 @@ use crate::ir::term::*;
 
 use std::iter::repeat;
 
-use rug::Integer;
-
 struct ArrayLinearizer {
     /// A map from (original) replaced terms, to what they were replaced with.
     sequences: TermMap<Vec<Term>>,

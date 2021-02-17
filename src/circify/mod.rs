@@ -381,7 +381,7 @@ impl<E: Embeddable> Circify<E> {
         let old_val = self.vals.get(&old_name).unwrap();
         match (old_val, val) {
             (Val::Term(old), Val::Term(new)) => {
-                let guard = self.condition();
+                let guard = self.condition.clone();
                 let ite_val = self.e.ite(&mut self.cir_ctx, guard, (*old).clone(), new);
                 let new_val =
                     Val::Term(
