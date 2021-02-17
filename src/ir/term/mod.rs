@@ -456,6 +456,50 @@ impl Sort {
             panic!("{} is not a bit-vector", self)
         }
     }
+
+    /// An iterator over the elements of this sort.
+    /// Only defined for booleans, bit-vectors, and field elements.
+    #[track_caller]
+    pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
+        match self {
+            Sort::Bool => Box::new(
+                vec![false, true]
+                    .into_iter()
+                    .map(|b| leaf_term(Op::Const(Value::Bool(b)))),
+            ),
+            Sort::BitVector(w) => {
+                let w = *w;
+                let lim = Integer::from(1) << w as u32;
+                Box::new(
+                    std::iter::successors(Some(Integer::from(0)), move |p| {
+                        let q = p.clone() + 1;
+                        if q < lim {
+                            Some(q)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(move |i| bv_lit(i, w)),
+                )
+            }
+            Sort::Field(m) => {
+                let m = m.clone();
+                let m2 = m.clone();
+                Box::new(
+                    std::iter::successors(Some(Integer::from(0)), move |p| {
+                        let q = p.clone() + 1;
+                        if &q < &*m {
+                            Some(q)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(move |i| leaf_term(Op::Const(Value::Field(FieldElem::new(i, m2.clone()))))),
+                )
+            }
+            _ => panic!("Cannot iterate over {}", self),
+        }
+    }
 }
 
 impl Display for Sort {

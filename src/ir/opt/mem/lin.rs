@@ -57,17 +57,12 @@ impl MemVisitor for ArrayLinearizer {
     }
     fn visit_store(&mut self, orig: &Term, _a: &Term, k: &Term, v: &Term) {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            // TODO: check for bv-indices better.  let w = check(k.clone()).unwrap().as_bv();
-            let w = check(k).as_bv();
+            let key_sort = check(k);
             let ites: Vec<Term> = a_seq
                 .iter()
-                .enumerate()
-                .map(|(i, a_i)| {
-                    let idx = leaf_term(Op::Const(Value::BitVector(BitVector::new(
-                        Integer::from(i),
-                        w,
-                    ))));
-                    let eq_idx = term![Op::Eq; idx, k.clone()];
+                .zip(key_sort.elems_iter())
+                .map(|(a_i, key_i)| {
+                    let eq_idx = term![Op::Eq; key_i, k.clone()];
                     term![Op::Ite; eq_idx, v.clone(), a_i.clone()]
                 })
                 .collect();
@@ -76,20 +71,15 @@ impl MemVisitor for ArrayLinearizer {
     }
     fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            // TODO: check for bv-indices better.
-            let w = check(k).as_bv();
+            let key_sort = check(k);
             let first = a_seq.first().expect("empty array in visit_select").clone();
             Some(
                 a_seq
                     .iter()
+                    .zip(key_sort.elems_iter())
                     .skip(1)
-                    .enumerate()
-                    .fold(first, |acc, (i, a_i)| {
-                        let idx = leaf_term(Op::Const(Value::BitVector(BitVector::new(
-                            Integer::from(i + 1),
-                            w,
-                        ))));
-                        let eq_idx = term![Op::Eq; idx, k.clone()];
+                    .fold(first, |acc, (a_i, key_i)| {
+                        let eq_idx = term![Op::Eq; key_i, k.clone()];
                         term![Op::Ite; eq_idx, a_i.clone(), acc]
                     }),
             )
@@ -124,6 +114,8 @@ pub fn linearize(t: &Term, size_thresh: usize) -> Term {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::sync::Arc;
+    use crate::ir::term::field::TEST_FIELD;
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
@@ -140,6 +132,10 @@ mod test {
             .count()
     }
 
+    fn field_lit(u: usize) -> Term {
+        leaf_term(Op::Const(Value::Field(FieldElem::new(Integer::from(u), Arc::new(Integer::from(TEST_FIELD))))))
+    }
+
     #[test]
     fn select_ite_stores() {
         let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
@@ -150,6 +146,22 @@ mod test {
               term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
+        ];
+        let tt = linearize(&t, 6);
+        assert!(array_free(&tt));
+        assert_eq!(6 + 6 + 6 + 5, count_ites(&tt));
+    }
+
+    #[test]
+    fn select_ite_stores_field() {
+        let z = term![Op::ConstArray(Sort::Field(Arc::new(Integer::from(TEST_FIELD))), 6); bv_lit(0, 4)];
+        let t = term![Op::Select;
+            term![Op::Ite;
+              leaf_term(Op::Const(Value::Bool(true))),
+              term![Op::Store; z.clone(), field_lit(3), bv_lit(1, 4)],
+              term![Op::Store; z.clone(), field_lit(2), bv_lit(1, 4)]
+            ],
+            field_lit(3)
         ];
         let tt = linearize(&t, 6);
         assert!(array_free(&tt));
