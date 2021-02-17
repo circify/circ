@@ -1,10 +1,21 @@
 #![allow(dead_code)]
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
+use std::sync::Arc;
 
+use lazy_static::lazy_static;
 use rug::Integer;
 
 use crate::ir::term::*;
+
+lazy_static! {
+    pub static ref ZOKRATES_MODULUS: Integer = Integer::from_str_radix(
+        "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+        10
+    )
+    .unwrap();
+    pub static ref ZOKRATES_MODULUS_ARC: Arc<Integer> = Arc::new(ZOKRATES_MODULUS.clone());
+}
 
 #[derive(Clone, PartialEq, Eq)]
 enum Ty {
@@ -32,8 +43,26 @@ enum T {
     Uint(usize, Term),
     Bool(Term),
     Field(Term),
-    Array(Ty, usize, Term),
-    Struct(String, BTreeMap<String, Term>),
+    /// TODO: special case primitive arrays with Vec<T>.
+    Array(Ty, Vec<T>),
+    Struct(String, BTreeMap<String, T>),
+}
+
+impl T {
+    fn type_(&self) -> Ty {
+        match self {
+            T::Uint(w, _) => Ty::Uint(*w),
+            T::Bool(_) => Ty::Bool,
+            T::Field(_) => Ty::Field,
+            T::Array(b, v) => Ty::Array(v.len(), Box::new(b.clone())),
+            T::Struct(name, map) => Ty::Struct(
+                name.clone(),
+                map.iter()
+                    .map(|(f_name, f_term)| (f_name.clone(), f_term.type_()))
+                    .collect(),
+            ),
+        }
+    }
 }
 
 impl Display for T {
@@ -43,7 +72,7 @@ impl Display for T {
             T::Uint(_, x) => write!(f, "{}", x),
             T::Field(x) => write!(f, "{}", x),
             T::Struct(_, _) => write!(f, "struct"),
-            T::Array(_, _, _) => write!(f, "array"),
+            T::Array(_, _) => write!(f, "array"),
         }
     }
 }
@@ -298,15 +327,19 @@ fn ite(c: Term, a: T, b: T) -> Result<T, String> {
         (T::Uint(na, a), T::Uint(nb, b)) if na == nb => Ok(T::Uint(na, term![Op::Ite; c, a, b])),
         (T::Bool(a), T::Bool(b)) => Ok(T::Bool(term![Op::Ite; c, a, b])),
         (T::Field(a), T::Field(b)) => Ok(T::Field(term![Op::Ite; c, a, b])),
-        (T::Array(ta, na, a), T::Array(tb, nb, b)) if na == nb && ta == tb => {
-            Ok(T::Array(ta.clone(), na, term![Op::Ite; c, a, b]))
-        }
+        (T::Array(ta, a), T::Array(tb, b)) if a.len() == b.len() && ta == tb => Ok(T::Array(
+            ta,
+            a.into_iter()
+                .zip(b.into_iter())
+                .map(|(a_i, b_i)| ite(c.clone(), a_i, b_i))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
         (T::Struct(na, a), T::Struct(nb, b)) if na == nb => Ok(T::Struct(na.clone(), {
             a.into_iter()
                 .zip(b.into_iter())
                 .map(|((af, av), (bf, bv))| {
                     if af == bf {
-                        Ok((af, term![Op::Ite; c.clone(), av, bv]))
+                        Ok((af, ite(c.clone(), av, bv)?))
                     } else {
                         Err(format!("Field mismatch: {} vs {}", af, bf))
                     }
@@ -319,4 +352,150 @@ fn ite(c: Term, a: T, b: T) -> Result<T, String> {
 
 fn cond(c: T, a: T, b: T) -> Result<T, String> {
     ite(bool(c)?, a, b)
+}
+
+fn pf_lit<I>(i: I) -> Term
+where
+    Integer: From<I>,
+{
+    leaf_term(Op::Const(Value::Field(FieldElem::new(
+        Integer::from(i),
+        ZOKRATES_MODULUS_ARC.clone(),
+    ))))
+}
+
+fn slice(array: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
+    match array {
+        T::Array(b, mut list) => {
+            let start = start.unwrap_or(0);
+            let end = end.unwrap_or(list.len() - 1);
+            Ok(T::Array(b, list.drain(start..end).collect()))
+        }
+        a => Err(format!("Cannot slice {}", a)),
+    }
+}
+
+fn spread(array: T) -> Result<Vec<T>, String> {
+    match array {
+        T::Array(_, list) => Ok(list),
+        a => Err(format!("Cannot spread {}", a)),
+    }
+}
+
+fn field_select(struct_: &T, field: &str) -> Result<T, String> {
+    match struct_ {
+        T::Struct(_, map) => map
+            .get(field)
+            .cloned()
+            .ok_or_else(|| format!("No field '{}'", field)),
+        a => Err(format!("{} is not a struct", a)),
+    }
+}
+
+fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
+    match struct_ {
+        T::Struct(name, mut map) => Ok(T::Struct(name, {
+            if map.insert(field.to_owned(), val).is_some() {
+                map
+            } else {
+                return Err(format!("No '{}' field", field));
+            }
+        })),
+        a => Err(format!("{} is not a struct", a)),
+    }
+}
+
+fn array_select(array: T, idx: T) -> Result<T, String> {
+    match (array, idx) {
+        (T::Array(_, list), T::Field(idx)) => {
+            let mut it = list.into_iter().enumerate();
+            let first = it
+                .next()
+                .ok_or_else(|| format!("Cannot index empty array"))?;
+            it.fold(Ok(first.1), |acc, (i, elem)| {
+                ite(term![Op::Eq; pf_lit(i), idx.clone()], elem, acc?)
+            })
+        }
+        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+    }
+}
+
+fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
+    match (array, idx) {
+        (T::Array(ty, list), T::Field(idx)) => Ok(T::Array(
+            ty,
+            list.into_iter()
+                .enumerate()
+                .map(|(i, elem)| ite(term![Op::Eq; pf_lit(i), idx.clone()], val.clone(), elem))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+    }
+}
+
+fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
+    let v: Vec<T> = elems.into_iter().collect();
+    if let Some(e) = v.first() {
+        let ty = e.type_();
+        if v.iter().skip(1).any(|a| a.type_() != ty) {
+            Err(format!("Inconsistent types in array"))
+        } else {
+            Ok(T::Array(ty, v))
+        }
+    } else {
+        Err(format!("Empty array"))
+    }
+}
+
+fn u32_to_bits(u: T) -> Result<T, String> {
+    match u {
+        T::Uint(32, t) => Ok(T::Array(
+            Ty::Bool,
+            (0..32)
+                .map(|i| T::Bool(term![Op::BvBit(i); t.clone()]))
+                .collect(),
+        )),
+        u => Err(format!("Cannot do u32-to-bits on {}", u)),
+    }
+}
+
+fn u32_from_bits(u: T) -> Result<T, String> {
+    match u {
+        T::Array(Ty::Bool, list) => {
+            if list.len() == 32 {
+                Ok(T::Uint(
+                    32,
+                    term(
+                        Op::BvConcat,
+                        list.into_iter()
+                            .map(|z: T| -> Result<Term, String> {
+                                Ok(term![Op::BoolToBv; bool(z)?])
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                    ),
+                ))
+            } else {
+                Err(format!(
+                    "Cannot do u32-from-bits on len {} array",
+                    list.len()
+                ))
+            }
+        }
+        u => Err(format!("Cannot do u32-from-bits on {}", u)),
+    }
+}
+
+fn field_to_bits(f: T) -> Result<T, String> {
+    match f {
+        T::Field(t) => {
+            let u = term![Op::PfToBv(254); t];
+            Ok(T::Array(
+                Ty::Bool,
+                (0..254)
+                    .map(|i| T::Bool(term![Op::BvBit(i); u.clone()]))
+                    .collect(),
+            ))
+        }
+        u => Err(format!("Cannot do field-to-bits on {}", u)),
+    }
 }
