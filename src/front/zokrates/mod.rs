@@ -1,14 +1,16 @@
 #![allow(dead_code)]
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
 use lazy_static::lazy_static;
 use rug::Integer;
 
+use crate::circify::{CirCtx, Embeddable};
 use crate::ir::term::*;
 
 lazy_static! {
+    // TODO: handle this better
     pub static ref ZOKRATES_MODULUS: Integer = Integer::from_str_radix(
         "21888242871839275222246405745257275088548364400416034343698204186575808495617",
         10
@@ -497,5 +499,175 @@ fn field_to_bits(f: T) -> Result<T, String> {
             ))
         }
         u => Err(format!("Cannot do field-to-bits on {}", u)),
+    }
+}
+
+struct ZoKrates {
+    values: Option<HashMap<String, Integer>>,
+    modulus: Arc<Integer>,
+}
+
+fn field_name(struct_name: &str, field_name: &str) -> String {
+    format!("{}.{}", struct_name, field_name)
+}
+
+fn idx_name(struct_name: &str, idx: usize) -> String {
+    format!("{}.{}", struct_name, idx)
+}
+
+impl Embeddable for ZoKrates {
+    type T = T;
+    type Ty = Ty;
+    fn declare(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        raw_name: String,
+        user_name: Option<String>,
+    ) -> Self::T {
+        let get_int_val = || -> Integer {
+            self.values
+                .as_ref()
+                .and_then(|vs| {
+                    user_name
+                        .as_ref()
+                        .and_then(|n| vs.get(n))
+                        .or_else(|| vs.get(&raw_name))
+                })
+                .cloned()
+                .unwrap_or_else(|| Integer::from(0))
+        };
+        match ty {
+            Ty::Bool => T::Bool(ctx.cs.borrow_mut().new_var(
+                &raw_name,
+                Sort::Bool,
+                || Value::Bool(get_int_val() != 0),
+                user_name.is_some(),
+            )),
+            Ty::Field => T::Field(ctx.cs.borrow_mut().new_var(
+                &raw_name,
+                Sort::Field(self.modulus.clone()),
+                || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
+                user_name.is_some(),
+            )),
+            Ty::Uint(w) => T::Field(ctx.cs.borrow_mut().new_var(
+                &raw_name,
+                Sort::BitVector(*w),
+                || Value::BitVector(BitVector::new(get_int_val(), *w)),
+                user_name.is_some(),
+            )),
+            Ty::Array(n, ty) => T::Array(
+                (**ty).clone(),
+                (0..*n)
+                    .map(|i| {
+                        self.declare(
+                            ctx,
+                            &*ty,
+                            idx_name(&raw_name, i),
+                            user_name.as_ref().map(|u| idx_name(u, i)),
+                        )
+                    })
+                    .collect(),
+            ),
+            Ty::Struct(n, fs) => T::Struct(
+                n.clone(),
+                fs.iter()
+                    .map(|(f_name, f_ty)| {
+                        (
+                            f_name.clone(),
+                            self.declare(
+                                ctx,
+                                f_ty,
+                                field_name(&raw_name, f_name),
+                                user_name.as_ref().map(|u| field_name(u, f_name)),
+                            ),
+                        )
+                    })
+                    .collect(),
+            ),
+        }
+    }
+    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+        match (t, f) {
+            (T::Bool(a), T::Bool(b)) => T::Bool(term![Op::Ite; cond, a, b]),
+            (T::Uint(wa, a), T::Uint(wb, b)) if wa == wb => T::Uint(wa, term![Op::Ite; cond, a, b]),
+            (T::Field(a), T::Field(b)) => T::Field(term![Op::Ite; cond, a, b]),
+            (T::Array(a_ty, a), T::Array(b_ty, b)) if a_ty == b_ty => T::Array(
+                a_ty,
+                a.into_iter()
+                    .zip(b.into_iter())
+                    .map(|(a_i, b_i)| self.ite(ctx, cond.clone(), a_i, b_i))
+                    .collect(),
+            ),
+            (T::Struct(a_nm, a), T::Struct(b_nm, b)) if a_nm == b_nm => T::Struct(
+                a_nm,
+                a.into_iter()
+                    .zip(b.into_iter())
+                    .map(|((a_f, a_i), (b_f, b_i))| {
+                        if a_f == b_f {
+                            (a_f, self.ite(ctx, cond.clone(), a_i, b_i))
+                        } else {
+                            panic!("Field mismatch: '{}' vs '{}'", a_f, b_f)
+                        }
+                    })
+                    .collect(),
+            ),
+            (t, f) => panic!("Cannot ITE {} and {}", t, f),
+        }
+    }
+    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T) -> Self::T {
+        assert!(&t.type_() == ty);
+        match (ty, t) {
+            (_, T::Bool(b)) => {
+                ctx.cs.borrow_mut().eval_and_save(&name, &b);
+                let v = leaf_term(Op::Var(name, Sort::Bool));
+                ctx.cs
+                    .borrow_mut()
+                    .assertions
+                    .push(term![Op::Eq; v.clone(), b]);
+                T::Bool(v)
+            }
+            (_, T::Field(b)) => {
+                ctx.cs.borrow_mut().eval_and_save(&name, &b);
+                let v = leaf_term(Op::Var(name, Sort::Field(self.modulus.clone())));
+                ctx.cs
+                    .borrow_mut()
+                    .assertions
+                    .push(term![Op::Eq; v.clone(), b]);
+                T::Field(v)
+            }
+            (_, T::Uint(w, b)) => {
+                ctx.cs.borrow_mut().eval_and_save(&name, &b);
+                let v = leaf_term(Op::Var(name, Sort::BitVector(w)));
+                ctx.cs
+                    .borrow_mut()
+                    .assertions
+                    .push(term![Op::Eq; v.clone(), b]);
+                T::Uint(w, v)
+            }
+            (_, T::Array(ety, list)) => T::Array(
+                ety.clone(),
+                list.into_iter()
+                    .enumerate()
+                    .map(|(i, elem)| self.assign(ctx, &ety, idx_name(&name, i), elem))
+                    .collect(),
+            ),
+            (Ty::Struct(_, tys), T::Struct(s_name, list)) => T::Struct(
+                s_name,
+                list.into_iter()
+                    .zip(tys.into_iter())
+                    .map(|((f_name, elem), (_, f_ty))| {
+                        (
+                            f_name.clone(),
+                            self.assign(ctx, &f_ty, field_name(&name, &f_name), elem),
+                        )
+                    })
+                    .collect(),
+            ),
+            _ => unimplemented!(),
+        }
+    }
+    fn values(&self) -> bool {
+        self.values.is_some()
     }
 }
