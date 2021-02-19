@@ -14,10 +14,15 @@ lazy_static = "1.4"
 rand = "0.8"
 rsmt2 = "0.11"
 ieee754 = "0.2"
+zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser" }
+zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast" }
+typed-arena = "2.0"
+log = "0.4"
 
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
+env_logger = "0.8"
 
 [profile.release]
 #debug = true

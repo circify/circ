@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
 
+pub mod includer;
 pub mod mem;
 
 type Version = usize;
@@ -272,6 +273,7 @@ pub struct Circify<E: Embeddable> {
     globals: LexScope<E::Ty>,
     cir_ctx: CirCtx,
     condition: Term,
+    typedefs: HashMap<String, E::Ty>,
 }
 
 impl<E: Embeddable> Circify<E> {
@@ -288,6 +290,7 @@ impl<E: Embeddable> Circify<E> {
                 cs,
             },
             condition: leaf_term(Op::Const(Value::Bool(true))),
+            typedefs: HashMap::new(),
         }
     }
 
@@ -504,6 +507,16 @@ impl<E: Embeddable> Circify<E> {
             name: name.to_owned(),
             idx: Some(idx),
         })
+    }
+    pub fn def_type(&mut self, name: &str, ty: E::Ty) {
+        if let Some(old_ty) = self.typedefs.insert(name.to_owned(), ty) {
+            panic!("{} already defined as {}", name, old_ty)
+        }
+    }
+    pub fn get_type(&mut self, name: &str) -> &E::Ty {
+        self.typedefs
+            .get(name)
+            .unwrap_or_else(|| panic!("No type {}", name))
     }
 }
 
