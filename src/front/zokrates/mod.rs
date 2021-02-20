@@ -88,9 +88,13 @@ impl<'ast> ZGen<'ast> {
 
     fn builtin_call(fn_name: &str, mut args: Vec<T>) -> Result<T, String> {
         match fn_name {
-            "to_bits" if args.len() == 1 => u32_to_bits(args.pop().unwrap()),
-            "from_bits" if args.len() == 1 => u32_from_bits(args.pop().unwrap()),
-            "unpack" if args.len() == 1 => field_to_bits(args.pop().unwrap()),
+            "EMBED/u8_to_bits" if args.len() == 1 => uint_to_bits(args.pop().unwrap()),
+            "EMBED/u16_to_bits" if args.len() == 1 => uint_to_bits(args.pop().unwrap()),
+            "EMBED/u32_to_bits" if args.len() == 1 => uint_to_bits(args.pop().unwrap()),
+            "EMBED/u8_from_bits" if args.len() == 1 => uint_from_bits(args.pop().unwrap()),
+            "EMBED/u16_from_bits" if args.len() == 1 => uint_from_bits(args.pop().unwrap()),
+            "EMBED/u32_from_bits" if args.len() == 1 => uint_from_bits(args.pop().unwrap()),
+            "EMBED/unpack" if args.len() == 1 => field_to_bits(args.pop().unwrap()),
             _ => Err(format!("Unknown builtin '{}'", fn_name)),
         }
     }
@@ -306,14 +310,15 @@ impl<'ast> ZGen<'ast> {
             ast::Expression::Postfix(p) => {
                 // Assume no functions in arrays, etc.
                 let (base, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
+                    debug!("Call: {}", p.id.value);
                     let (f_path, f_name) = self.deref_import(p.id.value.clone());
                     let args = c
                         .expressions
                         .iter()
                         .map(|e| self.expr(e))
                         .collect::<Vec<_>>();
-                    let res = if f_path.to_string_lossy() == "EMBED" {
-                        Self::builtin_call(&f_name, args).unwrap()
+                    let res = if f_path.to_string_lossy().starts_with("EMBED") {
+                        Self::builtin_call(f_path.to_str().unwrap(), args).unwrap()
                     } else {
                         let p = (f_path, f_name);
                         let f = self

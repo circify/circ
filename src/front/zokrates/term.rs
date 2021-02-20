@@ -90,9 +90,9 @@ impl T {
 impl Display for T {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            T::Bool(x) => write!(f, "{}", x),
-            T::Uint(_, x) => write!(f, "{}", x),
-            T::Field(x) => write!(f, "{}", x),
+            T::Bool(x) => write!(f, "Bool({})", x),
+            T::Uint(_, x) => write!(f, "Uint({})", x),
+            T::Field(x) => write!(f, "Field({})", x),
             T::Struct(_, _) => write!(f, "struct"),
             T::Array(_, _) => write!(f, "array"),
         }
@@ -483,41 +483,33 @@ fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
     }
 }
 
-pub fn u32_to_bits(u: T) -> Result<T, String> {
+pub fn uint_to_bits(u: T) -> Result<T, String> {
     match u {
-        T::Uint(32, t) => Ok(T::Array(
+        T::Uint(n, t) => Ok(T::Array(
             Ty::Bool,
-            (0..32)
+            (0..n)
                 .map(|i| T::Bool(term![Op::BvBit(i); t.clone()]))
                 .collect(),
         )),
-        u => Err(format!("Cannot do u32-to-bits on {}", u)),
+        u => Err(format!("Cannot do uint-to-bits on {}", u)),
     }
 }
 
-pub fn u32_from_bits(u: T) -> Result<T, String> {
+pub fn uint_from_bits(u: T) -> Result<T, String> {
     match u {
-        T::Array(Ty::Bool, list) => {
-            if list.len() == 32 {
-                Ok(T::Uint(
-                    32,
-                    term(
-                        Op::BvConcat,
-                        list.into_iter()
-                            .map(|z: T| -> Result<Term, String> {
-                                Ok(term![Op::BoolToBv; bool(z)?])
-                            })
-                            .collect::<Result<Vec<_>, _>>()?,
-                    ),
-                ))
-            } else {
-                Err(format!(
-                    "Cannot do u32-from-bits on len {} array",
-                    list.len()
-                ))
-            }
-        }
-        u => Err(format!("Cannot do u32-from-bits on {}", u)),
+        T::Array(Ty::Bool, list) => match list.len() {
+            8 | 16 | 32 => Ok(T::Uint(
+                list.len(),
+                term(
+                    Op::BvConcat,
+                    list.into_iter()
+                        .map(|z: T| -> Result<Term, String> { Ok(term![Op::BoolToBv; bool(z)?]) })
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+            )),
+            l => Err(format!("Cannot do uint-from-bits on len {} array", l,)),
+        },
+        u => Err(format!("Cannot do uint-from-bits on {}", u)),
     }
 }
 
@@ -594,7 +586,7 @@ impl Embeddable for ZoKrates {
                 || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
                 public,
             )),
-            Ty::Uint(w) => T::Field(ctx.cs.borrow_mut().new_var(
+            Ty::Uint(w) => T::Uint(*w, ctx.cs.borrow_mut().new_var(
                 &raw_name,
                 Sort::BitVector(*w),
                 || Value::BitVector(BitVector::new(get_int_val(), *w)),
@@ -667,25 +659,19 @@ impl Embeddable for ZoKrates {
             (_, T::Bool(b)) => {
                 ctx.cs.borrow_mut().eval_and_save(&name, &b);
                 let v = leaf_term(Op::Var(name, Sort::Bool));
-                ctx.cs
-                    .borrow_mut()
-                    .assert(term![Op::Eq; v.clone(), b]);
+                ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
                 T::Bool(v)
             }
             (_, T::Field(b)) => {
                 ctx.cs.borrow_mut().eval_and_save(&name, &b);
                 let v = leaf_term(Op::Var(name, Sort::Field(self.modulus.clone())));
-                ctx.cs
-                    .borrow_mut()
-                    .assert(term![Op::Eq; v.clone(), b]);
+                ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
                 T::Field(v)
             }
             (_, T::Uint(w, b)) => {
                 ctx.cs.borrow_mut().eval_and_save(&name, &b);
                 let v = leaf_term(Op::Var(name, Sort::BitVector(w)));
-                ctx.cs
-                    .borrow_mut()
-                    .assert(term![Op::Eq; v.clone(), b]);
+                ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
                 T::Uint(w, v)
             }
             (_, T::Array(ety, list)) => T::Array(

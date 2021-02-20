@@ -43,8 +43,8 @@ impl ZStdLib {
         panic!("Could not find ZoKrates stdlibfrom {}", p.display())
     }
     pub fn canonicalize(&self, parent: &Path, child: &str) -> PathBuf {
-        if parent.to_str().map(|s| s.contains("EMBED")).unwrap_or(false) {
-            return PathBuf::from("EMBED");
+        if child.contains("EMBED") {
+            return PathBuf::from(child);
         }
         let paths = vec![parent.to_path_buf(), self.path.clone()];
         for mut p in paths {
