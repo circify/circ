@@ -81,7 +81,7 @@ impl MemManager {
 
     fn assert(&mut self, t: Term) {
         debug_assert!(check(&t) == Sort::Bool);
-        self.cs.borrow_mut().assertions.push(t);
+        self.cs.borrow_mut().assert(t);
     }
 
     pub fn allocate(&mut self, array: Term) -> AllocId {
@@ -167,10 +167,10 @@ mod test {
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
-        cs.borrow_mut().assertions.push(t);
+        cs.borrow_mut().assert(t);
         let sys = term(
             Op::BoolNaryOp(BoolNaryOp::And),
-            cs.borrow().assertions.clone(),
+            cs.borrow().assertions().clone(),
         );
         assert!(check_sat(&sys))
     }
@@ -185,10 +185,10 @@ mod test {
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(3, 4));
         let t = term![Op::Not; term![Op::Eq; a, b]];
-        cs.borrow_mut().assertions.push(t);
+        cs.borrow_mut().assert(t);
         let sys = term(
             Op::BoolNaryOp(BoolNaryOp::And),
-            cs.borrow().assertions.clone(),
+            cs.borrow().assertions().clone(),
         );
         assert!(!check_sat(&sys))
     }

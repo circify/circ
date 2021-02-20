@@ -40,6 +40,12 @@ impl Display for Ty {
     }
 }
 
+impl fmt::Debug for Ty {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 #[derive(Clone)]
 pub enum T {
     Uint(usize, Term),
@@ -51,7 +57,7 @@ pub enum T {
 }
 
 impl T {
-    fn type_(&self) -> Ty {
+    pub fn type_(&self) -> Ty {
         match self {
             T::Uint(w, _) => Ty::Uint(*w),
             T::Bool(_) => Ty::Bool,
@@ -65,6 +71,20 @@ impl T {
             ),
         }
     }
+    pub fn unwrap_array(self) -> Result<Vec<T>, String> {
+        match self {
+            T::Array(_, v) => Ok(v),
+            s => Err(format!("Not an array: {}", s)),
+        }
+    }
+    pub fn new_array(v: Vec<T>) -> Result<T, String> {
+        if v.len() == 0 {
+            Err("Empty array".to_owned())
+        } else {
+            let ty = v.first().unwrap().type_();
+            Ok(T::Array(ty, v))
+        }
+    }
 }
 
 impl Display for T {
@@ -76,6 +96,12 @@ impl Display for T {
             T::Struct(_, _) => write!(f, "struct"),
             T::Array(_, _) => write!(f, "array"),
         }
+    }
+}
+
+impl fmt::Debug for T {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -119,7 +145,7 @@ fn add_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Add); a, b]
 }
 
-fn add(a: T, b: T) -> Result<T, String> {
+pub fn add(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("+", Some(add_uint), Some(add_field), None, a, b)
 }
 
@@ -131,7 +157,7 @@ fn sub_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Add); a, term![Op::PfUnOp(PfUnOp::Neg); b]]
 }
 
-fn sub(a: T, b: T) -> Result<T, String> {
+pub fn sub(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("-", Some(sub_uint), Some(sub_field), None, a, b)
 }
 
@@ -143,7 +169,7 @@ fn mul_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Mul); a, b]
 }
 
-fn mul(a: T, b: T) -> Result<T, String> {
+pub fn mul(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("*", Some(mul_uint), Some(mul_field), None, a, b)
 }
 
@@ -155,15 +181,23 @@ fn div_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Mul); a, term![Op::PfUnOp(PfUnOp::Recip); b]]
 }
 
-fn div(a: T, b: T) -> Result<T, String> {
+pub fn div(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("/", Some(div_uint), Some(div_field), None, a, b)
+}
+
+fn rem_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinOp(BvBinOp::Urem); a, b]
+}
+
+pub fn rem(a: T, b: T) -> Result<T, String> {
+    wrap_bin_op("%", Some(rem_uint), None, None, a, b)
 }
 
 fn bitand_uint(a: Term, b: Term) -> Term {
     term![Op::BvNaryOp(BvNaryOp::And); a, b]
 }
 
-fn bitand(a: T, b: T) -> Result<T, String> {
+pub fn bitand(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("&", Some(bitand_uint), None, None, a, b)
 }
 
@@ -171,7 +205,7 @@ fn bitor_uint(a: Term, b: Term) -> Term {
     term![Op::BvNaryOp(BvNaryOp::Or); a, b]
 }
 
-fn bitor(a: T, b: T) -> Result<T, String> {
+pub fn bitor(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("|", Some(bitor_uint), None, None, a, b)
 }
 
@@ -179,7 +213,7 @@ fn bitxor_uint(a: Term, b: Term) -> Term {
     term![Op::BvNaryOp(BvNaryOp::Xor); a, b]
 }
 
-fn bitxor(a: T, b: T) -> Result<T, String> {
+pub fn bitxor(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("^", Some(bitxor_uint), None, None, a, b)
 }
 
@@ -187,7 +221,7 @@ fn or_bool(a: Term, b: Term) -> Term {
     term![Op::BoolNaryOp(BoolNaryOp::Or); a, b]
 }
 
-fn or(a: T, b: T) -> Result<T, String> {
+pub fn or(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("||", None, None, Some(or_bool), a, b)
 }
 
@@ -195,7 +229,7 @@ fn and_bool(a: Term, b: Term) -> Term {
     term![Op::BoolNaryOp(BoolNaryOp::And); a, b]
 }
 
-fn and(a: T, b: T) -> Result<T, String> {
+pub fn and(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("&&", None, None, Some(and_bool), a, b)
 }
 
@@ -203,7 +237,7 @@ fn eq_base(a: Term, b: Term) -> Term {
     term![Op::Eq; a, b]
 }
 
-fn eq(a: T, b: T) -> Result<T, String> {
+pub fn eq(a: T, b: T) -> Result<T, String> {
     wrap_bin_pred("==", Some(eq_base), Some(eq_base), Some(eq_base), a, b)
 }
 
@@ -211,7 +245,7 @@ fn neq_base(a: Term, b: Term) -> Term {
     term![Op::Not; term![Op::Eq; a, b]]
 }
 
-fn neq(a: T, b: T) -> Result<T, String> {
+pub fn neq(a: T, b: T) -> Result<T, String> {
     wrap_bin_pred("!=", Some(neq_base), Some(neq_base), Some(neq_base), a, b)
 }
 
@@ -219,7 +253,7 @@ fn ult_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinPred(BvBinPred::Ult); a, b]
 }
 
-fn ult(a: T, b: T) -> Result<T, String> {
+pub fn ult(a: T, b: T) -> Result<T, String> {
     wrap_bin_pred("<", Some(ult_uint), None, None, a, b)
 }
 
@@ -227,7 +261,7 @@ fn ule_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinPred(BvBinPred::Ule); a, b]
 }
 
-fn ule(a: T, b: T) -> Result<T, String> {
+pub fn ule(a: T, b: T) -> Result<T, String> {
     wrap_bin_pred("<=", Some(ule_uint), None, None, a, b)
 }
 
@@ -235,7 +269,7 @@ fn ugt_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinPred(BvBinPred::Ugt); a, b]
 }
 
-fn ugt(a: T, b: T) -> Result<T, String> {
+pub fn ugt(a: T, b: T) -> Result<T, String> {
     wrap_bin_pred(">", Some(ugt_uint), None, None, a, b)
 }
 
@@ -243,7 +277,7 @@ fn uge_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinPred(BvBinPred::Uge); a, b]
 }
 
-fn uge(a: T, b: T) -> Result<T, String> {
+pub fn uge(a: T, b: T) -> Result<T, String> {
     wrap_bin_pred(">=", Some(uge_uint), None, None, a, b)
 }
 
@@ -270,7 +304,7 @@ fn neg_uint(a: Term) -> Term {
     term![Op::BvUnOp(BvUnOp::Neg); a]
 }
 
-fn neg(a: T) -> Result<T, String> {
+pub fn neg(a: T) -> Result<T, String> {
     wrap_un_op("unary-", Some(neg_uint), Some(neg_field), None, a)
 }
 
@@ -282,7 +316,7 @@ fn not_uint(a: Term) -> Term {
     term![Op::BvUnOp(BvUnOp::Not); a]
 }
 
-fn not(a: T) -> Result<T, String> {
+pub fn not(a: T) -> Result<T, String> {
     wrap_un_op("!", Some(not_uint), None, Some(not_bool), a)
 }
 
@@ -301,7 +335,7 @@ pub fn const_int(a: T) -> Result<Integer, String> {
     s.ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
-fn bool(a: T) -> Result<Term, String> {
+pub fn bool(a: T) -> Result<Term, String> {
     match a {
         T::Bool(b) => Ok(b),
         a => Err(format!("{} is not a boolean", a)),
@@ -316,11 +350,11 @@ fn wrap_shift(name: &str, op: BvBinOp, a: T, b: T) -> Result<T, String> {
     }
 }
 
-fn shl(a: T, b: T) -> Result<T, String> {
+pub fn shl(a: T, b: T) -> Result<T, String> {
     wrap_shift("<<", BvBinOp::Shl, a, b)
 }
 
-fn shr(a: T, b: T) -> Result<T, String> {
+pub fn shr(a: T, b: T) -> Result<T, String> {
     wrap_shift(">>", BvBinOp::Lshr, a, b)
 }
 
@@ -352,7 +386,7 @@ fn ite(c: Term, a: T, b: T) -> Result<T, String> {
     }
 }
 
-fn cond(c: T, a: T, b: T) -> Result<T, String> {
+pub fn cond(c: T, a: T, b: T) -> Result<T, String> {
     ite(bool(c)?, a, b)
 }
 
@@ -366,7 +400,7 @@ where
     ))))
 }
 
-fn slice(array: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
+pub fn slice(array: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
     match array {
         T::Array(b, mut list) => {
             let start = start.unwrap_or(0);
@@ -384,7 +418,7 @@ fn spread(array: T) -> Result<Vec<T>, String> {
     }
 }
 
-fn field_select(struct_: &T, field: &str) -> Result<T, String> {
+pub fn field_select(struct_: &T, field: &str) -> Result<T, String> {
     match struct_ {
         T::Struct(_, map) => map
             .get(field)
@@ -394,7 +428,7 @@ fn field_select(struct_: &T, field: &str) -> Result<T, String> {
     }
 }
 
-fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
+pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
     match struct_ {
         T::Struct(name, mut map) => Ok(T::Struct(name, {
             if map.insert(field.to_owned(), val).is_some() {
@@ -407,7 +441,7 @@ fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
     }
 }
 
-fn array_select(array: T, idx: T) -> Result<T, String> {
+pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match (array, idx) {
         (T::Array(_, list), T::Field(idx)) => {
             let mut it = list.into_iter().enumerate();
@@ -422,7 +456,7 @@ fn array_select(array: T, idx: T) -> Result<T, String> {
     }
 }
 
-fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
+pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     match (array, idx) {
         (T::Array(ty, list), T::Field(idx)) => Ok(T::Array(
             ty,
@@ -533,6 +567,7 @@ impl Embeddable for ZoKrates {
         ty: &Self::Ty,
         raw_name: String,
         user_name: Option<String>,
+        public: bool,
     ) -> Self::T {
         let get_int_val = || -> Integer {
             self.values
@@ -551,19 +586,19 @@ impl Embeddable for ZoKrates {
                 &raw_name,
                 Sort::Bool,
                 || Value::Bool(get_int_val() != 0),
-                user_name.is_some(),
+                public,
             )),
             Ty::Field => T::Field(ctx.cs.borrow_mut().new_var(
                 &raw_name,
                 Sort::Field(self.modulus.clone()),
                 || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
-                user_name.is_some(),
+                public,
             )),
             Ty::Uint(w) => T::Field(ctx.cs.borrow_mut().new_var(
                 &raw_name,
                 Sort::BitVector(*w),
                 || Value::BitVector(BitVector::new(get_int_val(), *w)),
-                user_name.is_some(),
+                public,
             )),
             Ty::Array(n, ty) => T::Array(
                 (**ty).clone(),
@@ -574,6 +609,7 @@ impl Embeddable for ZoKrates {
                             &*ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
+                            public,
                         )
                     })
                     .collect(),
@@ -589,6 +625,7 @@ impl Embeddable for ZoKrates {
                                 f_ty,
                                 field_name(&raw_name, f_name),
                                 user_name.as_ref().map(|u| field_name(u, f_name)),
+                                public,
                             ),
                         )
                     })
@@ -632,8 +669,7 @@ impl Embeddable for ZoKrates {
                 let v = leaf_term(Op::Var(name, Sort::Bool));
                 ctx.cs
                     .borrow_mut()
-                    .assertions
-                    .push(term![Op::Eq; v.clone(), b]);
+                    .assert(term![Op::Eq; v.clone(), b]);
                 T::Bool(v)
             }
             (_, T::Field(b)) => {
@@ -641,8 +677,7 @@ impl Embeddable for ZoKrates {
                 let v = leaf_term(Op::Var(name, Sort::Field(self.modulus.clone())));
                 ctx.cs
                     .borrow_mut()
-                    .assertions
-                    .push(term![Op::Eq; v.clone(), b]);
+                    .assert(term![Op::Eq; v.clone(), b]);
                 T::Field(v)
             }
             (_, T::Uint(w, b)) => {
@@ -650,8 +685,7 @@ impl Embeddable for ZoKrates {
                 let v = leaf_term(Op::Var(name, Sort::BitVector(w)));
                 ctx.cs
                     .borrow_mut()
-                    .assertions
-                    .push(term![Op::Eq; v.clone(), b]);
+                    .assert(term![Op::Eq; v.clone(), b]);
                 T::Uint(w, v)
             }
             (_, T::Array(ety, list)) => T::Array(

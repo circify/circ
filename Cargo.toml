@@ -18,6 +18,7 @@ zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser" }
 zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast" }
 typed-arena = "2.0"
 log = "0.4"
+thiserror = "1.0"
 
 [dev-dependencies]
 quickcheck = "1"

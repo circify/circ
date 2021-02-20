@@ -724,8 +724,9 @@ impl ToR1cs {
 }
 
 pub fn to_r1cs(cs: Constraints, modulus: Integer) -> R1cs<String> {
-    let mut converter = ToR1cs::new(modulus, cs.values, cs.public_inputs);
-    for c in cs.assertions {
+    let (assertions, public_inputs, values) = cs.consume();
+    let mut converter = ToR1cs::new(modulus, values, public_inputs);
+    for c in assertions {
         converter.assert(c);
     }
     converter.r1cs

@@ -4,6 +4,7 @@ use rug::Integer;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, RwLock};
+use log::debug;
 
 pub mod bv;
 pub mod dist;
@@ -1050,9 +1051,9 @@ impl std::iter::Iterator for PostOrderIter {
 
 #[derive(Clone, Debug)]
 pub struct Constraints {
-    pub assertions: Vec<Term>,
-    pub public_inputs: HashSet<String>,
-    pub values: Option<HashMap<String, Value>>,
+    assertions: Vec<Term>,
+    public_inputs: HashSet<String>,
+    values: Option<HashMap<String, Value>>,
 }
 
 impl Constraints {
@@ -1076,6 +1077,7 @@ impl Constraints {
         val_fn: F,
         public: bool,
     ) -> Term {
+        debug!("Var: {} (public: {})", name, public);
         if public {
             assert!(
                 self.public_inputs.insert(name.to_owned()),
@@ -1084,11 +1086,27 @@ impl Constraints {
             );
         }
         if let Some(vs) = self.values.as_mut() {
-            if let Some(v) = vs.insert(name.to_owned(), val_fn()) {
+            let val = val_fn();
+            debug!("  val = {}", val);
+            if let Some(v) = vs.insert(name.to_owned(), val) {
                 panic!("{} already had a value: {}", name, v);
             }
         }
         leaf_term(Op::Var(name.to_string(), s))
+    }
+    pub fn publicize(&mut self, s: String) {
+        self.public_inputs.insert(s);
+    }
+    pub fn assert(&mut self, s: Term) {
+        assert!(check(&s) == Sort::Bool);
+        debug!("Assert: {}", s);
+        self.assertions.push(s);
+    }
+    pub fn assertions(&self) -> &Vec<Term> {
+        &self.assertions
+    }
+    pub fn consume(self) -> (Vec<Term>, HashSet<String>, Option<HashMap<String, Value>>) {
+        (self.assertions, self.public_inputs, self.values)
     }
 }
 
