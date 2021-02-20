@@ -371,6 +371,17 @@ mod ast {
         Iteration(IterationStatement<'ast>),
     }
 
+    impl<'ast> Statement<'ast> {
+        pub fn span(&self) -> &Span<'ast> {
+            match self {
+                Statement::Return(x) => &x.span,
+                Statement::Definition(x) => &x.span,
+                Statement::Assertion(x) => &x.span,
+                Statement::Iteration(x) => &x.span,
+            }
+        }
+    }
+
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::definition_statement))]
     pub struct DefinitionStatement<'ast> {
