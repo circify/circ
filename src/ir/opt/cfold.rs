@@ -1,5 +1,13 @@
 use crate::ir::term::*;
+use lazy_static::lazy_static;
 use rug::Integer;
+use std::ops::DerefMut;
+use std::sync::RwLock;
+
+lazy_static! {
+    // TODO: use weak pointers to allow GC
+    static ref FOLDS: RwLock<TermMap<Term>> = RwLock::new(TermMap::new());
+}
 
 /// Create a constant boolean
 fn cbool(b: bool) -> Option<Term> {
@@ -13,10 +21,25 @@ fn cbv(b: BitVector) -> Option<Term> {
 
 /// Fold away operators over constants.
 pub fn fold(node: &Term) -> Term {
+    let mut cache = FOLDS.write().unwrap();
+    fold_cache(node, cache.deref_mut())
+}
+
+pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
+    // (node, children pushed)
+    let mut stack = vec![(node.clone(), false)];
+
     // Maps terms to their rewritten versions.
-    let mut cache = TermMap::<Term>::new();
-    for t in PostOrderIter::new(node.clone()) {
-        let c_get = |x: &Term| cache.get(x).unwrap();
+    while let Some((t, children_pushed)) = stack.pop() {
+        if cache.contains_key(&t) {
+            continue;
+        }
+        if !children_pushed {
+            stack.push((t.clone(), true));
+            stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
+            continue;
+        }
+        let c_get = |x: &Term| -> Term { cache.get(&x).expect("postorder cache").clone() };
         let get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
@@ -119,18 +142,22 @@ pub fn fold(node: &Term) -> Term {
                     Some(true) => Some(t.clone()),
                     Some(false) => Some(f.clone()),
                     None => match t.as_bool_opt() {
-                        Some(true) => Some(fold(
+                        Some(true) => Some(fold_cache(
                             &term![Op::BoolNaryOp(BoolNaryOp::Or); c.clone(), f.clone()],
+                            cache,
                         )),
-                        Some(false) => Some(fold(
+                        Some(false) => Some(fold_cache(
                             &term![Op::BoolNaryOp(BoolNaryOp::And); neg_bool(c.clone()), f.clone()],
+                            cache,
                         )),
                         _ => match f.as_bool_opt() {
-                            Some(true) => Some(fold(
+                            Some(true) => Some(fold_cache(
                                 &term![Op::BoolNaryOp(BoolNaryOp::Or); neg_bool(c.clone()), t.clone()],
+                                cache,
                             )),
-                            Some(false) => Some(fold(
+                            Some(false) => Some(fold_cache(
                                 &term![Op::BoolNaryOp(BoolNaryOp::And); c.clone(), t.clone()],
+                                cache,
                             )),
                             _ => None,
                         },
@@ -146,15 +173,12 @@ pub fn fold(node: &Term) -> Term {
             }),
             _ => None,
         };
-        let new_t = new_t_opt.unwrap_or_else(|| {
-            term(
-                t.op.clone(),
-                t.cs.iter().map(|c| cache.get(c).unwrap().clone()).collect(),
-            )
-        });
-        cache.insert(t.clone(), new_t);
+        let c_get = |x: &Term| -> Term { cache.get(&x).expect("postorder cache").clone() };
+        let new_t = new_t_opt
+            .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| c_get(c)).collect()));
+        cache.insert(t, new_t);
     }
-    cache.get(&node).unwrap().clone()
+    cache.get(&node).expect("postorder cache").clone()
 }
 
 fn neg_bool(t: Term) -> Term {

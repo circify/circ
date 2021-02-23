@@ -1024,6 +1024,7 @@ pub struct PostOrderIter {
     // (cs stacked, term)
     stack: Vec<(bool, Term)>,
     visited: TermSet,
+
 }
 
 impl PostOrderIter {
