@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter, Debug};
 use std::rc::Rc;
 use thiserror::Error;
-use log::debug;
 
 pub mod includer;
 pub mod mem;
@@ -317,7 +316,7 @@ pub trait Embeddable {
         public: bool,
     ) -> Self::T;
     fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T;
-    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T) -> Self::T;
+    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T, public: bool) -> Self::T;
     fn values(&self) -> bool;
 }
 
@@ -459,11 +458,11 @@ impl<E: Embeddable> Circify<E> {
         val: Val<E::T>,
         public: bool,
     ) -> Result<Val<E::T>> {
-        self.declare(name.clone(), &ty, false, public)?;
-        self.assign(Loc::local(name), val)
+        self.declare(name.clone(), &ty, false, false)?;
+        self.assign(Loc::local(name), val, public)
     }
 
-    pub fn assign(&mut self, loc: Loc, val: Val<E::T>) -> Result<Val<E::T>> {
+    pub fn assign(&mut self, loc: Loc, val: Val<E::T>, public: bool) -> Result<Val<E::T>> {
         let lex = self.get_lex_mut(&loc)?;
         let old_name = lex.get_name(&loc.name)?.clone();
         let ty = lex.get_ty(&loc.name)?.clone();
@@ -472,11 +471,11 @@ impl<E: Embeddable> Circify<E> {
         match (old_val, val) {
             (Val::Term(old), Val::Term(new)) => {
                 let guard = self.condition.clone();
-                let ite_val = self.e.ite(&mut self.cir_ctx, guard, (*old).clone(), new);
+                let ite_val = self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone());
                 let new_val =
                     Val::Term(
                         self.e
-                            .assign(&mut self.cir_ctx, &ty, new_name.clone(), ite_val),
+                            .assign(&mut self.cir_ctx, &ty, new_name.clone(), ite_val, public),
                     );
                 assert!(self.vals.insert(new_name, new_val.clone()).is_none());
                 Ok(new_val)
@@ -567,6 +566,7 @@ impl<E: Embeddable> Circify<E> {
                     idx: None,
                 },
                 Val::Term(r),
+                false,
             )?;
         }
         self.break_(RET_BREAK_NAME)
@@ -691,7 +691,7 @@ mod test {
                 match ty {
                     Ty::Bool => {
                         if public {
-                            ctx.cs.borrow_mut().public_inputs.insert(raw_name.clone());
+                            ctx.cs.borrow_mut().publicize(raw_name.clone());
                         }
                         T::Base(ctx.cs.borrow_mut().new_var(
                             &raw_name,
@@ -743,20 +743,23 @@ mod test {
                 _ty: &Self::Ty,
                 name: String,
                 t: Self::T,
+                public: bool,
             ) -> Self::T {
                 match t {
                     T::Base(a) => {
                         ctx.cs.borrow_mut().eval_and_save(&name, &a);
+                        if public {
+                            ctx.cs.borrow_mut().publicize(name.clone());
+                        }
                         let v = leaf_term(Op::Var(name, Sort::Bool));
                         ctx.cs
                             .borrow_mut()
-                            .assertions
-                            .push(term![Op::Eq; v.clone(), a]);
+                            .assert(term![Op::Eq; v.clone(), a]);
                         T::Base(v)
                     }
                     T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a)),
-                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b)),
+                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, public)),
+                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, public)),
                     ),
                 }
             }

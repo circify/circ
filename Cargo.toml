@@ -26,4 +26,4 @@ quickcheck_macros = "1"
 env_logger = "0.8"
 
 [profile.release]
-#debug = true
+debug = true

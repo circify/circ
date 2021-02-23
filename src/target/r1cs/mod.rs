@@ -7,6 +7,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 pub mod opt;
+pub mod trans;
 
 #[derive(Clone, Debug)]
 pub struct R1cs<S: Hash + Eq> {
@@ -285,7 +286,9 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         assert_eq!(&self.modulus, &b.modulus);
         assert_eq!(&self.modulus, &c.modulus);
         self.constraints.push((a.clone(), b.clone(), c.clone()));
-        self.check(&a, &b, &c);
+        if self.values.is_some() {
+            self.check(&a, &b, &c);
+        }
     }
     pub fn format_lc(&self, a: &Lc) -> String {
         let mut s = String::new();
@@ -370,5 +373,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
                 self.check(a, b, c)
             }
         }
+    }
+    pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
+        &self.constraints
     }
 }

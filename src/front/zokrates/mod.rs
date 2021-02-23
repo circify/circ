@@ -129,7 +129,7 @@ impl<'ast> ZGen<'ast> {
                     self.circ.enter_scope();
                     let ass_res = self
                         .circ
-                        .assign(Loc::local(v_name.clone()), Val::Term(T::Field(pf_lit(j))));
+                        .assign(Loc::local(v_name.clone()), Val::Term(T::Field(pf_lit(j))), false);
                     self.unwrap(ass_res, &i.index.span);
                     for s in &i.statements {
                         self.stmt(s);
@@ -194,7 +194,7 @@ impl<'ast> ZGen<'ast> {
             .unwrap_term();
         let new = self.apply_lval_mod(old, l, t)?;
         self.circ
-            .assign(var, Val::Term(new))
+            .assign(var, Val::Term(new), false)
             .map_err(|e| format!("{}", e))
             .map(|_| ())
     }

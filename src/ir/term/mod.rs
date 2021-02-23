@@ -551,6 +551,13 @@ impl TermData {
             None
         }
     }
+    pub fn is_var(&self) -> bool {
+        if let Op::Var(..) = &self.op {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Value {
@@ -1036,8 +1043,8 @@ impl std::iter::Iterator for PostOrderIter {
                 self.stack.pop();
             } else if !children_pushed {
                 self.stack.last_mut().unwrap().0 = true;
-                let cs = self.stack.last().unwrap().1.cs.clone();
-                self.stack.extend(cs.into_iter().map(|c| (false, c)));
+                let last = self.stack.last().unwrap().1.clone();
+                self.stack.extend(last.cs.iter().map(|c| (false, c.clone())));
             } else {
                 break;
             }
@@ -1051,9 +1058,9 @@ impl std::iter::Iterator for PostOrderIter {
 
 #[derive(Clone, Debug)]
 pub struct Constraints {
-    assertions: Vec<Term>,
-    public_inputs: HashSet<String>,
-    values: Option<HashMap<String, Value>>,
+    pub(super) assertions: Vec<Term>,
+    pub(super) public_inputs: HashSet<String>,
+    pub(super) values: Option<HashMap<String, Value>>,
 }
 
 impl Constraints {
@@ -1107,6 +1114,14 @@ impl Constraints {
     }
     pub fn consume(self) -> (Vec<Term>, HashSet<String>, Option<HashMap<String, Value>>) {
         (self.assertions, self.public_inputs, self.values)
+    }
+    pub fn from_parts(assertions: Vec<Term>, public_inputs:  HashSet<String>, values: Option<HashMap<String, Value>>) -> Self {
+        Self {
+            assertions, public_inputs, values,
+        }
+    }
+    pub fn assertions_as_term(&self) -> Term {
+        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
     }
 }
 

@@ -1,11 +1,17 @@
 use crate::ir::term::*;
 
+use rsmt2::conf::SmtConf;
 use rsmt2::errors::SmtRes;
+use rsmt2::parse::{IdentParser, ModelParser, SmtParser};
 use rsmt2::print::{Expr2Smt, Sort2Smt, Sym2Smt};
 use rsmt2::Solver;
 
+use rug::Integer;
+
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::io::Write;
+use std::str::FromStr;
 
 use ieee754::Ieee754;
 
@@ -167,6 +173,62 @@ impl<'a, T: Display + 'a> Sym2Smt<()> for SmtSymDisp<'a, T> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Parser;
+
+impl<'a, R: std::io::BufRead> IdentParser<String, Sort, &'a mut SmtParser<R>> for Parser {
+    fn parse_ident(self, input: &'a mut SmtParser<R>) -> SmtRes<String> {
+        Ok(input
+            .try_sym(|a| -> Result<String, String> { Ok(a.to_owned()) })?
+            .expect("sym"))
+    }
+    fn parse_type(self, input: &'a mut SmtParser<R>) -> SmtRes<Sort> {
+        if input.try_tag("Bool")? {
+            Ok(Sort::Bool)
+        } else if input.try_tag("(_ BitVec")? {
+            let n = input
+                .try_int(|s, b| {
+                    if b {
+                        Ok(usize::from_str(s).unwrap())
+                    } else {
+                        Err("Non-positive bit-vector width")
+                    }
+                })?
+                .unwrap();
+            input.tag(")")?;
+            Ok(Sort::BitVector(n))
+        } else {
+            unimplemented!()
+        }
+    }
+}
+
+impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtParser<Br>>
+    for Parser
+{
+    fn parse_value(
+        self,
+        input: &'a mut SmtParser<Br>,
+        _: &String,
+        _: &[(String, Sort)],
+        _: &Sort,
+    ) -> SmtRes<Value> {
+        let r = if let Some(b) = input.try_bool()? {
+            Value::Bool(b)
+        } else if input.try_tag("#b")? {
+            let bits = input.get_sexpr()?;
+            let i = Integer::from_str_radix(bits, 2).unwrap();
+            Value::BitVector(BitVector::new(i, bits.len()))
+        } else {
+            unimplemented!()
+        };
+        //if !input.try_tag(")")? {
+        //    input.fail_with("No trailing ')'")?;
+        //}
+        Ok(r)
+    }
+}
+
 pub fn check_sat(t: &Term) -> bool {
     let mut solver = Solver::default_cvc4(()).unwrap();
     for c in PostOrderIter::new(t.clone()) {
@@ -179,11 +241,38 @@ pub fn check_sat(t: &Term) -> bool {
     solver.check_sat().unwrap()
 }
 
+pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
+    let mut conf = SmtConf::default_cvc4();
+    conf.models();
+    let mut solver = Solver::new(conf, Parser).unwrap();
+    //solver.path_tee("solver_com").unwrap();
+    for c in PostOrderIter::new(t.clone()) {
+        if let Op::Var(n, s) = &c.op {
+            solver.declare_const(&SmtSymDisp(n), s).unwrap();
+        }
+    }
+    assert!(check(t) == Sort::Bool);
+    solver.assert(&**t).unwrap();
+    if solver.check_sat().unwrap() {
+        Some(
+            solver
+                .get_model()
+                .unwrap()
+                .into_iter()
+                .map(|(id, _, _, v)| (id, v))
+                .collect(),
+        )
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use quickcheck_macros::quickcheck;
+    use rug::Integer;
     use std::collections::HashMap;
 
     #[test]
@@ -191,11 +280,68 @@ mod test {
         let t = leaf_term(Op::Var("a".into(), Sort::Bool));
         assert!(check_sat(&t));
     }
+
+    #[test]
+    fn var_is_sat_model() {
+        let t = leaf_term(Op::Var("a".into(), Sort::Bool));
+        assert!(
+            find_model(&t)
+                == Some(
+                    vec![("a".to_owned(), Value::Bool(true))]
+                        .into_iter()
+                        .collect()
+                )
+        );
+    }
+
     #[test]
     fn var_and_not_is_unsat() {
         let v = leaf_term(Op::Var("a".into(), Sort::Bool));
         let t = term![Op::BoolNaryOp(BoolNaryOp::And); v.clone(), term![Op::Not; v]];
         assert!(!check_sat(&t));
+    }
+
+    #[test]
+    fn bv_is_sat() {
+        let t = term![Op::Eq; bv_lit(0,4), leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
+        assert!(check_sat(&t));
+    }
+
+    #[test]
+    fn bv_is_sat_model() {
+        let t = term![Op::Eq; bv_lit(0,4), leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
+        assert!(
+            find_model(&t)
+                == Some(
+                    vec![(
+                        "a".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(0), 4))
+                    ),]
+                    .into_iter()
+                    .collect()
+                )
+        );
+    }
+
+    #[test]
+    fn vars_are_sat_model() {
+        let t = term![Op::BoolNaryOp(BoolNaryOp::And);
+           leaf_term(Op::Var("a".into(), Sort::Bool)),
+           leaf_term(Op::Var("b".into(), Sort::Bool)),
+           leaf_term(Op::Var("c".into(), Sort::Bool))
+        ];
+        assert!(
+            find_model(&t)
+                == Some(
+                    vec![
+                        ("a".to_owned(), Value::Bool(true)),
+                        ("b".to_owned(), Value::Bool(true)),
+                        ("c".to_owned(), Value::Bool(true)),
+                    ]
+                    .into_iter()
+                    .collect()
+                )
+        );
     }
 
     #[quickcheck]

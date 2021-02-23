@@ -653,23 +653,32 @@ impl Embeddable for ZoKrates {
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
         }
     }
-    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T) -> Self::T {
+    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T, public: bool) -> Self::T {
         assert!(&t.type_() == ty);
         match (ty, t) {
             (_, T::Bool(b)) => {
                 ctx.cs.borrow_mut().eval_and_save(&name, &b);
+                if public {
+                    ctx.cs.borrow_mut().publicize(name.clone());
+                }
                 let v = leaf_term(Op::Var(name, Sort::Bool));
                 ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
                 T::Bool(v)
             }
             (_, T::Field(b)) => {
                 ctx.cs.borrow_mut().eval_and_save(&name, &b);
+                if public {
+                    ctx.cs.borrow_mut().publicize(name.clone());
+                }
                 let v = leaf_term(Op::Var(name, Sort::Field(self.modulus.clone())));
                 ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
                 T::Field(v)
             }
             (_, T::Uint(w, b)) => {
                 ctx.cs.borrow_mut().eval_and_save(&name, &b);
+                if public {
+                    ctx.cs.borrow_mut().publicize(name.clone());
+                }
                 let v = leaf_term(Op::Var(name, Sort::BitVector(w)));
                 ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
                 T::Uint(w, v)
@@ -678,7 +687,7 @@ impl Embeddable for ZoKrates {
                 ety.clone(),
                 list.into_iter()
                     .enumerate()
-                    .map(|(i, elem)| self.assign(ctx, &ety, idx_name(&name, i), elem))
+                    .map(|(i, elem)| self.assign(ctx, &ety, idx_name(&name, i), elem, public))
                     .collect(),
             ),
             (Ty::Struct(_, tys), T::Struct(s_name, list)) => T::Struct(
@@ -688,7 +697,7 @@ impl Embeddable for ZoKrates {
                     .map(|((f_name, elem), (_, f_ty))| {
                         (
                             f_name.clone(),
-                            self.assign(ctx, &f_ty, field_name(&name, &f_name), elem),
+                            self.assign(ctx, &f_ty, field_name(&name, &f_name), elem, public),
                         )
                     })
                     .collect(),
