@@ -14,11 +14,12 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
 
 ## Todo List
 
-   [ ] draft circify
-   [ ] Intern variable names
-   [ ] Optimize R1CS
-   [ ] Inlining optimization
-   [ ] ZoKrates FE
-   [ ] C FE
-   [ ] More SMT solver support
-   [ ] More eval support
+- [x] draft circify
+- [ ] Intern variable names
+- [x] Optimize R1CS
+- [x] Inlining optimization
+- [x] ZoKrates FE
+- [ ] C FE
+- [ ] Tune optimizer for ouput, speed, and memory usage.
+- [ ] More SMT solver support
+- [ ] More eval support
