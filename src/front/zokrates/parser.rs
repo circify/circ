@@ -43,6 +43,7 @@ impl ZStdLib {
         panic!("Could not find ZoKrates stdlibfrom {}", p.display())
     }
     pub fn canonicalize(&self, parent: &Path, child: &str) -> PathBuf {
+        debug!("Looking for {} from {}", child, parent.display());
         if child.contains("EMBED") {
             return PathBuf::from(child);
         }
@@ -52,6 +53,7 @@ impl ZStdLib {
             if p.extension().is_none() {
                 p.set_extension("zok");
             }
+            debug!("Checking {}", p.display());
             if p.exists() {
                 return p;
             }

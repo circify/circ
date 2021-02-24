@@ -458,6 +458,15 @@ impl Sort {
         }
     }
 
+    #[track_caller]
+    pub fn as_pf(&self) -> Arc<Integer> {
+        if let Sort::Field(w) = self {
+            w.clone()
+        } else {
+            panic!("{} is not a field", self)
+        }
+    }
+
     /// An iterator over the elements of this sort.
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]

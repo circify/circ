@@ -418,6 +418,11 @@ impl<'ast> ZGen<'ast> {
     fn cur_path(&self) -> &Path {
         self.file_stack.last().unwrap()
     }
+    fn cur_dir(&self) -> PathBuf {
+        let mut p = self.file_stack.last().unwrap().to_path_buf();
+        p.pop();
+        p
+    }
     fn deref_import(&self, s: String) -> (PathBuf, String) {
         let r = (self.cur_path().to_path_buf(), s);
         self.import_map.get(&r).cloned().unwrap_or(r)
@@ -477,7 +482,7 @@ impl<'ast> ZGen<'ast> {
                     ),
                 };
                 let dst_name = dst_name_opt.unwrap_or_else(|| src_name.clone());
-                let abs_src_path = self.stdlib.canonicalize(self.cur_path(), src_path.as_str());
+                let abs_src_path = self.stdlib.canonicalize(&self.cur_dir(), src_path.as_str());
                 debug!(
                     "Import of {} from {} as {}",
                     src_name,

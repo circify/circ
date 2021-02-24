@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
+use log::debug;
 
 pub mod opt;
 pub mod trans;
@@ -285,6 +286,10 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         assert_eq!(&self.modulus, &a.modulus);
         assert_eq!(&self.modulus, &b.modulus);
         assert_eq!(&self.modulus, &c.modulus);
+        debug!("Constraint:\n    {}\n  * {}\n  = {}",
+                self.format_lc(&a),
+                self.format_lc(&b),
+                self.format_lc(&c));
         self.constraints.push((a.clone(), b.clone(), c.clone()));
         if self.values.is_some() {
             self.check(&a, &b, &c);

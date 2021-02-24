@@ -1,4 +1,5 @@
 use super::*;
+use log::debug;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 struct LinReducer<S: Eq + Hash> {
@@ -139,6 +140,11 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
             if let Some((var, lc)) =
                 as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs.public_idxs)
             {
+                debug!(
+                    "Elim: {} -> {}",
+                    self.r1cs.idxs_signals.get(&var).unwrap().iter().next().unwrap(),
+                    self.r1cs.format_lc(&lc)
+                );
                 self.clear_constraint(con_id);
                 for use_id in self.uses[&var].clone() {
                     if self.sub_in(var, &lc, use_id) {

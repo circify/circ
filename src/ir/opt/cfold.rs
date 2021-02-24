@@ -219,7 +219,7 @@ impl NaryFlat<bool> for BoolNaryOp {
                 } else if children.len() == 0 {
                     leaf_term(Op::Const(Value::Bool(false)))
                 } else {
-                    term(Op::BoolNaryOp(BoolNaryOp::Or), children)
+                    safe_nary(Op::BoolNaryOp(BoolNaryOp::Or), children)
                 }
             }
             BoolNaryOp::And => {
@@ -228,7 +228,7 @@ impl NaryFlat<bool> for BoolNaryOp {
                 } else if children.len() == 0 {
                     leaf_term(Op::Const(Value::Bool(true)))
                 } else {
-                    term(Op::BoolNaryOp(BoolNaryOp::And), children)
+                    safe_nary(Op::BoolNaryOp(BoolNaryOp::And), children)
                 }
             }
             BoolNaryOp::Xor => {
@@ -236,7 +236,7 @@ impl NaryFlat<bool> for BoolNaryOp {
                 if children.len() == 0 {
                     leaf_term(Op::Const(Value::Bool(odd_trues)))
                 } else {
-                    let t = term(Op::BoolNaryOp(BoolNaryOp::Xor), children);
+                    let t = safe_nary(Op::BoolNaryOp(BoolNaryOp::Xor), children);
                     if odd_trues {
                         term![Op::Not; t]
                     } else {
@@ -263,16 +263,16 @@ impl NaryFlat<BitVector> for BvNaryOp {
                     if children.len() == 0 {
                         leaf_term(Op::Const(Value::BitVector(c)))
                     } else if c.uint() == &Integer::from(0) {
-                        term(Op::BvNaryOp(BvNaryOp::Or), children)
+                        safe_nary(Op::BvNaryOp(BvNaryOp::Or), children)
                     } else {
-                        term(
+                        safe_nary(
                             Op::BvConcat,
                             (0..c.width())
                                 .map(|i| {
                                     term![Op::BoolToBv; if c.bit(i) {
                                         leaf_term(Op::Const(Value::Bool(true)))
                                     } else {
-                                        term(
+                                        safe_nary(
                                             Op::BoolNaryOp(BoolNaryOp::Or),
                                             children
                                                 .iter()
@@ -287,7 +287,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                         )
                     }
                 } else {
-                    term(Op::BvNaryOp(BvNaryOp::Or), children)
+                    safe_nary(Op::BvNaryOp(BvNaryOp::Or), children)
                 }
             }
             BvNaryOp::And => {
@@ -296,12 +296,12 @@ impl NaryFlat<BitVector> for BvNaryOp {
                     if children.len() == 0 {
                         leaf_term(Op::Const(Value::BitVector(c)))
                     } else {
-                        term(
+                        safe_nary(
                             Op::BvConcat,
                             (0..c.width())
                                 .map(|i| {
                                     term![Op::BoolToBv; if c.bit(i) {
-                                        term(
+                                        safe_nary(
                                             Op::BoolNaryOp(BoolNaryOp::And),
                                             children
                                                 .iter()
@@ -318,7 +318,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                         )
                     }
                 } else {
-                    term(Op::BvNaryOp(BvNaryOp::And), children)
+                    safe_nary(Op::BvNaryOp(BvNaryOp::And), children)
                 }
             }
             BvNaryOp::Xor => {
@@ -327,11 +327,11 @@ impl NaryFlat<BitVector> for BvNaryOp {
                     if children.len() == 0 {
                         leaf_term(Op::Const(Value::BitVector(c)))
                     } else {
-                        term(
+                        safe_nary(
                             Op::BvConcat,
                             (0..c.width())
                                 .map(|i| {
-                                    let t = term(
+                                    let t = safe_nary(
                                         Op::BoolNaryOp(BoolNaryOp::Xor),
                                         children
                                             .iter()
@@ -350,7 +350,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                         )
                     }
                 } else {
-                    term(Op::BvNaryOp(BvNaryOp::Xor), children)
+                    safe_nary(Op::BvNaryOp(BvNaryOp::Xor), children)
                 }
             }
             BvNaryOp::Add => {
@@ -360,7 +360,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                         children.push(leaf_term(Op::Const(Value::BitVector(c))));
                     }
                 }
-                term(Op::BvNaryOp(BvNaryOp::Add), children)
+                safe_nary(Op::BvNaryOp(BvNaryOp::Add), children)
             }
             BvNaryOp::Mul => {
                 if let Some(c) = consts.pop() {
@@ -371,10 +371,10 @@ impl NaryFlat<BitVector> for BvNaryOp {
                         if c.uint() != &Integer::from(1) || children.len() == 0 {
                             children.push(leaf_term(Op::Const(Value::BitVector(c))));
                         }
-                        term(Op::BvNaryOp(BvNaryOp::Mul), children)
+                        safe_nary(Op::BvNaryOp(BvNaryOp::Mul), children)
                     }
                 } else {
-                    term(Op::BvNaryOp(BvNaryOp::Mul), children)
+                    safe_nary(Op::BvNaryOp(BvNaryOp::Mul), children)
                 }
             }
         }
@@ -397,7 +397,7 @@ impl NaryFlat<FieldElem> for PfNaryOp {
                         children.push(leaf_term(Op::Const(Value::Field(c))));
                     }
                 }
-                term(Op::PfNaryOp(PfNaryOp::Add), children)
+                safe_nary(Op::PfNaryOp(PfNaryOp::Add), children)
             }
             PfNaryOp::Mul => {
                 if let Some(c) = consts.pop() {
@@ -408,10 +408,10 @@ impl NaryFlat<FieldElem> for PfNaryOp {
                         if c.i() != &Integer::from(1) {
                             children.push(leaf_term(Op::Const(Value::Field(c))));
                         }
-                        term(Op::PfNaryOp(PfNaryOp::Mul), children)
+                        safe_nary(Op::PfNaryOp(PfNaryOp::Mul), children)
                     }
                 } else {
-                    term(Op::PfNaryOp(PfNaryOp::Mul), children)
+                    safe_nary(Op::PfNaryOp(PfNaryOp::Mul), children)
                 }
             }
         }
@@ -484,5 +484,13 @@ mod test {
             fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)]),
             term![Op::BvUext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
+    }
+}
+
+fn safe_nary(op: Op, mut children: Vec<Term>) -> Term {
+    match children.len() {
+        0 => panic!("Empty {}", op),
+        1 => children.pop().unwrap(),
+        _ => term(op, children),
     }
 }

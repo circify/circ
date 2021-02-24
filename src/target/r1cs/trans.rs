@@ -1,8 +1,10 @@
 use crate::ir::term::*;
+use crate::ir::term::extras::Letified;
 use crate::target::r1cs::*;
 
 use rug::ops::Pow;
 use rug::Integer;
+use log::debug;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -60,6 +62,7 @@ impl ToR1cs {
     /// If values are being recorded, `value` must be provided.
     fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D, value: Option<Integer>) -> Lc {
         let v = self.fresh_var(ctx, value);
+        debug!("Fresh bit: {}", self.r1cs.format_lc(&v));
         self.enforce_bit(v.clone());
         v
     }
@@ -75,11 +78,20 @@ impl ToR1cs {
         self.r1cs.constraint(x.clone(), i, self.r1cs.zero() + 1);
     }
 
-    /// Return a bit indicating whether wire `x` is zero.
+    /// Return a bit indicating whether wire `x` is non-zero.
     fn is_zero(&mut self, x: Lc) -> Lc {
-        let is_zero = self.fresh_bit("is_zero", self.r1cs.eval(&x).map(|x| Integer::from(x == 0)));
-        self.enforce_nonzero(x.clone() + &is_zero);
-        self.r1cs.constraint(x, is_zero.clone(), self.r1cs.zero());
+        // m * x - 1 + is_zero == 0
+        // is_zero * x == 0
+        let m = self.fresh_var("is_zero_inv", self.r1cs.eval(&x).map(|x| {
+            if x == 0 {
+                Integer::from(0)
+            } else {
+                Integer::from(x.invert(&self.r1cs.modulus()).unwrap())
+            }
+        }));
+        let is_zero = self.fresh_var("is_zero", self.r1cs.eval(&x).map(|x| Integer::from(x == 0)));
+        self.r1cs.constraint(m, x.clone(), -is_zero.clone() + 1);
+        self.r1cs.constraint(is_zero.clone(), x, self.r1cs.zero());
         is_zero
     }
 
@@ -89,18 +101,8 @@ impl ToR1cs {
     }
 
     /// Return a bit indicating whether wires `x` and `y` are equal.
-    fn bits_are_equal(&mut self, x: Lc, y: &Lc) -> Lc {
-        let eq = self.fresh_bit(
-            "is_zero",
-            self.r1cs
-                .eval(&x)
-                .and_then(|x| self.r1cs.eval(y).map(|y| Integer::from(x == y))),
-        );
-        let ones = self.bool_not(&eq);
-        let twos = x + y - &ones;
-        self.r1cs
-            .constraint(twos.clone(), twos - 2, self.r1cs.zero());
-        eq
+    fn bits_are_equal(&mut self, x: &Lc, y: &Lc) -> Lc {
+        self.mul(x.clone() * 2, y.clone()) - x - y + 1
     }
 
     /// Evaluate `var`'s value as an (integer-casted) boolean.
@@ -247,7 +249,9 @@ impl ToR1cs {
     }
 
     fn embed(&mut self, t: Term) {
+        debug!("Embed: {}", Letified(t.clone()));
         for c in PostOrderIter::new(t) {
+            debug!("Embed op: {}", c.op);
             match check(&c) {
                 Sort::Bool => {
                     self.embed_bool(c);
@@ -268,7 +272,7 @@ impl ToR1cs {
             Sort::Bool => {
                 let a = self.get_bool(a).clone();
                 let b = self.get_bool(b).clone();
-                self.bits_are_equal(a, &b)
+                self.bits_are_equal(&a, &b)
             }
             Sort::BitVector(_) => {
                 let a = self.get_bv_uint(a).clone();
@@ -292,7 +296,9 @@ impl ToR1cs {
             let lc = match &c.op {
                 Op::Var(name, Sort::Bool) => {
                     let v = self.fresh_var(name, self.eval_bool(name));
-                    self.enforce_bit(v.clone());
+                    if !self.public_inputs.contains(name) {
+                        self.enforce_bit(v.clone());
+                    }
                     v
                 }
                 Op::Const(Value::Bool(b)) => self.r1cs.zero() + *b as isize,
@@ -723,6 +729,7 @@ impl ToR1cs {
         self.r1cs.constraint(self.r1cs.zero(), self.r1cs.zero(), x);
     }
     fn assert(&mut self, t: Term) {
+        debug!("Assert: {}", Letified(t.clone()));
         self.embed(t.clone());
         let lc = self.get_bool(&t).clone();
         self.assert_zero(lc - 1);
@@ -759,6 +766,10 @@ mod test {
     use rand::distributions::Distribution;
     use rand::SeedableRng;
     use std::sync::Arc;
+
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
 
     #[test]
     fn bool() {
@@ -893,6 +904,7 @@ mod test {
 
     #[test]
     fn not_opt_test() {
+        init();
         let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
         let values: HashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
             .into_iter()

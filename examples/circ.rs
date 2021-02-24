@@ -16,7 +16,7 @@ fn main() {
         inputs: None,
     };
     let cs = Zokrates::gen(inputs);
-    let cs = opt(cs, vec![Opt::ConstantFold, Opt::Flatten, Opt::FlattenAssertions, Opt::Inline, Opt::Mem, Opt::Flatten, Opt::FlattenAssertions, Opt::ConstantFold]);
+    let cs = opt(cs, vec![Opt::ConstantFold, Opt::Flatten, Opt::FlattenAssertions, Opt::Inline, Opt::Mem, Opt::Flatten, Opt::FlattenAssertions, Opt::ConstantFold, Opt::Inline]);
     let r1cs = to_r1cs(cs, circ::front::zokrates::term::ZOKRATES_MODULUS.clone());
     println!("R1cs size: {}", r1cs.constraints().len());
     let r1cs = reduce_linearities(r1cs);
