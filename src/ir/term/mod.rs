@@ -1103,19 +1103,6 @@ pub struct Constraints {
 }
 
 impl Constraints {
-    pub fn eval_and_save(&mut self, name: &str, term: &Term) {
-        if let Some(vs) = self.values.as_mut() {
-            let v = eval(term, vs);
-            vs.insert(name.to_owned(), v);
-        }
-    }
-    pub fn new(values: bool) -> Self {
-        Self {
-            assertions: Vec::new(),
-            public_inputs: HashSet::new(),
-            values: if values { Some(HashMap::new()) } else { None },
-        }
-    }
     pub fn new_var<F: FnOnce() -> Value>(
         &mut self,
         name: &str,
@@ -1140,13 +1127,36 @@ impl Constraints {
         }
         leaf_term(Op::Var(name.to_string(), s))
     }
-    pub fn publicize(&mut self, s: String) {
-        self.public_inputs.insert(s);
+    pub fn assign(&mut self, name: &str, term: Term, public: bool) -> Term {
+        let val = self.eval(&term);
+        let sort = check(&term);
+        let var = self.new_var(name, sort, || val.unwrap(), public);
+        self.assert(term![Op::Eq; var.clone(), term]);
+        var
     }
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
         debug!("Assert: {}", s);
         self.assertions.push(s);
+    }
+    pub fn eval_and_save(&mut self, name: &str, term: &Term) {
+        if let Some(vs) = self.values.as_mut() {
+            let v = eval(term, vs);
+            vs.insert(name.to_owned(), v);
+        }
+    }
+    pub fn eval(&self, term: &Term) -> Option<Value> {
+        self.values.as_ref().map(|vs| eval(term, vs))
+    }
+    pub fn new(values: bool) -> Self {
+        Self {
+            assertions: Vec::new(),
+            public_inputs: HashSet::new(),
+            values: if values { Some(HashMap::new()) } else { None },
+        }
+    }
+    pub fn publicize(&mut self, s: String) {
+        self.public_inputs.insert(s);
     }
     pub fn assertions(&self) -> &Vec<Term> {
         &self.assertions

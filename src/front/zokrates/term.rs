@@ -586,12 +586,15 @@ impl Embeddable for ZoKrates {
                 || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
                 public,
             )),
-            Ty::Uint(w) => T::Uint(*w, ctx.cs.borrow_mut().new_var(
-                &raw_name,
-                Sort::BitVector(*w),
-                || Value::BitVector(BitVector::new(get_int_val(), *w)),
-                public,
-            )),
+            Ty::Uint(w) => T::Uint(
+                *w,
+                ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::BitVector(*w),
+                    || Value::BitVector(BitVector::new(get_int_val(), *w)),
+                    public,
+                ),
+            ),
             Ty::Array(n, ty) => T::Array(
                 (**ty).clone(),
                 (0..*n)
@@ -653,36 +656,19 @@ impl Embeddable for ZoKrates {
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
         }
     }
-    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T, public: bool) -> Self::T {
+    fn assign(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        name: String,
+        t: Self::T,
+        public: bool,
+    ) -> Self::T {
         assert!(&t.type_() == ty);
         match (ty, t) {
-            (_, T::Bool(b)) => {
-                ctx.cs.borrow_mut().eval_and_save(&name, &b);
-                if public {
-                    ctx.cs.borrow_mut().publicize(name.clone());
-                }
-                let v = leaf_term(Op::Var(name, Sort::Bool));
-                ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
-                T::Bool(v)
-            }
-            (_, T::Field(b)) => {
-                ctx.cs.borrow_mut().eval_and_save(&name, &b);
-                if public {
-                    ctx.cs.borrow_mut().publicize(name.clone());
-                }
-                let v = leaf_term(Op::Var(name, Sort::Field(self.modulus.clone())));
-                ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
-                T::Field(v)
-            }
-            (_, T::Uint(w, b)) => {
-                ctx.cs.borrow_mut().eval_and_save(&name, &b);
-                if public {
-                    ctx.cs.borrow_mut().publicize(name.clone());
-                }
-                let v = leaf_term(Op::Var(name, Sort::BitVector(w)));
-                ctx.cs.borrow_mut().assert(term![Op::Eq; v.clone(), b]);
-                T::Uint(w, v)
-            }
+            (_, T::Bool(b)) => T::Bool(ctx.cs.borrow_mut().assign(&name, b, public)),
+            (_, T::Field(b)) => T::Field(ctx.cs.borrow_mut().assign(&name, b, public)),
+            (_, T::Uint(w, b)) => T::Uint(w, ctx.cs.borrow_mut().assign(&name, b, public)),
             (_, T::Array(ety, list)) => T::Array(
                 ety.clone(),
                 list.into_iter()

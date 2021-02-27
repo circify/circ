@@ -3,7 +3,7 @@ use crate::ir::term::*;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt::{self, Display, Formatter, Debug};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::rc::Rc;
 use thiserror::Error;
 
@@ -40,7 +40,7 @@ pub enum CircError {
     #[error("Cannot assign '{0}' to location '{1}', which held '{2}'")]
     MisTypedAssign(String, String, String),
     #[error("Function '{0}' has a return value: {1}. Return stmt has a value: {2}'")]
-    ReturnMismatch(String, bool, bool)
+    ReturnMismatch(String, bool, bool),
 }
 
 pub type Result<T> = std::result::Result<T, CircError>;
@@ -151,13 +151,24 @@ impl<Ty: Display> LexScope<Ty> {
         }
     }
     fn get_name(&self, name: &str) -> Result<&SsaName> {
-        Ok(&self.entries.get(name).ok_or_else(|| CircError::NoName(name.to_owned()))?.ssa_name)
+        Ok(&self
+            .entries
+            .get(name)
+            .ok_or_else(|| CircError::NoName(name.to_owned()))?
+            .ssa_name)
     }
     fn get_ty(&self, name: &str) -> Result<&Ty> {
-        Ok(&self.entries.get(name).ok_or_else(|| CircError::NoName(name.to_owned()))?.ty)
+        Ok(&self
+            .entries
+            .get(name)
+            .ok_or_else(|| CircError::NoName(name.to_owned()))?
+            .ty)
     }
     fn next_ver(&mut self, name: &str) -> Result<&SsaName> {
-        let e = self.entries.get_mut(name).ok_or_else(|| CircError::NoName(name.to_owned()))?;
+        let e = self
+            .entries
+            .get_mut(name)
+            .ok_or_else(|| CircError::NoName(name.to_owned()))?;
         e.next_ver();
         Ok(&e.ssa_name)
     }
@@ -307,6 +318,7 @@ pub trait Embeddable {
     /// Terms for this language
     type T: Display + Clone + Debug;
 
+    /// Declare a new value of type
     fn declare(
         &self,
         ctx: &mut CirCtx,
@@ -316,7 +328,14 @@ pub trait Embeddable {
         public: bool,
     ) -> Self::T;
     fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T;
-    fn assign(&self, ctx: &mut CirCtx, ty: &Self::Ty, name: String, t: Self::T, public: bool) -> Self::T;
+    fn assign(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        name: String,
+        t: Self::T,
+        public: bool,
+    ) -> Self::T;
     fn values(&self) -> bool;
 }
 
@@ -380,7 +399,10 @@ impl<E: Embeddable> Circify<E> {
             if input { Some(name) } else { None },
             public,
         );
-        assert!(self.vals.insert(ssa_name.to_string(), Val::Term(t)).is_none());
+        assert!(self
+            .vals
+            .insert(ssa_name.to_string(), Val::Term(t))
+            .is_none());
         Ok(())
     }
 
@@ -472,11 +494,13 @@ impl<E: Embeddable> Circify<E> {
             (Val::Term(old), Val::Term(new)) => {
                 let guard = self.condition.clone();
                 let ite_val = self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone());
-                let new_val =
-                    Val::Term(
-                        self.e
-                            .assign(&mut self.cir_ctx, &ty, new_name.clone(), ite_val, public),
-                    );
+                let new_val = Val::Term(self.e.assign(
+                    &mut self.cir_ctx,
+                    &ty,
+                    new_name.clone(),
+                    ite_val,
+                    public,
+                ));
                 assert!(self.vals.insert(new_name, new_val.clone()).is_none());
                 Ok(new_val)
             }
@@ -548,16 +572,22 @@ impl<E: Embeddable> Circify<E> {
     pub fn enter_fn(&mut self, name: String, ret_ty: Option<E::Ty>) {
         let prefix = format!("{}_f{}", name, self.fn_ctr);
         self.fn_ctr += 1;
-        self.fn_stack.push(FnFrame::new(name, prefix, ret_ty.is_some()));
+        self.fn_stack
+            .push(FnFrame::new(name, prefix, ret_ty.is_some()));
         if let Some(ty) = ret_ty {
-            self.declare(RET_NAME.to_owned(), &ty, false, false).expect("Bad ret name in fn enter");
+            self.declare(RET_NAME.to_owned(), &ty, false, false)
+                .expect("Bad ret name in fn enter");
         }
     }
 
     pub fn return_(&mut self, val: Option<E::T>) -> Result<()> {
         let last = self.fn_stack.last().expect("No fn");
         if val.is_some() != last.has_return {
-            return Err(CircError::ReturnMismatch(last.name.clone(), last.has_return, val.is_some()));
+            return Err(CircError::ReturnMismatch(
+                last.name.clone(),
+                last.has_return,
+                val.is_some(),
+            ));
         }
         if let Some(r) = val {
             self.assign(
@@ -746,17 +776,7 @@ mod test {
                 public: bool,
             ) -> Self::T {
                 match t {
-                    T::Base(a) => {
-                        ctx.cs.borrow_mut().eval_and_save(&name, &a);
-                        if public {
-                            ctx.cs.borrow_mut().publicize(name.clone());
-                        }
-                        let v = leaf_term(Op::Var(name, Sort::Bool));
-                        ctx.cs
-                            .borrow_mut()
-                            .assert(term![Op::Eq; v.clone(), a]);
-                        T::Base(v)
-                    }
+                    T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, public)),
                     T::Pair(a, b) => T::Pair(
                         Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, public)),
                         Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, public)),
@@ -787,7 +807,8 @@ mod test {
                 &Ty::Pair(Box::new(Ty::Bool), Box::new(Ty::Bool)),
                 true,
                 false,
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 }
