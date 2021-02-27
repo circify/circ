@@ -1,4 +1,6 @@
 use crate::ir::term::*;
+use std::collections::HashSet;
+use log::debug;
 
 /// Detects common C-language SHA patterns and rewrites them.
 pub fn sha_rewrites(term_: &Term) -> Term {
@@ -20,6 +22,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                         && b.cs[0].cs[0] == a.cs[0]
                     {
                         if let Sort::BitVector(w) = check(&t) {
+                            debug!("SHA CH");
                             Some(term(
                                 Op::BvConcat,
                                 (0..w)
@@ -33,6 +36,45 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                             ))
                         } else {
                             unreachable!()
+                        }
+                    } else {
+                        None
+                    }
+                } else if t.cs.len() == 3 {
+                    let c0 = get(0);
+                    let c1 = get(1);
+                    let c2 = get(2);
+                    if &c0.op == &c1.op
+                        && &c1.op == &c2.op
+                        && &c2.op == &Op::BvNaryOp(BvNaryOp::And)
+                        && c0.cs.len() == 2
+                        && c1.cs.len() == 2
+                        && c2.cs.len() == 2
+                    {
+                        let s0 = c0.cs.iter().collect::<HashSet<_>>();
+                        let s1 = c1.cs.iter().collect::<HashSet<_>>();
+                        let s2 = c2.cs.iter().collect::<HashSet<_>>();
+                        if s0.intersection(&s1).count() == 1
+                            && s1.intersection(&s2).count() == 1
+                            && s2.intersection(&s0).count() == 1
+                        {
+                            debug!("SHA MAJ");
+                            let items = s0.union(&s1).collect::<Vec<_>>();
+                            let w = check(&c0).as_bv();
+                            Some(term(
+                                Op::BvConcat,
+                                (0..w)
+                                    .map(|i| {
+                                        term![Op::BoolToBv; term![Op::BoolMaj;
+                                               term![Op::BvBit(i); (*items[0]).clone()],
+                                               term![Op::BvBit(i); (*items[1]).clone()],
+                                               term![Op::BvBit(i); (*items[2]).clone()]]]
+                                    })
+                                    .rev()
+                                    .collect(),
+                            ))
+                        } else {
+                            None
                         }
                     } else {
                         None

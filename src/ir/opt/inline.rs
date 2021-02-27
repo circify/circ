@@ -1,6 +1,5 @@
 use crate::ir::term::extras::*;
 use crate::ir::term::*;
-use log::debug;
 use std::collections::HashSet;
 use super::cfold;
 

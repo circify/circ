@@ -62,7 +62,7 @@ impl ToR1cs {
     /// If values are being recorded, `value` must be provided.
     fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D, value: Option<Integer>) -> Lc {
         let v = self.fresh_var(ctx, value);
-        debug!("Fresh bit: {}", self.r1cs.format_lc(&v));
+        //debug!("Fresh bit: {}", self.r1cs.format_lc(&v));
         self.enforce_bit(v.clone());
         v
     }
@@ -151,6 +151,7 @@ impl ToR1cs {
     /// Constrains `x` to fit in `n` (`signed`) bits.
     /// The LSB is at index 0.
     fn bitify<D: Display + ?Sized>(&mut self, d: &D, x: &Lc, n: usize, signed: bool) -> Vec<Lc> {
+        debug!("Bitify({}): {}", n, self.r1cs.format_lc(&x));
         let bits = self.decomp(d, x, n);
         let sum = self.debitify(bits.iter().cloned(), signed);
         self.assert_zero(sum - x);
@@ -181,13 +182,18 @@ impl ToR1cs {
     }
 
     /// Given `xs`, an iterator of bit-valued wires, returns the XOR of all of them.
-    fn nary_xor<I: ExactSizeIterator<Item = Lc>>(&mut self, xs: I) -> Lc {
+    fn nary_xor<I: ExactSizeIterator<Item = Lc>>(&mut self, mut xs: I) -> Lc {
         let n = xs.len();
-        let sum = xs.into_iter().fold(self.r1cs.zero(), |s, i| s + &i);
-        let sum_bits = self.bitify("sum", &sum, bitsize(n), false);
-        assert!(n > 0);
-        assert!(self.r1cs.modulus() > &n);
-        sum_bits.into_iter().next().unwrap() // safe b/c assert
+        if n > 3 {
+            let sum = xs.into_iter().fold(self.r1cs.zero(), |s, i| s + &i);
+            let sum_bits = self.bitify("sum", &sum, bitsize(n), false);
+            assert!(n > 0);
+            assert!(self.r1cs.modulus() > &n);
+            sum_bits.into_iter().next().unwrap() // safe b/c assert
+        } else {
+            let first = xs.next().expect("empty XOR");
+            xs.fold(first, |a, b| a.clone() + &b -&self.mul(a, b))
+        }
     }
 
     /// Return the product of `a` and `b`.
@@ -300,6 +306,17 @@ impl ToR1cs {
                     let b = self.get_bool(&c.cs[1]).clone();
                     let c = self.get_bool(&c.cs[2]).clone();
                     self.ite(a, b, &c)
+                }
+                Op::BoolMaj => {
+                    let a = self.get_bool(&c.cs[0]).clone();
+                    let b = self.get_bool(&c.cs[1]).clone();
+                    let c = self.get_bool(&c.cs[2]).clone();
+                    // m = ab + bc + ca - 2abc
+                    // m = ab + c(b + a - 2ab)
+                    //   where i = ab
+                    // m = i + c(b + a - 2i)
+                    let i = self.mul(a.clone(), b.clone());
+                    self.mul(c, b + &a - &(i.clone() * 2)) - &i
                 }
                 Op::Not => {
                     let a = self.get_bool(&c.cs[0]);
@@ -444,10 +461,16 @@ impl ToR1cs {
                         let neg_x = self.ite(is_zero, self.r1cs.zero(), &almost_neg_x);
                         self.set_bv_uint(bv, neg_x, n);
                     }
-                    Op::BvUext(_) => {
+                    Op::BvUext(extra_n) => {
                         // TODO: carry over bits if possible.
-                        let x = self.get_bv_uint(&bv.cs[0]).clone();
-                        self.set_bv_uint(bv, x, n);
+                        if self.bv_has_bits(&bv.cs[0]) {
+                            let bits = self.get_bv_bits(&bv.cs[0]).clone();
+                            let ext_bits = std::iter::repeat(self.r1cs.zero()).take(*extra_n);
+                            self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
+                        } else {
+                            let x = self.get_bv_uint(&bv.cs[0]).clone();
+                            self.set_bv_uint(bv, x, n);
+                        }
                     }
                     Op::BvSext(extra_n) => {
                         let mut bits = self.get_bv_bits(&bv.cs[0]).clone().into_iter().rev();
@@ -670,6 +693,10 @@ impl ToR1cs {
                 bits: Vec::new(),
             },
         );
+    }
+
+    fn bv_has_bits(&self, t: &Term) -> bool {
+        self.bvs.get(t).expect("Missing term").bits.len() > 0
     }
 
     fn get_bv_uint(&self, t: &Term) -> &Lc {

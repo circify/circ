@@ -1,10 +1,10 @@
 use hashconsing::{consign, HConsed, WHConsed};
 use lazy_static::lazy_static;
+use log::debug;
 use rug::Integer;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{self, Display, Formatter};
 use std::sync::{Arc, RwLock};
-use log::debug;
 
 pub mod bv;
 pub mod dist;
@@ -40,6 +40,8 @@ pub enum Op {
     BoolNaryOp(BoolNaryOp),
     Not,
     BvBit(usize),
+    // Ternary majority operator.
+    BoolMaj,
 
     FpBinOp(FpBinOp),
     FpBinPred(FpBinPred),
@@ -84,6 +86,7 @@ impl Op {
             Op::BoolNaryOp(_) => None,
             Op::Not => Some(1),
             Op::BvBit(_) => Some(1),
+            Op::BoolMaj => Some(3),
             Op::FpBinOp(_) => Some(2),
             Op::FpBinPred(_) => Some(2),
             Op::FpUnPred(_) => Some(1),
@@ -123,6 +126,7 @@ impl Display for Op {
             Op::BoolNaryOp(a) => write!(f, "{}", a),
             Op::Not => write!(f, "not"),
             Op::BvBit(a) => write!(f, "bit {}", a),
+            Op::BoolMaj => write!(f, "maj"),
             Op::FpBinOp(a) => write!(f, "{}", a),
             Op::FpBinPred(a) => write!(f, "{}", a),
             Op::FpUnPred(a) => write!(f, "{}", a),
@@ -504,7 +508,9 @@ impl Sort {
                             None
                         }
                     })
-                    .map(move |i| leaf_term(Op::Const(Value::Field(FieldElem::new(i, m2.clone()))))),
+                    .map(move |i| {
+                        leaf_term(Op::Const(Value::Field(FieldElem::new(i, m2.clone()))))
+                    }),
                 )
             }
             _ => panic!("Cannot iterate over {}", self),
@@ -796,6 +802,12 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                             )))
                         }
                     }
+                    (Op::BoolMaj, &[a, b, c]) => {
+                        let ctx = "bool majority";
+                        bool_or(a, ctx)
+                            .and_then(|_| bool_or(b, ctx).and_then(|_| bool_or(c, ctx)))
+                            .map(|c| c.clone())
+                    }
                     (Op::FpBinOp(_), &[a, b]) => {
                         let ctx = "fp binary op";
                         fp_or(a, ctx)
@@ -881,6 +893,12 @@ pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
             ),
             Op::BvBit(i) => {
                 Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32))
+            }
+            Op::BoolMaj => {
+                let c0 = vs.get(&c.cs[0]).unwrap().as_bool() as u8;
+                let c1 = vs.get(&c.cs[1]).unwrap().as_bool() as u8;
+                let c2 = vs.get(&c.cs[2]).unwrap().as_bool() as u8;
+                Value::Bool(c0 + c1 + c2 > 1)
             }
             Op::BvConcat => Value::BitVector({
                 let mut it = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
@@ -1064,7 +1082,8 @@ impl std::iter::Iterator for PostOrderIter {
             } else if !children_pushed {
                 self.stack.last_mut().unwrap().0 = true;
                 let last = self.stack.last().unwrap().1.clone();
-                self.stack.extend(last.cs.iter().map(|c| (false, c.clone())));
+                self.stack
+                    .extend(last.cs.iter().map(|c| (false, c.clone())));
             } else {
                 break;
             }
@@ -1135,9 +1154,15 @@ impl Constraints {
     pub fn consume(self) -> (Vec<Term>, HashSet<String>, Option<HashMap<String, Value>>) {
         (self.assertions, self.public_inputs, self.values)
     }
-    pub fn from_parts(assertions: Vec<Term>, public_inputs:  HashSet<String>, values: Option<HashMap<String, Value>>) -> Self {
+    pub fn from_parts(
+        assertions: Vec<Term>,
+        public_inputs: HashSet<String>,
+        values: Option<HashMap<String, Value>>,
+    ) -> Self {
         Self {
-            assertions, public_inputs, values,
+            assertions,
+            public_inputs,
+            values,
         }
     }
     pub fn assertions_as_term(&self) -> Term {

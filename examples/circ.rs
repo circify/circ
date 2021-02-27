@@ -5,7 +5,6 @@ use circ::ir::opt::{opt,Opt};
 use circ::target::r1cs::trans::to_r1cs;
 use circ::target::r1cs::opt::reduce_linearities;
 use std::path::PathBuf;
-use log::debug;
 use env_logger;
 
 fn main() {
@@ -15,7 +14,7 @@ fn main() {
         inputs: None,
     };
     let cs = Zokrates::gen(inputs);
-    let cs = opt(cs, vec![Opt::ConstantFold, Opt::Flatten, Opt::FlattenAssertions, Opt::Inline, Opt::Mem, Opt::Flatten, Opt::FlattenAssertions, Opt::ConstantFold, Opt::Inline]);
+    let cs = opt(cs, vec![Opt::Flatten, Opt::Sha, Opt::ConstantFold, Opt::Flatten, Opt::FlattenAssertions, Opt::Inline, Opt::Mem, Opt::Flatten, Opt::FlattenAssertions, Opt::ConstantFold, Opt::Inline]);
     println!("Converting to r1cs");
     let r1cs = to_r1cs(cs, circ::front::zokrates::term::ZOKRATES_MODULUS.clone());
     println!("R1cs size: {}", r1cs.constraints().len());
