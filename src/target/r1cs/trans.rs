@@ -1,10 +1,10 @@
-use crate::ir::term::*;
 use crate::ir::term::extras::Letified;
+use crate::ir::term::*;
 use crate::target::r1cs::*;
 
+use log::debug;
 use rug::ops::Pow;
 use rug::Integer;
-use log::debug;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -67,28 +67,20 @@ impl ToR1cs {
         v
     }
 
-    /// Enforce `x` to be non-zero.
-    fn enforce_nonzero(&mut self, x: Lc) {
-        let i = self.fresh_var(
-            "inv",
-            self.r1cs
-                .eval(&x)
-                .map(|x| x.invert(&self.r1cs.modulus()).expect("Is zero")),
-        );
-        self.r1cs.constraint(x.clone(), i, self.r1cs.zero() + 1);
-    }
-
     /// Return a bit indicating whether wire `x` is non-zero.
     fn is_zero(&mut self, x: Lc) -> Lc {
         // m * x - 1 + is_zero == 0
         // is_zero * x == 0
-        let m = self.fresh_var("is_zero_inv", self.r1cs.eval(&x).map(|x| {
-            if x == 0 {
-                Integer::from(0)
-            } else {
-                Integer::from(x.invert(&self.r1cs.modulus()).unwrap())
-            }
-        }));
+        let m = self.fresh_var(
+            "is_zero_inv",
+            self.r1cs.eval(&x).map(|x| {
+                if x == 0 {
+                    Integer::from(0)
+                } else {
+                    Integer::from(x.invert(&self.r1cs.modulus()).unwrap())
+                }
+            }),
+        );
         let is_zero = self.fresh_var("is_zero", self.r1cs.eval(&x).map(|x| Integer::from(x == 0)));
         self.r1cs.constraint(m, x.clone(), -is_zero.clone() + 1);
         self.r1cs.constraint(is_zero.clone(), x, self.r1cs.zero());
@@ -611,7 +603,25 @@ impl ToR1cs {
                             }
                         }
                     }
-                    _ => panic!("Non-bv in embed_bv: {}", bv),
+                    Op::BvConcat => {
+                        let mut bits = Vec::new();
+                        for c in bv.cs.iter().rev() {
+                            bits.extend(self.get_bv_bits(c).into_iter().cloned());
+                        }
+                        self.set_bv_bits(bv, bits);
+                    }
+                    // inclusive!
+                    Op::BvExtract(high, low) => {
+                        let bits = self
+                            .get_bv_bits(&bv.cs[0])
+                            .into_iter()
+                            .skip(*low)
+                            .take(*high-*low+1)
+                            .cloned()
+                            .collect();
+                        self.set_bv_bits(bv, bits);
+                    }
+                    _ => panic!("Non-bv in embed_bv: {}", Letified(bv)),
                 }
             }
         //self.r1cs.eval(self.get_bv_uint(&bv2)).map(|v| {
@@ -739,6 +749,13 @@ impl ToR1cs {
 pub fn to_r1cs(cs: Constraints, modulus: Integer) -> R1cs<String> {
     let (assertions, public_inputs, values) = cs.consume();
     let mut converter = ToR1cs::new(modulus, values, public_inputs);
+    debug!(
+        "Term count: {}",
+        assertions
+            .iter()
+            .map(|c| PostOrderIter::new(c.clone()).count())
+            .sum::<usize>()
+    );
     for c in assertions {
         converter.assert(c);
     }
@@ -831,11 +848,7 @@ mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs = Constraints::from_parts(
-            vec![t],
-            HashSet::new(),
-            Some(values),
-        );
+        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -844,11 +857,7 @@ mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(
-            vec![t],
-            HashSet::new(),
-            Some(values),
-        );
+        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -857,11 +866,7 @@ mod test {
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(
-            vec![t],
-            HashSet::new(),
-            Some(values),
-        );
+        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -872,11 +877,7 @@ mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(
-            vec![t],
-            HashSet::new(),
-            Some(values),
-        );
+        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -911,11 +912,7 @@ mod test {
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(
-            vec![t],
-            HashSet::new(),
-            Some(values),
-        );
+        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);

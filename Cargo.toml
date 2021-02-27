@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 hashconsing = "1.3"
+#hashconsing = { path = "../hashconsing" }
 rug = "1.11"
 fnv = "1.0.7"
 lazy_static = "1.4"

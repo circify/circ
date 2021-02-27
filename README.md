@@ -16,6 +16,9 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
 
 - [x] draft circify
 - [ ] Intern variable names
+- [ ] Tweak log system to expect exact target match
+- [ ] Implement automatic display letification
+- [ ] smarter letification
 - [x] Optimize R1CS
 - [x] Inlining optimization
 - [x] ZoKrates FE

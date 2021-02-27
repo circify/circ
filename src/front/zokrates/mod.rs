@@ -123,19 +123,23 @@ impl<'ast> ZGen<'ast> {
                 let s = self.const_int(&i.from);
                 let e = self.const_int(&i.to);
                 let v_name = i.index.value.clone();
+                self.circ.enter_scope();
                 let decl_res = self.circ.declare(v_name.clone(), &ty, false, false);
                 self.unwrap(decl_res, &i.index.span);
                 for j in s..e {
                     self.circ.enter_scope();
-                    let ass_res = self
-                        .circ
-                        .assign(Loc::local(v_name.clone()), Val::Term(T::Field(pf_lit(j))), false);
+                    let ass_res = self.circ.assign(
+                        Loc::local(v_name.clone()),
+                        Val::Term(T::Field(pf_lit(j))),
+                        false,
+                    );
                     self.unwrap(ass_res, &i.index.span);
                     for s in &i.statements {
                         self.stmt(s);
                     }
                     self.circ.exit_scope();
                 }
+                self.circ.exit_scope();
             }
             ast::Statement::Definition(d) => {
                 assert!(d.lhs.len() <= 1);
@@ -154,9 +158,12 @@ impl<'ast> ZGen<'ast> {
                             );
                         }
                         assert!(l.a.accesses.len() == 0);
-                        let d_res = self
-                            .circ
-                            .declare_init(l.a.id.value.clone(), decl_ty, Val::Term(e), false);
+                        let d_res = self.circ.declare_init(
+                            l.a.id.value.clone(),
+                            decl_ty,
+                            Val::Term(e),
+                            false,
+                        );
                         self.unwrap(d_res, &d.span);
                     } else {
                         // Assignee case
@@ -469,19 +476,30 @@ impl<'ast> ZGen<'ast> {
                 );
             }
             for i in &f.imports {
-                let (src_path, src_name, dst_name_opt) = match i {
+                let (src_path, src_name, dst_name) = match i {
                     ast::ImportDirective::Main(m) => (
                         m.source.value.clone(),
                         "main".to_owned(),
-                        m.alias.as_ref().map(|a| a.value.clone()),
+                        m.alias
+                            .as_ref()
+                            .map(|a| a.value.clone())
+                            .unwrap_or_else(|| {
+                                PathBuf::from(m.source.value.clone())
+                                    .file_stem()
+                                    .unwrap_or_else(|| panic!("Bad import: {}", m.source.value))
+                                    .to_string_lossy()
+                                    .to_string()
+                            }),
                     ),
                     ast::ImportDirective::From(m) => (
                         m.source.value.clone(),
                         m.symbol.value.clone(),
-                        m.alias.as_ref().map(|a| a.value.clone()),
+                        m.alias
+                            .as_ref()
+                            .map(|a| a.value.clone())
+                            .unwrap_or_else(|| m.symbol.value.clone()),
                     ),
                 };
-                let dst_name = dst_name_opt.unwrap_or_else(|| src_name.clone());
                 let abs_src_path = self.stdlib.canonicalize(&self.cur_dir(), src_path.as_str());
                 debug!(
                     "Import of {} from {} as {}",

@@ -19,12 +19,14 @@ pub enum Opt {
 }
 
 pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> Constraints {
-    debug!("Initial: {}", Letified(cs.assertions_as_term()));
+    //debug!("Initial: {}", Letified(cs.assertions_as_term()));
     for i in optimizations {
+        debug!("Applying: {:?}", i);
         match i {
             Opt::ConstantFold => {
+                let mut cache = TermMap::new();
                 for a in &mut cs.assertions {
-                    *a = cfold::fold(a);
+                    *a = cfold::fold_cache(a, &mut cache);
                 }
             }
             Opt::Sha => {
@@ -59,5 +61,6 @@ pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> 
         }
         debug!("After {:?}: {}", i, Letified(cs.assertions_as_term()));
     }
+    garbage_collect();
     cs
 }

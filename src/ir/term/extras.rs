@@ -57,17 +57,28 @@ impl Display for Letified {
 ///
 /// The substitution map is taken mutably; this function will add rewrites to it.
 /// This allows the same map to be re-used across multiple rewrites, with caching.
+///
+/// TODO: Return a reference into the subs.
 pub fn substitute_cache(t: &Term, subs: &mut TermMap<Term>) -> Term {
-    for n in PostOrderIter::new(t.clone()) {
-        if !subs.contains_key(&n) {
-            let new_n = term(
-                n.op.clone(),
-                n.cs.iter()
-                    .map(|c| subs.get(c).expect("postorder").clone())
-                    .collect(),
-            );
-            subs.insert(n.clone(), new_n);
+    let mut stack = vec![(t.clone(), false)];
+
+    // Maps terms to their rewritten versions.
+    while let Some((n, children_pushed)) = stack.pop() {
+        if subs.contains_key(&n) {
+            continue;
         }
+        if !children_pushed {
+            stack.push((n.clone(), true));
+            stack.extend(n.cs.iter().map(|c| (c.clone(), false)));
+            continue;
+        }
+        let new_n = term(
+            n.op.clone(),
+            n.cs.iter()
+                .map(|c| subs.get(c).expect("postorder").clone())
+                .collect(),
+        );
+        subs.insert(n.clone(), new_n);
     }
     subs.get(t).expect("postorder").clone()
 }

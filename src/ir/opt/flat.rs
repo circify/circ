@@ -4,7 +4,18 @@ use crate::ir::term::*;
 pub fn flatten_nary_ops(term_: Term) -> Term {
     // what does a term rewrite to?
     let mut rewritten = TermMap::<Term>::new();
-    for t in PostOrderIter::new(term_.clone()) {
+    let mut stack = vec![(term_.clone(), false)];
+
+    // Maps terms to their rewritten versions.
+    while let Some((t, children_pushed)) = stack.pop() {
+        if rewritten.contains_key(&t) {
+            continue;
+        }
+        if !children_pushed {
+            stack.push((t.clone(), true));
+            stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
+            continue;
+        }
         let new_t = match &t.op {
             // Don't flatten field*, since it does not help us.
             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(PfNaryOp::Add) => {

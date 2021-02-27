@@ -39,6 +39,7 @@ impl<'a> Inliner<'a> {
 
     /// Checks invariant that no key variable is in any `substs` value.
     /// Also checks that no key variable is in any `subst_cache` value.
+    #[allow(dead_code)]
     fn check_substs(&self) {
         let keys: HashSet<&Term> = self.substs.keys().collect();
         for (key, value) in &self.substs {
@@ -132,7 +133,7 @@ impl<'a> Inliner<'a> {
     /// If `t` is not a substitution, then its (substituted variant) is returned.
     fn ingest_term(&mut self, t: &Term) -> Option<Term> {
         if let Some((var, val)) = self.as_fresh_def(&t) {
-            debug!(target: "circ::ir::opt::inline", "Inline: {} -> {}", var, val.clone());
+            //debug!(target: "circ::ir::opt::inline", "Inline: {} -> {}", var, val.clone());
             // Rewrite the substitution
             let subst_val = self.apply(&val);
 

@@ -404,7 +404,7 @@ pub fn slice(array: T, start: Option<usize>, end: Option<usize>) -> Result<T, St
     match array {
         T::Array(b, mut list) => {
             let start = start.unwrap_or(0);
-            let end = end.unwrap_or(list.len() - 1);
+            let end = end.unwrap_or(list.len());
             Ok(T::Array(b, list.drain(start..end).collect()))
         }
         a => Err(format!("Cannot slice {}", a)),

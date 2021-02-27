@@ -69,7 +69,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                     _ => None,
                 }
             }
-            // TODO: Pf to Bv
+            Op::PfToBv(w) => {
+                let child = get(0);
+                child
+                    .as_pf_opt()
+                    .map(|c| bv_lit(c.i() % (Integer::from(1) << *w as u32), *w))
+            }
             Op::BvBinOp(o) => {
                 let c0 = get(0);
                 let c1 = get(1);

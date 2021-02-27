@@ -531,11 +531,22 @@ pub type Term = HConsed<TermData>;
 pub type TTerm = WHConsed<TermData>;
 
 consign! {
-    let TERM_FACTORY = consign(100) for TermData;
+    let TERM_FACTORY = consign(10000) for TermData;
 }
 
 lazy_static! {
     static ref TERM_TYPES: RwLock<HashMap<TTerm, Sort>> = RwLock::new(HashMap::new());
+}
+
+/// Scans the term database and the type database and removes dead terms.
+pub fn garbage_collect() {
+    use hashconsing::HashConsign;
+    TERM_FACTORY.collect();
+    let mut ty_map = TERM_TYPES.write().unwrap();
+    let old_size = ty_map.len();
+    ty_map.retain(|term, _| term.to_hconsed().is_some());
+    let new_size = ty_map.len();
+    debug!(target: "ir::term::gc", "{} of {} types collected", old_size -new_size, old_size);
 }
 
 impl TermData {
@@ -1033,13 +1044,12 @@ pub struct PostOrderIter {
     // (cs stacked, term)
     stack: Vec<(bool, Term)>,
     visited: TermSet,
-
 }
 
 impl PostOrderIter {
-    pub fn new(t: Term) -> Self {
+    pub fn new(root: Term) -> Self {
         Self {
-            stack: vec![(false, t)],
+            stack: vec![(false, root)],
             visited: TermSet::new(),
         }
     }
