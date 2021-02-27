@@ -716,8 +716,10 @@ impl ToR1cs {
                         PfNaryOp::Add => args.fold(self.r1cs.zero(), std::ops::Add::add),
                         PfNaryOp::Mul => {
                             let args = args.cloned().collect::<Vec<_>>();
-                            args.into_iter()
-                                .fold(self.r1cs.zero() + 1, |a, b| self.mul(a, b.clone()))
+                            let mut args_iter = args.into_iter();
+                            let first = args_iter.next().unwrap();
+                            args_iter
+                                .fold(first, |a, b| self.mul(a, b.clone()))
                         }
                     }
                 }
