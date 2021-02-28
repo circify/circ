@@ -192,7 +192,7 @@ impl ToR1cs {
             sum_bits.into_iter().next().unwrap() // safe b/c assert
         } else {
             let first = xs.next().expect("empty XOR");
-            xs.fold(first, |a, b| a.clone() + &b -&self.mul(a, b))
+            xs.fold(first, |a, b| a.clone() + &b - &(self.mul(a, b) * 2))
         }
     }
 

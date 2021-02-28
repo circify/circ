@@ -12,7 +12,7 @@ use crate::ir::term::*;
 lazy_static! {
     // TODO: handle this better
     pub static ref ZOKRATES_MODULUS: Integer = Integer::from_str_radix(
-        "21888242871839275222246405745257275088548364400416034343698204186575808495617",
+        "52435875175126190479447740508185965837690552500527637822603658699938581184513",
         10
     )
     .unwrap();

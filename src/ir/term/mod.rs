@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::{Arc, RwLock};
 
 pub mod bv;
@@ -367,7 +367,7 @@ impl Display for PfUnOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct TermData {
     pub op: Op,
     pub cs: Vec<Term>,
@@ -384,6 +384,12 @@ impl Display for TermData {
             }
             write!(f, ")")
         }
+    }
+}
+
+impl Debug for TermData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 

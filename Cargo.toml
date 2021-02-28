@@ -10,6 +10,7 @@ edition = "2018"
 hashconsing = "1.3"
 #hashconsing = { path = "../hashconsing" }
 rug = "1.11"
+gmp-mpfr-sys = "1.4"
 fnv = "1.0.7"
 lazy_static = "1.4"
 rand = "0.8"
@@ -20,11 +21,16 @@ zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast" }
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
+bellman = "0.9"
+ff = "0.9"
+funty = "=1.1"
 
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
 env_logger = "0.8"
+bls12_381 = "0.4"
+structopt = "0.3"
 
 [profile.release]
 debug = true

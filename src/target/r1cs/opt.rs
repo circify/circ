@@ -142,7 +142,7 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
             {
                 debug!(
                     "Elim: {} -> {}",
-                    self.r1cs.idxs_signals.get(&var).unwrap().iter().next().unwrap(),
+                    self.r1cs.idxs_signals.get(&var).unwrap(),
                     self.r1cs.format_lc(&lc)
                 );
                 self.clear_constraint(con_id);

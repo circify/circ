@@ -1,3 +1,4 @@
+use log::debug;
 use rug::ops::{RemRounding, RemRoundingAssign};
 use rug::Integer;
 use std::collections::hash_map::Entry;
@@ -5,8 +6,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
-use log::debug;
 
+pub mod bellman;
 pub mod opt;
 pub mod trans;
 
@@ -14,7 +15,7 @@ pub mod trans;
 pub struct R1cs<S: Hash + Eq> {
     modulus: Rc<Integer>,
     signal_idxs: HashMap<S, usize>,
-    idxs_signals: HashMap<usize, HashSet<S>>,
+    idxs_signals: HashMap<usize, S>,
     next_idx: usize,
     public_idxs: HashSet<usize>,
     values: Option<HashMap<usize, Integer>>,
@@ -264,8 +265,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let n = self.next_idx;
         self.next_idx += 1;
         self.signal_idxs.insert(s.clone(), n);
-        self.idxs_signals
-            .insert(n, std::iter::once(s.clone()).collect::<HashSet<_>>());
+        self.idxs_signals.insert(n, s.clone());
         match (self.values.as_mut(), v) {
             (Some(vs), Some(v)) => {
                 //println!("{} -> {}", &s, &v);
@@ -286,10 +286,12 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         assert_eq!(&self.modulus, &a.modulus);
         assert_eq!(&self.modulus, &b.modulus);
         assert_eq!(&self.modulus, &c.modulus);
-        debug!("Constraint:\n    {}\n  * {}\n  = {}",
-                self.format_lc(&a),
-                self.format_lc(&b),
-                self.format_lc(&c));
+        debug!(
+            "Constraint:\n    {}\n  * {}\n  = {}",
+            self.format_lc(&a),
+            self.format_lc(&b),
+            self.format_lc(&c)
+        );
         self.constraints.push((a.clone(), b.clone(), c.clone()));
         if self.values.is_some() {
             self.check(&a, &b, &c);
@@ -315,7 +317,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
                     " {} {}{}",
                     sign(coeff),
                     abs(coeff),
-                    self.idxs_signals.get(idx).unwrap().iter().next().unwrap()
+                    self.idxs_signals.get(idx).unwrap(),
                 )
                 .chars(),
             );
