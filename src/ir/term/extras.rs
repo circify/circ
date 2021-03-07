@@ -33,23 +33,28 @@ impl Display for Letified {
         //};
         let mut let_ct = 0;
         let mut print_as = TermMap::new();
+
+        let mut parent_counts = TermMap::<usize>::new();
+        for t in PostOrderIter::new(self.0.clone()) {
+            for c in t.cs.iter().cloned() {
+                *parent_counts.entry(c).or_insert(0) += 1;
+            }
+        }
+
         writeln!(f, "(let (")?;
         for t in PostOrderIter::new(self.0.clone()) {
-            let s = if t.cs.len() > 0 {
-                let v = format!("let_{}", let_ct);
+            if parent_counts.get(&t).unwrap_or(&0) > &1 && t.cs.len() > 0 {
+                let name = format!("let_{}", let_ct);
                 let_ct += 1;
-                write!(f, "  ({} ({}", v, t.op)?;
-                for c in &t.cs {
-                    write!(f, " {}", print_as.get(c).unwrap())?;
-                }
-                writeln!(f, "))")?;
-                v
-            } else {
-                format!("{}", t)
-            };
-            print_as.insert(t, s);
+                let sort = check(&t);
+                write!(f, "  ({} ", name)?;
+                let var = leaf_term(Op::Var(name, sort));
+                writeln!(f, "{})", substitute_cache(&t, &mut print_as))?;
+                print_as.insert(t, var);
+
+            }
         }
-        writeln!(f, ") {})", print_as.get(&self.0).unwrap())
+        writeln!(f, ") {})", substitute_cache(&self.0, &mut print_as))
     }
 }
 
