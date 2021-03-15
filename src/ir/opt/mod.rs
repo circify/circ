@@ -51,15 +51,21 @@ pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> 
                 cs.assertions = new_assertions;
             }
             Opt::Flatten => {
-                for a in &mut cs.assertions {
-                    *a = flat::flatten_nary_ops(a.clone());
-                }
+                let cs_term = cs.assertions_as_term();
+                let new_term =  flat::flatten_nary_ops(cs_term);
+                let assertions = if new_term.op == Op::BoolNaryOp(BoolNaryOp::And) {
+                    new_term.cs.clone()
+                } else {
+                    vec![new_term]
+                };
+                cs.assertions = assertions;
             }
             Opt::Inline => {
                 inline::inline(&mut cs.assertions, &cs.public_inputs);
             }
         }
-        debug!("After {:?}: {}", i, Letified(cs.assertions_as_term()));
+        debug!("After {:?}: {}", i, cs.terms());
+        //debug!("After {:?}: {}", i, Letified(cs.assertions_as_term()));
     }
     garbage_collect();
     cs

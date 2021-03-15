@@ -143,7 +143,7 @@ mod test {
     fn letified_no_dups() {
         let t = term![Op::Eq; term![Op::BvNaryOp(BvNaryOp::Add); bv_lit(4,3), bv_lit(1,3)], bv_lit(5,3)];
         assert_eq!(
-            remove_whitespace("(let ((let_0 (bvadd #b100 #b001))(let_1 (= let_0 #b101))) let_1)"),
+            remove_whitespace("(let ()(= (bvadd #b100 #b001) #b101))"),
             remove_whitespace(&format!("{}", Letified(t))),
         );
     }
@@ -152,7 +152,7 @@ mod test {
         let a = term![Op::BvNaryOp(BvNaryOp::Add); bv_lit(4,3), bv_lit(1,3)];
         let t = term![Op::Eq; a.clone(), a];
         assert_eq!(
-            remove_whitespace("(let ((let_0 (bvadd #b100 #b001))(let_1 (= let_0 let_0))) let_1)"),
+            remove_whitespace("(let ((let_0 (bvadd #b100 #b001)))(= let_0 let_0))"),
             remove_whitespace(&format!("{}", Letified(t))),
         );
     }

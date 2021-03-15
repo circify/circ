@@ -1,9 +1,73 @@
 use crate::ir::term::*;
+use std::collections::HashSet;
+use std::rc::Rc;
+
+enum Entry {
+    Term(Rc<Term>),
+    NaryTerm(Op, L<Term>, Option<Term>),
+}
+
+type L<T> = Rc<PersistentConcatList<T>>;
+
+enum PersistentConcatList<T> {
+    Leaf(Rc<T>),
+    Concat(Vec<L<T>>),
+}
+
+impl<T: Clone> PersistentConcatList<T> {
+    fn as_vec(this: L<T>) -> Vec<T> {
+        let mut v = Vec::new();
+        let mut stack = vec![this];
+        while let Some(t) = stack.pop() {
+            match &*t {
+                PersistentConcatList::Leaf(t) => v.push((**t).clone()),
+                PersistentConcatList::Concat(ts) => {
+                    ts.into_iter().for_each(|c| stack.push(c.clone()));
+                }
+            }
+        }
+        v
+    }
+}
+
+impl Entry {
+    fn to_term(&mut self) -> Term {
+        match self {
+            Entry::Term(t) => (**t).clone(),
+            Entry::NaryTerm(o, ts, maybe_term) => {
+                if maybe_term.is_none() {
+                    let v = PersistentConcatList::as_vec(ts.clone());
+                    *maybe_term = Some(term(o.clone(), v));
+                }
+                maybe_term.as_ref().unwrap().clone()
+            }
+        }
+    }
+}
+
+pub struct Cache(TermMap<Entry>);
+
+impl Cache {
+    pub fn new() -> Self {
+        Cache(TermMap::new())
+    }
+}
 
 /// Traverse `term`, flattening n-ary operators.
 pub fn flatten_nary_ops(term_: Term) -> Term {
+    let mut c = Cache::new();
+    flatten_nary_ops_cached(term_, &mut c)
+}
+/// Traverse `term`, flattening n-ary operators.
+pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache) -> Term {
+    let mut parent_counts = TermMap::<usize>::new();
+    for t in PostOrderIter::new(term_.clone()) {
+        for c in t.cs.iter().cloned() {
+            *parent_counts.entry(c).or_insert(0) += 1;
+        }
+    }
+
     // what does a term rewrite to?
-    let mut rewritten = TermMap::<Term>::new();
     let mut stack = vec![(term_.clone(), false)];
 
     // Maps terms to their rewritten versions.
@@ -16,30 +80,42 @@ pub fn flatten_nary_ops(term_: Term) -> Term {
             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
             continue;
         }
-        let new_t = match &t.op {
+        let entry = match &t.op {
             // Don't flatten field*, since it does not help us.
             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(PfNaryOp::Add) => {
                 let mut children = Vec::new();
                 for c in &t.cs {
-                    let new_c = rewritten.get(c).unwrap();
-                    if &new_c.op == &t.op {
-                        children.extend(new_c.cs.iter().cloned())
-                    } else {
-                        children.push(new_c.clone());
+                    match rewritten.get_mut(c).unwrap() {
+                        Entry::Term(t) => {
+                            children.push(Rc::new(PersistentConcatList::Leaf(t.clone())))
+                        }
+                        Entry::NaryTerm(o, ts, _)
+                            if &t.op == o && parent_counts.get(c).unwrap_or(&0) <= &1 =>
+                        {
+                            children.push(ts.clone());
+                        }
+                        e => {
+                            children
+                                .push(Rc::new(PersistentConcatList::Leaf(Rc::new(e.to_term()))));
+                        }
                     }
                 }
-                term(t.op.clone(), children)
+                Entry::NaryTerm(
+                    t.op.clone(),
+                    Rc::new(PersistentConcatList::Concat(children)),
+                    None,
+                )
             }
-            _ => term(
+            _ => Entry::Term(Rc::new(term(
                 t.op.clone(),
                 t.cs.iter()
-                    .map(|c| rewritten.get(c).unwrap().clone())
+                    .map(|c| rewritten.get_mut(c).unwrap().to_term())
                     .collect(),
-            ),
+            ))),
         };
-        rewritten.insert(t, new_t);
+        rewritten.insert(t, entry);
     }
-    rewritten.get(&term_).unwrap().clone()
+    rewritten.get_mut(&term_).unwrap().to_term()
 }
 
 #[cfg(test)]
@@ -62,8 +138,11 @@ mod test {
     const BV_MUL: Op = Op::BvNaryOp(BvNaryOp::Mul);
 
     fn is_flat(t: Term) -> bool {
-        PostOrderIter::new(t)
-            .all(|c| c.op == Op::PfNaryOp(PfNaryOp::Mul) || c.op.arity().is_some() || !c.cs.iter().any(|cc| c.op == cc.op))
+        PostOrderIter::new(t).all(|c| {
+            c.op == Op::PfNaryOp(PfNaryOp::Mul)
+                || c.op.arity().is_some()
+                || !c.cs.iter().any(|cc| c.op == cc.op)
+        })
     }
 
     #[quickcheck]

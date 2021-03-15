@@ -32,17 +32,20 @@ fn main() {
     };
     let cs = Zokrates::gen(inputs);
     let cs = opt(cs, vec![Opt::Flatten, Opt::Sha, Opt::ConstantFold, Opt::Flatten, Opt::FlattenAssertions, Opt::Inline, Opt::Mem, Opt::Flatten, Opt::FlattenAssertions, Opt::ConstantFold, Opt::Inline]);
+    println!("Done with IR optimization");
+
     println!("Converting to r1cs");
     let r1cs = to_r1cs(cs, circ::front::zokrates::term::ZOKRATES_MODULUS.clone());
     println!("R1cs size: {}", r1cs.constraints().len());
     let r1cs = reduce_linearities(r1cs);
     println!("R1cs size: {}", r1cs.constraints().len());
-    r1cs.check_all();
-    let mut cs = TestConstraintSystem::<Scalar>::new();
-    r1cs.synthesize(&mut cs).unwrap();
-    println!("Num constraints: {}", cs.num_constraints());
-    println!("{}", cs.pretty_print());
-    if let Some(c) = cs.which_is_unsatisfied() {
-        panic!("Unsat: {}", c);
-    }
+
+    //r1cs.check_all();
+    //let mut cs = TestConstraintSystem::<Scalar>::new();
+    //r1cs.synthesize(&mut cs).unwrap();
+    //println!("Num constraints: {}", cs.num_constraints());
+    //println!("{}", cs.pretty_print());
+    //if let Some(c) = cs.which_is_unsatisfied() {
+    //    panic!("Unsat: {}", c);
+    //}
 }

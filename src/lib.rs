@@ -1,4 +1,5 @@
 #![feature(drain_filter)]
+#![feature(bindings_after_at)]
 #![feature(box_patterns)]
 
 #[macro_use]

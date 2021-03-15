@@ -1,48 +1,12 @@
 use super::*;
 use log::debug;
 use std::collections::{HashMap, HashSet, VecDeque};
+use crate::util::once::OnceQueue;
 
 struct LinReducer<S: Eq + Hash> {
     r1cs: R1cs<S>,
     uses: HashMap<usize, HashSet<usize>>,
     queue: OnceQueue<usize>,
-}
-
-struct OnceQueue<T> {
-    queue: VecDeque<T>,
-    set: HashSet<T>,
-}
-
-impl<T: Eq + Hash + Clone> OnceQueue<T> {
-    pub fn push(&mut self, t: T) {
-        if self.set.insert(t.clone()) {
-            self.queue.push_back(t)
-        }
-    }
-    pub fn pop(&mut self) -> Option<T> {
-        self.queue.pop_front().map(|t| {
-            self.set.remove(&t);
-            t
-        })
-    }
-    pub fn new() -> Self {
-        Self {
-            queue: VecDeque::new(),
-            set: HashSet::new(),
-        }
-    }
-}
-
-impl<A: Eq + Hash + Clone> std::iter::FromIterator<A> for OnceQueue<A> {
-    fn from_iter<T>(iter: T) -> Self
-    where
-        T: IntoIterator<Item = A>,
-    {
-        iter.into_iter().fold(Self::new(), |mut q, i| {
-            q.push(i);
-            q
-        })
-    }
 }
 
 impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
