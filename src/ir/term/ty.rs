@@ -1,7 +1,7 @@
 use super::*;
 
 lazy_static! {
-    pub static ref TERM_TYPES: RwLock<HashMap<TTerm, Sort>> = RwLock::new(HashMap::new());
+    pub static ref TERM_TYPES: RwLock<AHashMap<TTerm, Sort>> = RwLock::new(AHashMap::new());
 }
 
 #[track_caller]

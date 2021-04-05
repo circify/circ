@@ -1,6 +1,6 @@
 use super::*;
 use log::debug;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use crate::util::once::OnceQueue;
 
 struct LinReducer<S: Eq + Hash> {

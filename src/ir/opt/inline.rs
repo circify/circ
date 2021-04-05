@@ -1,6 +1,6 @@
 use crate::ir::term::extras::*;
 use crate::ir::term::*;
-use std::collections::HashSet;
+use ahash::AHashSet;
 use super::cfold;
 
 /// This is a tool for sweeping a list of equations, some of which define new variables as
@@ -23,11 +23,11 @@ pub struct Inliner<'a> {
     stale_vars: TermSet,
 
     /// Variables that are "protected": they should not be eliminated.
-    protected: &'a HashSet<String>,
+    protected: &'a AHashSet<String>,
 }
 
 impl<'a> Inliner<'a> {
-    fn new(protected: &'a HashSet<String>) -> Self {
+    fn new(protected: &'a AHashSet<String>) -> Self {
         Self {
             substs: TermMap::new(),
             subst_cache: TermMap::new(),
@@ -40,7 +40,7 @@ impl<'a> Inliner<'a> {
     /// Also checks that no key variable is in any `subst_cache` value.
     #[allow(dead_code)]
     fn check_substs(&self) {
-        let keys: HashSet<&Term> = self.substs.keys().collect();
+        let keys: AHashSet<&Term> = self.substs.keys().collect();
         for (key, value) in &self.substs {
             for child in PostOrderIter::new(value.clone()) {
                 assert!(
@@ -173,7 +173,7 @@ impl<'a> Inliner<'a> {
 ///
 /// First, maintains a set of variables being substituted.
 /// Second, maintain a
-pub fn inline(assertions: &mut Vec<Term>, public_inputs: &HashSet<String>) {
+pub fn inline(assertions: &mut Vec<Term>, public_inputs: &AHashSet<String>) {
     let mut new_assertions = Vec::new();
     let mut inliner = Inliner::new(public_inputs);
     for assertion in assertions.drain(..) {
@@ -203,7 +203,7 @@ mod test {
 
     fn sub_test(xs: Vec<Term>, n: usize) {
         let mut ys = xs.clone();
-        let p = HashSet::new();
+        let p = AHashSet::new();
         inline(&mut ys, &p);
         assert_eq!(n, ys.len());
         let x = term(Op::BoolNaryOp(BoolNaryOp::And), xs.clone());

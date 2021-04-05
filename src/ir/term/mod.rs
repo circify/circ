@@ -3,7 +3,7 @@ use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::{Arc, RwLock};
 use crate::util::once::OnceQueue;
@@ -722,7 +722,7 @@ impl Value {
     }
 }
 
-pub fn eval(t: &Term, h: &HashMap<String, Value>) -> Value {
+pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
         let v = match &c.op {
@@ -928,8 +928,8 @@ impl std::iter::Iterator for PostOrderIter {
 #[derive(Clone, Debug)]
 pub struct Constraints {
     pub(super) assertions: Vec<Term>,
-    pub(super) public_inputs: HashSet<String>,
-    pub(super) values: Option<HashMap<String, Value>>,
+    pub(super) public_inputs: AHashSet<String>,
+    pub(super) values: Option<AHashMap<String, Value>>,
 }
 
 impl Constraints {
@@ -981,8 +981,8 @@ impl Constraints {
     pub fn new(values: bool) -> Self {
         Self {
             assertions: Vec::new(),
-            public_inputs: HashSet::new(),
-            values: if values { Some(HashMap::new()) } else { None },
+            public_inputs: AHashSet::new(),
+            values: if values { Some(AHashMap::new()) } else { None },
         }
     }
     pub fn publicize(&mut self, s: String) {
@@ -991,13 +991,13 @@ impl Constraints {
     pub fn assertions(&self) -> &Vec<Term> {
         &self.assertions
     }
-    pub fn consume(self) -> (Vec<Term>, HashSet<String>, Option<HashMap<String, Value>>) {
+    pub fn consume(self) -> (Vec<Term>, AHashSet<String>, Option<AHashMap<String, Value>>) {
         (self.assertions, self.public_inputs, self.values)
     }
     pub fn from_parts(
         assertions: Vec<Term>,
-        public_inputs: HashSet<String>,
-        values: Option<HashMap<String, Value>>,
+        public_inputs: AHashSet<String>,
+        values: Option<AHashMap<String, Value>>,
     ) -> Self {
         Self {
             assertions,
@@ -1009,7 +1009,7 @@ impl Constraints {
         term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
     }
     pub fn terms(&self) -> usize {
-        let mut terms = HashSet::<Term>::new();
+        let mut terms = AHashSet::<Term>::new();
         for a in &self.assertions {
             for s in PostOrderIter::new(a.clone()) {
                 terms.insert(s);

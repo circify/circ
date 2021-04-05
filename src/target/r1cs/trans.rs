@@ -5,9 +5,8 @@ use crate::target::r1cs::*;
 use log::debug;
 use rug::ops::Pow;
 use rug::Integer;
+use ahash::{AHashMap, AHashSet};
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::iter::ExactSizeIterator;
 
@@ -22,16 +21,16 @@ struct ToR1cs {
     bools: TermMap<Lc>,
     bvs: TermMap<BvEntry>,
     fields: TermMap<Lc>,
-    values: Option<HashMap<String, Value>>,
-    public_inputs: HashSet<String>,
+    values: Option<AHashMap<String, Value>>,
+    public_inputs: AHashSet<String>,
     next_idx: usize,
 }
 
 impl ToR1cs {
     fn new(
         modulus: Integer,
-        values: Option<HashMap<String, Value>>,
-        public_inputs: HashSet<String>,
+        values: Option<AHashMap<String, Value>>,
+        public_inputs: AHashSet<String>,
     ) -> Self {
         Self {
             r1cs: R1cs::new(modulus, values.is_some()),
@@ -839,13 +838,13 @@ mod test {
     }
 
     #[derive(Clone, Debug)]
-    struct PureBool(Term, HashMap<String, Value>);
+    struct PureBool(Term, AHashMap<String, Value>);
 
     impl Arbitrary for PureBool {
         fn arbitrary(g: &mut Gen) -> Self {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             let t = PureBoolDist(g.size()).sample(&mut rng);
-            let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
+            let values: AHashMap<String, Value> = PostOrderIter::new(t.clone())
                 .filter_map(|c| {
                     if let Op::Var(n, _) = &c.op {
                         Some((n.clone(), Value::Bool(bool::arbitrary(g))))
@@ -877,7 +876,7 @@ mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
+        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -886,7 +885,7 @@ mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
+        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -895,7 +894,7 @@ mod test {
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
+        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -906,7 +905,7 @@ mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
+        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -936,12 +935,12 @@ mod test {
     fn not_opt_test() {
         init();
         let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
-        let values: HashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
+        let values: AHashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
             .into_iter()
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], HashSet::new(), Some(values));
+        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);

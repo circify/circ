@@ -1,5 +1,4 @@
 use crate::ir::term::*;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 enum Entry {
