@@ -2,7 +2,7 @@ use log::debug;
 use rug::ops::{RemRounding, RemRoundingAssign};
 use rug::Integer;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
