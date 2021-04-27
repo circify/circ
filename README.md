@@ -3,8 +3,12 @@
 This repository holds an in-progress rewrite of CirC.
 
 CirC is a *compiler infrastructure* which supports compilation from
-high-level (stateful, uniform) languages to (existentially quantified)
-circuits.
+high-level (stateful, uniform) languages to (state-free, non-uniform,
+existentially quantified) circuits.
+
+It's been used to compile {C, ZoKrates, Circom} to {SMT, R1CS}, but it
+probably also applies to any statically type high-level language and
+MPC/constant-time/ILP/FHE.
 
 ## Requirements
 
@@ -54,6 +58,8 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
 
 - [ ] Intern variable names
 - [ ] Tweak log system to expect exact target match
-- [ ] C FE
-- [ ] Tune optimizer for ouput, speed, and memory usage.
+- [ ] C front-end
+- [ ] Tune R1CS optimizer
+   - [ ] Consider using ff/ark-ff instead of gmp
+- [ ] remove synchronization from term representation (or explore parallelism!)
 - [ ] More SMT solver support
