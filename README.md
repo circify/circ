@@ -60,6 +60,11 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
 - [ ] Tweak log system to expect exact target match
 - [ ] C front-end
 - [ ] Tune R1CS optimizer
+   - [ ] Less hash maps
    - [ ] Consider using ff/ark-ff instead of gmp
+   - [ ] Consider a lazy merging strategy
 - [ ] remove synchronization from term representation (or explore parallelism!)
 - [ ] More SMT solver support
+   - [ ] Parse cvc4 models
+- [ ] A more configurable term distribution (for fuzzing)
+- [ ] Add user-defined (aka opaque) operator to IR
