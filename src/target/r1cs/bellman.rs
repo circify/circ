@@ -1,3 +1,4 @@
+//! Exporting our R1CS to bellman
 use ::bellman::{Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
 use ff::PrimeField;
 use gmp_mpfr_sys::gmp::limb_t;
@@ -50,7 +51,11 @@ impl<'a, F: PrimeField, S: Display + Eq + Hash> Circuit<F> for &'a R1cs<S> {
         CS: ConstraintSystem<F>,
     {
         let f_mod = modulus_as_int::<F>();
-        assert_eq!(*self.modulus, f_mod, "\nR1CS has modulus \n{},\n but Bellman CS expectes \n{}", self.modulus, f_mod);
+        assert_eq!(
+            *self.modulus, f_mod,
+            "\nR1CS has modulus \n{},\n but Bellman CS expectes \n{}",
+            self.modulus, f_mod
+        );
         let vars = self
             .idxs_signals
             .iter()

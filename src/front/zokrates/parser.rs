@@ -1,3 +1,8 @@
+//! Parsing and recursively loading ZoKrates.
+//!
+//! Based on the original ZoKrates parser, with extra machinery for recursive loading and locating
+//! the standard library.
+
 use zokrates_pest_ast as ast;
 
 use log::debug;
@@ -10,6 +15,14 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use typed_arena::Arena;
 
+/// Parse an inputs file where each line has format: `no-withespace integer`.
+///
+/// Permits blank lines and ignores non-separating whitespace.
+///
+/// ```ignore
+/// x 5
+/// x.y -7
+/// ```
 pub fn parse_inputs(p: PathBuf) -> HashMap<String, Integer> {
     let mut m = HashMap::new();
     for l in BufReader::new(File::open(p).unwrap()).lines() {
@@ -25,11 +38,14 @@ pub fn parse_inputs(p: PathBuf) -> HashMap<String, Integer> {
     m
 }
 
+/// A representation of the standard libary's location.
 pub struct ZStdLib {
     path: PathBuf,
 }
 
 impl ZStdLib {
+    /// Looks for a "ZoKrates/zokrates_stdlib/stdlib" path in some ancestor of the current
+    /// directory.
     pub fn new() -> Self {
         let p = std::env::current_dir().unwrap().canonicalize().unwrap();
         assert!(p.is_absolute());
@@ -42,6 +58,7 @@ impl ZStdLib {
         }
         panic!("Could not find ZoKrates stdlibfrom {}", p.display())
     }
+    /// Turn `child`, relative to `parent` (or to the standard libary!), into an absolute path.
     pub fn canonicalize(&self, parent: &Path, child: &str) -> PathBuf {
         debug!("Looking for {} from {}", child, parent.display());
         if child.contains("EMBED") {
@@ -62,12 +79,15 @@ impl ZStdLib {
     }
 }
 
+/// A recrusive zokrates loader
 pub struct ZLoad {
     sources: Arena<String>,
     stdlib: ZStdLib,
 }
 
 impl ZLoad {
+    /// Make a new ZoKrates loader, looking for the standard library somewhere above the current
+    /// dirdirectory. See [ZStdLib::new].
     pub fn new() -> Self {
         Self {
             sources: Arena::new(),
@@ -75,6 +95,11 @@ impl ZLoad {
         }
     }
 
+    /// Recursively load a ZoKrates file.
+    ///
+    /// ## Returns
+    ///
+    /// Returns a map from file paths to parsed files.
     pub fn load<P: AsRef<Path>>(&self, p: &P) -> HashMap<PathBuf, ast::File> {
         self.recursive_load(p).unwrap()
     }

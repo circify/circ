@@ -1,7 +1,8 @@
+//! Optimizations over R1CS
 use super::*;
-use log::debug;
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use crate::util::once::OnceQueue;
+use ahash::{AHashMap as HashMap, AHashSet as HashSet};
+use log::debug;
 
 struct LinReducer<S: Eq + Hash> {
     r1cs: R1cs<S>,
@@ -164,6 +165,7 @@ fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
     }
 }
 
+/// Attempt to shrink this system by reducing linearities.
 pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> R1cs<S> {
     LinReducer::new(r1cs).run()
 }

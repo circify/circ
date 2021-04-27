@@ -1,3 +1,5 @@
+//! Flatten terms
+
 use crate::ir::term::*;
 use std::rc::Rc;
 
@@ -44,9 +46,11 @@ impl Entry {
     }
 }
 
+/// Flattening cache.
 pub struct Cache(TermMap<Entry>);
 
 impl Cache {
+    /// Empty flattening.
     pub fn new() -> Self {
         Cache(TermMap::new())
     }

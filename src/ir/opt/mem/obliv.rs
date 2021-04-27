@@ -217,6 +217,7 @@ impl MemVisitor for Replacer {
     }
 }
 
+/// Eliminate oblivious arrays. See module documentation.
 pub fn elim_obliv(t: &Term) -> Term {
     let mut prop_pass = NonOblivComputer::new();
     prop_pass.traverse_to_fixpoint(t);

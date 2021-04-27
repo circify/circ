@@ -1,15 +1,22 @@
+//! Type(Sort)-checking
+
 use super::*;
 
 lazy_static! {
+    /// Cache of all types
     pub static ref TERM_TYPES: RwLock<AHashMap<TTerm, Sort>> = RwLock::new(AHashMap::new());
 }
 
 #[track_caller]
+/// Type-check this term, at a surface level.
+/// That is, determine its type without a full validity check.
 pub fn check(t: &Term) -> Sort {
     check_raw(t).unwrap()
 }
 
 #[track_caller]
+/// Fully type-check this term.
+/// That is, determine its type *with* a full validity check.
 pub fn check_rec(t: &Term) -> Sort {
     rec_check_raw(t).unwrap()
 }
@@ -285,6 +292,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// A type error with some operator.
 pub struct TypeError {
     op: Op,
     args: Vec<Sort>,
@@ -292,15 +300,25 @@ pub struct TypeError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// Underlying reason for the error
 pub enum TypeErrorReason {
+    /// Two sorts should be equal
     NotEqual(Sort, Sort, &'static str),
+    /// A sort should be a boolean
     ExpectedBool(Sort, &'static str),
+    /// A sort should be a floating-point
     ExpectedFp(Sort, &'static str),
+    /// A sort should be a bit-vector
     ExpectedBv(Sort, &'static str),
+    /// A sort should be a prime field
     ExpectedPf(Sort, &'static str),
+    /// A sort should be an array
     ExpectedArray(Sort, &'static str),
+    /// An empty n-ary operator.
     EmptyNary(String),
+    /// Something else
     Custom(String),
+    /// Bad bounds
     OutOfBounds(String),
 }
 

@@ -1,3 +1,5 @@
+//! The stack-allocation memory manager
+
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -6,7 +8,7 @@ use std::rc::Rc;
 
 type AllocId = usize;
 
-pub struct Alloc {
+struct Alloc {
     id: AllocId,
     addr_width: usize,
     val_width: usize,
@@ -57,6 +59,7 @@ impl Alloc {
     }
 }
 
+/// Manages a circuit-embedded stack.
 pub struct MemManager {
     allocs: HashMap<AllocId, Alloc>,
     next_id: usize,
@@ -64,6 +67,7 @@ pub struct MemManager {
 }
 
 impl MemManager {
+    /// Create a new manager, with an empty stack.
     pub fn new(cs: Rc<RefCell<Constraints>>) -> Self {
         Self {
             allocs: HashMap::new(),
@@ -84,6 +88,7 @@ impl MemManager {
         self.cs.borrow_mut().assert(t);
     }
 
+    /// Allocate a new stack array, equal to `array`.
     pub fn allocate(&mut self, array: Term) -> AllocId {
         let s = check(&array);
         if let Sort::Array(box Sort::BitVector(addr_width), box Sort::BitVector(val_width), size) =
@@ -105,6 +110,17 @@ impl MemManager {
         }
     }
 
+    /// Allocate a new zero-initialized stack array.
+    ///
+    /// ## Parameters
+    ///
+    /// * `size`: number of elements
+    /// * `addr_width`: number of bits in an index
+    /// * `val_width`: number of bits in a value
+    ///
+    /// ## Returns
+    ///
+    /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
         let sort = Sort::Array(
             Box::new(Sort::BitVector(addr_width)),
@@ -120,12 +136,14 @@ impl MemManager {
         self.allocate(leaf_term(Op::Const(array)))
     }
 
+    /// Load the value of index `offset` from the allocation `id`.
     pub fn load(&self, id: AllocId, offset: Term) -> Term {
         let alloc = self.allocs.get(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         term![Op::Select; alloc.var().clone(), offset]
     }
 
+    /// Write the value `val` to index `offset` in the allocation `id`.
     pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
@@ -141,6 +159,7 @@ impl MemManager {
         self.assert(term![Op::Eq; v, new]);
     }
 
+    /// Is `offset` in bounds for the allocation `id`?
     pub fn in_bounds(&self, id: AllocId, offset: Term) -> Term {
         let alloc = self.allocs.get(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());

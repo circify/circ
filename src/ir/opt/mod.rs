@@ -1,23 +1,32 @@
+//! Optimizations
 pub mod cfold;
 pub mod flat;
+pub mod inline;
 pub mod mem;
 pub mod sha;
-pub mod inline;
 
 use super::term::*;
 use log::debug;
 
 #[derive(Debug)]
+/// An optimization pass
 pub enum Opt {
+    /// Fold constants
     ConstantFold,
+    /// Flatten n-ary operators
     Flatten,
+    /// SHA-2 peephole optimizations
     Sha,
+    /// Memory elimination
     Mem,
+    /// Extract top-level ANDs as distinct assertions
     FlattenAssertions,
+    /// Find assertions like `(= variable term)`, and substitute out `variable`
     Inline,
 }
 
-pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> Constraints {
+/// Run optimizations on `cs`, in this order, returning the new constraint system.
+pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Constraints, optimizations: I) -> Constraints {
     for i in optimizations {
         debug!("Applying: {:?}", i);
         match i {
@@ -50,7 +59,7 @@ pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> 
             }
             Opt::Flatten => {
                 let cs_term = cs.assertions_as_term();
-                let new_term =  flat::flatten_nary_ops(cs_term);
+                let new_term = flat::flatten_nary_ops(cs_term);
                 let assertions = if new_term.op == Op::BoolNaryOp(BoolNaryOp::And) {
                     new_term.cs.clone()
                 } else {

@@ -1,13 +1,15 @@
+//! Distributions over terms (useful for fuzz testing)
+
 use super::*;
 use std::sync::Arc;
 
 // A distribution of boolean terms with some size.
 // All subterms are booleans.
-pub struct PureBoolDist(pub usize);
+pub(crate) struct PureBoolDist(pub usize);
 
 // A distribution of n usizes that sum to this value.
 // (n, sum)
-pub struct Sum(usize, usize);
+pub(crate) struct Sum(usize, usize);
 impl rand::distributions::Distribution<Vec<usize>> for Sum {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Vec<usize> {
         use rand::seq::SliceRandom;
@@ -66,7 +68,7 @@ impl rand::distributions::Distribution<Term> for PureBoolDist {
     }
 }
 
-pub struct FixedSizeDist {
+pub(crate) struct FixedSizeDist {
     pub size: usize,
     pub bv_width: usize,
     pub pf_mod: Arc<Integer>,
@@ -92,7 +94,7 @@ impl FixedSizeDist {
     }
 }
 
-pub struct UniformBitVector(pub usize);
+pub(crate) struct UniformBitVector(pub usize);
 
 impl rand::distributions::Distribution<BitVector> for UniformBitVector {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> BitVector {
@@ -105,7 +107,7 @@ impl rand::distributions::Distribution<BitVector> for UniformBitVector {
     }
 }
 
-pub struct UniformFieldElem(pub Arc<Integer>);
+pub(crate) struct UniformFieldElem(pub Arc<Integer>);
 
 impl rand::distributions::Distribution<FieldElem> for UniformFieldElem {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> FieldElem {
@@ -267,10 +269,10 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 pub mod test {
     use super::*;
 
+    use ahash::AHashMap as HashMap;
     use quickcheck::{Arbitrary, Gen};
     use rand::distributions::Distribution;
     use rand::SeedableRng;
-    use ahash::AHashMap as HashMap;
 
     #[derive(Clone)]
     pub struct ArbitraryTerm(pub Term);

@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+//! Symbolic ZoKrates terms
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
@@ -11,11 +11,13 @@ use crate::ir::term::*;
 
 lazy_static! {
     // TODO: handle this better
+    /// The modulus for ZoKrates.
     pub static ref ZOKRATES_MODULUS: Integer = Integer::from_str_radix(
         "52435875175126190479447740508185965837690552500527637822603658699938581184513",
         10
     )
     .unwrap();
+    /// The modulus for ZoKrates, as an ARC
     pub static ref ZOKRATES_MODULUS_ARC: Arc<Integer> = Arc::new(ZOKRATES_MODULUS.clone());
 }
 
@@ -78,12 +80,7 @@ impl T {
         }
     }
     pub fn new_array(v: Vec<T>) -> Result<T, String> {
-        if v.len() == 0 {
-            Err("Empty array".to_owned())
-        } else {
-            let ty = v.first().unwrap().type_();
-            Ok(T::Array(ty, v))
-        }
+        array(v)
     }
 }
 
@@ -304,6 +301,8 @@ fn neg_uint(a: Term) -> Term {
     term![Op::BvUnOp(BvUnOp::Neg); a]
 }
 
+#[allow(dead_code)]
+// Missing from ZoKrates.
 pub fn neg(a: T) -> Result<T, String> {
     wrap_un_op("unary-", Some(neg_uint), Some(neg_field), None, a)
 }
@@ -408,13 +407,6 @@ pub fn slice(array: T, start: Option<usize>, end: Option<usize>) -> Result<T, St
             Ok(T::Array(b, list.drain(start..end).collect()))
         }
         a => Err(format!("Cannot slice {}", a)),
-    }
-}
-
-fn spread(array: T) -> Result<Vec<T>, String> {
-    match array {
-        T::Array(_, list) => Ok(list),
-        a => Err(format!("Cannot spread {}", a)),
     }
 }
 

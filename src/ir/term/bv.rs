@@ -1,8 +1,11 @@
+//! Bit-vector literal definition
+
 use rug::Integer;
 
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+/// A bit-vector constant
 pub struct BitVector {
     uint: Integer,
     width: usize,
@@ -28,8 +31,6 @@ macro_rules! bv_arith_impl {
 bv_arith_impl!(std::ops::Add, add);
 bv_arith_impl!(std::ops::Sub, sub);
 bv_arith_impl!(std::ops::Mul, mul);
-//bv_arith_impl!(std::ops::Div, div);
-//bv_arith_impl!(std::ops::Rem, rem);
 bv_arith_impl!(std::ops::BitAnd, bitand);
 bv_arith_impl!(std::ops::BitOr, bitor);
 bv_arith_impl!(std::ops::BitXor, bitxor);
@@ -120,6 +121,7 @@ impl std::ops::Not for BitVector {
 impl BitVector {
     #[track_caller]
     #[inline]
+    /// Check that the integer value fits in the number of bits
     pub fn check(&self, location: &str) {
         debug_assert!(
             self.uint >= 0,
@@ -136,6 +138,7 @@ impl BitVector {
             location
         );
     }
+    /// arithmetic right shift
     pub fn ashr(mut self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
         let n = other.uint.to_u32().unwrap();
@@ -147,6 +150,7 @@ impl BitVector {
         self.check("ashr");
         self
     }
+    /// logical right shift
     pub fn lshr(self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
         let r = BitVector {
@@ -156,6 +160,7 @@ impl BitVector {
         r.check("lshr");
         r
     }
+    /// binary concatenation: `self` gets the high-order bits
     pub fn concat(self, other: Self) -> Self {
         let r = BitVector {
             uint: (self.uint << other.width as u32) | other.uint,
@@ -164,6 +169,9 @@ impl BitVector {
         r.check("concat");
         r
     }
+    /// Gets the bits from `high` to `low`, inclusive. Zero-indexed.
+    ///
+    /// The number of bits yielded is `high-low+1`.
     pub fn extract(self, high: usize, low: usize) -> Self {
         let r = BitVector {
             uint: (self.uint >> low as u32).keep_bits((high - low + 1) as u32),
@@ -172,6 +180,7 @@ impl BitVector {
         r.check("extract");
         r
     }
+    /// Get the two's complement signed integer.
     pub fn as_sint(&self) -> Integer {
         if self.uint.significant_bits() as usize == self.width {
             self.uint.clone() - (Integer::from(1) << self.width as u32)
@@ -179,27 +188,33 @@ impl BitVector {
             self.uint.clone()
         }
     }
+    /// Get the unsigned integer.
     pub fn uint(&self) -> &Integer {
         &self.uint
     }
+    /// Get the number of bits.
     pub fn width(&self) -> usize {
         self.width
     }
     #[track_caller]
+    /// Make a new bit-vector literal.
     pub fn new(uint: Integer, width: usize) -> BitVector {
         let r = BitVector { uint, width };
         r.check("new");
         r
     }
+    /// Get the `i`th bit.
     pub fn bit(&self, i: usize) -> bool {
         self.uint.get_bit(i as u32)
     }
+    /// Make an all-ones bit-vector.
     pub fn ones(n: usize) -> BitVector {
         BitVector {
             uint: (Integer::from(1) << n as u32) - 1,
             width: n,
         }
     }
+    /// Make an all-zeroes bit-vector.
     pub fn zeros(n: usize) -> BitVector {
         BitVector {
             uint: Integer::from(0),

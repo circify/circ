@@ -1,7 +1,9 @@
+//! Substitutions
+
+use super::cfold;
 use crate::ir::term::extras::*;
 use crate::ir::term::*;
 use ahash::AHashSet;
-use super::cfold;
 
 /// This is a tool for sweeping a list of equations, some of which define new variables as
 /// functions of previous ones, and eliminating these new variables, by substituting them

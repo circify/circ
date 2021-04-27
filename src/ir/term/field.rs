@@ -1,12 +1,16 @@
+//! Prime field literal definition
+
 use rug::ops::RemRounding;
 use rug::Integer;
 
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
+/// Test modulus.
 pub const TEST_FIELD: usize = 1014088787;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+/// A prime field element
 pub struct FieldElem {
     i: Integer,
     modulus: Arc<Integer>,
@@ -24,6 +28,7 @@ impl Display for FieldElem {
 impl FieldElem {
     #[track_caller]
     #[inline]
+    /// Check that the value is in-range.
     pub fn check(&self, location: &str) {
         debug_assert!(
             self.i >= 0,
@@ -38,12 +43,15 @@ impl FieldElem {
             location
         );
     }
+    /// Get the integer value.
     pub fn i(&self) -> &Integer {
         &self.i
     }
+    /// Get the modulus.
     pub fn modulus(&self) -> &Arc<Integer> {
         &self.modulus
     }
+    /// Take the reciprocal.
     pub fn recip(self) -> Self {
         let r = FieldElem {
             i: self.i.invert(&*self.modulus).expect("no inverse!"),
@@ -53,6 +61,7 @@ impl FieldElem {
         r
     }
     #[track_caller]
+    /// Make a new prime-field element
     pub fn new(i: Integer, modulus: Arc<Integer>) -> FieldElem {
         let r = FieldElem { i, modulus };
         r.check("new");

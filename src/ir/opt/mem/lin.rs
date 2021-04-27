@@ -71,16 +71,13 @@ impl MemVisitor for ArrayLinearizer {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
             let key_sort = check(k);
             let first = a_seq.first().expect("empty array in visit_select").clone();
-            Some(
-                a_seq
-                    .iter()
-                    .zip(key_sort.elems_iter())
-                    .skip(1)
-                    .fold(first, |acc, (a_i, key_i)| {
-                        let eq_idx = term![Op::Eq; key_i, k.clone()];
-                        term![Op::Ite; eq_idx, a_i.clone(), acc]
-                    }),
-            )
+            Some(a_seq.iter().zip(key_sort.elems_iter()).skip(1).fold(
+                first,
+                |acc, (a_i, key_i)| {
+                    let eq_idx = term![Op::Eq; key_i, k.clone()];
+                    term![Op::Ite; eq_idx, a_i.clone(), acc]
+                },
+            ))
         } else {
             None
         }
@@ -101,6 +98,7 @@ impl MemVisitor for ArrayLinearizer {
     }
 }
 
+/// Eliminate arrays using linear scans. See module documentation.
 pub fn linearize(t: &Term, size_thresh: usize) -> Term {
     let mut pass = ArrayLinearizer {
         size_thresh,
@@ -112,9 +110,9 @@ pub fn linearize(t: &Term, size_thresh: usize) -> Term {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::sync::Arc;
-    use rug::Integer;
     use crate::ir::term::field::TEST_FIELD;
+    use rug::Integer;
+    use std::sync::Arc;
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
@@ -132,7 +130,10 @@ mod test {
     }
 
     fn field_lit(u: usize) -> Term {
-        leaf_term(Op::Const(Value::Field(FieldElem::new(Integer::from(u), Arc::new(Integer::from(TEST_FIELD))))))
+        leaf_term(Op::Const(Value::Field(FieldElem::new(
+            Integer::from(u),
+            Arc::new(Integer::from(TEST_FIELD)),
+        ))))
     }
 
     #[test]

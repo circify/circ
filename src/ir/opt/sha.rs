@@ -1,6 +1,8 @@
+//! SHA-2 peephole optimizations
+
 use crate::ir::term::*;
-use std::collections::HashSet;
 use log::debug;
+use std::collections::HashSet;
 
 /// Detects common C-language SHA patterns and rewrites them.
 pub fn sha_rewrites(term_: &Term) -> Term {

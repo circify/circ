@@ -1,3 +1,5 @@
+//! A library for building front-ends
+
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -19,30 +21,42 @@ type SsaName = String;
 /// A *value*. Can be a term, or a reference.
 #[derive(Clone, Debug)]
 pub enum Val<T> {
+    /// A language term
     Term(T),
+    /// A location reference
     Ref(Loc),
 }
 
 #[derive(Error, Debug)]
+/// An error in circuit translation
 pub enum CircError {
     #[error("Location '{0}' is invalid")]
+    /// Invalid location
     InvalidLoc(Loc),
     #[error("Identifier '{0}' cannot be found")]
+    /// Unknown identifier
     NoName(VarName),
     #[error("No lexical scope in fn '{0}'")]
+    /// The requested operation can only be performed inside a scope
     NoScope(String),
     #[error("Identifier '{0}' already declared as a '{1}'")]
+    /// Attempted rebinding
     Rebind(String, String),
     #[error("Term '{0}' is not a boolean, as conditionals must be.")]
+    /// Boolean required
     NotBool(Term),
     #[error("The break label '{0}' is unknown.")]
+    /// The requested operation can only be performed inside a breakable block
     UnknownBreak(String),
     #[error("Cannot assign '{0}' to location '{1}', which held '{2}'")]
+    /// Type error
     MisTypedAssign(String, String, String),
     #[error("Function '{0}' has a return value: {1}. Return stmt has a value: {2}'")]
+    /// Statement and function don't agree about return value presence.
     ReturnMismatch(String, bool, bool),
 }
 
+/// A `T` or a [CircError].
 pub type Result<T> = std::result::Result<T, CircError>;
 
 impl<T: Display> Display for Val<T> {
@@ -55,6 +69,7 @@ impl<T: Display> Display for Val<T> {
 }
 
 impl<T> Val<T> {
+    /// Unwrap as a language term, panicking otherwise
     pub fn unwrap_term(self) -> T {
         match self {
             Val::Term(t) => t,
@@ -74,6 +89,7 @@ pub struct Loc {
 }
 
 impl Loc {
+    /// The location of a local variable.
     pub fn local(name: VarName) -> Self {
         Self { name, idx: None }
     }
@@ -177,8 +193,11 @@ impl<Ty: Display> LexScope<Ty> {
     }
 }
 
+/// Circuit construction context. Useful for addition assertions, using memory, etc.
 pub struct CirCtx {
+    /// Memory manager
     pub mem: mem::MemManager,
+    /// Underlying constraint system
     pub cs: Rc<RefCell<Constraints>>,
 }
 
@@ -191,7 +210,7 @@ enum StateEntry<Ty> {
 }
 
 #[derive(Debug)]
-pub struct FnFrame<Ty> {
+struct FnFrame<Ty> {
     stack: Vec<StateEntry<Ty>>,
     scope_ctr: usize,
     prefix: String,
@@ -327,7 +346,38 @@ pub trait Embeddable {
         user_name: Option<String>,
         public: bool,
     ) -> Self::T;
+    /// Construct an it-then-else (ternary) langauge value.
+    ///
+    /// Conceptually, `(ite cond t f)`
     fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T;
+    /// Create a fresh variable representation of type `ty`, and constrain it to be equal to `t`.
+    ///
+    /// For simple types, this is usually just a single new variable, and single equality.
+    /// For compound types, it can be more.
+    ///
+    /// For a language with booleans and pairs, calling `assign(ctx, Bool, "a", t, public)` produces
+    /// * new variable "a", of sort [Sort::Bool], which is public iff `public`.
+    /// * an assertion `(= a t)`.
+    ///
+    ///
+    /// Calling `assign(ctx, Pair(Bool,Bool), "a", (pair s t), public)` produces
+    /// * new variables
+    ///   * "a.0", of sort [Sort::Bool], which is public iff `public`.
+    ///   * "a.1", of sort [Sort::Bool], which is public iff `public`.
+    /// * assertions
+    ///   * `(= a.0 s)`
+    ///   * `(= a.1 t)`
+    ///
+    ///
+    /// ## Arguments
+    ///
+    ///    * `ctx`: circuit context: used to make assertions
+    ///    * `ty`: type of the new variable (or collection of variables)
+    ///    * `name`: name (prefix) of the new variable(s). Different calls are guaranteed to be
+    ///    prefix-free.
+    ///    * `t`: value that the new langauge variable should be equal to.
+    ///    * `public`: whether the newly created variable(s) should be public inputs to the
+    ///    constraint system. Otherwise they are private inputs.
     fn assign(
         &self,
         ctx: &mut CirCtx,
@@ -336,9 +386,11 @@ pub trait Embeddable {
         t: Self::T,
         public: bool,
     ) -> Self::T;
+    /// Does the front-end have access to concrete values for the circuit?
     fn values(&self) -> bool;
 }
 
+/// Manager for circuit-embedded state.
 pub struct Circify<E: Embeddable> {
     e: E,
     vals: HashMap<String, Val<E::T>>,
@@ -364,6 +416,7 @@ impl<E: Embeddable> Debug for Circify<E> {
 }
 
 impl<E: Embeddable> Circify<E> {
+    /// Creates an empty state management module
     pub fn new(e: E) -> Self {
         let cs = Rc::new(RefCell::new(Constraints::new(e.values())));
         Self {
@@ -473,6 +526,9 @@ impl<E: Embeddable> Circify<E> {
         Ok(self.get_scope_ref(idx))
     }
 
+    /// Declare `name` in the current scope as being a `ty`, and being equal to `val`.
+    ///
+    /// If `public`, then make it a public (fixed) rather than private (existential) circuit input.
     pub fn declare_init(
         &mut self,
         name: VarName,
@@ -484,6 +540,10 @@ impl<E: Embeddable> Circify<E> {
         self.assign(Loc::local(name), val, public)
     }
 
+    /// Assign `loc` in the current scope to `val`.
+    ///
+    /// If `public`, then make the new variable version a public (fixed) rather than private
+    /// (existential) circuit input.
     pub fn assign(&mut self, loc: Loc, val: Val<E::T>, public: bool) -> Result<Val<E::T>> {
         let lex = self.get_lex_mut(&loc)?;
         let old_name = lex.get_name(&loc.name)?.clone();
@@ -517,6 +577,9 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Enter a breakable block, called `name`.
+    ///
+    /// This is a block of code that can be skipped to the end of.
     pub fn enter_breakable(&mut self, name: String) {
         self.fn_stack
             .last_mut()
@@ -525,25 +588,30 @@ impl<E: Embeddable> Circify<E> {
     }
 
     #[track_caller]
+    /// End a breakable block
     pub fn exit_breakable(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_breakable();
     }
 
     #[track_caller]
+    /// Emit a break statement for the breakable block, `name`.
     pub fn break_(&mut self, name: &str) -> Result<()> {
         self.fn_stack.last_mut().expect("No fn").break_(name)
     }
 
     #[track_caller]
+    /// Enter a lexical scope
     pub fn enter_scope(&mut self) {
         self.fn_stack.last_mut().expect("No fn").enter_scope()
     }
 
     #[track_caller]
+    /// Exit a lexical scope
     pub fn exit_scope(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_scope()
     }
 
+    /// Enter a conditional block
     pub fn enter_condition(&mut self, condition: Term) -> Result<()> {
         assert!(check(&condition) == Sort::Bool);
         self.fn_stack
@@ -554,11 +622,13 @@ impl<E: Embeddable> Circify<E> {
         Ok(())
     }
 
+    /// Exit a conditional block
     pub fn exit_codition(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_condition();
         self.condition = self.condition();
     }
 
+    /// Get the current path condition
     pub fn condition(&self) -> Term {
         // TODO:  more precise conditions, depending on lex scopes.
         let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions()).collect();
@@ -569,6 +639,7 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Enter a function, `name`, with return type `ret_ty`.
     pub fn enter_fn(&mut self, name: String, ret_ty: Option<E::Ty>) {
         let prefix = format!("{}_f{}", name, self.fn_ctr);
         self.fn_ctr += 1;
@@ -580,6 +651,7 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Return (subject to the current path condition).
     pub fn return_(&mut self, val: Option<E::T>) -> Result<()> {
         let last = self.fn_stack.last().expect("No fn");
         if val.is_some() != last.has_return {
@@ -602,11 +674,17 @@ impl<E: Embeddable> Circify<E> {
         self.break_(RET_BREAK_NAME)
     }
 
+    /// Assert something
     pub fn assert(&mut self, t: Term) {
         self.cir_ctx.cs.borrow_mut().assert(t);
     }
 
     #[track_caller]
+    /// Exit a function call.
+    ///
+    /// ## Returns
+    ///
+    /// Returns the return value of the function, if any.
     pub fn exit_fn(&mut self) -> Option<Val<E::T>> {
         if let Some(fn_) = self.fn_stack.last() {
             let ret = if fn_.has_return {
@@ -621,6 +699,7 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Get the current value of a location
     pub fn get_value(&self, loc: Loc) -> Result<Val<E::T>> {
         let l = self.get_lex_ref(&loc)?;
         self.vals
@@ -629,12 +708,17 @@ impl<E: Embeddable> Circify<E> {
             .ok_or_else(|| CircError::InvalidLoc(loc))
     }
 
+    /// Dereference a reference into a location.
+    ///
+    /// Panics if not a reference.
     pub fn deref(&self, v: &Val<E::T>) -> Loc {
         match v {
             Val::Ref(l) => l.clone(),
             Val::Term(_) => panic!("{} is not dereferencable", v),
         }
     }
+
+    /// Create a reference to a variable.
     pub fn ref_(&self, name: &VarName) -> Result<Val<E::T>> {
         let idx = self.mk_abs(name)?;
         Ok(Val::Ref(Loc {
@@ -642,16 +726,22 @@ impl<E: Embeddable> Circify<E> {
             idx: Some(idx),
         }))
     }
+
+    /// Define a new type
     pub fn def_type(&mut self, name: &str, ty: E::Ty) {
         if let Some(old_ty) = self.typedefs.insert(name.to_owned(), ty) {
             panic!("{} already defined as {}", name, old_ty)
         }
     }
+
+    /// Get a defined type
     pub fn get_type(&mut self, name: &str) -> &E::Ty {
         self.typedefs
             .get(name)
             .unwrap_or_else(|| panic!("No type {}", name))
     }
+
+    /// Get the constraints from this manager
     pub fn consume(self) -> Rc<RefCell<Constraints>> {
         self.cir_ctx.cs
     }

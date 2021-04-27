@@ -1,3 +1,5 @@
+//! Constant folding
+
 use crate::ir::term::*;
 use lazy_static::lazy_static;
 use rug::Integer;
@@ -25,6 +27,7 @@ pub fn fold(node: &Term) -> Term {
     fold_cache(node, cache.deref_mut())
 }
 
+/// Do constant-folding backed by a cache.
 pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];

@@ -1,12 +1,15 @@
+//! IR term definition
+//!
+//! Generally based on SMT-LIB, and its theories.
+use crate::util::once::OnceQueue;
 use ahash::{AHashMap, AHashSet};
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::{Arc, RwLock};
-use crate::util::once::OnceQueue;
 
 pub mod bv;
 pub mod dist;
@@ -19,52 +22,97 @@ pub use field::FieldElem;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// An operator
 pub enum Op {
+    /// if-then-else: ternary
     Ite,
+    /// equality
     Eq,
+    /// let-binding to a variable (binary)
     Let(String),
+    /// a variable
     Var(String, Sort),
+    /// a constant
     Const(Value),
 
+    /// bit-vector binary operator
     BvBinOp(BvBinOp),
+    /// bit-vector binary predicate
     BvBinPred(BvBinPred),
+    /// bit-vector n-ary operator
     BvNaryOp(BvNaryOp),
+    /// bit-vector unary operator
     BvUnOp(BvUnOp),
+    /// single-bit bit-vector from a boolean
     BoolToBv,
-    // high, low (zero-indexed, inclusive)
+    /// Get bits (high) through (low) from the underlying bit-vector.
+    ///
+    /// Zero-indexed and inclusive.
     BvExtract(usize, usize),
+    /// bit-vector concatenation. n-ary. Low-index arguements map to high-order bits
     BvConcat,
-    // number of extra bits
+    /// add this many zero bits
     BvUext(usize),
+    /// add this many sign-extend bits
     BvSext(usize),
-    // number of bits the element should fit in.
+    /// translate a prime-field element into a certain-width bit-vector.
     PfToBv(usize),
 
+    /// boolean implication (binary)
     Implies,
+    /// boolean n-ary operator
     BoolNaryOp(BoolNaryOp),
+    /// boolean not
     Not,
+    /// get this index bit from an input bit-vector
     BvBit(usize),
     // Ternary majority operator.
+    /// boolean majority (ternary)
     BoolMaj,
 
+    /// floating-point binary operator
     FpBinOp(FpBinOp),
+    /// floating-point binary predicate
     FpBinPred(FpBinPred),
+    /// floating-point unary predicate
     FpUnPred(FpBinPred),
+    /// floating-point unary operator
     FpUnOp(FpUnOp),
     //FpFma,
+    /// cast bit-vector to floating-point, as bits
     BvToFp,
+    /// translate the (unsigned) bit-vector number represented by the argument to a floating-point
+    /// value of this width.
     UbvToFp(usize),
+    /// translate the (signed) bit-vector number represented by the argument to a floating-point
+    /// value of this width.
     SbvToFp(usize),
     // dest width
+    /// translate the number represented by the argument to a floating-point value of this width.
     FpToFp(usize),
 
+    /// Prime-field unary operator
     PfUnOp(PfUnOp),
+    /// Prime-field n-ary operator
     PfNaryOp(PfNaryOp),
 
     // key sort, size
-    // Note that "size" assumes an order and starting point for keys.
+    /// A unary operator.
+    ///
+    /// Make an array from keys of the given sort, which is equal to the provided argument at all
+    /// places.
+    ///
+    /// Has space for the provided number of elements. Note that this assumes an order and starting
+    /// point for keys.
     ConstArray(Sort, usize),
+
+    /// Binary operator, with arguments (array, index).
+    ///
+    /// Gets the value at index in array.
     Select,
+    /// Ternary operator, with arguments (array, index, value).
+    ///
+    /// Makes an array equal to `array`, but with `value` at `index`.
     Store,
 
     /// Assemble n things into a tuple
@@ -74,6 +122,7 @@ pub enum Op {
 }
 
 impl Op {
+    /// Number of arguments for this operator. `None` if n-ary.
     pub fn arity(&self) -> Option<usize> {
         match self {
             Op::Ite => Some(3),
@@ -158,9 +207,13 @@ impl Display for Op {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Boolean n-ary operator
 pub enum BoolNaryOp {
+    /// Boolean AND
     And,
+    /// Boolean XOR
     Xor,
+    /// Boolean OR
     Or,
 }
 
@@ -175,12 +228,19 @@ impl Display for BoolNaryOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Bit-vector binary operator
 pub enum BvBinOp {
+    /// Bit-vector (-)
     Sub,
+    /// Bit-vector (/)
     Udiv,
+    /// Bit-vector (%)
     Urem,
+    /// Bit-vector (<<)
     Shl,
+    /// Bit-vector arithmetic (sign extend) (>>)
     Ashr,
+    /// Bit-vector logical (zero fill) (>>)
     Lshr,
 }
 
@@ -198,15 +258,24 @@ impl Display for BvBinOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Bit-vector binary predicate
 pub enum BvBinPred {
     // TODO: add overflow predicates.
+    /// Bit-vector unsigned (<)
     Ult,
+    /// Bit-vector unsigned (>)
     Ugt,
+    /// Bit-vector unsigned (<=)
     Ule,
+    /// Bit-vector unsigned (>=)
     Uge,
+    /// Bit-vector signed (<)
     Slt,
+    /// Bit-vector signed (>)
     Sgt,
+    /// Bit-vector signed (<=)
     Sle,
+    /// Bit-vector signed (>=)
     Sge,
 }
 
@@ -226,11 +295,17 @@ impl Display for BvBinPred {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Bit-vector n-ary operator
 pub enum BvNaryOp {
+    /// Bit-vector (+)
     Add,
+    /// Bit-vector (*)
     Mul,
+    /// Bit-vector bitwise OR
     Or,
+    /// Bit-vector bitwise AND
     And,
+    /// Bit-vector bitwise XOR
     Xor,
 }
 
@@ -247,8 +322,11 @@ impl Display for BvNaryOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Bit-vector unary operator
 pub enum BvUnOp {
+    /// Bit-vector bitwise not
     Not,
+    /// Bit-vector two's complement negation
     Neg,
 }
 
@@ -262,13 +340,21 @@ impl Display for BvUnOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Floating-point binary operator
 pub enum FpBinOp {
+    /// Floating-point (+)
     Add,
+    /// Floating-point (*)
     Mul,
+    /// Floating-point (-)
     Sub,
+    /// Floating-point (/)
     Div,
+    /// Floating-point (%)
     Rem,
+    /// Floating-point max
     Max,
+    /// Floating-point min
     Min,
 }
 
@@ -287,10 +373,15 @@ impl Display for FpBinOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Floating-point unary operator
 pub enum FpUnOp {
+    /// Floating-point unary negation
     Neg,
+    /// Floating-point absolute value
     Abs,
+    /// Floating-point square root
     Sqrt,
+    /// Floating-point round
     Round,
 }
 
@@ -306,13 +397,20 @@ impl Display for FpUnOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Floating-point binary predicate
 pub enum FpBinPred {
+    /// Floating-point (<=)
     Le,
+    /// Floating-point (<)
     Lt,
+    /// Floating-point (=)
     Eq,
+    /// Floating-point (>=)
     Ge,
+    /// Floating-point (>)
     Gt,
 }
+
 impl Display for FpBinPred {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
@@ -326,13 +424,21 @@ impl Display for FpBinPred {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Floating-point unary predicate
 pub enum FpUnPred {
+    /// Is this normal?
     Normal,
+    /// Is this subnormal?
     Subnormal,
+    /// Is this zero (or negative zero)?
     Zero,
+    /// Is this infinite?
     Infinite,
+    /// Is this not-a-number?
     Nan,
+    /// Is this negative?
     Negative,
+    /// Is this positive?
     Positive,
 }
 
@@ -351,8 +457,11 @@ impl Display for FpUnPred {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Finite field n-ary operator
 pub enum PfNaryOp {
+    /// Finite field (+)
     Add,
+    /// Finite field (*)
     Mul,
 }
 
@@ -366,8 +475,11 @@ impl Display for PfNaryOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Finite field n-ary operator
 pub enum PfUnOp {
+    /// Finite field negation
     Neg,
+    /// Finite field reciprocal
     Recip,
 }
 
@@ -381,8 +493,11 @@ impl Display for PfUnOp {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
+/// A term: an operator applied to arguements
 pub struct TermData {
+    /// the operator
     pub op: Op,
+    /// the arguments
     pub cs: Vec<Term>,
 }
 
@@ -407,14 +522,23 @@ impl Debug for TermData {
 }
 
 #[derive(Clone, PartialEq, Debug, PartialOrd)]
+/// An IR value (aka literal)
 pub enum Value {
+    /// Bit-vector
     BitVector(BitVector),
+    /// f32
     F32(f32),
+    /// f64
     F64(f64),
+    /// Arbitrary-precision integer
     Int(Integer),
+    /// Finite field element
     Field(FieldElem),
+    /// Boolean
     Bool(bool),
+    /// Array
     Array(Sort, Box<Value>, BTreeMap<Value, Value>, usize),
+    /// Tuple
     Tuple(Vec<Value>),
 }
 
@@ -470,21 +594,31 @@ impl std::hash::Hash for Value {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+/// The "type" of an IR term
 pub enum Sort {
+    /// bit-vectors of this width
     BitVector(usize),
+    /// f32s
     F32,
+    /// f64s
     F64,
+    /// arbitrary-precision integer
     Int,
+    /// prime field, integers mod this modulus
     Field(Arc<Integer>),
+    /// boolean
     Bool,
-    // key, value, size
-    // size presumes an order, and zero, for the keys.
+    /// Array from one sort to another, of fixed size.
+    ///
+    /// size presumes an order, and a zero, for the key sort.
     Array(Box<Sort>, Box<Sort>, usize),
+    /// A tuple
     Tuple(Vec<Sort>),
 }
 
 impl Sort {
     #[track_caller]
+    /// Unwrap the bitsize of this bit-vector, panicking otherwise.
     pub fn as_bv(&self) -> usize {
         if let Sort::BitVector(w) = self {
             *w
@@ -494,6 +628,7 @@ impl Sort {
     }
 
     #[track_caller]
+    /// Unwrap the modulus of this prime field, panicking otherwise.
     pub fn as_pf(&self) -> Arc<Integer> {
         if let Sort::Field(w) = self {
             w.clone()
@@ -503,6 +638,7 @@ impl Sort {
     }
 
     #[track_caller]
+    /// Unwrap the constituent sorts of this tuple, panicking otherwise.
     pub fn as_tuple(&self) -> &Vec<Sort> {
         if let Sort::Tuple(w) = self {
             &w
@@ -579,8 +715,10 @@ impl Display for Sort {
     }
 }
 
+/// A (perfectly shared) pointer to a term
 pub type Term = HConsed<TermData>;
 // "Temporary" terms.
+/// A weak (perfectly shared) pointer to a term
 pub type TTerm = WHConsed<TermData>;
 
 struct TermTable {
@@ -676,6 +814,7 @@ fn collect_types() {
 }
 
 impl TermData {
+    /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
         if let Op::Const(Value::Bool(b)) = &self.op {
             Some(*b)
@@ -683,6 +822,7 @@ impl TermData {
             None
         }
     }
+    /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
         if let Op::Const(Value::BitVector(b)) = &self.op {
             Some(b)
@@ -690,6 +830,7 @@ impl TermData {
             None
         }
     }
+    /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldElem> {
         if let Op::Const(Value::Field(b)) = &self.op {
             Some(b)
@@ -697,6 +838,7 @@ impl TermData {
             None
         }
     }
+    /// Is this a variable?
     pub fn is_var(&self) -> bool {
         if let Op::Var(..) = &self.op {
             true
@@ -707,6 +849,7 @@ impl TermData {
 }
 
 impl Value {
+    /// Compute the sort of this value
     pub fn sort(&self) -> Sort {
         match &self {
             Value::Bool(_) => Sort::Bool,
@@ -720,6 +863,7 @@ impl Value {
         }
     }
     #[track_caller]
+    /// Get the underlying boolean constant, or panic!
     pub fn as_bool(&self) -> bool {
         if let Value::Bool(b) = self {
             *b
@@ -728,6 +872,7 @@ impl Value {
         }
     }
     #[track_caller]
+    /// Get the underlying bit-vector constant, or panic!
     pub fn as_bv(&self) -> &BitVector {
         if let Value::BitVector(b) = self {
             b
@@ -736,6 +881,7 @@ impl Value {
         }
     }
     #[track_caller]
+    /// Get the underlying prime field constant, if possible.
     pub fn as_pf(&self) -> &FieldElem {
         if let Value::Field(b) = self {
             b
@@ -744,6 +890,7 @@ impl Value {
         }
     }
     #[track_caller]
+    /// Get the underlying tuple's constituent values, if possible.
     pub fn as_tuple(&self) -> &Vec<Value> {
         if let Value::Tuple(b) = self {
             b
@@ -752,6 +899,7 @@ impl Value {
         }
     }
 
+    /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
         if let Value::Bool(b) = self {
             Some(*b)
@@ -759,6 +907,7 @@ impl Value {
             None
         }
     }
+    /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
         if let Value::BitVector(b) = self {
             Some(b)
@@ -768,6 +917,7 @@ impl Value {
     }
 }
 
+/// Evaluate the term `t`, using variable values in `h`.
 pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
@@ -898,9 +1048,7 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
                     },
                 )
             }),
-            Op::Tuple => Value::Tuple(
-                c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()
-            ),
+            Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
             Op::Field(i) => {
                 let t = vs.get(&c.cs[0]).unwrap().as_tuple();
                 assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
@@ -914,14 +1062,17 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
     vs.get(t).unwrap().clone()
 }
 
+/// Make a term with no arguments, just an operator.
 pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
+/// Make a term with arguments.
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
     mk(TermData { op, cs })
 }
 
+/// Make a bit-vector constant term.
 pub fn bv_lit<T>(uint: T, width: usize) -> Term
 where
     Integer: From<T>,
@@ -933,15 +1084,21 @@ where
 }
 
 #[macro_export]
+/// Make a term.
+///
+/// Syntax: `term![OP; ARG0, ARG1, ... ]`. Note the semi-colon.
 macro_rules! term {
     ($x:expr; $($y:expr),+) => {
         term($x, vec![$($y),+])
     };
 }
 
+/// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
+/// Set of terms
 pub type TermSet = hashconsing::coll::HConSet<Term>;
 
+/// Iterator over descendents in child-first order.
 pub struct PostOrderIter {
     // (cs stacked, term)
     stack: Vec<(bool, Term)>,
@@ -949,6 +1106,7 @@ pub struct PostOrderIter {
 }
 
 impl PostOrderIter {
+    /// Make an iterator over the descendents of `root`.
     pub fn new(root: Term) -> Self {
         Self {
             stack: vec![(false, root)],
@@ -980,13 +1138,19 @@ impl std::iter::Iterator for PostOrderIter {
 }
 
 #[derive(Clone, Debug)]
+/// An IR constraint system.
 pub struct Constraints {
+    /// The assertions.
     pub(super) assertions: Vec<Term>,
+    /// The public inputs to the system.
     pub(super) public_inputs: AHashSet<String>,
+    /// The values of variables in the system.
     pub(super) values: Option<AHashMap<String, Value>>,
 }
 
 impl Constraints {
+    /// Create a new variable, `name: s`, where `val_fn` can be called to get the concrete value,
+    /// and `public` indicates whether this variable is public in the constraint system.
     pub fn new_var<F: FnOnce() -> Value>(
         &mut self,
         name: &str,
@@ -1011,6 +1175,8 @@ impl Constraints {
         }
         leaf_term(Op::Var(name.to_string(), s))
     }
+    /// Create a new variable, `name` in the constraint system, and set it equal to `term`.
+    /// `public` indicates whether this variable is public in the constraint system.
     pub fn assign(&mut self, name: &str, term: Term, public: bool) -> Term {
         let val = self.eval(&term);
         let sort = check(&term);
@@ -1018,20 +1184,24 @@ impl Constraints {
         self.assert(term![Op::Eq; var.clone(), term]);
         var
     }
+    /// Assert `s` in the system.
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
         debug!("Assert: {}", s);
         self.assertions.push(s);
     }
+    /// If tracking values, evaluate `term`, and set the result to `name`.
     pub fn eval_and_save(&mut self, name: &str, term: &Term) {
         if let Some(vs) = self.values.as_mut() {
             let v = eval(term, vs);
             vs.insert(name.to_owned(), v);
         }
     }
+    /// Evaluate `term`, if values are being tracked.
     pub fn eval(&self, term: &Term) -> Option<Value> {
         self.values.as_ref().map(|vs| eval(term, vs))
     }
+    /// Create a new system, which tracks values iff `values`.
     pub fn new(values: bool) -> Self {
         Self {
             assertions: Vec::new(),
@@ -1039,15 +1209,19 @@ impl Constraints {
             values: if values { Some(AHashMap::new()) } else { None },
         }
     }
+    /// Make `s` a public input.
     pub fn publicize(&mut self, s: String) {
         self.public_inputs.insert(s);
     }
+    /// Get the assertions in the system.
     pub fn assertions(&self) -> &Vec<Term> {
         &self.assertions
     }
+    /// Consume this system, yielding its parts: (assertions, public inputs, values)
     pub fn consume(self) -> (Vec<Term>, AHashSet<String>, Option<AHashMap<String, Value>>) {
         (self.assertions, self.public_inputs, self.values)
     }
+    /// Build a system from its parts: (assertions, public inputs, values)
     pub fn from_parts(
         assertions: Vec<Term>,
         public_inputs: AHashSet<String>,
@@ -1059,9 +1233,11 @@ impl Constraints {
             values,
         }
     }
+    /// Get the term, (AND all assertions)
     pub fn assertions_as_term(&self) -> Term {
         term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
     }
+    /// How many total (unique) terms are there?
     pub fn terms(&self) -> usize {
         let mut terms = AHashSet::<Term>::new();
         for a in &self.assertions {

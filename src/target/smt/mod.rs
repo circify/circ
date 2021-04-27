@@ -1,3 +1,5 @@
+//! The SMT back-end.
+
 use crate::ir::term::*;
 
 use rsmt2::conf::SmtConf;
@@ -251,6 +253,7 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
     }
 }
 
+/// Check whether some term is satisfiable.
 pub fn check_sat(t: &Term) -> bool {
     let mut solver = Solver::default_cvc4(()).unwrap();
     for c in PostOrderIter::new(t.clone()) {
@@ -263,6 +266,7 @@ pub fn check_sat(t: &Term) -> bool {
     solver.check_sat().unwrap()
 }
 
+/// Get a satisfying assignment for `t`, assuming it is SAT.
 pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
     let mut conf = SmtConf::default_cvc4();
     conf.models();

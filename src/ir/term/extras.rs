@@ -1,3 +1,5 @@
+//! Extra algorithms over terms (e.g. substitutions)
+
 use super::*;
 use std::fmt::{self, Display, Formatter};
 
@@ -51,7 +53,6 @@ impl Display for Letified {
                 let var = leaf_term(Op::Var(name, sort));
                 writeln!(f, "{})", substitute_cache(&t, &mut print_as))?;
                 print_as.insert(t, var);
-
             }
         }
         writeln!(f, ") {})", substitute_cache(&self.0, &mut print_as))
@@ -106,12 +107,18 @@ pub fn substitute_single(t: &Term, from: Term, to: Term) -> Term {
     substitute_cache(t, &mut c)
 }
 
+/// Is `needle` not in `haystack`?
 pub fn does_not_contain(haystack: Term, needle: &Term) -> bool {
-    PostOrderIter::new(haystack).into_iter().all(|descendent| &descendent != needle)
+    PostOrderIter::new(haystack)
+        .into_iter()
+        .all(|descendent| &descendent != needle)
 }
 
+/// Is `needle` in `haystack`?
 pub fn contains(haystack: Term, needle: &Term) -> bool {
-    PostOrderIter::new(haystack).into_iter().any(|descendent| &descendent == needle)
+    PostOrderIter::new(haystack)
+        .into_iter()
+        .any(|descendent| &descendent == needle)
 }
 
 /// Is `v` free in `t`? Wrong in the presence of lets.

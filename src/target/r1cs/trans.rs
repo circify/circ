@@ -1,3 +1,4 @@
+//! Lowering IR to R1CS
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use crate::target::r1cs::*;
@@ -835,6 +836,7 @@ impl ToR1cs {
     }
 }
 
+/// Convert this (IR) constraint system `cs` to R1CS, over a prime field defined by `modulus`.
 pub fn to_r1cs(cs: Constraints, modulus: Integer) -> R1cs<String> {
     let (assertions, public_inputs, values) = cs.consume();
     let mut converter = ToR1cs::new(modulus, values, public_inputs);

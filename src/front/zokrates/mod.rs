@@ -1,5 +1,7 @@
-pub mod parser;
-pub mod term;
+//! The ZoKrates front-end
+
+mod parser;
+mod term;
 
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
@@ -14,11 +16,27 @@ use zokrates_pest_ast as ast;
 
 use term::*;
 
+/// The modulus for the ZoKrates language.
+pub use term::ZOKRATES_MODULUS;
+
+/// Inputs to the ZoKrates compilier
 pub struct Inputs {
+    /// The file to look for `main` in.
     pub file: PathBuf,
+    /// The file to look for concrete arguments to main in. Optional.
+    ///
+    /// ## Examples
+    ///
+    /// If main takes `x: u64, y: field`, this file might contain
+    ///
+    /// ```ignore
+    /// x 4
+    /// y -1
+    /// ```
     pub inputs: Option<PathBuf>,
 }
 
+/// The ZoKrates front-end. Implements [FrontEnd].
 pub struct Zokrates;
 
 impl FrontEnd for Zokrates {
@@ -35,7 +53,7 @@ impl FrontEnd for Zokrates {
     }
 }
 
-pub struct ZGen<'ast> {
+struct ZGen<'ast> {
     circ: Circify<ZoKrates>,
     stdlib: parser::ZStdLib,
     asts: HashMap<PathBuf, ast::File<'ast>>,

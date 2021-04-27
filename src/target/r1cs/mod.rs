@@ -1,8 +1,10 @@
+//! Rank 1 Constraint Systems
+
+use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use log::debug;
 use rug::ops::{RemRounding, RemRoundingAssign};
 use rug::Integer;
 use std::collections::hash_map::Entry;
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
@@ -12,6 +14,7 @@ pub mod opt;
 pub mod trans;
 
 #[derive(Clone, Debug)]
+/// A Rank 1 Constraint System.
 pub struct R1cs<S: Hash + Eq> {
     modulus: Rc<Integer>,
     signal_idxs: HashMap<S, usize>,
@@ -23,6 +26,7 @@ pub struct R1cs<S: Hash + Eq> {
 }
 
 #[derive(Clone, Debug)]
+/// A linear combination
 pub struct Lc {
     modulus: Rc<Integer>,
     constant: Integer,
@@ -30,13 +34,16 @@ pub struct Lc {
 }
 
 impl Lc {
+    /// Is this the zero combination?
     pub fn is_zero(&self) -> bool {
         self.monomials.len() == 0 && &self.constant == &0
     }
+    /// Make this the zero combination.
     pub fn clear(&mut self) {
         self.monomials.clear();
         self.constant = Integer::from(0);
     }
+    /// Take this linear combination, leaving zero in its place.
     pub fn take(&mut self) -> Self {
         let monomials = std::mem::take(&mut self.monomials);
         let constant = std::mem::take(&mut self.constant);
@@ -46,6 +53,7 @@ impl Lc {
             modulus: self.modulus.clone(),
         }
     }
+    /// Is this a constant? If so, return that constant.
     pub fn as_const(&self) -> Option<&Integer> {
         (self.monomials.len() == 0).then(|| &self.constant)
     }
@@ -234,6 +242,8 @@ impl std::ops::MulAssign<isize> for Lc {
 }
 
 impl<S: Clone + Hash + Eq + Display> R1cs<S> {
+    /// Make an empty constraint system, mod `modulus`.
+    /// If `values`, then this constraint system will track & expect concrete values.
     pub fn new(modulus: Integer, values: bool) -> Self {
         R1cs {
             modulus: Rc::new(modulus),
@@ -245,6 +255,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             constraints: Vec::new(),
         }
     }
+    /// Get the zero combination for this system.
     pub fn zero(&self) -> Lc {
         Lc {
             modulus: self.modulus.clone(),
@@ -252,6 +263,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             monomials: HashMap::new(),
         }
     }
+    /// Get combination which is just the wire `s`.
     pub fn signal_lc(&self, s: &S) -> Lc {
         let idx = self
             .signal_idxs
@@ -261,6 +273,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         lc.monomials.insert(*idx, Integer::from(1));
         lc
     }
+    /// Create a new wire, `s`. If this system is tracking concrete values, you must provide the
+    /// value, `v`.
     pub fn add_signal(&mut self, s: S, v: Option<Integer>) {
         let n = self.next_idx;
         self.next_idx += 1;
@@ -276,12 +290,14 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             (_, Some(_)) => panic!("R1cs is not storing values, but one provided"),
         }
     }
+    /// Make `s` a public wire in the system
     pub fn publicize(&mut self, s: &S) {
         self.signal_idxs
             .get(s)
             .cloned()
             .map(|i| self.public_idxs.insert(i));
     }
+    /// Make `a * b = c` a constraint.
     pub fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
         assert_eq!(&self.modulus, &a.modulus);
         assert_eq!(&self.modulus, &b.modulus);
@@ -297,6 +313,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             self.check(&a, &b, &c);
         }
     }
+    /// Get a nice string represenation of the combination `a`.
     pub fn format_lc(&self, a: &Lc) -> String {
         let mut s = String::new();
         let half_m: Integer = self.modulus().clone() / 2;
@@ -325,6 +342,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         s
     }
 
+    /// Get a nice string represenation of the tuple.
     pub fn format_qeq(&self, (a, b, c): &(Lc, Lc, Lc)) -> String {
         format!(
             "({})({}) = {}",
@@ -334,13 +352,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         )
     }
 
-    pub fn check_i(&self, i: usize) {
-        self.check(
-            &self.constraints[i].0,
-            &self.constraints[i].1,
-            &self.constraints[i].2,
-        );
-    }
+    /// Check `a * b = c` in this constraint system.
     pub fn check(&self, a: &Lc, b: &Lc, c: &Lc) {
         let av = self.eval(a).unwrap();
         let bv = self.eval(b).unwrap();
@@ -357,7 +369,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             )
         }
     }
-    pub fn eval(&self, lc: &Lc) -> Option<Integer> {
+
+    fn eval(&self, lc: &Lc) -> Option<Integer> {
         self.values.as_ref().map(|values| {
             let mut acc = lc.constant.clone();
             for (var, coeff) in &lc.monomials {
@@ -371,9 +384,11 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             acc
         })
     }
-    pub fn modulus(&self) -> &Integer {
+    fn modulus(&self) -> &Integer {
         &self.modulus
     }
+
+    /// Check all assertions, if values are being tracked.
     pub fn check_all(&self) {
         if self.values.is_some() {
             for (a, b, c) in &self.constraints {
@@ -381,6 +396,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             }
         }
     }
+
+    /// Access the raw constraints.
     pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
         &self.constraints
     }
