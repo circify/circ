@@ -664,6 +664,7 @@ const RET_BREAK_NAME: &str = "return";
 mod test {
     use super::*;
 
+    #[allow(dead_code)]
     mod bool_pair {
         use super::*;
 

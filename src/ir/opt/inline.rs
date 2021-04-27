@@ -193,12 +193,6 @@ mod test {
         leaf_term(Op::Var(format!("{}", b), Sort::Bool))
     }
 
-    fn b_lit(b: bool) -> Term {
-        leaf_term(Op::Const(Value::Bool(b)))
-    }
-
-    const B_AND: Op = Op::BoolNaryOp(BoolNaryOp::And);
-    const B_OR: Op = Op::BoolNaryOp(BoolNaryOp::Or);
     const B_XOR: Op = Op::BoolNaryOp(BoolNaryOp::Xor);
 
     fn sub_test(xs: Vec<Term>, n: usize) {

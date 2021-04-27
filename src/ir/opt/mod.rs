@@ -5,7 +5,6 @@ pub mod sha;
 pub mod inline;
 
 use super::term::*;
-use super::term::extras::Letified;
 use log::debug;
 
 #[derive(Debug)]
@@ -19,7 +18,6 @@ pub enum Opt {
 }
 
 pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> Constraints {
-    //debug!("Initial: {}", Letified(cs.assertions_as_term()));
     for i in optimizations {
         debug!("Applying: {:?}", i);
         match i {
@@ -65,7 +63,6 @@ pub fn opt<I: IntoIterator<Item=Opt>>(mut cs: Constraints, optimizations: I) -> 
             }
         }
         debug!("After {:?}: {}", i, cs.terms());
-        //debug!("After {:?}: {}", i, Letified(cs.assertions_as_term()));
     }
     garbage_collect();
     cs
