@@ -66,6 +66,11 @@ pub enum Op {
     ConstArray(Sort, usize),
     Select,
     Store,
+
+    /// Assemble n things into a tuple
+    Tuple,
+    /// Get the n'th element of a tuple
+    Field(usize),
 }
 
 impl Op {
@@ -104,6 +109,8 @@ impl Op {
             Op::ConstArray(_, _) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
+            Op::Tuple => None,
+            Op::Field(_) => Some(1),
         }
     }
 }
@@ -144,6 +151,8 @@ impl Display for Op {
             Op::ConstArray(_, s) => write!(f, "const-array {}", s),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
+            Op::Tuple => write!(f, "tuple"),
+            Op::Field(_) => write!(f, "field"),
         }
     }
 }
@@ -406,6 +415,7 @@ pub enum Value {
     Field(FieldElem),
     Bool(bool),
     Array(Sort, Box<Value>, BTreeMap<Value, Value>, usize),
+    Tuple(Vec<Value>),
 }
 
 impl Display for Value {
@@ -417,6 +427,13 @@ impl Display for Value {
             Value::Int(b) => write!(f, "{}", b),
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
+            Value::Tuple(fields) => {
+                write!(f, "(tuple")?;
+                for field in fields {
+                    write!(f, " {}", field)?;
+                }
+                write!(f, ")")
+            }
             Value::Array(_s, d, map, size) => {
                 write!(f, "(map default:{} size:{} {:?})", d, size, map)
             }
@@ -445,6 +462,9 @@ impl std::hash::Hash for Value {
                 a.hash(state);
                 size.hash(state);
             }
+            Value::Tuple(s) => {
+                s.hash(state);
+            }
         }
     }
 }
@@ -460,6 +480,7 @@ pub enum Sort {
     // key, value, size
     // size presumes an order, and zero, for the keys.
     Array(Box<Sort>, Box<Sort>, usize),
+    Tuple(Vec<Sort>),
 }
 
 impl Sort {
@@ -478,6 +499,15 @@ impl Sort {
             w.clone()
         } else {
             panic!("{} is not a field", self)
+        }
+    }
+
+    #[track_caller]
+    pub fn as_tuple(&self) -> &Vec<Sort> {
+        if let Sort::Tuple(w) = self {
+            &w
+        } else {
+            panic!("{} is not a tuple", self)
         }
     }
 
@@ -538,6 +568,13 @@ impl Display for Sort {
             Sort::F64 => write!(f, "f64"),
             Sort::Field(i) => write!(f, "(mod {})", i),
             Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
+            Sort::Tuple(fields) => {
+                write!(f, "(tuple")?;
+                for field in fields {
+                    write!(f, " {}", field)?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -679,6 +716,7 @@ impl Value {
             Value::F32(_) => Sort::F32,
             Value::BitVector(b) => Sort::BitVector(b.width()),
             Value::Array(s, _, _, _) => s.clone(),
+            Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
     #[track_caller]
@@ -703,6 +741,14 @@ impl Value {
             b
         } else {
             panic!("Not a field-elem: {}", self)
+        }
+    }
+    #[track_caller]
+    pub fn as_tuple(&self) -> &Vec<Value> {
+        if let Value::Tuple(b) = self {
+            b
+        } else {
+            panic!("Not a tuple: {}", self)
         }
     }
 
@@ -852,6 +898,14 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
                     },
                 )
             }),
+            Op::Tuple => Value::Tuple(
+                c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()
+            ),
+            Op::Field(i) => {
+                let t = vs.get(&c.cs[0]).unwrap().as_tuple();
+                assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
+                t[*i].clone()
+            }
             o => unimplemented!("eval: {:?}", o),
         };
         //println!("Eval {}\nAs   {}", c, v);

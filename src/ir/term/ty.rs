@@ -85,6 +85,11 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         )),
         Op::Select => array_or(&check_raw(&t.cs[0])?, "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(check_raw(&t.cs[0])?),
+        Op::Tuple => Ok(Sort::Tuple(
+            t.cs.iter()
+                .map(|c| check_raw(c))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
         _ => Err(TypeErrorReason::Custom(format!("other"))),
     };
     let mut term_tys = TERM_TYPES.write().unwrap();
@@ -247,6 +252,19 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
                         .and_then(|_| eq_or(v, b, "store"))
                         .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
+                    (Op::Tuple, a) => {
+                        Ok(Sort::Tuple(a.into_iter().map(|a| (*a).clone()).collect()))
+                    }
+                    (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
+                        if i < &t.len() {
+                            Ok(t[*i].clone())
+                        } else {
+                            Err(TypeErrorReason::OutOfBounds(format!(
+                                "index {} in tuple of sort {}",
+                                i, a
+                            )))
+                        }
+                    }),
                     (_, _) => Err(TypeErrorReason::Custom(format!("other"))),
                 })
                 .map_err(|reason| TypeError {
@@ -320,6 +338,13 @@ fn fp_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason
 fn pf_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason> {
     match a {
         Sort::Field(_) => Ok(a),
+        _ => Err(TypeErrorReason::ExpectedPf(a.clone(), ctx)),
+    }
+}
+
+fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Vec<Sort>, TypeErrorReason> {
+    match a {
+        Sort::Tuple(a) => Ok(a),
         _ => Err(TypeErrorReason::ExpectedPf(a.clone(), ctx)),
     }
 }

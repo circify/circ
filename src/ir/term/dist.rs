@@ -270,6 +270,7 @@ pub mod test {
     use quickcheck::{Arbitrary, Gen};
     use rand::distributions::Distribution;
     use rand::SeedableRng;
+    use ahash::AHashMap as HashMap;
 
     #[derive(Clone)]
     pub struct ArbitraryTerm(pub Term);
