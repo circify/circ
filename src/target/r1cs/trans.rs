@@ -2,13 +2,13 @@ use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use crate::target::r1cs::*;
 
+use ahash::{AHashMap, AHashSet};
 use log::debug;
 use rug::ops::Pow;
 use rug::Integer;
-use ahash::{AHashMap, AHashSet};
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use std::fmt::Display;
 use std::iter::ExactSizeIterator;
@@ -19,6 +19,7 @@ struct BvEntry {
     bits: Vec<Lc>,
 }
 
+#[derive(Clone)]
 enum EmbeddedTerm {
     Bv(Rc<RefCell<BvEntry>>),
     Bool(Lc),
@@ -255,18 +256,55 @@ impl ToR1cs {
         debug!("Embed: {}", Letified(t.clone()));
         for c in PostOrderIter::new(t) {
             debug!("Embed op: {}", c.op);
-            match check(&c) {
-                Sort::Bool => {
-                    self.embed_bool(c);
+            // Handle field access once and for all
+            if let Op::Field(i) = &c.op {
+                if !self.cache.contains_key(&c) {
+                    let t = self.get_field(&c.cs[0], *i);
+                    self.cache.insert(c, t);
                 }
-                Sort::BitVector(_) => {
-                    self.embed_bv(c);
+            } else {
+                match check(&c) {
+                    Sort::Bool => {
+                        self.embed_bool(c);
+                    }
+                    Sort::BitVector(_) => {
+                        self.embed_bv(c);
+                    }
+                    Sort::Field(_) => {
+                        self.embed_pf(c);
+                    }
+                    Sort::Tuple(_) => {
+                        self.embed_tuple(c);
+                    }
+                    s => panic!("Unsupported sort in embed: {:?}", s),
                 }
-                Sort::Field(_) => {
-                    self.embed_pf(c);
-                }
-                s => panic!("Unsupported sort in embed: {:?}", s),
             }
+        }
+    }
+
+    fn embed_tuple(&mut self, a: Term) {
+        if !self.cache.contains_key(&a) {
+            for t in &a.cs {
+                self.embed(t.clone());
+            }
+            let t = match &a.op {
+                Op::Tuple => {
+                    let subembeddings =
+                        a.cs.iter()
+                            .map(|child| self.cache.get(child).unwrap().clone())
+                            .collect();
+                    EmbeddedTerm::Tuple(subembeddings)
+                }
+                _ => panic!("Cannot embed tuple term: {}", a),
+            };
+            self.cache.insert(a, t);
+        }
+    }
+
+    fn get_field(&self, tuple_term: &Term, field: usize) -> EmbeddedTerm {
+        match self.cache.get(tuple_term) {
+            Some(EmbeddedTerm::Tuple(v)) => v[field].clone(),
+            _ => panic!("No tuple for {}", tuple_term),
         }
     }
 
@@ -362,7 +400,6 @@ impl ToR1cs {
                         Ult => self.bv_cmp(n, false, true, &c.cs[1], &c.cs[0]),
                     }
                 }
-
                 _ => panic!("Non-boolean in embed_bool: {}", c),
             };
             self.cache.insert(c.clone(), EmbeddedTerm::Bool(lc));
@@ -644,7 +681,7 @@ impl ToR1cs {
                             .get_bv_bits(&bv.cs[0])
                             .into_iter()
                             .skip(*low)
-                            .take(*high-*low+1)
+                            .take(*high - *low + 1)
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }
@@ -669,9 +706,11 @@ impl ToR1cs {
     }
 
     fn get_bool(&self, t: &Term) -> &Lc {
-        match self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t)) {
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
             EmbeddedTerm::Bool(b) => &b,
             _ => panic!("Non-boolean for {:?}", t),
         }
@@ -682,12 +721,11 @@ impl ToR1cs {
         assert!(!self.cache.contains_key(&t));
         self.cache.insert(
             t,
-            EmbeddedTerm::Bv(Rc::new(RefCell::new(
-            BvEntry {
+            EmbeddedTerm::Bv(Rc::new(RefCell::new(BvEntry {
                 uint: sum,
                 width: bits.len(),
                 bits,
-            })))
+            }))),
         );
     }
 
@@ -695,8 +733,7 @@ impl ToR1cs {
         assert!(!self.cache.contains_key(&t));
         self.cache.insert(
             t,
-            EmbeddedTerm::Bv(Rc::new(RefCell::new(
-            BvEntry {
+            EmbeddedTerm::Bv(Rc::new(RefCell::new(BvEntry {
                 uint,
                 width,
                 bits: Vec::new(),
@@ -705,9 +742,11 @@ impl ToR1cs {
     }
 
     fn get_bv(&self, t: &Term) -> Rc<RefCell<BvEntry>> {
-        match self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t)) {
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
             EmbeddedTerm::Bv(b) => b.clone(),
             _ => panic!("Non-bv for {:?}", t),
         }
@@ -736,9 +775,11 @@ impl ToR1cs {
     }
 
     fn get_pf(&self, t: &Term) -> &Lc {
-        match self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t)) {
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
             EmbeddedTerm::Field(b) => b,
             _ => panic!("Non-field for {:?}", t),
         }
@@ -765,8 +806,7 @@ impl ToR1cs {
                             let args = args.cloned().collect::<Vec<_>>();
                             let mut args_iter = args.into_iter();
                             let first = args_iter.next().unwrap();
-                            args_iter
-                                .fold(first, |a, b| self.mul(a, b.clone()))
+                            args_iter.fold(first, |a, b| self.mul(a, b.clone()))
                         }
                     }
                 }
@@ -1084,5 +1124,26 @@ mod test {
             term![Op::PfToBv(8); pf(15)],
             bv(0b1111, 8)
         ]);
+    }
+
+    #[test]
+    fn tuple() {
+        let cs = Constraints::from_parts(
+            vec![
+                term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
+                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+            ],
+            vec!["a", "b"].into_iter().map(|a| a.to_owned()).collect(),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Bool(true)),
+                    ("b".to_owned(), Value::Bool(false)),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        );
+        let r1cs = to_r1cs(cs, Integer::from(17));
+        r1cs.check_all();
     }
 }
