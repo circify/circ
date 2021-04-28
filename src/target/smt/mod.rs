@@ -308,7 +308,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn var_is_sat_model() {
         let t = leaf_term(Op::Var("a".into(), Sort::Bool));
         assert!(
@@ -343,7 +342,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn bv_is_sat_model() {
         let t = term![Op::Eq; bv_lit(0,4), leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
         assert!(
@@ -360,7 +358,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn vars_are_sat_model() {
         let t = term![Op::BoolNaryOp(BoolNaryOp::And);
            leaf_term(Op::Var("a".into(), Sort::Bool)),

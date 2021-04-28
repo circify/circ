@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::Circuit;
 use bls12_381::Scalar;
