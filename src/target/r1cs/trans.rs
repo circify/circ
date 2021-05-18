@@ -284,22 +284,57 @@ impl ToR1cs {
     }
 
     fn embed_tuple(&mut self, a: Term) {
-        if !self.cache.contains_key(&a) {
-            for t in &a.cs {
-                self.embed(t.clone());
-            }
-            let t = match &a.op {
-                Op::Tuple => {
-                    let subembeddings =
-                        a.cs.iter()
-                            .map(|child| self.cache.get(child).unwrap().clone())
-                            .collect();
-                    EmbeddedTerm::Tuple(subembeddings)
-                }
-                _ => panic!("Cannot embed tuple term: {}", a),
-            };
-            self.cache.insert(a, t);
-        }
+        panic!("Tuple: {}", a);
+//        if !self.cache.contains_key(&a) {
+//            for t in &a.cs {
+//                self.embed(t.clone());
+//            }
+//            let t = match &a.op {
+//                Op::Tuple => {
+//                    let subembeddings =
+//                        a.cs.iter()
+//                            .map(|child| self.cache.get(child).unwrap().clone())
+//                            .collect();
+//                    EmbeddedTerm::Tuple(subembeddings)
+//                }
+//                Op::Const(Value::Tuple(consts)) => {
+//                    let subembeddings = consts
+//                        .iter()
+//                        .map(|child| {
+//                            // a bit of recursion
+//                            let subconst = leaf_term(Op::Const(child.clone()));
+//                            self.embed(subconst.clone());
+//                            self.cache.get(&subconst).unwrap().clone()
+//                        })
+//                        .collect();
+//                    EmbeddedTerm::Tuple(subembeddings)
+//                }
+//                Op::Var(name, Sort::Tuple(sorts)) => {
+//                    let subembeddings = sorts
+//                        .iter()
+//                        .enumerate()
+//                        .map(|(i, s)| {
+//                            let var = format!("{}.{}", name, i);
+//                            if let Some(vs) = self.values.as_ref() {
+//                                let v = vs
+//                                    .get(name)
+//                                    .unwrap_or_else(|| panic!("No value for {}", name))
+//                                    .as_tuple()[i]
+//                                    .clone();
+//                                // safe b/c if-let.
+//                                self.values.as_mut().unwrap().insert(var.clone(), v);
+//                            }
+//                            let subvar = leaf_term(Op::Var(var, s.clone()));
+//                            self.embed(subvar.clone());
+//                            self.cache.get(&subvar).unwrap().clone()
+//                        })
+//                        .collect();
+//                    EmbeddedTerm::Tuple(subembeddings)
+//                }
+//                _ => panic!("Cannot embed tuple term: {}", a),
+//            };
+//            self.cache.insert(a, t);
+//        }
     }
 
     fn get_field(&self, tuple_term: &Term, field: usize) -> EmbeddedTerm {
@@ -325,6 +360,16 @@ impl ToR1cs {
                 let a = self.get_pf(a).clone();
                 let b = self.get_pf(b).clone();
                 self.are_equal(a, &b)
+            }
+            Sort::Tuple(sorts) => {
+                let n = sorts.len();
+                let eqs: Vec<Term> = (0..n).map(|i| {
+                    let t = term![Op::Eq; term![Op::Field(i); a.clone()], term![Op::Field(i); b.clone()]];
+                    t
+                }).collect();
+                let conj = term(Op::BoolNaryOp(BoolNaryOp::And), eqs);
+                self.embed(conj.clone());
+                self.get_bool(&conj).clone()
             }
             s => panic!("Unimplemented sort for Eq: {:?}", s),
         }
@@ -949,6 +994,7 @@ mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -969,6 +1015,7 @@ mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -1145,6 +1192,7 @@ mod test {
                 .collect(),
             ),
         );
+        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(17));
         r1cs.check_all();
     }

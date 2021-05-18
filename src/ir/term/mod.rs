@@ -201,7 +201,7 @@ impl Display for Op {
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
-            Op::Field(_) => write!(f, "field"),
+            Op::Field(i) => write!(f, "field{}", i),
         }
     }
 }
@@ -922,7 +922,7 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
         let v = match &c.op {
-            Op::Var(n, _) => h.get(n).unwrap().clone(),
+            Op::Var(n, _) => h.get(n).unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h)).clone(),
             Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
             Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
             Op::Implies => Value::Bool(
@@ -1146,6 +1146,16 @@ pub struct Constraints {
     pub(super) public_inputs: AHashSet<String>,
     /// The values of variables in the system.
     pub(super) values: Option<AHashMap<String, Value>>,
+}
+
+impl std::default::Default for Constraints {
+    fn default() -> Self {
+        Self {
+            assertions: Vec::new(),
+            public_inputs: AHashSet::new(),
+            values: None,
+        }
+    }
 }
 
 impl Constraints {

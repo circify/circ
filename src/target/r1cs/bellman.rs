@@ -122,7 +122,6 @@ mod test {
     fn convert(i: Integer) {
         let by_fn = int_to_ff::<Scalar>(&i);
         let by_str = Scalar::from_str(&format!("{}", i)).unwrap();
-        println!("  {:?}\nv {:?}", by_fn, by_str);
         assert_eq!(by_fn, by_str);
     }
 

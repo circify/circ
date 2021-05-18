@@ -97,7 +97,19 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                 .map(|c| check_raw(c))
                 .collect::<Result<Vec<_>, _>>()?,
         )),
-        _ => Err(TypeErrorReason::Custom(format!("other"))),
+        Op::Field(i) => {
+            let sort = check_raw(&t.cs[0])?;
+            let sorts = sort.as_tuple();
+            if i < &sorts.len() {
+                Ok(sorts[*i].clone())
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "index {} in tuple of sort {}",
+                    i, sort
+                )))
+            }
+        }
+        o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     };
     let mut term_tys = TERM_TYPES.write().unwrap();
     let ty = ty.map_err(|reason| TypeError {

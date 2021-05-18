@@ -4,6 +4,7 @@ pub mod flat;
 pub mod inline;
 pub mod mem;
 pub mod sha;
+pub mod tuple;
 
 use super::term::*;
 use log::debug;
@@ -23,6 +24,8 @@ pub enum Opt {
     FlattenAssertions,
     /// Find assertions like `(= variable term)`, and substitute out `variable`
     Inline,
+    /// Eliminate tuples
+    Tuple
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -69,6 +72,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Constraints, optimizations: I) -
             }
             Opt::Inline => {
                 inline::inline(&mut cs.assertions, &cs.public_inputs);
+            }
+            Opt::Tuple => {
+                cs = tuple::eliminate_tuples(cs);
             }
         }
         debug!("After {:?}: {}", i, cs.terms());
