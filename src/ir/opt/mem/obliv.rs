@@ -1,7 +1,7 @@
 //! Oblivious Array Elimination
 //!
 //! This module attempts to identify *oblivious* arrays: those that are only accessed at constant
-//! indices[1]. These arrays can be replaced with normal terms.
+//! indices. These arrays can be replaced with normal terms.
 //!
 //! It operates in two passes:
 //!
@@ -42,10 +42,6 @@
 //!   value list of the array
 //!    * stores to oblivious arrays are mapped to updated value lists
 //!    * equalities between oblivious arrays are mapped to conjunctions of equalities
-//!
-//! [1]: Our use of "oblivious" is inspired by *oblivious turing
-//! machines* <https://en.wikipedia.org/wiki/Turing_machine_equivalents#Oblivious_Turing_machines>
-//! which access their tape in a data-indepedant way.
 
 use super::visit::*;
 use crate::ir::term::*;
