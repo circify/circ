@@ -1,6 +1,26 @@
 //! IR term definition
 //!
 //! Generally based on SMT-LIB, and its theories.
+//!
+//! The most important types and functions are:
+//!
+//!    * Term structure
+//!       * [Term]: perfectly-shared terms. Think of them as shared pointers to
+//!       * [TermData]: the underlying term. An operator and some children.
+//!       * [Op]: an operator
+//!    * Term types
+//!       * [Sort]: the type of a term
+//!       * [check]: get the type of a term
+//!    * Term construction
+//!       * [leaf_term]: from an operator
+//!       * [term()]: from an operator and vector of children
+//!       * [term!]: from an operator and a syntactic list of children
+//!    * Term data-structures and algorithms
+//!       * [TermMap], [TermSet]: maps from and sets of terms
+//!       * [PostOrderIter]: an iterator over the descendents of a term. Children-first.
+//!    * [Constraints]: a collection of variables and assertions about them
+//!    * [Value]: a variable-free (and evaluated) term
+//!
 use crate::util::once::OnceQueue;
 use ahash::{AHashMap, AHashSet};
 use hashconsing::{HConsed, WHConsed};
