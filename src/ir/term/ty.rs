@@ -30,7 +30,6 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
     let ty = match &t.op {
         Op::Ite => Ok(check_raw(&t.cs[1])?),
         Op::Eq => Ok(Sort::Bool),
-        Op::Let(_) => Ok(check_raw(&t.cs[1])?),
         Op::Var(_, s) => Ok(s.clone()),
         Op::Const(c) => Ok(c.sort()),
         Op::BvBinOp(_) => Ok(check_raw(&t.cs[0])?),
@@ -162,7 +161,6 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     (Op::Eq, &[a, b]) => eq_or(a, b, "=").map(|_| Sort::Bool),
                     (Op::Ite, &[&Sort::Bool, b, c]) => eq_or(b, c, "ITE").map(|_| b.clone()),
                     (Op::Var(_, s), &[]) => Ok(s.clone()),
-                    (Op::Let(_), &[_, a]) => Ok(a.clone()),
                     (Op::Const(c), &[]) => Ok(c.sort()),
                     (Op::BvBinOp(_), &[a, b]) => {
                         let ctx = "bv binary op";

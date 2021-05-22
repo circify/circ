@@ -24,16 +24,15 @@ pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// An operator
 pub enum Op {
-    /// if-then-else: ternary
-    Ite,
-    /// equality
-    Eq,
-    /// let-binding to a variable (binary)
-    Let(String),
     /// a variable
     Var(String, Sort),
     /// a constant
     Const(Value),
+
+    /// if-then-else: ternary
+    Ite,
+    /// equality
+    Eq,
 
     /// bit-vector binary operator
     BvBinOp(BvBinOp),
@@ -127,7 +126,6 @@ impl Op {
         match self {
             Op::Ite => Some(3),
             Op::Eq => Some(2),
-            Op::Let(_) => Some(2),
             Op::Var(_, _) => Some(0),
             Op::Const(_) => Some(0),
             Op::BvBinOp(_) => Some(2),
@@ -169,7 +167,6 @@ impl Display for Op {
         match self {
             Op::Ite => write!(f, "ite"),
             Op::Eq => write!(f, "="),
-            Op::Let(a) => write!(f, "let {}", a),
             Op::Var(n, _) => write!(f, "{}", n),
             Op::Const(c) => write!(f, "{}", c),
             Op::BvBinOp(a) => write!(f, "{}", a),
