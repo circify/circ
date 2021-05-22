@@ -25,7 +25,7 @@ pub enum Opt {
     /// Find assertions like `(= variable term)`, and substitute out `variable`
     Inline,
     /// Eliminate tuples
-    Tuple
+    Tuple,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.

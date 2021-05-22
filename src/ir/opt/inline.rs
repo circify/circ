@@ -242,10 +242,7 @@ mod test {
 
     #[test]
     fn test_single_contra() {
-        sub_test(
-            vec![term![EQ; b_var("x"), term![NOT; b_var("x")]]],
-            1,
-        );
+        sub_test(vec![term![EQ; b_var("x"), term![NOT; b_var("x")]]], 1);
     }
 
     #[test]

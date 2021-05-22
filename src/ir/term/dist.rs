@@ -117,24 +117,22 @@ impl FixedSizeDist {
                 }
                 ops
             }
-            Sort::BitVector(w) => {
-                vec![
-                    self.sample_value(sort, rng),
-                    Op::Var(self.sample_ident(&format!("bv{}", w), rng), sort.clone()),
-                    Op::BvUnOp(BvUnOp::Neg),
-                    Op::BvUnOp(BvUnOp::Not),
-                    Op::BvUext(rng.gen_range(0..w.clone())),
-                    Op::BvSext(rng.gen_range(0..w.clone())),
-                    Op::BvBinOp(BvBinOp::Sub),
-                    Op::BvBinOp(BvBinOp::Udiv),
-                    Op::BvBinOp(BvBinOp::Urem),
-                    Op::BvNaryOp(BvNaryOp::Or),
-                    Op::BvNaryOp(BvNaryOp::And),
-                    Op::BvNaryOp(BvNaryOp::Xor),
-                    Op::BvNaryOp(BvNaryOp::Add),
-                    Op::BvNaryOp(BvNaryOp::Mul),
-                ]
-            }
+            Sort::BitVector(w) => vec![
+                self.sample_value(sort, rng),
+                Op::Var(self.sample_ident(&format!("bv{}", w), rng), sort.clone()),
+                Op::BvUnOp(BvUnOp::Neg),
+                Op::BvUnOp(BvUnOp::Not),
+                Op::BvUext(rng.gen_range(0..w.clone())),
+                Op::BvSext(rng.gen_range(0..w.clone())),
+                Op::BvBinOp(BvBinOp::Sub),
+                Op::BvBinOp(BvBinOp::Udiv),
+                Op::BvBinOp(BvBinOp::Urem),
+                Op::BvNaryOp(BvNaryOp::Or),
+                Op::BvNaryOp(BvNaryOp::And),
+                Op::BvNaryOp(BvNaryOp::Xor),
+                Op::BvNaryOp(BvNaryOp::Add),
+                Op::BvNaryOp(BvNaryOp::Mul),
+            ],
             Sort::Field(_) => {
                 vec![
                     self.sample_value(sort, rng),
@@ -161,7 +159,7 @@ impl FixedSizeDist {
         };
         ops.push(Op::Ite);
         if self.tuples && self.size > 1 {
-            ops.push(Op::Field(rng.gen_range(0..(self.size-1))));
+            ops.push(Op::Field(rng.gen_range(0..(self.size - 1))));
         }
         ops.retain(|o| o.arity().map(|a| a < self.size).unwrap_or(self.size > 2));
         // always Some b/c variables & constants have 0 arity
@@ -171,17 +169,14 @@ impl FixedSizeDist {
         match op {
             Op::Ite => vec![Sort::Bool, sort.clone(), sort.clone()],
             o if o.arity() == Some(0) => vec![],
-            Op::Field(i) => {
-                vec![
-                    if let Sort::Tuple(mut ss) = self.sample_tuple_sort(*i + 1, self.size - 1, rng)
-                    {
-                        ss[*i] = sort.clone();
-                        Sort::Tuple(ss)
-                    } else {
-                        unreachable!()
-                    },
-                ]
-            }
+            Op::Field(i) => vec![if let Sort::Tuple(mut ss) =
+                self.sample_tuple_sort(*i + 1, self.size - 1, rng)
+            {
+                ss[*i] = sort.clone();
+                Sort::Tuple(ss)
+            } else {
+                unreachable!()
+            }],
             Op::Tuple => {
                 if let Sort::Tuple(sorts) = sort {
                     sorts.clone()

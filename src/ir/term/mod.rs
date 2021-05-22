@@ -1008,7 +1008,10 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
         let v = match &c.op {
-            Op::Var(n, _) => h.get(n).unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h)).clone(),
+            Op::Var(n, _) => h
+                .get(n)
+                .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h))
+                .clone(),
             Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
             Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
             Op::Implies => Value::Bool(
