@@ -143,6 +143,7 @@ mod test {
     fn is_flat(t: Term) -> bool {
         PostOrderIter::new(t).all(|c| {
             c.op == Op::PfNaryOp(PfNaryOp::Mul)
+                || c.op == Op::Tuple
                 || c.op.arity().is_some()
                 || !c.cs.iter().any(|cc| c.op == cc.op)
         })
