@@ -30,6 +30,7 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
       * `opt/flat.rs`: n-ary flattening
       * `opt/inline.rs`: inlining
       * `opt/sha.rs`: replacements for SHA's CH and MAJ operations
+      * `opt/tuple.rs`: eliminating tuples
       * `opt/mem/obliv.rs`: oblivious array elimination
       * `opt/mem/lin.rs`: linear-scan array elimination
       * `opt/mem/visit.rs`: utility for visiting (and replacing?) all
