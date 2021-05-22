@@ -120,6 +120,75 @@ pub enum Op {
     Field(usize),
 }
 
+/// Boolean AND
+pub const AND: Op = Op::BoolNaryOp(BoolNaryOp::And);
+/// Boolean OR
+pub const OR: Op = Op::BoolNaryOp(BoolNaryOp::Or);
+/// Boolean XOR
+pub const XOR: Op = Op::BoolNaryOp(BoolNaryOp::Xor);
+/// Boolean NOT
+pub const NOT: Op = Op::Not;
+/// Equal to
+pub const EQ: Op = Op::Eq;
+/// If-then-else
+pub const ITE: Op = Op::Ite;
+/// Boolean implication
+pub const IMPLIES: Op = Op::Implies;
+/// Bit-vector AND
+pub const BV_AND: Op = Op::BvNaryOp(BvNaryOp::And);
+/// Bit-vector OR
+pub const BV_OR: Op = Op::BvNaryOp(BvNaryOp::Or);
+/// Bit-vector XOR
+pub const BV_XOR: Op = Op::BvNaryOp(BvNaryOp::Xor);
+/// Bit-vector multiplication
+pub const BV_MUL: Op = Op::BvNaryOp(BvNaryOp::Mul);
+/// Bit-vector addition
+pub const BV_ADD: Op = Op::BvNaryOp(BvNaryOp::Add);
+/// Bit-vector subtraction
+pub const BV_SUB: Op = Op::BvBinOp(BvBinOp::Sub);
+/// Bit-vector unsigned division
+pub const BV_UDIV: Op = Op::BvBinOp(BvBinOp::Udiv);
+/// Bit-vector unsigned remainder
+pub const BV_UREM: Op = Op::BvBinOp(BvBinOp::Urem);
+/// Bit-vector shift left
+pub const BV_SHL: Op = Op::BvBinOp(BvBinOp::Shl);
+/// Bit-vector logical shift right
+pub const BV_LSHR: Op = Op::BvBinOp(BvBinOp::Lshr);
+/// Bit-vector arithmetic shift right
+pub const BV_ASHR: Op = Op::BvBinOp(BvBinOp::Ashr);
+/// Bit-vector negation
+pub const BV_NEG: Op = Op::BvUnOp(BvUnOp::Neg);
+/// Bit-vector not
+pub const BV_NOT: Op = Op::BvUnOp(BvUnOp::Not);
+/// Bit-vector unsigned less than
+pub const BV_ULT: Op = Op::BvBinPred(BvBinPred::Ult);
+/// Bit-vector unsigned greater than
+pub const BV_UGT: Op = Op::BvBinPred(BvBinPred::Ugt);
+/// Bit-vector unsigned less than or equal
+pub const BV_ULE: Op = Op::BvBinPred(BvBinPred::Ule);
+/// Bit-vector unsigned greater than or equal
+pub const BV_UGE: Op = Op::BvBinPred(BvBinPred::Uge);
+/// Bit-vector signed less than
+pub const BV_SLT: Op = Op::BvBinPred(BvBinPred::Slt);
+/// Bit-vector signed greater than
+pub const BV_SGT: Op = Op::BvBinPred(BvBinPred::Sgt);
+/// Bit-vector signed less than or equal
+pub const BV_SLE: Op = Op::BvBinPred(BvBinPred::Sle);
+/// Bit-vector signed greater than or equal
+pub const BV_SGE: Op = Op::BvBinPred(BvBinPred::Sge);
+/// Bit-vector of length one, from boolean
+pub const BOOL_TO_BV: Op = Op::BoolToBv;
+/// Bit-vector concatenation (high || low). N-ary.
+pub const BV_CONCAT: Op = Op::BvConcat;
+/// prime-field negation
+pub const PF_NEG: Op = Op::PfUnOp(PfUnOp::Neg);
+/// prime-field reciprocal
+pub const PF_RECIP: Op = Op::PfUnOp(PfUnOp::Recip);
+/// prime-field addition
+pub const PF_ADD: Op = Op::PfNaryOp(PfNaryOp::Add);
+/// prime-field multiplication
+pub const PF_MUL: Op = Op::PfNaryOp(PfNaryOp::Mul);
+
 impl Op {
     /// Number of arguments for this operator. `None` if n-ary.
     pub fn arity(&self) -> Option<usize> {

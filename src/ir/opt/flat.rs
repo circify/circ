@@ -131,18 +131,9 @@ mod test {
         leaf_term(Op::Const(Value::Bool(b)))
     }
 
-    const B_AND: Op = Op::BoolNaryOp(BoolNaryOp::And);
-    const B_OR: Op = Op::BoolNaryOp(BoolNaryOp::Or);
-    const B_XOR: Op = Op::BoolNaryOp(BoolNaryOp::Xor);
-    const BV_AND: Op = Op::BvNaryOp(BvNaryOp::And);
-    const BV_OR: Op = Op::BvNaryOp(BvNaryOp::Or);
-    const BV_XOR: Op = Op::BvNaryOp(BvNaryOp::Xor);
-    const BV_ADD: Op = Op::BvNaryOp(BvNaryOp::Add);
-    const BV_MUL: Op = Op::BvNaryOp(BvNaryOp::Mul);
-
     fn is_flat(t: Term) -> bool {
         PostOrderIter::new(t).all(|c| {
-            c.op == Op::PfNaryOp(PfNaryOp::Mul)
+            c.op == PF_MUL
                 || c.op == Op::Tuple
                 || c.op.arity().is_some()
                 || !c.cs.iter().any(|cc| c.op == cc.op)
@@ -162,7 +153,7 @@ mod test {
 
     #[test]
     fn simple_bool() {
-        for o in vec![B_AND, B_OR, B_XOR] {
+        for o in vec![AND, OR, XOR] {
             let t = term![o.clone(); term![o.clone(); bool(true), bool(false)], bool(true)];
             let tt = term![o.clone(); bool(true), bool(false), bool(true)];
             assert_eq!(flatten_nary_ops(t), tt);

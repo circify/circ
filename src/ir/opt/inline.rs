@@ -107,7 +107,7 @@ impl<'a> Inliner<'a> {
     ///
     /// Will not return `v` which are protected.
     fn as_fresh_def(&self, t: &Term) -> Option<(Term, Term)> {
-        if let Op::Eq = &t.op {
+        if &EQ == &t.op {
             if let Op::Var(name, _) = &t.cs[0].op {
                 if !self.stale_vars.contains(&t.cs[0])
                     && !self.protected.contains(name)
@@ -195,17 +195,15 @@ mod test {
         leaf_term(Op::Var(format!("{}", b), Sort::Bool))
     }
 
-    const B_XOR: Op = Op::BoolNaryOp(BoolNaryOp::Xor);
-
     fn sub_test(xs: Vec<Term>, n: usize) {
         let mut ys = xs.clone();
         let p = AHashSet::new();
         inline(&mut ys, &p);
         assert_eq!(n, ys.len());
-        let x = term(Op::BoolNaryOp(BoolNaryOp::And), xs.clone());
-        let y = term(Op::BoolNaryOp(BoolNaryOp::And), ys.clone());
-        let imp = term![Op::Implies; x.clone(), y.clone()];
-        let not_imp = term![Op::Not; imp];
+        let x = term(AND, xs.clone());
+        let y = term(AND, ys.clone());
+        let imp = term![IMPLIES; x.clone(), y.clone()];
+        let not_imp = term![NOT; imp];
         if let Some(cex) = find_model(&not_imp) {
             println!("Inputs:");
             for x_i in xs {
@@ -221,8 +219,8 @@ mod test {
             }
             panic!("Invalid inline");
         }
-        let imp_not = term![Op::Implies; x, y];
-        let not_imp_not = term![Op::Not; imp_not];
+        let imp_not = term![IMPLIES; x, y];
+        let not_imp_not = term![NOT; imp_not];
         if let Some(cex) = find_model(&not_imp_not) {
             println!("Inputs:");
             for x_i in xs {
@@ -245,7 +243,7 @@ mod test {
     #[test]
     fn test_single_contra() {
         sub_test(
-            vec![term![Op::Eq; b_var("x"), term![Op::Not; b_var("x")]]],
+            vec![term![EQ; b_var("x"), term![NOT; b_var("x")]]],
             1,
         );
     }
@@ -254,8 +252,8 @@ mod test {
     fn test_sat_cycle() {
         sub_test(
             vec![
-                term![Op::Eq; b_var("x"), term![Op::Not; b_var("y")]],
-                term![Op::Eq; b_var("y"), term![Op::Not; b_var("x")]],
+                term![EQ; b_var("x"), term![NOT; b_var("y")]],
+                term![EQ; b_var("y"), term![NOT; b_var("x")]],
             ],
             1,
         );
@@ -265,8 +263,8 @@ mod test {
     fn test_unsat_cycle() {
         sub_test(
             vec![
-                term![Op::Eq; b_var("x"), term![Op::Not; b_var("y")]],
-                term![Op::Eq; b_var("y"), b_var("x")],
+                term![EQ; b_var("x"), term![NOT; b_var("y")]],
+                term![EQ; b_var("y"), b_var("x")],
             ],
             1,
         );
@@ -276,10 +274,10 @@ mod test {
     fn test_rolling_defs() {
         sub_test(
             vec![
-                term![Op::Eq; b_var("x"), term![Op::Not; b_var("y")]],
-                term![Op::Eq; b_var("z"), b_var("x")],
-                term![Op::Eq; b_var("a"), term![B_XOR; b_var("q"), b_var("y")]],
-                term![B_XOR; b_var("a"), b_var("y")],
+                term![EQ; b_var("x"), term![NOT; b_var("y")]],
+                term![EQ; b_var("z"), b_var("x")],
+                term![EQ; b_var("a"), term![XOR; b_var("q"), b_var("y")]],
+                term![XOR; b_var("a"), b_var("y")],
             ],
             1,
         );

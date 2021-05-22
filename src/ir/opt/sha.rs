@@ -14,22 +14,22 @@ pub fn sha_rewrites(term_: &Term) -> Term {
         let new_t = match &t.op {
             // A pattern: (a & b) | (~a & c)
             // or: (a & b) ^ (~a & c)
-            Op::BvNaryOp(BvNaryOp::Or) | Op::BvNaryOp(BvNaryOp::Xor) => {
+            &BV_OR | &BV_XOR => {
                 if t.cs.len() == 2 {
                     let a = get(0);
                     let b = get(1);
                     if &a.op == &b.op
-                        && &a.op == &Op::BvNaryOp(BvNaryOp::And)
-                        && b.cs[0].op == Op::BvUnOp(BvUnOp::Not)
+                        && &a.op == &BV_AND
+                        && b.cs[0].op == BV_NOT
                         && b.cs[0].cs[0] == a.cs[0]
                     {
                         if let Sort::BitVector(w) = check(&t) {
                             debug!("SHA CH");
                             Some(term(
-                                Op::BvConcat,
+                                BV_CONCAT,
                                 (0..w)
                                     .map(|i| {
-                                        term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(i); a.cs[0].clone()],
+                                        term![BOOL_TO_BV; term![ITE; term![Op::BvBit(i); a.cs[0].clone()],
                                                    term![Op::BvBit(i); a.cs[1].clone()],
                                                    term![Op::BvBit(i); b.cs[1].clone()]]]
                                     })
@@ -48,7 +48,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                     let c2 = get(2);
                     if &c0.op == &c1.op
                         && &c1.op == &c2.op
-                        && &c2.op == &Op::BvNaryOp(BvNaryOp::And)
+                        && &c2.op == &BV_AND
                         && c0.cs.len() == 2
                         && c1.cs.len() == 2
                         && c2.cs.len() == 2
@@ -64,10 +64,10 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                             let items = s0.union(&s1).collect::<Vec<_>>();
                             let w = check(&c0).as_bv();
                             Some(term(
-                                Op::BvConcat,
+                                BV_CONCAT,
                                 (0..w)
                                     .map(|i| {
-                                        term![Op::BoolToBv; term![Op::BoolMaj;
+                                        term![BOOL_TO_BV; term![Op::BoolMaj;
                                                term![Op::BvBit(i); (*items[0]).clone()],
                                                term![Op::BvBit(i); (*items[1]).clone()],
                                                term![Op::BvBit(i); (*items[2]).clone()]]]
@@ -104,18 +104,13 @@ mod test {
     use crate::ir::term::dist::test::*;
     use quickcheck_macros::quickcheck;
 
-    const BV_AND: Op = Op::BvNaryOp(BvNaryOp::And);
-    const BV_OR: Op = Op::BvNaryOp(BvNaryOp::Or);
-    const BV_XOR: Op = Op::BvNaryOp(BvNaryOp::Xor);
-    const BV_NOT: Op = Op::BvUnOp(BvUnOp::Not);
-
     #[test]
     fn with_or() {
         let a = bv_lit(0, 1);
         let b = bv_lit(0, 1);
         let c = bv_lit(0, 1);
         let t = term![BV_OR; term![BV_AND; a.clone(), b.clone()], term![BV_AND; term![BV_NOT; a.clone()], c.clone()]];
-        let tt = term![Op::BvConcat; term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]];
+        let tt = term![BV_CONCAT; term![BOOL_TO_BV; term![ITE; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]];
         assert_eq!(tt, sha_rewrites(&t));
     }
 
@@ -125,7 +120,7 @@ mod test {
         let b = bv_lit(0, 1);
         let c = bv_lit(0, 1);
         let t = term![BV_XOR; term![BV_AND; a.clone(), b.clone()], term![BV_AND; term![BV_NOT; a.clone()], c.clone()]];
-        let tt = term![Op::BvConcat; term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]];
+        let tt = term![BV_CONCAT; term![BOOL_TO_BV; term![ITE; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]];
         assert_eq!(tt, sha_rewrites(&t));
     }
 
@@ -135,9 +130,9 @@ mod test {
         let b = bv_lit(0, 2);
         let c = bv_lit(0, 2);
         let t = term![BV_OR; term![BV_AND; a.clone(), b.clone()], term![BV_AND; term![BV_NOT; a.clone()], c.clone()]];
-        let tt = term![Op::BvConcat;
-        term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(1); a.clone()], term![Op::BvBit(1); b.clone()], term![Op::BvBit(1); c.clone()]]],
-        term![Op::BoolToBv; term![Op::Ite; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]
+        let tt = term![BV_CONCAT;
+        term![BOOL_TO_BV; term![ITE; term![Op::BvBit(1); a.clone()], term![Op::BvBit(1); b.clone()], term![Op::BvBit(1); c.clone()]]],
+        term![BOOL_TO_BV; term![ITE; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]
         ];
         assert_eq!(tt, sha_rewrites(&t));
     }
