@@ -12,9 +12,9 @@
 //!       * [Sort]: the type of a term
 //!       * [check]: get the type of a term
 //!    * Term construction
-//!       * [leaf_term]: from an operator
-//!       * [term()]: from an operator and vector of children
 //!       * [term!]: from an operator and a syntactic list of children
+//!       * [leaf_term]: from an operator alone
+//!       * [term()]: from an operator and vector of children
 //!    * Term data-structures and algorithms
 //!       * [TermMap], [TermSet]: maps from and sets of terms
 //!       * [PostOrderIter]: an iterator over the descendents of a term. Children-first.
@@ -1172,8 +1172,15 @@ where
 #[macro_export]
 /// Make a term.
 ///
-/// Syntax: `term![OP; ARG0, ARG1, ... ]`. Note the semi-colon.
+/// Syntax:
+///
+///    * without children: `term![OP]`
+///    * with children: `term![OP; ARG0, ARG1, ... ]`
+///       * Note the semi-colon
 macro_rules! term {
+    ($x:expr) => {
+        leaf_term($x)
+    };
     ($x:expr; $($y:expr),+) => {
         term($x, vec![$($y),+])
     };
