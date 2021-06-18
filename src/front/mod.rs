@@ -2,7 +2,7 @@
 
 pub mod zokrates;
 
-use super::ir::term::Constraints;
+use super::ir::term::Computation;
 
 /// A front-end
 pub trait FrontEnd {
@@ -10,5 +10,5 @@ pub trait FrontEnd {
     type Inputs;
 
     /// Compile the program (and possibly assignment) to constraints
-    fn gen(i: Self::Inputs) -> Constraints;
+    fn gen(i: Self::Inputs) -> Computation;
 }

@@ -20,58 +20,56 @@ pub enum Opt {
     Sha,
     /// Memory elimination
     Mem,
-    /// Extract top-level ANDs as distinct assertions
+    /// Extract top-level ANDs as distinct outputs
     FlattenAssertions,
-    /// Find assertions like `(= variable term)`, and substitute out `variable`
+    /// Find outputs like `(= variable term)`, and substitute out `variable`
     Inline,
     /// Eliminate tuples
     Tuple,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
-pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Constraints, optimizations: I) -> Constraints {
+pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -> Computation {
     for i in optimizations {
         debug!("Applying: {:?}", i);
         match i {
             Opt::ConstantFold => {
                 let mut cache = TermMap::new();
-                for a in &mut cs.assertions {
+                for a in &mut cs.outputs {
                     *a = cfold::fold_cache(a, &mut cache);
                 }
             }
             Opt::Sha => {
-                for a in &mut cs.assertions {
+                for a in &mut cs.outputs {
                     *a = sha::sha_rewrites(a);
                 }
             }
             Opt::Mem => {
-                for a in &mut cs.assertions {
+                for a in &mut cs.outputs {
                     *a = mem::array_elim(a);
                 }
             }
             Opt::FlattenAssertions => {
-                let mut new_assertions = Vec::new();
-                for a in std::mem::take(&mut cs.assertions) {
+                let mut new_outputs = Vec::new();
+                for a in std::mem::take(&mut cs.outputs) {
+                    assert_eq!(check(&a), Sort::Bool, "Non-bool in {:?}", i);
                     if &a.op == &Op::BoolNaryOp(BoolNaryOp::And) {
-                        new_assertions.extend(a.cs.iter().cloned());
+                        new_outputs.extend(a.cs.iter().cloned());
                     } else {
-                        new_assertions.push(a)
+                        new_outputs.push(a)
                     }
                 }
-                cs.assertions = new_assertions;
+                cs.outputs = new_outputs;
             }
             Opt::Flatten => {
-                let cs_term = cs.assertions_as_term();
-                let new_term = flat::flatten_nary_ops(cs_term);
-                let assertions = if new_term.op == Op::BoolNaryOp(BoolNaryOp::And) {
-                    new_term.cs.clone()
-                } else {
-                    vec![new_term]
-                };
-                cs.assertions = assertions;
+                let mut cache = flat::Cache::new();
+                for a in &mut cs.outputs {
+                    *a = flat::flatten_nary_ops_cached(a.clone(), &mut cache);
+                }
             }
             Opt::Inline => {
-                inline::inline(&mut cs.assertions, &cs.public_inputs);
+                let public_inputs = cs.metadata.public_inputs().map(ToOwned::to_owned).collect();
+                inline::inline(&mut cs.outputs, &public_inputs);
             }
             Opt::Tuple => {
                 cs = tuple::eliminate_tuples(cs);

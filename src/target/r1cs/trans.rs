@@ -841,8 +841,9 @@ impl ToR1cs {
 }
 
 /// Convert this (IR) constraint system `cs` to R1CS, over a prime field defined by `modulus`.
-pub fn to_r1cs(cs: Constraints, modulus: Integer) -> R1cs<String> {
-    let (assertions, public_inputs, values) = cs.consume();
+pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
+    let Computation { outputs: assertions, metadata, values } = cs;
+    let public_inputs = metadata.public_inputs().map(ToOwned::to_owned).collect();
     let mut converter = ToR1cs::new(modulus, values, public_inputs);
     debug!(
         "Term count: {}",
@@ -872,6 +873,7 @@ mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use crate::ir::term::dist::*;
+    use crate::ir::proof::Constraints;
     use crate::target::r1cs::opt::reduce_linearities;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
@@ -885,7 +887,7 @@ mod test {
 
     #[test]
     fn bool() {
-        let cs = Constraints::from_parts(
+        let cs = Computation::from_constraint_system_parts(
             vec![
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
                 term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
@@ -943,7 +945,7 @@ mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -952,7 +954,7 @@ mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
         let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -962,7 +964,7 @@ mod test {
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -973,7 +975,7 @@ mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
         let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -983,7 +985,7 @@ mod test {
 
     #[test]
     fn eq_test() {
-        let cs = Constraints::from_parts(
+        let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec!["a"].into_iter().map(|a| a.to_owned()).collect(),
@@ -1009,7 +1011,7 @@ mod test {
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Constraints::from_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -1031,7 +1033,7 @@ mod test {
     }
 
     fn const_test(term: Term) {
-        let mut cs = Constraints::new(true);
+        let mut cs = Computation::new(true);
         cs.assert(term);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -1136,7 +1138,7 @@ mod test {
 
     #[test]
     fn tuple() {
-        let cs = Constraints::from_parts(
+        let cs = Computation::from_constraint_system_parts(
             vec![
                 term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
                 term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],

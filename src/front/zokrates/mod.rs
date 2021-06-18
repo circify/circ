@@ -6,6 +6,7 @@ mod term;
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::ir::term::*;
+use crate::ir::proof::{self, ConstraintMetadata};
 use log::debug;
 use rug::Integer;
 use std::collections::HashMap;
@@ -18,6 +19,9 @@ use term::*;
 
 /// The modulus for the ZoKrates language.
 pub use term::ZOKRATES_MODULUS;
+
+const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
+const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the ZoKrates compilier
 pub struct Inputs {
@@ -41,7 +45,7 @@ pub struct Zokrates;
 
 impl FrontEnd for Zokrates {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Constraints {
+    fn gen(i: Inputs) -> Computation {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(i.inputs, asts);
@@ -80,14 +84,16 @@ impl ZLoc {
 
 impl<'ast> ZGen<'ast> {
     fn new(inputs: Option<PathBuf>, asts: HashMap<PathBuf, ast::File<'ast>>) -> Self {
-        Self {
+        let this = Self {
             circ: Circify::new(ZoKrates::new(inputs.map(|i| parser::parse_inputs(i)))),
             asts,
             stdlib: parser::ZStdLib::new(),
             file_stack: vec![],
             functions: HashMap::new(),
             import_map: HashMap::new(),
-        }
+        };
+        this.circ.cir_ctx().cs.borrow_mut().metadata.add_prover_and_verifier();
+        this
     }
 
     /// Unwrap a result with a span-dependent error
@@ -142,14 +148,14 @@ impl<'ast> ZGen<'ast> {
                 let e = self.const_int(&i.to);
                 let v_name = i.index.value.clone();
                 self.circ.enter_scope();
-                let decl_res = self.circ.declare(v_name.clone(), &ty, false, false);
+                let decl_res = self.circ.declare(v_name.clone(), &ty, false, PROVER_VIS);
                 self.unwrap(decl_res, &i.index.span);
                 for j in s..e {
                     self.circ.enter_scope();
                     let ass_res = self.circ.assign(
                         Loc::local(v_name.clone()),
                         Val::Term(T::Field(pf_lit(j))),
-                        false,
+                        PROVER_VIS,
                     );
                     self.unwrap(ass_res, &i.index.span);
                     for s in &i.statements {
@@ -180,7 +186,7 @@ impl<'ast> ZGen<'ast> {
                             l.a.id.value.clone(),
                             decl_ty,
                             Val::Term(e),
-                            false,
+                            PROVER_VIS,
                         );
                         self.unwrap(d_res, &d.span);
                     } else {
@@ -219,7 +225,7 @@ impl<'ast> ZGen<'ast> {
             .unwrap_term();
         let new = self.apply_lval_mod(old, l, t)?;
         self.circ
-            .assign(var, Val::Term(new), false)
+            .assign(var, Val::Term(new), PROVER_VIS)
             .map_err(|e| format!("{}", e))
             .map(|_| ())
     }
@@ -354,13 +360,13 @@ impl<'ast> ZGen<'ast> {
                         self.file_stack.push(p.0);
                         assert!(f.returns.len() <= 1);
                         let ret_ty = f.returns.first().map(|r| self.type_(r));
-                        self.circ.enter_fn(p.1, ret_ty);
+                        self.circ.enter_fn(p.1, ret_ty, PROVER_VIS);
                         assert_eq!(f.parameters.len(), args.len());
                         for (p, a) in f.parameters.iter().zip(args) {
                             let ty = self.type_(&p.ty);
                             let d_res =
                                 self.circ
-                                    .declare_init(p.id.value.clone(), ty, Val::Term(a), false);
+                                    .declare_init(p.id.value.clone(), ty, Val::Term(a), PUBLIC_VIS);
                             self.unwrap(d_res, &c.span);
                         }
                         for s in &f.statements {
@@ -419,7 +425,7 @@ impl<'ast> ZGen<'ast> {
             .clone();
         assert!(f.returns.len() <= 1);
         let ret_ty = f.returns.first().map(|r| self.type_(r));
-        self.circ.enter_fn(n.to_owned(), ret_ty.clone());
+        self.circ.enter_fn(n.to_owned(), ret_ty.clone(), PROVER_VIS);
         for p in f.parameters.iter() {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
@@ -427,7 +433,7 @@ impl<'ast> ZGen<'ast> {
                 Some(ast::Visibility::Private(_)) => false,
                 _ => true,
             };
-            let r = self.circ.declare(p.id.value.clone(), &ty, true, public);
+            let r = self.circ.declare(p.id.value.clone(), &ty, true, if public { PUBLIC_VIS } else { PROVER_VIS });
             self.unwrap(r, &p.span);
         }
         for s in &f.statements {
@@ -436,7 +442,7 @@ impl<'ast> ZGen<'ast> {
         if let Some(r) = self.circ.exit_fn() {
             let r = self
                 .circ
-                .declare_init("return".to_owned(), ret_ty.unwrap(), r, true);
+                .declare_init("return".to_owned(), ret_ty.unwrap(), r, PUBLIC_VIS);
             self.unwrap(r, &f.span);
         }
     }

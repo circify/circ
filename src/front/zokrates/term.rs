@@ -551,7 +551,7 @@ impl Embeddable for ZoKrates {
         ty: &Self::Ty,
         raw_name: String,
         user_name: Option<String>,
-        public: bool,
+        visibility: Option<PartyId>,
     ) -> Self::T {
         let get_int_val = || -> Integer {
             self.values
@@ -570,13 +570,13 @@ impl Embeddable for ZoKrates {
                 &raw_name,
                 Sort::Bool,
                 || Value::Bool(get_int_val() != 0),
-                public,
+                visibility,
             )),
             Ty::Field => T::Field(ctx.cs.borrow_mut().new_var(
                 &raw_name,
                 Sort::Field(self.modulus.clone()),
                 || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
-                public,
+                visibility,
             )),
             Ty::Uint(w) => T::Uint(
                 *w,
@@ -584,7 +584,7 @@ impl Embeddable for ZoKrates {
                     &raw_name,
                     Sort::BitVector(*w),
                     || Value::BitVector(BitVector::new(get_int_val(), *w)),
-                    public,
+                    visibility,
                 ),
             ),
             Ty::Array(n, ty) => T::Array(
@@ -596,7 +596,7 @@ impl Embeddable for ZoKrates {
                             &*ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
-                            public,
+                            visibility.clone(),
                         )
                     })
                     .collect(),
@@ -612,7 +612,7 @@ impl Embeddable for ZoKrates {
                                 f_ty,
                                 field_name(&raw_name, f_name),
                                 user_name.as_ref().map(|u| field_name(u, f_name)),
-                                public,
+                                visibility.clone(),
                             ),
                         )
                     })
@@ -654,18 +654,20 @@ impl Embeddable for ZoKrates {
         ty: &Self::Ty,
         name: String,
         t: Self::T,
-        public: bool,
+        visibility: Option<PartyId>,
     ) -> Self::T {
         assert!(&t.type_() == ty);
         match (ty, t) {
-            (_, T::Bool(b)) => T::Bool(ctx.cs.borrow_mut().assign(&name, b, public)),
-            (_, T::Field(b)) => T::Field(ctx.cs.borrow_mut().assign(&name, b, public)),
-            (_, T::Uint(w, b)) => T::Uint(w, ctx.cs.borrow_mut().assign(&name, b, public)),
+            (_, T::Bool(b)) => T::Bool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
+            (_, T::Field(b)) => T::Field(ctx.cs.borrow_mut().assign(&name, b, visibility)),
+            (_, T::Uint(w, b)) => T::Uint(w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
             (_, T::Array(ety, list)) => T::Array(
                 ety.clone(),
                 list.into_iter()
                     .enumerate()
-                    .map(|(i, elem)| self.assign(ctx, &ety, idx_name(&name, i), elem, public))
+                    .map(|(i, elem)| {
+                        self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
+                    })
                     .collect(),
             ),
             (Ty::Struct(_, tys), T::Struct(s_name, list)) => T::Struct(
@@ -675,7 +677,13 @@ impl Embeddable for ZoKrates {
                     .map(|((f_name, elem), (_, f_ty))| {
                         (
                             f_name.clone(),
-                            self.assign(ctx, &f_ty, field_name(&name, &f_name), elem, public),
+                            self.assign(
+                                ctx,
+                                &f_ty,
+                                field_name(&name, &f_name),
+                                elem,
+                                visibility.clone(),
+                            ),
                         )
                     })
                     .collect(),

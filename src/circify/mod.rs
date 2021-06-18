@@ -198,7 +198,7 @@ pub struct CirCtx {
     /// Memory manager
     pub mem: mem::MemManager,
     /// Underlying constraint system
-    pub cs: Rc<RefCell<Constraints>>,
+    pub cs: Rc<RefCell<Computation>>,
 }
 
 #[derive(Debug)]
@@ -216,16 +216,18 @@ struct FnFrame<Ty> {
     prefix: String,
     name: String,
     has_return: bool,
+    ret_visibility: Option<PartyId>
 }
 
 impl<Ty: Display> FnFrame<Ty> {
-    fn new(name: String, prefix: String, has_return: bool) -> Self {
+    fn new(name: String, prefix: String, has_return: bool, ret_visibility: Option<PartyId>) -> Self {
         let mut this = Self {
             stack: Vec::new(),
             scope_ctr: 0,
             prefix,
             name,
             has_return,
+            ret_visibility,
         };
         this.enter_scope();
         this.enter_breakable(RET_BREAK_NAME.to_owned());
@@ -344,7 +346,7 @@ pub trait Embeddable {
         ty: &Self::Ty,
         raw_name: String,
         user_name: Option<String>,
-        public: bool,
+        visibility: Option<PartyId>,
     ) -> Self::T;
     /// Construct an it-then-else (ternary) langauge value.
     ///
@@ -384,7 +386,7 @@ pub trait Embeddable {
         ty: &Self::Ty,
         name: String,
         t: Self::T,
-        public: bool,
+        visibility: Option<PartyId>,
     ) -> Self::T;
     /// Does the front-end have access to concrete values for the circuit?
     fn values(&self) -> bool;
@@ -418,7 +420,7 @@ impl<E: Embeddable> Debug for Circify<E> {
 impl<E: Embeddable> Circify<E> {
     /// Creates an empty state management module
     pub fn new(e: E) -> Self {
-        let cs = Rc::new(RefCell::new(Constraints::new(e.values())));
+        let cs = Rc::new(RefCell::new(Computation::new(e.values())));
         Self {
             e,
             vals: HashMap::new(),
@@ -434,12 +436,17 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Get the circuit generation context
+    pub fn cir_ctx(&self) -> &CirCtx {
+        &self.cir_ctx
+    }
+
     /// Declares a new (unconstrained) value of type `ty`, with name `name`, in the current lexical
     /// scope.
     /// If `input`, then the language's declaration function is provided with `name` as the
     /// user-visible name for this variable, which can be used to look up user-provided values.
     /// If `public`, then the language's declaration function is told to make this variable public.
-    pub fn declare(&mut self, name: VarName, ty: &E::Ty, input: bool, public: bool) -> Result<()> {
+    pub fn declare(&mut self, name: VarName, ty: &E::Ty, input: bool, visibility: Option<PartyId>) -> Result<()> {
         let ssa_name = if let Some(back) = self.fn_stack.last_mut() {
             back.declare(name.clone(), ty.clone())?
         } else {
@@ -450,7 +457,7 @@ impl<E: Embeddable> Circify<E> {
             ty,
             ssa_name.to_string(),
             if input { Some(name) } else { None },
-            public,
+            visibility,
         );
         assert!(self
             .vals
@@ -534,17 +541,17 @@ impl<E: Embeddable> Circify<E> {
         name: VarName,
         ty: E::Ty,
         val: Val<E::T>,
-        public: bool,
+        visibility: Option<PartyId>,
     ) -> Result<Val<E::T>> {
-        self.declare(name.clone(), &ty, false, false)?;
-        self.assign(Loc::local(name), val, public)
+        self.declare(name.clone(), &ty, false, visibility)?;
+        self.assign(Loc::local(name), val, visibility)
     }
 
     /// Assign `loc` in the current scope to `val`.
     ///
     /// If `public`, then make the new variable version a public (fixed) rather than private
     /// (existential) circuit input.
-    pub fn assign(&mut self, loc: Loc, val: Val<E::T>, public: bool) -> Result<Val<E::T>> {
+    pub fn assign(&mut self, loc: Loc, val: Val<E::T>, visiblity: Option<PartyId>) -> Result<Val<E::T>> {
         let lex = self.get_lex_mut(&loc)?;
         let old_name = lex.get_name(&loc.name)?.clone();
         let ty = lex.get_ty(&loc.name)?.clone();
@@ -559,7 +566,7 @@ impl<E: Embeddable> Circify<E> {
                     &ty,
                     new_name.clone(),
                     ite_val,
-                    public,
+                    visiblity,
                 ));
                 assert!(self.vals.insert(new_name, new_val.clone()).is_none());
                 Ok(new_val)
@@ -640,13 +647,13 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Enter a function, `name`, with return type `ret_ty`.
-    pub fn enter_fn(&mut self, name: String, ret_ty: Option<E::Ty>) {
+    pub fn enter_fn(&mut self, name: String, ret_ty: Option<E::Ty>, ret_visibility: Option<PartyId>) {
         let prefix = format!("{}_f{}", name, self.fn_ctr);
         self.fn_ctr += 1;
         self.fn_stack
-            .push(FnFrame::new(name, prefix, ret_ty.is_some()));
+            .push(FnFrame::new(name, prefix, ret_ty.is_some(), ret_visibility.clone()));
         if let Some(ty) = ret_ty {
-            self.declare(RET_NAME.to_owned(), &ty, false, false)
+            self.declare(RET_NAME.to_owned(), &ty, false, ret_visibility)
                 .expect("Bad ret name in fn enter");
         }
     }
@@ -662,13 +669,14 @@ impl<E: Embeddable> Circify<E> {
             ));
         }
         if let Some(r) = val {
+            let v = last.ret_visibility.clone();
             self.assign(
                 Loc {
                     name: RET_NAME.to_owned(),
                     idx: None,
                 },
                 Val::Term(r),
-                false,
+                v,
             )?;
         }
         self.break_(RET_BREAK_NAME)
@@ -742,7 +750,7 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Get the constraints from this manager
-    pub fn consume(self) -> Rc<RefCell<Constraints>> {
+    pub fn consume(self) -> Rc<RefCell<Computation>> {
         self.cir_ctx.cs
     }
 }
@@ -753,6 +761,7 @@ const RET_BREAK_NAME: &str = "return";
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ir::proof::*;
 
     #[allow(dead_code)]
     mod bool_pair {
@@ -807,13 +816,10 @@ mod test {
                 ty: &Self::Ty,
                 raw_name: String,
                 user_name: Option<String>,
-                public: bool,
+                visibility: Option<PartyId>,
             ) -> Self::T {
                 match ty {
                     Ty::Bool => {
-                        if public {
-                            ctx.cs.borrow_mut().publicize(raw_name.clone());
-                        }
                         T::Base(ctx.cs.borrow_mut().new_var(
                             &raw_name,
                             Sort::Bool,
@@ -827,7 +833,7 @@ mod test {
                                         .unwrap_or(false),
                                 )
                             },
-                            user_name.is_some(),
+                            visibility
                         ))
                     }
                     Ty::Pair(a, b) => T::Pair(
@@ -836,14 +842,14 @@ mod test {
                             &**a,
                             format!("{}.0", raw_name),
                             user_name.as_ref().map(|u| format!("{}.0", u)),
-                            public,
+                            visibility.clone(),
                         )),
                         Box::new(self.declare(
                             ctx,
                             &**b,
                             format!("{}.1", raw_name),
                             user_name.as_ref().map(|u| format!("{}.1", u)),
-                            public,
+                            visibility,
                         )),
                     ),
                 }
@@ -864,13 +870,13 @@ mod test {
                 _ty: &Self::Ty,
                 name: String,
                 t: Self::T,
-                public: bool,
+                visibility: Option<PartyId>,
             ) -> Self::T {
                 match t {
-                    T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, public)),
+                    T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, visibility)),
                     T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, public)),
-                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, public)),
+                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, visibility.clone())),
+                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, visibility)),
                     ),
                 }
             }
@@ -892,12 +898,13 @@ mod test {
                 values: Some(values),
             };
             let mut c = Circify::new(e);
-            c.declare("a".to_owned(), &Ty::Bool, true, false).unwrap();
+            c.cir_ctx.cs.borrow_mut().metadata.add_prover_and_verifier();
+            c.declare("a".to_owned(), &Ty::Bool, true, Some(PROVER_ID)).unwrap();
             c.declare(
                 "b".to_owned(),
                 &Ty::Pair(Box::new(Ty::Bool), Box::new(Ty::Bool)),
                 true,
-                false,
+                Some(PROVER_ID),
             )
             .unwrap();
         }

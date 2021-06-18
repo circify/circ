@@ -14,7 +14,8 @@
 use std::rc::Rc;
 
 use crate::ir::term::{
-    check, leaf_term, term, BoolNaryOp, Constraints, Op, PostOrderIter, Sort, Term, TermMap, Value,
+    check, leaf_term, term, BoolNaryOp, Computation, Op, PartyId, PostOrderIter, Sort, Term,
+    TermMap, Value,
 };
 
 type Tree = Rc<TreeData>;
@@ -75,11 +76,11 @@ fn restructure(sort: &Sort, items: &mut impl Iterator<Item = Term>) -> Tree {
 
 struct Pass {
     map: TermMap<Tree>,
-    cs: Constraints,
+    cs: Computation,
 }
 
 impl Pass {
-    fn new(cs: Constraints) -> Self {
+    fn new(cs: Computation) -> Self {
         Self {
             map: TermMap::new(),
             cs,
@@ -98,7 +99,7 @@ impl Pass {
         prefix: &str,
         sort: &Sort,
         value: Option<Value>,
-        public: bool,
+        party: Option<PartyId>,
     ) -> Tree {
         match sort {
             Sort::Tuple(sorts) => {
@@ -117,14 +118,15 @@ impl Pass {
                                 values
                                     .as_mut()
                                     .map(|v| std::mem::replace(&mut v[i], Value::Bool(true))),
-                                public,
+                                party,
                             )
                         })
                         .collect(),
                 ))
             }
             _ => Rc::new(TreeData::Leaf(
-                if self.cs.public_inputs.contains(prefix)
+                if self.cs.metadata.inputs.contains_key(prefix)
+                    && self.cs.metadata.is_input_public(prefix)
                     && self
                         .cs
                         .values
@@ -135,7 +137,7 @@ impl Pass {
                     leaf_term(Op::Var(prefix.into(), sort.clone()))
                 } else {
                     self.cs
-                        .new_var(prefix, sort.clone(), || value.unwrap().clone(), public)
+                        .new_var(prefix, sort.clone(), || value.unwrap().clone(), party)
                 },
             )),
         }
@@ -147,7 +149,7 @@ impl Pass {
             match &t.op {
                 Op::Const(v) => Rc::new(TreeData::from_value(v.clone())),
                 Op::Var(name, sort) => {
-                    let public = self.cs.public_inputs.contains(name);
+                    let party_visibility = self.cs.metadata.get_input_visibility(name);
                     self.create_vars(
                         name,
                         sort,
@@ -155,7 +157,7 @@ impl Pass {
                             .values
                             .as_ref()
                             .map(|v| v.get(name).unwrap().clone()),
-                        public,
+                        party_visibility,
                     )
                 }
                 Op::Tuple => Rc::new(TreeData::Tuple(
@@ -230,16 +232,16 @@ fn tuple_free(t: Term) -> bool {
 }
 
 /// Run the tuple elimination pass.
-pub fn eliminate_tuples(mut cs: Constraints) -> Constraints {
-    let assertions = std::mem::take(&mut cs.assertions);
-    let conj = term(Op::BoolNaryOp(BoolNaryOp::And), assertions);
+pub fn eliminate_tuples(mut cs: Computation) -> Computation {
+    let outputs = std::mem::take(&mut cs.outputs);
     let mut pass = Pass::new(cs);
-    pass.embed(&conj);
-    let new_assertions: Vec<Term> = conj
-        .cs
+    for output in &outputs {
+        pass.embed(&output);
+    }
+    let new_ouputs: Vec<Term> = outputs
         .iter()
         .map(|c| pass.get_tree(c).unwrap_leaf().clone())
         .collect();
-    pass.cs.assertions = new_assertions;
+    pass.cs.outputs = new_ouputs;
     pass.cs
 }

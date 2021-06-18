@@ -18,7 +18,7 @@
 //!    * Term data-structures and algorithms
 //!       * [TermMap], [TermSet]: maps from and sets of terms
 //!       * [PostOrderIter]: an iterator over the descendents of a term. Children-first.
-//!    * [Constraints]: a collection of variables and assertions about them
+//!    * [Computation]: a collection of variables and assertions about them
 //!    * [Value]: a variable-free (and evaluated) term
 //!
 use crate::util::once::OnceQueue;
@@ -1233,28 +1233,76 @@ impl std::iter::Iterator for PostOrderIter {
     }
 }
 
-#[derive(Clone, Debug)]
+/// A party identifier
+pub type PartyId = u8;
+
+#[derive(Clone, Debug, Default)]
 /// An IR constraint system.
-pub struct Constraints {
-    /// The assertions.
-    pub(super) assertions: Vec<Term>,
-    /// The public inputs to the system.
-    pub(super) public_inputs: AHashSet<String>,
-    /// The values of variables in the system.
-    pub(super) values: Option<AHashMap<String, Value>>,
+pub struct ComputationMetadata {
+    /// A map from party names to numbers assigned to them.
+    pub party_ids: AHashMap<String, PartyId>,
+    /// The next free id.
+    pub next_party_id: PartyId,
+    /// All inputs, including who knows them. If no visibility is set, the input is public.
+    pub inputs: AHashMap<String, Option<PartyId>>,
 }
 
-impl std::default::Default for Constraints {
+impl ComputationMetadata {
+    /// Add a new party to the computation, getting a [PartyId] for them.
+    pub fn add_party(&mut self, name: String) -> PartyId {
+        self.party_ids.insert(name, self.next_party_id);
+        self.next_party_id += 1;
+        self.next_party_id - 1
+    }
+    /// Add a new input to the computation, visible to `party`, or public if `party` is [None].
+    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>) {
+        debug_assert!(
+            !self.inputs.contains_key(&input_name),
+            "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
+            input_name,
+            party,
+            self.inputs.get(&input_name).unwrap()
+        );
+        self.inputs.insert(input_name, party);
+    }
+    /// Returns None if the value is public. Otherwise, the unique party that knows it.
+    pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
+        self.inputs.get(input_name).unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs)).clone()
+    }
+    /// Is this input public?
+    pub fn is_input_public(&self, input_name: &str) -> bool {
+        self.get_input_visibility(input_name).is_none()
+    }
+    /// Get all public inputs.
+    pub fn public_inputs(&self) -> impl Iterator<Item = &str> {
+        self.inputs.iter().filter_map(|(name, party)| if party.is_none() { Some(name.as_str()) } else { None })
+    }
+}
+
+#[derive(Clone, Debug)]
+/// An IR computation.
+pub struct Computation {
+    /// The outputs of the computation.
+    pub outputs: Vec<Term>,
+    /// The values of variables in the system.
+    ///
+    /// These are tracked when doing witness extension for proof systems.
+    pub values: Option<AHashMap<String, Value>>,
+    /// Metadata about the computation. I.e. who knows what inputs
+    pub metadata: ComputationMetadata,
+}
+
+impl std::default::Default for Computation {
     fn default() -> Self {
         Self {
-            assertions: Vec::new(),
-            public_inputs: AHashSet::new(),
+            outputs: Vec::new(),
+            metadata: ComputationMetadata::default(),
             values: None,
         }
     }
 }
 
-impl Constraints {
+impl Computation {
     /// Create a new variable, `name: s`, where `val_fn` can be called to get the concrete value,
     /// and `public` indicates whether this variable is public in the constraint system.
     pub fn new_var<F: FnOnce() -> Value>(
@@ -1262,16 +1310,10 @@ impl Constraints {
         name: &str,
         s: Sort,
         val_fn: F,
-        public: bool,
+        party: Option<PartyId>,
     ) -> Term {
-        debug!("Var: {} (public: {})", name, public);
-        if public {
-            assert!(
-                self.public_inputs.insert(name.to_owned()),
-                "{} already a public input",
-                name
-            );
-        }
+        debug!("Var: {} (visibility: {:?})", name, party);
+        self.metadata.new_input(name.to_owned(), party);
         if let Some(vs) = self.values.as_mut() {
             let val = val_fn();
             debug!("  val = {}", val);
@@ -1283,10 +1325,10 @@ impl Constraints {
     }
     /// Create a new variable, `name` in the constraint system, and set it equal to `term`.
     /// `public` indicates whether this variable is public in the constraint system.
-    pub fn assign(&mut self, name: &str, term: Term, public: bool) -> Term {
+    pub fn assign(&mut self, name: &str, term: Term, party: Option<PartyId>) -> Term {
         let val = self.eval(&term);
         let sort = check(&term);
-        let var = self.new_var(name, sort, || val.unwrap(), public);
+        let var = self.new_var(name, sort, || val.unwrap(), party);
         self.assert(term![Op::Eq; var.clone(), term]);
         var
     }
@@ -1294,7 +1336,7 @@ impl Constraints {
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
         debug!("Assert: {}", s);
-        self.assertions.push(s);
+        self.outputs.push(s);
     }
     /// If tracking values, evaluate `term`, and set the result to `name`.
     pub fn eval_and_save(&mut self, name: &str, term: &Term) {
@@ -1310,43 +1352,47 @@ impl Constraints {
     /// Create a new system, which tracks values iff `values`.
     pub fn new(values: bool) -> Self {
         Self {
-            assertions: Vec::new(),
-            public_inputs: AHashSet::new(),
+            outputs: Vec::new(),
+            metadata: ComputationMetadata::default(),
             values: if values { Some(AHashMap::new()) } else { None },
         }
     }
-    /// Make `s` a public input.
-    pub fn publicize(&mut self, s: String) {
-        self.public_inputs.insert(s);
+// TODO: rm
+//    /// Make `s` a public input.
+//    pub fn publicize(&mut self, s: String) {
+//        self.public_inputs.insert(s);
+//    }
+    /// Get the outputs of the computation.
+    ///
+    /// For proof systems, these are the assertions that must hold.
+    pub fn outputs(&self) -> &Vec<Term> {
+        &self.outputs
     }
-    /// Get the assertions in the system.
-    pub fn assertions(&self) -> &Vec<Term> {
-        &self.assertions
-    }
-    /// Consume this system, yielding its parts: (assertions, public inputs, values)
-    pub fn consume(self) -> (Vec<Term>, AHashSet<String>, Option<AHashMap<String, Value>>) {
-        (self.assertions, self.public_inputs, self.values)
-    }
-    /// Build a system from its parts: (assertions, public inputs, values)
-    pub fn from_parts(
-        assertions: Vec<Term>,
-        public_inputs: AHashSet<String>,
-        values: Option<AHashMap<String, Value>>,
-    ) -> Self {
-        Self {
-            assertions,
-            public_inputs,
-            values,
-        }
-    }
-    /// Get the term, (AND all assertions)
-    pub fn assertions_as_term(&self) -> Term {
-        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
-    }
+// TODO: rm
+//    /// Consume this system, yielding its parts: (assertions, public inputs, values)
+//    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<AHashMap<String, Value>>) {
+//        (self.assertions, self.metadata, self.values)
+//    }
+//    /// Build a system from its parts: (assertions, public inputs, values)
+//    pub fn from_parts(
+//        assertions: Vec<Term>,
+//        public_inputs: AHashSet<String>,
+//        values: Option<AHashMap<String, Value>>,
+//    ) -> Self {
+//        Self {
+//            assertions,
+//            public_inputs,
+//            values,
+//        }
+//    }
+//    /// Get the term, (AND all assertions)
+//    pub fn assertions_as_term(&self) -> Term {
+//        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
+//    }
     /// How many total (unique) terms are there?
     pub fn terms(&self) -> usize {
         let mut terms = AHashSet::<Term>::new();
-        for a in &self.assertions {
+        for a in &self.outputs {
             for s in PostOrderIter::new(a.clone()) {
                 terms.insert(s);
             }

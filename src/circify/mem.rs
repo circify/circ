@@ -63,12 +63,12 @@ impl Alloc {
 pub struct MemManager {
     allocs: HashMap<AllocId, Alloc>,
     next_id: usize,
-    cs: Rc<RefCell<Constraints>>,
+    cs: Rc<RefCell<Computation>>,
 }
 
 impl MemManager {
     /// Create a new manager, with an empty stack.
-    pub fn new(cs: Rc<RefCell<Constraints>>) -> Self {
+    pub fn new(cs: Rc<RefCell<Computation>>) -> Self {
         Self {
             allocs: HashMap::new(),
             next_id: 0,
@@ -178,7 +178,7 @@ mod test {
 
     #[test]
     fn sat_test() {
-        let cs = Rc::new(RefCell::new(Constraints::new(false)));
+        let cs = Rc::new(RefCell::new(Computation::new(false)));
         let mut mem = MemManager::new(cs.clone());
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
@@ -189,14 +189,14 @@ mod test {
         cs.borrow_mut().assert(t);
         let sys = term(
             Op::BoolNaryOp(BoolNaryOp::And),
-            cs.borrow().assertions().clone(),
+            cs.borrow().outputs().clone(),
         );
         assert!(check_sat(&sys))
     }
 
     #[test]
     fn unsat_test() {
-        let cs = Rc::new(RefCell::new(Constraints::new(false)));
+        let cs = Rc::new(RefCell::new(Computation::new(false)));
         let mut mem = MemManager::new(cs.clone());
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
@@ -207,7 +207,7 @@ mod test {
         cs.borrow_mut().assert(t);
         let sys = term(
             Op::BoolNaryOp(BoolNaryOp::And),
-            cs.borrow().assertions().clone(),
+            cs.borrow().outputs().clone(),
         );
         assert!(!check_sat(&sys))
     }
