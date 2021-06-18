@@ -1,4 +1,8 @@
 //! Lowering IR to R1CS
+//!
+//! [Ben Braun's
+//! thesis](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.683.6940&rep=rep1&type=pdf)
+//! is a good intro to how this process works.
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use crate::target::r1cs::*;
