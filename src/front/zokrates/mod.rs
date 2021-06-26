@@ -470,7 +470,12 @@ impl<'ast> ZGen<'ast> {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS.clone(),
             Some(ast::Visibility::Private(private)) => match self.mode {
-                Mode::Proof => PROVER_VIS.clone(),
+                Mode::Proof => {
+                    if private.number.is_some() {
+                        self.err("Party number found, but we're generating a proof circuit", &private.span);
+                    }
+                    PROVER_VIS.clone()
+                }
                 Mode::Mpc(n_parties) => {
                     let num_str = private
                         .number
