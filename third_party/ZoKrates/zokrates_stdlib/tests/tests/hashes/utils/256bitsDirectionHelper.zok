@@ -1,0 +1,40 @@
+//Python code used to create test vector:
+// import bitstring
+// from zokrates_pycrypto.gadgets.pedersenHasher import PedersenHasher
+// import numpy as np
+//
+// entropy = np.random.bytes(64)
+// print(entropy)
+// # b'\x17\xd2\xe6\xd9\\t\xe9|K\xf6\x0c\xc0\xc6\xa6\xb4\x17\xba\xfcT\xe9 \\\x80\x80&\x1fBD\x964\xd6\xdf\x8e\x7f^\x06j)n\xcf\x1d\xc1\x83\x8cy\x1c\x8fZ\xee\x9e\xca3!\x00\xf1\x89\xc9k\x02\x88\xc6\xb1P\x1f'
+// hasher = PedersenHasher("test")
+// digest = hasher.hash_bytes(entropy)
+//
+// entropy_bits = bitstring.BitArray(bytes=entropy).bin
+// digest_bits = bitstring.BitArray(bytes=digest.compress()).bin
+
+import "hashes/utils/256bitsDirectionHelper" as direction
+
+def left() -> bool:
+
+	u32[8] a = [0x1b19dea8, 0xba4e3c16, 0x43eb67a4, 0x2667fd3c, 0xc50a189f, 0x54977e2f, 0x8ab0beee, 0x332b2a38]
+	u32[8] b = [0x03f3f628, 0xe067520d, 0x9a36f714, 0xa5ba86cd, 0x2dbcae1d, 0x37e034b3, 0x84786de3, 0xedb8b557]
+
+	u32[16] out = direction(false, a, b)
+	assert(out == [0x1b19dea8, 0xba4e3c16, 0x43eb67a4, 0x2667fd3c, 0xc50a189f, 0x54977e2f, 0x8ab0beee, 0x332b2a38, 0x03f3f628, 0xe067520d, 0x9a36f714, 0xa5ba86cd, 0x2dbcae1d, 0x37e034b3, 0x84786de3, 0xedb8b557])
+	return true
+
+def right() -> bool:
+
+	u32[8] a = [0x1b19dea8, 0xba4e3c16, 0x43eb67a4, 0x2667fd3c, 0xc50a189f, 0x54977e2f, 0x8ab0beee, 0x332b2a38]
+	u32[8] b = [0x03f3f628, 0xe067520d, 0x9a36f714, 0xa5ba86cd, 0x2dbcae1d, 0x37e034b3, 0x84786de3, 0xedb8b557]
+
+	u32[16] out = direction(true, a, b)
+	assert(out == [0x03f3f628, 0xe067520d, 0x9a36f714, 0xa5ba86cd, 0x2dbcae1d, 0x37e034b3, 0x84786de3, 0xedb8b557, 0x1b19dea8, 0xba4e3c16, 0x43eb67a4, 0x2667fd3c, 0xc50a189f, 0x54977e2f, 0x8ab0beee, 0x332b2a38])
+	return true
+
+def main():
+	
+	assert(left())
+	assert(right())
+
+	return
