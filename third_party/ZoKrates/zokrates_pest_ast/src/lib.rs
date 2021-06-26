@@ -340,7 +340,7 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::parameter))]
     pub struct Parameter<'ast> {
-        pub visibility: Option<Visibility>,
+        pub visibility: Option<Visibility<'ast>>,
         pub ty: Type<'ast>,
         pub id: IdentifierExpression<'ast>,
         #[pest_ast(outer())]
@@ -349,9 +349,18 @@ mod ast {
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::vis))]
-    pub enum Visibility {
+    pub enum Visibility<'ast> {
         Public(PublicVisibility),
-        Private(PrivateVisibility),
+        Private(PrivateVisibility<'ast>),
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::vis_private_num))]
+    pub struct PrivateNumber<'ast> {
+        #[pest_ast(outer(with(span_into_str)))]
+        pub value: String,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
@@ -360,7 +369,11 @@ mod ast {
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::vis_private))]
-    pub struct PrivateVisibility {}
+    pub struct PrivateVisibility<'ast> {
+        pub number: Option<PrivateNumber<'ast>>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::statement))]

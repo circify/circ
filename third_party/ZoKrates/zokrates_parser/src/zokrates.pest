@@ -32,7 +32,8 @@ ty_struct_definition = { "struct" ~ identifier ~ "{" ~ NEWLINE* ~ struct_field_l
 struct_field_list = _{(struct_field ~ (NEWLINE+ ~ struct_field)*)? }
 struct_field = { ty ~ identifier }
 
-vis_private = {"private"}
+vis_private_num = @{ "<" ~ ASCII_DIGIT* ~ ">" }
+vis_private = {"private" ~ vis_private_num? }
 vis_public = {"public"}
 vis = { vis_private | vis_public }
 

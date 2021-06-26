@@ -27,3 +27,6 @@ test_path ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zo
 test_path ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 test_path ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
 
+test_path ./examples/ZoKrates/mpc/2pc_mult.zok
+test_path ./examples/ZoKrates/mpc/2pc_mult_add_pub.zok
+

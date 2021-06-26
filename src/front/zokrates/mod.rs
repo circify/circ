@@ -5,8 +5,8 @@ mod term;
 
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
-use crate::ir::term::*;
 use crate::ir::proof::{self, ConstraintMetadata};
+use crate::ir::term::*;
 use log::debug;
 use rug::Integer;
 use std::collections::HashMap;
@@ -38,7 +38,20 @@ pub struct Inputs {
     /// y -1
     /// ```
     pub inputs: Option<PathBuf>,
+    /// The mode to generate for (MPC or proof). Effects visibility.
+    pub mode: Mode,
 }
+
+#[derive(Clone, Copy, Debug)]
+/// Kind of circuit to generate. Effects privacy labels.
+pub enum Mode {
+    /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
+    Mpc(u8),
+    /// Generating for a proof circuit. Inputs are public of private (to the prover).
+    Proof,
+}
+
+impl Mode {}
 
 /// The ZoKrates front-end. Implements [FrontEnd].
 pub struct Zokrates;
@@ -48,7 +61,7 @@ impl FrontEnd for Zokrates {
     fn gen(i: Inputs) -> Computation {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(i.inputs, asts);
+        let mut g = ZGen::new(i.inputs, asts, i.mode);
         g.visit_files();
         g.file_stack.push(i.file);
         g.entry_fn("main");
@@ -64,6 +77,7 @@ struct ZGen<'ast> {
     file_stack: Vec<PathBuf>,
     functions: HashMap<(PathBuf, String), ast::Function<'ast>>,
     import_map: HashMap<(PathBuf, String), (PathBuf, String)>,
+    mode: Mode,
 }
 
 enum ZLoc {
@@ -83,7 +97,7 @@ impl ZLoc {
 }
 
 impl<'ast> ZGen<'ast> {
-    fn new(inputs: Option<PathBuf>, asts: HashMap<PathBuf, ast::File<'ast>>) -> Self {
+    fn new(inputs: Option<PathBuf>, asts: HashMap<PathBuf, ast::File<'ast>>, mode: Mode) -> Self {
         let this = Self {
             circ: Circify::new(ZoKrates::new(inputs.map(|i| parser::parse_inputs(i)))),
             asts,
@@ -91,8 +105,14 @@ impl<'ast> ZGen<'ast> {
             file_stack: vec![],
             functions: HashMap::new(),
             import_map: HashMap::new(),
+            mode,
         };
-        this.circ.cir_ctx().cs.borrow_mut().metadata.add_prover_and_verifier();
+        this.circ
+            .cir_ctx()
+            .cs
+            .borrow_mut()
+            .metadata
+            .add_prover_and_verifier();
         this
     }
 
@@ -364,9 +384,12 @@ impl<'ast> ZGen<'ast> {
                         assert_eq!(f.parameters.len(), args.len());
                         for (p, a) in f.parameters.iter().zip(args) {
                             let ty = self.type_(&p.ty);
-                            let d_res =
-                                self.circ
-                                    .declare_init(p.id.value.clone(), ty, Val::Term(a), PUBLIC_VIS);
+                            let d_res = self.circ.declare_init(
+                                p.id.value.clone(),
+                                ty,
+                                Val::Term(a),
+                                PUBLIC_VIS,
+                            );
                             self.unwrap(d_res, &c.span);
                         }
                         for s in &f.statements {
@@ -429,11 +452,8 @@ impl<'ast> ZGen<'ast> {
         for p in f.parameters.iter() {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
-            let public = match p.visibility {
-                Some(ast::Visibility::Private(_)) => false,
-                _ => true,
-            };
-            let r = self.circ.declare(p.id.value.clone(), &ty, true, if public { PUBLIC_VIS } else { PROVER_VIS });
+            let vis = self.interpret_visibility(&p.visibility);
+            let r = self.circ.declare(p.id.value.clone(), &ty, true, vis);
             self.unwrap(r, &p.span);
         }
         for s in &f.statements {
@@ -444,6 +464,27 @@ impl<'ast> ZGen<'ast> {
                 .circ
                 .declare_init("return".to_owned(), ret_ty.unwrap(), r, PUBLIC_VIS);
             self.unwrap(r, &f.span);
+        }
+    }
+    fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> Option<PartyId> {
+        match visibility {
+            None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS.clone(),
+            Some(ast::Visibility::Private(private)) => match self.mode {
+                Mode::Proof => PROVER_VIS.clone(),
+                Mode::Mpc(n_parties) => {
+                    let num_str = private
+                        .number
+                        .as_ref()
+                        .unwrap_or_else(|| self.err("No party number", &private.span));
+                    let num_val = u8::from_str_radix(&num_str.value[1..num_str.value.len()-1], 10)
+                        .unwrap_or_else(|e| self.err(format!("Bad party number: {}", e), &private.span));
+                    if num_val <= n_parties {
+                    Some(num_val - 1)
+                    } else {
+                        self.err(format!("Party number {} greater than the number of parties ({})", num_val, n_parties), &private.span)
+                    }
+                }
+            },
         }
     }
     fn cur_path(&self) -> &Path {
