@@ -55,9 +55,9 @@ fn main() {
 
     println!("Converting to r1cs");
     let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
-    println!("R1cs size: {}", r1cs.constraints().len());
+    println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
     let r1cs = reduce_linearities(r1cs);
-    println!("R1cs size: {}", r1cs.constraints().len());
+    println!("Final R1cs size: {}", r1cs.constraints().len());
 
     //r1cs.check_all();
     //let mut cs = TestConstraintSystem::<Scalar>::new();
