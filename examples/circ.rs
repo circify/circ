@@ -5,8 +5,7 @@ use bls12_381::Scalar;
 use circ::front::zokrates::{Inputs, Zokrates, Mode};
 use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
-use circ::target::r1cs::opt::reduce_linearities;
-use circ::target::r1cs::trans::to_r1cs;
+use circ::target::aby::trans::to_aby;
 use env_logger;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -61,18 +60,6 @@ fn main() {
     );
     println!("Done with IR optimization");
 
-    println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
-    println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-    let r1cs = reduce_linearities(r1cs);
-    println!("Final R1cs size: {}", r1cs.constraints().len());
-
-    //r1cs.check_all();
-    //let mut cs = TestConstraintSystem::<Scalar>::new();
-    //r1cs.synthesize(&mut cs).unwrap();
-    //println!("Num constraints: {}", cs.num_constraints());
-    //println!("{}", cs.pretty_print());
-    //if let Some(c) = cs.which_is_unsatisfied() {
-    //    panic!("Unsat: {}", c);
-    //}
+    println!("Converting to aby");
+    let _aby = to_aby(cs);
 }
