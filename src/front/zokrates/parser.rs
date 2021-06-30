@@ -49,14 +49,20 @@ impl ZStdLib {
     pub fn new() -> Self {
         let p = std::env::current_dir().unwrap().canonicalize().unwrap();
         assert!(p.is_absolute());
+        let stdlib_subdirs = vec![
+            "ZoKrates/zokrates_stdlib/stdlib",
+            "third_party/ZoKrates/zokrates_stdlib/stdlib",
+        ];
         for a in p.ancestors() {
-            let mut q = a.to_path_buf();
-            q.push("ZoKrates/zokrates_stdlib/stdlib");
-            if q.exists() {
-                return Self { path: q };
+            for subdir in &stdlib_subdirs {
+                let mut q = a.to_path_buf();
+                q.push(subdir);
+                if q.exists() {
+                    return Self { path: q };
+                }
             }
         }
-        panic!("Could not find ZoKrates stdlibfrom {}", p.display())
+        panic!("Could not find ZoKrates stdlib from {}", p.display())
     }
     /// Turn `child`, relative to `parent` (or to the standard libary!), into an absolute path.
     pub fn canonicalize(&self, parent: &Path, child: &str) -> PathBuf {
