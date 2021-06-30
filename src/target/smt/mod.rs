@@ -243,8 +243,17 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
             let bits = input.get_sexpr()?;
             let i = Integer::from_str_radix(bits, 2).unwrap();
             Value::BitVector(BitVector::new(i, bits.len()))
+        } else if input.try_tag("(_")? {
+            if input.try_tag("bv")? {
+                let val = Integer::from_str_radix(input.get_sexpr()?, 10).unwrap();
+                let width = usize::from_str(input.get_sexpr()?).unwrap();
+                input.tag(")")?;
+                Value::BitVector(BitVector::new(val, width))
+            } else {
+                unimplemented!("Could not parse model suffix: {}\n after (_ bv", input.buff_rest())
+            }
         } else {
-            unimplemented!()
+            unimplemented!("Could not parse model suffix: {}", input.buff_rest())
         };
         //if !input.try_tag(")")? {
         //    input.fail_with("No trailing ')'")?;
