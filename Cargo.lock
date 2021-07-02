@@ -489,8 +489,9 @@ dependencies = [
 [[package]]
 name = "hashconsing"
 version = "1.3.0"
-source = "git+https://github.com/alex-ozdemir/hashconsing.git#b6f90b56dc1777f588194952d749939ad3993e38"
+source = "git+https://github.com/alex-ozdemir/hashconsing.git?branch=ahash#bb1e66fe9f09c799ce31bea6a411db779ded7641"
 dependencies = [
+ "ahash",
  "lazy_static",
 ]
 

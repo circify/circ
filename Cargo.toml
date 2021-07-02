@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 #hashconsing = "1.3"
-hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git" }
+hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "ahash"}
 rug = "1.11"
 gmp-mpfr-sys = "1.4"
 fnv = "1.0.7"
