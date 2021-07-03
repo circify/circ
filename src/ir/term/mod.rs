@@ -882,7 +882,7 @@ fn mk(elm: TermData) -> Term {
     slf.mk(elm)
 }
 
-/// Scans the term database and the type database and removes dead terms.
+/// Scans the term database and the type database and removes dead terms and types.
 pub fn garbage_collect() {
     collect_terms();
     collect_types();
@@ -891,6 +891,7 @@ pub fn garbage_collect() {
 fn collect_terms() {
     TERMS.write().unwrap().collect();
 }
+
 fn collect_types() {
     let mut ty_map = ty::TERM_TYPES.write().unwrap();
     let old_size = ty_map.len();
