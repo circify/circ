@@ -1268,7 +1268,10 @@ impl ComputationMetadata {
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        self.inputs.get(input_name).unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs)).clone()
+        self.inputs
+            .get(input_name)
+            .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs))
+            .clone()
     }
     /// Is this input public?
     pub fn is_input_public(&self, input_name: &str) -> bool {
@@ -1276,7 +1279,13 @@ impl ComputationMetadata {
     }
     /// Get all public inputs.
     pub fn public_inputs(&self) -> impl Iterator<Item = &str> {
-        self.inputs.iter().filter_map(|(name, party)| if party.is_none() { Some(name.as_str()) } else { None })
+        self.inputs.iter().filter_map(|(name, party)| {
+            if party.is_none() {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -1358,38 +1367,38 @@ impl Computation {
             values: if values { Some(AHashMap::new()) } else { None },
         }
     }
-// TODO: rm
-//    /// Make `s` a public input.
-//    pub fn publicize(&mut self, s: String) {
-//        self.public_inputs.insert(s);
-//    }
+    // TODO: rm
+    //    /// Make `s` a public input.
+    //    pub fn publicize(&mut self, s: String) {
+    //        self.public_inputs.insert(s);
+    //    }
     /// Get the outputs of the computation.
     ///
     /// For proof systems, these are the assertions that must hold.
     pub fn outputs(&self) -> &Vec<Term> {
         &self.outputs
     }
-// TODO: rm
-//    /// Consume this system, yielding its parts: (assertions, public inputs, values)
-//    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<AHashMap<String, Value>>) {
-//        (self.assertions, self.metadata, self.values)
-//    }
-//    /// Build a system from its parts: (assertions, public inputs, values)
-//    pub fn from_parts(
-//        assertions: Vec<Term>,
-//        public_inputs: AHashSet<String>,
-//        values: Option<AHashMap<String, Value>>,
-//    ) -> Self {
-//        Self {
-//            assertions,
-//            public_inputs,
-//            values,
-//        }
-//    }
-//    /// Get the term, (AND all assertions)
-//    pub fn assertions_as_term(&self) -> Term {
-//        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
-//    }
+    // TODO: rm
+    //    /// Consume this system, yielding its parts: (assertions, public inputs, values)
+    //    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<AHashMap<String, Value>>) {
+    //        (self.assertions, self.metadata, self.values)
+    //    }
+    //    /// Build a system from its parts: (assertions, public inputs, values)
+    //    pub fn from_parts(
+    //        assertions: Vec<Term>,
+    //        public_inputs: AHashSet<String>,
+    //        values: Option<AHashMap<String, Value>>,
+    //    ) -> Self {
+    //        Self {
+    //            assertions,
+    //            public_inputs,
+    //            values,
+    //        }
+    //    }
+    //    /// Get the term, (AND all assertions)
+    //    pub fn assertions_as_term(&self) -> Term {
+    //        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
+    //    }
     /// How many total (unique) terms are there?
     pub fn terms(&self) -> usize {
         let mut terms = AHashSet::<Term>::new();

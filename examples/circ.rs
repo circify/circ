@@ -2,7 +2,7 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::Circuit;
 use bls12_381::Scalar;
-use circ::front::zokrates::{Inputs, Zokrates, Mode};
+use circ::front::zokrates::{Inputs, Mode, Zokrates};
 use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
 use circ::target::r1cs::opt::reduce_linearities;
@@ -34,38 +34,52 @@ fn main() {
         .init();
     let options = Options::from_args();
     println!("{:?}", options);
+    let mode = match options.parties {
+        Some(p) => Mode::Mpc(p),
+        None => Mode::Proof,
+    };
     let inputs = Inputs {
         file: options.zokrates_path,
         inputs: options.inputs,
-        mode: match options.parties {
-            Some(p) => Mode::Mpc(p),
-            None => Mode::Proof,
-        }
+        mode: mode.clone(),
     };
     let cs = Zokrates::gen(inputs);
-    let cs = opt(
-        cs,
-        vec![
-            Opt::Flatten,
-            Opt::Sha,
-            Opt::ConstantFold,
-            Opt::Flatten,
-            Opt::FlattenAssertions,
-            Opt::Inline,
-            Opt::Mem,
-            Opt::Flatten,
-            Opt::FlattenAssertions,
-            Opt::ConstantFold,
-            Opt::Inline,
-        ],
-    );
+    let cs = match mode {
+        Mode::Mpc(_) => opt(
+            cs,
+            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+        ),
+        Mode::Proof => opt(
+            cs,
+            vec![
+                Opt::Flatten,
+                Opt::Sha,
+                Opt::ConstantFold,
+                Opt::Flatten,
+                Opt::FlattenAssertions,
+                Opt::Inline,
+                Opt::Mem,
+                Opt::Flatten,
+                Opt::FlattenAssertions,
+                Opt::ConstantFold,
+                Opt::Inline,
+            ],
+        ),
+    };
     println!("Done with IR optimization");
 
-    println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
-    println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-    let r1cs = reduce_linearities(r1cs);
-    println!("Final R1cs size: {}", r1cs.constraints().len());
+    match mode {
+        Mode::Proof => {
+            println!("Converting to r1cs");
+            let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
+            println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
+            let r1cs = reduce_linearities(r1cs);
+            println!("Final R1cs size: {}", r1cs.constraints().len());
+        }
+        Mode::Mpc(_) => {
+            println!("TODO: add MPC backend");
+        }
+    }
 
     //r1cs.check_all();
     //let mut cs = TestConstraintSystem::<Scalar>::new();

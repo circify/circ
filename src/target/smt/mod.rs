@@ -250,7 +250,10 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
                 input.tag(")")?;
                 Value::BitVector(BitVector::new(val, width))
             } else {
-                unimplemented!("Could not parse model suffix: {}\n after (_ bv", input.buff_rest())
+                unimplemented!(
+                    "Could not parse model suffix: {}\n after (_ bv",
+                    input.buff_rest()
+                )
             }
         } else {
             unimplemented!("Could not parse model suffix: {}", input.buff_rest())

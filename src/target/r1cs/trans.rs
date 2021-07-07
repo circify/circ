@@ -846,7 +846,11 @@ impl ToR1cs {
 
 /// Convert this (IR) constraint system `cs` to R1CS, over a prime field defined by `modulus`.
 pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
-    let Computation { outputs: assertions, metadata, values } = cs;
+    let Computation {
+        outputs: assertions,
+        metadata,
+        values,
+    } = cs;
     let public_inputs = metadata.public_inputs().map(ToOwned::to_owned).collect();
     let mut converter = ToR1cs::new(modulus, values, public_inputs);
     debug!(
@@ -875,9 +879,9 @@ fn bitsize(mut n: usize) -> usize {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ir::proof::Constraints;
     use crate::ir::term::dist::test::*;
     use crate::ir::term::dist::*;
-    use crate::ir::proof::Constraints;
     use crate::target::r1cs::opt::reduce_linearities;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
