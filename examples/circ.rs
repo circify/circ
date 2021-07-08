@@ -6,6 +6,8 @@ use circ::front::zokrates::{Inputs, Mode, Zokrates};
 use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
 use circ::target::aby::trans::to_aby;
+use circ::target::r1cs::opt::reduce_linearities;
+use circ::target::r1cs::trans::to_r1cs;
 use env_logger;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -46,7 +48,8 @@ fn main() {
     let cs = match mode {
         Mode::Mpc(_) => opt(
             cs,
-            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![],
+            // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof => opt(
             cs,
