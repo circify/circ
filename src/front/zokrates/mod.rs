@@ -172,11 +172,9 @@ impl<'ast> ZGen<'ast> {
                 self.unwrap(decl_res, &i.index.span);
                 for j in s..e {
                     self.circ.enter_scope();
-                    let ass_res = self.circ.assign(
-                        Loc::local(v_name.clone()),
-                        Val::Term(T::Field(pf_lit(j))),
-                        PROVER_VIS,
-                    );
+                    let ass_res = self
+                        .circ
+                        .assign(Loc::local(v_name.clone()), Val::Term(T::Field(pf_lit(j))));
                     self.unwrap(ass_res, &i.index.span);
                     for s in &i.statements {
                         self.stmt(s);
@@ -202,12 +200,9 @@ impl<'ast> ZGen<'ast> {
                             );
                         }
                         assert!(l.a.accesses.len() == 0);
-                        let d_res = self.circ.declare_init(
-                            l.a.id.value.clone(),
-                            decl_ty,
-                            Val::Term(e),
-                            PROVER_VIS,
-                        );
+                        let d_res =
+                            self.circ
+                                .declare_init(l.a.id.value.clone(), decl_ty, Val::Term(e));
                         self.unwrap(d_res, &d.span);
                     } else {
                         // Assignee case
@@ -245,7 +240,7 @@ impl<'ast> ZGen<'ast> {
             .unwrap_term();
         let new = self.apply_lval_mod(old, l, t)?;
         self.circ
-            .assign(var, Val::Term(new), PROVER_VIS)
+            .assign(var, Val::Term(new))
             .map_err(|e| format!("{}", e))
             .map(|_| ())
     }
@@ -380,16 +375,12 @@ impl<'ast> ZGen<'ast> {
                         self.file_stack.push(p.0);
                         assert!(f.returns.len() <= 1);
                         let ret_ty = f.returns.first().map(|r| self.type_(r));
-                        self.circ.enter_fn(p.1, ret_ty, PROVER_VIS);
+                        self.circ.enter_fn(p.1, ret_ty);
                         assert_eq!(f.parameters.len(), args.len());
                         for (p, a) in f.parameters.iter().zip(args) {
                             let ty = self.type_(&p.ty);
-                            let d_res = self.circ.declare_init(
-                                p.id.value.clone(),
-                                ty,
-                                Val::Term(a),
-                                PUBLIC_VIS,
-                            );
+                            let d_res =
+                                self.circ.declare_init(p.id.value.clone(), ty, Val::Term(a));
                             self.unwrap(d_res, &c.span);
                         }
                         for s in &f.statements {
@@ -439,6 +430,7 @@ impl<'ast> ZGen<'ast> {
     }
     fn entry_fn(&mut self, n: &str) {
         debug!("Entry: {}", n);
+        // find the entry function
         let (f_path, f_name) = self.deref_import(n.to_owned());
         let p = (f_path, f_name);
         let f = self
@@ -447,8 +439,10 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or_else(|| panic!("No function '{}'", p.1))
             .clone();
         assert!(f.returns.len() <= 1);
+        // get return type
         let ret_ty = f.returns.first().map(|r| self.type_(r));
-        self.circ.enter_fn(n.to_owned(), ret_ty.clone(), PROVER_VIS);
+        // setup stack frame for entry function
+        self.circ.enter_fn(n.to_owned(), ret_ty.clone());
         for p in f.parameters.iter() {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
@@ -460,10 +454,26 @@ impl<'ast> ZGen<'ast> {
             self.stmt(s);
         }
         if let Some(r) = self.circ.exit_fn() {
-            let r = self
-                .circ
-                .declare_init("return".to_owned(), ret_ty.unwrap(), r, PUBLIC_VIS);
-            self.unwrap(r, &f.span);
+            match self.mode {
+                Mode::Mpc(_) => {
+                    let ret_term = r.unwrap_term();
+                    let ret_terms = ret_term.terms();
+                    self.circ
+                        .cir_ctx()
+                        .cs
+                        .borrow_mut()
+                        .outputs
+                        .extend(ret_terms);
+                }
+                Mode::Proof => {
+                    let ty = ret_ty.as_ref().unwrap();
+                    let name = "return".to_owned();
+                    let term = r.unwrap_term();
+                    let _r = self.circ.declare(name.clone(), &ty, false, PROVER_VIS);
+                    self.circ
+                        .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
+                }
+            }
         }
     }
     fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> Option<PartyId> {
@@ -472,7 +482,10 @@ impl<'ast> ZGen<'ast> {
             Some(ast::Visibility::Private(private)) => match self.mode {
                 Mode::Proof => {
                     if private.number.is_some() {
-                        self.err("Party number found, but we're generating a proof circuit", &private.span);
+                        self.err(
+                            "Party number found, but we're generating a proof circuit",
+                            &private.span,
+                        );
                     }
                     PROVER_VIS.clone()
                 }
@@ -481,12 +494,21 @@ impl<'ast> ZGen<'ast> {
                         .number
                         .as_ref()
                         .unwrap_or_else(|| self.err("No party number", &private.span));
-                    let num_val = u8::from_str_radix(&num_str.value[1..num_str.value.len()-1], 10)
-                        .unwrap_or_else(|e| self.err(format!("Bad party number: {}", e), &private.span));
+                    let num_val =
+                        u8::from_str_radix(&num_str.value[1..num_str.value.len() - 1], 10)
+                            .unwrap_or_else(|e| {
+                                self.err(format!("Bad party number: {}", e), &private.span)
+                            });
                     if num_val <= n_parties {
-                    Some(num_val - 1)
+                        Some(num_val - 1)
                     } else {
-                        self.err(format!("Party number {} greater than the number of parties ({})", num_val, n_parties), &private.span)
+                        self.err(
+                            format!(
+                                "Party number {} greater than the number of parties ({})",
+                                num_val, n_parties
+                            ),
+                            &private.span,
+                        )
                     }
                 }
             },

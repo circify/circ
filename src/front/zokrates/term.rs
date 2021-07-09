@@ -48,6 +48,23 @@ impl fmt::Debug for Ty {
     }
 }
 
+impl Ty {
+    fn default(&self) -> T {
+        match self {
+            Self::Bool => T::Bool(leaf_term(Op::Const(Value::Bool(false)))),
+            Self::Uint(w) => T::Uint(*w, bv_lit(0, *w)),
+            Self::Field => T::Field(pf_lit(0)),
+            Self::Array(n, b) => T::Array((**b).clone(), vec![b.default(); *n]),
+            Self::Struct(n, fs) => T::Struct(
+                n.clone(),
+                fs.iter()
+                    .map(|(f_name, f_ty)| (f_name.to_owned(), f_ty.default()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum T {
     Uint(usize, Term),
@@ -72,6 +89,21 @@ impl T {
                     .collect(),
             ),
         }
+    }
+    /// Get all IR terms inside this value, as a list.
+    pub fn terms(&self) -> Vec<Term> {
+        let mut output: Vec<Term> = Vec::new();
+        fn terms_tail(term: &T, output: &mut Vec<Term>) {
+            match term {
+                T::Bool(b) => output.push(b.clone()),
+                T::Uint(_, b) => output.push(b.clone()),
+                T::Field(b) => output.push(b.clone()),
+                T::Array(_, v) => v.iter().for_each(|v| terms_tail(v, output)),
+                T::Struct(_, map) => map.iter().for_each(|(_, v)| terms_tail(v, output)),
+            }
+        }
+        terms_tail(self, &mut output);
+        output
     }
     pub fn unwrap_array(self) -> Result<Vec<T>, String> {
         match self {
@@ -693,5 +725,13 @@ impl Embeddable for ZoKrates {
     }
     fn values(&self) -> bool {
         self.values.is_some()
+    }
+
+    fn type_of(&self, term: &Self::T) -> Self::Ty {
+        term.type_()
+    }
+
+    fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
+        ty.default()
     }
 }
