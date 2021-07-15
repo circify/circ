@@ -1,2 +1,2 @@
-def main(private<1> field a, private<2> field b) -> field:
+def main(private<1> u32 a, private<2> u32 b) -> u32:
   return a * b

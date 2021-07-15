@@ -24,10 +24,6 @@ struct ToABY {
     md: ComputationMetadata,
     seen_party_inputs: HashMap<String, Option<PartyId>>,
     cache: TermMap<EmbeddedTerm>,
-
-    setup: Vec<String>,
-    circs: Vec<String>,
-    closer: Vec<String>,
     output_gate: String,
 }
 
@@ -39,9 +35,6 @@ impl ToABY {
             md: metadata,
             seen_party_inputs: HashMap::new(),
             cache: TermMap::new(),
-            setup: Vec::new(),
-            circs: Vec::new(),
-            closer: Vec::new(),
             output_gate: "out".to_string(),
         }
     }
@@ -53,32 +46,45 @@ impl ToABY {
 
     // Set-up functions
     fn setup(&mut self) {
-        self.setup.push("ABYParty* party = new ABYParty(role, address, port, seclvl, bitlen, nthreads, mt_alg);".to_string());
-        self.setup
+        self.aby.setup.push("ABYParty* party = new ABYParty(role, address, port, seclvl, bitlen, nthreads, mt_alg);".to_string());
+        self.aby
+            .setup
             .push("std::vector<Sharing*>& sharings = party->GetSharings();".to_string());
-        self.setup
+        self.aby
+            .setup
             .push("Circuit* circ = sharings[sharing]->GetCircuitBuildRoutine();".to_string());
     }
 
     fn init_inputs(&mut self) {
         let mut server_inputs = Vec::<&str>::new();
         let mut client_inputs = Vec::<&str>::new();
+        let mut counter = 0;
 
         for (input, visibility) in self.seen_party_inputs.iter() {
-            self.setup.push(format!("share *s_{};", input).to_string());
+            self.aby.setup.push(format!(
+                "uint32_t {} = std::atoi(params[{}].c_str());",
+                input.to_string(),
+                counter
+            ));
+            self.aby
+                .setup
+                .push(format!("share *s_{};", input).to_string());
             let role = visibility.unwrap_or_else(|| NO_ROLE);
             if role == SERVER {
                 server_inputs.push(input);
             } else if role == CLIENT {
                 client_inputs.push(input);
             }
+
+            counter += 1;
         }
-        self.setup
+        self.aby
+            .setup
             .push(format!("share *s_{};", self.output_gate).to_string());
 
-        self.setup.push("if (role == SERVER) {".to_string());
+        self.aby.setup.push("if (role == SERVER) {".to_string());
         for input in server_inputs.iter() {
-            self.setup.push(
+            self.aby.setup.push(
                 format!(
                     "\ts_{} = circ->PutINGate({}, bitlen, SERVER);",
                     input, input
@@ -87,14 +93,15 @@ impl ToABY {
             );
         }
         for input in client_inputs.iter() {
-            self.setup
+            self.aby
+                .setup
                 .push(format!("\ts_{} = circ->PutDummyINGate(bitlen);", input).to_string());
         }
-        self.setup.push("}".to_string());
+        self.aby.setup.push("}".to_string());
 
-        self.setup.push("if (role == CLIENT) {".to_string());
+        self.aby.setup.push("if (role == CLIENT) {".to_string());
         for input in client_inputs.iter() {
-            self.setup.push(
+            self.aby.setup.push(
                 format!(
                     "\ts_{} = circ->PutINGate({}, bitlen, CLIENT);",
                     input, input
@@ -103,26 +110,27 @@ impl ToABY {
             );
         }
         for input in server_inputs.iter() {
-            self.setup
+            self.aby
+                .setup
                 .push(format!("\ts_{} = circ->PutDummyINGate(bitlen);", input).to_string());
         }
-        self.setup.push("}".to_string());
+        self.aby.setup.push("}".to_string());
     }
 
     fn closer(&mut self) {
-        self.closer.push("party->ExecCircuit();".to_string());
-        self.closer.push(format!(
-            "uint32_t output = s_{}->get_clear_value<uint32_t>();",
+        self.aby.closer.push("party->ExecCircuit();".to_string());
+        self.aby.closer.push(format!(
+            "uint32_t output = s_{}->get_clear_value<uint32_t>();\n\tstd::cout << \"output: \" << output << std::endl;",
             self.output_gate
         ));
-        self.closer.push("delete party;".to_string());
-        self.closer.push("return 0;".to_string());
+        self.aby.closer.push("delete party;".to_string());
+        self.aby.closer.push("return 0;".to_string());
     }
 
     // Translation functions
 
     fn zero() -> String {
-        format!("circ->PutCONSGate((uint_64)0, (uint_32)1)")
+        format!("circ->PutCONSGate((uint64_t)0, (uint32_t)1)")
     }
 
     fn embed_eq(&mut self, t: Term, a: &Term, b: &Term) -> String {
@@ -421,7 +429,7 @@ impl ToABY {
     fn assert(&mut self, t: Term) {
         let mut output_circ = self.embed(t);
         output_circ = self.add_output_gate(output_circ);
-        self.circs.push(output_circ);
+        self.aby.circs.push(output_circ);
     }
 }
 
@@ -442,16 +450,6 @@ pub fn to_aby(cs: Computation) -> ABY {
 
     converter.init_inputs();
     converter.closer();
-
-    for v in converter.setup.iter() {
-        println!("{}", v)
-    }
-    for v in converter.circs.iter() {
-        println!("{}", v)
-    }
-    for v in converter.closer.iter() {
-        println!("{}", v)
-    }
 
     converter.aby
 }
