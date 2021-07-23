@@ -71,7 +71,7 @@ fn write_test_file(filename: &String) {
         *filename, *filename
     );
 
-    fs::write(path.clone(), template.replace("{}", &*filename))
+    fs::write(path.clone(), template.replace("{fn}", &*filename))
         .expect("Failed to write to cmake file");
 }
 

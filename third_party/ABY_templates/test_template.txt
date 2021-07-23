@@ -3,7 +3,7 @@
 
 #include "../../abycore/aby/abyparty.h"
 
-#include "common/{}.h"
+#include "common/{fn}.h"
 
 int32_t read_test_options(int32_t* argcp, char*** argvp, e_role* role,
 		uint32_t* bitlen, uint32_t* nvals, uint32_t* secparam, std::string* address,
@@ -69,13 +69,13 @@ int main(int argc, char** argv) {
 	std::string parameters = "";
 
 	read_test_options(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address,
-			&port, &test_op, &parameters)
+			&port, &test_op, &parameters);
 
 	seclvl seclvl = get_sec_lvl(secparam);
 
 	std::vector<std::string> params = split_str(parameters, ",");
 
-	test_{}_circuit(params, role, address, port, seclvl, 32,
+	test_{fn}_circuit(params, role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_BOOL);
 
 	return 0;

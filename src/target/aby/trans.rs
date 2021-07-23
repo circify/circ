@@ -22,7 +22,8 @@ enum EmbeddedTerm {
 struct ToABY {
     aby: ABY,
     md: ComputationMetadata,
-    seen_party_inputs: HashMap<String, Option<PartyId>>,
+    inputs: HashMap<String, Option<PartyId>>,
+    inputs_order: Vec<String>,
     cache: TermMap<EmbeddedTerm>,
     output_gate: String,
 }
@@ -33,15 +34,11 @@ impl ToABY {
         Self {
             aby: ABY::new(),
             md: metadata,
-            seen_party_inputs: HashMap::new(),
+            inputs: HashMap::new(),
+            inputs_order: Vec::new(),
             cache: TermMap::new(),
             output_gate: "out".to_string(),
         }
-    }
-
-    // Helper Functions
-    fn not_in_seen(&mut self, name: &str) -> bool {
-        return !self.seen_party_inputs.contains_key(name);
     }
 
     // Set-up functions
@@ -58,9 +55,12 @@ impl ToABY {
     fn init_inputs(&mut self) {
         let mut server_inputs = Vec::<&str>::new();
         let mut client_inputs = Vec::<&str>::new();
+        let mut public_inputs = Vec::<&str>::new();
         let mut counter = 0;
 
-        for (input, visibility) in self.seen_party_inputs.iter() {
+        self.inputs_order.reverse();
+        for input in self.inputs_order.iter() {
+            let visibility = self.inputs.get(input).unwrap();
             self.aby.setup.push(format!(
                 "uint32_t {} = std::atoi(params[{}].c_str());",
                 input.to_string(),
@@ -74,13 +74,23 @@ impl ToABY {
                 server_inputs.push(input);
             } else if role == CLIENT {
                 client_inputs.push(input);
+            } else if role != SERVER && role != CLIENT && self.md.is_input_public(&input) {
+                public_inputs.push(input);
+            } else {
+                panic!("Unknown role or visibility for input: {}", input);
             }
-
             counter += 1;
         }
+
         self.aby
             .setup
             .push(format!("share *s_{};", self.output_gate).to_string());
+
+        for input in public_inputs.iter() {
+            self.aby.setup.push(
+                format!("s_{} = circ->PutCONSGate({}, bitlen);", input, input).to_string(),
+            );
+        }
 
         self.aby.setup.push("if (role == SERVER) {".to_string());
         for input in server_inputs.iter() {
@@ -114,11 +124,11 @@ impl ToABY {
                 .setup
                 .push(format!("\ts_{} = circ->PutDummyINGate(bitlen);", input).to_string());
         }
-        self.aby.setup.push("}".to_string());
+        self.aby.setup.push("}\n".to_string());
     }
 
     fn closer(&mut self) {
-        self.aby.closer.push("party->ExecCircuit();".to_string());
+        self.aby.closer.push("\tparty->ExecCircuit();".to_string());
         self.aby.closer.push(format!(
             "uint32_t output = s_{}->get_clear_value<uint32_t>();\n\tstd::cout << \"output: \" << output << std::endl;",
             self.output_gate
@@ -133,6 +143,10 @@ impl ToABY {
         format!("circ->PutCONSGate((uint64_t)0, (uint32_t)1)")
     }
 
+    fn one() -> String {
+        format!("circ->PutCONSGate((uint64_t)1, (uint32_t)1)")
+    }
+
     fn embed_eq(&mut self, t: Term, a: &Term, b: &Term) -> String {
         match check(a) {
             Sort::Bool => {
@@ -140,8 +154,8 @@ impl ToABY {
                 let b = self.get_bool(b).clone();
 
                 let s = format!(
-                    "((BooleanCircuit *)circ)->PutINVGate(circ->PutXORGate({}, {}))",
-                    a, b
+                    "circ->PutXORGate(circ->PutXORGate({}, {}), {})",
+                    a, b, ToABY::one()
                 );
                 self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
                 s
@@ -150,8 +164,8 @@ impl ToABY {
                 let a = self.get_bv(a).clone();
                 let b = self.get_bv(b).clone();
                 let s = format!(
-                    "circ->PutXORGate(circ->PutGTGate({}, {}), circ->PutGTGate({}, {})) ",
-                    a, b, b, a
+                    "circ->PutXORGate(circ->PutXORGate(circ->PutGTGate({}, {}), circ->PutGTGate({}, {})), {})",
+                    a, b, b, a, ToABY::one()
                 );
                 self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
                 s
@@ -174,20 +188,14 @@ impl ToABY {
     fn embed_bool(&mut self, t: Term) -> String {
         match &t.op {
             Op::Var(name, Sort::Bool) => {
-                if self.not_in_seen(&name) {
-                    self.seen_party_inputs
+                if !self.inputs.contains_key(name) {
+                    self.inputs
                         .insert(name.to_string(), *self.md.inputs.get(name).unwrap());
+                    self.inputs_order.push(name.to_string());
                 }
-                if self.md.is_input_public(&name) {
-                    if !self.cache.contains_key(&t) {
-                        self.cache
-                            .insert(t.clone(), EmbeddedTerm::Bool(format!("{}", name)));
-                    }
-                } else {
-                    if !self.cache.contains_key(&t) {
-                        self.cache
-                            .insert(t.clone(), EmbeddedTerm::Bool(format!("s_{}", name)));
-                    }
+                if !self.cache.contains_key(&t) {
+                    self.cache
+                        .insert(t.clone(), EmbeddedTerm::Bool(format!("s_{}", name)));
                 }
             }
             Op::Const(Value::Bool(b)) => {
@@ -310,20 +318,14 @@ impl ToABY {
     fn embed_bv(&mut self, t: Term) -> String {
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
-                if self.not_in_seen(&name) {
-                    self.seen_party_inputs
+                if !self.inputs.contains_key(name) {
+                    self.inputs
                         .insert(name.to_string(), *self.md.inputs.get(name).unwrap());
+                    self.inputs_order.push(name.to_string());
                 }
-                if self.md.is_input_public(&name) {
-                    if !self.cache.contains_key(&t) {
-                        self.cache
-                            .insert(t.clone(), EmbeddedTerm::Bv(format!("{}", name)));
-                    }
-                } else {
-                    if !self.cache.contains_key(&t) {
-                        self.cache
-                            .insert(t.clone(), EmbeddedTerm::Bv(format!("s_{}", name)));
-                    }
+                if !self.cache.contains_key(&t) {
+                    self.cache
+                        .insert(t.clone(), EmbeddedTerm::Bv(format!("s_{}", name)));
                 }
             }
             Op::Const(Value::BitVector(b)) => {
@@ -420,7 +422,7 @@ impl ToABY {
 
     fn add_output_gate(&mut self, circ: String) -> String {
         format!(
-            "s_{} = circ->PutOUTGate({}, ALL);",
+            "\ts_{} = circ->PutOUTGate({}, ALL);\n",
             self.output_gate.clone(),
             circ
         )

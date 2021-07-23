@@ -36,3 +36,8 @@ function mpc_test {
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_mult.zok
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_mult_add_pub.zok
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
+mpc_test 2 ./examples/ZoKrates/mpc/2pc_boolean_equals.zok
+mpc_test 2 ./examples/ZoKrates/mpc/2pc_int_equals.zok
+mpc_test 2 ./examples/ZoKrates/mpc/2pc_add.zok
+mpc_test 2 ./examples/ZoKrates/mpc/2pc_sub.zok
+
