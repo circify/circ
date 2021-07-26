@@ -7,6 +7,7 @@ use std::io::{prelude::*, BufRead, BufReader};
 use std::path::Path;
 use std::path::PathBuf;
 
+/// Given PathBuf `path_buf`, return the filename of the path
 fn get_filename(path_buf: PathBuf) -> String {
     Path::new(&path_buf.iter().last().unwrap().to_os_string())
         .file_stem()
@@ -16,12 +17,15 @@ fn get_filename(path_buf: PathBuf) -> String {
         .unwrap()
 }
 
+/// In ABY examples, remove the existing directory and create a directory
+/// in order to write the new test case
 fn create_dir_in_aby(filename: &String) {
     let path = format!("third_party/ABY/src/examples/{}", *filename);
     fs::remove_dir_all(path.clone());
     fs::create_dir_all(format!("{}/common", path.clone())).expect("Failed to create directory");
 }
 
+/// Update the CMake file in ABY
 fn update_cmake_file(filename: &String) {
     let cmake_filename = "third_party/ABY/src/examples/CMakeLists.txt";
     let file = File::open(cmake_filename.clone()).expect("Failed to open cmake file");
@@ -47,6 +51,8 @@ fn update_cmake_file(filename: &String) {
     }
 }
 
+/// Create a CMake file for the corresponding filename (testcase)
+/// in the ABY examples directory
 fn write_test_cmake_file(filename: &String) {
     let path = format!("third_party/ABY/src/examples/{}/CMakeLists.txt", *filename);
 
@@ -63,6 +69,7 @@ fn write_test_cmake_file(filename: &String) {
     .expect("Failed to write to cmake file");
 }
 
+/// Write the testcase in the ABY examples directory
 fn write_test_file(filename: &String) {
     let template = fs::read_to_string("third_party/ABY_templates/test_template.txt")
         .expect("Unable to read file");
@@ -75,6 +82,7 @@ fn write_test_file(filename: &String) {
         .expect("Failed to write to cmake file");
 }
 
+/// Using the h_template.txt, write the .h file for the new test case
 fn write_h_file(filename: &String) {
     let template = fs::read_to_string("third_party/ABY_templates/h_template.txt")
         .expect("Unable to read file");
@@ -87,6 +95,7 @@ fn write_h_file(filename: &String) {
         .expect("Failed to write to cmake file");
 }
 
+/// Using the cpp_template.txt, write the .cpp file for the new test case
 fn write_circ_file(filename: &String, circ: String) {
     let template = fs::read_to_string("third_party/ABY_templates/cpp_template.txt")
         .expect("Unable to read file");
@@ -104,7 +113,7 @@ fn write_circ_file(filename: &String, circ: String) {
     .expect("Failed to write to cmake file");
 }
 
-/// Write circ-aby output to ABY to compile executables
+/// Write circuit output from translation later to ABY
 pub fn write_aby_exec(aby: ABY, path_buf: PathBuf) {
     let filename = get_filename(path_buf);
     create_dir_in_aby(&filename);

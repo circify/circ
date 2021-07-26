@@ -1,7 +1,8 @@
 //! Lowering IR to ABY DSL
-//! https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/ABY_example/common/ezpc.h
+//! [EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/ABY_example/common/ezpc.h)
 
-//! Weird boolean circuit stuff with inv: https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml
+//! Inv gates need to typecast circuit object to boolean circuit
+//! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
 use crate::target::aby::*;
@@ -10,7 +11,6 @@ use std::collections::HashMap;
 const NO_ROLE: u8 = u8::MAX;
 const SERVER: u8 = 0;
 const CLIENT: u8 = 1;
-
 const BOOLEAN_BITLEN: i32 = 1;
 
 #[derive(Clone)]
@@ -29,7 +29,6 @@ struct ToABY {
 }
 
 impl ToABY {
-    // Constructor
     fn new(metadata: ComputationMetadata) -> Self {
         Self {
             aby: ABY::new(),
@@ -41,7 +40,7 @@ impl ToABY {
         }
     }
 
-    // Set-up functions
+    /// Initialize the ABY Party, sharing scheme, and Circuit object
     fn setup(&mut self) {
         self.aby.setup.push("ABYParty* party = new ABYParty(role, address, port, seclvl, bitlen, nthreads, mt_alg);".to_string());
         self.aby
@@ -52,12 +51,16 @@ impl ToABY {
             .push("Circuit* circ = sharings[sharing]->GetCircuitBuildRoutine();".to_string());
     }
 
+    /// Initialize private and public inputs from each party
+    /// Party inputs are stored in *self.inputs*
     fn init_inputs(&mut self) {
         let mut server_inputs = Vec::<&str>::new();
         let mut client_inputs = Vec::<&str>::new();
         let mut public_inputs = Vec::<&str>::new();
         let mut counter = 0;
 
+        // Parse input parameters from command line as uint32_t variables
+        // Initialize shares for each party
         self.inputs_order.reverse();
         for input in self.inputs_order.iter() {
             let visibility = self.inputs.get(input).unwrap();
@@ -82,16 +85,19 @@ impl ToABY {
             counter += 1;
         }
 
+        // Initialize output gate
         self.aby
             .setup
             .push(format!("share *s_{};", self.output_gate).to_string());
 
+        // Initialize public inputs as CONS shares
         for input in public_inputs.iter() {
-            self.aby.setup.push(
-                format!("s_{} = circ->PutCONSGate({}, bitlen);", input, input).to_string(),
-            );
+            self.aby
+                .setup
+                .push(format!("s_{} = circ->PutCONSGate({}, bitlen);", input, input).to_string());
         }
 
+        // Initialize Server inputs
         self.aby.setup.push("if (role == SERVER) {".to_string());
         for input in server_inputs.iter() {
             self.aby.setup.push(
@@ -109,6 +115,7 @@ impl ToABY {
         }
         self.aby.setup.push("}".to_string());
 
+        // Initialize Client inputs
         self.aby.setup.push("if (role == CLIENT) {".to_string());
         for input in client_inputs.iter() {
             self.aby.setup.push(
@@ -127,6 +134,7 @@ impl ToABY {
         self.aby.setup.push("}\n".to_string());
     }
 
+    /// Clean up code to execute circuit, get circuit output, and return
     fn closer(&mut self) {
         self.aby.closer.push("\tparty->ExecCircuit();".to_string());
         self.aby.closer.push(format!(
@@ -137,12 +145,12 @@ impl ToABY {
         self.aby.closer.push("return 0;".to_string());
     }
 
-    // Translation functions
-
+    /// Return constant gate evaluating to 0
     fn zero() -> String {
         format!("circ->PutCONSGate((uint64_t)0, (uint32_t)1)")
     }
 
+    /// Return constant gate evaluating to 1
     fn one() -> String {
         format!("circ->PutCONSGate((uint64_t)1, (uint32_t)1)")
     }
@@ -155,7 +163,9 @@ impl ToABY {
 
                 let s = format!(
                     "circ->PutXORGate(circ->PutXORGate({}, {}), {})",
-                    a, b, ToABY::one()
+                    a,
+                    b,
+                    ToABY::one()
                 );
                 self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
                 s
@@ -174,6 +184,8 @@ impl ToABY {
         }
     }
 
+    /// Given term `t`, type-check `t` is of type Bool and return the variable name for
+    /// `t`
     fn get_bool(&self, t: &Term) -> String {
         match self
             .cache
@@ -227,13 +239,16 @@ impl ToABY {
                 );
             }
             Op::BoolNaryOp(o) => {
-                let a = self.get_bool(&t.cs[1]).clone();
-                let b = self.get_bool(&t.cs[2]).clone();
+                let a = self.get_bool(&t.cs[0]).clone();
+                let b = self.get_bool(&t.cs[1]).clone();
                 match o {
                     BoolNaryOp::Or => {
                         self.cache.insert(
                             t.clone(),
-                            EmbeddedTerm::Bool(format!("circ->PutORGate({}, {})", a, b)),
+                            EmbeddedTerm::Bool(format!(
+                                "((BooleanCircuit *)circ)->PutORGate({}, {})",
+                                a, b
+                            )),
                         );
                     }
                     BoolNaryOp::And => {
@@ -260,7 +275,7 @@ impl ToABY {
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bool(format!(
-                                "circ->OR(circ->PutGTGate({}, {}), {})",
+                                "((BooleanCircuit *)circ)->PutORGate(circ->PutGTGate({}, {}), {})",
                                 a, b, eq
                             )),
                         );
@@ -276,23 +291,15 @@ impl ToABY {
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bool(format!(
-                                "circ->OR(circ->PutXORGate(circ->PutGTGate({}, {}), {}), {})",
-                                a,
-                                b,
-                                ToABY::zero(),
-                                eq
+                                "((BooleanCircuit *)circ)->PutORGate(circ->PutGTGate({}, {}), {})",
+                                b, a, eq
                             )),
                         );
                     }
                     BvBinPred::Ult => {
                         self.cache.insert(
                             t.clone(),
-                            EmbeddedTerm::Bool(format!(
-                                "circ->PutXORGate(circ->PutGTGate({}, {}), {})",
-                                a,
-                                b,
-                                ToABY::zero(),
-                            )),
+                            EmbeddedTerm::Bool(format!("circ->PutGTGate({}, {})", b, a)),
                         );
                     }
                     _ => panic!("Non-field in bool BvBinPred: {}", op),
@@ -304,6 +311,8 @@ impl ToABY {
         self.get_bool(&t)
     }
 
+    /// Given term `t`, type-check `t` is of type Bv and return the variable name for
+    /// `t`
     fn get_bv(&self, t: &Term) -> String {
         match self
             .cache
@@ -361,7 +370,10 @@ impl ToABY {
                     BvNaryOp::Or => {
                         self.cache.insert(
                             t.clone(),
-                            EmbeddedTerm::Bv(format!("circ->PutORGate({}, {})", a, b)),
+                            EmbeddedTerm::Bv(format!(
+                                "((BooleanCircuit *)circ)->PutORGate({}, {})",
+                                a, b
+                            )),
                         );
                     }
                     BvNaryOp::And => {
@@ -420,6 +432,10 @@ impl ToABY {
         output_circ
     }
 
+    /// Given a Circuit `circ`, wrap `circ` in an OUT gate to extract the value of
+    /// the circuit to a share      
+    ///
+    /// Return a String of the resulting Circuit
     fn add_output_gate(&mut self, circ: String) -> String {
         format!(
             "\ts_{} = circ->PutOUTGate({}, ALL);\n",
@@ -428,28 +444,32 @@ impl ToABY {
         )
     }
 
-    fn assert(&mut self, t: Term) {
+    /// Given a term `t`, lower `t` to ABY Circuits
+    fn lower(&mut self, t: Term) {
         let mut output_circ = self.embed(t);
         output_circ = self.add_output_gate(output_circ);
         self.aby.circs.push(output_circ);
     }
 }
 
-/// Convert this (IR) constraint system `cs` to ABY.
-pub fn to_aby(cs: Computation) -> ABY {
+/// Convert this (IR) `ir` to ABY.
+pub fn to_aby(ir: Computation) -> ABY {
     let Computation {
         outputs: terms,
         metadata: md,
         values: _,
-    } = cs;
+    } = ir;
     let mut converter = ToABY::new(md);
 
     converter.setup();
     for t in terms {
         println!("Terms: {}", t);
-        converter.assert(t.clone());
+        converter.lower(t.clone());
     }
 
+    // Iterating and lowering the terms populates self.inputs, which
+    // are the input parameters for the ABY circuit.
+    // Call init_inputs here after self.inputs is populated.
     converter.init_inputs();
     converter.closer();
 

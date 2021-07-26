@@ -1,9 +1,11 @@
-test:
-	cargo test && ./scripts/zokrates_test.zsh
+all: build test 
 
-compile_aby:
-	./scripts/compile_aby.zsh
-	
-test_aby:
-	./scripts/zokrates_test.zsh && ./scripts/compile_aby.zsh && python3 ./scripts/aby_test.py
+build:
+	cargo build --release --example circ && ./scripts/build_aby.zsh
+
+test:
+	cargo test && ./scripts/zokrates_test.zsh && python3 ./scripts/test_aby.py
+
+aby:
+	./scripts/zokrates_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/test_aby.py
 
