@@ -383,9 +383,6 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
 
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
 
-    print("Running test:", server_cmd[0])
-    print("Description:", desc)
-
     try:
         server_proc = Popen(server_cmd, stdout=PIPE, stderr=PIPE)
         client_proc = Popen(client_cmd, stdout=PIPE, stderr=PIPE)
@@ -404,10 +401,8 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
         assert client_out.startswith("output: "), "client output did not start with \"output:\", but instead with: "+client_out
         assert server_out == client_out, "server out != client out\nserver_out: "+server_out+"\nclient_out: "+client_out
         assert server_out == expected, "output != expected\nserver_out: "+server_out+"\nexpected: "+expected
-        print("Pass ✅\n")
         return True
     except Exception as e:
-        print("Fail 🚫\n")
         print("Exception: ", e)
         return False
 
@@ -426,6 +421,7 @@ def main():
         
 
     failed_test_descs = []
+    num_retries = 3
     for test in tests:
         assert len(test) == 5, "test configurations are wrong for test: "+test[0]
         desc = test[0]
@@ -433,8 +429,19 @@ def main():
         path = test[2]
         server_cmd = build_server_cmd(path, test[3])
         client_cmd = build_client_cmd(path, test[4])
-        if not run_test(desc, expected, server_cmd, client_cmd):
+
+        print("Running test:", server_cmd[0])
+        print("Description:", desc)
+
+        test_results = []
+        for i in range(num_retries):
+            test_results.append(run_test(desc, expected, server_cmd, client_cmd))
+        
+        if any(test_results):
+            print("Pass ✅\n")
+        else:
             failed_test_descs.append(desc)
+            print("Fail 🚫\n")
         
     assert len(failed_test_descs) == 0, "there were failed test cases:\n\t- " + "\n\t- ".join(failed_test_descs)
 
