@@ -28,6 +28,6 @@ jobs:
     - name: Check
       run: cargo check --verbose
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose && make build
     - name: Run tests
       run: make test
