@@ -13,4 +13,4 @@ clean:
 	# reset ABY submodule
 	touch ./third_party/ABY/build && rm -r -- ./third_party/ABY/build 
 	touch ./third_party/ABY/src/examples/2pc_* && rm -r -- ./third_party/ABY/src/examples/2pc_* 
-	sed '/add_subdirectory.*2pc.*/d' -i CMakeLists.txt 
+	sed '/add_subdirectory.*2pc.*/d' -i ./third_party/ABY/src/examples/CMakeLists.txt 
