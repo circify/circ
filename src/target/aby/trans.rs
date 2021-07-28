@@ -241,29 +241,26 @@ impl ToABY {
             Op::BoolNaryOp(o) => {
                 let a = self.get_bool(&t.cs[0]).clone();
                 let b = self.get_bool(&t.cs[1]).clone();
-                match o {
-                    BoolNaryOp::Or => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!(
-                                "((BooleanCircuit *)circ)->PutORGate({}, {})",
-                                a, b
-                            )),
-                        );
-                    }
-                    BoolNaryOp::And => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!("circ->PutANDGate({}, {})", a, b)),
-                        );
-                    }
-                    BoolNaryOp::Xor => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!("circ->PutXORGate({}, {})", a, b)),
-                        );
-                    }
+
+                let mut circ = "circ";
+                if *o == BoolNaryOp::Or {
+                    circ = "((BooleanCircuit *)circ)";
                 }
+
+                self.cache.insert(
+                    t.clone(),
+                    EmbeddedTerm::Bool(format!(
+                        "{}->{}({}, {})",
+                        circ,
+                        match o {
+                            BoolNaryOp::Or => "PutORGate",
+                            BoolNaryOp::And => "PutANDGate",
+                            BoolNaryOp::Xor => "PutXORGate"
+                        },
+                        a,
+                        b
+                    )),
+                );
             }
             Op::BvBinPred(op) => {
                 let a = self.get_bv(&t.cs[0]);
@@ -360,41 +357,27 @@ impl ToABY {
                 let a = self.get_bv(&t.cs[0]);
                 let b = self.get_bv(&t.cs[1]);
 
-                match o {
-                    BvNaryOp::Xor => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!("circ->PutXORGate({}, {})", a, b)),
-                        );
-                    }
-                    BvNaryOp::Or => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "((BooleanCircuit *)circ)->PutORGate({}, {})",
-                                a, b
-                            )),
-                        );
-                    }
-                    BvNaryOp::And => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!("circ->PutANDGate({}, {})", a, b)),
-                        );
-                    }
-                    BvNaryOp::Add => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!("circ->PutADDGate({}, {})", a, b)),
-                        );
-                    }
-                    BvNaryOp::Mul => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!("circ->PutMULGate({}, {})", a, b)),
-                        );
-                    }
+                let mut circ = "circ";
+                if *o == BvNaryOp::Or {
+                    circ = "((BooleanCircuit *)circ)";
                 }
+
+                self.cache.insert(
+                    t.clone(),
+                    EmbeddedTerm::Bv(format!(
+                        "{}->{}({}, {})",
+                        circ,
+                        match o {
+                            BvNaryOp::Xor => "PutXORGate",
+                            BvNaryOp::Or => "PutORGate",
+                            BvNaryOp::And => "PutANDGate",
+                            BvNaryOp::Add => "PutADDGate",
+                            BvNaryOp::Mul => "PutMULGate",
+                        },
+                        a,
+                        b
+                    )),
+                );
             }
             Op::BvBinOp(o) => {
                 let a = self.get_bv(&t.cs[0]);

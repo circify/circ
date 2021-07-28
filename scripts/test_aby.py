@@ -184,6 +184,16 @@ arithmetic_boolean_tests = [
     ],
 ]
 
+nary_arithmetic_tests = [
+    [
+        "Test a + b + c",
+        6,
+        "./third_party/ABY/build/bin/2pc_nary_add_test",
+        [1, 0, 0],
+        [0, 2, 3],
+    ],
+]
+
 bitwise_tests = [
     [
         "Bitwise & - 1",
@@ -344,6 +354,24 @@ boolean_tests = [
     ],
 ]
 
+nary_boolean_tests = [
+    [
+        "Test a & b & c - 1",
+        0,
+        "./third_party/ABY/build/bin/2pc_nary_boolean_and_test",
+        [1, 0, 0],
+        [0, 1, 0],
+    ],
+    [
+        "Test a & b & c - 2",
+        1,
+        "./third_party/ABY/build/bin/2pc_nary_boolean_and_test",
+        [1, 0, 0],
+        [0, 1, 1],
+    ],
+]
+
+
 misc_tests = [
     [
         "Millionaire's problem: server has more money than client",
@@ -415,8 +443,10 @@ def main():
     # 5. client arguments: list 
     tests = arithmetic_tests + \
         arithmetic_boolean_tests + \
+        nary_arithmetic_tests + \
         bitwise_tests + \
         boolean_tests + \
+        nary_boolean_tests + \
         misc_tests
         
 

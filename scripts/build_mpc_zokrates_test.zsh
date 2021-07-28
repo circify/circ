@@ -26,6 +26,9 @@ mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_greater_equals.zok
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_less_than.zok
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_less_equals.zok
 
+# build mpc nary arithmetic tests
+mpc_test 2 ./examples/ZoKrates/mpc/nary_arithmetic_tests/2pc_nary_arithmetic_add.zok
+
 # build mpc bitwise tests
 mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_and.zok
 mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_or.zok
@@ -35,6 +38,9 @@ mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_xor.zok
 mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_and.zok
 mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_or.zok
 mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_equals.zok
+
+# build mpc nary boolean tests
+mpc_test 2 ./examples/ZoKrates/mpc/nary_boolean_tests/2pc_nary_boolean_and.zok
 
 # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
