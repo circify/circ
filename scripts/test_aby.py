@@ -188,7 +188,7 @@ nary_arithmetic_tests = [
     [
         "Test a + b + c",
         6,
-        "./third_party/ABY/build/bin/2pc_nary_add_test",
+        "./third_party/ABY/build/bin/2pc_nary_arithmetic_add_test",
         [1, 0, 0],
         [0, 2, 3],
     ],
