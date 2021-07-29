@@ -1,3 +1,0 @@
-
-def main(private<1> field a, private<2> field b, public field v) -> field:
-  return a * b + v

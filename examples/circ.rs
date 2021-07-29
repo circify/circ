@@ -5,6 +5,8 @@ use bls12_381::Scalar;
 use circ::front::zokrates::{Inputs, Mode, Zokrates};
 use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
+use circ::target::aby::output::write_aby_exec;
+use circ::target::aby::trans::to_aby;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use env_logger;
@@ -33,6 +35,7 @@ fn main() {
         .format_timestamp(None)
         .init();
     let options = Options::from_args();
+    let path_buf = options.zokrates_path.clone();
     println!("{:?}", options);
     let mode = match options.parties {
         Some(p) => Mode::Mpc(p),
@@ -77,7 +80,9 @@ fn main() {
             println!("Final R1cs size: {}", r1cs.constraints().len());
         }
         Mode::Mpc(_) => {
-            println!("TODO: add MPC backend");
+            println!("Converting to aby");
+            let aby = to_aby(cs);
+            write_aby_exec(aby, path_buf);
         }
     }
 

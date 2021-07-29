@@ -1,0 +1,3 @@
+
+def main(private<1> u32 a, private<2> u32 b, public u32 v) -> u32:
+  return a * b + v

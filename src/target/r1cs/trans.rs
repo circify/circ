@@ -860,6 +860,7 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
             .map(|c| PostOrderIter::new(c.clone()).count())
             .sum::<usize>()
     );
+    println!("Printing assertions");
     for c in assertions {
         converter.assert(c);
     }

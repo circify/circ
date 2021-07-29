@@ -13,12 +13,6 @@ function r1cs_test {
     time --format='%e seconds %M kB' $BIN $zpath
 }
 
-function mpc_test {
-    parties=$1
-    zpath=$2
-    time --format='%e seconds %M kB' $BIN -p $parties $zpath
-}
-
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOrderCheck.zok
@@ -32,7 +26,3 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/utils/casts/bool_128_to_
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
-
-mpc_test 2 ./examples/ZoKrates/mpc/2pc_mult.zok
-mpc_test 2 ./examples/ZoKrates/mpc/2pc_mult_add_pub.zok
-
