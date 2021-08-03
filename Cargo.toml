@@ -26,6 +26,7 @@ bellman = "0.9"
 ff = "0.9"
 funty = "=1.1"
 ahash = "0.7"
+lp-modeler = "0.5"
 
 [dev-dependencies]
 quickcheck = "1"
