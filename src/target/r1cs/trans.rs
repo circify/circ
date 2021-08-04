@@ -868,7 +868,7 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
 }
 
 // Returns the number of bits needed to hold n.
-fn bitsize(mut n: usize) -> usize {
+pub fn bitsize(mut n: usize) -> usize {
     let mut acc = 0;
     while n > 0 {
         n >>= 1;
@@ -878,7 +878,7 @@ fn bitsize(mut n: usize) -> usize {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use crate::ir::proof::Constraints;
     use crate::ir::term::dist::test::*;
@@ -916,7 +916,7 @@ mod test {
     }
 
     #[derive(Clone, Debug)]
-    struct PureBool(Term, AHashMap<String, Value>);
+    pub struct PureBool(pub Term, pub AHashMap<String, Value>);
 
     impl Arbitrary for PureBool {
         fn arbitrary(g: &mut Gen) -> Self {

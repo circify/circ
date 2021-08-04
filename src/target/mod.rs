@@ -3,4 +3,4 @@
 pub mod aby;
 pub mod r1cs;
 pub mod smt;
-pub mod milp;
+pub mod ilp;
