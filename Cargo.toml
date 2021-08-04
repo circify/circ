@@ -26,6 +26,8 @@ bellman = "0.9"
 ff = "0.9"
 funty = "=1.1"
 ahash = "0.7"
+good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false }
+lp-solvers = "0.0.4"
 
 [dev-dependencies]
 quickcheck = "1"
