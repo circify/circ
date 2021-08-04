@@ -8,10 +8,19 @@ cargo build --release --example circ
 
 BIN=./target/release/examples/circ
 
+case "$OSTYPE" in 
+    darwin*)
+        alias measure_time="gtime --format='%e seconds %M kB'"
+    ;;
+    linux*)
+        alias measure_time="time --format='%e seconds %M kB'"
+    ;;
+esac
+
 function mpc_test {
     parties=$1
     zpath=$2
-    RUST_BACKTRACE=1 time --format='%e seconds %M kB' $BIN -p $parties $zpath
+    RUST_BACKTRACE=1 measure_time $BIN -p $parties $zpath
 }
 
 # build mpc arithmetic tests

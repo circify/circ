@@ -8,9 +8,18 @@ cargo build --release --example circ
 
 BIN=./target/release/examples/circ
 
+case "$OSTYPE" in 
+    darwin*)
+        alias measure_time="gtime --format='%e seconds %M kB'"
+    ;;
+    linux*)
+        alias measure_time="time --format='%e seconds %M kB'"
+    ;;
+esac
+
 function r1cs_test {
     zpath=$1
-    time --format='%e seconds %M kB' $BIN $zpath
+    measure_time $BIN $zpath
 }
 
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
