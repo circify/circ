@@ -61,17 +61,20 @@ impl Ilp {
     pub fn solve<M: SolverModel<Error = ResolutionError>, S: Solver<Model = M>>(
         self,
         s: S,
-    ) -> Result<HashMap<String, f64>, IlpUnsat> {
+    ) -> Result<(f64, HashMap<String, f64>), IlpUnsat> {
+        let max = self.maximize.clone();
         let mut prob = self.variables.maximise(self.maximize).using(s);
         for c in self.constraints {
             prob = prob.with(c);
         }
         match prob.solve() {
-            Ok(s) => Ok(self
-                .var_names
-                .into_iter()
-                .map(|(name, v)| (name, s.value(v)))
-                .collect()),
+            Ok(s) => Ok((
+                s.eval(max),
+                self.var_names
+                    .into_iter()
+                    .map(|(name, v)| (name, s.value(v)))
+                    .collect(),
+            )),
             Err(ResolutionError::Unbounded) => Err(IlpUnsat::Unbounded),
             Err(ResolutionError::Infeasible) => Err(IlpUnsat::Infeasible),
             Err(e) => panic!("Error in solving: {}", e),
@@ -149,7 +152,7 @@ mod test {
         vars.new_constraint(a << 5.0);
         vars.new_constraint(b << 5.0);
         vars.new_constraint(c << 2.0);
-        let solution = vars.solve(s).unwrap();
+        let (_max, solution) = vars.solve(s).unwrap();
         assert_eq!(solution.get("a").unwrap(), &1.0);
         assert_eq!(solution.get("b").unwrap(), &5.0);
         assert_eq!(solution.get("c").unwrap(), &2.0);

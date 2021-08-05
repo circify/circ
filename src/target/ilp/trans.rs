@@ -435,9 +435,6 @@ impl ToMilp {
                     _ => panic!("Non-bv in embed_bv: {}", Letified(bv)),
                 }
             }
-        //self.r1cs.eval(self.get_bv_uint(&bv2)).map(|v| {
-        //    println!("-> {:b}", v);
-        //});
         } else {
             panic!("{} is not a bit-vector in embed_bv", bv);
         }
@@ -665,6 +662,9 @@ pub fn to_ilp(cs: Computation) -> Ilp {
         Sort::Bool => {
             converter.ilp.maximize(converter.get_bool(&opt).clone());
         }
+        Sort::BitVector(_) => {
+            converter.ilp.maximize(converter.get_bv_uint(&opt).clone());
+        }
         s => panic!("Cannot optimize term of sort {}", s),
     };
     converter.ilp
@@ -675,8 +675,9 @@ mod test {
     use super::*;
     use crate::ir::proof::Constraints;
     use crate::ir::term::test as test_vecs;
-    use crate::target::r1cs::trans::test::PureBool;
+    use crate::target::r1cs::trans::test::{bv, PureBool};
     use ahash::AHashSet;
+    use approx::assert_abs_diff_eq;
     use good_lp::default_solver;
     use quickcheck_macros::quickcheck;
 
@@ -702,7 +703,7 @@ mod test {
             values: None,
         };
         let ilp = to_ilp(cs);
-        let r = ilp.solve(default_solver).unwrap();
+        let r = ilp.solve(default_solver).unwrap().1;
         assert_eq!(r.get("a").unwrap(), &1.0);
         assert_eq!(r.get("b").unwrap(), &0.0);
     }
@@ -739,7 +740,7 @@ mod test {
             }
         }
         let r = ilp.solve(default_solver);
-        let solution = r.unwrap();
+        let solution = r.unwrap().1;
         for (v, val) in &values {
             match val {
                 Value::Bool(true) => {
@@ -835,5 +836,85 @@ mod test {
     #[test]
     fn bv_uext_test() {
         test_vecs::bv_uext_tests().into_iter().for_each(const_test)
+    }
+
+    #[test]
+    fn trivial_bv_opt() {
+        let cs = Computation {
+            outputs: vec![leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let ilp = to_ilp(cs);
+        let (max, vars) = ilp.solve(default_solver).unwrap();
+        assert_eq!(max, 15.0);
+        assert_eq!(vars.get("a").unwrap(), &15.0);
+    }
+
+    #[test]
+    fn mul1_bv_opt() {
+        let cs = Computation {
+            outputs: vec![term![BV_MUL;
+                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
+                bv(1,4)
+            ]],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let ilp = to_ilp(cs);
+        let (max, vars) = ilp.solve(default_solver).unwrap();
+        assert_abs_diff_eq!(max, 15.0, epsilon = 0.2);
+        assert_abs_diff_eq!(vars.get("a").unwrap(), &15.0, epsilon = 0.2);
+    }
+    #[test]
+    fn mul2_bv_opt() {
+        let cs = Computation {
+            outputs: vec![term![BV_MUL;
+                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
+                bv(2,4)
+            ]],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let ilp = to_ilp(cs);
+        let (max, _vars) = ilp.solve(default_solver).unwrap();
+        assert_abs_diff_eq!(max, 14.0, epsilon = 0.2);
+    }
+    #[test]
+    fn mul2_plus_bv_opt() {
+        let cs = Computation {
+            outputs: vec![term![BV_ADD;
+                term![BV_MUL;
+                    leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
+                    bv(2,4)
+                ],
+
+                    leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))
+            ]],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let ilp = to_ilp(cs);
+        let (max, vars) = ilp.solve(default_solver).unwrap();
+        assert_abs_diff_eq!(max, 15.0, epsilon = 0.2);
+        assert_abs_diff_eq!(vars.get("a").unwrap(), &5.0, epsilon = 0.2);
+    }
+    #[test]
+    fn ite_bv_opt() {
+        let a = leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)));
+        let c = leaf_term(Op::Var("c".to_owned(), Sort::Bool));
+        let cs = Computation {
+            outputs: vec![term![BV_ADD;
+                term![ITE; c, bv(2,4), bv(1,4)],
+                term![BV_MUL; a, bv(2,4)]
+                ],
+            ],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let ilp = to_ilp(cs);
+        let (max, vars) = ilp.solve(default_solver).unwrap();
+        assert_abs_diff_eq!(max, 15.0, epsilon = 0.2);
+        assert_abs_diff_eq!(vars.get("c").unwrap(), &0.0, epsilon = 0.2);
     }
 }
