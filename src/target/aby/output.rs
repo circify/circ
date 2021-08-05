@@ -21,7 +21,7 @@ fn get_filename(path_buf: PathBuf) -> String {
 /// in order to write the new test case
 fn create_dir_in_aby(filename: &String) {
     let path = format!("third_party/ABY/src/examples/{}", *filename);
-    fs::remove_dir_all(path.clone());
+    let _ = fs::remove_dir_all(path.clone());
     fs::create_dir_all(format!("{}/common", path.clone())).expect("Failed to create directory");
 }
 

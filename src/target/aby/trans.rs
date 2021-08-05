@@ -146,6 +146,7 @@ impl ToABY {
     }
 
     /// Return constant gate evaluating to 0
+    #[allow(dead_code)]
     fn zero() -> String {
         format!("circ->PutCONSGate((uint64_t)0, (uint32_t)1)")
     }

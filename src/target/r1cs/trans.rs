@@ -867,7 +867,7 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
     converter.r1cs
 }
 
-// Returns the number of bits needed to hold n.
+/// Returns the number of bits needed to hold `n`.
 pub fn bitsize(mut n: usize) -> usize {
     let mut acc = 0;
     while n > 0 {
