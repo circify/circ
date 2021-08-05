@@ -7,6 +7,7 @@ use good_lp::{
     Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver, SolverModel,
     Variable, VariableDefinition,
 };
+use log::debug;
 
 /// An integer linear program
 pub struct Ilp {
@@ -35,11 +36,13 @@ impl Ilp {
     pub fn new_variable(&mut self, defn: VariableDefinition, name: String) -> Variable {
         let defn = defn.name(&name);
         let v = self.variables.add(defn);
-        self.var_names.insert(name, v);
+        self.var_names.insert(name.clone(), v);
+        debug!("Variable: {} -> {:?}", name, v);
         v
     }
     /// Add a constraint.
     pub fn new_constraint(&mut self, c: Constraint) {
+        debug!("Constraint: {:?}", c);
         self.constraints.push(c);
     }
     /// Add a constraint.

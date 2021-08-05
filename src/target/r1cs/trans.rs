@@ -513,7 +513,6 @@ impl ToR1cs {
                         self.set_bv_uint(bv, neg_x, n);
                     }
                     Op::BvUext(extra_n) => {
-                        // TODO: carry over bits if possible.
                         if self.bv_has_bits(&bv.cs[0]) {
                             let bits = self.get_bv_bits(&bv.cs[0]);
                             let ext_bits = std::iter::repeat(self.r1cs.zero()).take(*extra_n);
@@ -1027,7 +1026,8 @@ pub mod test {
         r1cs2.check_all();
     }
 
-    fn bv(u: usize, w: usize) -> Term {
+    /// A bit-vector literal with value `u` and size `w`
+    pub fn bv(u: usize, w: usize) -> Term {
         leaf_term(Op::Const(Value::BitVector(BitVector::new(
             Integer::from(u),
             w,
