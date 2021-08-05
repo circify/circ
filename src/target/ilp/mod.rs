@@ -1,0 +1,159 @@
+//! Mixed ILP backend
+
+pub mod trans;
+
+use ahash::AHashMap as HashMap;
+use good_lp::{
+    Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver, SolverModel,
+    Variable, VariableDefinition,
+};
+
+/// An integer linear program
+pub struct Ilp {
+    /// Map from names to variables
+    pub var_names: HashMap<String, Variable>,
+    /// The variables
+    variables: ProblemVariables,
+    /// The constraints
+    constraints: Vec<Constraint>,
+    /// The optimization objective (to maximize)
+    maximize: Expression,
+}
+
+impl Ilp {
+    /// Create an empty ILP
+    pub fn new() -> Self {
+        Self {
+            var_names: HashMap::new(),
+            variables: ProblemVariables::new(),
+            constraints: Vec::new(),
+            maximize: Expression::from(0),
+        }
+    }
+    /// Create a new variable. `defn` can specify bounds, etc. See [VariableDefinition], which can
+    /// be built using [good_lp::variable].
+    pub fn new_variable(&mut self, defn: VariableDefinition, name: String) -> Variable {
+        let defn = defn.name(&name);
+        let v = self.variables.add(defn);
+        self.var_names.insert(name, v);
+        v
+    }
+    /// Add a constraint.
+    pub fn new_constraint(&mut self, c: Constraint) {
+        self.constraints.push(c);
+    }
+    /// Add a constraint.
+    pub fn new_constraints(&mut self, c: impl IntoIterator<Item = Constraint>) {
+        self.constraints.extend(c);
+    }
+    /// Get constraints
+    pub fn constraints(&self) -> &[Constraint] {
+        &self.constraints
+    }
+    /// Set maximization objective
+    pub fn maximize(&mut self, e: Expression) {
+        self.maximize = e;
+    }
+    /// Solve, using `s`.
+    pub fn solve<M: SolverModel<Error = ResolutionError>, S: Solver<Model = M>>(
+        self,
+        s: S,
+    ) -> Result<HashMap<String, f64>, IlpUnsat> {
+        let mut prob = self.variables.maximise(self.maximize).using(s);
+        for c in self.constraints {
+            prob = prob.with(c);
+        }
+        match prob.solve() {
+            Ok(s) => Ok(self
+                .var_names
+                .into_iter()
+                .map(|(name, v)| (name, s.value(v)))
+                .collect()),
+            Err(ResolutionError::Unbounded) => Err(IlpUnsat::Unbounded),
+            Err(ResolutionError::Infeasible) => Err(IlpUnsat::Infeasible),
+            Err(e) => panic!("Error in solving: {}", e),
+        }
+    }
+}
+
+/// Why the ILP could not be solved
+#[derive(Debug)]
+pub enum IlpUnsat {
+    /// The objective can be arbitrarily maximized
+    Unbounded,
+    /// No solutions to the constraints
+    Infeasible,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use good_lp::{
+        default_solver, solvers::lp_solvers::SolverTrait, variable, ProblemVariables, Solution,
+        SolverModel,
+    };
+
+    #[test]
+    fn simple() {
+        let mut vars = ProblemVariables::new();
+        let a = vars.add(variable().name("a").binary());
+        let b = vars.add(variable().name("b").integer().max(10));
+        let c = vars.add(variable().name("c").max(10));
+        let solution = vars
+            .maximise(a + b + c)
+            .using(default_solver)
+            .with(a + b << 30.0)
+            .solve()
+            .unwrap();
+        assert_eq!(solution.value(a), 1.0);
+        assert_eq!(solution.value(b), 10.0);
+        assert_eq!(solution.value(c), 10.0);
+    }
+
+    fn test_solver<S: SolverTrait + Clone>(s: S) {
+        let mut vars = ProblemVariables::new();
+        let a = vars.add(variable().name("a").binary());
+        let b = vars.add(variable().name("b").integer().max(10));
+        let c = vars.add(variable().name("c").max(10));
+        let solution = vars
+            .maximise(a + b + c)
+            .using(good_lp::solvers::lp_solvers::LpSolver(s))
+            .with(a + b << 30.0)
+            .solve()
+            .unwrap();
+        assert_eq!(solution.value(a), 1.0);
+        assert_eq!(solution.value(b), 10.0);
+        assert_eq!(solution.value(c), 10.0);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_cbc() {
+        test_solver(good_lp::solvers::lp_solvers::CbcSolver::new());
+    }
+    #[test]
+    #[ignore]
+    fn test_glpk() {
+        test_solver(good_lp::solvers::lp_solvers::GlpkSolver::new());
+    }
+
+    fn test_solver_our_ilp<M: SolverModel<Error = ResolutionError>, S: Solver<Model = M>>(s: S) {
+        let mut vars = Ilp::new();
+        let a = vars.new_variable(variable().binary(), "a".into());
+        let b = vars.new_variable(variable().integer().max(10), "b".into());
+        let c = vars.new_variable(variable().max(10), "c".into());
+        vars.maximize(a + b + c);
+        vars.new_constraint(a << 5.0);
+        vars.new_constraint(b << 5.0);
+        vars.new_constraint(c << 2.0);
+        let solution = vars.solve(s).unwrap();
+        assert_eq!(solution.get("a").unwrap(), &1.0);
+        assert_eq!(solution.get("b").unwrap(), &5.0);
+        assert_eq!(solution.get("c").unwrap(), &2.0);
+    }
+
+    #[test]
+    fn test_our_ilp_with_default_solver() {
+        test_solver_our_ilp(default_solver)
+    }
+}
