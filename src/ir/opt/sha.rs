@@ -98,6 +98,37 @@ pub fn sha_rewrites(term_: &Term) -> Term {
     cache.get(&term_).unwrap().clone()
 }
 
+/// Eliminate the SHA majority operator, replacing it with ands and ors.
+pub fn sha_maj_elim(term_: &Term) -> Term {
+    // what does a term rewrite to?
+    let mut cache = TermMap::<Term>::new();
+    for t in PostOrderIter::new(term_.clone()) {
+        let c_get = |x: &Term| cache.get(x).unwrap();
+        let get = |i: usize| c_get(&t.cs[i]);
+        let new_t = match &t.op {
+            // maj(a, b, c) = (a & b) | (b & c) | (c & a)
+            &Op::BoolMaj => {
+                let a = get(0);
+                let b = get(1);
+                let c = get(2);
+                let ab = term![AND; a.clone(), b.clone()];
+                let bc = term![AND; b.clone(), c.clone()];
+                let ca = term![AND; c.clone(), a.clone()];
+                Some(term![OR; ab, bc, ca])
+            }
+            _ => None,
+        };
+        let new_t = new_t.unwrap_or_else(|| {
+            term(
+                t.op.clone(),
+                t.cs.iter().map(|c| cache.get(c).unwrap().clone()).collect(),
+            )
+        });
+        cache.insert(t, new_t);
+    }
+    cache.get(&term_).unwrap().clone()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -135,6 +166,16 @@ mod test {
         term![BOOL_TO_BV; term![ITE; term![Op::BvBit(0); a], term![Op::BvBit(0); b], term![Op::BvBit(0); c]]]
         ];
         assert_eq!(tt, sha_rewrites(&t));
+    }
+
+    #[test]
+    fn undo() {
+        let a = bv_lit(0, 1);
+        let b = bv_lit(0, 1);
+        let c = bv_lit(0, 1);
+        let t = term![Op::BoolMaj; a.clone(), b.clone(),c.clone()];
+        let tt = term![OR; term![AND; a.clone(), b.clone()], term![AND; b.clone(), c.clone()], term![AND; c.clone(), a.clone()]];
+        assert_eq!(tt, sha_maj_elim(&t));
     }
 
     #[quickcheck]
