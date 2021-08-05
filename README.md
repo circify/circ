@@ -16,6 +16,9 @@ Developing CirC requires the CVC4 SMT solver, which is used in some tests. Its
 binary must be on your path. On Arch Linux and Ubuntu you can install the
 `cvc4` package from official repositories.
 
+You'll also need the COIN-OR CBC solver. On Arch linux, this is `coin-or-cbc`.
+On Ubuntu `coinor-cbc` and `coinor-libcbc-dev`.
+
 You'll also need a Rust nightly compiler. You can set the nightly channel as
 Rust's default for the circ directory by running `rustup override set nightly`
 in it.
