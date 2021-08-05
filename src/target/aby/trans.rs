@@ -256,7 +256,7 @@ impl ToABY {
                         match o {
                             BoolNaryOp::Or => "PutORGate",
                             BoolNaryOp::And => "PutANDGate",
-                            BoolNaryOp::Xor => "PutXORGate"
+                            BoolNaryOp::Xor => "PutXORGate",
                         },
                         a,
                         b

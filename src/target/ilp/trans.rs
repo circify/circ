@@ -90,7 +90,10 @@ impl ToMilp {
         let (sum, ct) = xs
             .into_iter()
             .fold((Expression::from(0), 0), |(acc, n), x| (acc + x, n + 1));
-        self.bit_decomp(&sum, bitsize(ct)).into_iter().next().unwrap()
+        self.bit_decomp(&sum, bitsize(ct))
+            .into_iter()
+            .next()
+            .unwrap()
     }
 
     /// Returns a bit decomposition of e, with the ones place in index 0.
