@@ -9,7 +9,11 @@ use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+use circ::target::ilp::{
+    trans::to_ilp
+};
 use env_logger;
+use good_lp::default_solver;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -27,6 +31,10 @@ struct Options {
     /// Number of parties for an MPC. If missing, generates a proof circuit.
     #[structopt(short, long, name = "PARTIES")]
     parties: Option<u8>,
+
+    /// Whether to maximize the output
+    #[structopt(short, long)]
+    maximize: bool,
 }
 
 fn main() {
@@ -37,9 +45,13 @@ fn main() {
     let options = Options::from_args();
     let path_buf = options.zokrates_path.clone();
     println!("{:?}", options);
-    let mode = match options.parties {
-        Some(p) => Mode::Mpc(p),
-        None => Mode::Proof,
+    let mode = if options.maximize {
+        Mode::Opt
+    } else {
+        match options.parties {
+            Some(p) => Mode::Mpc(p),
+            None => Mode::Proof,
+        }
     };
     let inputs = Inputs {
         file: options.zokrates_path,
@@ -48,6 +60,10 @@ fn main() {
     };
     let cs = Zokrates::gen(inputs);
     let cs = match mode {
+        Mode::Opt => opt(
+            cs,
+            vec![Opt::ConstantFold],
+        ),
         Mode::Mpc(_) => opt(
             cs,
             vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
@@ -83,6 +99,18 @@ fn main() {
             println!("Converting to aby");
             let aby = to_aby(cs);
             write_aby_exec(aby, path_buf);
+        }
+        Mode::Opt => {
+            println!("Converting to ilp");
+            let ilp = to_ilp(cs);
+            let solver_result = ilp.solve(default_solver);
+            let (max, vars) = solver_result.expect("ILP could not be solved");
+            println!("Max value: {}", max.round() as u64);
+            println!("Assignment:");
+            
+            for (var, val) in &vars {
+                println!("  {}: {}", var, val.round() as u64);
+            }
         }
     }
 
