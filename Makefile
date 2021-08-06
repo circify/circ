@@ -4,7 +4,7 @@ build: init
 	cargo build --release --example circ && ./scripts/build_mpc_zokrates_test.zsh && ./scripts/build_aby.zsh
 
 test:
-	cargo test && ./scripts/zokrates_test.zsh && python3 ./scripts/test_aby.py
+	cargo test && ./scripts/zokrates_test.zsh && python3 ./scripts/test_aby.py && ./scripts/test_zok_to_ilp.zsh
 
 init:
 	git submodule update --init
