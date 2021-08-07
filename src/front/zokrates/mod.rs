@@ -10,7 +10,7 @@ use crate::ir::term::*;
 use log::debug;
 use rug::Integer;
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use zokrates_pest_ast as ast;
@@ -49,9 +49,20 @@ pub enum Mode {
     Mpc(u8),
     /// Generating for a proof circuit. Inputs are public of private (to the prover).
     Proof,
+    /// Generating for an optimization circuit. Inputs are existentially quantified.
+    /// There should be only one output, which will be maximized.
+    Opt,
 }
 
-impl Mode {}
+impl Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            &Mode::Mpc(n) => write!(f, "{}-pc", n),
+            &Mode::Proof => write!(f, "proof"),
+            &Mode::Opt => write!(f, "opt"),
+        }
+    }
+}
 
 /// The ZoKrates front-end. Implements [FrontEnd].
 pub struct Zokrates;
@@ -473,6 +484,25 @@ impl<'ast> ZGen<'ast> {
                     self.circ
                         .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
                 }
+                Mode::Opt => {
+                    let ret_term = r.unwrap_term();
+                    let ret_terms = ret_term.terms();
+                    assert!(ret_terms.len() == 1, "When compiling to optimize, there can only be one output");
+                    let t = ret_terms.into_iter().next().unwrap();
+                    match check(&t) {
+                        Sort::BitVector(_) => {
+                        }
+                        s => {
+                            panic!("Cannot maximize output of type {}", s)
+                        }
+                    }
+                    self.circ
+                        .cir_ctx()
+                        .cs
+                        .borrow_mut()
+                        .outputs
+                        .push(t);
+                }
             }
         }
     }
@@ -480,10 +510,13 @@ impl<'ast> ZGen<'ast> {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS.clone(),
             Some(ast::Visibility::Private(private)) => match self.mode {
-                Mode::Proof => {
+                Mode::Proof | Mode::Opt => {
                     if private.number.is_some() {
                         self.err(
-                            "Party number found, but we're generating a proof circuit",
+                            format!(
+                                "Party number found, but we're generating a {} circuit",
+                                self.mode
+                            ),
                             &private.span,
                         );
                     }
