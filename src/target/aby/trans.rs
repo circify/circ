@@ -148,12 +148,12 @@ impl ToABY {
     /// Return constant gate evaluating to 0
     #[allow(dead_code)]
     fn zero() -> String {
-        format!("circ->PutCONSGate((uint64_t)0, (uint32_t)1)")
+        format!("circ->PutCONSGate((uint32_t)0, (uint32_t)1)")
     }
 
     /// Return constant gate evaluating to 1
     fn one() -> String {
-        format!("circ->PutCONSGate((uint64_t)1, (uint32_t)1)")
+        format!("circ->PutCONSGate((uint32_t)1, (uint32_t)1)")
     }
 
     fn embed_eq(&mut self, t: Term, a: &Term, b: &Term) -> String {
@@ -215,8 +215,9 @@ impl ToABY {
                 self.cache.insert(
                     t.clone(),
                     EmbeddedTerm::Bool(format!(
-                        "circ->PutCONSGate((uint64_t){}, (uint32_t){})",
-                        *b as isize, BOOLEAN_BITLEN
+                        "circ->PutCONSGate((uint32_t){}, (uint32_t){})",
+                        *b as isize, 
+                        BOOLEAN_BITLEN
                     )),
                 );
             }
@@ -336,11 +337,12 @@ impl ToABY {
                 }
             }
             Op::Const(Value::BitVector(b)) => {
+                println!("BV: {}", b);
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "circ->PutCONSGate((uint64_t){}, (uint32_t){})",
-                        b,
+                    EmbeddedTerm::Bv(format!(
+                        "circ->PutCONSGate((uint32_t){}, (uint32_t){})",
+                        format!("{}", b).replace("#", "0"),
                         b.width()
                     )),
                 );
@@ -351,7 +353,7 @@ impl ToABY {
                 let b = self.get_bv(&t.cs[2]).clone();
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!("circ->PutMUXGate({}, {}, {})", a, b, sel)),
+                    EmbeddedTerm::Bv(format!("circ->PutMUXGate({}, {}, {})", a, b, sel)),
                 );
             }
             Op::BvNaryOp(o) => {

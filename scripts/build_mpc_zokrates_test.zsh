@@ -51,5 +51,9 @@ mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_equals.zok
 # build mpc nary boolean tests
 mpc_test 2 ./examples/ZoKrates/mpc/nary_boolean_tests/2pc_nary_boolean_and.zok
 
+# build mpc const tests
+mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_arith.zok
+mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_bool.zok
+
 # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
