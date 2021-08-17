@@ -371,6 +371,30 @@ nary_boolean_tests = [
     ],
 ]
 
+const_tests = [
+    [
+        "Test add client int + server int to const value",
+        6,
+        "./third_party/ABY/build/bin/2pc_const_arith_test",
+        [2, 0],
+        [0, 3],
+    ], 
+    [
+        "Test server value == const value - 1",
+        0,
+        "./third_party/ABY/build/bin/2pc_const_bool_test",
+        [0, 0],
+        [0, 0],
+    ], 
+    [
+        "Test server value == const value - 2",
+        1,
+        "./third_party/ABY/build/bin/2pc_const_bool_test",
+        [1, 0],
+        [0, 0],
+    ], 
+]
+
 
 misc_tests = [
     [
@@ -447,6 +471,7 @@ def main():
         bitwise_tests + \
         boolean_tests + \
         nary_boolean_tests + \
+        const_tests + \
         misc_tests
         
 
