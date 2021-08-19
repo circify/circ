@@ -1,0 +1,2 @@
+def main(private<1> u32 a, private<2> u32 b, public bool sel) -> u32:
+    return if sel then a else b fi 
