@@ -371,6 +371,7 @@ nary_boolean_tests = [
     ],
 ]
 
+
 const_tests = [
     [
         "Test add client int + server int to const value",
@@ -393,6 +394,37 @@ const_tests = [
         {"a": 1, "b": 0},
         {"a": 0, "b": 0},
     ], 
+]
+
+ite_tests = [
+    [
+        "Test ite ret bool - 1",
+        0,
+        "./third_party/ABY/build/bin/2pc_ite_ret_bool_test",
+        {"a": 0, "b": 0, "sel": 1},
+        {"a": 0, "b": 1, "sel": 1},
+    ],
+    [
+        "Test ite ret bool - 2",
+        1,
+        "./third_party/ABY/build/bin/2pc_ite_ret_bool_test",
+        {"a": 0, "b": 0, "sel": 0},
+        {"a": 0, "b": 1, "sel": 0},
+    ],
+        [
+        "Test ite ret int - 1",
+        32,
+        "./third_party/ABY/build/bin/2pc_ite_ret_int_test",
+        {"a": 32, "b": 0, "sel": 1},
+        {"a": 0, "b": 45, "sel": 1},
+    ],
+    [
+        "Test ite ret int - 2",
+        45,
+        "./third_party/ABY/build/bin/2pc_ite_ret_int_test",
+        {"a": 32, "b": 0, "sel": 0},
+        {"a": 0, "b": 45, "sel": 0},
+    ],
 ]
 
 
@@ -480,6 +512,7 @@ def main():
         boolean_tests + \
         nary_boolean_tests + \
         const_tests + \
+        ite_tests + \
         misc_tests
         
 
