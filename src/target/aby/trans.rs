@@ -23,7 +23,6 @@ struct ToABY {
     aby: ABY,
     md: ComputationMetadata,
     inputs: HashMap<String, Option<PartyId>>,
-    inputs_order: Vec<String>,
     cache: TermMap<EmbeddedTerm>,
     output_gate: String,
 }
@@ -34,7 +33,6 @@ impl ToABY {
             aby: ABY::new(),
             md: metadata,
             inputs: HashMap::new(),
-            inputs_order: Vec::new(),
             cache: TermMap::new(),
             output_gate: "out".to_string(),
         }
@@ -51,38 +49,43 @@ impl ToABY {
             .push("Circuit* circ = sharings[sharing]->GetCircuitBuildRoutine();".to_string());
     }
 
+    /// Parse variable name from IR representation of a variable
+    fn parse_var_name(&self, full_name: String) -> String {
+        let parsed: Vec::<String> = full_name.split("_").map(str::to_string).collect();
+        if parsed.len() < 2 {
+            panic!("Invalid variable name: {}", full_name);
+        }
+        parsed[parsed.len() - 2].to_string()
+    }
+
     /// Initialize private and public inputs from each party
     /// Party inputs are stored in *self.inputs*
     fn init_inputs(&mut self) {
         let mut server_inputs = Vec::<&str>::new();
         let mut client_inputs = Vec::<&str>::new();
         let mut public_inputs = Vec::<&str>::new();
-        let mut counter = 0;
 
         // Parse input parameters from command line as uint32_t variables
         // Initialize shares for each party
-        self.inputs_order.reverse();
-        for input in self.inputs_order.iter() {
-            let visibility = self.inputs.get(input).unwrap();
+        for (name, party) in self.inputs.iter() {
             self.aby.setup.push(format!(
-                "uint32_t {} = std::atoi(params[{}].c_str());",
-                input.to_string(),
-                counter
+                "uint32_t {} = std::atoi(params[\"{}\"].c_str());",
+                name,
+                self.parse_var_name(name.to_string())
             ));
             self.aby
                 .setup
-                .push(format!("share *s_{};", input).to_string());
-            let role = visibility.unwrap_or_else(|| NO_ROLE);
+                .push(format!("share *s_{};", name).to_string());
+            let role = party.unwrap_or_else(|| NO_ROLE);
             if role == SERVER {
-                server_inputs.push(input);
+                server_inputs.push(name);
             } else if role == CLIENT {
-                client_inputs.push(input);
-            } else if role != SERVER && role != CLIENT && self.md.is_input_public(&input) {
-                public_inputs.push(input);
+                client_inputs.push(name);
+            } else if role != SERVER && role != CLIENT && self.md.is_input_public(&name) {
+                public_inputs.push(name);
             } else {
-                panic!("Unknown role or visibility for input: {}", input);
+                panic!("Unknown role or visibility for variable: {}", name);
             }
-            counter += 1;
         }
 
         // Initialize output gate
@@ -204,7 +207,6 @@ impl ToABY {
                 if !self.inputs.contains_key(name) {
                     self.inputs
                         .insert(name.to_string(), *self.md.inputs.get(name).unwrap());
-                    self.inputs_order.push(name.to_string());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache
@@ -329,7 +331,6 @@ impl ToABY {
                 if !self.inputs.contains_key(name) {
                     self.inputs
                         .insert(name.to_string(), *self.md.inputs.get(name).unwrap());
-                    self.inputs_order.push(name.to_string());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache

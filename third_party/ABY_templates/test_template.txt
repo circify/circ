@@ -45,7 +45,7 @@ int32_t read_test_options(int32_t* argcp, char*** argvp, e_role* role,
 	return 1;
 }
 
-std::vector<std::string> split_str(std::string s, std::string del = ",") {
+std::map<std::string, std::string> parameters_to_map(std::string s, std::string del = ",") {
 	std::vector<std::string> v = {};
 	int start = 0;
     int end = s.find(del);
@@ -55,7 +55,14 @@ std::vector<std::string> split_str(std::string s, std::string del = ",") {
         end = s.find(del, start);
     }
     v.push_back(s.substr(start, end - start));
-	return v;
+
+	std::map<std::string, std::string> m;
+	for (int i = 0; i < v.size(); i += 2) {
+		if (i+1 < v.size()) {
+			m[v[i]] = v[i+1];
+		}
+	}
+	return m;
 }
 
 int main(int argc, char** argv) {
@@ -73,7 +80,7 @@ int main(int argc, char** argv) {
 
 	seclvl seclvl = get_sec_lvl(secparam);
 
-	std::vector<std::string> params = split_str(parameters, ",");
+	std::map<std::string, std::string> params = parameters_to_map(parameters, ",");
 
 	test_{fn}_circuit(params, role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_BOOL);
