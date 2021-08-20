@@ -272,12 +272,11 @@ impl ToABY {
 
                 match op {
                     BvBinPred::Uge => {
-                        let eq = self.embed_eq(t.clone(), &t.cs[0], &t.cs[1]);
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bool(format!(
-                                "((BooleanCircuit *)circ)->PutORGate(circ->PutGTGate({}, {}), {})",
-                                a, b, eq
+                                "((BooleanCircuit *)circ)->PutINVGate(circ->PutGTGate({}, {}))",
+                                b, a
                             )),
                         );
                     }
@@ -288,12 +287,11 @@ impl ToABY {
                         );
                     }
                     BvBinPred::Ule => {
-                        let eq = self.embed_eq(t.clone(), &t.cs[0], &t.cs[1]);
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bool(format!(
-                                "((BooleanCircuit *)circ)->PutORGate(circ->PutGTGate({}, {}), {})",
-                                b, a, eq
+                                "((BooleanCircuit *)circ)->PutINVGate(circ->PutGTGate({}, {}))",
+                                a, b
                             )),
                         );
                     }
