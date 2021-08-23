@@ -32,7 +32,7 @@ impl Ilp {
         }
     }
     /// Create a new variable. `defn` can specify bounds, etc. See [VariableDefinition], which can
-    /// be built using [good_lp::variable].
+    /// be built using [good_lp::variable()].
     pub fn new_variable(&mut self, defn: VariableDefinition, name: String) -> Variable {
         let defn = defn.name(&name);
         let v = self.variables.add(defn);
