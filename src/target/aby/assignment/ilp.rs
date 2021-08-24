@@ -242,10 +242,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             }),
     );
 
-    println!("ILP: {:#?}", ilp);
-
     let (_opt, solution) = ilp.default_solve().unwrap();
-    println!("Solution: {:#?}", solution);
 
     let mut assignment = TermMap::new();
     for ((term, ty), (_, _, var_name)) in &term_vars {
