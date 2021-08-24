@@ -2,8 +2,11 @@
 
 use crate::ir::term::{Computation, PostOrderIter, TermMap};
 
+pub mod ilp;
+
 /// The sharing scheme used for an operation
-pub enum SharingType {
+#[derive(Debug,PartialEq,Eq,Hash,Clone,Copy)]
+pub enum ShareType {
     /// Arithmetic sharing (additive mod `Z_(2^l)`)
     Arithmetic,
     /// Boolean sharing (additive mod `Z_2`)
@@ -12,15 +15,29 @@ pub enum SharingType {
     Yao,
 }
 
+
+/// List of share types.
+pub const SHARE_TYPES: [ShareType; 3] = [ShareType::Arithmetic, ShareType::Boolean, ShareType::Yao];
+
+impl ShareType {
+    fn char(&self) -> char {
+        match self {
+            &ShareType::Arithmetic => 'a',
+            &ShareType::Yao => 'y',
+            &ShareType::Boolean => 'b',
+        }
+    }
+}
+
 /// A map from terms (operations or inputs) to sharing schemes they use
-pub type SharingMap = TermMap<SharingType>;
+pub type SharingMap = TermMap<ShareType>;
 
 /// Assigns boolean sharing to all terms
 pub fn all_boolean_sharing(c: &Computation) -> SharingMap {
     c.outputs
         .iter()
         .flat_map(|output| {
-            PostOrderIter::new(output.clone()).map(|term| (term.clone(), SharingType::Boolean))
+            PostOrderIter::new(output.clone()).map(|term| (term.clone(), ShareType::Boolean))
         })
         .collect()
 }

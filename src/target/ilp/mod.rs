@@ -3,11 +3,12 @@
 pub mod trans;
 
 use ahash::AHashMap as HashMap;
-use good_lp::{
+pub(crate) use good_lp::{
     Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver, SolverModel,
-    Variable, VariableDefinition,
+    Variable, VariableDefinition, variable
 };
 use log::debug;
+use std::fmt::{self, Formatter, Debug};
 
 /// An integer linear program
 pub struct Ilp {
@@ -19,6 +20,16 @@ pub struct Ilp {
     constraints: Vec<Constraint>,
     /// The optimization objective (to maximize)
     maximize: Expression,
+}
+
+impl Debug for Ilp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Ilp")
+            .field("var_names", &self.var_names)
+            .field("constraints", &self.constraints)
+            .field("maximize", &self.maximize)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Ilp {
@@ -79,6 +90,12 @@ impl Ilp {
             Err(ResolutionError::Infeasible) => Err(IlpUnsat::Infeasible),
             Err(e) => panic!("Error in solving: {}", e),
         }
+    }
+    /// Solve, using the default solver of [good_lp].
+    pub fn default_solve(
+        self,
+    ) -> Result<(f64, HashMap<String, f64>), IlpUnsat> {
+        self.solve(good_lp::default_solver)
     }
 }
 
