@@ -14,15 +14,15 @@
 //!
 //! Since each term is evaluated using one protocol,
 //!
-//!     forall t. 1 = \sum_a T[t, a]             (1)
+//! `forall t. 1 = \sum_a T[t, a]             (1)`
 //!
 //! Sometimes conversions are needed
 //!
-//!     forall t a b. forall s in Uses(t). C[t, a, b] >= T[t, a] + T[s, b] - 1     (2)
+//! `forall t a b. forall s in Uses(t). C[t, a, b] >= T[t, a] + T[s, b] - 1     (2)`
 //!
 //! The constraint (2) is intendend to encode
 //!
-//!     forall t a b. C[t, a, b] = OR_(s in Uses(t)) T[t, a] AND T[s, b]
+//! `forall t a b. C[t, a, b] = OR_(s in Uses(t)) T[t, a] AND T[s, b]`
 //!
 //! It does this well because (a) the system is SAT and (b) our objective is a linear combination
 //! of all variables (term and conversion) scaled by their cost. In trying to minimize that, `C`
