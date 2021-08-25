@@ -1,11 +1,11 @@
 //! Machinery for assigning operations to sharing schemes
 
-use crate::ir::term::{Computation, Op, BvNaryOp, PostOrderIter, TermMap};
+use crate::ir::term::{Computation, PostOrderIter, TermMap};
 
 pub mod ilp;
 
 /// The sharing scheme used for an operation
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug,PartialEq,Eq,Hash,Clone,Copy)]
 pub enum ShareType {
     /// Arithmetic sharing (additive mod `Z_(2^l)`)
     Arithmetic,
@@ -14,6 +14,7 @@ pub enum ShareType {
     /// Yao sharing (one party holds `k_a`, `k_b`, other knows the `{k_a, k_b} <-> {0, 1}` mapping)
     Yao,
 }
+
 
 /// List of share types.
 pub const SHARE_TYPES: [ShareType; 3] = [ShareType::Arithmetic, ShareType::Boolean, ShareType::Yao];
@@ -37,23 +38,6 @@ pub fn all_boolean_sharing(c: &Computation) -> SharingMap {
         .iter()
         .flat_map(|output| {
             PostOrderIter::new(output.clone()).map(|term| (term.clone(), ShareType::Boolean))
-        })
-        .collect()
-}
-
-/// Assigns arithmetic sharing to addition and multiplication
-pub fn some_arith_sharing(c: &Computation) -> SharingMap {
-    c.outputs
-        .iter()
-        .flat_map(|output| {
-            PostOrderIter::new(output.clone()).map(|term| match &term.op {
-                Op::BvNaryOp(o) => match o {
-                    BvNaryOp::Add => (term.clone(), ShareType::Arithmetic),
-                    BvNaryOp::Mul => (term.clone(), ShareType::Arithmetic),
-                    _ => (term.clone(), ShareType::Boolean),
-                }
-                _ => (term.clone(), ShareType::Boolean),
-            })
         })
         .collect()
 }

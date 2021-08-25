@@ -1,6 +1,5 @@
 from subprocess import Popen, PIPE
 from typing import List
-import time 
 
 arithmetic_tests = [
     [
@@ -451,13 +450,6 @@ misc_tests = [
         {"a": 1, "b": 0},
         {"a": 0, "b": 2},
     ], 
-    [
-        "Conversion problem",
-        7,
-        "./third_party/ABY/build/bin/2pc_conv_test",
-        {"a": 0, "b": 0},
-        {"a": 0, "b": 7},
-    ], 
 ]
 
 def flatten_args(args: dict) -> list:
@@ -486,6 +478,7 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
     try:
         server_proc = Popen(server_cmd, stdout=PIPE, stderr=PIPE)
         client_proc = Popen(client_cmd, stdout=PIPE, stderr=PIPE)
+
 
         server_out, server_err = server_proc.communicate()
         client_out, client_err = client_proc.communicate()
@@ -521,7 +514,7 @@ def main():
         const_tests + \
         ite_tests + \
         misc_tests
-    # tests = misc_tests
+        
 
     failed_test_descs = []
     num_retries = 3

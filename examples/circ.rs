@@ -7,9 +7,11 @@ use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
-use circ::target::ilp::trans::to_ilp;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+use circ::target::ilp::{
+    trans::to_ilp
+};
 use env_logger;
 use good_lp::default_solver;
 use std::path::PathBuf;
@@ -58,10 +60,13 @@ fn main() {
     };
     let cs = Zokrates::gen(inputs);
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
+        Mode::Opt => opt(
+            cs,
+            vec![Opt::ConstantFold],
+        ),
         Mode::Mpc(_) => opt(
             cs,
-            vec![], //Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof => opt(
             cs,
@@ -102,7 +107,7 @@ fn main() {
             let (max, vars) = solver_result.expect("ILP could not be solved");
             println!("Max value: {}", max.round() as u64);
             println!("Assignment:");
-
+            
             for (var, val) in &vars {
                 println!("  {}: {}", var, val.round() as u64);
             }

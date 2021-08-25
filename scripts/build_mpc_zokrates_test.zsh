@@ -23,7 +23,7 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN -p $parties $zpath
 }
 
-# build mpc arithmetic tests
+# # build mpc arithmetic tests
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_add.zok
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_sub.zok
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_mult.zok
@@ -35,20 +35,20 @@ mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_greater_equals.zok
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_less_than.zok
 mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_less_equals.zok
 
-# build mpc nary arithmetic tests
+# # build mpc nary arithmetic tests
 mpc_test 2 ./examples/ZoKrates/mpc/nary_arithmetic_tests/2pc_nary_arithmetic_add.zok
 
-# build mpc bitwise tests
+# # build mpc bitwise tests
 mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_and.zok
 mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_or.zok
 mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_xor.zok
 
-# build mpc boolean tests
+# # build mpc boolean tests
 mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_and.zok
 mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_or.zok
 mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_equals.zok
 
-# build mpc nary boolean tests
+# # build mpc nary boolean tests
 mpc_test 2 ./examples/ZoKrates/mpc/nary_boolean_tests/2pc_nary_boolean_and.zok
 
 # build ite tests
@@ -56,7 +56,7 @@ mpc_test 2 ./examples/ZoKrates/mpc/ite_tests/2pc_ite_ret_bool.zok
 mpc_test 2 ./examples/ZoKrates/mpc/ite_tests/2pc_ite_ret_int.zok
 
 
-# build mpc misc tests
+# # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
 
 
@@ -66,4 +66,3 @@ mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_bool.zok
 
 # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
-mpc_test 2 ./examples/ZoKrates/mpc/2pc_conv.zok

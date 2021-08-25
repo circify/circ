@@ -37,7 +37,7 @@ use crate::ir::term::*;
 
 use crate::target::ilp::{variable, Expression, Ilp, Variable};
 
-use std::{env::var, fs::File, path::Path};
+use std::{fs::File, path::Path, env::var};
 
 /// A cost model for ABY operations and share conversions
 #[derive(Debug)]
@@ -86,10 +86,10 @@ impl CostModel {
             let ops_from_name = |name: &str| {
                 match name {
                     // assume comparisions are unsigned
-                    "ge" => vec![BV_UGE],
-                    "le" => vec![BV_ULE],
-                    "gt" => vec![BV_UGT],
-                    "lt" => vec![BV_ULT],
+                    "ge" => vec![BV_ULE],
+                    "le" => vec![BV_SLE],
+                    "gt" => vec![BV_ULT],
+                    "lt" => vec![BV_SLT],
                     // assume n-ary ops apply to BVs
                     "add" => vec![BV_ADD],
                     "mul" => vec![BV_MUL],

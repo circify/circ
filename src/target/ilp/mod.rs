@@ -4,11 +4,11 @@ pub mod trans;
 
 use ahash::AHashMap as HashMap;
 pub(crate) use good_lp::{
-    variable, Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver,
-    SolverModel, Variable, VariableDefinition,
+    Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver, SolverModel,
+    Variable, VariableDefinition, variable
 };
 use log::debug;
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Formatter, Debug};
 
 /// An integer linear program
 pub struct Ilp {
@@ -92,7 +92,9 @@ impl Ilp {
         }
     }
     /// Solve, using the default solver of [good_lp].
-    pub fn default_solve(self) -> Result<(f64, HashMap<String, f64>), IlpUnsat> {
+    pub fn default_solve(
+        self,
+    ) -> Result<(f64, HashMap<String, f64>), IlpUnsat> {
         self.solve(good_lp::default_solver)
     }
 }
