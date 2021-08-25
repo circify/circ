@@ -487,21 +487,18 @@ impl<'ast> ZGen<'ast> {
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
                     let ret_terms = ret_term.terms();
-                    assert!(ret_terms.len() == 1, "When compiling to optimize, there can only be one output");
+                    assert!(
+                        ret_terms.len() == 1,
+                        "When compiling to optimize, there can only be one output"
+                    );
                     let t = ret_terms.into_iter().next().unwrap();
                     match check(&t) {
-                        Sort::BitVector(_) => {
-                        }
+                        Sort::BitVector(_) => {}
                         s => {
                             panic!("Cannot maximize output of type {}", s)
                         }
                     }
-                    self.circ
-                        .cir_ctx()
-                        .cs
-                        .borrow_mut()
-                        .outputs
-                        .push(t);
+                    self.circ.cir_ctx().cs.borrow_mut().outputs.push(t);
                 }
             }
         }

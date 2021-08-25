@@ -905,10 +905,9 @@ mod test {
         let c = leaf_term(Op::Var("c".to_owned(), Sort::Bool));
         let cs = Computation {
             outputs: vec![term![BV_ADD;
-                term![ITE; c, bv(2,4), bv(1,4)],
-                term![BV_MUL; a, bv(2,4)]
-                ],
-            ],
+            term![ITE; c, bv(2,4), bv(1,4)],
+            term![BV_MUL; a, bv(2,4)]
+            ]],
             metadata: ComputationMetadata::default(),
             values: None,
         };
