@@ -10,7 +10,7 @@ init:
 	git submodule update --init
 
 aby:
-	./scripts/zokrates_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/test_aby.py
+	./scripts/build_mpc_zokrates_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/test_aby.py
 
 clean:
 	# remove all generated files

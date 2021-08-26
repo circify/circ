@@ -1,7 +1,7 @@
-use structopt::StructOpt;
 use circ::ir::term::*;
-use circ::term;
 use circ::target::aby::assignment::ilp;
+use circ::term;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(

@@ -37,7 +37,7 @@ use crate::ir::term::*;
 
 use crate::target::ilp::{variable, Expression, Ilp, Variable};
 
-use std::{fs::File, path::Path, env::var};
+use std::{env::var, fs::File, path::Path};
 
 /// A cost model for ABY operations and share conversions
 #[derive(Debug)]
@@ -86,10 +86,10 @@ impl CostModel {
             let ops_from_name = |name: &str| {
                 match name {
                     // assume comparisions are unsigned
-                    "ge" => vec![BV_ULE],
-                    "le" => vec![BV_SLE],
-                    "gt" => vec![BV_ULT],
-                    "lt" => vec![BV_SLT],
+                    "ge" => vec![BV_UGE],
+                    "le" => vec![BV_ULE],
+                    "gt" => vec![BV_UGT],
+                    "lt" => vec![BV_ULT],
                     // assume n-ary ops apply to BVs
                     "add" => vec![BV_ADD],
                     "mul" => vec![BV_MUL],
@@ -131,6 +131,7 @@ impl CostModel {
 
 /// Uses an ILP to assign...
 pub fn assign(c: &Computation) -> SharingMap {
+    println!("{:#?}", c);
     let p = format!(
         "{}/third_party/opa/sample_costs.json",
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
@@ -159,6 +160,13 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     for (t, i) in terms.iter() {
         let mut vars = vec![];
         if let Op::Var(_, _) = &t.op {
+            for ty in &SHARE_TYPES {
+                let name = format!("t_{}_{}", i, ty.char());
+                let v = ilp.new_variable(variable().binary(), name.clone());
+                term_vars.insert((t.clone(), *ty), (v, 0.0, name));
+                vars.push(v);
+            }
+        } else if let Op::Const(_) = &t.op {
             for ty in &SHARE_TYPES {
                 let name = format!("t_{}_{}", i, ty.char());
                 let v = ilp.new_variable(variable().binary(), name.clone());
