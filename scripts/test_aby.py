@@ -552,7 +552,10 @@ def main():
         ite_tests + \
         arr_tests + \
 <<<<<<< HEAD
+<<<<<<< HEAD
         function_tests + \
+=======
+>>>>>>> 17c19fc... Added support for multiple outputs in test cases
 =======
 >>>>>>> 17c19fc... Added support for multiple outputs in test cases
         misc_tests
