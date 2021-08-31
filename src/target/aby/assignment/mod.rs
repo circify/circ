@@ -1,6 +1,6 @@
 //! Machinery for assigning operations to sharing schemes
 
-use crate::ir::term::{Computation, Op, BvNaryOp, PostOrderIter, TermMap};
+use crate::ir::term::{BvNaryOp, Computation, Op, PostOrderIter, TermMap};
 
 pub mod ilp;
 
@@ -51,7 +51,7 @@ pub fn some_arith_sharing(c: &Computation) -> SharingMap {
                     BvNaryOp::Add => (term.clone(), ShareType::Arithmetic),
                     BvNaryOp::Mul => (term.clone(), ShareType::Arithmetic),
                     _ => (term.clone(), ShareType::Boolean),
-                }
+                },
                 _ => (term.clone(), ShareType::Boolean),
             })
         })

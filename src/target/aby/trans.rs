@@ -5,10 +5,8 @@
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
-use crate::target::aby::assignment::ilp::assign;
-use crate::target::aby::assignment::{
-    some_arith_sharing, ShareType, SharingMap,
-};
+// use crate::target::aby::assignment::ilp::assign;
+use crate::target::aby::assignment::{some_arith_sharing, ShareType, SharingMap};
 use crate::target::aby::*;
 
 const NO_ROLE: u8 = u8::MAX;
@@ -28,6 +26,7 @@ struct ToABY {
     inputs: TermMap<Option<PartyId>>,
     cache: TermMap<EmbeddedTerm>,
     s_map: SharingMap,
+    output_counter: u8,
 }
 
 impl ToABY {
@@ -38,6 +37,7 @@ impl ToABY {
             inputs: TermMap::new(),
             cache: TermMap::new(),
             s_map: s_map,
+            output_counter: 0,
         }
     }
 
@@ -500,16 +500,31 @@ impl ToABY {
     /// the circuit to a share      
     ///
     /// Return a String of the resulting Circuit
-    fn add_output_gate(&mut self, circ: String) -> String {
-        format!("\ts_out = bcirc->PutOUTGate({}, ALL);\n", circ)
+    fn add_output_gate(&mut self, t: Term, circ: String) -> String {
+        format!(
+            "\ts_out_{} = {}->PutOUTGate({}, ALL);\n",
+            self.output_counter,
+            self.get_sharetype_circ(t),
+            circ
+        )
     }
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self, t: Term) {
-        println!("{:?}", t);
-        let mut output_circ = self.embed(t);
-        output_circ = self.add_output_gate(output_circ);
+        let mut output_circ = self.embed(t.clone());
+
+        output_circ = self.add_output_gate(t, output_circ);
         self.aby.circs.push(output_circ);
+        self.aby
+            .setup
+            .push(format!("share *s_out_{};", self.output_counter));
+        self.aby.output.push(format!(
+            "uint32_t output_{} = s_out_{}->get_clear_value<uint32_t>();\n 
+            \tstd::cout << output_{} << std::endl;",
+            self.output_counter, self.output_counter, self.output_counter
+        ));
+
+        self.output_counter += 1;
     }
 }
 
