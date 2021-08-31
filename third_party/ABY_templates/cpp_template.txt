@@ -15,15 +15,14 @@ int32_t test_{fn}_circuit(std::map<std::string, std::string> params, e_role role
 	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
 	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
 
-	share *s_out;
-
 	// compiled circuit
 	{circ}
 
-	// output
 	party->ExecCircuit();
-	uint32_t output = s_out->get_clear_value<uint32_t>();
-	std::cout << "output: " << output << std::endl;
+
+	// output
+	{output}
+
 	delete party;
 	return 0;
 }
