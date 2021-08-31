@@ -553,11 +553,14 @@ def main():
         arr_tests + \
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         function_tests + \
 =======
 >>>>>>> 17c19fc... Added support for multiple outputs in test cases
 =======
 >>>>>>> 17c19fc... Added support for multiple outputs in test cases
+=======
+>>>>>>> 17c19fc6f527ec39434884e40a1a5ffff4c61c48
         misc_tests
     # tests = arr_tests
 
