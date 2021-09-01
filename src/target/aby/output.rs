@@ -96,7 +96,7 @@ fn write_h_file(filename: &String) {
 }
 
 /// Using the cpp_template.txt, write the .cpp file for the new test case
-fn write_circ_file(filename: &String, circ: String) {
+fn write_circ_file(filename: &String, circ: String, output: &String) {
     let template = fs::read_to_string("third_party/ABY_templates/cpp_template.txt")
         .expect("Unable to read file");
     let path = format!(
@@ -108,7 +108,8 @@ fn write_circ_file(filename: &String, circ: String) {
         path.clone(),
         template
             .replace("{fn}", &*filename)
-            .replace("{circ}", &circ),
+            .replace("{circ}", &circ)
+            .replace("{output}", &output),
     )
     .expect("Failed to write to cmake file");
 }
@@ -121,6 +122,6 @@ pub fn write_aby_exec(aby: ABY, path_buf: PathBuf) {
     write_test_cmake_file(&filename);
     write_test_file(&filename);
     write_h_file(&filename);
-    let circ_str = aby.setup.join("\n\t") + &aby.circs.join("\n\t") + &aby.closer.join("\n\t");
-    write_circ_file(&filename, circ_str);
+    let circ_str = aby.setup.join("\n\t") + &aby.circs.join("\n\t");
+    write_circ_file(&filename, circ_str, &aby.output.join("\n\t"));
 }

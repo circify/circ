@@ -428,6 +428,41 @@ ite_tests = [
     ],
 ]
 
+arr_tests = [
+    [
+        "Array sum test",
+        3,
+        "./third_party/ABY/build/bin/2pc_array_sum_test",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+    [
+        "Array ret test",
+        "2\n1",
+        "./third_party/ABY/build/bin/2pc_array_ret_test",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+]
+
+function_tests = [
+    [
+        "Sum() two numbers - 1",
+        3,
+        "./third_party/ABY/build/bin/2pc_function_sum_test",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Sum() two numbers - 2",
+        2,
+        "./third_party/ABY/build/bin/2pc_function_sum_test",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+
+]
+
 
 misc_tests = [
     [
@@ -468,9 +503,6 @@ def flatten_args(args: dict) -> list:
         flat_args.append(str(v))
     return flat_args
 
-def build_expected(expected) -> str:
-    return "output: "+str(expected)
-
 def build_server_cmd(exec: str, args: dict) -> List[str]:
     return [exec, "-r", "0", "-i"] + flatten_args(args)
 
@@ -496,8 +528,6 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
         server_out = server_out.decode('utf-8').strip()
         client_out = client_out.decode('utf-8').strip()
 
-        assert server_out.startswith("output: "), "server output did not start with \"output:\", but instead with: "+server_out
-        assert client_out.startswith("output: "), "client output did not start with \"output:\", but instead with: "+client_out
         assert server_out == client_out, "server out != client out\nserver_out: "+server_out+"\nclient_out: "+client_out
         assert server_out == expected, "output != expected\nserver_out: "+server_out+"\nexpected: "+expected
         return True
@@ -520,15 +550,17 @@ def main():
         nary_boolean_tests + \
         const_tests + \
         ite_tests + \
+        arr_tests + \
+        function_tests + \
         misc_tests
-    # tests = misc_tests
+    # tests = arr_tests
 
     failed_test_descs = []
     num_retries = 3
     for test in tests:
         assert len(test) == 5, "test configurations are wrong for test: "+test[0]
         desc = test[0]
-        expected = build_expected(test[1])
+        expected = str(test[1])
         path = test[2]
         server_cmd = build_server_cmd(path, test[3])
         client_cmd = build_client_cmd(path, test[4])

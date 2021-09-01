@@ -8,11 +8,11 @@ pub mod trans;
 /// The ABY Circuit consists of three Vec<String>: setup, circ, and closer
 /// *setup* holds code for initializing the ABY party, sharing scheme, and input values
 /// *circs* holds the lowered code from the IR to ABY Circuits
-/// *closer* holds the code for executing the ABY Circuits and printing the output value
+/// *output* holds the code for printing the output value
 pub struct ABY {
     setup: Vec<String>,
     circs: Vec<String>,
-    closer: Vec<String>,
+    output: Vec<String>,
 }
 
 impl ABY {
@@ -21,7 +21,7 @@ impl ABY {
         ABY {
             setup: Vec::new(),
             circs: Vec::new(),
-            closer: Vec::new(),
+            output: Vec::new(),
         }
     }
 }

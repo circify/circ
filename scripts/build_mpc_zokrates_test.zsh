@@ -56,13 +56,17 @@ mpc_test 2 ./examples/ZoKrates/mpc/ite_tests/2pc_ite_ret_bool.zok
 mpc_test 2 ./examples/ZoKrates/mpc/ite_tests/2pc_ite_ret_int.zok
 
 
-# build mpc misc tests
-mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
-
-
 # build mpc const tests
 mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_arith.zok
 mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_bool.zok
+
+
+# build mpc array tests
+mpc_test 2 ./examples/ZoKrates/mpc/array_tests/2pc_array_sum.zok
+mpc_test 2 ./examples/ZoKrates/mpc/array_tests/2pc_array_ret.zok
+
+# build mpc function tests
+mpc_test 2 ./examples/ZoKrates/mpc/function_tests/2pc_function_sum.zok
 
 # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
