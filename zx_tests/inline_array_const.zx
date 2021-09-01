@@ -1,0 +1,6 @@
+const u32[3] A = [1, 2, 3]
+const u32[2][3] B = [A, A]
+const u32[1][2][3] C = [B]
+
+def main() -> u32[1][2][3]:
+    return C

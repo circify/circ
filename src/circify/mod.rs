@@ -598,7 +598,12 @@ impl<E: Embeddable> Circify<E> {
                 // get condition under which assignment happens
                 let guard = self.condition.clone();
                 // build condition-aware new value
-                let ite_val = Val::Term(self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()));
+                let ite = match guard.as_bool_opt() {
+                    Some(true) => new,
+                    Some(false) => old.clone(),
+                    None => self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()),
+                };
+                let ite_val = Val::Term(ite);
                 // TODO: add language-specific coersion here if needed
                 assert!(self.vals.insert(new_name, ite_val.clone()).is_none());
                 Ok(ite_val)

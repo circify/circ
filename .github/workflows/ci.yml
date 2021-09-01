@@ -3,8 +3,6 @@ name: Build & Test
 on:
   push:
     branches: [ master, ci ]
-  pull_request:
-    branches: [ master, ci ]
 
 env:
   CARGO_TERM_COLOR: always

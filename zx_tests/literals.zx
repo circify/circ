@@ -1,0 +1,6 @@
+def main() -> bool:
+    assert(0xfa == 250)
+    assert(0xbeef == 48879)
+    assert(0xdeadbeef == 3735928559)
+    assert(0xc0ffee1111111111 == 13907095931411566865)
+    return true

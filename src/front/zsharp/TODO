@@ -1,0 +1,25 @@
+- talk to AO about bit-split
+
+- remove ret requirement for fns - typecheck with bool if no type (and test
+  function_call() for compatibility!)
+
+- unify_inline_array revisit
+
+- const / non-const cleanup
+
+- casts
+    - widening casts are free!
+    - check narrowing cast correctness!
+    - look at unpack functions again
+
+- stdlib rename to avoid confusion with parallel ZoK checkouts
+    [x] and/or: check ZSHARP_STDLIB_PATH envvar
+
+- generic inf: monomorphize at call time
+
+- add explicit-generic-expr
+
+- POW width - allow full width operand once we have range analysis
+
+- optimization: for a < b, only expand a to b's bit width;
+  a < b is (a_expansion == a) && (a_expansion < b_expansion)

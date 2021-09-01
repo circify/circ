@@ -2,6 +2,7 @@
 
 use crate::ir::term::{BvNaryOp, Computation, Op, PostOrderIter, TermMap};
 
+#[cfg(feature = "lp")]
 pub mod ilp;
 
 /// The sharing scheme used for an operation
@@ -19,6 +20,7 @@ pub enum ShareType {
 pub const SHARE_TYPES: [ShareType; 3] = [ShareType::Arithmetic, ShareType::Boolean, ShareType::Yao];
 
 impl ShareType {
+    #[cfg(feature = "lp")]
     fn char(&self) -> char {
         match self {
             ShareType::Arithmetic => 'a',

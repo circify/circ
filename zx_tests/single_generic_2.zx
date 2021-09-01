@@ -1,0 +1,6 @@
+def dbl<N,NN>(u32[N] a) -> u32[NN]:
+    // XXX NN is unconstrained! this is a weird and annoying thing
+    return [...a,...a]
+
+def main() -> u32[6]:
+    return dbl([1u32,2,3])
