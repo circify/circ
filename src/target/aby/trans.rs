@@ -26,6 +26,7 @@ struct ToABY {
     inputs: TermMap<Option<PartyId>>,
     cache: TermMap<EmbeddedTerm>,
     s_map: SharingMap,
+    output_counter: u8,
 }
 
 impl ToABY {
@@ -36,6 +37,7 @@ impl ToABY {
             inputs: TermMap::new(),
             cache: TermMap::new(),
             s_map: s_map,
+            output_counter: 0,
         }
     }
 

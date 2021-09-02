@@ -66,13 +66,6 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
 # build mpc function tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
 
-# build mpc misc tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaire.zok
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_conv.zok
-
-# build mpc function tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
-
 # build mpc shift tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_rhs.zok

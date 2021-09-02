@@ -501,7 +501,6 @@ shift_tests = [
     ], 
 ]
 
-
 misc_tests = [
     [
         "Millionaire's problem: server has more money than client",
@@ -588,11 +587,11 @@ def main():
         nary_boolean_tests + \
         const_tests + \
         ite_tests + \
-        arr_tests + \
         function_tests + \
         shift_tests + \
         misc_tests
-    # tests = arr_tests
+        # arr_tests + \
+
 
     failed_test_descs = []
     num_retries = 3
