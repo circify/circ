@@ -188,6 +188,14 @@ impl ToABY {
         format!("bcirc->PutCONSGate((uint64_t)1, (uint32_t)1)")
     }
 
+    fn remove_cons_gate(&self, circ: String) -> String {
+        if circ.contains("PutCONSGate(") {
+           circ.split("PutCONSGate(").last().unwrap_or("").split(",").next().unwrap_or("").to_string()          
+        } else {
+            panic!("PutCONSGate not found in: {}", circ)
+        }
+    }
+
     fn embed_eq(&mut self, t: Term, a: Term, b: Term) -> String {
         let s_circ = self.get_sharetype_circ(t.clone());
         match check(&a) {
@@ -471,8 +479,41 @@ impl ToABY {
                             )),
                         );
                     }
+                    BvBinOp::Shl => {
+                        let b_val = self.remove_cons_gate(b_conv);
+                        self.cache.insert(
+                            t.clone(),
+                            EmbeddedTerm::Bv(format!(
+                                "left_shift({}, {}, {})",
+                                s_circ, a_conv, b_val
+                            )),
+                        );
+                    }
+                    BvBinOp::Lshr => {
+                        let b_val = self.remove_cons_gate(b_conv);
+                        self.cache.insert(
+                            t.clone(),
+                            EmbeddedTerm::Bv(format!(
+                                "logical_right_shift({}, {}, {})",
+                                s_circ, a_conv, b_val
+                            )),
+                        );
+                    }
+                    BvBinOp::Ashr => {
+                        let b_val = self.remove_cons_gate(b_conv);
+                        self.cache.insert(
+                            t.clone(),
+                            EmbeddedTerm::Bv(format!(
+                                "arithmetic_right_shift({}, {}, {})",
+                                s_circ, a_conv, b_val
+                            )),
+                        );
+                    }
                     _ => panic!("Invalid bv-op in BvBinOp: {:?}", o),
                 }
+            }
+            Op::BvExtract(start, end) => {
+                
             }
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
@@ -480,51 +521,38 @@ impl ToABY {
         self.get_bv(&t)
     }
 
-    fn embed(&mut self, t: Term) -> String {
-        let mut output_circ: String = "".to_string();
-        for c in PostOrderIter::new(t) {
-            match check(&c) {
-                Sort::Bool => {
-                    output_circ = self.embed_bool(c);
-                }
-                Sort::BitVector(_) => {
-                    output_circ = self.embed_bv(c);
-                }
-                e => panic!("Unsupported sort in embed: {:?}", e),
-            }
-        }
-        output_circ
-    }
-
     /// Given a Circuit `circ`, wrap `circ` in an OUT gate to extract the value of
     /// the circuit to a share      
     ///
     /// Return a String of the resulting Circuit
-    fn add_output_gate(&mut self, t: Term, circ: String) -> String {
+    fn format_output_circuit(&self, t: Term, circ: String) -> String {
         format!(
-            "\ts_out_{} = {}->PutOUTGate({}, ALL);\n",
-            self.output_counter,
+            "\tadd_to_output_queue(out_q, {}->PutOUTGate({}, ALL), role, std::cout);\n",
             self.get_sharetype_circ(t),
             circ
         )
     }
 
+    fn embed(&mut self, t: Term) -> String {
+        let mut circ = String::new();
+        for c in PostOrderIter::new(t.clone()) {
+            match check(&c) {
+                Sort::Bool => {
+                    circ = self.embed_bool(c);
+                }
+                Sort::BitVector(_) => {
+                    circ = self.embed_bv(c);
+                }
+                e => panic!("Unsupported sort in embed: {:?}", e),
+            }
+        }
+        self.format_output_circuit(t, circ)
+    }
+
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self, t: Term) {
-        let mut output_circ = self.embed(t.clone());
-
-        output_circ = self.add_output_gate(t, output_circ);
-        self.aby.circs.push(output_circ);
-        self.aby
-            .setup
-            .push(format!("share *s_out_{};", self.output_counter));
-        self.aby.output.push(format!(
-            "uint32_t output_{} = s_out_{}->get_clear_value<uint32_t>();\n 
-            \tstd::cout << output_{} << std::endl;",
-            self.output_counter, self.output_counter, self.output_counter
-        ));
-
-        self.output_counter += 1;
+        let circ = self.embed(t.clone());
+        self.aby.circs.push(circ);
     }
 }
 

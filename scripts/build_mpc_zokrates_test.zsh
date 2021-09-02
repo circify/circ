@@ -24,50 +24,54 @@ function mpc_test {
 }
 
 # build mpc arithmetic tests
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_add.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_sub.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_mult.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_mult_add_pub.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_add.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_sub.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_mult.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_mult_add_pub.zok
 
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_equals.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_greater_than.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_greater_equals.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_less_than.zok
-mpc_test 2 ./examples/ZoKrates/mpc/arithmetic_tests/2pc_int_less_equals.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_int_equals.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_int_greater_than.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_int_greater_equals.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_int_less_than.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/arithmetic_tests/2pc_int_less_equals.zok
 
 # build mpc nary arithmetic tests
-mpc_test 2 ./examples/ZoKrates/mpc/nary_arithmetic_tests/2pc_nary_arithmetic_add.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/nary_arithmetic_tests/2pc_nary_arithmetic_add.zok
 
 # build mpc bitwise tests
-mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_and.zok
-mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_or.zok
-mpc_test 2 ./examples/ZoKrates/mpc/bitwise_tests/2pc_bitwise_xor.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/bitwise_tests/2pc_bitwise_and.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/bitwise_tests/2pc_bitwise_or.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/bitwise_tests/2pc_bitwise_xor.zok
 
 # build mpc boolean tests
-mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_and.zok
-mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_or.zok
-mpc_test 2 ./examples/ZoKrates/mpc/boolean_tests/2pc_boolean_equals.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/boolean_tests/2pc_boolean_and.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/boolean_tests/2pc_boolean_or.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/boolean_tests/2pc_boolean_equals.zok
 
 # build mpc nary boolean tests
-mpc_test 2 ./examples/ZoKrates/mpc/nary_boolean_tests/2pc_nary_boolean_and.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.zok
 
 # build ite tests
-mpc_test 2 ./examples/ZoKrates/mpc/ite_tests/2pc_ite_ret_bool.zok
-mpc_test 2 ./examples/ZoKrates/mpc/ite_tests/2pc_ite_ret_int.zok
-
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_int.zok
 
 # build mpc const tests
-mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_arith.zok
-mpc_test 2 ./examples/ZoKrates/mpc/const_tests/2pc_const_bool.zok
-
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_arith.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
 
 # build mpc array tests
-mpc_test 2 ./examples/ZoKrates/mpc/array_tests/2pc_array_sum.zok
-mpc_test 2 ./examples/ZoKrates/mpc/array_tests/2pc_array_ret.zok
+# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
+# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_ret.zok
 
 # build mpc function tests
-mpc_test 2 ./examples/ZoKrates/mpc/function_tests/2pc_function_sum.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
+
+# build mpc shift tests
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_rhs.zok
 
 # build mpc misc tests
-mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaire.zok
-mpc_test 2 ./examples/ZoKrates/mpc/2pc_conv.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaire.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_conv.zok
+
+# mpc_test 2 ./examples/ZoKrates/mpc/hycc_benchmarks/biomatch.zok

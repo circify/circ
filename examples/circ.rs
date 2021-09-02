@@ -61,7 +61,8 @@ fn main() {
         Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![],
+            // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof => opt(
             cs,
