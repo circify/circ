@@ -79,7 +79,7 @@ fn write_test_file(filename: &String) {
     );
 
     fs::write(path.clone(), template.replace("{fn}", &*filename))
-        .expect("Failed to write to cmake file");
+        .expect("Failed to write to test file");
 }
 
 /// Using the h_template.txt, write the .h file for the new test case
@@ -92,7 +92,7 @@ fn write_h_file(filename: &String) {
     );
 
     fs::write(path.clone(), template.replace("{fn}", &*filename))
-        .expect("Failed to write to cmake file");
+        .expect("Failed to write to h file");
 }
 
 /// Using the cpp_template.txt, write the .cpp file for the new test case
@@ -111,7 +111,7 @@ fn write_circ_file(filename: &String, circ: String, output: &String) {
             .replace("{circ}", &circ)
             .replace("{output}", &output),
     )
-    .expect("Failed to write to cmake file");
+    .expect("Failed to write to cpp file");
 }
 
 /// Write circuit output from translation later to ABY

@@ -463,6 +463,44 @@ function_tests = [
 
 ]
 
+shift_tests = [
+     [
+        "Left Shift a by 1 - 1",
+        20,
+        "./third_party/ABY/build/bin/2pc_lhs_test",
+        {"a": 10, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Left Shift a by 1 - 2",
+        0,
+        "./third_party/ABY/build/bin/2pc_lhs_test",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Left Shift a by 1 - 3",
+        0,
+        "./third_party/ABY/build/bin/2pc_lhs_test",
+        {"a": 2147483648, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Right Shift a by 1 - 1",
+        10,
+        "./third_party/ABY/build/bin/2pc_rhs_test",
+        {"a": 20, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Right Shift a by 1 - 2",
+        0,
+        "./third_party/ABY/build/bin/2pc_rhs_test",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+]
+
 
 misc_tests = [
     [
@@ -552,6 +590,7 @@ def main():
         ite_tests + \
         arr_tests + \
         function_tests + \
+        shift_tests + \
         misc_tests
     # tests = arr_tests
 
