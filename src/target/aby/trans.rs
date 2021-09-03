@@ -26,7 +26,6 @@ struct ToABY {
     inputs: TermMap<Option<PartyId>>,
     cache: TermMap<EmbeddedTerm>,
     s_map: SharingMap,
-    output_counter: u8,
 }
 
 impl ToABY {
@@ -37,7 +36,6 @@ impl ToABY {
             inputs: TermMap::new(),
             cache: TermMap::new(),
             s_map: s_map,
-            output_counter: 0,
         }
     }
 
@@ -536,6 +534,7 @@ impl ToABY {
     fn embed(&mut self, t: Term) -> String {
         let mut circ = String::new();
         for c in PostOrderIter::new(t.clone()) {
+            println!("Embedding: {:?}", c);
             match check(&c) {
                 Sort::Bool => {
                     circ = self.embed_bool(c);
