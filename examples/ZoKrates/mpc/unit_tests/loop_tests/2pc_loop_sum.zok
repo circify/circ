@@ -1,0 +1,6 @@
+def main(private<1> u32 a, private<2> u32 b) -> u32:
+    u32 res = 0x00000000
+    for u32 i in 0..5 do 
+        res = res + i
+    endfor
+    return res
