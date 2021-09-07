@@ -427,14 +427,16 @@ impl<'ast> ZGen<'ast> {
                 };
                 accs.iter().fold(Ok(base), |b, acc| match acc {
                     ast::Access::Member(m) => field_select(&b?, &m.id.value),
-                    ast::Access::Select(a) => match &a.expression {
-                        ast::RangeOrExpression::Expression(e) => array_select(b?, self.expr(e)),
-                        ast::RangeOrExpression::Range(r) => {
-                            let s = r.from.as_ref().map(|s| self.const_int(&s.0) as usize);
-                            let e = r.to.as_ref().map(|s| self.const_int(&s.0) as usize);
-                            slice(b?, s, e)
+                    ast::Access::Select(a) => {
+                            match &a.expression {
+                            ast::RangeOrExpression::Expression(e) => array_select(b?, self.expr(e)),
+                            ast::RangeOrExpression::Range(r) => {
+                                let s = r.from.as_ref().map(|s| self.const_int(&s.0) as usize);
+                                let e = r.to.as_ref().map(|s| self.const_int(&s.0) as usize);
+                                slice(b?, s, e)
+                            }
                         }
-                    },
+                    }
                     ast::Access::Call(_) => unreachable!("stray call"),
                 })
             }

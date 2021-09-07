@@ -459,6 +459,20 @@ loop_tests = [
         "./third_party/ABY/build/bin/2pc_loop_sum_test",
         {"a": 10, "b": 0},
         {"a": 0, "b": 3},
+    ],    
+    [
+        "Loop addition - 1",
+        6,
+        "./third_party/ABY/build/bin/2pc_loop_addition_test",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+    [
+        "Loop addition - 2",
+        22,
+        "./third_party/ABY/build/bin/2pc_loop_addition_test",
+        {"a": 10, "b": 0},
+        {"a": 0, "b": 3},
     ],
 ]
 
@@ -596,20 +610,20 @@ def main():
     # 3. executable path: string
     # 4. server arguments: dict[name] = value
     # 5. client arguments: dict[name] = value
-    tests = arithmetic_tests + \
-        arithmetic_boolean_tests + \
-        nary_arithmetic_tests + \
-        bitwise_tests + \
-        boolean_tests + \
-        nary_boolean_tests + \
-        const_tests + \
-        loop_tests + \
-        ite_tests + \
-        function_tests + \
-        shift_tests + \
-        misc_tests
+    # tests = arithmetic_tests + \
+    #     arithmetic_boolean_tests + \
+    #     nary_arithmetic_tests + \
+    #     bitwise_tests + \
+    #     boolean_tests + \
+    #     nary_boolean_tests + \
+    #     const_tests + \
+    #     loop_tests + \
+    #     ite_tests + \
+    #     function_tests + \
+    #     shift_tests + \
+    #     misc_tests
         # arr_tests + \
-
+    tests = arr_tests
 
     failed_test_descs = []
     num_retries = 3

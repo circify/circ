@@ -534,7 +534,6 @@ impl ToABY {
     fn embed(&mut self, t: Term) -> String {
         let mut circ = String::new();
         for c in PostOrderIter::new(t.clone()) {
-            println!("Embedding: {:?}", c);
             match check(&c) {
                 Sort::Bool => {
                     circ = self.embed_bool(c);
