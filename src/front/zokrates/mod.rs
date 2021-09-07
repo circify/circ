@@ -185,7 +185,15 @@ impl<'ast> ZGen<'ast> {
                     self.circ.enter_scope();
                     let ass_res = self
                         .circ
-                        .assign(Loc::local(v_name.clone()), Val::Term(T::Field(pf_lit(j))));
+                        .assign(Loc::local(v_name.clone()), Val::Term(
+                            match ty {
+                                Ty::Uint(8) => T::Uint(8, bv_lit(j, 8)),
+                                Ty::Uint(16) => T::Uint(16, bv_lit(j, 16)),
+                                Ty::Uint(32) => T::Uint(32, bv_lit(j, 32)),
+                                Ty::Field =>  T::Field(pf_lit(j)),
+                                _ => panic!("Unexpected type for iteration: {:?}", ty),
+                            }
+                        ));
                     self.unwrap(ass_res, &i.index.span);
                     for s in &i.statements {
                         self.stmt(s);

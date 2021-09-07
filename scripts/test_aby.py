@@ -445,6 +445,23 @@ arr_tests = [
     ], 
 ]
 
+loop_tests = [
+    [
+        "Loop sum const - 1",
+        10,
+        "./third_party/ABY/build/bin/2pc_loop_sum_test",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+    [
+        "Loop sum const - 2",
+        10,
+        "./third_party/ABY/build/bin/2pc_loop_sum_test",
+        {"a": 10, "b": 0},
+        {"a": 0, "b": 3},
+    ],
+]
+
 function_tests = [
     [
         "Sum() two numbers - 1",
@@ -586,6 +603,7 @@ def main():
         boolean_tests + \
         nary_boolean_tests + \
         const_tests + \
+        loop_tests + \
         ite_tests + \
         function_tests + \
         shift_tests + \
