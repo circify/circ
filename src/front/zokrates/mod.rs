@@ -23,7 +23,7 @@ pub use term::ZOKRATES_MODULUS;
 const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
 const PUBLIC_VIS: Option<PartyId> = None;
 
-/// Inputs to the ZoKrates compilier
+/// Inputs to the ZoKrates compiler
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
@@ -72,6 +72,7 @@ impl FrontEnd for Zokrates {
     fn gen(i: Inputs) -> Computation {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
+        println!("ASTS: {:?}", asts);
         let mut g = ZGen::new(i.inputs, asts, i.mode);
         g.visit_files();
         g.file_stack.push(i.file);
