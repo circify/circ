@@ -1,28 +1,21 @@
 //! Parsing and recursively loading C.
 
-use log::debug;
-use std::collections::HashMap;
+use std::path::PathBuf;
+use lang_c::driver::{Config, parse, Parse};
+use lang_c::driver::Error;
 
-use crate::circify::includer::Loader;
-use std::path::{Path, PathBuf};
+pub struct CParser {
+    config: Config,
+}
 
-// // A recursive c loader
-// pub struct CLoad {
+impl CParser {
+    pub fn new() -> Self {
+        Self {
+            config: Config::default(),
+        }
+    }
 
-// }
-
-// impl CLoad {
-//     pub fn new() -> Self {
-//         Self {
-
-//         }
-//     }
-
-//     // Load and parse a C file
-//     /// Returns a map from file paths to parsed files.
-//     pub fn load<P: AsRef<Path>>(&self, p: &P) {
-//         println!("{}", p);
-//         let config = Config::default();
-//         // println!("{:?}", parse(&config, "example.c"));
-//     }
-// }
+    pub fn parse_file(&self, path: &PathBuf) -> Result<Parse, Error> {
+        Ok(parse(&self.config, path)?)
+    }
+}

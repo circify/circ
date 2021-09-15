@@ -7,9 +7,17 @@ use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
+use lang_c::ast::{
+    Declarator, DeclaratorKind,
+    ExternalDeclaration, TranslationUnit, 
+};
+use lang_c::span::Node;
+use lang_c::visit;
+use lang_c::visit::Visit;
+use log::debug;
+// use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
-use lang_c::driver::{Config, parse};
 
 use term::*;
 
@@ -62,16 +70,10 @@ pub struct C;
 impl FrontEnd for C {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computation {
-        
-
-        let config = Config::default();
-        println!("{:?}", parse(&config, i.file));
-
-        // let mut g = CGen::new(i.inputs, asts, i.mode);
-        // g.visit_files();
-        // g.file_stack.push(i.file);
-        // g.entry_fn("main");
-        // g.file_stack.pop();
+        let parser = parser::CParser::new();
+        let p = parser.parse_file(&i.file).unwrap();
+        let mut g = CGen::new(p.source, p.unit, i.mode);
+        g.gen();
         // g.circ.consume().borrow().clone()
 
         Computation {
@@ -83,44 +85,40 @@ impl FrontEnd for C {
 }
 
 
-// struct CGen<'ast> {
-//     circ: Circify<C>,
-//     asts: HashMap<PathBuf, ast::File<'ast>>,
-//     file_stack: Vec<PathBuf>,
-//     functions: HashMap<(PathBuf, String), ast::Function<'ast>>,
-//     import_map: HashMap<(PathBuf, String), (PathBuf, String)>,
-//     mode: Mode,
-// }
+struct CGen {
+    source: String, 
+    tu: TranslationUnit,
+    mode: Mode,
+}
 
-// impl<'ast> CGen<'ast> {
-//     fn new(inputs: Option<PathBuf>, asts: HashMap<PathBuf, ast::File<'ast>>, mode: Mode) -> Self {
-//         let this = Self {
-//             circ: Circify::new(ZoKrates::new(inputs.map(|i| parser::parse_inputs(i)))),
-//             asts,
-//             stdlib: parser::ZStdLib::new(),
-//             file_stack: vec![],
-//             functions: HashMap::new(),
-//             import_map: HashMap::new(),
-//             mode,
-//         };
-//         this.circ
-//             .cir_ctx()
-//             .cs
-//             .borrow_mut()
-//             .metadata
-//             .add_prover_and_verifier();
-//         this
-//     }
+impl CGen {
+    fn new(source: String, tu: TranslationUnit, mode: Mode) -> Self {
+        Self { source, tu, mode }
+    }
 
-//     /// Unwrap a result with a span-dependent error
-//     fn err<E: Display>(&self, e: E, s: &ast::Span) -> ! {
-//         println!("Error: {}", e);
-//         println!("In: {}", self.cur_path().display());
-//         for l in s.lines() {
-//             println!("  {}", l);
-//         }
-//         std::process::exit(1)
-//     }
-// }
+    fn get_name(&self, dec: &Declarator) -> String {
+        match dec.kind.node {
+            DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
+            _ => panic!("Declarator Identified not found: {:?}", id.node),
+        }
+    }
+
+    fn gen(&mut self) {
+        let TranslationUnit(nodes) = &self.tu;
+        for n in nodes.iter() {
+            match n.node {
+                ExternalDeclaration::Declaration(ref decl) => {
+                    println!("{:#?}", decl);
+                }
+                ExternalDeclaration::FunctionDefinition(ref fn_def) => {
+                    let fn_name = self.get_name(&fn_def.node.declarator.node);
+                    let ret_ty = 
+                }
+                _ => panic!("Haven't implemented node: {:?}", n.node),
+            }
+        }
+    }
+}
+
 
 
