@@ -13,7 +13,11 @@ use circ::target::r1cs::trans::to_r1cs;
 use env_logger;
 use good_lp::default_solver;
 use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
 use structopt::StructOpt;
+use clap::arg_enum;
+use circ::front::datalog::parser::parse;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -30,9 +34,21 @@ struct Options {
     #[structopt(short, long, name = "PARTIES")]
     parties: Option<u8>,
 
+    /// Input language
+    #[structopt(short, long, name = "LANG", default_value = "zokrates")]
+    lang: InputLang,
+
     /// Whether to maximize the output
     #[structopt(short, long)]
     maximize: bool,
+}
+
+arg_enum!{
+    #[derive(PartialEq, Debug)]
+    pub enum InputLang {
+        Zokrates,
+        Datalog,
+    }
 }
 
 fn main() {
@@ -56,7 +72,24 @@ fn main() {
         inputs: options.inputs,
         mode: mode.clone(),
     };
-    let cs = Zokrates::gen(inputs);
+    let cs = match options.lang {
+        InputLang::Zokrates => Zokrates::gen(inputs),
+        InputLang::Datalog => {
+            let mut f = File::open(&path_buf).unwrap();
+            let mut buffer = String::new();
+            f.read_to_string(&mut buffer).unwrap();
+            let ast = parse(&buffer);
+            let ast = match ast {
+                Ok(ast) => ast,
+                Err(e) => {
+                    println!("{}", e);
+                    panic!("parse error!")
+                }
+            };
+            println!("{:#?}", ast);
+            todo!()
+        }
+    };
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
