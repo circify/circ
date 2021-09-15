@@ -1,5 +1,6 @@
 //! Input language front-ends
 
+pub mod datalog;
 pub mod zokrates;
 
 use super::ir::term::Computation;

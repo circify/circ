@@ -45,6 +45,9 @@
 
 use super::visit::*;
 use crate::ir::term::*;
+use crate::ir::term::extras::as_uint_constant;
+
+use log::debug;
 
 use std::iter::repeat;
 
@@ -134,6 +137,7 @@ impl Replacer {
 impl MemVisitor for Replacer {
     fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
         if self.should_replace(orig) {
+            debug!("Will replace constant: {}", orig);
             self.sequences
                 .insert(orig.clone(), repeat(val).cloned().take(size).collect());
         }
@@ -170,10 +174,8 @@ impl MemVisitor for Replacer {
                 .get(&orig.cs[0])
                 .expect("inconsistent store")
                 .clone();
-            let k_const = k
-                .as_bv_opt()
+            let k_const = as_uint_constant(k)
                 .expect("not obliv!")
-                .uint()
                 .to_usize()
                 .expect("oversize index");
             a_seq[k_const] = v.clone();
@@ -182,10 +184,9 @@ impl MemVisitor for Replacer {
     }
     fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            let k_const = k
-                .as_bv_opt()
+            debug!("Will replace select: {}", orig);
+            let k_const = as_uint_constant(k)
                 .expect("not obliv!")
-                .uint()
                 .to_usize()
                 .expect("oversize index");
             if k_const < a_seq.len() {
