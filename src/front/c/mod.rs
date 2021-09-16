@@ -1,25 +1,20 @@
 //! The C front-end
 
+mod ast_utils;
 mod parser;
 mod term;
+mod types;
 
 use super::FrontEnd;
-use crate::circify::{Circify, Loc, Val};
-use crate::ir::proof::{self, ConstraintMetadata};
+use crate::ir::proof;
 use crate::ir::term::*;
 use lang_c::ast::{
-    Declarator, DeclaratorKind,
     ExternalDeclaration, TranslationUnit, 
 };
-use lang_c::span::Node;
-use lang_c::visit;
-use lang_c::visit::Visit;
-use log::debug;
 // use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use term::*;
 
 const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
 const PUBLIC_VIS: Option<PartyId> = None;
@@ -65,6 +60,7 @@ impl Display for Mode {
     }
 }
 
+/// The C front-end. Implements [FrontEnd].
 pub struct C;
 
 impl FrontEnd for C {
@@ -96,11 +92,8 @@ impl CGen {
         Self { source, tu, mode }
     }
 
-    fn get_name(&self, dec: &Declarator) -> String {
-        match dec.kind.node {
-            DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
-            _ => panic!("Declarator Identified not found: {:?}", id.node),
-        }
+    fn gen_stmt(&mut self, ) {
+        
     }
 
     fn gen(&mut self) {
@@ -111,8 +104,8 @@ impl CGen {
                     println!("{:#?}", decl);
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
-                    let fn_name = self.get_name(&fn_def.node.declarator.node);
-                    let ret_ty = 
+                    let fn_info = ast_utils::get_fn_info(&fn_def.node);
+                    println!("{}", fn_info);
                 }
                 _ => panic!("Haven't implemented node: {:?}", n.node),
             }

@@ -510,7 +510,7 @@ impl ToABY {
                     _ => panic!("Invalid bv-op in BvBinOp: {:?}", o),
                 }
             }
-            Op::BvExtract(start, end) => {
+            Op::BvExtract(_start, _end) => {
                 
             }
             _ => panic!("Non-field in embed_bv: {:?}", t),
