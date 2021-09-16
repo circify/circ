@@ -6,12 +6,13 @@ mod term;
 mod types;
 
 use super::FrontEnd;
+use crate::circify::Circify;
+
 use crate::front::c::term::*;
 use crate::ir::proof;
+use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
-use lang_c::ast::{
-    BinaryOperator, BlockItem, Expression, ExternalDeclaration, Statement, TranslationUnit,
-};
+use lang_c::ast::*;
 
 // use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -60,7 +61,7 @@ impl FrontEnd for C {
     fn gen(i: Inputs) -> Computation {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
-        let mut g = CGen::new(p.source, p.unit, i.mode);
+        let mut g = CGen::new(i.inputs, i.mode, p.source, p.unit);
         g.gen();
         // g.circ.consume().borrow().clone()
 
@@ -73,25 +74,37 @@ impl FrontEnd for C {
 }
 
 struct CGen {
+    circ: Circify<Ct>,
+    mode: Mode,
     source: String,
     tu: TranslationUnit,
-    mode: Mode,
 }
 
 impl CGen {
-    fn new(source: String, tu: TranslationUnit, mode: Mode) -> Self {
-        Self { source, tu, mode }
+    fn new(inputs: Option<PathBuf>, mode: Mode, source: String, tu: TranslationUnit) -> Self {
+        let this = Self { 
+            circ: Circify::new(Ct::new(inputs.map(|i| parser::parse_inputs(i)))),
+            mode,
+            source, 
+            tu, 
+        };
+        this.circ
+            .cir_ctx()
+            .cs
+            .borrow_mut()
+            .metadata
+            .add_prover_and_verifier();
+        this
     }
 
     /// Unwrap a result with a span-dependent error
-    fn err<E: Display>(&self, e: E, expr: Expression) -> ! {
+    fn err<E: Display>(&self, e: E) -> ! {
         println!("Error: {}", e);
-        println!("In: {:#?}", expr);
         std::process::exit(1)
     }
 
-    fn unwrap<CTerm, E: Display>(&self, r: Result<CTerm, E>, expr: Expression) -> CTerm {
-        r.unwrap_or_else(|e| self.err(e, expr))
+    fn unwrap<CTerm, E: Display>(&self, r: Result<CTerm, E>) -> CTerm {
+        r.unwrap_or_else(|e| self.err(e))
     }
 
     fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
@@ -103,6 +116,9 @@ impl CGen {
 
     fn gen_expr(&self, expr: Expression) -> CTerm {
         let res = match expr.clone() {
+            // Expression::Identifier(node) => {
+            //     Ok(self.unwrap(self.circ.get_value(Loc::local(node.name.clone()))).unwrap_term()),
+            // }
             Expression::BinaryOperator(node) => {
                 let bin_expr = node.node;
                 println!("{:#?}", bin_expr);
@@ -116,7 +132,7 @@ impl CGen {
             }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
-        self.unwrap(res, expr)
+        self.unwrap(res)
     }
 
     fn gen_stmt(&self, stmt: Statement) {

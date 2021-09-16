@@ -1,18 +1,23 @@
 //! C Terms
-use crate::front::c::types::Type;
+use crate::circify::{CirCtx, Embeddable};
+use crate::front::c::types::Ty;
 use crate::ir::term::*;
+use rug::Integer;
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
+
+#[derive(Clone)]
 pub enum CTermData {
     CBool(Term),
     CInt(usize, Term),
 }
 
 impl CTermData {
-    pub fn type_(&self) -> Type {
+    pub fn type_(&self) -> Ty {
         match self {
-            Self::CBool(_) => Type::Bool,
-            Self::CInt(w, _) => Type::Uint(*w),
+            Self::CBool(_) => Ty::Bool,
+            Self::CInt(w, _) => Ty::Uint(*w),
         }
     }
 }
@@ -26,9 +31,23 @@ impl Display for CTermData {
     }
 }
 
+impl fmt::Debug for CTermData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+
+#[derive(Clone, Debug)]
 pub struct CTerm {
-    term: CTermData,
-    udef: bool,
+    pub term: CTermData,
+    pub udef: bool,
+}
+
+impl Display for CTerm {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "Term: {:#?},\nudef: {}", self.term, self.udef)
+    }
 }
 
 fn wrap_bin_op(
@@ -59,18 +78,124 @@ pub fn add(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_op("+", Some(add_uint), None, a, b)
 }
 
-// fn sub_uint(a: Term, b: Term) -> Term {
-//     term![Op::BvBinOp(BvBinOp::Sub); a, b]
-// }
+pub struct Ct {
+    values: Option<HashMap<String, Integer>>,
+}
 
-// pub fn sub(a: Term, b: Term) -> Result<Term, String> {
-//     wrap_bin_op("-", Some(sub_uint), None, a, b)
-// }
+impl Ct {
+    pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
+        Self {
+            values,
+        }
+    }
+}
 
-// fn mul_uint(a: Term, b: Term) -> Term {
-//     term![Op::BvNaryOp(BvNaryOp::Mul); a, b]
-// }
+impl Embeddable for Ct {
+    type T = CTerm;
+    type Ty = Ty;
+    fn declare(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        raw_name: String,
+        user_name: Option<String>,
+        visibility: Option<PartyId>,
+    ) -> Self::T {
+        let get_int_val = || -> Integer {
+            self.values
+                .as_ref()
+                .and_then(|vs| {
+                    user_name
+                        .as_ref()
+                        .and_then(|n| vs.get(n))
+                        .or_else(|| vs.get(&raw_name))
+                })
+                .cloned()
+                .unwrap_or_else(|| Integer::from(0))
+        };
+        match ty {
+            Ty::Bool => {
+                Self::T {
+                    term: CTermData::CBool(
+                            ctx.cs.borrow_mut().new_var(
+                            &raw_name,
+                            Sort::Bool,
+                            || Value::Bool(get_int_val() != 0),
+                            visibility,
+                        )
+                    ),
+                    udef: false,
+                }
+            },
+            Ty::Uint(w) => {
+                Self::T {
+                    term: CTermData::CInt(
+                            *w,
+                            ctx.cs.borrow_mut().new_var(
+                            &raw_name,
+                            Sort::BitVector(*w),
+                            || Value::BitVector(BitVector::new(get_int_val(), *w)),
+                            visibility,
+                        ),
+                    ),
+                    udef: false,
+                }
+            }
+        }
+    }
+    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+        match (t.term, f.term) {
+            (CTermData::CBool(a), CTermData::CBool(b)) => {
+                Self::T {
+                    term: CTermData::CBool(term![Op::Ite; cond, a, b]),
+                    udef: false,
+                }
+            }
+            (CTermData::CInt(wa, a), CTermData::CInt(wb, b)) if wa == wb => {
+                Self::T {
+                    term: CTermData::CInt(wa, term![Op::Ite; cond, a, b]),
+                    udef: false,
+                }
+            }
+            (t, f) => panic!("Cannot ITE {} and {}", t, f),
+        }
+    }
 
-// pub fn mul(a: Term, b: Term) -> Result<Term, String> {
-//     wrap_bin_op("*", Some(mul_uint), None, a, b)
-// }
+    fn assign(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        name: String,
+        t: Self::T,
+        visibility: Option<PartyId>,
+    ) -> Self::T {
+        assert!(&t.term.type_() == ty);
+        match (ty, t.term) {
+            (_, CTermData::CBool(b)) => {
+                Self::T {
+                    term: CTermData::CBool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
+                    udef: false,
+                }
+            }
+            (_, CTermData::CInt(w, b)) => {
+                Self::T {
+                    term: CTermData::CInt(w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
+                    udef: false,
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn values(&self) -> bool {
+        self.values.is_some()
+    }
+
+    fn type_of(&self, cterm: &Self::T) -> Self::Ty {
+        cterm.term.type_()
+    }
+
+    fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
+        ty.default()
+    }
+}
