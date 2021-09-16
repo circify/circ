@@ -14,11 +14,11 @@ use std::fmt::{self, Display, Formatter};
 pub struct FnInfo {
     name: String, 
     args: Vec<ParameterDeclaration>,
-    body: Vec<Node<BlockItem>>,
+    body: Statement,
 }       
 
 impl FnInfo {
-    fn new(name: String, args: Vec<ParameterDeclaration>, body: Vec<Node<BlockItem>>) -> Self {
+    fn new(name: String, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
         Self { name, args, body }
     }
 }
@@ -37,7 +37,7 @@ pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
     FnInfo {
         name,
         args: args.to_vec(),
-        body: body.to_vec(),
+        body: body,
     }
 }
 
@@ -63,10 +63,6 @@ fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaratio
     })
 }
 
-fn body_from_func(fn_def: &FunctionDefinition) -> &Vec<Node<BlockItem>> {
-    let stmt = &fn_def.statement.node;
-    match stmt {
-        Statement::Compound(nodes) => nodes,
-        _ => panic!("Function body not found: {:?}", stmt),
-    }
+fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
+    fn_def.statement.node.clone()
 }

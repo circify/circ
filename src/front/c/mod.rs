@@ -9,7 +9,7 @@ use super::FrontEnd;
 use crate::ir::proof;
 use crate::ir::term::*;
 use lang_c::ast::{
-    ExternalDeclaration, TranslationUnit, 
+    BlockItem, ExternalDeclaration, TranslationUnit, Statement
 };
 // use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -92,8 +92,26 @@ impl CGen {
         Self { source, tu, mode }
     }
 
-    fn gen_stmt(&mut self, ) {
-        
+    fn gen_stmt(&mut self, stmt: Statement) {
+        match stmt {
+            Statement::Compound(nodes) => {
+                for node in nodes {
+                    match node.node {
+                        BlockItem::Declaration(decl) => {
+                            _ => panic!("Declaration not supported yet"),
+                        }
+                        BlockItem::Statement(stmt) => {
+                        }
+                        BlockItem::StaticAssert(sa) => {
+                            _ => panic!("Static Assert not supported yet"),
+                        }
+                    }                    
+                }
+            }
+            Statement::Expression(expr) => {
+            }
+            _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
+        }
     }
 
     fn gen(&mut self) {
