@@ -92,21 +92,27 @@ impl CGen {
         Self { source, tu, mode }
     }
 
-    fn gen_stmt(&mut self, stmt: Statement) {
+    // fn gen_expr(&self, ) {
+
+    // }
+
+    fn gen_stmt(&self, stmt: Statement) {
         match stmt {
             Statement::Compound(nodes) => {
                 for node in nodes {
                     match node.node {
-                        BlockItem::Declaration(decl) => {
-                            _ => panic!("Declaration not supported yet"),
-                        }
+                        BlockItem::Declaration(_decl) => unimplemented!("Declaration not supported yet"),
                         BlockItem::Statement(stmt) => {
+                            self.gen_stmt(stmt.node);
                         }
-                        BlockItem::StaticAssert(sa) => {
-                            _ => panic!("Static Assert not supported yet"),
-                        }
+                        BlockItem::StaticAssert(_sa) => unimplemented!("Static Assert not supported yet"),
                     }                    
                 }
+            }
+            Statement::Return(ret) => {
+                // Return is Optional type here
+                println!("{:#?}", ret);
+                // self.gen_expr(ret);
             }
             Statement::Expression(expr) => {
             }
@@ -114,7 +120,7 @@ impl CGen {
         }
     }
 
-    fn gen(&mut self) {
+    fn gen(&self) {
         let TranslationUnit(nodes) = &self.tu;
         for n in nodes.iter() {
             match n.node {
@@ -123,6 +129,7 @@ impl CGen {
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
+                    self.gen_stmt(fn_info.body.clone());
                     println!("{}", fn_info);
                 }
                 _ => panic!("Haven't implemented node: {:?}", n.node),

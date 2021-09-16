@@ -12,9 +12,9 @@ use std::fmt::{self, Display, Formatter};
 
 
 pub struct FnInfo {
-    name: String, 
-    args: Vec<ParameterDeclaration>,
-    body: Statement,
+    pub name: String, 
+    pub args: Vec<ParameterDeclaration>,
+    pub body: Statement,
 }       
 
 impl FnInfo {
