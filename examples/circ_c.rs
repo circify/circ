@@ -15,7 +15,6 @@ use good_lp::default_solver;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
@@ -74,5 +73,4 @@ fn main() {
     //         write_aby_exec(aby, path_buf);
     //     }
     // }
-
 }

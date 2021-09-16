@@ -1,8 +1,8 @@
 //! Parsing and recursively loading C.
 
-use std::path::PathBuf;
-use lang_c::driver::{Config, parse, Parse};
 use lang_c::driver::Error;
+use lang_c::driver::{parse, Config, Parse};
+use std::path::PathBuf;
 
 pub struct CParser {
     config: Config,

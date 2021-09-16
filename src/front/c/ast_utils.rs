@@ -1,21 +1,14 @@
 use lang_c::ast::{
-    BlockItem,
-    DeclaratorKind, 
-    DerivedDeclarator,
-    FunctionDefinition, 
-    ParameterDeclaration, 
-    Statement
+    DeclaratorKind, DerivedDeclarator, FunctionDefinition, ParameterDeclaration, Statement,
 };
-use lang_c::span::Node;
 
 use std::fmt::{self, Display, Formatter};
 
-
 pub struct FnInfo {
-    pub name: String, 
+    pub name: String,
     pub args: Vec<ParameterDeclaration>,
     pub body: Statement,
-}       
+}
 
 impl FnInfo {
     fn new(name: String, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
@@ -25,7 +18,11 @@ impl FnInfo {
 
 impl Display for FnInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "name: {},\nargs: {:#?},\nbody: {:#?}", self.name, self.args, self.body)
+        write!(
+            f,
+            "name: {},\nargs: {:#?},\nbody: {:#?}",
+            self.name, self.args, self.body
+        )
     }
 }
 
@@ -41,7 +38,6 @@ pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
     }
 }
 
-
 fn name_from_func(fn_def: &FunctionDefinition) -> String {
     let dec = &fn_def.declarator.node;
     match dec.kind.node {
@@ -54,12 +50,15 @@ fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaratio
     let dec = &fn_def.declarator.node;
     dec.derived.iter().find_map(|d| match d.node {
         DerivedDeclarator::Function(ref fn_dec) => {
-            let args = fn_dec.node.parameters.iter().map(|a| {
-                a.node.clone()
-            }).collect::<Vec<ParameterDeclaration>>();
+            let args = fn_dec
+                .node
+                .parameters
+                .iter()
+                .map(|a| a.node.clone())
+                .collect::<Vec<ParameterDeclaration>>();
             Some(args)
         }
-        _ => None
+        _ => None,
     })
 }
 
