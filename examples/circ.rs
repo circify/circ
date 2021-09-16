@@ -2,7 +2,8 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::Circuit;
 use bls12_381::Scalar;
-use circ::front::zokrates::{Inputs, Mode, Zokrates};
+use circ::front::datalog::{self, Datalog};
+use circ::front::zokrates::{self, Mode, Zokrates};
 use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
 use circ::target::aby::output::write_aby_exec;
@@ -10,14 +11,13 @@ use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+use clap::arg_enum;
 use env_logger;
 use good_lp::default_solver;
-use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use structopt::StructOpt;
-use clap::arg_enum;
-use circ::front::datalog::parser::parse;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -43,7 +43,7 @@ struct Options {
     maximize: bool,
 }
 
-arg_enum!{
+arg_enum! {
     #[derive(PartialEq, Debug)]
     pub enum InputLang {
         Zokrates,
@@ -67,27 +67,20 @@ fn main() {
             None => Mode::Proof,
         }
     };
-    let inputs = Inputs {
-        file: options.zokrates_path,
-        inputs: options.inputs,
-        mode: mode.clone(),
-    };
     let cs = match options.lang {
-        InputLang::Zokrates => Zokrates::gen(inputs),
-        InputLang::Datalog => {
-            let mut f = File::open(&path_buf).unwrap();
-            let mut buffer = String::new();
-            f.read_to_string(&mut buffer).unwrap();
-            let ast = parse(&buffer);
-            let ast = match ast {
-                Ok(ast) => ast,
-                Err(e) => {
-                    println!("{}", e);
-                    panic!("parse error!")
-                }
+        InputLang::Zokrates => {
+            let inputs = zokrates::Inputs {
+                file: options.zokrates_path,
+                inputs: options.inputs,
+                mode: mode.clone(),
             };
-            println!("{:#?}", ast);
-            todo!()
+            Zokrates::gen(inputs)
+        }
+        InputLang::Datalog => {
+            let inputs = datalog::Inputs {
+                file: options.zokrates_path,
+            };
+            Datalog::gen(inputs)
         }
     };
     let cs = match mode {

@@ -427,8 +427,8 @@ pub mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::qual_ty))]
     pub struct QualType<'ast> {
-        qualifier: Option<Visibility<'ast>>,
-        ty: Type<'ast>,
+        pub qualifier: Option<Visibility<'ast>>,
+        pub ty: Type<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
@@ -436,8 +436,8 @@ pub mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::decl))]
     pub struct Declaration<'ast> {
-        ident: Ident<'ast>,
-        ty: QualType<'ast>,
+        pub ident: Ident<'ast>,
+        pub ty: QualType<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }

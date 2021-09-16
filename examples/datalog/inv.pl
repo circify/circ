@@ -1,1 +1,1 @@
-non_zero(X: field, Y: u8) :- exists I: field. X * I = 1.
+main(X: field) :- exists I: field. X * I = 1.
