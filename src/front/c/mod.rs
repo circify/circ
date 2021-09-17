@@ -6,13 +6,17 @@ mod term;
 mod types;
 
 use super::FrontEnd;
-use crate::circify::Circify;
+use crate::circify::{Circify, Loc};
 
+
+use crate::front::c::ast_utils::name_from_decl;
 use crate::front::c::term::*;
+use crate::front::c::types::Ty;
 use crate::ir::proof;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use lang_c::ast::*;
+
 
 // use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -63,13 +67,7 @@ impl FrontEnd for C {
         let p = parser.parse_file(&i.file).unwrap();
         let mut g = CGen::new(i.inputs, i.mode, p.source, p.unit);
         g.gen();
-        // g.circ.consume().borrow().clone()
-
-        Computation {
-            outputs: vec![],
-            metadata: ComputationMetadata::default(),
-            values: None,
-        }
+        g.circ.consume().borrow().clone()
     }
 }
 
@@ -107,6 +105,13 @@ impl CGen {
         r.unwrap_or_else(|e| self.err(e))
     }
 
+    fn type_(&self, t: &DeclarationSpecifier) -> Ty {
+        match t {
+            int => Ty::Uint(32),
+            _ => unimplemented!("Type {:#?} hasn't been implemented", t),
+        }
+    }
+
     fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             plus => add,
@@ -116,19 +121,15 @@ impl CGen {
 
     fn gen_expr(&self, expr: Expression) -> CTerm {
         let res = match expr.clone() {
-            // Expression::Identifier(node) => {
-            //     Ok(self.unwrap(self.circ.get_value(Loc::local(node.name.clone()))).unwrap_term()),
-            // }
+            Expression::Identifier(node) => {
+                Ok(self.unwrap(self.circ.get_value(Loc::local(node.node.name.clone()))).unwrap_term())
+            }
             Expression::BinaryOperator(node) => {
                 let bin_expr = node.node;
-                println!("{:#?}", bin_expr);
                 let f = self.get_bin_op(bin_expr.operator.node);
                 let a = self.gen_expr(bin_expr.lhs.node);
                 let b = self.gen_expr(bin_expr.rhs.node);
                 f(a, b)
-
-                // println!("lhs: {:#?}", lhs);
-                // println!("rhs: {:#?}", rhs);
             }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
@@ -165,7 +166,7 @@ impl CGen {
         }
     }
 
-    fn gen(&self) {
+    fn gen(&mut self) {
         let TranslationUnit(nodes) = &self.tu;
         for n in nodes.iter() {
             match n.node {
@@ -174,11 +175,22 @@ impl CGen {
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
+                    for p in fn_info.args.iter() {
+                        assert!(p.specifiers.len() == 1);
+                        let t = p.specifiers.first().unwrap();
+                        let ty = self.type_(&t.node);
+                        let d = &p.declarator.as_ref().unwrap().node;
+                        let name = name_from_decl(d);
+                        let r = self.circ.declare(name.clone(), &ty, true, PUBLIC_VIS);
+                        self.unwrap(r);
+                    }
                     self.gen_stmt(fn_info.body.clone());
                     // println!("{}", fn_info);
                 }
                 _ => panic!("Haven't implemented node: {:?}", n.node),
             }
         }
+
+        println!("{:#?}", self.circ.exit_fn());
     }
 }

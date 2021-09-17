@@ -57,6 +57,7 @@ fn main() {
         mode: mode.clone(),
     };
     let cs = Zokrates::gen(inputs);
+    println!("{:#?}", cs);
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
         Mode::Mpc(_) => opt(

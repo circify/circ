@@ -1,5 +1,5 @@
 use lang_c::ast::{
-    DeclaratorKind, DerivedDeclarator, FunctionDefinition, ParameterDeclaration, Statement,
+    Declarator, DeclaratorKind, DerivedDeclarator, FunctionDefinition, ParameterDeclaration, Statement,
 };
 
 use std::fmt::{self, Display, Formatter};
@@ -26,6 +26,13 @@ impl Display for FnInfo {
     }
 }
 
+pub fn name_from_decl(decl: &Declarator) -> String{
+    match decl.kind.node {
+        DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
+        _ => panic!("Function name not found: {:?}", decl),
+    }
+}
+
 pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
     let name = name_from_func(fn_def);
     let args = args_from_func(fn_def).unwrap();
@@ -39,11 +46,8 @@ pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
 }
 
 fn name_from_func(fn_def: &FunctionDefinition) -> String {
-    let dec = &fn_def.declarator.node;
-    match dec.kind.node {
-        DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
-        _ => panic!("Function name not found: {:?}", dec),
-    }
+    let decl = &fn_def.declarator.node;
+    name_from_decl(decl)
 }
 
 fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaration>> {
