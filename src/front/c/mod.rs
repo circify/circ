@@ -6,10 +6,8 @@ mod term;
 mod types;
 
 use super::FrontEnd;
-use crate::circify::{Circify, Loc};
-
-
-use crate::front::c::ast_utils::name_from_decl;
+use crate::circify::{Circify, Loc, Val};
+use crate::front::c::ast_utils::{decl_type, name_from_decl, type_};
 use crate::front::c::term::*;
 use crate::front::c::types::Ty;
 use crate::ir::proof;
@@ -105,13 +103,6 @@ impl CGen {
         r.unwrap_or_else(|e| self.err(e))
     }
 
-    fn type_(&self, t: &DeclarationSpecifier) -> Ty {
-        match t {
-            int => Ty::Uint(32),
-            _ => unimplemented!("Type {:#?} hasn't been implemented", t),
-        }
-    }
-
     fn const_(&self, c: Constant) -> CTerm {
         match c {
             Constant::Integer(i) => {
@@ -162,7 +153,19 @@ impl CGen {
 
     fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
-            plus => add,
+            BinaryOperator::Plus => add,
+            BinaryOperator::Minus => sub,
+            BinaryOperator::Multiply => mul,
+            BinaryOperator::Equals => eq,
+            BinaryOperator::Greater => ugt,
+            BinaryOperator::GreaterOrEqual => uge,
+            BinaryOperator::Less => ult,
+            BinaryOperator::LessOrEqual => ule,
+            BinaryOperator::BitwiseAnd => bitand,
+            BinaryOperator::BitwiseOr => bitor,
+            BinaryOperator::BitwiseXor => bitxor,
+            BinaryOperator::LogicalAnd => and,
+            BinaryOperator::LogicalOr => or,
             _ => unimplemented!("BinaryOperator {:#?} hasn't been implemented", op),
         }
     }
@@ -187,13 +190,34 @@ impl CGen {
         self.unwrap(res)
     }
 
+    fn gen_init(&mut self, decl: InitDeclarator, ty: Ty) {
+        println!("Decl {:#?}", decl);
+        let name = name_from_decl(&decl.declarator.node);
+        let mut expr: Option<CTerm> = None;
+        if let Some(i) = decl.initializer {
+            match i.node {
+                Initializer::Expression(e) => {
+                    expr = Some(self.gen_expr(e.node));
+                }
+                Initializer::List(l) => {
+                    unimplemented!("list type not implemented yet.");
+                }
+            }
+        }
+        let d_res = self.circ.declare_init(name, ty, Val::Term(expr.unwrap()));
+        self.unwrap(d_res);
+    }
+
     fn gen_stmt(&mut self, stmt: Statement) {
         match stmt {
             Statement::Compound(nodes) => {
                 for node in nodes {
                     match node.node {
-                        BlockItem::Declaration(_decl) => {
-                            unimplemented!("Declaration not supported yet")
+                        BlockItem::Declaration(node) => {
+                            let decl = node.node;
+                            let ty = decl_type(decl.clone()).unwrap();
+                            assert!(decl.declarators.len() == 1);
+                            self.gen_init(decl.declarators.first().unwrap().node.clone(), ty);
                         }
                         BlockItem::Statement(stmt) => {
                             self.gen_stmt(stmt.node);
@@ -229,16 +253,17 @@ impl CGen {
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
                     println!("{:#?}", fn_def.node.clone());
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
-                    self.circ.enter_fn(fn_info.name.to_owned(), Some(Ty::Uint(32)));
+                    println!("Ret ty: {:#?}", fn_info.ret_ty);
+                    self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty);
                     for arg in fn_info.args.iter() {
                         assert!(arg.specifiers.len() == 2);
                         let p = &arg.specifiers[0];
                         let vis = self.interpret_visibility(&p.node);
                         let t = &arg.specifiers[1];
-                        let ty = self.type_(&t.node);
+                        let ty = type_(&t.node);
                         let d = &arg.declarator.as_ref().unwrap().node;
                         let name = name_from_decl(d);
-                        let r = self.circ.declare(name.clone(), &ty, true, vis);
+                        let r = self.circ.declare(name.clone(), &ty.unwrap(), true, vis);
                         self.unwrap(r);
                     }
                     //TODO: move this out for just the main function as entry

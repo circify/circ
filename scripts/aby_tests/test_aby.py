@@ -58,7 +58,7 @@ def update_progress_bar():
     sys.stdout.flush()
 
 def end_progress_bar():
-    sys.stdout.write("\n") # this ends the progress bar
+    sys.stdout.write("]\n") # this ends the progress bar
 
 def main():
     # tests will be a list of all tests to run. each element in the list will be 
@@ -67,13 +67,13 @@ def main():
     # 3. executable path: string
     # 4. server arguments: dict[name] = value
     # 5. client arguments: dict[name] = value
-    tests = arithmetic_tests # + \
-        # arithmetic_boolean_tests + \
-        # nary_arithmetic_tests + \
-        # bitwise_tests + \
-        # boolean_tests + \
-        # nary_boolean_tests + \
-        # const_tests + \
+    tests = arithmetic_tests + \
+        arithmetic_boolean_tests + \
+        nary_arithmetic_tests + \
+        bitwise_tests + \
+        boolean_tests + \
+        nary_boolean_tests + \
+        const_tests # + \
         # loop_tests + \
         # ite_tests + \
         # function_tests + \
@@ -85,7 +85,7 @@ def main():
     failed_test_descs = []
     num_retries = 3
     progress_inc = 5
-    init_progress_bar(len(tests) // progress_inc + 1)
+    init_progress_bar(len(tests) // progress_inc)
     for t, test in enumerate(tests):
         assert len(test) == 5, "test configurations are wrong for test: "+test[0]
         desc = test[0]

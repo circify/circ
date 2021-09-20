@@ -1,18 +1,19 @@
+use crate::front::c::types::Ty;
 use lang_c::ast::{
-    Declarator, DeclaratorKind, DerivedDeclarator, FunctionDefinition, ParameterDeclaration, Statement,
+    Declaration, Declarator, DeclaratorKind, DeclarationSpecifier, DerivedDeclarator, FunctionDefinition, ParameterDeclaration, Statement, TypeSpecifier
 };
-
 use std::fmt::{self, Display, Formatter};
 
 pub struct FnInfo {
     pub name: String,
+    pub ret_ty: Option<Ty>,
     pub args: Vec<ParameterDeclaration>,
     pub body: Statement,
 }
 
 impl FnInfo {
-    fn new(name: String, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
-        Self { name, args, body }
+    fn new(name: String, ret_ty: Option<Ty>, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
+        Self { name, ret_ty, args, body }
     }
 }
 
@@ -33,13 +34,33 @@ pub fn name_from_decl(decl: &Declarator) -> String{
     }
 }
 
+pub fn type_(t: &DeclarationSpecifier) -> Option<Ty> {
+    if let DeclarationSpecifier::TypeSpecifier(ty) = t {
+        return match ty.node {
+            TypeSpecifier::Int => Some(Ty::Uint(32)),
+            TypeSpecifier::Bool => Some(Ty::Bool),
+            TypeSpecifier::Void => None,
+            _ => unimplemented!("Type {:#?} not implemented yet.", ty)
+        };
+    }
+    panic!("DeclarationSpecifier does not contain TyepSpecifier: {:#?}", t);
+}
+
+pub fn decl_type(decl: Declaration) -> Option<Ty> {
+    let spec = &decl.specifiers;
+    assert!(spec.len() == 1);
+    type_(&spec.first().unwrap().node)
+}
+
 pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
     let name = name_from_func(fn_def);
+    let ret_ty = ret_ty_from_func(fn_def);
     let args = args_from_func(fn_def).unwrap();
     let body = body_from_func(fn_def);
 
     FnInfo {
         name,
+        ret_ty,
         args: args.to_vec(),
         body: body,
     }
@@ -48,6 +69,12 @@ pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
 fn name_from_func(fn_def: &FunctionDefinition) -> String {
     let decl = &fn_def.declarator.node;
     name_from_decl(decl)
+}
+
+fn ret_ty_from_func(fn_def: &FunctionDefinition) -> Option<Ty> {
+    let spec = &fn_def.specifiers;
+    assert!(spec.len() == 1);
+    type_(&spec.first().unwrap().node)
 }
 
 fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaration>> {

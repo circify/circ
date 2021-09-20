@@ -82,12 +82,128 @@ fn wrap_bin_op(
     }
 }
 
+fn wrap_bin_pred(
+    name: &str,
+    fu: Option<fn(Term, Term) -> Term>,
+    fb: Option<fn(Term, Term) -> Term>,
+    a: CTerm,
+    b: CTerm,
+) -> Result<CTerm, String> {
+    match (a.term, b.term, fu, fb) {
+        (CTermData::CInt(na, a), CTermData::CInt(nb, b), Some(fu), _) if na == nb => Ok(CTerm {
+            term: CTermData::CBool(fu(a, b)),
+            udef: false,
+        }),
+        (CTermData::CBool(a), CTermData::CBool(b), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::CBool(fb(a, b)),
+            udef: false,
+        }),
+        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+    }
+}
+
 fn add_uint(a: Term, b: Term) -> Term {
     term![Op::BvNaryOp(BvNaryOp::Add); a, b]
 }
 
 pub fn add(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_op("+", Some(add_uint), None, a, b)
+}
+
+fn sub_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinOp(BvBinOp::Sub); a, b]
+}
+
+pub fn sub(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("-", Some(sub_uint), None, a, b)
+}
+
+fn mul_uint(a: Term, b: Term) -> Term {
+    term![Op::BvNaryOp(BvNaryOp::Mul); a, b]
+}
+
+pub fn mul(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("*", Some(mul_uint), None, a, b)
+}
+
+fn bitand_uint(a: Term, b: Term) -> Term {
+    term![Op::BvNaryOp(BvNaryOp::And); a, b]
+}
+
+pub fn bitand(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("&", Some(bitand_uint), None, a, b)
+}
+
+fn bitor_uint(a: Term, b: Term) -> Term {
+    term![Op::BvNaryOp(BvNaryOp::Or); a, b]
+}
+
+pub fn bitor(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("|", Some(bitor_uint), None, a, b)
+}
+
+fn bitxor_uint(a: Term, b: Term) -> Term {
+    term![Op::BvNaryOp(BvNaryOp::Xor); a, b]
+}
+
+pub fn bitxor(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("^", Some(bitxor_uint), None, a, b)
+}
+
+fn or_bool(a: Term, b: Term) -> Term {
+    term![Op::BoolNaryOp(BoolNaryOp::Or); a, b]
+}
+
+pub fn or(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("||", None, Some(or_bool), a, b)
+}
+
+fn and_bool(a: Term, b: Term) -> Term {
+    term![Op::BoolNaryOp(BoolNaryOp::And); a, b]
+}
+
+pub fn and(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_op("&&", None, Some(and_bool), a, b)
+}
+
+fn eq_base(a: Term, b: Term) -> Term {
+    term![Op::Eq; a, b]
+}
+
+pub fn eq(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_pred("==", Some(eq_base), Some(eq_base), a, b)
+}
+
+fn ult_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinPred(BvBinPred::Ult); a, b]
+}
+
+pub fn ult(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_pred("<", Some(ult_uint), None, a, b)
+}
+
+fn ule_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinPred(BvBinPred::Ule); a, b]
+}
+
+pub fn ule(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_pred("<=", Some(ule_uint), None, a, b)
+}
+
+fn ugt_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinPred(BvBinPred::Ugt); a, b]
+}
+
+pub fn ugt(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_pred(">", Some(ugt_uint), None, a, b)
+}
+
+fn uge_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinPred(BvBinPred::Uge); a, b]
+}
+
+pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_pred(">=", Some(uge_uint), None, a, b)
 }
 
 pub fn const_int(a: CTerm) -> Result<Integer, String> {
