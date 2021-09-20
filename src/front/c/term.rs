@@ -20,6 +20,18 @@ impl CTermData {
             Self::CInt(w, _) => Ty::Uint(*w),
         }
     }
+    /// Get all IR terms inside this value, as a list.
+    pub fn terms(&self) -> Vec<Term> {
+        let mut output: Vec<Term> = Vec::new();
+        fn terms_tail(term: &CTermData, output: &mut Vec<Term>) {
+            match term {
+                CTermData::CBool(b) => output.push(b.clone()),
+                CTermData::CInt(_, b) => output.push(b.clone()),
+            }
+        }
+        terms_tail(self, &mut output);
+        output
+    }
 }
 
 impl Display for CTermData {
@@ -76,6 +88,17 @@ fn add_uint(a: Term, b: Term) -> Term {
 
 pub fn add(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_op("+", Some(add_uint), None, a, b)
+}
+
+pub fn const_int(a: CTerm) -> Result<Integer, String> {
+    let s = match &a.term {
+        CTermData::CInt(_, i) => match &i.op {
+            Op::Const(Value::BitVector(f)) => Some(f.uint().clone()),
+            _ => None,
+        },
+        _ => None,
+    };
+    s.ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
 pub struct Ct {
@@ -183,7 +206,6 @@ impl Embeddable for Ct {
                     udef: false,
                 }
             }
-            _ => unimplemented!(),
         }
     }
 

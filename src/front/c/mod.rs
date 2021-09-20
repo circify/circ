@@ -112,6 +112,54 @@ impl CGen {
         }
     }
 
+    fn const_(&self, c: Constant) -> CTerm {
+        match c {
+            Constant::Integer(i) => {
+                CTerm {
+                    term: CTermData::CInt(32, bv_lit(i.number.parse::<i32>().unwrap(), 32)),
+                    udef: false,
+                }
+            }
+            _ => unimplemented!("Constant {:#?} hasn't been implemented", c)
+        }
+    }
+
+    fn interpret_visibility(&self, ext: &DeclarationSpecifier) -> Option<PartyId> {
+        if let DeclarationSpecifier::Extension(nodes) = ext { 
+            assert!(nodes.len() == 1);
+            let node = nodes.first().unwrap();
+            if let Extension::Attribute(attr) = &node.node {
+                let name = &attr.name;
+                return match name.node.as_str() {
+                    "public" => PUBLIC_VIS.clone(),
+                    "private" => {
+                        match self.mode {
+                            Mode::Mpc(n_parties) => {
+                                assert!(attr.arguments.len() == 1);
+                                let arg = attr.arguments.first().unwrap();
+                                let cons = self.gen_expr(arg.node.clone());
+                                let num_val = const_int(cons).ok()?;                                
+                                if num_val <= n_parties {
+                                    Some(num_val.to_u8()?)
+                                } else {
+                                    self.err(
+                                        format!(
+                                            "Party number {} greater than the number of parties ({})",
+                                            num_val, n_parties
+                                        )
+                                    )
+                                }
+                            }
+                            _ => unimplemented!("Mode {} is not supported.", self.mode)
+                        }
+                    }
+                    _ => panic!("Unknown visibility: {:#?}", name)
+                }
+            }
+        }
+        panic!("Bad visibility declaration.");
+    }
+
     fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             plus => add,
@@ -123,6 +171,9 @@ impl CGen {
         let res = match expr.clone() {
             Expression::Identifier(node) => {
                 Ok(self.unwrap(self.circ.get_value(Loc::local(node.node.name.clone()))).unwrap_term())
+            }
+            Expression::Constant(node) => {
+                Ok(self.const_(node.node))
             }
             Expression::BinaryOperator(node) => {
                 let bin_expr = node.node;
@@ -136,7 +187,7 @@ impl CGen {
         self.unwrap(res)
     }
 
-    fn gen_stmt(&self, stmt: Statement) {
+    fn gen_stmt(&mut self, stmt: Statement) {
         match stmt {
             Statement::Compound(nodes) => {
                 for node in nodes {
@@ -156,7 +207,9 @@ impl CGen {
             Statement::Return(ret) => {
                 match ret {
                     Some(expr) => {
-                        self.gen_expr(expr.node);
+                        let ret = self.gen_expr(expr.node);
+                        let ret_res = self.circ.return_(Some(ret));
+                        self.unwrap(ret_res);
                     }
                     None => {}
                 };
@@ -167,30 +220,44 @@ impl CGen {
     }
 
     fn gen(&mut self) {
-        let TranslationUnit(nodes) = &self.tu;
+        let TranslationUnit(nodes) = self.tu.clone();
         for n in nodes.iter() {
             match n.node {
                 ExternalDeclaration::Declaration(ref decl) => {
                     println!("{:#?}", decl);
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
+                    println!("{:#?}", fn_def.node.clone());
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
-                    for p in fn_info.args.iter() {
-                        assert!(p.specifiers.len() == 1);
-                        let t = p.specifiers.first().unwrap();
+                    self.circ.enter_fn(fn_info.name.to_owned(), Some(Ty::Uint(32)));
+                    for arg in fn_info.args.iter() {
+                        assert!(arg.specifiers.len() == 2);
+                        let p = &arg.specifiers[0];
+                        let vis = self.interpret_visibility(&p.node);
+                        let t = &arg.specifiers[1];
                         let ty = self.type_(&t.node);
-                        let d = &p.declarator.as_ref().unwrap().node;
+                        let d = &arg.declarator.as_ref().unwrap().node;
                         let name = name_from_decl(d);
-                        let r = self.circ.declare(name.clone(), &ty, true, PUBLIC_VIS);
+                        let r = self.circ.declare(name.clone(), &ty, true, vis);
                         self.unwrap(r);
                     }
+                    //TODO: move this out for just the main function as entry
+                    //TODO: get return type for function
+
                     self.gen_stmt(fn_info.body.clone());
-                    // println!("{}", fn_info);
+                    if let Some(r) = self.circ.exit_fn() {
+                        let ret_term = r.unwrap_term();
+                        let ret_terms = ret_term.term.terms();
+                        self.circ
+                            .cir_ctx()
+                            .cs
+                            .borrow_mut()
+                            .outputs
+                            .extend(ret_terms);
+                    }
                 }
-                _ => panic!("Haven't implemented node: {:?}", n.node),
+                _ => unimplemented!("Haven't implemented node: {:?}", n.node),
             }
         }
-
-        println!("{:#?}", self.circ.exit_fn());
     }
 }

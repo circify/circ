@@ -4,13 +4,13 @@ build: init
 	cargo build --release --example circ && ./scripts/build_mpc_zokrates_test.zsh && ./scripts/build_aby.zsh
 
 test:
-	cargo test && ./scripts/zokrates_test.zsh && python3 ./scripts/test_aby.py && ./scripts/test_zok_to_ilp.zsh
+	cargo test && ./scripts/zokrates_test.zsh && python3 ./scripts/aby_tests/test_aby.py && ./scripts/test_zok_to_ilp.zsh
 
 init:
 	git submodule update --init
 
 aby:
-	./scripts/build_mpc_zokrates_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/test_aby.py
+	./scripts/build_mpc_c_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/aby_tests/test_aby.py
 
 clean:
 	# remove all generated files

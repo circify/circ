@@ -59,19 +59,21 @@ fn main() {
 
     let cs = C::gen(inputs);
     println!("{:#?}", cs);
-    // let cs = match mode {
-    //     Mode::Mpc(_) => opt(
-    //         cs,
-    //         vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
-    //     ),
-    // };
-    // println!("Done with IR optimization");
+    let cs = match mode {
+        Mode::Mpc(_) => opt(
+            cs,
+            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+        ),
+        _ => unimplemented!()
+    };
+    println!("Done with IR optimization");
 
-    // match mode {
-    //     Mode::Mpc(_) => {
-    //         println!("Converting to aby");
-    //         let aby = to_aby(cs);
-    //         write_aby_exec(aby, path_buf);
-    //     }
-    // }
+    match mode {
+        Mode::Mpc(_) => {
+            println!("Converting to aby");
+            let aby = to_aby(cs);
+            write_aby_exec(aby, path_buf);
+        },
+        _ => unimplemented!()
+    }
 }

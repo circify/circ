@@ -42,7 +42,6 @@ fn main() {
         .init();
     let options = Options::from_args();
     let path_buf = options.zokrates_path.clone();
-    println!("{:?}", options);
     let mode = if options.maximize {
         Mode::Opt
     } else {
@@ -57,7 +56,6 @@ fn main() {
         mode: mode.clone(),
     };
     let cs = Zokrates::gen(inputs);
-    println!("{:#?}", cs);
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
