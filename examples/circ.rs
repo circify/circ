@@ -41,6 +41,10 @@ struct Options {
     /// Whether to maximize the output
     #[structopt(short, long)]
     maximize: bool,
+
+    /// How many recursions to allow (datalog)
+    #[structopt(short, long, name = "N", default_value = "5")]
+    rec_limit: usize,
 }
 
 arg_enum! {
@@ -79,6 +83,7 @@ fn main() {
         InputLang::Datalog => {
             let inputs = datalog::Inputs {
                 file: options.zokrates_path,
+                rec_limit: options.rec_limit,
             };
             Datalog::gen(inputs)
         }

@@ -24,20 +24,47 @@ use parser::ast;
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
+    /// How many recursions to tolerate
+    pub rec_limit: usize,
 }
 
 struct Gen<'ast> {
     rules: AHashMap<&'ast str, &'ast ast::Rule_<'ast>>,
+    call_stack: AHashMap<&'ast str, usize>,
+    rec_limit: usize,
     circ: Circify<term::Datalog>,
 }
 
 impl<'ast> Gen<'ast> {
-    fn new() -> Self {
+    fn new(rec_limit: usize) -> Self {
         Self {
             rules: AHashMap::new(),
+            rec_limit,
+            call_stack: AHashMap::new(),
             // TODO: values !?
             circ: Circify::new(term::Datalog::new()),
         }
+    }
+
+    fn enter_function(&mut self, name: &'ast str) {
+        let e = self.call_stack.entry(name).or_insert(0);
+        *e += 1;
+        if *e > self.rec_limit {
+            panic!(
+                "Recursed {} times in function {} (limit {})",
+                *e, name, self.rec_limit
+            );
+        }
+        self.circ.enter_fn(name.into(), None);
+        self.circ.enter_scope();
+    }
+
+    fn exit_function(&mut self, name: &'ast str) {
+        let e = self.call_stack.get_mut(name).unwrap();
+        assert!(*e > 0);
+        *e -= 1;
+        self.circ.exit_scope();
+        self.circ.exit_fn();
     }
 
     fn register_rules(&mut self, pgm: &'ast ast::Program<'ast>) {
@@ -67,13 +94,12 @@ impl<'ast> Gen<'ast> {
         )
     }
 
-    fn entry_rule(&mut self, name: &str) {
+    fn entry_rule(&mut self, name: &'ast str) {
         let rule = *self
             .rules
             .get(name)
             .unwrap_or_else(|| panic!("No entry rule: {}", name));
-        self.circ.enter_fn(name.into(), None);
-        self.circ.enter_scope();
+        self.enter_function(name);
         for d in &rule.args {
             let (ty, public) = self.ty(&d.ty);
             let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
@@ -82,19 +108,18 @@ impl<'ast> Gen<'ast> {
                 .unwrap();
         }
         let r = self.rule_cases(&rule);
+        self.exit_function(name);
         self.circ.assert(r.as_bool());
-        self.circ.exit_scope();
-        self.circ.exit_fn();
     }
 
-    fn rule_cases(&mut self, rule: &ast::Rule_) -> term::T {
+    fn rule_cases(&mut self, rule: &'ast ast::Rule_) -> term::T {
         rule.conds
             .iter()
             .map(|c| self.condition(c))
             .fold(term::bool_lit(false), |x, y| term::or(&x, &y).unwrap())
     }
 
-    fn condition(&mut self, c: &ast::Condition) -> term::T {
+    fn condition(&mut self, c: &'ast ast::Condition) -> term::T {
         if let Some(decls) = c.existential.as_ref() {
             for d in &decls.declarations {
                 let (ty, _public) = self.ty(&d.ty);
@@ -111,7 +136,7 @@ impl<'ast> Gen<'ast> {
     /// Generate IR for an expression.
     ///
     /// * `top_level` indicates whether this expression is a top-level expression in a condition.
-    fn expr(&mut self, e: &ast::Expression, top_level: bool) -> term::T {
+    fn expr(&mut self, e: &'ast ast::Expression, top_level: bool) -> term::T {
         match e {
             &ast::Expression::Binary(ref b) => self.bin_expr(b),
             &ast::Expression::Unary(ref u) => self.un_expr(u),
@@ -143,8 +168,7 @@ impl<'ast> Gen<'ast> {
                             .rules
                             .get(name)
                             .unwrap_or_else(|| panic!("No entry rule: {}", name));
-                        self.circ.enter_fn(name.into(), None);
-                        self.circ.enter_scope();
+                        self.enter_function(name);
                         for (d, actual_arg) in rule.args.iter().zip(&args) {
                             let (ty, _public) = self.ty(&d.ty);
                             self.circ
@@ -156,8 +180,7 @@ impl<'ast> Gen<'ast> {
                                 .unwrap();
                         }
                         let r = self.rule_cases(&rule);
-                        self.circ.exit_scope();
-                        self.circ.exit_fn();
+                        self.exit_function(name);
                         r
                     }
                 }
@@ -186,7 +209,7 @@ impl<'ast> Gen<'ast> {
             }
         }
     }
-    fn bin_expr(&mut self, e: &ast::BinaryExpression) -> term::T {
+    fn bin_expr(&mut self, e: &'ast ast::BinaryExpression) -> term::T {
         let l = self.expr(&e.left, false);
         let r = self.expr(&e.right, false);
         let res = match &e.op {
@@ -210,7 +233,7 @@ impl<'ast> Gen<'ast> {
         };
         res.expect("Bad expression")
     }
-    fn un_expr(&mut self, e: &ast::UnaryExpression) -> term::T {
+    fn un_expr(&mut self, e: &'ast ast::UnaryExpression) -> term::T {
         let l = self.expr(&e.expression, false);
         let res = match &e.op {
             ast::UnaryOperator::BitNot(_) => term::bitnot(&l),
@@ -239,7 +262,7 @@ impl FrontEnd for Datalog {
             }
         };
         println!("{:#?}", ast);
-        let mut g = Gen::new();
+        let mut g = Gen::new(i.rec_limit);
         g.register_rules(&ast);
         g.entry_rule("main");
         g.circ.consume().borrow().clone()
