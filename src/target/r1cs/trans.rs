@@ -818,6 +818,7 @@ impl ToR1cs {
                         }
                     }
                 }
+                Op::UbvToPf(_) => self.get_bv_uint(&c.cs[0]).clone(),
                 Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
                 Op::PfUnOp(PfUnOp::Recip) => {
                     let x = self.get_pf(&c.cs[0]).clone();

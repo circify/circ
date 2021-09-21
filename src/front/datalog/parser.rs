@@ -177,7 +177,7 @@ pub mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::call_expr))]
     pub struct CallExpression<'ast> {
-        pub builtin: Ident<'ast>,
+        pub fn_name: Ident<'ast>,
         pub args: Vec<Expression<'ast>>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,

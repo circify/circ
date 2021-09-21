@@ -9,6 +9,7 @@ use ahash::AHashMap;
 use rug::Integer;
 
 use crate::circify::{Circify, Loc, Val};
+use crate::front::zokrates::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::term::*;
 
 use super::FrontEnd;
@@ -75,8 +76,9 @@ impl<'ast> Gen<'ast> {
         self.circ.enter_scope();
         for d in &rule.args {
             let (ty, public) = self.ty(&d.ty);
+            let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
             self.circ
-                .declare(d.ident.value.into(), &ty, public, None)
+                .declare(d.ident.value.into(), &ty, public, vis)
                 .unwrap();
         }
         let r = self.rule_cases(&rule);
@@ -103,19 +105,63 @@ impl<'ast> Gen<'ast> {
         }
         c.exprs
             .iter()
-            .map(|e| self.expr(e))
+            .map(|e| self.expr(e, true))
             .fold(term::bool_lit(true), |x, y| term::and(&x, &y).unwrap())
     }
-    fn expr(&mut self, e: &ast::Expression) -> term::T {
+    /// Generate IR for an expression.
+    ///
+    /// * `top_level` indicates whether this expression is a top-level expression in a condition.
+    fn expr(&mut self, e: &ast::Expression, top_level: bool) -> term::T {
         match e {
             &ast::Expression::Binary(ref b) => self.bin_expr(b),
             &ast::Expression::Unary(ref u) => self.un_expr(u),
-            &ast::Expression::Paren(ref i, _) => self.expr(i),
-            &ast::Expression::Identifier(ref i) => {
-                self.circ.get_value(Loc::local(i.value.to_owned())).expect("lookup").unwrap_term()
-            }
+            &ast::Expression::Paren(ref i, _) => self.expr(i, top_level),
+            &ast::Expression::Identifier(ref i) => self
+                .circ
+                .get_value(Loc::local(i.value.to_owned()))
+                .expect("lookup")
+                .unwrap_term(),
             &ast::Expression::Literal(ref i) => self.literal(i),
-            &ast::Expression::Call(ref c) => todo!(),
+            &ast::Expression::Call(ref c) => {
+                let args = c
+                    .args
+                    .iter()
+                    .map(|a| self.expr(a, false))
+                    .collect::<Vec<_>>();
+                match c.fn_name.value {
+                    "to_field" => {
+                        assert_eq!(1, args.len(), "to_field takes 1 argument: {:?}", c.span);
+                        term::uint_to_field(&args[0]).unwrap()
+                    }
+                    name => {
+                        assert!(
+                            top_level,
+                            "Rules must be at the top level {} at {:?}",
+                            name, c.span
+                        );
+                        let rule = *self
+                            .rules
+                            .get(name)
+                            .unwrap_or_else(|| panic!("No entry rule: {}", name));
+                        self.circ.enter_fn(name.into(), None);
+                        self.circ.enter_scope();
+                        for (d, actual_arg) in rule.args.iter().zip(&args) {
+                            let (ty, _public) = self.ty(&d.ty);
+                            self.circ
+                                .declare_init(
+                                    d.ident.value.into(),
+                                    ty,
+                                    Val::Term(actual_arg.clone()),
+                                )
+                                .unwrap();
+                        }
+                        let r = self.rule_cases(&rule);
+                        self.circ.exit_scope();
+                        self.circ.exit_fn();
+                        r
+                    }
+                }
+            }
         }
     }
     fn literal(&mut self, e: &ast::Literal) -> term::T {
@@ -141,8 +187,8 @@ impl<'ast> Gen<'ast> {
         }
     }
     fn bin_expr(&mut self, e: &ast::BinaryExpression) -> term::T {
-        let l = self.expr(&e.left);
-        let r = self.expr(&e.right);
+        let l = self.expr(&e.left, false);
+        let r = self.expr(&e.right, false);
         let res = match &e.op {
             ast::BinaryOperator::BitXor => term::bitxor(&l, &r),
             ast::BinaryOperator::BitAnd => term::bitand(&l, &r),
@@ -165,7 +211,7 @@ impl<'ast> Gen<'ast> {
         res.expect("Bad expression")
     }
     fn un_expr(&mut self, e: &ast::UnaryExpression) -> term::T {
-        let l = self.expr(&e.expression);
+        let l = self.expr(&e.expression, false);
         let res = match &e.op {
             ast::UnaryOperator::BitNot(_) => term::bitnot(&l),
             ast::UnaryOperator::Not(_) => term::not(&l),

@@ -296,10 +296,10 @@ pub fn or(s: &T, t: &T) -> Result<T> {
     }
 }
 
-/// Operator ||
+/// Uint to field
 pub fn uint_to_field(s: &T) -> Result<T> {
     match &s.ty {
-        Ty::Uint(_) => Ok(T::new(term![BV_NEG; s.ir.clone()], s.ty)),
+        Ty::Uint(_) => Ok(T::new(term![Op::UbvToPf(ZOKRATES_MODULUS_ARC.clone()); s.ir.clone()], Ty::Field)),
         _ => Err(Error::InvalidBinOp("||".into(), s.clone(), s.clone())),
     }
 }
