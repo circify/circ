@@ -86,9 +86,7 @@ impl Ty {
             Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
             Self::Uint(w) => bv_lit(0, *w as usize),
             Self::Field => pf_ir_lit(0),
-            Self::Array(l, t) => {
-                term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()]
-            }
+            Self::Array(l, t) => term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()],
         }
     }
 }
@@ -206,14 +204,10 @@ pub fn rem(s: &T, t: &T) -> Result<T> {
 
 /// Operator ==
 pub fn eq(s: &T, t: &T) -> Result<T> {
-    match (&s.ty, &t.ty) {
-        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
-            Ok(T::new(term![EQ; s.ir.clone(), t.ir.clone()], Ty::Bool))
-        }
-        (Ty::Bool, Ty::Bool) | (Ty::Field, Ty::Field) => {
-            Ok(T::new(term![EQ; s.ir.clone(), t.ir.clone()], Ty::Bool))
-        }
-        _ => Err(Error::InvalidBinOp("=".into(), s.clone(), t.clone())),
+    if s.ty == t.ty {
+        Ok(T::new(term![EQ; s.ir.clone(), t.ir.clone()], Ty::Bool))
+    } else {
+        Err(Error::InvalidBinOp("=".into(), s.clone(), t.clone()))
     }
 }
 
@@ -341,13 +335,16 @@ pub fn uint_to_field(s: &T) -> Result<T> {
 
 /// Uint to field
 pub fn array_idx(a: &T, i: &T) -> Result<T> {
-    match (&a.ty, &i.ty)  {
-        (&Ty::Array(_, ref elem_ty), &Ty::Field) =>
-            Ok(T::new(
-                    term![Op::Select; a.ir.clone(), i.ir.clone()],
-                    (**elem_ty).clone()
-            )),
-        _ => Err(Error::InvalidBinOp("array[idx]".into(), a.clone(), i.clone())),
+    match (&a.ty, &i.ty) {
+        (&Ty::Array(_, ref elem_ty), &Ty::Field) => Ok(T::new(
+            term![Op::Select; a.ir.clone(), i.ir.clone()],
+            (**elem_ty).clone(),
+        )),
+        _ => Err(Error::InvalidBinOp(
+            "array[idx]".into(),
+            a.clone(),
+            i.clone(),
+        )),
     }
 }
 
@@ -408,9 +405,10 @@ impl Embeddable for Datalog {
                         )
                     })
                     .enumerate()
-                    .fold(ty.default_ir(), |arr, (i, v)| {
-                        term![Op::Store; arr, pf_ir_lit(i), v.ir]
-                    }),
+                    .fold(
+                        ty.default_ir(),
+                        |arr, (i, v)| term![Op::Store; arr, pf_ir_lit(i), v.ir],
+                    ),
                 ty.clone(),
             ),
         }
@@ -434,7 +432,10 @@ impl Embeddable for Datalog {
         visibility: Option<PartyId>,
     ) -> Self::T {
         assert!(&t.ty == ty);
-        T::new(ctx.cs.borrow_mut().assign(&name, t.ir, visibility), ty.clone())
+        T::new(
+            ctx.cs.borrow_mut().assign(&name, t.ir, visibility),
+            ty.clone(),
+        )
     }
     fn values(&self) -> bool {
         false

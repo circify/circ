@@ -46,17 +46,18 @@ impl<'ast> Gen<'ast> {
         }
     }
 
-    fn enter_function(&mut self, name: &'ast str) {
+    /// Attempt to enter a funciton.
+    /// Returns `false` if doing so would violate the recursion limit.
+    fn enter_function(&mut self, name: &'ast str) -> bool {
         let e = self.call_stack.entry(name).or_insert(0);
         *e += 1;
         if *e > self.rec_limit {
-            panic!(
-                "Recursed {} times in function {} (limit {})",
-                *e, name, self.rec_limit
-            );
+            false
+        } else {
+            self.circ.enter_fn(name.into(), None);
+            self.circ.enter_scope();
+            true
         }
-        self.circ.enter_fn(name.into(), None);
-        self.circ.enter_scope();
     }
 
     fn exit_function(&mut self, name: &'ast str) {
@@ -184,20 +185,24 @@ impl<'ast> Gen<'ast> {
                             .rules
                             .get(name)
                             .unwrap_or_else(|| panic!("No entry rule: {}", name));
-                        self.enter_function(name);
-                        for (d, actual_arg) in rule.args.iter().zip(&args) {
-                            let (ty, _public) = self.ty(&d.ty);
-                            self.circ
-                                .declare_init(
-                                    d.ident.value.into(),
-                                    ty,
-                                    Val::Term(actual_arg.clone()),
-                                )
-                                .unwrap();
+                        let can_call = self.enter_function(name);
+                        if can_call {
+                            for (d, actual_arg) in rule.args.iter().zip(&args) {
+                                let (ty, _public) = self.ty(&d.ty);
+                                self.circ
+                                    .declare_init(
+                                        d.ident.value.into(),
+                                        ty,
+                                        Val::Term(actual_arg.clone()),
+                                    )
+                                    .unwrap();
+                            }
+                            let r = self.rule_cases(&rule);
+                            self.exit_function(name);
+                            r
+                        } else {
+                            term::bool_lit(false)
                         }
-                        let r = self.rule_cases(&rule);
-                        self.exit_function(name);
-                        r
                     }
                 }
             }
