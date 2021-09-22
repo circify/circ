@@ -134,6 +134,15 @@ pub fn free_in(v: &str, t: Term) -> bool {
     return false;
 }
 
+/// If this term is a constant field or bit-vector, get the unsigned int value.
+pub fn as_uint_constant(t: &Term) -> Option<Integer> {
+    match &t.op {
+        Op::Const(Value::BitVector(bv)) => Some(bv.uint().clone()),
+        Op::Const(Value::Field(f)) => Some(f.i().clone()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod test {
 

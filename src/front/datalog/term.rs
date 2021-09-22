@@ -26,10 +26,16 @@ impl T {
     pub fn new(ir: Term, ty: Ty) -> Self {
         let ir_ty = check(&ir);
         let res = Self { ir, ty: ty.clone() };
-        match (ty, ir_ty) {
-            (Ty::Bool, Sort::Bool) | (Ty::Field, Sort::Field(_)) => res,
-            (Ty::Uint(w), Sort::BitVector(w2)) if w as usize == w2 => res,
-            _ => panic!("IR {} doesn't match datalog type {}", res.ir, res.ty),
+        Self::check_ty(&ir_ty, &res.ty);
+        res
+    }
+
+    fn check_ty(ir: &Sort, ty: &Ty) {
+        match (ty, ir) {
+            (Ty::Bool, Sort::Bool) | (Ty::Field, Sort::Field(_)) => {}
+            (Ty::Uint(w), Sort::BitVector(w2)) if *w as usize == *w2 => {}
+            (Ty::Array(l, t), Sort::Array(_, t2, l2)) if l == l2 => Self::check_ty(t2, t),
+            _ => panic!("IR sort {} doesn't match datalog type {}", ir, ty),
         }
     }
 
@@ -329,7 +335,19 @@ pub fn uint_to_field(s: &T) -> Result<T> {
             term![Op::UbvToPf(ZOKRATES_MODULUS_ARC.clone()); s.ir.clone()],
             Ty::Field,
         )),
-        _ => Err(Error::InvalidBinOp("||".into(), s.clone(), s.clone())),
+        _ => Err(Error::InvalidUnOp("to_field".into(), s.clone())),
+    }
+}
+
+/// Uint to field
+pub fn array_idx(a: &T, i: &T) -> Result<T> {
+    match (&a.ty, &i.ty)  {
+        (&Ty::Array(_, ref elem_ty), &Ty::Field) =>
+            Ok(T::new(
+                    term![Op::Select; a.ir.clone(), i.ir.clone()],
+                    (**elem_ty).clone()
+            )),
+        _ => Err(Error::InvalidBinOp("array[idx]".into(), a.clone(), i.clone())),
     }
 }
 
@@ -378,12 +396,12 @@ impl Embeddable for Datalog {
                 ),
                 ty.clone(),
             ),
-            Ty::Array(n, ty) => T::new(
+            Ty::Array(n, inner_ty) => T::new(
                 (0..*n)
                     .map(|i| {
                         self.declare(
                             ctx,
-                            &*ty,
+                            &*inner_ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
                             visibility.clone(),
@@ -393,7 +411,7 @@ impl Embeddable for Datalog {
                     .fold(ty.default_ir(), |arr, (i, v)| {
                         term![Op::Store; arr, pf_ir_lit(i), v.ir]
                     }),
-                (**ty).clone(),
+                ty.clone(),
             ),
         }
     }

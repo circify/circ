@@ -77,13 +77,19 @@ impl<'ast> Gen<'ast> {
     /// Returns (ty, public)
     fn ty(&self, ty: &ast::QualType<'ast>) -> (ty::Ty, bool) {
         (
-            match &ty.ty {
-                ast::Type::Bool(_) => ty::Ty::Bool,
-                ast::Type::Field(_) => ty::Ty::Field,
-                ast::Type::Uint(u) => {
-                    ty::Ty::Uint(u8::from_str(&u.type_name[1..]).expect("bad uN"))
-                }
-            },
+            ty.ty.array_sizes.iter().fold(
+                match &ty.ty.base {
+                    ast::BaseType::Bool(_) => ty::Ty::Bool,
+                    ast::BaseType::Field(_) => ty::Ty::Field,
+                    ast::BaseType::Uint(u) => {
+                        ty::Ty::Uint(u8::from_str(&u.type_name[1..]).expect("bad uN"))
+                    }
+                },
+                |t, size| {
+                    let size = usize::from_str(&size.value).expect("bad array size");
+                    ty::Ty::Array(size, Box::new(t))
+                },
+            ),
             ty.qualifier
                 .as_ref()
                 .map(|q| match q {
@@ -133,6 +139,13 @@ impl<'ast> Gen<'ast> {
             .map(|e| self.expr(e, true))
             .fold(term::bool_lit(true), |x, y| term::and(&x, &y).unwrap())
     }
+
+    fn ident(&mut self, i: &'ast ast::Ident) -> term::T {
+        self.circ
+            .get_value(Loc::local(i.value.to_owned()))
+            .expect("lookup")
+            .unwrap_term()
+    }
     /// Generate IR for an expression.
     ///
     /// * `top_level` indicates whether this expression is a top-level expression in a condition.
@@ -141,12 +154,15 @@ impl<'ast> Gen<'ast> {
             &ast::Expression::Binary(ref b) => self.bin_expr(b),
             &ast::Expression::Unary(ref u) => self.un_expr(u),
             &ast::Expression::Paren(ref i, _) => self.expr(i, top_level),
-            &ast::Expression::Identifier(ref i) => self
-                .circ
-                .get_value(Loc::local(i.value.to_owned()))
-                .expect("lookup")
-                .unwrap_term(),
+            &ast::Expression::Identifier(ref i) => self.ident(i),
             &ast::Expression::Literal(ref i) => self.literal(i),
+            &ast::Expression::Access(ref c) => {
+                let arr = self.ident(&c.arr);
+                c.idxs.iter().fold(arr, |arr, idx| {
+                    let idx = self.expr(idx, false);
+                    term::array_idx(&arr, &idx).unwrap()
+                })
+            }
             &ast::Expression::Call(ref c) => {
                 let args = c
                     .args

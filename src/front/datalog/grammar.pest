@@ -31,9 +31,11 @@ un_op = { neg | bitnot | not }
 call_expr = { identifier ~ "(" ~ expr_list ~ ")" }
 expr = { term ~ (bin_op ~ term)* }
 paren_expr = { "(" ~ expr ~ ")" }
-term = { call_expr | literal | identifier | paren_expr | unary_expression }
+term = { call_expr | literal | access_expr | identifier | paren_expr | unary_expression }
 unary_expression = { un_op ~ term }
 expr_list = _{ expr ~ ("," ~ expr)* }
+access = _{ "[" ~ expr ~ "]" }
+access_expr = { identifier ~ access+ }
 
 identifier = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
@@ -52,7 +54,10 @@ WHITESPACE = _{ " " | "\t" | "\n" }
 ty_field = {"field"}
 ty_uint = @{"u" ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 ty_bool = {"bool"}
-ty = { ty_field | ty_uint | ty_bool }
+base_ty = { ty_field | ty_uint | ty_bool }
+array_size = _{ "[" ~ decimal_literal ~ "]" }
+array_sizes = _{ array_size* }
+ty = { base_ty ~ array_sizes }
 
 vis_private = {"private"}
 vis_public = {"public"}

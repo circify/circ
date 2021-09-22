@@ -161,6 +161,7 @@ pub mod ast {
         Identifier(Ident<'ast>),
         Literal(Literal<'ast>),
         Call(CallExpression<'ast>),
+        Access(AccessExpression<'ast>),
         Unary(UnaryExpression<'ast>),
         Paren(Box<Expression<'ast>>, Span<'ast>),
     }
@@ -182,6 +183,16 @@ pub mod ast {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::access_expr))]
+    pub struct AccessExpression<'ast> {
+        pub arr: Ident<'ast>,
+        pub idxs: Vec<Expression<'ast>>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
 
     #[derive(Debug, PartialEq, Clone)]
     pub struct BinaryExpression<'ast> {
@@ -222,6 +233,7 @@ pub mod ast {
                 Expression::Literal(c) => &c.span(),
                 Expression::Unary(u) => &u.span,
                 Expression::Call(u) => &u.span,
+                Expression::Access(u) => &u.span,
                 Expression::Paren(_, s) => s,
             }
         }
@@ -292,6 +304,7 @@ pub mod ast {
     // Create an Expression from a `term`.
     // Precondition: `pair` MUST be a term
     fn build_factor(pair: Pair<Rule>) -> Box<Expression> {
+        //println!("pairs: {:#?}", pair);
         Box::new(match pair.as_rule() {
             Rule::term => {
                 // clone the pair to peek into what we should create
@@ -335,6 +348,9 @@ pub mod ast {
                     Rule::call_expr => Expression::Call(
                         CallExpression::from_pest(&mut pair.into_inner()).unwrap(),
                     ),
+                    Rule::access_expr => Expression::Access(
+                        AccessExpression::from_pest(&mut pair.into_inner()).unwrap(),
+                    ),
                     r => unreachable!("expected `term`, found {:#?}", r),
                 }
             }
@@ -373,21 +389,30 @@ pub mod ast {
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
-    #[pest_ast(rule(Rule::ty))]
-    pub enum Type<'ast> {
+    #[pest_ast(rule(Rule::base_ty))]
+    pub enum BaseType<'ast> {
         Uint(TypeUint<'ast>),
         Field(TypeField<'ast>),
         Bool(TypeBool<'ast>),
     }
 
-    impl<'ast> Type<'ast> {
+    impl<'ast> BaseType<'ast> {
         pub fn span(&self) -> &Span<'ast> {
             match self {
-                Type::Uint(p) => &p.span,
-                Type::Field(p) => &p.span,
-                Type::Bool(p) => &p.span,
+                BaseType::Uint(p) => &p.span,
+                BaseType::Field(p) => &p.span,
+                BaseType::Bool(p) => &p.span,
             }
         }
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::ty))]
+    pub struct Type<'ast> {
+        pub base: BaseType<'ast>,
+        pub array_sizes: Vec<DecimalLiteral<'ast>>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
