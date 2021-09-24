@@ -1,7 +1,5 @@
 use crate::front::c::types::Ty;
-use lang_c::ast::{
-    Declaration, Declarator, DeclaratorKind, DeclarationSpecifier, DerivedDeclarator, FunctionDefinition, ParameterDeclaration, Statement, TypeSpecifier
-};
+use lang_c::ast::*;
 use std::fmt::{self, Display, Formatter};
 
 pub struct FnInfo {
@@ -43,13 +41,32 @@ pub fn type_(t: &DeclarationSpecifier) -> Option<Ty> {
             _ => unimplemented!("Type {:#?} not implemented yet.", ty)
         };
     }
-    panic!("DeclarationSpecifier does not contain TyepSpecifier: {:#?}", t);
+    panic!("DeclarationSpecifier does not contain TypeSpecifier: {:#?}", t);
 }
 
 pub fn decl_type(decl: Declaration) -> Option<Ty> {
     let spec = &decl.specifiers;
     assert!(spec.len() == 1);
     type_(&spec.first().unwrap().node)
+}
+
+pub fn s_type_(t: &SpecifierQualifier) -> Option<Ty> {
+    if let SpecifierQualifier::TypeSpecifier(ty) = t {
+        return match ty.node {
+            TypeSpecifier::Int => Some(Ty::Uint(32)),
+            TypeSpecifier::Bool => Some(Ty::Bool),
+            TypeSpecifier::Void => None,
+            _ => unimplemented!("Type {:#?} not implemented yet.", ty)
+        };
+    }
+    panic!("SpecifierQualifier does not contain TypeSpecifier: {:#?}", t);
+}
+
+
+pub fn cast_type(ty_name: TypeName) -> Option<Ty> {
+    let spec = &ty_name.specifiers;
+    assert!(spec.len() == 1);
+    s_type_(&spec.first().unwrap().node)
 }
 
 pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {

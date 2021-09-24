@@ -40,3 +40,13 @@ impl fmt::Debug for Ty {
         write!(f, "{}", self)
     }
 }
+
+pub fn is_arith_type(t: &CTerm) -> bool {
+    let ty = t.term.type_();
+    match ty {
+        Ty::Uint(_) |
+        Ty::Bool => {
+            true
+        }
+    }
+}

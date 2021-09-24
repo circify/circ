@@ -1,6 +1,6 @@
 //! C Terms
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::c::types::Ty;
+use crate::front::c::types::*;
 use crate::ir::term::*;
 use rug::Integer;
 use std::collections::HashMap;
@@ -62,40 +62,99 @@ impl Display for CTerm {
     }
 }
 
-fn wrap_bin_op(
-    name: &str,
-    fu: Option<fn(Term, Term) -> Term>,
-    fb: Option<fn(Term, Term) -> Term>,
-    a: CTerm,
-    b: CTerm,
-) -> Result<CTerm, String> {
-    match (a.term, b.term, fu, fb) {
-        (CTermData::CInt(na, a), CTermData::CInt(nb, b), Some(fu), _) if na == nb => Ok(CTerm {
-            term: CTermData::CInt(na, fu(a, b)),
-            udef: false,
-        }),
-        (CTermData::CBool(a), CTermData::CBool(b), _, Some(fb)) => Ok(CTerm {
-            term: CTermData::CBool(fb(a, b)),
-            udef: false,
-        }),
-        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
+    let ty = t.term.type_();
+    match t.term {
+        CTermData::CBool(ref term) => {
+            match to_ty {
+                Some(Ty::Uint(_)) => {    
+                    CTerm {
+                        term: CTermData::CInt(32, term.clone()),
+                        udef: t.udef
+                    }
+                }
+                Some(Ty::Bool) => {
+                    t.clone()
+                }
+                None => panic!("Bad cast from {} to {:?}", ty, to_ty)
+            }
+        }   
+        CTermData::CInt(_w, ref term) => {
+            match to_ty {
+                Some(Ty::Bool) => {
+                    CTerm {
+                        term: CTermData::CBool(term.clone()),
+                        udef: t.udef
+                    }
+                }
+                Some(Ty::Uint(_)) => {
+                    t.clone()
+                }
+                None => panic!("Bad cast from {} to {:?}", ty, to_ty)
+            }
+        }
+        // _ => panic!("Bad cast from {} to {}", ty, to_ty)
     }
 }
 
-fn wrap_bin_pred(
+fn int_promotion(t: &CTerm) -> CTerm {
+    match &t.term {
+        CTermData::CBool(term) => {
+            CTerm {
+                term: CTermData::CInt(32, term.clone()),
+                udef: t.udef
+            }
+        }
+        CTermData::CInt(_, _) => {
+            t.clone()
+        }
+    }
+}
+
+fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
+    // let a_ty = a.term.type_();
+    // let b_ty = b.term.type_();
+    let a_prom = int_promotion(a);
+    let b_prom = int_promotion(b);
+    let a_prom_ty = a_prom.term.type_();
+    let b_prom_ty = b_prom.term.type_();
+    
+    if a_prom_ty == b_prom_ty {
+        return (a_prom, b_prom);
+    }
+
+    unimplemented!("Not implemented case in iUAC");
+}
+
+fn usual_arith_conversions(a: CTerm, b: CTerm) -> (CTerm, CTerm) {
+    if is_arith_type(&a) && is_arith_type(&b) {
+        let (a_, b_) = inner_usual_arith_conversions(&a, &b);
+        if a_.term.type_() == b_.term.type_() {
+            (a_, b_)
+        } else {
+            panic!("UAC failed: {:#?}, {:#?} to non-equal {:#?}, {:#?}", a, b, a_, b_);
+        }
+    } else {
+        (a, b)
+    }
+}
+
+
+fn wrap_bin_arith(
     name: &str,
     fu: Option<fn(Term, Term) -> Term>,
     fb: Option<fn(Term, Term) -> Term>,
     a: CTerm,
     b: CTerm,
 ) -> Result<CTerm, String> {
-    match (a.term, b.term, fu, fb) {
-        (CTermData::CInt(na, a), CTermData::CInt(nb, b), Some(fu), _) if na == nb => Ok(CTerm {
-            term: CTermData::CBool(fu(a, b)),
+    let (a_arith, b_arith) = usual_arith_conversions(a, b);
+    match (a_arith.term, b_arith.term, fu, fb) {
+        (CTermData::CInt(nx, x), CTermData::CInt(ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
+            term: CTermData::CInt(nx, fu(x, y)),
             udef: false,
         }),
-        (CTermData::CBool(a), CTermData::CBool(b), _, Some(fb)) => Ok(CTerm {
-            term: CTermData::CBool(fb(a, b)),
+        (CTermData::CBool(x), CTermData::CBool(y), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::CBool(fb(x, y)),
             udef: false,
         }),
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
@@ -107,7 +166,7 @@ fn add_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn add(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("+", Some(add_uint), None, a, b)
+    wrap_bin_arith("+", Some(add_uint), None, a, b)
 }
 
 fn sub_uint(a: Term, b: Term) -> Term {
@@ -115,7 +174,7 @@ fn sub_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn sub(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("-", Some(sub_uint), None, a, b)
+    wrap_bin_arith("-", Some(sub_uint), None, a, b)
 }
 
 fn mul_uint(a: Term, b: Term) -> Term {
@@ -123,7 +182,7 @@ fn mul_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn mul(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("*", Some(mul_uint), None, a, b)
+    wrap_bin_arith("*", Some(mul_uint), None, a, b)
 }
 
 fn bitand_uint(a: Term, b: Term) -> Term {
@@ -131,7 +190,7 @@ fn bitand_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn bitand(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("&", Some(bitand_uint), None, a, b)
+    wrap_bin_arith("&", Some(bitand_uint), None, a, b)
 }
 
 fn bitor_uint(a: Term, b: Term) -> Term {
@@ -139,7 +198,7 @@ fn bitor_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn bitor(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("|", Some(bitor_uint), None, a, b)
+    wrap_bin_arith("|", Some(bitor_uint), None, a, b)
 }
 
 fn bitxor_uint(a: Term, b: Term) -> Term {
@@ -147,7 +206,25 @@ fn bitxor_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn bitxor(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("^", Some(bitxor_uint), None, a, b)
+    wrap_bin_arith("^", Some(bitxor_uint), None, a, b)
+}
+
+fn wrap_bin_logical(
+    name: &str,
+    fu: Option<fn(Term, Term) -> Term>,
+    fb: Option<fn(Term, Term) -> Term>,
+    a: CTerm,
+    b: CTerm
+) -> Result<CTerm, String> {
+    let a_bool = cast(Some(Ty::Bool), a);
+    let b_bool = cast(Some(Ty::Bool), b);
+    match (a_bool.term, b_bool.term, fu, fb) {
+        (CTermData::CBool(a), CTermData::CBool(b), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::CBool(fb(a, b)),
+            udef: false,
+        }),
+        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+    }
 }
 
 fn or_bool(a: Term, b: Term) -> Term {
@@ -155,7 +232,7 @@ fn or_bool(a: Term, b: Term) -> Term {
 }
 
 pub fn or(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("||", None, Some(or_bool), a, b)
+    wrap_bin_logical("||", None, Some(or_bool), a, b)
 }
 
 fn and_bool(a: Term, b: Term) -> Term {
@@ -163,7 +240,28 @@ fn and_bool(a: Term, b: Term) -> Term {
 }
 
 pub fn and(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_op("&&", None, Some(and_bool), a, b)
+    wrap_bin_logical("&&", None, Some(and_bool), a, b)
+}
+
+fn wrap_bin_cmp(
+    name: &str,
+    fu: Option<fn(Term, Term) -> Term>,
+    fb: Option<fn(Term, Term) -> Term>,
+    a: CTerm,
+    b: CTerm
+) -> Result<CTerm, String> {
+    let (a_arith, b_arith) = usual_arith_conversions(a, b);
+    match (a_arith.term, b_arith.term, fu, fb) {
+        (CTermData::CInt(nx, x), CTermData::CInt(ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
+            term: CTermData::CBool(fu(x, y)),
+            udef: false,
+        }),
+        (CTermData::CBool(x), CTermData::CBool(y), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::CBool(fb(x, y)),
+            udef: false,
+        }),
+        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+    }
 }
 
 fn eq_base(a: Term, b: Term) -> Term {
@@ -171,7 +269,7 @@ fn eq_base(a: Term, b: Term) -> Term {
 }
 
 pub fn eq(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_pred("==", Some(eq_base), Some(eq_base), a, b)
+    wrap_bin_cmp("==", Some(eq_base), Some(eq_base), a, b)
 }
 
 fn ult_uint(a: Term, b: Term) -> Term {
@@ -179,7 +277,7 @@ fn ult_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn ult(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_pred("<", Some(ult_uint), None, a, b)
+    wrap_bin_cmp("<", Some(ult_uint), None, a, b)
 }
 
 fn ule_uint(a: Term, b: Term) -> Term {
@@ -187,7 +285,7 @@ fn ule_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn ule(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_pred("<=", Some(ule_uint), None, a, b)
+    wrap_bin_cmp("<=", Some(ule_uint), None, a, b)
 }
 
 fn ugt_uint(a: Term, b: Term) -> Term {
@@ -195,7 +293,7 @@ fn ugt_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn ugt(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_pred(">", Some(ugt_uint), None, a, b)
+    wrap_bin_cmp(">", Some(ugt_uint), None, a, b)
 }
 
 fn uge_uint(a: Term, b: Term) -> Term {
@@ -203,7 +301,7 @@ fn uge_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_bin_pred(">=", Some(uge_uint), None, a, b)
+    wrap_bin_cmp(">=", Some(uge_uint), None, a, b)
 }
 
 pub fn const_int(a: CTerm) -> Result<Integer, String> {
@@ -282,7 +380,7 @@ impl Embeddable for Ct {
             }
         }
     }
-    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+    fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         match (t.term, f.term) {
             (CTermData::CBool(a), CTermData::CBool(b)) => {
                 Self::T {

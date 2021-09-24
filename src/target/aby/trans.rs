@@ -254,6 +254,7 @@ impl ToABY {
 
     fn embed_bool(&mut self, t: Term) -> String {
         let mut s_circ = self.get_sharetype_circ(t.clone());
+        println!("EMBEDDING BOOL: {}", t);
         match &t.op {
             Op::Var(name, Sort::Bool) => {
                 if !self.inputs.contains_key(&t) {
@@ -398,6 +399,8 @@ impl ToABY {
     }
 
     fn embed_bv(&mut self, t: Term) -> String {
+        println!("EMBEDDING BV: {}", t);
+
         let mut s_circ = self.get_sharetype_circ(t.clone());
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {

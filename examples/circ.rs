@@ -93,7 +93,7 @@ fn main() {
         Mode::Mpc(_) => {
             println!("Converting to aby");
             let aby = to_aby(cs);
-            write_aby_exec(aby, path_buf);
+            write_aby_exec(aby, "zok".to_string(), path_buf);
         }
         Mode::Opt => {
             println!("Converting to ilp");

@@ -115,13 +115,14 @@ fn write_circ_file(filename: &String, circ: String, output: &String) {
 }
 
 /// Write circuit output from translation later to ABY
-pub fn write_aby_exec(aby: ABY, path_buf: PathBuf) {
+pub fn write_aby_exec(aby: ABY, lang: String, path_buf: PathBuf) {
     let filename = get_filename(path_buf);
-    create_dir_in_aby(&filename);
-    update_cmake_file(&filename);
-    write_test_cmake_file(&filename);
-    write_test_file(&filename);
-    write_h_file(&filename);
+    let name = format!("{}_{}", filename, lang);
+    create_dir_in_aby(&name);
+    update_cmake_file(&name);
+    write_test_cmake_file(&name);
+    write_test_file(&name);
+    write_h_file(&name);
     let circ_str = aby.setup.join("\n\t") + &aby.circs.join("\n\t");
-    write_circ_file(&filename, circ_str, &aby.output.join("\n\t"));
+    write_circ_file(&name, circ_str, &aby.output.join("\n\t"));
 }

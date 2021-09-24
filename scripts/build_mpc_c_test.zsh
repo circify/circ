@@ -53,4 +53,3 @@ mpc_test 2 ./examples/C/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.c
 
 # build mpc const tests
 mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
