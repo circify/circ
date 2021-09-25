@@ -6,11 +6,14 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use ahash::AHashMap;
+use log::debug;
 use rug::Integer;
 
 use crate::circify::{Circify, Loc, Val};
 use crate::front::zokrates::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::term::*;
+use crate::ir::opt::cfold::fold;
+use crate::ir::term::extras::as_uint_constant;
 
 use super::FrontEnd;
 
@@ -30,7 +33,7 @@ pub struct Inputs {
 
 struct Gen<'ast> {
     rules: AHashMap<&'ast str, &'ast ast::Rule_<'ast>>,
-    call_stack: AHashMap<&'ast str, usize>,
+    stack_by_fn: AHashMap<&'ast str, Vec<Option<Integer>>>,
     rec_limit: usize,
     circ: Circify<term::Datalog>,
 }
@@ -40,7 +43,7 @@ impl<'ast> Gen<'ast> {
         Self {
             rules: AHashMap::new(),
             rec_limit,
-            call_stack: AHashMap::new(),
+            stack_by_fn: AHashMap::new(),
             // TODO: values !?
             circ: Circify::new(term::Datalog::new()),
         }
@@ -48,22 +51,28 @@ impl<'ast> Gen<'ast> {
 
     /// Attempt to enter a funciton.
     /// Returns `false` if doing so would violate the recursion limit.
-    fn enter_function(&mut self, name: &'ast str) -> bool {
-        let e = self.call_stack.entry(name).or_insert(0);
-        *e += 1;
-        if *e > self.rec_limit {
-            false
+    fn enter_function(&mut self, name: &'ast str, dec_value: Option<Integer>) -> bool {
+        let e = self.stack_by_fn.entry(name).or_insert_with(|| Vec::new());
+        //assert_eq!(e.last().and_then(|l| l.as_ref()).is_some(), dec_value.is_some());
+        let do_enter = if let (Some(last_val), Some(this_val)) = (e.last().and_then(|l| l.as_ref()), dec_value.as_ref()) {
+            last_val > this_val
         } else {
+            e.len() <= self.rec_limit
+        };
+        if do_enter {
+            e.push(dec_value);
             self.circ.enter_fn(name.into(), None);
             self.circ.enter_scope();
-            true
         }
+        do_enter
     }
 
     fn exit_function(&mut self, name: &'ast str) {
-        let e = self.call_stack.get_mut(name).unwrap();
-        assert!(*e > 0);
-        *e -= 1;
+        let e = self.stack_by_fn.get_mut(name).unwrap();
+        e.pop();
+        if e.is_empty() {
+            self.stack_by_fn.remove(name);
+        }
         self.circ.exit_scope();
         self.circ.exit_fn();
     }
@@ -106,7 +115,7 @@ impl<'ast> Gen<'ast> {
             .rules
             .get(name)
             .unwrap_or_else(|| panic!("No entry rule: {}", name));
-        self.enter_function(name);
+        self.enter_function(name, None);
         for d in &rule.args {
             let (ty, public) = self.ty(&d.ty);
             let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
@@ -185,7 +194,16 @@ impl<'ast> Gen<'ast> {
                             .rules
                             .get(name)
                             .unwrap_or_else(|| panic!("No entry rule: {}", name));
-                        let can_call = self.enter_function(name);
+                        let opt_const = if let Some((i, _)) = rule.args.iter().enumerate().filter(|&(_, arg)| arg.dec.is_some()).next() {
+                            let ir = &args[i].ir;
+                            let reduced_ir = fold(ir);
+                            let r = as_uint_constant(&reduced_ir);
+                            debug!("Dec arg: {}, const value {:?}", rule.args[i].ident.value, r);
+                            r
+                        } else {
+                            None
+                        };
+                        let can_call = self.enter_function(name, opt_const);
                         if can_call {
                             for (d, actual_arg) in rule.args.iter().zip(&args) {
                                 let (ty, _public) = self.ty(&d.ty);

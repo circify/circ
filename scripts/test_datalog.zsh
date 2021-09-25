@@ -17,3 +17,4 @@ $BIN --lang datalog ./examples/datalog/arr.pl || true
 # Big R1cs b/c enough recursion
 ($BIN --lang datalog ./examples/datalog/dumb_hash.pl -r 6 || true) | rg "Final R1cs size: 306"
 ($BIN --lang datalog ./examples/datalog/dumb_hash.pl -r 10 || true) | rg "Final R1cs size: 306"
+($BIN --lang datalog ./examples/datalog/rec.pl -r 2 || true) | rg "Final R1cs size: 306"

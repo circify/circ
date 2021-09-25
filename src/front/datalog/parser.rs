@@ -468,6 +468,25 @@ pub mod ast {
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::dec))]
+    pub struct Decreasing<'ast> {
+        #[pest_ast(outer(with(span_into_str)))]
+        pub tok: &'ast str,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::fn_arg_decl))]
+    pub struct ArgDeclaration<'ast> {
+        pub dec: Option<Decreasing<'ast>>,
+        pub ident: Ident<'ast>,
+        pub ty: QualType<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::exist_prefix))]
     pub struct Existential<'ast> {
         pub declarations: Vec<Declaration<'ast>>,
@@ -488,7 +507,7 @@ pub mod ast {
     #[pest_ast(rule(Rule::rule))]
     pub struct Rule_<'ast> {
         pub name: Ident<'ast>,
-        pub args: Vec<Declaration<'ast>>,
+        pub args: Vec<ArgDeclaration<'ast>>,
         pub conds: Vec<Condition<'ast>>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,

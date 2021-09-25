@@ -41,10 +41,12 @@ identifier = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 decl_list = _{ decl ~ ("," ~ decl)* }
 decl = { identifier ~ ":" ~ qual_ty }
+fn_arg_decl = { dec? ~ identifier ~ ":" ~ qual_ty }
+fn_arg_decl_list = _{ fn_arg_decl ~ ("," ~ fn_arg_decl)* }
 exist_prefix = { "exists" ~ decl_list ~ "." }
 condition = { exist_prefix? ~ expr_list }
 rule_cases = _{ condition ~ (";" ~ condition)* ~ "." }
-rule = { identifier ~ "(" ~ decl_list ~ ")" ~ ":-" ~ rule_cases }
+rule = { identifier ~ "(" ~ fn_arg_decl_list ~ ")" ~ ":-" ~ rule_cases }
 
 program = { SOI ~ rule* ~ EOI }
 
@@ -62,5 +64,7 @@ ty = { base_ty ~ array_sizes }
 vis_private = {"private"}
 vis_public = {"public"}
 vis = { vis_private | vis_public }
+
+dec = { "decreasing" }
 
 qual_ty = { vis? ~ ty }
