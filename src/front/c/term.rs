@@ -69,6 +69,7 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
             match to_ty {
                 Some(Ty::Uint(_)) => {    
                     CTerm {
+                        // THIS IS BROKEN PLS CAST CORRECTLY
                         term: CTermData::CInt(32, term.clone()),
                         udef: t.udef
                     }
@@ -79,11 +80,11 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 None => panic!("Bad cast from {} to {:?}", ty, to_ty)
             }
         }   
-        CTermData::CInt(_w, ref term) => {
+        CTermData::CInt(w, ref term) => {
             match to_ty {
                 Some(Ty::Bool) => {
                     CTerm {
-                        term: CTermData::CBool(term.clone()),
+                        term: CTermData::CBool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
                         udef: t.udef
                     }
                 }
