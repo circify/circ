@@ -9,12 +9,12 @@ if __name__ == "__main__":
         boolean_tests + \
         nary_boolean_tests + \
         const_arith_tests + \
-        const_bool_tests + \
-        loop_tests + \
-        ite_tests + \
-        function_tests + \
-        shift_tests + \
-        misc_tests
+        const_bool_tests # + \
+        # loop_tests + \
+        # ite_tests + \
+        # function_tests + \
+        # shift_tests + \
+        # misc_tests
         # arr_tests + \
 
-    run_tests('zok', tests)
+    run_tests('c', tests)

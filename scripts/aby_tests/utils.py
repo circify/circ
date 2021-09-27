@@ -3,13 +3,33 @@ import sys
 from typing import List
 import time 
 
+def init_progress_bar(toolbar_width=40):
+    ''' Initialize progress bar '''
+    print("Running ABY unit tests")
+    sys.stdout.write("[%s]" % (" " * toolbar_width))
+    sys.stdout.flush()
+    sys.stdout.write("\b" * (toolbar_width+1)) 
+
+def update_progress_bar():
+    ''' Increment progress bar '''
+    sys.stdout.write("=")
+    sys.stdout.flush()
+
+def end_progress_bar():
+    ''' Close progress bar '''
+    sys.stdout.write("]\n") # this ends the progress bar
+
 def flatten_args(args: dict) -> list:
-    ''' flatten dictionary into list '''
+    ''' Flatten dictionary into list '''
     flat_args = []
     for k, v in args.items():
         flat_args.append(str(k))
         flat_args.append(str(v))
     return flat_args
+
+def update_path(path: str, lang: str) -> str:
+    '''Append path with language type'''
+    return f'{path}_{lang}_test'
 
 def build_server_cmd(exec: str, args: dict) -> List[str]:
     return [exec, "-r", "0", "-i"] + flatten_args(args)
@@ -43,16 +63,39 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
         # print("Exception: ", e)
         return False
 
+def run_tests(lang: str, tests: List[dict]):
+    '''
+    tests will be a list of all tests to run. each element in the list will be 
+    1. description of test case: string
+    2. expected output: string
+    3. executable path: string
+    4. server arguments: dict[name] = value
+    5. client arguments: dict[name] = value
+    '''
+    failed_test_descs = []
+    num_retries = 3
+    progress_inc = 5
+    init_progress_bar(len(tests) // progress_inc)
+    for t, test in enumerate(tests):
+        assert len(test) == 5, "test configurations are wrong for test: "+test[0]
+        desc = test[0]
+        expected = str(test[1])
+        path = update_path(test[2], lang)
+        server_cmd = build_server_cmd(path, test[3])
+        client_cmd = build_client_cmd(path, test[4])
 
-def init_progress_bar(toolbar_width=40):
-    print("Running ABY unit tests")
-    sys.stdout.write("[%s]" % (" " * toolbar_width))
-    sys.stdout.flush()
-    sys.stdout.write("\b" * (toolbar_width+1)) 
+        test_results = []
+        for i in range(num_retries):
+            test_results.append(run_test(desc, expected, server_cmd, client_cmd))
+        
+        if not any(test_results):
+            failed_test_descs.append(desc)
 
-def update_progress_bar():
-    sys.stdout.write("=")
-    sys.stdout.flush()
+        if t % progress_inc == 0:
+            update_progress_bar()
+    end_progress_bar()
+    
+    if len(failed_test_descs) == 0:
+        print("All tests passed ✅")
 
-def end_progress_bar():
-    sys.stdout.write("]\n") # this ends the progress bar
+    assert len(failed_test_descs) == 0, "there were failed test cases:\n\t- " + "\n\t- ".join(failed_test_descs)

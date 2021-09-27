@@ -10,7 +10,7 @@ init:
 	git submodule update --init
 
 aby:
-	./scripts/build_mpc_c_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/aby_tests/test_aby.py
+	./scripts/build_mpc_c_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/aby_tests/c_test_aby.py
 
 clean:
 	# remove all generated files
