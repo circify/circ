@@ -4,8 +4,8 @@ use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
 use rug::Integer;
-use thiserror::Error;
 
+use super::error::ErrorKind;
 use super::ty::Ty;
 
 use crate::circify::{CirCtx, Embeddable};
@@ -49,6 +49,9 @@ impl T {
     }
 }
 
+/// A fallible result
+pub type Result<T> = std::result::Result<T, ErrorKind>;
+
 /// Initialize a prime field literal
 pub fn pf_lit<I>(i: I) -> T
 where
@@ -86,7 +89,9 @@ impl Ty {
             Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
             Self::Uint(w) => bv_lit(0, *w as usize),
             Self::Field => pf_ir_lit(0),
-            Self::Array(l, t) => term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()],
+            Self::Array(l, t) => {
+                term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()]
+            }
         }
     }
 }
@@ -96,26 +101,12 @@ impl Display for T {
     }
 }
 
-#[derive(Error, Debug)]
-/// An error in circuit translation
-pub enum Error {
-    #[error("Cannot apply operator '{0}' to '{1}'")]
-    /// Cannot apply this operator to this term
-    InvalidUnOp(String, T),
-    #[error("Cannot apply operator '{0}' to\n\t{1}\nand\n\t{2}")]
-    /// Cannot apply this operator to these terms
-    InvalidBinOp(String, T, T),
-}
-
-/// Fallible value
-pub type Result<T> = std::result::Result<T, Error>;
-
 /// Operator unary-
 pub fn neg(t: &T) -> Result<T> {
     match &t.ty {
         Ty::Field => Ok(T::new(term![PF_NEG; t.ir.clone()], t.ty.clone())),
         Ty::Uint(_) => Ok(T::new(term![BV_NEG; t.ir.clone()], t.ty.clone())),
-        _ => Err(Error::InvalidUnOp("unary-".into(), t.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("unary-".into(), t.clone())),
     }
 }
 
@@ -123,7 +114,7 @@ pub fn neg(t: &T) -> Result<T> {
 pub fn not(t: &T) -> Result<T> {
     match &t.ty {
         Ty::Bool => Ok(T::new(term![Op::Not; t.ir.clone()], t.ty.clone())),
-        _ => Err(Error::InvalidUnOp("unary!".into(), t.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("unary!".into(), t.clone())),
     }
 }
 
@@ -131,7 +122,7 @@ pub fn not(t: &T) -> Result<T> {
 pub fn bitnot(t: &T) -> Result<T> {
     match &t.ty {
         Ty::Uint(_) => Ok(T::new(term![BV_NOT; t.ir.clone()], t.ty.clone())),
-        _ => Err(Error::InvalidUnOp("unary~".into(), t.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("unary~".into(), t.clone())),
     }
 }
 
@@ -146,7 +137,7 @@ pub fn add(s: &T, t: &T) -> Result<T> {
             term![PF_ADD; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("+".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("+".into(), s.clone(), t.clone())),
     }
 }
 
@@ -161,7 +152,7 @@ pub fn sub(s: &T, t: &T) -> Result<T> {
             term![PF_ADD; s.ir.clone(), term![PF_NEG; t.ir.clone()]],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("-".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("-".into(), s.clone(), t.clone())),
     }
 }
 
@@ -176,7 +167,7 @@ pub fn mul(s: &T, t: &T) -> Result<T> {
             term![PF_MUL; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("*".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("*".into(), s.clone(), t.clone())),
     }
 }
 
@@ -187,7 +178,7 @@ pub fn div(s: &T, t: &T) -> Result<T> {
             term![BV_UDIV; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("/".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("/".into(), s.clone(), t.clone())),
     }
 }
 
@@ -198,7 +189,7 @@ pub fn rem(s: &T, t: &T) -> Result<T> {
             term![BV_UREM; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("%".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("%".into(), s.clone(), t.clone())),
     }
 }
 
@@ -207,7 +198,7 @@ pub fn eq(s: &T, t: &T) -> Result<T> {
     if s.ty == t.ty {
         Ok(T::new(term![EQ; s.ir.clone(), t.ir.clone()], Ty::Bool))
     } else {
-        Err(Error::InvalidBinOp("=".into(), s.clone(), t.clone()))
+        Err(ErrorKind::InvalidBinOp("=".into(), s.clone(), t.clone()))
     }
 }
 
@@ -218,7 +209,7 @@ pub fn shl(s: &T, t: &T) -> Result<T> {
             term![BV_SHL; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("<<".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("<<".into(), s.clone(), t.clone())),
     }
 }
 
@@ -229,7 +220,7 @@ pub fn shr(s: &T, t: &T) -> Result<T> {
             term![BV_LSHR; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp(">>".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp(">>".into(), s.clone(), t.clone())),
     }
 }
 
@@ -239,7 +230,7 @@ pub fn lt(s: &T, t: &T) -> Result<T> {
         (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
             Ok(T::new(term![BV_ULT; s.ir.clone(), t.ir.clone()], Ty::Bool))
         }
-        _ => Err(Error::InvalidBinOp("<".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("<".into(), s.clone(), t.clone())),
     }
 }
 
@@ -249,7 +240,7 @@ pub fn gt(s: &T, t: &T) -> Result<T> {
         (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
             Ok(T::new(term![BV_UGT; s.ir.clone(), t.ir.clone()], Ty::Bool))
         }
-        _ => Err(Error::InvalidBinOp(">".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp(">".into(), s.clone(), t.clone())),
     }
 }
 
@@ -259,7 +250,7 @@ pub fn lte(s: &T, t: &T) -> Result<T> {
         (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
             Ok(T::new(term![BV_ULE; s.ir.clone(), t.ir.clone()], Ty::Bool))
         }
-        _ => Err(Error::InvalidBinOp("<=".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("<=".into(), s.clone(), t.clone())),
     }
 }
 
@@ -269,7 +260,7 @@ pub fn gte(s: &T, t: &T) -> Result<T> {
         (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
             Ok(T::new(term![BV_UGE; s.ir.clone(), t.ir.clone()], Ty::Bool))
         }
-        _ => Err(Error::InvalidBinOp(">=".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp(">=".into(), s.clone(), t.clone())),
     }
 }
 
@@ -280,7 +271,7 @@ pub fn bitor(s: &T, t: &T) -> Result<T> {
             term![BV_OR; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("|".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("|".into(), s.clone(), t.clone())),
     }
 }
 
@@ -291,7 +282,7 @@ pub fn bitand(s: &T, t: &T) -> Result<T> {
             term![BV_AND; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("&".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("&".into(), s.clone(), t.clone())),
     }
 }
 
@@ -302,7 +293,7 @@ pub fn bitxor(s: &T, t: &T) -> Result<T> {
             term![BV_XOR; s.ir.clone(), t.ir.clone()],
             t.ty.clone(),
         )),
-        _ => Err(Error::InvalidBinOp("^".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("^".into(), s.clone(), t.clone())),
     }
 }
 
@@ -310,7 +301,7 @@ pub fn bitxor(s: &T, t: &T) -> Result<T> {
 pub fn and(s: &T, t: &T) -> Result<T> {
     match (&s.ty, &t.ty) {
         (Ty::Bool, Ty::Bool) => Ok(T::new(term![AND; s.ir.clone(), t.ir.clone()], Ty::Bool)),
-        _ => Err(Error::InvalidBinOp("&&".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("&&".into(), s.clone(), t.clone())),
     }
 }
 
@@ -318,7 +309,7 @@ pub fn and(s: &T, t: &T) -> Result<T> {
 pub fn or(s: &T, t: &T) -> Result<T> {
     match (&s.ty, &t.ty) {
         (Ty::Bool, Ty::Bool) => Ok(T::new(term![OR; s.ir.clone(), t.ir.clone()], Ty::Bool)),
-        _ => Err(Error::InvalidBinOp("||".into(), s.clone(), t.clone())),
+        _ => Err(ErrorKind::InvalidBinOp("||".into(), s.clone(), t.clone())),
     }
 }
 
@@ -329,7 +320,7 @@ pub fn uint_to_field(s: &T) -> Result<T> {
             term![Op::UbvToPf(ZOKRATES_MODULUS_ARC.clone()); s.ir.clone()],
             Ty::Field,
         )),
-        _ => Err(Error::InvalidUnOp("to_field".into(), s.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("to_field".into(), s.clone())),
     }
 }
 
@@ -340,7 +331,7 @@ pub fn array_idx(a: &T, i: &T) -> Result<T> {
             term![Op::Select; a.ir.clone(), i.ir.clone()],
             (**elem_ty).clone(),
         )),
-        _ => Err(Error::InvalidBinOp(
+        _ => Err(ErrorKind::InvalidBinOp(
             "array[idx]".into(),
             a.clone(),
             i.clone(),

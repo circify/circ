@@ -11,16 +11,18 @@ use rug::Integer;
 
 use crate::circify::{Circify, Loc, Val};
 use crate::front::zokrates::{PROVER_VIS, PUBLIC_VIS};
-use crate::ir::term::*;
 use crate::ir::opt::cfold::fold;
 use crate::ir::term::extras::as_uint_constant;
+use crate::ir::term::*;
 
 use super::FrontEnd;
 
+pub mod error;
 pub mod parser;
 pub mod term;
 pub mod ty;
 
+use error::{Error, ErrorKind, Result};
 use parser::ast;
 
 /// Inputs to the datalog compilier
@@ -54,7 +56,9 @@ impl<'ast> Gen<'ast> {
     fn enter_function(&mut self, name: &'ast str, dec_value: Option<Integer>) -> bool {
         let e = self.stack_by_fn.entry(name).or_insert_with(|| Vec::new());
         //assert_eq!(e.last().and_then(|l| l.as_ref()).is_some(), dec_value.is_some());
-        let do_enter = if let (Some(last_val), Some(this_val)) = (e.last().and_then(|l| l.as_ref()), dec_value.as_ref()) {
+        let do_enter = if let (Some(last_val), Some(this_val)) =
+            (e.last().and_then(|l| l.as_ref()), dec_value.as_ref())
+        {
             last_val > this_val
         } else {
             e.len() <= self.rec_limit
@@ -110,56 +114,54 @@ impl<'ast> Gen<'ast> {
         )
     }
 
-    fn entry_rule(&mut self, name: &'ast str) {
+    fn entry_rule(&mut self, name: &'ast str) -> Result<()> {
         let rule = *self
             .rules
             .get(name)
-            .unwrap_or_else(|| panic!("No entry rule: {}", name));
+            .ok_or_else(|| ErrorKind::MissingEntry(name.into()))?;
         self.enter_function(name, None);
         for d in &rule.args {
             let (ty, public) = self.ty(&d.ty);
             let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
             self.circ
-                .declare(d.ident.value.into(), &ty, public, vis)
-                .unwrap();
+                .declare(d.ident.value.into(), &ty, public, vis)?;
         }
-        let r = self.rule_cases(&rule);
+        let r = self.rule_cases(&rule)?;
         self.exit_function(name);
         self.circ.assert(r.as_bool());
+        Ok(())
     }
 
-    fn rule_cases(&mut self, rule: &'ast ast::Rule_) -> term::T {
-        rule.conds
-            .iter()
-            .map(|c| self.condition(c))
-            .fold(term::bool_lit(false), |x, y| term::or(&x, &y).unwrap())
+    fn rule_cases(&mut self, rule: &'ast ast::Rule_) -> Result<'ast, term::T> {
+        rule.conds.iter().try_fold(term::bool_lit(false), |x, y| {
+            let cond = self.condition(y)?;
+            term::or(&x, &cond).map_err(|e| Error::from(e).with_span(rule.span.clone()))
+        })
     }
 
-    fn condition(&mut self, c: &'ast ast::Condition) -> term::T {
+    fn condition(&mut self, c: &'ast ast::Condition) -> Result<'ast, term::T> {
         if let Some(decls) = c.existential.as_ref() {
             for d in &decls.declarations {
                 let (ty, _public) = self.ty(&d.ty);
-                self.circ
-                    .declare(d.ident.value.into(), &ty, false, None)
-                    .unwrap();
+                self.circ.declare(d.ident.value.into(), &ty, false, None)?;
             }
         }
-        c.exprs
-            .iter()
-            .map(|e| self.expr(e, true))
-            .fold(term::bool_lit(true), |x, y| term::and(&x, &y).unwrap())
+        c.exprs.iter().try_fold(term::bool_lit(true), |x, y| {
+            let cond = self.expr(y, true)?;
+            term::and(&x, &cond).map_err(|e| Error::from(e).with_span(y.span().clone()))
+        })
     }
 
-    fn ident(&mut self, i: &'ast ast::Ident) -> term::T {
-        self.circ
-            .get_value(Loc::local(i.value.to_owned()))
-            .expect("lookup")
-            .unwrap_term()
+    fn ident(&mut self, i: &'ast ast::Ident) -> Result<'ast, term::T> {
+        Ok(self
+            .circ
+            .get_value(Loc::local(i.value.to_owned()))?
+            .unwrap_term())
     }
     /// Generate IR for an expression.
     ///
     /// * `top_level` indicates whether this expression is a top-level expression in a condition.
-    fn expr(&mut self, e: &'ast ast::Expression, top_level: bool) -> term::T {
+    fn expr(&mut self, e: &'ast ast::Expression, top_level: bool) -> Result<'ast, term::T> {
         match e {
             &ast::Expression::Binary(ref b) => self.bin_expr(b),
             &ast::Expression::Unary(ref u) => self.un_expr(u),
@@ -167,10 +169,10 @@ impl<'ast> Gen<'ast> {
             &ast::Expression::Identifier(ref i) => self.ident(i),
             &ast::Expression::Literal(ref i) => self.literal(i),
             &ast::Expression::Access(ref c) => {
-                let arr = self.ident(&c.arr);
-                c.idxs.iter().fold(arr, |arr, idx| {
-                    let idx = self.expr(idx, false);
-                    term::array_idx(&arr, &idx).unwrap()
+                let arr = self.ident(&c.arr)?;
+                c.idxs.iter().try_fold(arr, |arr, idx| {
+                    let idx_v = self.expr(idx, false)?;
+                    term::array_idx(&arr, &idx_v).map_err(|err| Error::new(err, idx.span().clone()))
                 })
             }
             &ast::Expression::Call(ref c) => {
@@ -178,11 +180,11 @@ impl<'ast> Gen<'ast> {
                     .args
                     .iter()
                     .map(|a| self.expr(a, false))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>>>()?;
                 match c.fn_name.value {
                     "to_field" => {
                         assert_eq!(1, args.len(), "to_field takes 1 argument: {:?}", c.span);
-                        term::uint_to_field(&args[0]).unwrap()
+                        term::uint_to_field(&args[0]).map_err(|err| Error::new(err, c.span.clone()))
                     }
                     name => {
                         assert!(
@@ -194,7 +196,13 @@ impl<'ast> Gen<'ast> {
                             .rules
                             .get(name)
                             .unwrap_or_else(|| panic!("No entry rule: {}", name));
-                        let opt_const = if let Some((i, _)) = rule.args.iter().enumerate().filter(|&(_, arg)| arg.dec.is_some()).next() {
+                        let opt_const = if let Some((i, _)) = rule
+                            .args
+                            .iter()
+                            .enumerate()
+                            .filter(|&(_, arg)| arg.dec.is_some())
+                            .next()
+                        {
                             let ir = &args[i].ir;
                             let reduced_ir = fold(ir);
                             let r = as_uint_constant(&reduced_ir);
@@ -215,42 +223,42 @@ impl<'ast> Gen<'ast> {
                                     )
                                     .unwrap();
                             }
-                            let r = self.rule_cases(&rule);
+                            let r = self.rule_cases(&rule)?;
                             self.exit_function(name);
-                            r
+                            Ok(r)
                         } else {
-                            term::bool_lit(false)
+                            Ok(term::bool_lit(false))
                         }
                     }
                 }
             }
         }
     }
-    fn literal(&mut self, e: &ast::Literal) -> term::T {
+    fn literal(&mut self, e: &ast::Literal) -> Result<'ast, term::T> {
         match e {
             &ast::Literal::BinLiteral(ref b) => {
                 let len = b.value.len() as u8 - 2;
                 let val = u64::from_str_radix(&b.value[2..], 2).unwrap();
-                term::uint_lit(val, len)
+                Ok(term::uint_lit(val, len))
             }
             &ast::Literal::HexLiteral(ref b) => {
                 let len = (b.value.len() as u8 - 2) * 4;
                 let val = u64::from_str_radix(&b.value[2..], 16).unwrap();
-                term::uint_lit(val, len)
+                Ok(term::uint_lit(val, len))
             }
             &ast::Literal::DecimalLiteral(ref b) => {
                 let val = Integer::from_str(&b.value).unwrap();
-                term::pf_lit(val)
+                Ok(term::pf_lit(val))
             }
             &ast::Literal::BooleanLiteral(ref b) => {
                 let val = bool::from_str(&b.value).unwrap();
-                term::bool_lit(val)
+                Ok(term::bool_lit(val))
             }
         }
     }
-    fn bin_expr(&mut self, e: &'ast ast::BinaryExpression) -> term::T {
-        let l = self.expr(&e.left, false);
-        let r = self.expr(&e.right, false);
+    fn bin_expr(&mut self, e: &'ast ast::BinaryExpression) -> Result<'ast, term::T> {
+        let l = self.expr(&e.left, false)?;
+        let r = self.expr(&e.right, false)?;
         let res = match &e.op {
             ast::BinaryOperator::BitXor => term::bitxor(&l, &r),
             ast::BinaryOperator::BitAnd => term::bitand(&l, &r),
@@ -270,16 +278,16 @@ impl<'ast> Gen<'ast> {
             ast::BinaryOperator::Lte => term::lte(&l, &r),
             ast::BinaryOperator::Gte => term::gte(&l, &r),
         };
-        res.expect("Bad expression")
+        res.map_err(|err| Error::new(err, e.span.clone()))
     }
-    fn un_expr(&mut self, e: &'ast ast::UnaryExpression) -> term::T {
-        let l = self.expr(&e.expression, false);
+    fn un_expr(&mut self, e: &'ast ast::UnaryExpression) -> Result<'ast, term::T> {
+        let l = self.expr(&e.expression, false)?;
         let res = match &e.op {
             ast::UnaryOperator::BitNot(_) => term::bitnot(&l),
             ast::UnaryOperator::Not(_) => term::not(&l),
             ast::UnaryOperator::Neg(_) => term::neg(&l),
         };
-        res.expect("Bad expression")
+        res.map_err(|err| Error::new(err, e.span.clone()))
     }
 }
 
@@ -300,10 +308,13 @@ impl FrontEnd for Datalog {
                 panic!("parse error!")
             }
         };
-        println!("{:#?}", ast);
         let mut g = Gen::new(i.rec_limit);
         g.register_rules(&ast);
-        g.entry_rule("main");
+        let r = g.entry_rule("main");
+        if let Err(e) = r {
+            eprintln!("{}", e);
+            panic!()
+        }
         g.circ.consume().borrow().clone()
     }
 }

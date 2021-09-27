@@ -19,7 +19,7 @@ pub mod ast {
     use lazy_static::lazy_static;
     use pest::iterators::{Pair, Pairs};
     use pest::prec_climber::{Assoc, Operator, PrecClimber};
-    use pest::Span;
+    pub use pest::Span;
     use pest_ast::FromPest;
 
     fn span_into_str(span: Span) -> &str {
