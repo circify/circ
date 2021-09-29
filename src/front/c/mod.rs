@@ -209,11 +209,8 @@ impl CGen {
                 }
             }
         }
-        println!("EXPR: {}", expr.clone().unwrap());
         let res = self.circ.declare_init(name.clone(), ty.unwrap(), Val::Term(expr.unwrap()));
         self.unwrap(res);
-
-        println!("VALUE: {:#?}", self.circ.get_value(Loc::local(name.clone())));
     }
 
     fn gen_stmt(&mut self, stmt: Statement) {
@@ -236,6 +233,14 @@ impl CGen {
                     }
                 }
             }
+            Statement::If(node) => {
+                println!("{:#?}", node.node);
+                let cond = self.gen_expr(node.node.condition.node);
+                self.gen_stmt(node.node.then_statement.node);
+                if let Some(f_cond) = node.node.else_statement {
+                    self.gen_stmt(f_cond.node);
+                } 
+            }
             Statement::Return(ret) => {
                 match ret {
                     Some(expr) => {
@@ -243,9 +248,13 @@ impl CGen {
                         let ret_res = self.circ.return_(Some(ret));
                         self.unwrap(ret_res);
                     }
-                    None => {}
+                    None => {
+                        let ret_res = self.circ.return_(None);
+                        self.unwrap(ret_res);
+                    }
                 };
             }
+
             Statement::Expression(_expr) => {}
             _ => unimplemented!("Expression {:#?} hasn't been implemented", stmt),
         }

@@ -316,6 +316,35 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
     s.ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
+pub fn bool(a: CTerm) -> Result<Term, String> {
+    match a.term {
+        CTermData::CBool(b) => Ok(b),
+        a => Err(format!("{} is not a boolean", a)),
+    }
+}
+
+fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    match (a.term, b.term) {
+        (CTermData::CInt(na, a), CTermData::CInt(nb, b)) if na == nb => Ok(
+            CTerm {
+                term: CTermData::CInt(na, term![Op::Ite; c, a, b]),
+                udef: false,
+            }
+        ),
+        (CTermData::CBool(a), CTermData::CBool(b)) => Ok(
+            CTerm {
+                term: CTermData::CBool(term![Op::Ite; c, a, b]),
+                udef: false,
+            }
+        ),
+        (x, y) => Err(format!("Cannot perform ITE on {} and {}", x, y)),
+    }
+}
+
+pub fn cond(c: CTerm, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    ite(bool(c)?, a, b)
+}
+
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
 }

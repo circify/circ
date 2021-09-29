@@ -9,7 +9,8 @@ if __name__ == "__main__":
         boolean_tests + \
         nary_boolean_tests + \
         const_arith_tests + \
-        const_bool_tests # + \
+        const_bool_tests + \
+        ite_tests
         # loop_tests + \
         # ite_tests + \
         # function_tests + \

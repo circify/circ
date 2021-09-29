@@ -72,6 +72,7 @@ def run_tests(lang: str, tests: List[dict]):
     4. server arguments: dict[name] = value
     5. client arguments: dict[name] = value
     '''
+    print("Running tests for frontend", lang)
     failed_test_descs = []
     num_retries = 3
     progress_inc = 5

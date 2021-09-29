@@ -51,13 +51,13 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/boolean_tests/2pc_boolean_equals.z
 # build mpc nary boolean tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.zok
 
-# build ite tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.zok
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_int.zok
-
 # build mpc const tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_arith.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
+
+# build ite tests
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_int.zok
 
 # build mpc array tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
