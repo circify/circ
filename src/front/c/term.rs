@@ -32,6 +32,13 @@ impl CTermData {
         terms_tail(self, &mut output);
         output
     }
+
+    pub fn term(&self) -> Term {
+        match self {
+            CTermData::CBool(b) => b.clone(),
+            CTermData::CInt(_, b) => b.clone(),
+        }
+    }
 }
 
 impl Display for CTermData {

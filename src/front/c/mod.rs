@@ -236,9 +236,16 @@ impl CGen {
             Statement::If(node) => {
                 println!("{:#?}", node.node);
                 let cond = self.gen_expr(node.node.condition.node);
+
+                // TODO Cast to boolean for condition;
+                self.circ.enter_condition(cond.term.term());
                 self.gen_stmt(node.node.then_statement.node);
+                self.circ.exit_condition();
+
                 if let Some(f_cond) = node.node.else_statement {
+                    self.circ.enter_condition(term!(Op::Not;cond.term.term()));
                     self.gen_stmt(f_cond.node);
+                    self.circ.exit_condition();
                 } 
             }
             Statement::Return(ret) => {

@@ -660,7 +660,7 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Exit a conditional block
-    pub fn exit_codition(&mut self) {
+    pub fn exit_condition(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_condition();
         self.condition = self.condition();
     }

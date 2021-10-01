@@ -57,5 +57,5 @@ mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
 
 # build ite tests
 mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
+mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
 

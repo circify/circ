@@ -97,6 +97,9 @@ impl MemManager {
             let id = self.take_next_id();
             let alloc = Alloc::new(id, addr_width, val_width, size);
             let v = alloc.var().clone();
+
+            // TODO change for MPC to store array inside allocs structure (somehow..)
+
             if let Op::Var(n, _) = &v.op {
                 self.cs.borrow_mut().eval_and_save(&n, &array);
             } else {
@@ -148,6 +151,16 @@ impl MemManager {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         assert_eq!(alloc.val_width, check(&val).as_bv());
+
+        // Change same as above for just storing term inside alloc
+        // add new field to alloc? cur_var
+
+        // Add ite here with condition
+        // if true, update circ_ctx with new ref with store 
+        // else return original arr
+
+        // Expose Store in circify 
+
         let new = term![Op::Store; alloc.var().clone(), offset, val];
         alloc.next_var();
         let v = alloc.var().clone();
