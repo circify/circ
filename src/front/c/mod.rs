@@ -204,7 +204,11 @@ impl CGen {
                 Initializer::Expression(e) => {
                     expr = Some(cast(ty.clone(), self.gen_expr(e.node)));
                 }
-                Initializer::List(_l) => {
+                Initializer::List(l) => {
+                    println!("LIST INIT?: {:#?}", l);
+                    for li in l {
+                        println!("LIST ITEM: {:#?}", li);
+                    }
                     unimplemented!("list type not implemented yet.");
                 }
             }

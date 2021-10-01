@@ -99,12 +99,16 @@ impl MemManager {
             let v = alloc.var().clone();
 
             // TODO change for MPC to store array inside allocs structure (somehow..)
+            
+
 
             if let Op::Var(n, _) = &v.op {
                 self.cs.borrow_mut().eval_and_save(&n, &array);
             } else {
                 unreachable!()
             }
+
+
             self.assert(term![Op::Eq; v, array]);
             self.allocs.insert(id, alloc);
             id
