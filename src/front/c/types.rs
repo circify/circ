@@ -9,6 +9,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum Ty {
     Bool,
     Uint(usize),
+    Array(usize, Box<Ty>)
 }
 
 impl Ty {
@@ -21,7 +22,11 @@ impl Ty {
             Self::Uint(w) => CTerm {
                 term: CTermData::CInt(*w, bv_lit(0, *w)),
                 udef: false,
-            }
+            },
+            Self::Array(n, b) => CTerm {
+                term: CTermData::CArray((**b).clone(), vec![b.default(); *n]),
+                udef: false,
+            } 
         }
     }
 }
@@ -31,6 +36,7 @@ impl Display for Ty {
         match self {
             Ty::Bool => write!(f, "bool"),
             Ty::Uint(w) => write!(f, "u{}", w),
+            Ty::Array(n, b) => write!(f, "{}[{}]", b, n),
         }
     }
 }

@@ -1,5 +1,6 @@
 //! A library for building front-ends
 
+use crate::circify::mem::AllocId;
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -715,6 +716,11 @@ impl<E: Embeddable> Circify<E> {
             )?;
         }
         self.break_(RET_BREAK_NAME)
+    }
+
+    /// Store a value in an array at a defined offset
+    pub fn store_(&mut self, id: AllocId, offset: Term, val: Term, cond: bool) {
+        self.cir_ctx.mem.store(id, offset, val, cond);
     }
 
     /// Assert something

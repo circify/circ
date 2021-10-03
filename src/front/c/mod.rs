@@ -9,12 +9,10 @@ use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
-use crate::front::c::types::Ty;
 use crate::ir::proof;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use lang_c::ast::*;
-
 
 // use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -196,25 +194,20 @@ impl CGen {
         self.unwrap(res)
     }
 
-    fn gen_init(&mut self, decl: InitDeclarator, ty: Option<Ty>) {
-        let name = name_from_decl(&decl.declarator.node);
-        let mut expr: Option<CTerm> = None;
-        if let Some(i) = decl.initializer {
-            match i.node {
-                Initializer::Expression(e) => {
-                    expr = Some(cast(ty.clone(), self.gen_expr(e.node)));
+    fn gen_init(&mut self, init: Initializer) -> CTerm {
+        match init {
+            Initializer::Expression(e) => {
+               self.gen_expr(e.node)
+            }
+            Initializer::List(l) => {
+                let mut values: Vec<CTerm> = Vec::new();
+                for li in l {
+                    let expr = self.gen_init(li.node.initializer.node);
+                    values.push(expr)
                 }
-                Initializer::List(l) => {
-                    println!("LIST INIT?: {:#?}", l);
-                    for li in l {
-                        println!("LIST ITEM: {:#?}", li);
-                    }
-                    unimplemented!("list type not implemented yet.");
-                }
+                unimplemented!("list type not implemented yet.");
             }
         }
-        let res = self.circ.declare_init(name.clone(), ty.unwrap(), Val::Term(expr.unwrap()));
-        self.unwrap(res);
     }
 
     fn gen_stmt(&mut self, stmt: Statement) {
@@ -224,9 +217,13 @@ impl CGen {
                     match node.node {
                         BlockItem::Declaration(node) => {
                             let decl = node.node;
-                            let ty = decl_type(decl.clone());
+                            let ty = decl_type(decl.clone()).unwrap();
                             assert!(decl.declarators.len() == 1);
-                            self.gen_init(decl.declarators.first().unwrap().node.clone(), ty);
+                            let d = decl.declarators.first().unwrap().node.clone();
+                            let name = name_from_decl(&d.declarator.node);
+                            let expr = self.gen_init(d.initializer.unwrap().node);
+                            let res = self.circ.declare_init(name, ty.clone(), Val::Term(cast(Some(ty), expr)));
+                            self.unwrap(res);
                         }
                         BlockItem::Statement(stmt) => {
                             self.gen_stmt(stmt.node);

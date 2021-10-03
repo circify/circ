@@ -11,6 +11,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum CTermData {
     CBool(Term),
     CInt(usize, Term),
+    CArray(Ty, Vec<CTerm>),
 }
 
 impl CTermData {
@@ -18,6 +19,7 @@ impl CTermData {
         match self {
             Self::CBool(_) => Ty::Bool,
             Self::CInt(w, _) => Ty::Uint(*w),
+            Self::CArray(b, v) => Ty::Array(v.len(), Box::new(b.clone())),
         }
     }
     /// Get all IR terms inside this value, as a list.
@@ -27,16 +29,26 @@ impl CTermData {
             match term {
                 CTermData::CBool(b) => output.push(b.clone()),
                 CTermData::CInt(_, b) => output.push(b.clone()),
+                CTermData::CArray(_, v) => v.iter().for_each(|v| terms_tail(&v.term, output)),
             }
         }
         terms_tail(self, &mut output);
         output
     }
-
+    pub fn unwrap_array(self) -> Result<Vec<CTerm>, String> {
+        match self {
+            CTermData::CArray(_, v) => Ok(v),
+            s => Err(format!("Not an array: {}", s)),
+        }
+    }
+    pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
+        array(v)
+    }
     pub fn term(&self) -> Term {
         match self {
             CTermData::CBool(b) => b.clone(),
             CTermData::CInt(_, b) => b.clone(),
+            _ => unimplemented!("Haven't implemented return terms for arrays"),
         }
     }
 }
@@ -100,6 +112,9 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 }
                 None => panic!("Bad cast from {} to {:?}", ty, to_ty)
             }
+        }
+        CTermData::CArray(_n, _ty) => {
+            unimplemented!("Haven't implemented casting for arrays");
         }
         // _ => panic!("Bad cast from {} to {}", ty, to_ty)
     }
@@ -350,6 +365,23 @@ fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
 
 pub fn cond(c: CTerm, a: CTerm, b: CTerm) -> Result<CTerm, String> {
     ite(bool(c)?, a, b)
+}
+
+fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
+    let v: Vec<CTerm> = elems.into_iter().collect();
+    if let Some(e) = v.first() {
+        let ty = e.term.type_();
+        if v.iter().skip(1).any(|a| a.term.type_() != ty) {
+            Err(format!("Inconsistent types in array"))
+        } else {
+            Ok( CTerm {
+                term: CTermData::CArray(ty, v),
+                udef: false
+            })
+        }
+    } else {
+        Err(format!("Empty array"))
+    }
 }
 
 pub struct Ct {
