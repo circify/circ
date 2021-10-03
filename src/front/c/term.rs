@@ -41,9 +41,6 @@ impl CTermData {
             s => Err(format!("Not an array: {}", s)),
         }
     }
-    pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
-        array(v)
-    }
     pub fn term(&self) -> Term {
         match self {
             CTermData::CBool(b) => b.clone(),
@@ -57,7 +54,8 @@ impl Display for CTermData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             CTermData::CBool(x) => write!(f, "Bool({})", x),
-            CTermData::CInt(_, x) => write!(f, "CInt({})", x),
+            CTermData::CInt(_, x) => write!(f, "Int({})", x),
+            CTermData::CArray(_, v) => write!(f, "Array({:#?})", v),
         }
     }
 }
@@ -96,7 +94,7 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 Some(Ty::Bool) => {
                     t.clone()
                 }
-                None => panic!("Bad cast from {} to {:?}", ty, to_ty)
+                _ => panic!("Bad cast from {} to {:?}", ty, to_ty)
             }
         }   
         CTermData::CInt(w, ref term) => {
@@ -110,11 +108,16 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 Some(Ty::Uint(_)) => {
                     t.clone()
                 }
-                None => panic!("Bad cast from {} to {:?}", ty, to_ty)
+                _ => panic!("Bad cast from {} to {:?}", ty, to_ty)
             }
         }
-        CTermData::CArray(_n, _ty) => {
-            unimplemented!("Haven't implemented casting for arrays");
+        CTermData::CArray(ref n, ref ty) => {
+            match to_ty {
+                Some(Ty::Array(n, ty)) => {
+                    t.clone()
+                }
+                _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty)
+            }
         }
         // _ => panic!("Bad cast from {} to {}", ty, to_ty)
     }
@@ -131,6 +134,7 @@ fn int_promotion(t: &CTerm) -> CTerm {
         CTermData::CInt(_, _) => {
             t.clone()
         }
+        _ => panic!("CTerm cannot be promoted to int: {:#?}", t.term.type_())
     }
 }
 
@@ -384,8 +388,35 @@ fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
     }
 }
 
+pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
+    array(v)
+}
+
+pub fn array_select(array: CTerm, idx: CTerm) -> Result<CTerm, String> {
+    match (array.term, idx.term) {
+        (CTermData::CArray(_, list), CTermData::CInt(_, idx)) => {
+            let mut it = list.into_iter().enumerate();
+            let first = it
+                .next()
+                .ok_or_else(|| format!("Cannot index empty array"))?;
+            it.fold(Ok(first.1), |acc, (i, elem)| {
+                ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], elem, acc?)
+            })
+        }
+        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+    }
+}
+
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
+}
+
+fn field_name(struct_name: &str, field_name: &str) -> String {
+    format!("{}.{}", struct_name, field_name)
+}
+
+fn idx_name(struct_name: &str, idx: usize) -> String {
+    format!("{}.{}", struct_name, idx)
 }
 
 impl Ct {
@@ -446,6 +477,25 @@ impl Embeddable for Ct {
                     ),
                     udef: false,
                 }
+            },
+            Ty::Array(n, ty) => {
+                Self::T {
+                    term: CTermData::CArray(
+                        (**ty).clone(),
+                        (0..*n)
+                            .map(|i| {
+                                self.declare(
+                                    ctx,
+                                    &*ty,
+                                    idx_name(&raw_name, i),
+                                    user_name.as_ref().map(|u| idx_name(u, i)),
+                                    visibility.clone(),
+                                )
+                            })
+                            .collect(),
+                    ),
+                    udef: false,
+                }
             }
         }
     }
@@ -486,6 +536,20 @@ impl Embeddable for Ct {
             (_, CTermData::CInt(w, b)) => {
                 Self::T {
                     term: CTermData::CInt(w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
+                    udef: false,
+                }
+            }
+            (_, CTermData::CArray(ety, list)) => {
+                Self::T {
+                    term: CTermData::CArray(
+                        ety.clone(),
+                        list.into_iter()
+                            .enumerate()
+                            .map(|(i, elem)| {
+                                self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
+                            })
+                            .collect(),
+                    ),
                     udef: false,
                 }
             }

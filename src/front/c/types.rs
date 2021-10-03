@@ -54,5 +54,6 @@ pub fn is_arith_type(t: &CTerm) -> bool {
         Ty::Bool => {
             true
         }
+        _ => false
     }
 }

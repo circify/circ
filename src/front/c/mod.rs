@@ -9,6 +9,7 @@ use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
+use crate::front::c::types::*;
 use crate::ir::proof;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
@@ -164,6 +165,7 @@ impl CGen {
             BinaryOperator::BitwiseXor => bitxor,
             BinaryOperator::LogicalAnd => and,
             BinaryOperator::LogicalOr => or,
+            BinaryOperator::Index => array_select,
             _ => unimplemented!("BinaryOperator {:#?} hasn't been implemented", op),
         }
     }
@@ -205,7 +207,8 @@ impl CGen {
                     let expr = self.gen_init(li.node.initializer.node);
                     values.push(expr)
                 }
-                unimplemented!("list type not implemented yet.");
+                let arr = new_array(values);
+                arr.unwrap()
             }
         }
     }
@@ -222,7 +225,13 @@ impl CGen {
                             let d = decl.declarators.first().unwrap().node.clone();
                             let name = name_from_decl(&d.declarator.node);
                             let expr = self.gen_init(d.initializer.unwrap().node);
-                            let res = self.circ.declare_init(name, ty.clone(), Val::Term(cast(Some(ty), expr)));
+                            let term = if ty == Ty::Bool {
+                                Val::Term(cast(Some(ty.clone()), expr))
+                            } else {
+                                Val::Term(expr)
+                            };
+
+                            let res = self.circ.declare_init(name, ty, term);
                             self.unwrap(res);
                         }
                         BlockItem::Statement(stmt) => {
