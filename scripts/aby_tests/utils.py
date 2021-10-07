@@ -6,13 +6,13 @@ import time
 def init_progress_bar(toolbar_width=40):
     ''' Initialize progress bar '''
     print("Running ABY unit tests")
-    sys.stdout.write("[%s]" % (" " * toolbar_width))
+    sys.stdout.write("[%s]" % ("." * toolbar_width))
     sys.stdout.flush()
     sys.stdout.write("\b" * (toolbar_width+1)) 
 
 def update_progress_bar():
     ''' Increment progress bar '''
-    sys.stdout.write("=")
+    sys.stdout.write("#")
     sys.stdout.flush()
 
 def end_progress_bar():
@@ -58,10 +58,10 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
 
         assert server_out == client_out, "server out != client out\nserver_out: "+server_out+"\nclient_out: "+client_out
         assert server_out == expected, "output != expected\nserver_out: "+server_out+"\nexpected: "+expected
-        return True
+        return True, ""
     except Exception as e:
         # print("Exception: ", e)
-        return False
+        return False, e
 
 def run_tests(lang: str, tests: List[dict]):
     '''
@@ -89,8 +89,9 @@ def run_tests(lang: str, tests: List[dict]):
         for i in range(num_retries):
             test_results.append(run_test(desc, expected, server_cmd, client_cmd))
         
-        if not any(test_results):
-            failed_test_descs.append(desc)
+        for r, e in test_results:
+            if not r:
+                failed_test_descs.append((desc, e))
 
         if t % progress_inc == 0:
             update_progress_bar()
@@ -99,4 +100,6 @@ def run_tests(lang: str, tests: List[dict]):
     if len(failed_test_descs) == 0:
         print("All tests passed ✅")
 
-    assert len(failed_test_descs) == 0, "there were failed test cases:\n\t- " + "\n\t- ".join(failed_test_descs)
+    failed_test_descs = [f"{r}:\n\t{e}" for r, e in failed_test_descs]
+
+    assert len(failed_test_descs) == 0, "there were failed test cases:\n======\n" + "\n\n".join(failed_test_descs)

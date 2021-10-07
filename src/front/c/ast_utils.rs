@@ -1,4 +1,6 @@
 use crate::front::c::types::Ty;
+use crate::front::c::term::CTerm;
+
 use lang_c::ast::*;
 use std::fmt::{self, Display, Formatter};
 
@@ -7,6 +9,11 @@ pub struct FnInfo {
     pub ret_ty: Option<Ty>,
     pub args: Vec<ParameterDeclaration>,
     pub body: Statement,
+}
+
+pub struct DeclInfo {
+    pub name: String,
+    pub ty: Ty,
 }
 
 impl FnInfo {
@@ -25,7 +32,14 @@ impl Display for FnInfo {
     }
 }
 
-pub fn name_from_decl(decl: &Declarator) -> String{
+pub fn name_from_lex(name: String) -> String {
+    let mut split = name.split("_");
+    let vec: Vec<&str> = split.collect();
+    println!("vec: {:#?}", vec);
+    vec[3].to_string()
+}
+
+pub fn name_from_decl(decl: &Declarator) -> String {
     match decl.kind.node {
         DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
         _ => panic!("Function name not found: {:?}", decl),
@@ -44,10 +58,19 @@ pub fn type_(t: &DeclarationSpecifier) -> Option<Ty> {
     panic!("DeclarationSpecifier does not contain TypeSpecifier: {:#?}", t);
 }
 
-pub fn decl_type(decl: Declaration) -> Option<Ty> {
+pub fn get_decl_info(decl: Declaration) -> DeclInfo {
     let spec = &decl.specifiers;
     assert!(spec.len() == 1);
-    type_(&spec.first().unwrap().node)
+    let ty = type_(&spec.first().unwrap().node).unwrap();
+
+    assert!(decl.declarators.len() == 1);
+    let decls = decl.declarators.first().unwrap().node.clone();
+    let name = name_from_decl(&decls.declarator.node);
+
+    DeclInfo {
+        name: name,
+        ty:ty,
+    }
 }
 
 pub fn s_type_(t: &SpecifierQualifier) -> Option<Ty> {

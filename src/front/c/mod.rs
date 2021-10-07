@@ -14,6 +14,7 @@ use crate::ir::proof;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use lang_c::ast::*;
+use log::debug;
 
 // use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
@@ -220,18 +221,48 @@ impl CGen {
                     match node.node {
                         BlockItem::Declaration(node) => {
                             let decl = node.node;
-                            let ty = decl_type(decl.clone()).unwrap();
-                            assert!(decl.declarators.len() == 1);
-                            let d = decl.declarators.first().unwrap().node.clone();
-                            let name = name_from_decl(&d.declarator.node);
-                            let expr = self.gen_init(d.initializer.unwrap().node);
-                            let term = if ty == Ty::Bool {
-                                Val::Term(cast(Some(ty.clone()), expr))
-                            } else {
-                                Val::Term(expr)
-                            };
+                            let decl_info = get_decl_info(decl.clone());
 
-                            let res = self.circ.declare_init(name, ty, term);
+                            // get derived types
+                            // Array, Pointer ... 
+                            let d = decl.declarators.first().unwrap().node.clone();
+                            let derived = &d.declarator.node.derived;
+                            let mut derived_ty: Ty = decl_info.ty;
+
+                            if derived.len() != 0 {
+                                for d in derived {
+                                    match &d.node {
+                                        DerivedDeclarator::Array(arr) => {
+                                            let _quals = &arr.node.qualifiers;
+                                            if let ArraySize::VariableExpression(size) = &arr.node.size {
+                                                if let Expression::Constant(con) = &size.node {
+                                                    if let Constant::Integer(i) = &con.node {
+                                                        let len: usize = i.number.parse::<usize>().unwrap();
+                                                        match derived_ty {
+                                                            Ty::Array(_, _) => {
+                                                                derived_ty = Ty::Array(len,  Box::new(derived_ty))
+                                                            }
+                                                            _ => derived_ty = Ty::Array(len, Box::new(derived_ty.clone()))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        DerivedDeclarator::Pointer(_ptr) => {
+                                            unimplemented!("pointers not implemented yet");
+                                        }
+                                        _ => panic!("Not implemented: {:#?}", d)
+                                    }
+                                }
+                            }
+                            let expr: CTerm;
+                            if let Some(init) = d.initializer {
+                                expr = self.gen_init(init.node);
+                            } else {
+                                expr = derived_ty.default();
+                            }
+
+                            let res = self.circ.declare_init(decl_info.name, derived_ty.clone(), Val::Term(cast(Some(derived_ty.clone()), expr)));
                             self.unwrap(res);
                         }
                         BlockItem::Statement(stmt) => {
@@ -244,16 +275,17 @@ impl CGen {
                 }
             }
             Statement::If(node) => {
-                println!("{:#?}", node.node);
                 let cond = self.gen_expr(node.node.condition.node);
 
                 // TODO Cast to boolean for condition;
-                self.circ.enter_condition(cond.term.term());
+                let t_res = self.circ.enter_condition(cond.term.term());
+                self.unwrap(t_res);
                 self.gen_stmt(node.node.then_statement.node);
                 self.circ.exit_condition();
 
                 if let Some(f_cond) = node.node.else_statement {
-                    self.circ.enter_condition(term!(Op::Not;cond.term.term()));
+                    let f_res = self.circ.enter_condition(term!(Op::Not;cond.term.term()));
+                    self.unwrap(f_res);
                     self.gen_stmt(f_cond.node);
                     self.circ.exit_condition();
                 } 
@@ -272,8 +304,38 @@ impl CGen {
                 };
             }
 
-            Statement::Expression(_expr) => {}
-            _ => unimplemented!("Expression {:#?} hasn't been implemented", stmt),
+            Statement::Expression(expr) => {
+                let e = expr.unwrap().node;
+                match e {
+                    Expression::BinaryOperator(node) => {
+                        match node.node {
+                            BinaryOperatorExpression{ operator, lhs, rhs } => {
+                                debug!("op: {:#?}", operator);
+                                debug!("lhs: {:#?}", lhs);
+                                debug!("rhs: {:#?}", rhs);
+
+                                let l = self.gen_expr(lhs.node);
+                                let r = self.gen_expr(rhs.node);
+                                match operator.node {
+
+                                    // TODO: REVERSE SEARCH NAME FROM TERM IN CTX
+                                    // INDEX NEEDS TO STORE INTO CONTEXT 
+                                    BinaryOperator::Assign => {
+                                        let res = self.circ.assign(
+                                            Loc::local(name_from_lex(l.term.term().to_string())),
+                                            Val::Term(r)
+                                        );
+                                        self.unwrap(res);
+                                    }
+                                    _ => unimplemented!("Statement expression operator {:#?}", operator)
+                                }
+                            }
+                        }
+                    }
+                    _ => unimplemented!("Statement expression {:#?} hasn't been implemented", e),
+                }
+            }
+            _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }
     }
 
@@ -285,7 +347,7 @@ impl CGen {
                     println!("{:#?}", decl);
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
-                    println!("{:#?}", fn_def.node.clone());
+                    // println!("{:#?}", fn_def.node.clone());
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
                     self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty);
                     for arg in fn_info.args.iter() {
@@ -300,6 +362,7 @@ impl CGen {
                         self.unwrap(r);
                     }
                     //TODO: move this out for just the main function as entry
+                    println!("body: {:#?}", fn_info.body);
                     self.gen_stmt(fn_info.body.clone());
                     if let Some(r) = self.circ.exit_fn() {
                         let ret_term = r.unwrap_term();

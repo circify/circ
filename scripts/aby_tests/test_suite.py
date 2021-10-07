@@ -427,7 +427,7 @@ ite_tests = [
     ],
 ]
 
-arr_tests = [
+array_tests = [
     [
         "Array sum test",
         3,
@@ -436,11 +436,35 @@ arr_tests = [
         {"a": 0, "b": 1},
     ], 
     [
-        "Array ret test",
-        "2\n1",
-        "./third_party/ABY/build/bin/2pc_array_ret",
+        "Array index test",
+        3,
+        "./third_party/ABY/build/bin/2pc_array_index",
         {"a": 2, "b": 0},
         {"a": 0, "b": 1},
+    ], 
+    # [
+    #     "Array ret test",
+    #     "2\n1",
+    #     "./third_party/ABY/build/bin/2pc_array_ret",
+    #     {"a": 2, "b": 0},
+    #     {"a": 0, "b": 1},
+    # ], 
+]
+
+c_array_tests = [
+    [
+        "CArray index and store test - 1",
+        2,
+        "./third_party/ABY/build/bin/2pc_array",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "CArray index and store test - 2",
+        3,
+        "./third_party/ABY/build/bin/2pc_array_index",
+        {"a": 3, "b": 0},
+        {"a": 0, "b": 3},
     ], 
 ]
 

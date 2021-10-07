@@ -162,13 +162,13 @@ impl MemManager {
     
         if cond {
             // if true, update circ_ctx with new ref with store 
-            let new = term![Op::Store; alloc.var().clone(), offset, val];
+            let new_term = term![Op::Store; alloc.var().clone(), offset, val];
             alloc.next_var();
             let v = alloc.var().clone();
-            self.assert(term![Op::Eq; v, new]);
+            self.assert(term![Op::Eq; v, new_term]);
         } else {
             // else return original arr
-            let new = term![Op::Store; alloc.var().clone(), offset, val];
+            let _new_term = term![Op::Store; alloc.var().clone(), offset, val];
             let old_v = alloc.var().clone();
             alloc.next_var();
             let v = alloc.var().clone();
