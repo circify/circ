@@ -9,11 +9,11 @@ pub struct FnInfo {
     pub body: Statement,
 }
 
-impl FnInfo {
-    fn new(name: String, ret_ty: Option<Ty>, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
-        Self { name, ret_ty, args, body }
-    }
-}
+// impl FnInfo {
+//     fn new(name: String, ret_ty: Option<Ty>, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
+//         Self { name, ret_ty, args, body }
+//     }
+// }
 
 impl Display for FnInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

@@ -660,7 +660,7 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Exit a conditional block
-    pub fn exit_codition(&mut self) {
+    pub fn exit_condition(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_condition();
         self.condition = self.condition();
     }
@@ -669,6 +669,7 @@ impl<E: Embeddable> Circify<E> {
     pub fn condition(&self) -> Term {
         // TODO:  more precise conditions, depending on lex scopes.
         let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions()).collect();
+        println!("cs: {:#?}", cs);
         if cs.len() == 0 {
             leaf_term(Op::Const(Value::Bool(true)))
         } else {

@@ -254,7 +254,6 @@ impl ToABY {
 
     fn embed_bool(&mut self, t: Term) -> String {
         let mut s_circ = self.get_sharetype_circ(t.clone());
-        println!("EMBEDDING BOOL: {}", t);
         match &t.op {
             Op::Var(name, Sort::Bool) => {
                 if !self.inputs.contains_key(&t) {
@@ -573,6 +572,7 @@ pub fn to_aby(ir: Computation) -> ABY {
     let mut converter = ToABY::new(md, s_map);
 
     for t in terms {
+        println!("Terms: {}", t);
         converter.lower(t.clone());
     }
 

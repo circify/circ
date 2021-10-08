@@ -10,7 +10,6 @@ use crate::circify::{Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::Ty;
-use crate::ir::proof;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use lang_c::ast::*;
@@ -20,14 +19,22 @@ use lang_c::ast::*;
 use std::fmt::{self, Display, Formatter};
 use std::path::PathBuf;
 
-const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
 const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the C compiler
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
-
+    /// The file to look for concrete arguments to main in. Optional.
+    ///
+    /// ## Examples
+    ///
+    /// If main takes `x: u64, y: field`, this file might contain
+    ///
+    /// ```ignore
+    /// x 4
+    /// y -1
+    /// ```
     pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
@@ -72,16 +79,16 @@ impl FrontEnd for C {
 struct CGen {
     circ: Circify<Ct>,
     mode: Mode,
-    source: String,
+    _source: String,
     tu: TranslationUnit,
 }
 
 impl CGen {
-    fn new(inputs: Option<PathBuf>, mode: Mode, source: String, tu: TranslationUnit) -> Self {
+    fn new(inputs: Option<PathBuf>, mode: Mode, _source: String, tu: TranslationUnit) -> Self {
         let this = Self { 
             circ: Circify::new(Ct::new(inputs.map(|i| parser::parse_inputs(i)))),
             mode,
-            source, 
+            _source, 
             tu, 
         };
         this.circ
@@ -236,10 +243,16 @@ impl CGen {
             Statement::If(node) => {
                 println!("{:#?}", node.node);
                 let cond = self.gen_expr(node.node.condition.node);
+                let t_cond = self.circ.enter_condition(cond.term.term());
+                self.unwrap(t_cond);
                 self.gen_stmt(node.node.then_statement.node);
-                if let Some(f_cond) = node.node.else_statement {
-                    self.gen_stmt(f_cond.node);
+
+                if let Some(false_br) = node.node.else_statement {
+                    self.gen_stmt(false_br.node);
                 } 
+
+                self.circ.exit_condition();
+
             }
             Statement::Return(ret) => {
                 match ret {
