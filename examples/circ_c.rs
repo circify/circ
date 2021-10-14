@@ -62,9 +62,10 @@ fn main() {
     let cs = match mode {
         Mode::Mpc(_) => opt(
             cs,
+            // vec![],
             vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
-        _ => unimplemented!()
+        _ => unimplemented!(),
     };
     println!("Done with IR optimization");
 
@@ -73,7 +74,7 @@ fn main() {
             println!("Converting to aby");
             let aby = to_aby(cs);
             write_aby_exec(aby, "c".to_string(), path_buf);
-        },
-        _ => unimplemented!()
+        }
+        _ => unimplemented!(),
     }
 }

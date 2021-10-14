@@ -9,7 +9,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum Ty {
     Bool,
     Uint(usize),
-    Array(usize, Box<Ty>)
+    Array(usize, Box<Ty>),
 }
 
 impl Ty {
@@ -26,7 +26,7 @@ impl Ty {
             Self::Array(n, b) => CTerm {
                 term: CTermData::CArray((**b).clone(), vec![b.default(); *n]),
                 udef: false,
-            } 
+            },
         }
     }
 }
@@ -50,10 +50,7 @@ impl fmt::Debug for Ty {
 pub fn is_arith_type(t: &CTerm) -> bool {
     let ty = t.term.type_();
     match ty {
-        Ty::Uint(_) |
-        Ty::Bool => {
-            true
-        }
-        _ => false
+        Ty::Uint(_) | Ty::Bool => true,
+        _ => false,
     }
 }

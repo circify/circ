@@ -453,17 +453,24 @@ array_tests = [
 
 c_array_tests = [
     [
-        "CArray index and store test - 1",
+        "C array test",
         2,
         "./third_party/ABY/build/bin/2pc_array",
         {"a": 2, "b": 0},
         {"a": 0, "b": 2},
     ], 
     [
-        "CArray index and store test - 2",
-        3,
-        "./third_party/ABY/build/bin/2pc_array_index",
-        {"a": 3, "b": 0},
+        "C array test 1",
+        17,
+        "./third_party/ABY/build/bin/2pc_array_1",
+        {"a": 10, "b": 0},
+        {"a": 0, "b": 3},
+    ], 
+    [
+        "C array test 2",
+        17,
+        "./third_party/ABY/build/bin/2pc_array_2",
+        {"a": 10, "b": 0},
         {"a": 0, "b": 3},
     ], 
 ]

@@ -14,6 +14,7 @@ use crate::ir::proof;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use lang_c::ast::*;
+use lang_c::span::Node;
 use log::debug;
 
 // use std::collections::HashMap;
@@ -76,13 +77,29 @@ struct CGen {
     tu: TranslationUnit,
 }
 
+enum CLoc {
+    Var(Loc),
+    Member(Box<CLoc>, String),
+    Idx(Box<CLoc>, CTerm),
+}
+
+impl CLoc {
+    fn loc(&self) -> &Loc {
+        match self {
+            CLoc::Var(l) => l,
+            CLoc::Member(i, _) => i.loc(),
+            CLoc::Idx(i, _) => i.loc(),
+        }
+    }
+}
+
 impl CGen {
     fn new(inputs: Option<PathBuf>, mode: Mode, source: String, tu: TranslationUnit) -> Self {
-        let this = Self { 
+        let this = Self {
             circ: Circify::new(Ct::new(inputs.map(|i| parser::parse_inputs(i)))),
             mode,
-            source, 
-            tu, 
+            source,
+            tu,
         };
         this.circ
             .cir_ctx()
@@ -103,49 +120,90 @@ impl CGen {
         r.unwrap_or_else(|e| self.err(e))
     }
 
-    fn const_(&self, c: Constant) -> CTerm {
-        match c {
-            Constant::Integer(i) => {
-                CTerm {
-                    term: CTermData::CInt(32, bv_lit(i.number.parse::<i32>().unwrap(), 32)),
-                    udef: false,
-                }
+    fn apply_lval_mod(&mut self, base: CTerm, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
+        match loc {
+            CLoc::Var(_) => Ok(val),
+            CLoc::Idx(inner_loc, idx) => {
+                let old_inner = array_select(base.clone(), idx.clone())?;
+                let new_inner = self.apply_lval_mod(old_inner, *inner_loc, val)?;
+                array_store(base, idx, new_inner)
             }
-            _ => unimplemented!("Constant {:#?} hasn't been implemented", c)
+            _ => unimplemented!("Have not implemented apply_lval_mod"),
         }
     }
 
-    fn interpret_visibility(&self, ext: &DeclarationSpecifier) -> Option<PartyId> {
-        if let DeclarationSpecifier::Extension(nodes) = ext { 
+    fn mod_lval(&mut self, l: CLoc, t: CTerm) -> Result<(), String> {
+        let var = l.loc().clone();
+        let old = self
+            .circ
+            .get_value(var.clone())
+            .map_err(|e| format!("{}", e))?
+            .unwrap_term();
+        let new = self.apply_lval_mod(old, l, t)?;
+        self.circ
+            .assign(var, Val::Term(new))
+            .map_err(|e| format!("{}", e))
+            .map(|_| ())
+    }
+
+    fn lval(&mut self, expr: Box<Node<Expression>>) -> CLoc {
+        match expr.node {
+            Expression::Identifier(ref node) => {
+                let base_name = name_from_ident(&expr.node);
+                CLoc::Var(Loc::local(base_name))
+            }
+            Expression::BinaryOperator(node) => {
+                let bin_op = node.node;
+                match bin_op.operator.node {
+                    BinaryOperator::Index => {
+                        let base_name = name_from_ident(&bin_op.lhs.node);
+                        let idx = self.gen_expr(bin_op.rhs.node);
+                        CLoc::Idx(Box::new(CLoc::Var(Loc::local(base_name))), idx)
+                    }
+                    _ => unimplemented!("Invalid left hand value"),
+                }
+            }
+            _ => unimplemented!("Invalid left hand value"),
+        }
+    }
+
+    fn const_(&self, c: Constant) -> CTerm {
+        match c {
+            Constant::Integer(i) => CTerm {
+                term: CTermData::CInt(32, bv_lit(i.number.parse::<i32>().unwrap(), 32)),
+                udef: false,
+            },
+            _ => unimplemented!("Constant {:#?} hasn't been implemented", c),
+        }
+    }
+
+    fn interpret_visibility(&mut self, ext: &DeclarationSpecifier) -> Option<PartyId> {
+        if let DeclarationSpecifier::Extension(nodes) = ext {
             assert!(nodes.len() == 1);
             let node = nodes.first().unwrap();
             if let Extension::Attribute(attr) = &node.node {
                 let name = &attr.name;
                 return match name.node.as_str() {
                     "public" => PUBLIC_VIS.clone(),
-                    "private" => {
-                        match self.mode {
-                            Mode::Mpc(n_parties) => {
-                                assert!(attr.arguments.len() == 1);
-                                let arg = attr.arguments.first().unwrap();
-                                let cons = self.gen_expr(arg.node.clone());
-                                let num_val = const_int(cons).ok()?;                                
-                                if num_val <= n_parties {
-                                    Some(num_val.to_u8()?)
-                                } else {
-                                    self.err(
-                                        format!(
-                                            "Party number {} greater than the number of parties ({})",
-                                            num_val, n_parties
-                                        )
-                                    )
-                                }
+                    "private" => match self.mode {
+                        Mode::Mpc(n_parties) => {
+                            assert!(attr.arguments.len() == 1);
+                            let arg = attr.arguments.first().unwrap();
+                            let cons = self.gen_expr(arg.node.clone());
+                            let num_val = const_int(cons).ok()?;
+                            if num_val <= n_parties {
+                                Some(num_val.to_u8()?)
+                            } else {
+                                self.err(format!(
+                                    "Party number {} greater than the number of parties ({})",
+                                    num_val, n_parties
+                                ))
                             }
-                            _ => unimplemented!("Mode {} is not supported.", self.mode)
                         }
-                    }
-                    _ => panic!("Unknown visibility: {:#?}", name)
-                }
+                        _ => unimplemented!("Mode {} is not supported.", self.mode),
+                    },
+                    _ => panic!("Unknown visibility: {:#?}", name),
+                };
             }
         }
         panic!("Bad visibility declaration.");
@@ -171,23 +229,37 @@ impl CGen {
         }
     }
 
-    fn gen_expr(&self, expr: Expression) -> CTerm {
+    fn gen_expr(&mut self, expr: Expression) -> CTerm {
         let res = match expr.clone() {
-            Expression::Identifier(node) => {
-                Ok(self.unwrap(self.circ.get_value(Loc::local(node.node.name.clone()))).unwrap_term())
-            }
-            Expression::Constant(node) => {
-                Ok(self.const_(node.node))
-            }
+            Expression::Identifier(node) => Ok(self
+                .unwrap(self.circ.get_value(Loc::local(node.node.name.clone())))
+                .unwrap_term()),
+            Expression::Constant(node) => Ok(self.const_(node.node)),
             Expression::BinaryOperator(node) => {
-                let bin_expr = node.node;
-                let f = self.get_bin_op(bin_expr.operator.node);
-                let a = self.gen_expr(bin_expr.lhs.node);
-                let b = self.gen_expr(bin_expr.rhs.node);
-                f(a, b)
+                let bin_op = node.node;
+                match bin_op.operator.node {
+                    BinaryOperator::Assign => {
+                        println!("lhs: {:#?}", bin_op.lhs.node);
+                        println!("rhs: {:#?}", bin_op.rhs.node);
+                        let e = self.gen_expr(bin_op.rhs.node);
+                        let lval = self.lval(bin_op.lhs);
+                        let mod_res = self.mod_lval(lval, e.clone());
+                        self.unwrap(mod_res);
+                        Ok(e)
+                    }
+                    _ => {
+                        let f = self.get_bin_op(bin_op.operator.node);
+                        let a = self.gen_expr(bin_op.lhs.node);
+                        let b = self.gen_expr(bin_op.rhs.node);
+                        f(a, b)
+                    }
+                }
             }
             Expression::Cast(node) => {
-                let CastExpression { type_name, expression } = node.node;
+                let CastExpression {
+                    type_name,
+                    expression,
+                } = node.node;
                 let to_ty = cast_type(type_name.node);
                 let expr = self.gen_expr(expression.node);
                 Ok(cast(to_ty, expr))
@@ -199,9 +271,7 @@ impl CGen {
 
     fn gen_init(&mut self, init: Initializer) -> CTerm {
         match init {
-            Initializer::Expression(e) => {
-               self.gen_expr(e.node)
-            }
+            Initializer::Expression(e) => self.gen_expr(e.node),
             Initializer::List(l) => {
                 let mut values: Vec<CTerm> = Vec::new();
                 for li in l {
@@ -224,7 +294,7 @@ impl CGen {
                             let decl_info = get_decl_info(decl.clone());
 
                             // get derived types
-                            // Array, Pointer ... 
+                            // Array, Pointer ...
                             let d = decl.declarators.first().unwrap().node.clone();
                             let derived = &d.declarator.node.derived;
                             let mut derived_ty: Ty = decl_info.ty;
@@ -234,15 +304,26 @@ impl CGen {
                                     match &d.node {
                                         DerivedDeclarator::Array(arr) => {
                                             let _quals = &arr.node.qualifiers;
-                                            if let ArraySize::VariableExpression(size) = &arr.node.size {
+                                            if let ArraySize::VariableExpression(size) =
+                                                &arr.node.size
+                                            {
                                                 if let Expression::Constant(con) = &size.node {
                                                     if let Constant::Integer(i) = &con.node {
-                                                        let len: usize = i.number.parse::<usize>().unwrap();
+                                                        let len: usize =
+                                                            i.number.parse::<usize>().unwrap();
                                                         match derived_ty {
                                                             Ty::Array(_, _) => {
-                                                                derived_ty = Ty::Array(len,  Box::new(derived_ty))
+                                                                derived_ty = Ty::Array(
+                                                                    len,
+                                                                    Box::new(derived_ty),
+                                                                )
                                                             }
-                                                            _ => derived_ty = Ty::Array(len, Box::new(derived_ty.clone()))
+                                                            _ => {
+                                                                derived_ty = Ty::Array(
+                                                                    len,
+                                                                    Box::new(derived_ty.clone()),
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -251,7 +332,7 @@ impl CGen {
                                         DerivedDeclarator::Pointer(_ptr) => {
                                             unimplemented!("pointers not implemented yet");
                                         }
-                                        _ => panic!("Not implemented: {:#?}", d)
+                                        _ => panic!("Not implemented: {:#?}", d),
                                     }
                                 }
                             }
@@ -262,7 +343,11 @@ impl CGen {
                                 expr = derived_ty.default();
                             }
 
-                            let res = self.circ.declare_init(decl_info.name, derived_ty.clone(), Val::Term(cast(Some(derived_ty.clone()), expr)));
+                            let res = self.circ.declare_init(
+                                decl_info.name,
+                                derived_ty.clone(),
+                                Val::Term(cast(Some(derived_ty.clone()), expr)),
+                            );
                             self.unwrap(res);
                         }
                         BlockItem::Statement(stmt) => {
@@ -276,7 +361,6 @@ impl CGen {
             }
             Statement::If(node) => {
                 let cond = self.gen_expr(node.node.condition.node);
-
                 // TODO Cast to boolean for condition;
                 let t_res = self.circ.enter_condition(cond.term.term());
                 self.unwrap(t_res);
@@ -284,11 +368,11 @@ impl CGen {
                 self.circ.exit_condition();
 
                 if let Some(f_cond) = node.node.else_statement {
-                    let f_res = self.circ.enter_condition(term!(Op::Not;cond.term.term()));
+                    let f_res = self.circ.enter_condition(term!(Op::Not; cond.term.term()));
                     self.unwrap(f_res);
                     self.gen_stmt(f_cond.node);
                     self.circ.exit_condition();
-                } 
+                }
             }
             Statement::Return(ret) => {
                 match ret {
@@ -303,37 +387,46 @@ impl CGen {
                     }
                 };
             }
-
             Statement::Expression(expr) => {
                 let e = expr.unwrap().node;
-                match e {
-                    Expression::BinaryOperator(node) => {
-                        match node.node {
-                            BinaryOperatorExpression{ operator, lhs, rhs } => {
-                                debug!("op: {:#?}", operator);
-                                debug!("lhs: {:#?}", lhs);
-                                debug!("rhs: {:#?}", rhs);
+                self.gen_expr(e);
+                // match e {
+                //     Expression::BinaryOperator(node) => {
+                //         match node.node {
+                //             BinaryOperatorExpression{ operator, lhs, rhs } => {
+                //                 debug!("op: {:#?}", operator);
+                //                 debug!("lhs: {:#?}", lhs);
+                //                 debug!("rhs: {:#?}", rhs);
 
-                                let l = self.gen_expr(lhs.node);
-                                let r = self.gen_expr(rhs.node);
-                                match operator.node {
+                //                 println!("op: {:#?}", operator);
+                //                 println!("lhs: {:#?}", lhs);
+                //                 println!("rhs: {:#?}", rhs);
+                //                 let l = self.gen_expr(lhs.node);
+                //                 let r = self.gen_expr(rhs.node);
 
-                                    // TODO: REVERSE SEARCH NAME FROM TERM IN CTX
-                                    // INDEX NEEDS TO STORE INTO CONTEXT 
-                                    BinaryOperator::Assign => {
-                                        let res = self.circ.assign(
-                                            Loc::local(name_from_lex(l.term.term().to_string())),
-                                            Val::Term(r)
-                                        );
-                                        self.unwrap(res);
-                                    }
-                                    _ => unimplemented!("Statement expression operator {:#?}", operator)
-                                }
-                            }
-                        }
-                    }
-                    _ => unimplemented!("Statement expression {:#?} hasn't been implemented", e),
-                }
+                //                 println!("l expr: {:#?}", l);
+                //                 println!("r expr: {:#?}", r);
+
+                //                 match operator.node {
+                //                     // TODO: REVERSE SEARCH NAME FROM TERM IN CTX
+                //                     // INDEX NEEDS TO STORE INTO CONTEXT
+                //                     BinaryOperator::Assign => {
+                //                         println!("L Type: {:#?}", l.term.type_());
+                //                         println!("R Type: {:#?}", r.term.type_());
+
+                //                         // let res = self.circ.assign(
+                //                         //     Loc::local(name_from_lex(l.term.term().to_string())),
+                //                         //     Val::Term(r)
+                //                         // );
+                //                         // self.unwrap(res);
+                //                     }
+                //                     _ => unimplemented!("Statement expression operator {:#?}", operator)
+                //                 }
+                //             }
+                //         }
+                //     }
+                //     _ => unimplemented!("Statement expression {:#?} hasn't been implemented", e),
+                // }
             }
             _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }

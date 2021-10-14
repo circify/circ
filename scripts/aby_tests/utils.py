@@ -57,7 +57,7 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
         client_out = client_out.decode('utf-8').strip()
 
         assert server_out == client_out, "server out != client out\nserver_out: "+server_out+"\nclient_out: "+client_out
-        assert server_out == expected, "output != expected\nserver_out: "+server_out+"\nexpected: "+expected
+        assert server_out == expected, "server_out: "+server_out+"\nexpected: "+expected
         return True, ""
     except Exception as e:
         # print("Exception: ", e)
@@ -89,9 +89,8 @@ def run_tests(lang: str, tests: List[dict]):
         for i in range(num_retries):
             test_results.append(run_test(desc, expected, server_cmd, client_cmd))
         
-        for r, e in test_results:
-            if not r:
-                failed_test_descs.append((desc, e))
+        if all([not r[0] for r in test_results]):
+            failed_test_descs += [(desc, e[1]) for e in test_results]
 
         if t % progress_inc == 0:
             update_progress_bar()
@@ -100,6 +99,6 @@ def run_tests(lang: str, tests: List[dict]):
     if len(failed_test_descs) == 0:
         print("All tests passed ✅")
 
-    failed_test_descs = [f"{r}:\n\t{e}" for r, e in failed_test_descs]
+    failed_test_descs = [f"{r}:\n{e}" for r, e in failed_test_descs]
 
     assert len(failed_test_descs) == 0, "there were failed test cases:\n======\n" + "\n\n".join(failed_test_descs)

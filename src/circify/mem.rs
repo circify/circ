@@ -158,10 +158,10 @@ impl MemManager {
 
         // Add ite here with condition
 
-        // Expose Store in circify 
-    
+        // Expose Store in circify
+
         if cond {
-            // if true, update circ_ctx with new ref with store 
+            // if cond true, update circ_ctx with new ref with store
             let new_term = term![Op::Store; alloc.var().clone(), offset, val];
             alloc.next_var();
             let v = alloc.var().clone();
@@ -174,7 +174,6 @@ impl MemManager {
             let v = alloc.var().clone();
             self.assert(term![Op::Eq; v, old_v]);
         }
-
 
         // if let Op::Var(n, _) = &v.op {
         //     self.cs.borrow_mut().eval_and_save(&n, &new);

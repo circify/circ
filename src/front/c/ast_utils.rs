@@ -1,6 +1,6 @@
-use crate::front::c::types::Ty;
 use crate::front::c::term::CTerm;
-
+use crate::front::c::types::Ty;
+use crate::front::c::Expression::Identifier;
 use lang_c::ast::*;
 use std::fmt::{self, Display, Formatter};
 
@@ -17,8 +17,18 @@ pub struct DeclInfo {
 }
 
 impl FnInfo {
-    fn new(name: String, ret_ty: Option<Ty>, args: Vec<ParameterDeclaration>, body: Statement) -> Self {
-        Self { name, ret_ty, args, body }
+    fn new(
+        name: String,
+        ret_ty: Option<Ty>,
+        args: Vec<ParameterDeclaration>,
+        body: Statement,
+    ) -> Self {
+        Self {
+            name,
+            ret_ty,
+            args,
+            body,
+        }
     }
 }
 
@@ -32,17 +42,17 @@ impl Display for FnInfo {
     }
 }
 
-pub fn name_from_lex(name: String) -> String {
-    let mut split = name.split("_");
-    let vec: Vec<&str> = split.collect();
-    println!("vec: {:#?}", vec);
-    vec[3].to_string()
-}
-
 pub fn name_from_decl(decl: &Declarator) -> String {
     match decl.kind.node {
         DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
-        _ => panic!("Function name not found: {:?}", decl),
+        _ => panic!("Identifier not found: {:?}", decl),
+    }
+}
+
+pub fn name_from_ident(ident: &Expression) -> String {
+    match ident {
+        Identifier(i) => i.node.name.clone(),
+        _ => panic!("Identifier not found: {:?}", ident),
     }
 }
 
@@ -52,10 +62,13 @@ pub fn type_(t: &DeclarationSpecifier) -> Option<Ty> {
             TypeSpecifier::Int => Some(Ty::Uint(32)),
             TypeSpecifier::Bool => Some(Ty::Bool),
             TypeSpecifier::Void => None,
-            _ => unimplemented!("Type {:#?} not implemented yet.", ty)
+            _ => unimplemented!("Type {:#?} not implemented yet.", ty),
         };
     }
-    panic!("DeclarationSpecifier does not contain TypeSpecifier: {:#?}", t);
+    panic!(
+        "DeclarationSpecifier does not contain TypeSpecifier: {:#?}",
+        t
+    );
 }
 
 pub fn get_decl_info(decl: Declaration) -> DeclInfo {
@@ -67,10 +80,7 @@ pub fn get_decl_info(decl: Declaration) -> DeclInfo {
     let decls = decl.declarators.first().unwrap().node.clone();
     let name = name_from_decl(&decls.declarator.node);
 
-    DeclInfo {
-        name: name,
-        ty:ty,
-    }
+    DeclInfo { name: name, ty: ty }
 }
 
 pub fn s_type_(t: &SpecifierQualifier) -> Option<Ty> {
@@ -79,12 +89,14 @@ pub fn s_type_(t: &SpecifierQualifier) -> Option<Ty> {
             TypeSpecifier::Int => Some(Ty::Uint(32)),
             TypeSpecifier::Bool => Some(Ty::Bool),
             TypeSpecifier::Void => None,
-            _ => unimplemented!("Type {:#?} not implemented yet.", ty)
+            _ => unimplemented!("Type {:#?} not implemented yet.", ty),
         };
     }
-    panic!("SpecifierQualifier does not contain TypeSpecifier: {:#?}", t);
+    panic!(
+        "SpecifierQualifier does not contain TypeSpecifier: {:#?}",
+        t
+    );
 }
-
 
 pub fn cast_type(ty_name: TypeName) -> Option<Ty> {
     let spec = &ty_name.specifiers;
