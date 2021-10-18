@@ -1,6 +1,6 @@
 //! Exporting our R1CS to bellman
 use ::bellman::{Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
-use ff::PrimeField;
+use ff::{PrimeField, PrimeFieldBits};
 use gmp_mpfr_sys::gmp::limb_t;
 use log::debug;
 use std::collections::HashMap;
@@ -35,7 +35,7 @@ fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
     lc_bellman
 }
 
-fn modulus_as_int<F: PrimeField>() -> Integer {
+fn modulus_as_int<F: PrimeFieldBits>() -> Integer {
     let mut bits = F::char_le_bits().to_bitvec();
     let mut acc = Integer::from(0);
     while let Some(b) = bits.pop() {
@@ -45,7 +45,7 @@ fn modulus_as_int<F: PrimeField>() -> Integer {
     acc
 }
 
-impl<'a, F: PrimeField, S: Display + Eq + Hash> Circuit<F> for &'a R1cs<S> {
+impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S> {
     fn synthesize<CS>(self, cs: &mut CS) -> std::result::Result<(), SynthesisError>
     where
         CS: ConstraintSystem<F>,
@@ -56,24 +56,43 @@ impl<'a, F: PrimeField, S: Display + Eq + Hash> Circuit<F> for &'a R1cs<S> {
             "\nR1CS has modulus \n{},\n but Bellman CS expectes \n{}",
             self.modulus, f_mod
         );
-        let vars = self
+        let mut uses = self
             .idxs_signals
             .iter()
-            .map(|(i, s)| {
-                cs.alloc(
+            .map(|(i, _)| (*i, 0))
+            .collect::<HashMap<usize, usize>>();
+        for (a, b, c) in self.constraints.iter() {
+            [a, b, c].iter().for_each(|x| {
+                x.monomials
+                    .iter()
+                    .for_each(|(i, _)| *uses.get_mut(i).unwrap() += 1)
+            });
+        }
+        let mut vars = HashMap::new();
+        for (i, s) in self.idxs_signals.iter() {
+            if uses.get(i).unwrap() > &0 {
+                debug!("var: {}", s);
+                let v = cs.alloc(
                     || format!("{}", s),
                     || {
                         Ok({
-                            let i_val = self.values.as_ref().unwrap().get(i).unwrap();
+                            let i_val = self
+                                .values
+                                .as_ref()
+                                .expect("missing values")
+                                .get(i)
+                                .unwrap();
                             let ff_val = int_to_ff(i_val);
                             debug!("witness: {} -> {:?} ({})", s, ff_val, i_val);
                             ff_val
                         })
                     },
-                )
-                .map(|v| (*i, v))
-            })
-            .collect::<Result<HashMap<_, _>, _>>()?;
+                )?;
+                vars.insert(*i, v);
+            } else {
+                debug!("drop dead var: {}", s);
+            }
+        }
         for (i, (a, b, c)) in self.constraints.iter().enumerate() {
             cs.enforce(
                 || format!("con{}", i),

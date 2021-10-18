@@ -52,6 +52,9 @@ pub enum Mode {
     /// Generating for an optimization circuit. Inputs are existentially quantified.
     /// There should be only one output, which will be maximized.
     Opt,
+    /// Find inputs that yeild an output at least this large,
+    /// and then prove knowledge of them.
+    ProofOfHighValue(u64),
 }
 
 impl Display for Mode {
@@ -60,6 +63,7 @@ impl Display for Mode {
             &Mode::Mpc(n) => write!(f, "{}-pc", n),
             &Mode::Proof => write!(f, "proof"),
             &Mode::Opt => write!(f, "opt"),
+            &Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),
         }
     }
 }
@@ -508,6 +512,24 @@ impl<'ast> ZGen<'ast> {
                     }
                     self.circ.cir_ctx().cs.borrow_mut().outputs.push(t);
                 }
+                Mode::ProofOfHighValue(v) => {
+                    let ret_term = r.unwrap_term();
+                    let ret_terms = ret_term.terms();
+                    assert!(
+                        ret_terms.len() == 1,
+                        "When compiling to optimize, there can only be one output"
+                    );
+                    let t = ret_terms.into_iter().next().unwrap();
+                    let cmp = match check(&t) {
+                        Sort::BitVector(w) => {
+                            term![BV_UGE; t, bv_lit(v, w)]
+                        }
+                        s => {
+                            panic!("Cannot maximize output of type {}", s)
+                        }
+                    };
+                    self.circ.cir_ctx().cs.borrow_mut().outputs.push(cmp);
+                }
             }
         }
     }
@@ -515,7 +537,7 @@ impl<'ast> ZGen<'ast> {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS.clone(),
             Some(ast::Visibility::Private(private)) => match self.mode {
-                Mode::Proof | Mode::Opt => {
+                Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
                         self.err(
                             format!(
