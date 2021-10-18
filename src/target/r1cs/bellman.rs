@@ -134,13 +134,13 @@ mod test {
     #[quickcheck]
     fn int_to_ff_random(BlsScalar(i): BlsScalar) -> bool {
         let by_fn = int_to_ff::<Scalar>(&i);
-        let by_str = Scalar::from_str(&format!("{}", i)).unwrap();
+        let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
         by_fn == by_str
     }
 
     fn convert(i: Integer) {
         let by_fn = int_to_ff::<Scalar>(&i);
-        let by_str = Scalar::from_str(&format!("{}", i)).unwrap();
+        let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
         assert_eq!(by_fn, by_str);
     }
 
