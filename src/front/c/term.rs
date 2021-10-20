@@ -34,12 +34,6 @@ impl CTermData {
         terms_tail(self, &mut output);
         output
     }
-    pub fn unwrap_array(self) -> Result<Vec<CTerm>, String> {
-        match self {
-            CTermData::CArray(_, v) => Ok(v),
-            s => Err(format!("Not an array: {}", s)),
-        }
-    }
     pub fn term(&self) -> Term {
         match self {
             CTermData::CBool(b) => b.clone(),
@@ -101,10 +95,11 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
             Some(Ty::Uint(_)) => t.clone(),
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
         },
-        CTermData::CArray(ref n, ref ty) => match to_ty {
-            Some(Ty::Array(n, ty)) => t.clone(),
+        CTermData::CArray(_, ref ty) => match to_ty {
+            Some(Ty::Array(_, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
-        }, // _ => panic!("Bad cast from {} to {}", ty, to_ty)
+        }, 
+        //_ => panic!("Bad cast from {} to {}", ty, to_ty)
     }
 }
 
@@ -325,13 +320,6 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
     s.ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
-pub fn bool(a: CTerm) -> Result<Term, String> {
-    match a.term {
-        CTermData::CBool(b) => Ok(b),
-        a => Err(format!("{} is not a boolean", a)),
-    }
-}
-
 fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
     match (a.term, b.term) {
         (CTermData::CInt(na, a), CTermData::CInt(nb, b)) if na == nb => Ok(CTerm {
@@ -344,10 +332,6 @@ fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
         }),
         (x, y) => Err(format!("Cannot perform ITE on {} and {}", x, y)),
     }
-}
-
-pub fn cond(c: CTerm, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    ite(bool(c)?, a, b)
 }
 
 fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
@@ -406,10 +390,6 @@ pub fn array_store(array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String
 
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
-}
-
-fn field_name(struct_name: &str, field_name: &str) -> String {
-    format!("{}.{}", struct_name, field_name)
 }
 
 fn idx_name(struct_name: &str, idx: usize) -> String {

@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
+/// Identifier for an Allocation block in memory
 pub type AllocId = usize;
 
 struct Alloc {
@@ -97,15 +98,11 @@ impl MemManager {
             let id = self.take_next_id();
             let alloc = Alloc::new(id, addr_width, val_width, size);
             let v = alloc.var().clone();
-
-            // TODO change for MPC to store array inside allocs structure (somehow..)
-
-            // if let Op::Var(n, _) = &v.op {
-            //     self.cs.borrow_mut().eval_and_save(&n, &array);
-            // } else {
-            //     unreachable!()
-            // }
-
+            if let Op::Var(n, _) = &v.op {
+                self.cs.borrow_mut().eval_and_save(&n, &array);
+            } else {
+                unreachable!()
+            }
             self.assert(term![Op::Eq; v, array]);
             self.allocs.insert(id, alloc);
             id
@@ -148,38 +145,19 @@ impl MemManager {
     }
 
     /// Write the value `val` to index `offset` in the allocation `id`.
-    pub fn store(&mut self, id: AllocId, offset: Term, val: Term, cond: bool) {
+    pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         assert_eq!(alloc.val_width, check(&val).as_bv());
-
-        // Change same as above for just storing term inside alloc
-        // add new field to alloc? cur_var
-
-        // Add ite here with condition
-
-        // Expose Store in circify
-
-        if cond {
-            // if cond true, update circ_ctx with new ref with store
-            let new_term = term![Op::Store; alloc.var().clone(), offset, val];
-            alloc.next_var();
-            let v = alloc.var().clone();
-            self.assert(term![Op::Eq; v, new_term]);
+        let new = term![Op::Store; alloc.var().clone(), offset, val];
+        alloc.next_var();
+        let v = alloc.var().clone();
+        if let Op::Var(n, _) = &v.op {
+            self.cs.borrow_mut().eval_and_save(&n, &new);
         } else {
-            // else return original arr
-            let _new_term = term![Op::Store; alloc.var().clone(), offset, val];
-            let old_v = alloc.var().clone();
-            alloc.next_var();
-            let v = alloc.var().clone();
-            self.assert(term![Op::Eq; v, old_v]);
+            unreachable!()
         }
-
-        // if let Op::Var(n, _) = &v.op {
-        //     self.cs.borrow_mut().eval_and_save(&n, &new);
-        // } else {
-        //     unreachable!()
-        // }
+        self.assert(term![Op::Eq; v, new]);
     }
 
     /// Is `offset` in bounds for the allocation `id`?

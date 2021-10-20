@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-/// Parse an inputs file where each line has format: `no-withespace integer`.
+/// Parse an inputs file where each line has format: `no-whitespace integer`.
 ///
 /// Permits blank lines and ignores non-separating whitespace.
 ///

@@ -1,4 +1,3 @@
-use crate::front::c::term::CTerm;
 use crate::front::c::types::Ty;
 use crate::front::c::Expression::Identifier;
 use lang_c::ast::*;
@@ -14,22 +13,6 @@ pub struct FnInfo {
 pub struct DeclInfo {
     pub name: String,
     pub ty: Ty,
-}
-
-impl FnInfo {
-    fn new(
-        name: String,
-        ret_ty: Option<Ty>,
-        args: Vec<ParameterDeclaration>,
-        body: Statement,
-    ) -> Self {
-        Self {
-            name,
-            ret_ty,
-            args,
-            body,
-        }
-    }
 }
 
 impl Display for FnInfo {
