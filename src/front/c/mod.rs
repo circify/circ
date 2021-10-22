@@ -170,41 +170,38 @@ impl CGen {
         }
     }
 
-
-
-/// Interpret the party association of input parameters 
-pub fn interpret_visibility(&mut self, ext: &DeclarationSpecifier) -> Option<PartyId> {
-    if let DeclarationSpecifier::Extension(nodes) = ext {
-        assert!(nodes.len() == 1);
-        let node = nodes.first().unwrap();
-        if let Extension::Attribute(attr) = &node.node {
-            let name = &attr.name;
-            return match name.node.as_str() {
-                "public" => PUBLIC_VIS.clone(),
-                "private" => match self.mode {
-                    Mode::Mpc(n_parties) => {
-                        assert!(attr.arguments.len() == 1);
-                        let arg = attr.arguments.first().unwrap();
-                        let cons = self.gen_expr(arg.node.clone());
-                        let num_val = const_int(cons).ok()?;
-                        if num_val <= n_parties {
-                            Some(num_val.to_u8()?)
-                        } else {
-                            self.err(format!(
-                                "Party number {} greater than the number of parties ({})",
-                                num_val, n_parties
-                            ))
+    /// Interpret the party association of input parameters 
+    pub fn interpret_visibility(&mut self, ext: &DeclarationSpecifier) -> Option<PartyId> {
+        if let DeclarationSpecifier::Extension(nodes) = ext {
+            assert!(nodes.len() == 1);
+            let node = nodes.first().unwrap();
+            if let Extension::Attribute(attr) = &node.node {
+                let name = &attr.name;
+                return match name.node.as_str() {
+                    "public" => PUBLIC_VIS.clone(),
+                    "private" => match self.mode {
+                        Mode::Mpc(n_parties) => {
+                            assert!(attr.arguments.len() == 1);
+                            let arg = attr.arguments.first().unwrap();
+                            let cons = self.gen_expr(arg.node.clone());
+                            let num_val = const_int(cons).ok()?;
+                            if num_val <= n_parties {
+                                Some(num_val.to_u8()?)
+                            } else {
+                                self.err(format!(
+                                    "Party number {} greater than the number of parties ({})",
+                                    num_val, n_parties
+                                ))
+                            }
                         }
-                    }
-                    _ => unimplemented!("Mode {} is not supported.", self.mode),
-                },
-                _ => panic!("Unknown visibility: {:#?}", name),
-            };
+                        _ => unimplemented!("Mode {} is not supported.", self.mode),
+                    },
+                    _ => panic!("Unknown visibility: {:#?}", name),
+                };
+            }
         }
+        panic!("Bad visibility declaration.");
     }
-    panic!("Bad visibility declaration.");
-}
-
 
     fn const_(&self, c: Constant) -> CTerm {
         match c {
@@ -416,8 +413,7 @@ pub fn interpret_visibility(&mut self, ext: &DeclarationSpecifier) -> Option<Par
                         assert!(arg.specifiers.len() == 2);
                         let p = &arg.specifiers[0];
                         let vis = self.interpret_visibility(&p.node);
-                        let t = &arg.specifiers[1];
-                        let ty = type_(&t.node);
+                        let ty = d_type_(arg.specifiers[1].node.clone());
                         let d = &arg.declarator.as_ref().unwrap().node;
                         let name = name_from_decl(d);
                         let r = self.circ.declare(name.clone(), &ty.unwrap(), true, vis);

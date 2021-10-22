@@ -39,52 +39,43 @@ pub fn name_from_ident(ident: &Expression) -> String {
     }
 }
 
-pub fn type_(t: &DeclarationSpecifier) -> Option<Ty> {
-    if let DeclarationSpecifier::TypeSpecifier(ty) = t {
-        return match ty.node {
-            TypeSpecifier::Int => Some(Ty::Int(true, 32)),
-            TypeSpecifier::Bool => Some(Ty::Bool),
-            TypeSpecifier::Void => None,
-            _ => unimplemented!("Type {:#?} not implemented yet.", ty),
-        };
+pub fn d_type_(d: DeclarationSpecifier) -> Option<Ty> {
+    match d {
+        DeclarationSpecifier::TypeSpecifier(t) => type_(t.node),
+        _ => unimplemented!("Unimplemented declaration type: {:#?}", d)
     }
-    panic!(
-        "DeclarationSpecifier does not contain TypeSpecifier: {:#?}",
-        t
-    );
+}
+
+pub fn s_type_(s: SpecifierQualifier) -> Option<Ty> {
+    match s {
+        SpecifierQualifier::TypeSpecifier(t) => type_(t.node),
+        _ => unimplemented!("Unimplemented Specifier type: {:#?}", s)
+    }
+}
+
+fn type_(t: TypeSpecifier) -> Option<Ty> {
+    return match t {
+        TypeSpecifier::Int => Some(Ty::Int(true, 32)),
+        TypeSpecifier::Bool => Some(Ty::Bool),
+        TypeSpecifier::Void => None,
+        _ => unimplemented!("Type {:#?} not implemented yet.", t),
+    };
 }
 
 pub fn get_decl_info(decl: Declaration) -> DeclInfo {
     let spec = &decl.specifiers;
     assert!(spec.len() == 1);
-    let ty = type_(&spec.first().unwrap().node).unwrap();
-
+    let ty = d_type_(spec.first().unwrap().node.clone()).unwrap();
     assert!(decl.declarators.len() == 1);
     let decls = decl.declarators.first().unwrap().node.clone();
     let name = name_from_decl(&decls.declarator.node);
-
     DeclInfo { name: name, ty: ty }
-}
-
-pub fn s_type_(t: &SpecifierQualifier) -> Option<Ty> {
-    if let SpecifierQualifier::TypeSpecifier(ty) = t {
-        return match ty.node {
-            TypeSpecifier::Int => Some(Ty::Int(true, 32)),
-            TypeSpecifier::Bool => Some(Ty::Bool),
-            TypeSpecifier::Void => None,
-            _ => unimplemented!("Type {:#?} not implemented yet.", ty),
-        };
-    }
-    panic!(
-        "SpecifierQualifier does not contain TypeSpecifier: {:#?}",
-        t
-    );
 }
 
 pub fn cast_type(ty_name: TypeName) -> Option<Ty> {
     let spec = &ty_name.specifiers;
     assert!(spec.len() == 1);
-    s_type_(&spec.first().unwrap().node)
+    s_type_(spec.first().unwrap().node.clone())
 }
 
 pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
@@ -109,7 +100,7 @@ fn name_from_func(fn_def: &FunctionDefinition) -> String {
 fn ret_ty_from_func(fn_def: &FunctionDefinition) -> Option<Ty> {
     let spec = &fn_def.specifiers;
     assert!(spec.len() == 1);
-    type_(&spec.first().unwrap().node)
+    d_type_(spec.first().unwrap().node.clone())
 }
 
 fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaration>> {
