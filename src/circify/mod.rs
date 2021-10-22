@@ -1,5 +1,4 @@
 //! A library for building front-ends
-
 use crate::ir::term::*;
 
 use std::cell::RefCell;

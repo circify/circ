@@ -6,18 +6,22 @@ use rug::Integer;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
-
 #[derive(Clone)]
 pub enum CTermData {
     CBool(Term),
-    CInt(usize, Term),
+    CInt(bool, usize, Term),
+    // TODO: This is a fairly restricted notion of an array
+    // Instead of Vec<CTerm> should be AllocId pointing to somewhere in memory
+    CArray(Ty, Vec<CTerm>),
+    
 }
 
 impl CTermData {
     pub fn type_(&self) -> Ty {
         match self {
             Self::CBool(_) => Ty::Bool,
-            Self::CInt(w, _) => Ty::Uint(*w),
+            Self::CInt(s, w, _) => Ty::Int(*s, *w),
+            Self::CArray(b, v) => Ty::Array(v.len(), Box::new(b.clone())),
         }
     }
     /// Get all IR terms inside this value, as a list.
@@ -26,17 +30,18 @@ impl CTermData {
         fn terms_tail(term: &CTermData, output: &mut Vec<Term>) {
             match term {
                 CTermData::CBool(b) => output.push(b.clone()),
-                CTermData::CInt(_, b) => output.push(b.clone()),
+                CTermData::CInt(_, _, b) => output.push(b.clone()),
+                CTermData::CArray(_, v) => v.iter().for_each(|v| terms_tail(&v.term, output)),
             }
         }
         terms_tail(self, &mut output);
         output
     }
-
     pub fn term(&self) -> Term {
         match self {
             CTermData::CBool(b) => b.clone(),
-            CTermData::CInt(_, b) => b.clone(),
+            CTermData::CInt(_, _, b) => b.clone(),
+            _ => unimplemented!("Haven't implemented return terms for arrays"),
         }
     }
 }
@@ -45,7 +50,8 @@ impl Display for CTermData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             CTermData::CBool(x) => write!(f, "Bool({})", x),
-            CTermData::CInt(_, x) => write!(f, "CInt({})", x),
+            CTermData::CInt(_, _, x) => write!(f, "Int({})", x),
+            CTermData::CArray(_, v) => write!(f, "Array({:#?})", v),
         }
     }
 }
@@ -55,7 +61,6 @@ impl fmt::Debug for CTermData {
         write!(f, "{}", self)
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub struct CTerm {
@@ -74,48 +79,40 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
     match t.term {
         CTermData::CBool(ref term) => {
             match to_ty {
-                Some(Ty::Uint(_)) => {    
+                Some(Ty::Int(s,w)) => {
                     CTerm {
-                        // THIS IS BROKEN PLS CAST CORRECTLY
-                        term: CTermData::CInt(32, term.clone()),
-                        udef: t.udef
+                        term: CTermData::CInt(s, w, term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
+                        udef: t.udef,
                     }
                 }
-                Some(Ty::Bool) => {
-                    t.clone()
-                }
-                None => panic!("Bad cast from {} to {:?}", ty, to_ty)
-            }
-        }   
-        CTermData::CInt(w, ref term) => {
-            match to_ty {
-                Some(Ty::Bool) => {
-                    CTerm {
-                        term: CTermData::CBool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
-                        udef: t.udef
-                    }
-                }
-                Some(Ty::Uint(_)) => {
-                    t.clone()
-                }
-                None => panic!("Bad cast from {} to {:?}", ty, to_ty)
+                Some(Ty::Bool) => t.clone(),
+                _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
             }
         }
-        // _ => panic!("Bad cast from {} to {}", ty, to_ty)
+        CTermData::CInt(_, w, ref term) => match to_ty {
+            Some(Ty::Bool) => CTerm {
+                term: CTermData::CBool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
+                udef: t.udef,
+            },
+            Some(Ty::Int(_,_)) => t.clone(),
+            _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
+        },
+        CTermData::CArray(_, ref ty) => match to_ty {
+            Some(Ty::Array(_, _)) => t.clone(),
+            _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
+        }, 
+        //_ => panic!("Bad cast from {} to {}", ty, to_ty)
     }
 }
 
 fn int_promotion(t: &CTerm) -> CTerm {
     match &t.term {
-        CTermData::CBool(term) => {
-            CTerm {
-                term: CTermData::CInt(32, term.clone()),
-                udef: t.udef
-            }
-        }
-        CTermData::CInt(_, _) => {
-            t.clone()
-        }
+        CTermData::CBool(term) => CTerm {
+            term: CTermData::CInt(true, 32, term.clone()),
+            udef: t.udef,
+        },
+        CTermData::CInt(_, _, _) => t.clone(),
+        _ => panic!("CTerm cannot be promoted to int: {:#?}", t.term.type_()),
     }
 }
 
@@ -126,7 +123,7 @@ fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
     let b_prom = int_promotion(b);
     let a_prom_ty = a_prom.term.type_();
     let b_prom_ty = b_prom.term.type_();
-    
+
     if a_prom_ty == b_prom_ty {
         return (a_prom, b_prom);
     }
@@ -140,13 +137,15 @@ fn usual_arith_conversions(a: CTerm, b: CTerm) -> (CTerm, CTerm) {
         if a_.term.type_() == b_.term.type_() {
             (a_, b_)
         } else {
-            panic!("UAC failed: {:#?}, {:#?} to non-equal {:#?}, {:#?}", a, b, a_, b_);
+            panic!(
+                "UAC failed: {:#?}, {:#?} to non-equal {:#?}, {:#?}",
+                a, b, a_, b_
+            );
         }
     } else {
         (a, b)
     }
 }
-
 
 fn wrap_bin_arith(
     name: &str,
@@ -157,8 +156,8 @@ fn wrap_bin_arith(
 ) -> Result<CTerm, String> {
     let (a_arith, b_arith) = usual_arith_conversions(a, b);
     match (a_arith.term, b_arith.term, fu, fb) {
-        (CTermData::CInt(nx, x), CTermData::CInt(ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
-            term: CTermData::CInt(nx, fu(x, y)),
+        (CTermData::CInt(sx, nx, x), CTermData::CInt(sy, ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
+            term: CTermData::CInt(sx && sy, nx, fu(x, y)),
             udef: false,
         }),
         (CTermData::CBool(x), CTermData::CBool(y), _, Some(fb)) => Ok(CTerm {
@@ -222,7 +221,7 @@ fn wrap_bin_logical(
     fu: Option<fn(Term, Term) -> Term>,
     fb: Option<fn(Term, Term) -> Term>,
     a: CTerm,
-    b: CTerm
+    b: CTerm,
 ) -> Result<CTerm, String> {
     let a_bool = cast(Some(Ty::Bool), a);
     let b_bool = cast(Some(Ty::Bool), b);
@@ -256,11 +255,11 @@ fn wrap_bin_cmp(
     fu: Option<fn(Term, Term) -> Term>,
     fb: Option<fn(Term, Term) -> Term>,
     a: CTerm,
-    b: CTerm
+    b: CTerm,
 ) -> Result<CTerm, String> {
     let (a_arith, b_arith) = usual_arith_conversions(a, b);
     match (a_arith.term, b_arith.term, fu, fb) {
-        (CTermData::CInt(nx, x), CTermData::CInt(ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
+        (CTermData::CInt(_, nx, x), CTermData::CInt(_, ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
             term: CTermData::CBool(fu(x, y)),
             udef: false,
         }),
@@ -314,8 +313,8 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 
 pub fn const_int(a: CTerm) -> Result<Integer, String> {
     let s = match &a.term {
-        CTermData::CInt(_, i) => match &i.op {
-            Op::Const(Value::BitVector(f)) => Some(f.uint().clone()),
+        CTermData::CInt(s, _, i) => match &i.op {
+            Op::Const(Value::BitVector(f)) => if *s { Some(f.as_sint().clone()) } else { Some(f.uint().clone()) },
             _ => None,
         },
         _ => None,
@@ -323,44 +322,89 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
     s.ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
-// pub fn bool(a: CTerm) -> Result<Term, String> {
-//     match a.term {
-//         CTermData::CBool(b) => Ok(b),
-//         a => Err(format!("{} is not a boolean", a)),
-//     }
-// }
+fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    match (a.term, b.term) {
+        (CTermData::CInt(sa, na, a), CTermData::CInt(sb, nb, b)) if na == nb => Ok(CTerm {
+            term: CTermData::CInt(sa && sb, na, term![Op::Ite; c, a, b]),
+            udef: false,
+        }),
+        (CTermData::CBool(a), CTermData::CBool(b)) => Ok(CTerm {
+            term: CTermData::CBool(term![Op::Ite; c, a, b]),
+            udef: false,
+        }),
+        (x, y) => Err(format!("Cannot perform ITE on {} and {}", x, y)),
+    }
+}
 
-// fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-//     match (a.term, b.term) {
-//         (CTermData::CInt(na, a), CTermData::CInt(nb, b)) if na == nb => Ok(
-//             CTerm {
-//                 term: CTermData::CInt(na, term![Op::Ite; c, a, b]),
-//                 udef: false,
-//             }
-//         ),
-//         (CTermData::CBool(a), CTermData::CBool(b)) => Ok(
-//             CTerm {
-//                 term: CTermData::CBool(term![Op::Ite; c, a, b]),
-//                 udef: false,
-//             }
-//         ),
-//         (x, y) => Err(format!("Cannot perform ITE on {} and {}", x, y)),
-//     }
-// }
+fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
+    let v: Vec<CTerm> = elems.into_iter().collect();
+    if let Some(e) = v.first() {
+        let ty = e.term.type_();
+        if v.iter().skip(1).any(|a| a.term.type_() != ty) {
+            Err(format!("Inconsistent types in array"))
+        } else {
+            Ok(CTerm {
+                term: CTermData::CArray(ty, v),
+                udef: false,
+            })
+        }
+    } else {
+        Err(format!("Empty array"))
+    }
+}
 
-// pub fn cond(c: CTerm, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-//     ite(bool(c)?, a, b)
-// }
+pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
+    array(v)
+}
+
+pub fn array_select(array: CTerm, idx: CTerm) -> Result<CTerm, String> {
+    match (array.term, idx.term) {
+        // TODO: add unsigned int check?
+        // TOOD: add bounds check?
+        (CTermData::CArray(_, list), CTermData::CInt(_, _, idx)) => {
+            let mut it = list.into_iter().enumerate();
+            let first = it
+                .next()
+                .ok_or_else(|| format!("Cannot index empty array"))?;
+            it.fold(Ok(first.1), |acc, (i, elem)| {
+                ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], elem, acc?)
+            })
+        }
+        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+    }
+}
+
+pub fn array_store(array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
+    match (array.term, idx.term) {
+        // TODO: add unsigned int check?
+        // TOOD: add bounds check?
+        (CTermData::CArray(ty, list), CTermData::CInt(_, _, idx)) => Ok(CTerm {
+            term: CTermData::CArray(
+                ty,
+                list.into_iter()
+                    .enumerate()
+                    .map(|(i, elem)| {
+                        ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], val.clone(), elem)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            udef: false,
+        }),
+        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+    }
+}
 
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
 }
 
+fn idx_name(struct_name: &str, idx: usize) -> String {
+    format!("{}.{}", struct_name, idx)
+}
+
 impl Ct {
     pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
-        Self {
-            values,
-        }
+        Self { values }
     }
 }
 
@@ -388,49 +432,68 @@ impl Embeddable for Ct {
                 .unwrap_or_else(|| Integer::from(0))
         };
         match ty {
-            Ty::Bool => {
-                Self::T {
-                    term: CTermData::CBool(
-                            ctx.cs.borrow_mut().new_var(
-                            &raw_name,
-                            Sort::Bool,
-                            || Value::Bool(get_int_val() != 0),
-                            visibility,
-                        )
-                    ),
-                    udef: false,
-                }
+            Ty::Bool => Self::T {
+                term: CTermData::CBool(ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::Bool,
+                    || Value::Bool(get_int_val() != 0),
+                    visibility,
+                )),
+                udef: false,
             },
-            Ty::Uint(w) => {
-                Self::T {
-                    term: CTermData::CInt(
-                            *w,
-                            ctx.cs.borrow_mut().new_var(
-                            &raw_name,
-                            Sort::BitVector(*w),
-                            || Value::BitVector(BitVector::new(get_int_val(), *w)),
-                            visibility,
-                        ),
+            // TODO: what if signed int?
+            Ty::Int(s, w) => Self::T {
+                term: CTermData::CInt(
+                    *s, 
+                    *w,
+                    ctx.cs.borrow_mut().new_var(
+                        &raw_name,
+                        Sort::BitVector(*w),
+                        || Value::BitVector(BitVector::new(get_int_val(), *w)),
+                        visibility,
                     ),
-                    udef: false,
-                }
-            }
+                ),
+                udef: false,
+            },
+            Ty::Array(n, ty) => Self::T {
+                term: CTermData::CArray(
+                    (**ty).clone(),
+                    (0..*n)
+                        .map(|i| {
+                            self.declare(
+                                ctx,
+                                &*ty,
+                                idx_name(&raw_name, i),
+                                user_name.as_ref().map(|u| idx_name(u, i)),
+                                visibility.clone(),
+                            )
+                        })
+                        .collect(),
+                ),
+                udef: false,
+            },
         }
     }
-    fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         match (t.term, f.term) {
-            (CTermData::CBool(a), CTermData::CBool(b)) => {
-                Self::T {
-                    term: CTermData::CBool(term![Op::Ite; cond, a, b]),
-                    udef: false,
-                }
-            }
-            (CTermData::CInt(wa, a), CTermData::CInt(wb, b)) if wa == wb => {
-                Self::T {
-                    term: CTermData::CInt(wa, term![Op::Ite; cond, a, b]),
-                    udef: false,
-                }
-            }
+            (CTermData::CBool(a), CTermData::CBool(b)) => Self::T {
+                term: CTermData::CBool(term![Op::Ite; cond, a, b]),
+                udef: false,
+            },
+            (CTermData::CInt(sa, wa, a), CTermData::CInt(sb, wb, b)) if wa == wb => Self::T {
+                term: CTermData::CInt(sa && sb, wa, term![Op::Ite; cond, a, b]),
+                udef: false,
+            },
+            (CTermData::CArray(a_ty, a), CTermData::CArray(b_ty, b)) if a_ty == b_ty => Self::T {
+                term: CTermData::CArray(
+                    a_ty,
+                    a.into_iter()
+                        .zip(b.into_iter())
+                        .map(|(a_i, b_i)| self.ite(ctx, cond.clone(), a_i, b_i))
+                        .collect(),
+                ),
+                udef: false,
+            },
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
         }
     }
@@ -445,18 +508,26 @@ impl Embeddable for Ct {
     ) -> Self::T {
         assert!(&t.term.type_() == ty);
         match (ty, t.term) {
-            (_, CTermData::CBool(b)) => {
-                Self::T {
-                    term: CTermData::CBool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
-                    udef: false,
-                }
-            }
-            (_, CTermData::CInt(w, b)) => {
-                Self::T {
-                    term: CTermData::CInt(w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
-                    udef: false,
-                }
-            }
+            (_, CTermData::CBool(b)) => Self::T {
+                term: CTermData::CBool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
+                udef: false,
+            },
+            (_, CTermData::CInt(s, w, b)) => Self::T {
+                term: CTermData::CInt(s, w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
+                udef: false,
+            },
+            (_, CTermData::CArray(ety, list)) => Self::T {
+                term: CTermData::CArray(
+                    ety.clone(),
+                    list.into_iter()
+                        .enumerate()
+                        .map(|(i, elem)| {
+                            self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
+                        })
+                        .collect(),
+                ),
+                udef: false,
+            },
         }
     }
 

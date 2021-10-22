@@ -8,7 +8,8 @@ use std::fmt::{self, Display, Formatter};
 #[derive(Clone, PartialEq, Eq)]
 pub enum Ty {
     Bool,
-    Uint(usize),
+    Int(bool, usize),
+    Array(usize, Box<Ty>),
 }
 
 impl Ty {
@@ -18,10 +19,14 @@ impl Ty {
                 term: CTermData::CBool(leaf_term(Op::Const(Value::Bool(false)))),
                 udef: false,
             },
-            Self::Uint(w) => CTerm {
-                term: CTermData::CInt(*w, bv_lit(0, *w)),
+            Self::Int(s, w) => CTerm {
+                term: CTermData::CInt(*s, *w, bv_lit(0, *w)),
                 udef: false,
-            }
+            },
+            Self::Array(n, b) => CTerm {
+                term: CTermData::CArray((**b).clone(), vec![b.default(); *n]),
+                udef: false,
+            },
         }
     }
 }
@@ -30,7 +35,8 @@ impl Display for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Ty::Bool => write!(f, "bool"),
-            Ty::Uint(w) => write!(f, "u{}", w),
+            Ty::Int(s, w) => if *s { write!(f, "s{}", w) } else { write!(f, "u{}", w) },
+            Ty::Array(n, b) => write!(f, "{}[{}]", b, n),
         }
     }
 }
@@ -44,9 +50,7 @@ impl fmt::Debug for Ty {
 pub fn is_arith_type(t: &CTerm) -> bool {
     let ty = t.term.type_();
     match ty {
-        Ty::Uint(_) |
-        Ty::Bool => {
-            true
-        }
+        Ty::Int(_,_) | Ty::Bool => true,
+        _ => false,
     }
 }

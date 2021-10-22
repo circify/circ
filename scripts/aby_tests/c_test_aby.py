@@ -10,12 +10,13 @@ if __name__ == "__main__":
         nary_boolean_tests + \
         const_arith_tests + \
         const_bool_tests + \
-        ite_tests
+        ite_tests + \
+        array_tests + \
+        c_array_tests
         # loop_tests + \
         # ite_tests + \
         # function_tests + \
         # shift_tests + \
         # misc_tests
-        # arr_tests + \
 
     run_tests('c', tests)

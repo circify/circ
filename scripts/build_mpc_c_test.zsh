@@ -55,7 +55,16 @@ mpc_test 2 ./examples/C/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.c
 mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
 mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
 
-# build ite tests
+# build if statement tests
 mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
+mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
+
+# build array tests
+mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
+mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
+
+# build circ/compiler array tests
+mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array.c
+mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_1.c
+mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_2.c
 

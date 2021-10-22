@@ -6,7 +6,8 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
-type AllocId = usize;
+/// Identifier for an Allocation block in memory
+pub type AllocId = usize;
 
 struct Alloc {
     id: AllocId,

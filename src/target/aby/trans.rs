@@ -306,30 +306,42 @@ impl ToABY {
                 );
             }
             Op::BoolNaryOp(o) => {
-                let a_circ = self.get_bool(&t.cs[0]).clone();
-                let b_circ = self.get_bool(&t.cs[1]).clone();
+                if t.cs.len() == 1 {
+                    // HACK: Conditionals might not contain two variables
+                    // If t.cs len is 1, just output that term
+                    // This is to bypass adding an AND gate with a single conditional term
+                    // Refer to pub fn condition() in src/circify/mod.rs
+                    let a = self.get_bool(&t.cs[0]).clone();
+                    self.cache.insert(
+                        t.clone(),
+                        EmbeddedTerm::Bool(format!("{}", a)),
+                    );
+                } else {
+                    let a_circ = self.get_bool(&t.cs[0]).clone();
+                    let b_circ = self.get_bool(&t.cs[1]).clone();
 
-                let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
-                let b_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), b_circ);
+                    let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
+                    let b_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), b_circ);
 
-                if *o == BoolNaryOp::Or {
-                    s_circ = format!("((BooleanCircuit *) {})", s_circ);
+                    if *o == BoolNaryOp::Or {
+                        s_circ = format!("((BooleanCircuit *) {})", s_circ);
+                    }
+
+                    self.cache.insert(
+                        t.clone(),
+                        EmbeddedTerm::Bool(format!(
+                            "{}->{}({}, {})",
+                            s_circ,
+                            match o {
+                                BoolNaryOp::Or => "PutORGate",
+                                BoolNaryOp::And => "PutANDGate",
+                                BoolNaryOp::Xor => "PutXORGate",
+                            },
+                            a_conv,
+                            b_conv
+                        )),
+                    );
                 }
-
-                self.cache.insert(
-                    t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "{}->{}({}, {})",
-                        s_circ,
-                        match o {
-                            BoolNaryOp::Or => "PutORGate",
-                            BoolNaryOp::And => "PutANDGate",
-                            BoolNaryOp::Xor => "PutXORGate",
-                        },
-                        a_conv,
-                        b_conv
-                    )),
-                );
             }
             Op::BvBinPred(op) => {
                 let a_circ = self.get_bv(&t.cs[0]);
@@ -398,8 +410,6 @@ impl ToABY {
     }
 
     fn embed_bv(&mut self, t: Term) -> String {
-        println!("EMBEDDING BV: {}", t);
-
         let mut s_circ = self.get_sharetype_circ(t.clone());
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
@@ -572,7 +582,7 @@ pub fn to_aby(ir: Computation) -> ABY {
     let mut converter = ToABY::new(md, s_map);
 
     for t in terms {
-        println!("Terms: {}", t);
+        println!("terms: {}", t);
         converter.lower(t.clone());
     }
 
