@@ -1,10 +1,11 @@
 //! C Terms
 use crate::circify::{CirCtx, Embeddable};
-use crate::circify::mem::AllocId;
+use crate::circify::mem::{AllocId, MemManager};
 use crate::front::c::is_signed_int;
 use crate::front::c::types::*;
 use crate::ir::term::*;
 use rug::Integer;
+use std::cell::RefMut;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
@@ -26,12 +27,13 @@ impl CTermData {
         }
     }
     /// Get all IR terms inside this value, as a list.
-    pub fn terms(&self) -> Vec<Term> {
+    pub fn terms(&self, mem: RefMut<MemManager>) -> Vec<Term> {
         let mut output: Vec<Term> = Vec::new();
         fn terms_tail(term: &CTermData, output: &mut Vec<Term>) {
             match term {
                 CTermData::CBool(b) => output.push(b.clone()),
                 CTermData::CInt(_, _, b) => output.push(b.clone()),
+
                 _ => unimplemented!("Term: {} not implemented yet", term),
                 // CTermData::CArray(_, v) => v.iter().for_each(|v| terms_tail(&v.term, output)),
             }
@@ -39,11 +41,14 @@ impl CTermData {
         terms_tail(self, &mut output);
         output
     }
-    pub fn term(&self) -> Term {
+    pub fn term(&self, mem: &RefMut<MemManager>) -> Term {
         match self {
             CTermData::CBool(b) => b.clone(),
             CTermData::CInt(_, _, b) => b.clone(),
-            _ => unimplemented!("Haven't implemented return terms for arrays"),
+            CTermData::CArray(_,b) => {
+                // TODO: load all of the array
+                mem.load(*b, bv_lit(0,32))
+            },
         }
     }
 }

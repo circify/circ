@@ -88,11 +88,19 @@ pub fn int_conversion_rank(ty: Ty) -> usize {
     }
 }
 
-pub fn num_bits(ty: Ty) -> usize {
+pub fn total_num_bits(ty: Ty) -> usize {
     match ty {
         Ty::Int(_,w) => w,
         Ty::Bool => 1,
         Ty::Array(s, t) => s.unwrap() * num_bits(*t),
+    }
+}
+
+pub fn num_bits(ty: Ty) -> usize {
+    match ty {
+        Ty::Int(_,w) => w,
+        Ty::Bool => 1,
+        Ty::Array(s, t) => 32,
     }
 }
 
