@@ -66,6 +66,16 @@ arithmetic_tests = [
     ], 
 ]
 
+unsigned_arithmetic_tests = [
+     [
+        "Add two unsigned numbers - 1",
+        3,
+        "./third_party/ABY/build/bin/2pc_add_unsigned",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+]
+
 arithmetic_boolean_tests = [
     [
         "Test two numbers are equal - 1",

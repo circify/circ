@@ -166,6 +166,12 @@ impl MemManager {
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         term![Op::BvBinPred(BvBinPred::Ult); offset, bv_lit(alloc.size, alloc.addr_width)]
     }
+
+    /// Get size of the array at the allocation `id`
+    pub fn get_size(&self, id: AllocId) -> usize {
+        let alloc = self.allocs.get(&id).expect("Missing allocation");
+        alloc.size
+    }
 }
 
 #[cfg(test)]

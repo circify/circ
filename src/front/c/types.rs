@@ -9,7 +9,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum Ty {
     Bool,
     Int(bool, usize),
-    Array(usize, Box<Ty>),
+    Array(Option<usize>, Box<Ty>),
 }
 
 impl Ty {
@@ -23,10 +23,11 @@ impl Ty {
                 term: CTermData::CInt(*s, *w, bv_lit(0, *w)),
                 udef: false,
             },
-            Self::Array(n, b) => CTerm {
-                term: CTermData::CArray((**b).clone(), vec![b.default(); *n]),
-                udef: false,
-            },
+            _ => unimplemented!(),
+            // Self::Array(n, b) => CTerm {
+            //     term: CTermData::CArray((**b).clone(), vec![b.default(); *n]),
+            //     udef: false,
+            // },
         }
     }
 }
@@ -36,7 +37,7 @@ impl Display for Ty {
         match self {
             Ty::Bool => write!(f, "bool"),
             Ty::Int(s, w) => if *s { write!(f, "s{}", w) } else { write!(f, "u{}", w) },
-            Ty::Array(n, b) => write!(f, "{}[{}]", b, n),
+            Ty::Array(_, b) => write!(f, "{}[]", b),
         }
     }
 }
@@ -52,5 +53,53 @@ pub fn is_arith_type(t: &CTerm) -> bool {
     match ty {
         Ty::Int(_,_) | Ty::Bool => true,
         _ => false,
+    }
+}
+
+pub fn is_signed_int(ty: Ty) -> bool {
+    if let Ty::Int(s, w) = ty {
+        if w == 8 || w == 16 || w == 32 || w == 64 {
+            return s;
+        }
+        return false;
+    }
+    return false;
+}
+
+pub fn is_unsigned_int(ty: Ty) -> bool {
+    if let Ty::Int(s, w) = ty {
+        if !s && (w == 8 || w == 16 || w == 32 || w == 64) {
+            return !s;
+        }
+        return s;
+    }
+    return false;
+}
+
+pub fn is_integer_type(ty: Ty) -> bool {
+    is_signed_int(ty.clone()) || is_unsigned_int(ty.clone())
+}
+
+pub fn int_conversion_rank(ty: Ty) -> usize {
+    match ty {
+        Ty::Int(_,w) => w,
+        Ty::Bool => 1,
+        _ => panic!("int_conversion_rank received a non-int type: {:#?}", ty),
+    }
+}
+
+pub fn num_bits(ty: Ty) -> usize {
+    match ty {
+        Ty::Int(_,w) => w,
+        Ty::Bool => 1,
+        Ty::Array(s, t) => s.unwrap() * num_bits(*t),
+    }
+}
+
+pub fn inner_ty(ty: Ty) -> Ty {
+    match ty {
+        Ty::Int(_,_) => ty,
+        Ty::Bool => ty,
+        Ty::Array(_, t) => *t,
     }
 }

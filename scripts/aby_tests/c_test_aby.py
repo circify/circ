@@ -13,10 +13,8 @@ if __name__ == "__main__":
         ite_tests + \
         array_tests + \
         c_array_tests
-        # loop_tests + \
-        # ite_tests + \
-        # function_tests + \
-        # shift_tests + \
-        # misc_tests
+
+        # TODO: add support for return value - int promotion
+        # unsigned_arithmetic_tests + \
 
     run_tests('c', tests)

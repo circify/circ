@@ -1,5 +1,7 @@
 //! C Terms
 use crate::circify::{CirCtx, Embeddable};
+use crate::circify::mem::AllocId;
+use crate::front::c::is_signed_int;
 use crate::front::c::types::*;
 use crate::ir::term::*;
 use rug::Integer;
@@ -10,10 +12,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum CTermData {
     CBool(Term),
     CInt(bool, usize, Term),
-    // TODO: This is a fairly restricted notion of an array
-    // Instead of Vec<CTerm> should be AllocId pointing to somewhere in memory
-    CArray(Ty, Vec<CTerm>),
-    
+    CArray(Ty, AllocId),
 }
 
 impl CTermData {
@@ -21,7 +20,9 @@ impl CTermData {
         match self {
             Self::CBool(_) => Ty::Bool,
             Self::CInt(s, w, _) => Ty::Int(*s, *w),
-            Self::CArray(b, v) => Ty::Array(v.len(), Box::new(b.clone())),
+            Self::CArray(b, _) => { 
+                Ty::Array(None, Box::new(b.clone()))
+            },
         }
     }
     /// Get all IR terms inside this value, as a list.
@@ -31,7 +32,8 @@ impl CTermData {
             match term {
                 CTermData::CBool(b) => output.push(b.clone()),
                 CTermData::CInt(_, _, b) => output.push(b.clone()),
-                CTermData::CArray(_, v) => v.iter().for_each(|v| terms_tail(&v.term, output)),
+                _ => unimplemented!("Term: {} not implemented yet", term),
+                // CTermData::CArray(_, v) => v.iter().for_each(|v| terms_tail(&v.term, output)),
             }
         }
         terms_tail(self, &mut output);
@@ -101,24 +103,41 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
             Some(Ty::Array(_, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         }, 
-        //_ => panic!("Bad cast from {} to {}", ty, to_ty)
     }
 }
 
+/// Implementation of integer promotion (C11, 6.3.1.1.3)
 fn int_promotion(t: &CTerm) -> CTerm {
-    match &t.term {
-        CTermData::CBool(term) => CTerm {
-            term: CTermData::CInt(true, 32, term.clone()),
-            udef: t.udef,
-        },
-        CTermData::CInt(_, _, _) => t.clone(),
-        _ => panic!("CTerm cannot be promoted to int: {:#?}", t.term.type_()),
+    let ty = t.term.type_();
+    if (is_integer_type(ty.clone()) || Ty::Bool == ty) && int_conversion_rank(ty) < 32 {
+        match &t.term {
+            // "If an int can represent all values ... converted to an int ...
+            // otherwise an unsigned int"
+            CTermData::CInt(s,w,v) => {
+                let width = w - if *s { 1 } else { 0 };
+                let max_val: u32 = u32::pow(2, width as u32) - 1;
+                let signed = max_val < u32::pow(2u32, 31u32) - 1;
+                CTerm {
+                    term: CTermData::CInt(signed, 32, v.clone()),
+                    udef: t.udef,
+                }
+            }
+            CTermData::CBool(v) => {
+                CTerm {
+                    term: CTermData::CInt(false, 32, v.clone()),
+                    udef: t.udef,
+                }
+            }
+            _ => t.clone()
+        }
+    } else {
+        t.clone()
     }
 }
 
 fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
-    // let a_ty = a.term.type_();
-    // let b_ty = b.term.type_();
+    let _a_ty = a.term.type_();
+    let _b_ty = b.term.type_();
     let a_prom = int_promotion(a);
     let b_prom = int_promotion(b);
     let a_prom_ty = a_prom.term.type_();
@@ -126,6 +145,14 @@ fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
 
     if a_prom_ty == b_prom_ty {
         return (a_prom, b_prom);
+    } else if is_signed_int(a_prom_ty.clone()) == is_signed_int(b_prom_ty.clone()) {
+        if int_conversion_rank(a_prom_ty.clone()) < int_conversion_rank(b_prom_ty.clone()) {
+            return (cast(Some(b_prom_ty), a_prom), b_prom);
+        } else {
+            return (a_prom, cast(Some(a_prom_ty), b_prom)) 
+        }
+    } else {
+
     }
 
     unimplemented!("Not implemented case in iUAC");
@@ -336,63 +363,63 @@ fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
     }
 }
 
-fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
-    let v: Vec<CTerm> = elems.into_iter().collect();
-    if let Some(e) = v.first() {
-        let ty = e.term.type_();
-        if v.iter().skip(1).any(|a| a.term.type_() != ty) {
-            Err(format!("Inconsistent types in array"))
-        } else {
-            Ok(CTerm {
-                term: CTermData::CArray(ty, v),
-                udef: false,
-            })
-        }
-    } else {
-        Err(format!("Empty array"))
-    }
-}
+// fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
+//     let v: Vec<CTerm> = elems.into_iter().collect();
+//     if let Some(e) = v.first() {
+//         let ty = e.term.type_();
+//         if v.iter().skip(1).any(|a| a.term.type_() != ty) {
+//             Err(format!("Inconsistent types in array"))
+//         } else {
+//             Ok(CTerm {
+//                 term: CTermData::CArray(ty),
+//                 udef: false,
+//             })
+//         }
+//     } else {
+//         Err(format!("Empty array"))
+//     }
+// }
 
-pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
-    array(v)
-}
+// pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
+//     array(v)
+// }
 
-pub fn array_select(array: CTerm, idx: CTerm) -> Result<CTerm, String> {
-    match (array.term, idx.term) {
-        // TODO: add unsigned int check?
-        // TOOD: add bounds check?
-        (CTermData::CArray(_, list), CTermData::CInt(_, _, idx)) => {
-            let mut it = list.into_iter().enumerate();
-            let first = it
-                .next()
-                .ok_or_else(|| format!("Cannot index empty array"))?;
-            it.fold(Ok(first.1), |acc, (i, elem)| {
-                ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], elem, acc?)
-            })
-        }
-        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
-    }
-}
+// pub fn array_select(array: CTerm, idx: CTerm) -> Result<CTerm, String> {
+//     match (array.term, idx.term) {
+//         // TODO: add unsigned int check?
+//         // TOOD: add bounds check?
+//         (CTermData::CArray(_, list), CTermData::CInt(_, _, idx)) => {
+//             let mut it = list.into_iter().enumerate();
+//             let first = it
+//                 .next()
+//                 .ok_or_else(|| format!("Cannot index empty array"))?;
+//             it.fold(Ok(first.1), |acc, (i, elem)| {
+//                 ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], elem, acc?)
+//             })
+//         }
+//         (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+//     }
+// }
 
-pub fn array_store(array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
-    match (array.term, idx.term) {
-        // TODO: add unsigned int check?
-        // TOOD: add bounds check?
-        (CTermData::CArray(ty, list), CTermData::CInt(_, _, idx)) => Ok(CTerm {
-            term: CTermData::CArray(
-                ty,
-                list.into_iter()
-                    .enumerate()
-                    .map(|(i, elem)| {
-                        ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], val.clone(), elem)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            udef: false,
-        }),
-        (a, b) => Err(format!("Cannot index {} by {}", b, a)),
-    }
-}
+// pub fn array_store(array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
+//     match (array.term, idx.term) {
+//         // TODO: add unsigned int check?
+//         // TOOD: add bounds check?
+//         (CTermData::CArray(ty, list), CTermData::CInt(_, _, idx)) => Ok(CTerm {
+//             term: CTermData::CArray(
+//                 ty,
+//                 list.into_iter()
+//                     .enumerate()
+//                     .map(|(i, elem)| {
+//                         ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], val.clone(), elem)
+//                     })
+//                     .collect::<Result<Vec<_>, _>>()?,
+//             ),
+//             udef: false,
+//         }),
+//         (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+//     }
+// }
 
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
@@ -455,23 +482,24 @@ impl Embeddable for Ct {
                 ),
                 udef: false,
             },
-            Ty::Array(n, ty) => Self::T {
-                term: CTermData::CArray(
-                    (**ty).clone(),
-                    (0..*n)
-                        .map(|i| {
-                            self.declare(
-                                ctx,
-                                &*ty,
-                                idx_name(&raw_name, i),
-                                user_name.as_ref().map(|u| idx_name(u, i)),
-                                visibility.clone(),
-                            )
-                        })
-                        .collect(),
-                ),
-                udef: false,
-            },
+            _ => unimplemented!(),
+            // Ty::Array(n, ty) => Self::T {
+            //     term: CTermData::CArray(
+            //         (**ty).clone(),
+            //         (0..*n)
+            //             .map(|i| {
+            //                 self.declare(
+            //                     ctx,
+            //                     &*ty,
+            //                     idx_name(&raw_name, i),
+            //                     user_name.as_ref().map(|u| idx_name(u, i)),
+            //                     visibility.clone(),
+            //                 )
+            //             })
+            //             .collect(),
+            //     ),
+            //     udef: false,
+            // },
         }
     }
     fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
@@ -484,16 +512,16 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(sa && sb, wa, term![Op::Ite; cond, a, b]),
                 udef: false,
             },
-            (CTermData::CArray(a_ty, a), CTermData::CArray(b_ty, b)) if a_ty == b_ty => Self::T {
-                term: CTermData::CArray(
-                    a_ty,
-                    a.into_iter()
-                        .zip(b.into_iter())
-                        .map(|(a_i, b_i)| self.ite(ctx, cond.clone(), a_i, b_i))
-                        .collect(),
-                ),
-                udef: false,
-            },
+            // (CTermData::CArray(a_ty, a), CTermData::CArray(b_ty, b)) if a_ty == b_ty => Self::T {
+            //     term: CTermData::CArray(
+            //         a_ty,
+            //         a.into_iter()
+            //             .zip(b.into_iter())
+            //             .map(|(a_i, b_i)| self.ite(ctx, cond.clone(), a_i, b_i))
+            //             .collect(),
+            //     ),
+            //     udef: false,
+            // },
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
         }
     }
@@ -516,18 +544,19 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(s, w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
                 udef: false,
             },
-            (_, CTermData::CArray(ety, list)) => Self::T {
-                term: CTermData::CArray(
-                    ety.clone(),
-                    list.into_iter()
-                        .enumerate()
-                        .map(|(i, elem)| {
-                            self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
-                        })
-                        .collect(),
-                ),
-                udef: false,
-            },
+            // (_, CTermData::CArray(ety, list)) => Self::T {
+            //     term: CTermData::CArray(
+            //         ety.clone(),
+            //         list.into_iter()
+            //             .enumerate()
+            //             .map(|(i, elem)| {
+            //                 self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
+            //             })
+            //             .collect(),
+            //     ),
+            //     udef: false,
+            // },
+            _ => unimplemented!(),
         }
     }
 

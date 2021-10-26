@@ -195,7 +195,7 @@ impl<Ty: Display> LexScope<Ty> {
 /// Circuit construction context. Useful for addition assertions, using memory, etc.
 pub struct CirCtx {
     /// Memory manager
-    pub mem: mem::MemManager,
+    pub mem: Rc<RefCell<mem::MemManager>>,
     /// Underlying constraint system
     pub cs: Rc<RefCell<Computation>>,
 }
@@ -433,7 +433,7 @@ impl<E: Embeddable> Circify<E> {
             fn_ctr: 0,
             globals: LexScope::with_prefix("global".to_string()),
             cir_ctx: CirCtx {
-                mem: mem::MemManager::new(cs.clone()),
+                mem: Rc::new(RefCell::new(mem::MemManager::new(cs.clone()))),
                 cs,
             },
             condition: leaf_term(Op::Const(Value::Bool(true))),
