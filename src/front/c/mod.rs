@@ -133,21 +133,21 @@ impl CGen {
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
         let mem = self.get_mem();
         println!("array select: {:#?}, {:#?}", array.term, idx.term);
-        match (array.term, idx.term) {
+        match (array.clone().term, idx.term) {
             // TODO: range check?
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
-                println!("ty: {}", ty);
+                let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
+
                 Ok(CTerm {
                     term: match ty {
                         Ty::Bool => {
-                            CTermData::CBool(mem.load(id, idx))
+                            CTermData::CBool(mem.load(i, idx))
                         }
                         Ty::Int(s,w) => {
-                            CTermData::CInt(s, w, mem.load(id, idx))
+                            CTermData::CInt(s, w, mem.load(i, idx))
                         } 
-                        // TODO: Calculate new AllocID?
+                        // TODO: Flatten array so this case doesn't occur
                         // Ty::Array(_,t) => {
-
                         //     CTermData::CArray(*t, id)
                         // }
                         _ => unimplemented!()
@@ -341,7 +341,7 @@ impl CGen {
                 }
 
                 CTerm {
-                    term: CTermData::CArray(inner_type, id), 
+                    term: CTermData::CArray(inner_type, Some(id)), 
                     udef: false,
                 }
             }

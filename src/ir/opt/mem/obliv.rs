@@ -140,6 +140,12 @@ impl MemVisitor for Replacer {
     }
     fn visit_eq(&mut self, orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
+            println!("visit eq: {}", orig);
+            println!("cs: {:#?}", orig.cs);
+            println!("cs[0]: {:#?}", orig.cs[0]);
+            println!("cs[1]: {:#?}", orig.cs[1]);
+            println!("sequences: {:#?}", self.sequences);
+
             let b_seq = self.sequences.get(&orig.cs[1]).expect("inconsistent eq");
             let eqs: Vec<Term> = a_seq
                 .iter()

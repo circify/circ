@@ -1,8 +1,10 @@
 //! C Types
+use crate::circify::mem::MemManager;
 use crate::front::c::term::CTerm;
 use crate::front::c::term::CTermData;
 use crate::ir::term::*;
 
+use std::cell::RefMut;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, PartialEq, Eq)]
@@ -23,11 +25,12 @@ impl Ty {
                 term: CTermData::CInt(*s, *w, bv_lit(0, *w)),
                 udef: false,
             },
-            _ => unimplemented!(),
-            // Self::Array(n, b) => CTerm {
-            //     term: CTermData::CArray((**b).clone(), vec![b.default(); *n]),
-            //     udef: false,
-            // },
+            Self::Array(s, ty) => {
+                CTerm {
+                    term: CTermData::CArray(*ty.clone(), None),
+                    udef: false,
+                }
+            }
         }
     }
 }

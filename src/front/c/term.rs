@@ -13,7 +13,7 @@ use std::fmt::{self, Display, Formatter};
 pub enum CTermData {
     CBool(Term),
     CInt(bool, usize, Term),
-    CArray(Ty, AllocId),
+    CArray(Ty, Option<AllocId>),
 }
 
 impl CTermData {
@@ -47,7 +47,8 @@ impl CTermData {
             CTermData::CInt(_, _, b) => b.clone(),
             CTermData::CArray(_,b) => {
                 // TODO: load all of the array
-                mem.load(*b, bv_lit(0,32))
+                let i = b.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", self));
+                mem.load(i, bv_lit(0,32))
             },
         }
     }
@@ -385,46 +386,7 @@ fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
 //     }
 // }
 
-// pub fn new_array(v: Vec<CTerm>) -> Result<CTerm, String> {
-//     array(v)
-// }
 
-// pub fn array_select(array: CTerm, idx: CTerm) -> Result<CTerm, String> {
-//     match (array.term, idx.term) {
-//         // TODO: add unsigned int check?
-//         // TOOD: add bounds check?
-//         (CTermData::CArray(_, list), CTermData::CInt(_, _, idx)) => {
-//             let mut it = list.into_iter().enumerate();
-//             let first = it
-//                 .next()
-//                 .ok_or_else(|| format!("Cannot index empty array"))?;
-//             it.fold(Ok(first.1), |acc, (i, elem)| {
-//                 ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], elem, acc?)
-//             })
-//         }
-//         (a, b) => Err(format!("Cannot index {} by {}", b, a)),
-//     }
-// }
-
-// pub fn array_store(array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
-//     match (array.term, idx.term) {
-//         // TODO: add unsigned int check?
-//         // TOOD: add bounds check?
-//         (CTermData::CArray(ty, list), CTermData::CInt(_, _, idx)) => Ok(CTerm {
-//             term: CTermData::CArray(
-//                 ty,
-//                 list.into_iter()
-//                     .enumerate()
-//                     .map(|(i, elem)| {
-//                         ite(term![Op::Eq; bv_lit(i, 32), idx.clone()], val.clone(), elem)
-//                     })
-//                     .collect::<Result<Vec<_>, _>>()?,
-//             ),
-//             udef: false,
-//         }),
-//         (a, b) => Err(format!("Cannot index {} by {}", b, a)),
-//     }
-// }
 
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,

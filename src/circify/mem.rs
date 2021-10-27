@@ -99,12 +99,14 @@ impl MemManager {
             let id = self.take_next_id();
             let alloc = Alloc::new(id, addr_width, val_width, size);
             let v = alloc.var().clone();
+            // TODO: add computations to ctx without assert
             if let Op::Var(n, _) = &v.op {
                 self.cs.borrow_mut().eval_and_save(&n, &array);
             } else {
                 unreachable!()
             }
             self.assert(term![Op::Eq; v, array]);
+            // self.cs.borrow_mut().outputs.push(term![Op::Eq; v, array]);
             self.allocs.insert(id, alloc);
             id
         } else {
@@ -124,6 +126,8 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
+        println!("size: {}", size);
+        println!("val width: {}", val_width);
         let sort = Sort::Array(
             Box::new(Sort::BitVector(addr_width)),
             Box::new(Sort::BitVector(val_width)),
@@ -153,12 +157,14 @@ impl MemManager {
         let new = term![Op::Store; alloc.var().clone(), offset, val];
         alloc.next_var();
         let v = alloc.var().clone();
+        // TODO: add computations to ctx without assert
         if let Op::Var(n, _) = &v.op {
             self.cs.borrow_mut().eval_and_save(&n, &new);
         } else {
             unreachable!()
         }
         self.assert(term![Op::Eq; v, new]);
+        // self.cs.borrow_mut().outputs.push(new)
     }
 
     /// Is `offset` in bounds for the allocation `id`?
