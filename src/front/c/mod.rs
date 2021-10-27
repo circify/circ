@@ -132,9 +132,11 @@ impl CGen {
 
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
         let mem = self.get_mem();
+        println!("array select: {:#?}, {:#?}", array.term, idx.term);
         match (array.term, idx.term) {
             // TODO: range check?
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
+                println!("ty: {}", ty);
                 Ok(CTerm {
                     term: match ty {
                         Ty::Bool => {
@@ -143,10 +145,11 @@ impl CGen {
                         Ty::Int(s,w) => {
                             CTermData::CInt(s, w, mem.load(id, idx))
                         } 
-                        // Calculate new AllocID?
-                        Ty::Array(_,t) => {
-                            CTermData::CArray(*t, id)
-                        }
+                        // TODO: Calculate new AllocID?
+                        // Ty::Array(_,t) => {
+
+                        //     CTermData::CArray(*t, id)
+                        // }
                         _ => unimplemented!()
                     }, 
                     udef: false,
@@ -338,7 +341,7 @@ impl CGen {
                 }
 
                 CTerm {
-                    term: CTermData::CArray(derived_ty, id), 
+                    term: CTermData::CArray(inner_type, id), 
                     udef: false,
                 }
             }
