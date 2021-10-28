@@ -16,7 +16,7 @@ if __name__ == "__main__":
         shift_tests + \
         misc_tests
         # arr_tests + \
-
+    
     run_tests('zok', tests)
 
 

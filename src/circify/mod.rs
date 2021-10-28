@@ -587,7 +587,6 @@ impl<E: Embeddable> Circify<E> {
         match (old_val, val) {
             (Val::Term(old), Val::Term(new)) => {
                 let new_ty = self.e.type_of(&new);
-                println!("ty: {}, new_ty: {}, {}", ty, new_ty, ty == new_ty);
                 assert_eq!(
                     ty, new_ty,
                     "Term {} has type {} but was assigned to {} of type {}",
