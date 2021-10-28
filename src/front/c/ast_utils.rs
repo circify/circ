@@ -134,7 +134,7 @@ pub fn derived_type_(base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Ty {
     for d in derived {
         let next_ty = inner_derived_type_(base_ty.clone(), d.node.clone());
         match derived_ty {
-            Ty::Array(s,t) => {
+            Ty::Array(s,_) => {
                 derived_ty = Ty::Array(s, Box::new(next_ty))
             }
             _ => derived_ty = next_ty,

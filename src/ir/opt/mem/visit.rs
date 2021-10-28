@@ -73,12 +73,21 @@ pub trait MemVisitor {
                                 None
                             }
                         }
-                        Op::Select => self.visit_select(&t, get(0), get(1)),
+                        Op::Select => {
+                            self.visit_select(&t, get(0), get(1))
+                        }
                         _ => None,
                     },
                 }
             };
-            cache.insert(t.clone(), new_t_opt.unwrap_or_else(|| t.clone()));
+            // replace children of in cache
+            let mut new_cs : Vec<Term> = Vec::new();
+            for x in t.cs.iter() {
+                new_cs.push(cache.get(&x).unwrap_or_else(|| x).clone());
+            }
+            let new_t = term(t.op.clone(), new_cs);                        
+
+            cache.insert(t.clone(), new_t_opt.unwrap_or_else(|| new_t.clone()));
         }
         cache.remove(node).unwrap()
     }

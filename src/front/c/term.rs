@@ -27,15 +27,13 @@ impl CTermData {
         }
     }
     /// Get all IR terms inside this value, as a list.
-    pub fn terms(&self, mem: RefMut<MemManager>) -> Vec<Term> {
+    pub fn terms(&self) -> Vec<Term> {
         let mut output: Vec<Term> = Vec::new();
         fn terms_tail(term: &CTermData, output: &mut Vec<Term>) {
             match term {
                 CTermData::CBool(b) => output.push(b.clone()),
                 CTermData::CInt(_, _, b) => output.push(b.clone()),
-
                 _ => unimplemented!("Term: {} not implemented yet", term),
-                // CTermData::CArray(_, v) => v.iter().for_each(|v| terms_tail(&v.term, output)),
             }
         }
         terms_tail(self, &mut output);
@@ -355,7 +353,7 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
     s.ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
-fn ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+fn _ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
     match (a.term, b.term) {
         (CTermData::CInt(sa, na, a), CTermData::CInt(sb, nb, b)) if na == nb => Ok(CTerm {
             term: CTermData::CInt(sa && sb, na, term![Op::Ite; c, a, b]),
@@ -392,7 +390,7 @@ pub struct Ct {
     values: Option<HashMap<String, Integer>>,
 }
 
-fn idx_name(struct_name: &str, idx: usize) -> String {
+fn _idx_name(struct_name: &str, idx: usize) -> String {
     format!("{}.{}", struct_name, idx)
 }
 
@@ -435,7 +433,6 @@ impl Embeddable for Ct {
                 )),
                 udef: false,
             },
-            // TODO: what if signed int?
             Ty::Int(s, w) => Self::T {
                 term: CTermData::CInt(
                     *s, 
@@ -450,26 +447,9 @@ impl Embeddable for Ct {
                 udef: false,
             },
             _ => unimplemented!(),
-            // Ty::Array(n, ty) => Self::T {
-            //     term: CTermData::CArray(
-            //         (**ty).clone(),
-            //         (0..*n)
-            //             .map(|i| {
-            //                 self.declare(
-            //                     ctx,
-            //                     &*ty,
-            //                     idx_name(&raw_name, i),
-            //                     user_name.as_ref().map(|u| idx_name(u, i)),
-            //                     visibility.clone(),
-            //                 )
-            //             })
-            //             .collect(),
-            //     ),
-            //     udef: false,
-            // },
         }
     }
-    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+    fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         match (t.term, f.term) {
             (CTermData::CBool(a), CTermData::CBool(b)) => Self::T {
                 term: CTermData::CBool(term![Op::Ite; cond, a, b]),

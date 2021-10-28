@@ -1,10 +1,8 @@
 //! C Types
-use crate::circify::mem::MemManager;
 use crate::front::c::term::CTerm;
 use crate::front::c::term::CTermData;
 use crate::ir::term::*;
 
-use std::cell::RefMut;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, PartialEq, Eq)]
@@ -25,7 +23,7 @@ impl Ty {
                 term: CTermData::CInt(*s, *w, bv_lit(0, *w)),
                 udef: false,
             },
-            Self::Array(s, ty) => {
+            Self::Array(_s, ty) => {
                 CTerm {
                     term: CTermData::CArray(*ty.clone(), None),
                     udef: false,
@@ -91,7 +89,7 @@ pub fn int_conversion_rank(ty: Ty) -> usize {
     }
 }
 
-pub fn total_num_bits(ty: Ty) -> usize {
+pub fn _total_num_bits(ty: Ty) -> usize {
     match ty {
         Ty::Int(_,w) => w,
         Ty::Bool => 1,
@@ -103,7 +101,7 @@ pub fn num_bits(ty: Ty) -> usize {
     match ty {
         Ty::Int(_,w) => w,
         Ty::Bool => 1,
-        Ty::Array(s, t) => 32,
+        Ty::Array(_, _) => 32,
     }
 }
 

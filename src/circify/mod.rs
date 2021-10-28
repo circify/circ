@@ -1,5 +1,4 @@
 //! A library for building front-ends
-use crate::circify::mem::AllocId;
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -588,6 +587,7 @@ impl<E: Embeddable> Circify<E> {
         match (old_val, val) {
             (Val::Term(old), Val::Term(new)) => {
                 let new_ty = self.e.type_of(&new);
+                println!("ty: {}, new_ty: {}, {}", ty, new_ty, ty == new_ty);
                 assert_eq!(
                     ty, new_ty,
                     "Term {} has type {} but was assigned to {} of type {}",
@@ -669,7 +669,6 @@ impl<E: Embeddable> Circify<E> {
     pub fn condition(&self) -> Term {
         // TODO:  more precise conditions, depending on lex scopes.
         let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions()).collect();
-        println!("cs: {:#?}", cs);
         if cs.len() == 0 {
             leaf_term(Op::Const(Value::Bool(true)))
         } else {

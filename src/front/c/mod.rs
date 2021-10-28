@@ -7,7 +7,7 @@ mod types;
 
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
-use crate::circify::mem::{AllocId,MemManager};
+use crate::circify::mem::MemManager;
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::*;
@@ -132,12 +132,9 @@ impl CGen {
 
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
         let mem = self.get_mem();
-        println!("array select: {:#?}, {:#?}", array.term, idx.term);
         match (array.clone().term, idx.term) {
-            // TODO: range check?
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
-
                 Ok(CTerm {
                     term: match ty {
                         Ty::Bool => {
@@ -159,51 +156,59 @@ impl CGen {
         }
     }
 
-    // fn apply_lval_mod(&mut self, base: CTerm, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
-    //     match loc {
-    //         CLoc::Var(_) => Ok(val),
-    //         CLoc::Idx(inner_loc, idx) => {
-    //             let old_inner = array_select(base.clone(), idx.clone())?;
-    //             let new_inner = self.apply_lval_mod(old_inner, *inner_loc, val)?;
-    //             array_store(base, idx, new_inner)
-    //         }
-    //     }
-    // }
+    pub fn array_store(&self, array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
+        match (array.clone().term, idx.term) {
+            (CTermData::CArray(_, id), CTermData::CInt(_, _, idx_term)) => {
+                let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
+                let mut mem = self.get_mem();
+                let new_val = val.term.term(&mem);
+                mem.store(i, idx_term, new_val);
+                Ok(val.clone())
+            }
+            (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+        }
+    }
 
-    // fn mod_lval(&mut self, l: CLoc, t: CTerm) -> Result<(), String> {
-    //     let var = l.loc().clone();
-    //     let old = self
-    //         .circ
-    //         .get_value(var.clone())
-    //         .map_err(|e| format!("{}", e))?
-    //         .unwrap_term();
-    //     let new = self.apply_lval_mod(old, l, t)?;
-    //     self.circ
-    //         .assign(var, Val::Term(new))
-    //         .map_err(|e| format!("{}", e))
-    //         .map(|_| ())
-    // }
+    fn mod_lval(&mut self, l: CLoc, t: CTerm) -> Result<CTerm, String> {
+        let var = l.loc().clone();
+        let old = self
+            .circ
+            .get_value(var.clone())
+            .map_err(|e| format!("{}", e))?
+            .unwrap_term();
 
-    // fn lval(&mut self, expr: Box<Node<Expression>>) -> CLoc {
-    //     match expr.node {
-    //         Expression::Identifier(_) => {
-    //             let base_name = name_from_ident(&expr.node);
-    //             CLoc::Var(Loc::local(base_name))
-    //         }
-    //         Expression::BinaryOperator(node) => {
-    //             let bin_op = node.node;
-    //             match bin_op.operator.node {
-    //                 BinaryOperator::Index => {
-    //                     let base_name = name_from_ident(&bin_op.lhs.node);
-    //                     let idx = self.gen_expr(bin_op.rhs.node);
-    //                     CLoc::Idx(Box::new(CLoc::Var(Loc::local(base_name))), idx)
-    //                 }
-    //                 _ => unimplemented!("Invalid left hand value"),
-    //             }
-    //         }
-    //         _ => unimplemented!("Invalid left hand value"),
-    //     }
-    // }
+        match l {
+            CLoc::Var(_) => {
+                self.circ
+                    .assign(var, Val::Term(t.clone()))
+                    .map_err(|e| format!("{}", e))
+                    .map(|_| t)
+            },
+            CLoc::Idx(_, offset) => self.array_store(old, offset, t)
+        }
+
+    }
+
+    fn lval(&mut self, expr: Box<Node<Expression>>) -> CLoc {
+        match expr.node {
+            Expression::Identifier(_) => {
+                let base_name = name_from_ident(&expr.node);
+                CLoc::Var(Loc::local(base_name))
+            }
+            Expression::BinaryOperator(node) => {
+                let bin_op = node.node;
+                match bin_op.operator.node {
+                    BinaryOperator::Index => {
+                        let base_name = name_from_ident(&bin_op.lhs.node);
+                        let idx = self.gen_expr(bin_op.rhs.node);
+                        CLoc::Idx(Box::new(CLoc::Var(Loc::local(base_name))), idx)
+                    }
+                    _ => unimplemented!("Invalid left hand value"),
+                }
+            }
+            _ => unimplemented!("Invalid left hand value"),
+        }
+    }
 
     /// Interpret the party association of input parameters 
     pub fn interpret_visibility(&mut self, ext: &DeclarationSpecifier) -> Option<PartyId> {
@@ -278,19 +283,16 @@ impl CGen {
                 let bin_op = node.node;
                 match bin_op.operator.node {
                     BinaryOperator::Assign => {
-                        unimplemented!()
-                        // let e = self.gen_expr(bin_op.rhs.node);
-                        // let lval = self.lval(bin_op.lhs);
-                        // let mod_res = self.mod_lval(lval, e.clone());
-                        // self.unwrap(mod_res);
-                        // Ok(e)
+                        let e = self.gen_expr(bin_op.rhs.node);
+                        let lval = self.lval(bin_op.lhs);
+                        let mod_res = self.mod_lval(lval, e.clone());
+                        self.unwrap(mod_res);
+                        Ok(e)
                     } 
                     BinaryOperator::Index => {
                         let a = self.gen_expr(bin_op.lhs.node);
                         let b = self.gen_expr(bin_op.rhs.node);
-                        println!("array select: {}, {}", a, b);
                         self.array_select(a,b)
-
                     }
                     _ => {
                         let f = self.get_bin_op(bin_op.operator.node);
@@ -323,18 +325,12 @@ impl CGen {
                 let inner_type = inner_ty(derived_ty.clone());
                 for li in l.clone() {
                     let expr = self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
-                    println!("expr: {}", expr);
-                    println!("node: {:#?}", li.node.initializer.node);
-                    println!("types: {}, {}", expr.term.type_(), inner_type);
-                    // assert!(expr.term.type_() == derived_ty);
                     values.push(expr)
                 }
                 let mut mem = self.get_mem();
-                // TODO: verify is this the right number of bits
                 let id = mem.zero_allocate(values.len(), 32, num_bits(inner_type.clone()));
 
                 for (i,v) in values.iter().enumerate() {
-                    println!("offset: {}, value: {}", i, v);
                     let offset = bv_lit(i, 32);
                     let v_ = v.term.term(&mem);
                     mem.store(id, offset, v_);
@@ -358,7 +354,18 @@ impl CGen {
         if let Some(init) = d.initializer {
             expr = self.gen_init(derived_ty.clone(), init.node);
         } else {
-            expr = derived_ty.default();
+            expr = match derived_ty {
+                // TODO: clean this up
+                Ty::Array(size, ref ty) => {
+                    let mut mem = self.get_mem();
+                    let id = mem.zero_allocate(size.unwrap(), 32, num_bits(*ty.clone()));
+                    CTerm {
+                        term: CTermData::CArray(*ty.clone(), Some(id)), 
+                        udef: false,
+                    }
+                }
+                _ => derived_ty.default()
+            }
         }
 
         let res = self.circ.declare_init(
@@ -434,7 +441,6 @@ impl CGen {
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
                     debug!("{:#?}", fn_def.node.clone());
-                    println!("{:#?}", fn_def.node.clone());
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
                     self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty);
                     for arg in fn_info.args.iter() {
@@ -449,7 +455,7 @@ impl CGen {
                     self.gen_stmt(fn_info.body.clone());
                     if let Some(r) = self.circ.exit_fn() {
                         let ret_term = r.unwrap_term();
-                        let ret_terms = ret_term.term.terms(self.get_mem());
+                        let ret_terms = ret_term.term.terms();
                         self.circ
                             .cir_ctx()
                             .cs
