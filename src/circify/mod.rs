@@ -468,8 +468,6 @@ impl<E: Embeddable> Circify<E> {
         visibility: Option<PartyId>,
     ) -> Result<()> {
         let ssa_name = self.declare_env_name(name.clone(), ty)?.clone();
-        println!("SSA_NAME: {}", ssa_name);
-        println!("NAME: {}", name);
         let t = self.e.declare(
             &mut self.cir_ctx,
             ty,
@@ -477,7 +475,6 @@ impl<E: Embeddable> Circify<E> {
             if input { Some(name) } else { None },
             visibility,
         );
-        println!("TERM: {:#?}", t);
         assert!(self.vals.insert(ssa_name, Val::Term(t)).is_none());
         Ok(())
     }

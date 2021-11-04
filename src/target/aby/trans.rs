@@ -39,9 +39,9 @@ impl ToABY {
         }
     }
 
-    fn get_var_name(t: Term) -> String {
+    fn get_var_name(t: Term, b: bool) -> String {
         match &t.op {
-            Op::Var(name, _) => name.to_string(),
+            Op::Var(name, _) =>  if b { name.to_string().clone().replace(".", "_") } else { name.to_string() }, 
             _ => panic!("Term {} is not of type Var", t),
         }
     }
@@ -52,7 +52,15 @@ impl ToABY {
         if parsed.len() < 2 {
             panic!("Invalid variable name: {}", full_name);
         }
-        parsed[parsed.len() - 2].to_string()
+        let mut name = parsed[parsed.len() - 2].to_string();
+        if full_name.contains(".") {
+            let index: Vec<String> = full_name.split(".").map(str::to_string).collect();
+            if index.len() < 1 {
+                panic!("Invalid variable name: {}", full_name);
+            }
+            name += &("_".to_owned() + &index[index.len() - 1].to_string());
+        } 
+        name
     }
 
     fn get_sharetype_circ(&self, t: Term) -> String {
@@ -89,7 +97,7 @@ impl ToABY {
     }
 
     fn add_cons_gate(&self, t: Term) -> String {
-        let name = ToABY::get_var_name(t.clone());
+        let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t.clone());
         format!(
             "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);",
@@ -99,7 +107,7 @@ impl ToABY {
     }
 
     fn add_in_gate(&self, t: Term, role: String) -> String {
-        let name = ToABY::get_var_name(t.clone());
+        let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t.clone());
         format!(
             "\ts_{} = {}->PutINGate({}, bitlen, {});",
@@ -109,7 +117,7 @@ impl ToABY {
     }
 
     fn add_dummy_gate(&self, t: Term) -> String {
-        let name = ToABY::get_var_name(t.clone());
+        let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t.clone());
         format!("\ts_{} = {}->PutDummyINGate(bitlen);", name, s_circ).to_string()
     }
@@ -124,21 +132,22 @@ impl ToABY {
         // Parse input parameters from command line as uint32_t variables
         // Initialize shares for each party
         for (t, party) in self.inputs.iter() {
-            let name = ToABY::get_var_name(t.clone());
+            let name = ToABY::get_var_name(t.clone(), false);
+            let name_ = ToABY::get_var_name(t.clone(), true);
             self.aby.setup.push(format!(
                 "uint32_t {} = std::atoi(params[\"{}\"].c_str());",
-                name,
+                name_,
                 self.parse_var_name(name.to_string())
             ));
             self.aby
                 .setup
-                .push(format!("share *s_{};", name).to_string());
+                .push(format!("share *s_{};", name_).to_string());
             let role = party.unwrap_or_else(|| NO_ROLE);
             if role == SERVER {
                 server_inputs.insert(t.clone());
             } else if role == CLIENT {
                 client_inputs.insert(t.clone());
-            } else if role != SERVER && role != CLIENT && self.md.is_input_public(&name) {
+            } else if role != SERVER && role != CLIENT && self.md.is_input_public(&name_) {
                 public_inputs.insert(t.clone());
             } else {
                 panic!("Unknown role or visibility for variable: {}", name);
@@ -263,7 +272,7 @@ impl ToABY {
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache
-                        .insert(t.clone(), EmbeddedTerm::Bool(format!("s_{}", name)));
+                        .insert(t.clone(), EmbeddedTerm::Bool(format!("s_{}", name.replace(".", "_"))));
                 }
             }
             Op::Const(Value::Bool(b)) => {
@@ -420,7 +429,7 @@ impl ToABY {
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache
-                        .insert(t.clone(), EmbeddedTerm::Bv(format!("s_{}", name)));
+                        .insert(t.clone(), EmbeddedTerm::Bv(format!("s_{}", name.replace(".", "_"))));
                 }
             }
             Op::Const(Value::BitVector(b)) => {

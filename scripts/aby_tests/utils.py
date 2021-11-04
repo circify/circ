@@ -24,7 +24,10 @@ def flatten_args(args: dict) -> list:
     flat_args = []
     for k, v in args.items():
         flat_args.append(str(k))
-        flat_args.append(str(v))
+        if type(v) == list:
+            flat_args += [str(x) for x in v]
+        else:
+            flat_args.append(str(v))
     return flat_args
 
 def update_path(path: str, lang: str) -> str:
@@ -76,7 +79,7 @@ def run_tests(lang: str, tests: List[dict]):
     failed_test_descs = []
     num_retries = 3
     progress_inc = 5
-    init_progress_bar(len(tests) // progress_inc)
+    init_progress_bar(len(tests) // progress_inc + 1)
     for t, test in enumerate(tests):
         assert len(test) == 5, "test configurations are wrong for test: "+test[0]
         desc = test[0]

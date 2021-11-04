@@ -177,7 +177,6 @@ mod test {
         leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
     }
 
-    // TODO: fix zero_allocate for SMT
     // #[test]
     // fn sat_test() {
     //     let cs = Rc::new(RefCell::new(Computation::new(false)));

@@ -492,10 +492,10 @@ c_array_tests = [
     ], 
     [
         "C array test 3",
-        6,
-        "./third_party/ABY/build/bin/2pc_array_3",
-        {"a": [1,2], "b": 0},
-        {"a": 0, "b": [1,2]},
+        30,
+        "./third_party/ABY/build/bin/2pc_array_sum_c",
+        {"a": [1,2,3,4,5], "b": 7},
+        {"a": 6, "b": [1,2,3,4,5]},
     ], 
 ]
 
