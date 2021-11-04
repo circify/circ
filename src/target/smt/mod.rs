@@ -142,6 +142,16 @@ impl Expr2Smt<()> for TermData {
                 write!(w, "((_ tupSel {})", i)?;
                 true
             }
+            Op::ConstArray(key_sort, length) => {
+                let val_sort = check(&self.cs[0]);
+                let arr_sort = Sort::Array(Box::new(key_sort.clone()), Box::new(val_sort), *length);
+                write!(
+                    w,
+                    "((as const {})",
+                    SmtSortDisp(&arr_sort)
+                )?;
+                true
+            }
             o => panic!("Cannot give {} to SMT solver", o),
         };
         if s_expr_children {
@@ -268,6 +278,7 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
 /// Check whether some term is satisfiable.
 pub fn check_sat(t: &Term) -> bool {
     let mut solver = Solver::default_cvc4(()).unwrap();
+    //solver.path_tee("out.smt2").unwrap();
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(n, s) = &c.op {
             solver.declare_const(&SmtSymDisp(n), s).unwrap();
