@@ -787,17 +787,6 @@ impl<E: Embeddable> Circify<E> {
     pub fn consume(self) -> Rc<RefCell<Computation>> {
         self.cir_ctx.cs
     }
-
-    // /// Load value from array
-    // pub fn load(self, id: AllocId, offset: Term) -> Term {
-    //     self.cir_ctx().mem.borrow_mut().load(id, offset)
-    // }
-
-    // /// Store value in array
-    // pub fn store(self, id: AllocId, offset: Term, val: Term, cond: bool) {
-    //     let t: Term = self.cir_ctx().mem.borrow_mut().store(size, addr_width, val_width, cond);
-        
-    // }
 }
 
 const RET_NAME: &str = "return";

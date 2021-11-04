@@ -257,6 +257,7 @@ impl CGen {
     fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             BinaryOperator::Plus => add,
+            BinaryOperator::AssignPlus => add,
             BinaryOperator::Minus => sub,
             BinaryOperator::Multiply => mul,
             BinaryOperator::Equals => eq,
@@ -270,6 +271,13 @@ impl CGen {
             BinaryOperator::LogicalAnd => and,
             BinaryOperator::LogicalOr => or,
             _ => unimplemented!("BinaryOperator {:#?} hasn't been implemented", op),
+        }
+    }
+
+    fn get_u_op(&self, op: UnaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
+        match op {
+            UnaryOperator::PostIncrement => add,
+            _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", op),
         }
     }
 
@@ -289,6 +297,16 @@ impl CGen {
                         self.unwrap(mod_res);
                         Ok(e)
                     } 
+                    BinaryOperator::AssignPlus => {
+                        let f = self.get_bin_op(bin_op.operator.node);
+                        let i = self.gen_expr(bin_op.lhs.node.clone());
+                        let rhs = self.gen_expr(bin_op.rhs.node);
+                        let e = f(i, rhs).unwrap();
+                        let lval = self.lval(bin_op.lhs);
+                        let mod_res = self.mod_lval(lval, e.clone());
+                        self.unwrap(mod_res);
+                        Ok(e)
+                    }
                     BinaryOperator::Index => {
                         let a = self.gen_expr(bin_op.lhs.node);
                         let b = self.gen_expr(bin_op.rhs.node);
@@ -300,6 +318,25 @@ impl CGen {
                         let b = self.gen_expr(bin_op.rhs.node);
                         f(a, b)
                     }
+                }
+            }
+            Expression::UnaryOperator(node) => {
+                let u_op = node.node;
+                match u_op.operator.node {
+                    UnaryOperator::PostIncrement => {
+                        let f = self.get_u_op(u_op.operator.node);
+                        let i = self.gen_expr(u_op.operand.node.clone());
+                        let one = CTerm {
+                            term: CTermData::CInt(true, 32, bv_lit(1, 32)),
+                            udef: false
+                        };
+                        let e = f(i, one).unwrap();
+                        let lval = self.lval(u_op.operand);
+                        let mod_res = self.mod_lval(lval, e.clone());
+                        self.unwrap(mod_res);
+                        Ok(e)                        
+                    }
+                    _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", u_op),
                 }
             }
             Expression::Cast(node) => {
@@ -344,7 +381,7 @@ impl CGen {
         }
     }
 
-    fn gen_decl(&mut self, decl: Declaration) {
+    fn gen_decl(&mut self, decl: Declaration) -> CTerm {
         let decl_info = get_decl_info(decl.clone());
         let d = decl.declarators.first().unwrap().node.clone();
         let base_ty: Ty = decl_info.ty;
@@ -371,11 +408,98 @@ impl CGen {
         let res = self.circ.declare_init(
             decl_info.name,
             derived_ty.clone(),
-            Val::Term(cast(Some(derived_ty.clone()), expr)),
+            Val::Term(cast(Some(derived_ty.clone()), expr.clone())),
         );
         self.unwrap(res);
+        expr
     }
-   
+
+    fn get_const_iters(&mut self, for_stmt: ForStatement) -> Option<ConstIteration> {
+        let init: Option<ConstIteration> = match for_stmt.initializer.node {
+            ForInitializer::Declaration(d) => {
+                let decl_info = get_decl_info(d.node.clone());
+                let name = decl_info.name; 
+                let expr = self.gen_decl(d.node);
+                let val = const_int(expr).ok().unwrap();
+                Some(
+                    ConstIteration {
+                        name,
+                        val: val.to_i32()?,
+                    }
+                )
+            }
+            _ => None
+        };
+
+        let cond: Option<ConstIteration> = match for_stmt.condition.unwrap().node {
+            Expression::BinaryOperator(bin_op) => {
+                let name = name_from_ident(&bin_op.node.lhs.node);
+                let b = self.gen_expr(bin_op.node.rhs.node);
+                let val = const_int(b).ok().unwrap();
+                match bin_op.node.operator.node {
+                    BinaryOperator::Less => {
+                        Some(
+                            ConstIteration {
+                                name,
+                                val: val.to_i32()?,
+                            }
+                        )
+                    } 
+                    BinaryOperator::LessOrEqual => {
+                        Some(
+                            ConstIteration {
+                                name,
+                                val: val.to_i32()? + 1,
+                            }
+                        )
+                    }
+                    _ => None
+                }                        
+            }
+            _ => None
+        };
+        
+        // TODO: add options for i += 1 
+        let step: Option<ConstIteration> = match for_stmt.step.unwrap().node {
+            Expression::UnaryOperator(u_op) => {
+                let name = name_from_ident(&u_op.node.operand.node);
+                match u_op.node.operator.node {
+                    UnaryOperator::PostIncrement | UnaryOperator::PreIncrement => {
+                        Some(
+                            ConstIteration {
+                                name,
+                                val: 1,
+                            }
+                        )
+                    }
+                    _ => None
+                }
+            }
+            _ => None
+        };
+
+        // TODO: error checking here
+        let init_ = init.unwrap();
+        let cond_ = cond.unwrap();
+        let incr_ = step.unwrap();
+
+        let init_name = init_.name;
+        let start = init_.val;
+        let cond_name = cond_.name;
+        let end = cond_.val;
+        let incr_name = incr_.name;
+        let incr = incr_.val;
+
+        if init_name == cond_name && cond_name == incr_name {
+            return Some(
+                ConstIteration {
+                    name: init_name,
+                    val: ((end - start - 1) / incr) + 1
+                }
+            );
+        }
+        None
+    }
 
     fn gen_stmt(&mut self, stmt: Statement) {
         match stmt {
@@ -427,6 +551,24 @@ impl CGen {
             Statement::Expression(expr) => {
                 let e = expr.unwrap().node;
                 self.gen_expr(e);
+            }
+            Statement::For(for_stmt) => {
+                // Is this the right name?
+                self.circ.enter_breakable("FOR_LOOP".to_string());
+                let const_iters = self.get_const_iters(for_stmt.node.clone());
+                // Loop 5 times if not specified
+                let bound = const_iters.unwrap_or(ConstIteration {
+                    name: "".to_string(),
+                    val: 5
+                }).val;
+
+                for _ in 0..bound {
+                    // TODO: something is wrong here.
+                    self.gen_stmt(for_stmt.node.statement.node.clone());
+                    self.gen_expr(for_stmt.node.step.as_ref().unwrap().node.clone());
+                }
+
+                self.circ.exit_breakable();
             }
             _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }

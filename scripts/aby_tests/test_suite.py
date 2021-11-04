@@ -483,6 +483,13 @@ c_array_tests = [
         {"a": 10, "b": 0},
         {"a": 0, "b": 3},
     ], 
+    [
+        "C array test 3",
+        18,
+        "./third_party/ABY/build/bin/2pc_array_3",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 3},
+    ], 
 ]
 
 loop_tests = [

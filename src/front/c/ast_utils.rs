@@ -16,6 +16,11 @@ pub struct DeclInfo {
     pub ty: Ty,
 }
 
+pub struct ConstIteration {
+    pub name: String,
+    pub val: i32,
+}
+
 impl Display for FnInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
@@ -194,3 +199,4 @@ fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaratio
 fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
 }
+

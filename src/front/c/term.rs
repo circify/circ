@@ -384,8 +384,6 @@ fn _ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
 //     }
 // }
 
-
-
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
 }

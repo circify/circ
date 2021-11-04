@@ -68,4 +68,5 @@ mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
 mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array.c
 mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_1.c
 mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_2.c
+mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_3.c
 
