@@ -388,7 +388,7 @@ pub struct Ct {
     values: Option<HashMap<String, Integer>>,
 }
 
-fn _idx_name(struct_name: &str, idx: usize) -> String {
+fn idx_name(struct_name: &str, idx: usize) -> String {
     format!("{}.{}", struct_name, idx)
 }
 
@@ -444,7 +444,33 @@ impl Embeddable for Ct {
                 ),
                 udef: false,
             },
-            _ => unimplemented!(),
+            Ty::Array(n, ty) => {
+                let v: Vec<Self::T> = (0..n.unwrap())
+                    .map(|i| {
+                        self.declare(
+                            ctx,
+                            &*ty,
+                            idx_name(&raw_name, i),
+                            user_name.as_ref().map(|u| idx_name(u, i)),
+                            visibility.clone(),
+                        )
+                    })
+                    .collect();
+                let mut mem = ctx.mem.borrow_mut();
+                let id = mem.zero_allocate(n.unwrap(), 32, num_bits(*ty.clone()));
+                let arr = Self::T {
+                    term: CTermData::CArray(
+                        *ty.clone(),
+                        Some(id),
+                    ),
+                    udef: false,
+                };
+                for (i, t) in v.iter().enumerate() {
+                    let val = t.term.term(&mem);
+                    mem.store(id, bv_lit(i, 32), val);
+                }
+                arr
+            },
         }
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {

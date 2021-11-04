@@ -152,7 +152,7 @@ impl CGen {
                     udef: false,
                 })  
             }
-            (a, b) => Err(format!("Cannot index {} by {}", b, a))
+            (a, b) => Err(format!("[Array Select] cannot index {} by {}", b, a))
         }
     }
 
@@ -165,7 +165,7 @@ impl CGen {
                 mem.store(i, idx_term, new_val);
                 Ok(val.clone())
             }
-            (a, b) => Err(format!("Cannot index {} by {}", b, a)),
+            (a, b) => Err(format!("[Array Store] cannot index {} by {}", b, a)),
         }
     }
 
@@ -588,10 +588,11 @@ impl CGen {
                     for arg in fn_info.args.iter() {
                         let p = &arg.specifiers[0];
                         let vis = self.interpret_visibility(&p.node);
-                        let ty = d_type_(arg.specifiers[1..].to_vec());
+                        let base_ty = d_type_(arg.specifiers[1..].to_vec());
                         let d = &arg.declarator.as_ref().unwrap().node;
+                        let derived_ty = derived_type_(base_ty.unwrap(), d.derived.to_vec());
                         let name = name_from_decl(d);
-                        let r = self.circ.declare(name.clone(), &ty.unwrap(), true, vis);
+                        let r = self.circ.declare(name.clone(), &derived_ty, true, vis);
                         self.unwrap(r);
                     }
                     self.gen_stmt(fn_info.body.clone());

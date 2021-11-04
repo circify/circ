@@ -152,6 +152,7 @@ impl ToABY {
 
         // Initialize Server inputs
         self.aby.setup.push("if (role == SERVER) {".to_string());
+        // TODO: add in gates based on type / number of inputs 
         for t in server_inputs.iter() {
             self.aby
                 .setup

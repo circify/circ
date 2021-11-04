@@ -194,7 +194,6 @@ impl MemVisitor for Replacer {
                 .to_usize()
                 .expect("oversize index");
             if k_const < a_seq.len() {
-                println!("return term: {:#?}", a_seq[k_const]);
                 Some(a_seq[k_const].clone())
             } else {
                 panic!("Oversize index: {}", k_const)
