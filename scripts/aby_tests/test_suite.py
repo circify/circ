@@ -66,6 +66,30 @@ arithmetic_tests = [
     ], 
 ]
 
+mod_tests = [
+    [
+        "Mod two numbers - 1",
+        0,
+        "./third_party/ABY/build/bin/2pc_mod",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Mod two numbers - 2",
+        1,
+        "./third_party/ABY/build/bin/2pc_mod",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Mod two numbers - 3",
+        0,
+        "./third_party/ABY/build/bin/2pc_mod",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+]
+
 unsigned_arithmetic_tests = [
      [
         "Add two unsigned numbers - 1",
@@ -449,6 +473,13 @@ array_tests = [
         "Array index test",
         3,
         "./third_party/ABY/build/bin/2pc_array_index",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+    [
+        "Array index test 2",
+        2,
+        "./third_party/ABY/build/bin/2pc_array_index_2",
         {"a": 2, "b": 0},
         {"a": 0, "b": 1},
     ], 

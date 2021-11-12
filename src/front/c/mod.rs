@@ -270,6 +270,7 @@ impl CGen {
             BinaryOperator::BitwiseXor => bitxor,
             BinaryOperator::LogicalAnd => and,
             BinaryOperator::LogicalOr => or,
+            BinaryOperator::Modulo => rem,
             _ => unimplemented!("BinaryOperator {:#?} hasn't been implemented", op),
         }
     }
@@ -382,11 +383,13 @@ impl CGen {
     }
 
     fn gen_decl(&mut self, decl: Declaration) -> CTerm {
+        dbg!(&decl);
         let decl_info = get_decl_info(decl.clone());
         let d = decl.declarators.first().unwrap().node.clone();
         let base_ty: Ty = decl_info.ty;
         let derived = &d.declarator.node.derived;
-        let derived_ty = derived_type_(base_ty, derived.to_vec());
+        let mem = self.get_mem();
+        let derived_ty = derived_type_(base_ty, derived.to_vec(), &mem);
         let expr: CTerm;
         if let Some(init) = d.initializer {
             expr = self.gen_init(derived_ty.clone(), init.node);
@@ -395,6 +398,7 @@ impl CGen {
                 // TODO: clean this up
                 Ty::Array(size, ref ty) => {
                     let mut mem = self.get_mem();
+                    println!("SIZE: {:#?}", size);
                     let id = mem.zero_allocate(size.unwrap(), 32, num_bits(*ty.clone()));
                     CTerm {
                         term: CTermData::CArray(*ty.clone(), Some(id)), 
@@ -419,12 +423,13 @@ impl CGen {
             ForInitializer::Declaration(d) => {
                 let decl_info = get_decl_info(d.node.clone());
                 let name = decl_info.name; 
-                let expr = self.gen_decl(d.node);
-                let val = const_int(expr).ok().unwrap();
+                let expr = self.gen_decl(d.node.clone());
+                let mem = self.get_mem();
+                let val = fold_(expr, &mem);
                 Some(
                     ConstIteration {
                         name,
-                        val: val.to_i32()?,
+                        val
                     }
                 )
             }
@@ -434,14 +439,15 @@ impl CGen {
         let cond: Option<ConstIteration> = match for_stmt.condition.unwrap().node {
             Expression::BinaryOperator(bin_op) => {
                 let name = name_from_ident(&bin_op.node.lhs.node);
-                let b = self.gen_expr(bin_op.node.rhs.node);
-                let val = const_int(b).ok().unwrap();
+                let expr = self.gen_expr(bin_op.node.rhs.node);
+                let mem = self.get_mem();
+                let val = fold_(expr, &mem);
                 match bin_op.node.operator.node {
                     BinaryOperator::Less => {
                         Some(
                             ConstIteration {
                                 name,
-                                val: val.to_i32()?,
+                                val: val,
                             }
                         )
                     } 
@@ -449,7 +455,7 @@ impl CGen {
                         Some(
                             ConstIteration {
                                 name,
-                                val: val.to_i32()? + 1,
+                                val: val + 1,
                             }
                         )
                     }
@@ -553,22 +559,26 @@ impl CGen {
                 self.gen_expr(e);
             }
             Statement::For(for_stmt) => {
-                // Is this the right name?
-                self.circ.enter_breakable("FOR_LOOP".to_string());
+                // TODO: Is this the right name?
                 let const_iters = self.get_const_iters(for_stmt.node.clone());
-                // Loop 5 times if not specified
+                // Loop 5 times if const not specified
                 let bound = const_iters.unwrap_or(ConstIteration {
                     name: "".to_string(),
                     val: 5
                 }).val;
 
                 for _ in 0..bound {
+                    self.circ.enter_scope();
+                    self.circ.enter_breakable("FOR_LOOP".to_string());
+
                     // TODO: something is wrong here.
                     self.gen_stmt(for_stmt.node.statement.node.clone());
                     self.gen_expr(for_stmt.node.step.as_ref().unwrap().node.clone());
-                }
 
-                self.circ.exit_breakable();
+                    self.circ.exit_breakable();
+                    self.circ.exit_scope();
+    
+                }
             }
             _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }
@@ -590,7 +600,8 @@ impl CGen {
                         let vis = self.interpret_visibility(&p.node);
                         let base_ty = d_type_(arg.specifiers[1..].to_vec());
                         let d = &arg.declarator.as_ref().unwrap().node;
-                        let derived_ty = derived_type_(base_ty.unwrap(), d.derived.to_vec());
+                        let mem = self.get_mem();
+                        let derived_ty = derived_type_(base_ty.unwrap(), d.derived.to_vec(), &mem);
                         let name = name_from_decl(d);
                         let r = self.circ.declare(name.clone(), &derived_ty, true, vis);
                         self.unwrap(r);

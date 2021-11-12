@@ -505,6 +505,15 @@ impl ToABY {
                             )),
                         );
                     }
+                    BvBinOp::Urem => {
+                        self.cache.insert(
+                            t.clone(),
+                            EmbeddedTerm::Bv(format!(
+                                "unsignedmodbl({}, {}, {})",
+                                s_circ, a_conv, b_conv
+                            )),
+                        );
+                    }
                     BvBinOp::Shl => {
                         let b_val = self.remove_cons_gate(b_conv);
                         self.cache.insert(

@@ -223,6 +223,14 @@ pub fn mul(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_arith("*", Some(mul_uint), None, a, b)
 }
 
+fn rem_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinOp(BvBinOp::Urem); a, b]
+}
+
+pub fn rem(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_arith("%", Some(rem_uint), None, a, b)
+}
+
 fn bitand_uint(a: Term, b: Term) -> Term {
     term![Op::BvNaryOp(BvNaryOp::And); a, b]
 }
