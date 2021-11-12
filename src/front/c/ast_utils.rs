@@ -1,10 +1,5 @@
-use crate::front::c::const_int;
-use crate::front::c::CTerm;
-use crate::front::c::CTermData;
 use crate::front::c::Expression::Identifier;
-use crate::front::c::MemManager;
 use crate::front::c::types::Ty;
-use crate::ir::opt::cfold::fold;
 use lang_c::ast::*;
 use lang_c::span::Node;
 use std::fmt::{self, Display, Formatter};
@@ -106,77 +101,6 @@ fn type_(t: TypeSpecifier) -> Option<Ty> {
         TypeSpecifier::Void => None,
         _ => unimplemented!("Type {:#?} not implemented yet.", t),
     };
-}
-
-pub fn fold_(expr: CTerm, mem: &MemManager) -> i32 {
-    let term_ = fold(&expr.term.term(mem));
-    let cterm_ = CTerm {
-        term: CTermData::CInt(true, 32, term_),
-        udef: false,
-    };
-    let val = const_int(cterm_).ok().unwrap();
-    val.to_i32().unwrap()
-}
-
-fn inner_derived_type_(base_ty: Ty, d: DerivedDeclarator, mem: &MemManager) -> Ty {
-    match d {
-        DerivedDeclarator::Array(arr) => {
-            if let ArraySize::VariableExpression(size) =
-                &arr.node.size
-            {
-                match &size.node {
-                    Expression::Identifier(e) => {
-                        let base_ty = e.term.type_();
-                        let size = fold_(e.term.term(mem));
-                        return Ty::Array(
-                            Some(size),
-                            Box::new(base_ty),
-                        )
-                    }
-                    Expression::Constant(con) => {
-                        if let Constant::Integer(i) = &con.node {
-                            let len: usize = i.number.parse::<usize>().unwrap();
-                            return Ty::Array(
-                                Some(len),
-                                Box::new(base_ty),
-                            )
-                        } 
-                    }
-                    _ => {
-                        return Ty::Array(
-                            None,
-                            Box::new(base_ty),
-                        )
-                    }
-                }
-            } 
-            return Ty::Array(
-                None,
-                Box::new(base_ty),
-            )
-        }
-        DerivedDeclarator::Pointer(_ptr) => {
-            unimplemented!("pointers not implemented yet");
-        }
-        _ => panic!("Not implemented: {:#?}", d),
-    }
-}
-
-pub fn derived_type_(base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>, mem: &MemManager) -> Ty {
-    if derived.len() == 0 {
-        return base_ty;
-    }
-    let mut derived_ty = base_ty.clone();
-    for d in derived {
-        let next_ty = inner_derived_type_(base_ty.clone(), d.node.clone(), mem);
-        match derived_ty {
-            Ty::Array(s,_) => {
-                derived_ty = Ty::Array(s, Box::new(next_ty))
-            }
-            _ => derived_ty = next_ty,
-        }
-    }
-    derived_ty
 }
 
 pub fn get_decl_info(decl: Declaration) -> DeclInfo {

@@ -11,6 +11,7 @@ use crate::circify::mem::MemManager;
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::*;
+use crate::ir::opt::cfold::fold;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use lang_c::ast::*;
@@ -209,6 +210,59 @@ impl CGen {
             _ => unimplemented!("Invalid left hand value"),
         }
     }
+    
+    fn fold_(&mut self, expr: CTerm) -> i32 {
+        let mem = self.get_mem();
+        let term_ = fold(&expr.term.term(&mem));
+        let cterm_ = CTerm {
+            term: CTermData::CInt(true, 32, term_),
+            udef: false,
+        };
+        let val = const_int(cterm_).ok().unwrap();
+        val.to_i32().unwrap()
+    }
+
+    fn inner_derived_type_(&mut self, base_ty: Ty, d: DerivedDeclarator) -> Ty {
+        match d {
+            DerivedDeclarator::Array(arr) => {
+                if let ArraySize::VariableExpression(expr) =
+                    &arr.node.size
+                {
+                    let expr_ = self.gen_expr(expr.node.clone());
+                    let size = self.fold_(expr_) as usize;
+                    return Ty::Array(
+                        Some(size),
+                        Box::new(base_ty),
+                    )
+                } 
+                return Ty::Array(
+                    None,
+                    Box::new(base_ty),
+                )
+            }
+            DerivedDeclarator::Pointer(_ptr) => {
+                unimplemented!("pointers not implemented yet");
+            }
+            _ => panic!("Not implemented: {:#?}", d),
+        }
+    }
+
+    fn derived_type_(&mut self, base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Ty {
+        if derived.len() == 0 {
+            return base_ty;
+        }
+        let mut derived_ty = base_ty.clone();
+        for d in derived {
+            let next_ty = self.inner_derived_type_(base_ty.clone(), d.node.clone());
+            match derived_ty {
+                Ty::Array(s,_) => {
+                    derived_ty = Ty::Array(s, Box::new(next_ty))
+                }
+                _ => derived_ty = next_ty,
+            }
+        }
+        derived_ty
+    }
 
     /// Interpret the party association of input parameters 
     pub fn interpret_visibility(&mut self, ext: &DeclarationSpecifier) -> Option<PartyId> {
@@ -388,8 +442,7 @@ impl CGen {
         let d = decl.declarators.first().unwrap().node.clone();
         let base_ty: Ty = decl_info.ty;
         let derived = &d.declarator.node.derived;
-        let mem = self.get_mem();
-        let derived_ty = derived_type_(base_ty, derived.to_vec(), &mem);
+        let derived_ty = self.derived_type_(base_ty, derived.to_vec());
         let expr: CTerm;
         if let Some(init) = d.initializer {
             expr = self.gen_init(derived_ty.clone(), init.node);
@@ -424,8 +477,7 @@ impl CGen {
                 let decl_info = get_decl_info(d.node.clone());
                 let name = decl_info.name; 
                 let expr = self.gen_decl(d.node.clone());
-                let mem = self.get_mem();
-                let val = fold_(expr, &mem);
+                let val = self.fold_(expr);
                 Some(
                     ConstIteration {
                         name,
@@ -440,8 +492,7 @@ impl CGen {
             Expression::BinaryOperator(bin_op) => {
                 let name = name_from_ident(&bin_op.node.lhs.node);
                 let expr = self.gen_expr(bin_op.node.rhs.node);
-                let mem = self.get_mem();
-                let val = fold_(expr, &mem);
+                let val = self.fold_(expr);
                 match bin_op.node.operator.node {
                     BinaryOperator::Less => {
                         Some(
@@ -600,8 +651,7 @@ impl CGen {
                         let vis = self.interpret_visibility(&p.node);
                         let base_ty = d_type_(arg.specifiers[1..].to_vec());
                         let d = &arg.declarator.as_ref().unwrap().node;
-                        let mem = self.get_mem();
-                        let derived_ty = derived_type_(base_ty.unwrap(), d.derived.to_vec(), &mem);
+                        let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
                         let name = name_from_decl(d);
                         let r = self.circ.declare(name.clone(), &derived_ty, true, vis);
                         self.unwrap(r);
