@@ -58,7 +58,7 @@ fn main() {
     };
 
     let cs = C::gen(inputs);
-    // println!("{:#?}", cs);
+    println!("{:#?}", cs);
     let cs = match mode {
         Mode::Mpc(_) => opt(
             cs,

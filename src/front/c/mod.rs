@@ -624,6 +624,7 @@ impl CGen {
             Statement::For(for_stmt) => {
                 // TODO: Is this the right name?
                 let const_iters = self.get_const_iters(for_stmt.node.clone());
+                println!("const iters: {}", const_iters.as_ref().unwrap().val);
                 // Loop 5 times if const not specified
                 let bound = const_iters.unwrap_or(ConstIteration {
                     name: "".to_string(),
@@ -656,6 +657,7 @@ impl CGen {
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
                     debug!("{:#?}", fn_def.node.clone());
+                    // println!("function: {:#?}", fn_def.node);
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
                     self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty);
                     for arg in fn_info.args.iter() {
