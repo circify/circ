@@ -437,7 +437,6 @@ impl CGen {
     }
 
     fn gen_decl(&mut self, decl: Declaration) -> CTerm {
-        dbg!(&decl);
         let decl_info = get_decl_info(decl.clone());
         let d = decl.declarators.first().unwrap().node.clone();
         let base_ty: Ty = decl_info.ty;
@@ -451,7 +450,6 @@ impl CGen {
                 // TODO: clean this up
                 Ty::Array(size, ref ty) => {
                     let mut mem = self.get_mem();
-                    println!("SIZE: {:#?}", size);
                     let id = mem.zero_allocate(size.unwrap(), 32, num_bits(*ty.clone()));
                     CTerm {
                         term: CTermData::CArray(*ty.clone(), Some(id)), 
@@ -484,6 +482,20 @@ impl CGen {
                         val
                     }
                 )
+            }
+            ForInitializer::Expression(e) => {
+                if let Expression::BinaryOperator(bin_op) = e.node {
+                    let name = name_from_ident(&bin_op.node.lhs.node);
+                    let expr = self.gen_expr(bin_op.node.rhs.node);
+                    let val = self.fold_(expr);
+                    return Some(
+                        ConstIteration {
+                            name,
+                            val
+                        }
+                    );
+                }
+                None
             }
             _ => None
         };
