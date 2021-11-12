@@ -185,7 +185,7 @@ impl MemVisitor for Replacer {
             self.sequences.insert(orig.clone(), a_seq);
         }
     }
-    fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {        
+    fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {  
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
             let k_const = k
                 .as_bv_opt()

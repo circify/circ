@@ -10,37 +10,34 @@ int main(__attribute__((private(0))) int a[100], __attribute__((private(1))) int
     
     // init data
     int data[LEN*D];
-    for(int i = 0; i < D*NA; i++) {
-		data[i]=a[i];
+    for(int i_0 = 0; i_0 < D*NA; i_0++) {
+		data[i_0]=a[i_0];
 	}
-    int offset = NA*D;
-    for(int j = 0; j < D*NB; j++) {
-		data[i+offset]=b[j];
+    int offset = D*NA; 
+    for(int i_1 = 0; i_1 < D*NB; i_1++) {
+		data[i_1+offset]=b[i_1];
 	}
 
     int output[D*NC];
 
-    //kmeans
-    int c;
-    int p;
-    int cluster[10]; // NC * D
-    for (c = 0; c < 5; c++) {
-        cluster[c*D] = data[((c+3)%LEN)*D];
-		cluster[c*D+1] = data[((c+3)%LEN)*D+1];
+    // kmeans
+    int cluster[D*NC];
+    for (int i_2 = 0; i_2 < NC; i_2++) {
+        cluster[i_2*D] = data[((i_2+3)%LEN)*D];
+		cluster[i_2*D+1] = data[((i_2+3)%LEN)*D+1];
     }
 
-    for (p = 0; p < 4; p++) { 
-        int size = NC * D;
-		int new_cluster[size]; // NC * D
+    for (int i_3 = 0; i_3 < PRECISION; i_3++) { 
+		int new_cluster[D*NC]; // NC * D
 
 		// ======================= iteration_unrolled_outer	
         int count[NC];
         
         // Set Outer result
-        for(c = 0; c < NC; c++) {
-            new_cluster[c*D] = 0;
-            new_cluster[c*D+1] = 0;
-            count[c] = 0;
+        for(int i_4 = 0; i_4 < NC; i_4++) {
+            new_cluster[i_4*D] = 0;
+            new_cluster[i_4*D+1] = 0;
+            count[i_4] = 0;
         }	
         
         int loop_clusterD1[NC * LEN_OUTER];
@@ -48,14 +45,14 @@ int main(__attribute__((private(0))) int a[100], __attribute__((private(1))) int
         int loop_count[NC * LEN_OUTER];
         
         // Compute decomposition
-        for(j = 0; j < LEN_OUTER; j++) {
+        for(int i_5 = 0; i_5 < LEN_OUTER; i_5++) {
             // Copy data, fasthack for scalability
-            int data_offset = j*LEN_INNER*D;
+            int data_offset = i_5*LEN_INNER*D;
             int data_inner[LEN_INNER*D];
             
             // memcpy(data_inner, data+data_offset, LEN_INNER*D*sizeof(coord_t));
-            for (i = 0; i < LEN_INNER*D; i++) {
-                data_inner[i] = data[i+data_offset];
+            for (int i_6 = 0; i_6 < LEN_INNER*D; i_6++) {
+                data_inner[i_6] = data[i_6+data_offset];
             }
 
             int cluster_inner[NC*D];
@@ -66,85 +63,85 @@ int main(__attribute__((private(0))) int a[100], __attribute__((private(1))) int
             int pos[NC];
             int bestMap_inner[LEN_INNER];
             
-            for(c = 0; c < NC; c++) {
-                cluster_inner[c*D] = 0;
-                cluster_inner[c*D+1] = 0;
-                count_inner[c] = 0;
+            for(int i_7 = 0; i_7 < NC; i_7++) {
+                cluster_inner[i_7*D] = 0;
+                cluster_inner[i_7*D+1] = 0;
+                count_inner[i_7] = 0;
             }	
             
             // Compute nearest clusters for Data item i
-            for(i = 0; i < LEN_INNER; i++) {
-                int dx = data_inner[i*D];
-                int dy = data_inner[i*D+1];
+            for(int i_8 = 0; i_8 < LEN_INNER; i_8++) {
+                int dx = data_inner[i_8*D];
+                int dy = data_inner[i_8*D+1];
             
-                for(c = 0; c < NC; c++) {
-                    pos[c]=c;
-                    int x1 = cluster[D*c];
-                    int x2 = cluster[D*c+1];
+                for(int i_9 = 0; i_9 < NC; i_9++) {
+                    pos[i_9]=i_9;
+                    int x1 = cluster[D*i_9];
+                    int x2 = cluster[D*i_9+1];
                     int y1 = dx;
                     int y2 = dy;
-                    dist[c] = (x1-x2) * (x1-x2) + (y1 - y2) * (y1 - y2);
+                    dist[i_9] = (x1-x2) * (x1-x2) + (y1 - y2) * (y1 - y2);
                 }
                 // hardcoded NC = 5;
                 // stride = 1
                 // stride = 2
                 // stride = 4
                 int stride = 1;
-                for(i = 0; i + stride < NC; i+=stride<<1) {
-                    if(dist[i+stride] < dist[i]) {
-                        dist[i] = dist[i+stride];
-                        pos[i] = pos[i+stride];
+                for(int i_10 = 0; i_10 + stride < NC; i_10+=stride<<1) {
+                    if(dist[i_10+stride] < dist[i_10]) {
+                        dist[i_10] = dist[i_10+stride];
+                        pos[i_10] = pos[i_10+stride];
                     }
                 }
                 stride = 2;
-                for(i = 0; i + stride < NC; i+=stride<<1) {
-                    if(dist[i+stride] < dist[i]) {
-                        dist[i] = dist[i+stride];
-                        pos[i] = pos[i+stride];
+                for(int i_11 = 0; i_11 + stride < NC; i_11+=stride<<1) {
+                    if(dist[i_11+stride] < dist[i_11]) {
+                        dist[i_11] = dist[i_11+stride];
+                        pos[i_11] = pos[i_11+stride];
                     }
                 }
                 stride = 4;
-                for(i = 0; i + stride < NC; i+=stride<<1) {
-                    if(data[i+stride] < data[i]) {
-                        data[i] = data[i+stride];
-                        pos[i] = pos[i+stride];
+                for(int i_12 = 0; i_12 + stride < NC; i_12+=stride<<1) {
+                    if(data[i_12+stride] < data[i_12]) {
+                        data[i_12] = data[i_12+stride];
+                        pos[i_12] = pos[i_12+stride];
                     }
                 }
-                bestMap_inner[i] = pos[0];
-                int cc = bestMap_inner[i];
-                cluster_inner[cc*D] += data_inner[i*D];
-                cluster_inner[cc*D+1] += data_inner[i*D+1];
+                bestMap_inner[i_8] = pos[0];
+                int cc = bestMap_inner[i_8];
+                cluster_inner[cc*D] += data_inner[i_8*D];
+                cluster_inner[cc*D+1] += data_inner[i_8*D+1];
                 count_inner[cc]++;		
             }
             // ======================= iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner, LEN_INNER, NC);
 
 
             // Depth: num_cluster Addition
-            for(c = 0; c < NC; c++) {
-                loop_clusterD1[c * LEN_OUTER + j] = cluster_inner[c*D];
-                loop_clusterD2[c * LEN_OUTER + j] = cluster_inner[c*D+1];
-                loop_count[c * LEN_OUTER + j] = count_inner[c];
+            for(int i_13 = 0; i_13 < NC; i_13++) {
+                loop_clusterD1[i_13 * LEN_OUTER + i_5] = cluster_inner[i_13*D];
+                loop_clusterD2[i_13 * LEN_OUTER + i_5] = cluster_inner[i_13*D+1];
+                loop_count[i_13 * LEN_OUTER + i_5] = count_inner[i_13];
             }
         }
 
-        for(c = 0; c < NC; c++) {
-            int tmp = c * LEN_OUTER;
+        for(int i_14 = 0; i_14 < NC; i_14++) {
+            int tmp = i_14 * LEN_OUTER;
 
-            new_cluster[c*D] = 
+            new_cluster[i_14*D] = 
                 loop_clusterD1[tmp + 0] + loop_clusterD1[tmp + 1] + 
                 loop_clusterD1[tmp + 2] + loop_clusterD1[tmp + 3] +
                 loop_clusterD1[tmp + 4] + loop_clusterD1[tmp + 5] +
                 loop_clusterD1[tmp + 6] + loop_clusterD1[tmp + 7] +
                 loop_clusterD1[tmp + 8] + loop_clusterD1[tmp + 9];
 
-            new_cluster[c*D+1] =
+            new_cluster[i_14*D+1] =
                 loop_clusterD2[tmp + 0] + loop_clusterD2[tmp + 1] + 
                 loop_clusterD2[tmp + 2] + loop_clusterD2[tmp + 3] +
                 loop_clusterD2[tmp + 4] + loop_clusterD2[tmp + 5] +
                 loop_clusterD2[tmp + 6] + loop_clusterD2[tmp + 7] +
                 loop_clusterD2[tmp + 8] + loop_clusterD2[tmp + 9];
 
-            new_cluster[c] = 
+            new_cluster[i_14] = 
                 loop_count[tmp + 0] + loop_count[tmp + 1] + 
                 loop_count[tmp + 2] + loop_count[tmp + 3] +
                 loop_count[tmp + 4] + loop_count[tmp + 5] +
@@ -155,28 +152,28 @@ int main(__attribute__((private(0))) int a[100], __attribute__((private(1))) int
 
         // Recompute cluster Pos
         // Compute mean
-        for(c = 0; c < NC; c++) {  
-            if(count[c] >0 ) {
-                new_cluster[c*D] /= count[c];
-                new_cluster[c*D+1] /= count[c];
+        for(int i_15 = 0; i_15 < NC; i_15++) {  
+            if(count[i_15] > 0) {
+                new_cluster[i_15*D] /= count[i_15];
+                new_cluster[i_15*D+1] /= count[i_15];
             } 
         }
 
 
         // ======================= iteration_unrolled_outer
-		for(c = 0; c < size; c++) { // NC * D
-			cluster[c] = new_cluster[c];
+		for(int i_16 = 0; i_16 < NC*D; i_16++) { // NC * D
+			cluster[i_16] = new_cluster[i_16];
 		}
 	}
 
-    for(c = 0; c < NC; c++) {  
-		output[c*D] = cluster[c*D];
-		output[c*D+1] = cluster[c*D+1];
+    for(int i_17 = 0; i_17 < NC; i_17++) {  
+		output[i_17*D] = cluster[i_17*D];
+		output[i_17*D+1] = cluster[i_17*D+1];
 	}
 
     int sum;
-    for (i=0; i < D*NC; i++) {
-        sum += output[i];
+    for (int i_18 = 0; i_18 < D*NC; i_18++) {
+        sum += output[i_18];
     }
 
     return sum;
