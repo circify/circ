@@ -41,7 +41,8 @@ pub fn name_from_decl(decl: &Declarator) -> String {
 pub fn name_from_ident(ident: &Expression) -> String {
     match ident {
         Identifier(i) => i.node.name.clone(),
-        _ => panic!("Identifier not found: {:?}", ident),
+        //TODO: make this Option
+        _ => "".to_string(), 
     }
 }
 

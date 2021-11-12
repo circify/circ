@@ -312,6 +312,7 @@ impl CGen {
         match op {
             BinaryOperator::Plus => add,
             BinaryOperator::AssignPlus => add,
+            BinaryOperator::AssignDivide => div,
             BinaryOperator::Minus => sub,
             BinaryOperator::Multiply => mul,
             BinaryOperator::Equals => eq,
@@ -325,6 +326,8 @@ impl CGen {
             BinaryOperator::LogicalAnd => and,
             BinaryOperator::LogicalOr => or,
             BinaryOperator::Modulo => rem,
+            BinaryOperator::ShiftLeft=> shl,
+            BinaryOperator::ShiftRight=> shr,
             _ => unimplemented!("BinaryOperator {:#?} hasn't been implemented", op),
         }
     }
@@ -488,14 +491,15 @@ impl CGen {
                     let name = name_from_ident(&bin_op.node.lhs.node);
                     let expr = self.gen_expr(bin_op.node.rhs.node);
                     let val = self.fold_(expr);
-                    return Some(
+                    Some(
                         ConstIteration {
                             name,
                             val
                         }
-                    );
+                    )
+                } else {
+                    None
                 }
-                None
             }
             _ => None
         };
@@ -528,7 +532,6 @@ impl CGen {
             _ => None
         };
         
-        // TODO: add options for i += 1 
         let step: Option<ConstIteration> = match for_stmt.step.unwrap().node {
             Expression::UnaryOperator(u_op) => {
                 let name = name_from_ident(&u_op.node.operand.node);
@@ -538,6 +541,22 @@ impl CGen {
                             ConstIteration {
                                 name,
                                 val: 1,
+                            }
+                        )
+                    }
+                    _ => None
+                }
+            }
+            Expression::BinaryOperator(bin_op) => {
+                let name = name_from_ident(&bin_op.node.lhs.node);
+                match bin_op.node.operator.node {
+                    BinaryOperator::AssignPlus => {
+                        let expr = self.gen_expr(bin_op.node.rhs.node);
+                        let val = self.fold_(expr);
+                        Some(
+                            ConstIteration {
+                                name,
+                                val,
                             }
                         )
                     }
@@ -554,10 +573,15 @@ impl CGen {
 
         let init_name = init_.name;
         let start = init_.val;
-        let cond_name = cond_.name;
+        let mut cond_name = cond_.name;
         let end = cond_.val;
         let incr_name = incr_.name;
         let incr = incr_.val;
+
+        // TODO: fix naming
+        if cond_name == "" {
+            cond_name = init_name.clone();
+        }
 
         if init_name == cond_name && cond_name == incr_name {
             return Some(
@@ -624,7 +648,6 @@ impl CGen {
             Statement::For(for_stmt) => {
                 // TODO: Is this the right name?
                 let const_iters = self.get_const_iters(for_stmt.node.clone());
-                println!("const iters: {}", const_iters.as_ref().unwrap().val);
                 // Loop 5 times if const not specified
                 let bound = const_iters.unwrap_or(ConstIteration {
                     name: "".to_string(),

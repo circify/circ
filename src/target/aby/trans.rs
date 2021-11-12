@@ -505,11 +505,20 @@ impl ToABY {
                             )),
                         );
                     }
+                    BvBinOp::Udiv => {
+                        self.cache.insert(
+                            t.clone(),
+                            EmbeddedTerm::Bv(format!(
+                                "signeddival({}, {}, {})",
+                                s_circ, a_conv, b_conv
+                            )),
+                        );
+                    }
                     BvBinOp::Urem => {
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bv(format!(
-                                "unsignedmodbl({}, {}, {})",
+                                "unsignedmodal({}, {}, {})",
                                 s_circ, a_conv, b_conv
                             )),
                         );
@@ -544,7 +553,6 @@ impl ToABY {
                             )),
                         );
                     }
-                    _ => panic!("Invalid bv-op in BvBinOp: {:?}", o),
                 }
             }
             Op::BvExtract(_start, _end) => {}

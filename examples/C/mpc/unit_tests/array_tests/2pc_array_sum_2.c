@@ -14,7 +14,8 @@ int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) {
     // for (int j = 0; j < 2; j++) acc += arr[j];
     // return acc;
     int acc = 0;
-    for (int j = 0; j < 2; j++) {
+    int j;
+    for (j = 0; j < 2; j++) {
         acc += arr[j];
     }
     return acc;

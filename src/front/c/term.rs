@@ -223,6 +223,14 @@ pub fn mul(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_arith("*", Some(mul_uint), None, a, b)
 }
 
+fn div_uint(a: Term, b: Term) -> Term {
+    term![Op::BvBinOp(BvBinOp::Udiv); a, b]
+}
+
+pub fn div(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_arith("/", Some(div_uint), None, a, b)
+}
+
 fn rem_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinOp(BvBinOp::Urem); a, b]
 }
@@ -359,6 +367,29 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
         _ => None,
     };
     s.ok_or_else(|| format!("{} is not a constant integer", a))
+}
+
+fn wrap_shift(name: &str, op: BvBinOp, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    let bc = const_int(b)?;
+    match &a.term {
+        CTermData::CInt(s, na, a) => Ok(CTerm {
+            term: CTermData::CInt(
+                *s,
+                *na,
+                term![Op::BvBinOp(op); a.clone(), bv_lit(bc, *na)]
+            ),
+            udef: false,
+        }),
+        x => Err(format!("Cannot perform op '{}' on {} and {}", name, x, bc)),
+    }
+}
+
+pub fn shl(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_shift("<<", BvBinOp::Shl, a, b)
+}
+
+pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_shift(">>", BvBinOp::Lshr, a, b)
 }
 
 fn _ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
