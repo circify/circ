@@ -315,6 +315,7 @@ impl CGen {
             BinaryOperator::AssignDivide => div,
             BinaryOperator::Minus => sub,
             BinaryOperator::Multiply => mul,
+            BinaryOperator::Divide => div,
             BinaryOperator::Equals => eq,
             BinaryOperator::Greater => ugt,
             BinaryOperator::GreaterOrEqual => uge,
@@ -355,7 +356,7 @@ impl CGen {
                         self.unwrap(mod_res);
                         Ok(e)
                     } 
-                    BinaryOperator::AssignPlus => {
+                    BinaryOperator::AssignPlus | BinaryOperator::AssignDivide => {
                         let f = self.get_bin_op(bin_op.operator.node);
                         let i = self.gen_expr(bin_op.lhs.node.clone());
                         let rhs = self.gen_expr(bin_op.rhs.node);
@@ -372,8 +373,24 @@ impl CGen {
                     }
                     _ => {
                         let f = self.get_bin_op(bin_op.operator.node);
-                        let a = self.gen_expr(bin_op.lhs.node);
-                        let b = self.gen_expr(bin_op.rhs.node);
+                        let mut a = self.gen_expr(bin_op.lhs.node);
+                        let mut b = self.gen_expr(bin_op.rhs.node);
+                        
+                        // TODO: fix hack, const int check for shifting 
+                        if f == shl || f == shr {
+                            let mem = self.get_mem();
+                            let a_t = fold(&a.term.term(&mem));
+                            a = CTerm {
+                                term: CTermData::CInt(true, 32, a_t),
+                                udef: false,
+                            };
+
+                            let b_t = fold(&b.term.term(&mem));
+                            b = CTerm {
+                                term: CTermData::CInt(true, 32, b_t),
+                                udef: false,
+                            };
+                        }
                         f(a, b)
                     }
                 }
@@ -450,7 +467,6 @@ impl CGen {
             expr = self.gen_init(derived_ty.clone(), init.node);
         } else {
             expr = match derived_ty {
-                // TODO: clean this up
                 Ty::Array(size, ref ty) => {
                     let mut mem = self.get_mem();
                     let id = mem.zero_allocate(size.unwrap(), 32, num_bits(*ty.clone()));
@@ -490,7 +506,12 @@ impl CGen {
                 if let Expression::BinaryOperator(bin_op) = e.node {
                     let name = name_from_ident(&bin_op.node.lhs.node);
                     let expr = self.gen_expr(bin_op.node.rhs.node);
-                    let val = self.fold_(expr);
+                    let val = self.fold_(expr.clone());
+                    // let ass_res = self.circ.assign(
+                    //     Loc::local(name.clone()),
+                    //     Val::Term(expr.clone()),
+                    // );
+                    // self.unwrap(ass_res);
                     Some(
                         ConstIteration {
                             name,
@@ -646,7 +667,8 @@ impl CGen {
                 self.gen_expr(e);
             }
             Statement::For(for_stmt) => {
-                // TODO: Is this the right name?
+                // TODO: add enter_breakable
+                self.circ.enter_scope();
                 let const_iters = self.get_const_iters(for_stmt.node.clone());
                 // Loop 5 times if const not specified
                 let bound = const_iters.unwrap_or(ConstIteration {
@@ -656,16 +678,11 @@ impl CGen {
 
                 for _ in 0..bound {
                     self.circ.enter_scope();
-                    self.circ.enter_breakable("FOR_LOOP".to_string());
-
-                    // TODO: something is wrong here.
                     self.gen_stmt(for_stmt.node.statement.node.clone());
-                    self.gen_expr(for_stmt.node.step.as_ref().unwrap().node.clone());
-
-                    self.circ.exit_breakable();
                     self.circ.exit_scope();
-    
+                    self.gen_expr(for_stmt.node.step.as_ref().unwrap().node.clone());
                 }
+                self.circ.exit_scope();
             }
             _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }

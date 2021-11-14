@@ -187,10 +187,12 @@ fn wrap_bin_arith(
 ) -> Result<CTerm, String> {
     let (a_arith, b_arith) = usual_arith_conversions(a, b);
     match (a_arith.term, b_arith.term, fu, fb) {
-        (CTermData::CInt(sx, nx, x), CTermData::CInt(sy, ny, y), Some(fu), _) if nx == ny => Ok(CTerm {
-            term: CTermData::CInt(sx && sy, nx, fu(x, y)),
-            udef: false,
-        }),
+        (CTermData::CInt(sx, nx, x), CTermData::CInt(sy, ny, y), Some(fu), _) if nx == ny => {
+            Ok(CTerm {
+                term: CTermData::CInt(sx && sy, nx, fu(x, y)),
+                udef: false,
+            })
+        },
         (CTermData::CBool(x), CTermData::CBool(y), _, Some(fb)) => Ok(CTerm {
             term: CTermData::CBool(fb(x, y)),
             udef: false,

@@ -509,7 +509,7 @@ impl ToABY {
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bv(format!(
-                                "signeddival({}, {}, {})",
+                                "signeddivbl({}, {}, {})",
                                 s_circ, a_conv, b_conv
                             )),
                         );
@@ -518,7 +518,7 @@ impl ToABY {
                         self.cache.insert(
                             t.clone(),
                             EmbeddedTerm::Bv(format!(
-                                "unsignedmodal({}, {}, {})",
+                                "signedmodal({}, {}, {})",
                                 s_circ, a_conv, b_conv
                             )),
                         );

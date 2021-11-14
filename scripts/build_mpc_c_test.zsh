@@ -57,9 +57,11 @@ function mpc_test {
 # mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
 
-# # build if statement tests
+# build if statement tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
+
 
 # # build array tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
@@ -67,6 +69,14 @@ function mpc_test {
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index_2.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_ret.c
+
+# build shift tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
+
+# build div tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
+mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div_2.c
 
 
 
@@ -79,7 +89,7 @@ function mpc_test {
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 
 # benchmarks
-mpc_test 2 ./examples/C/mpc/benchmarks/kmeans.c
+mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
 
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_loop_add.c
 
