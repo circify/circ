@@ -84,10 +84,10 @@ int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int
                     int y2 = dy;
                     dist[i_9] = (x1-x2) * (x1-x2) + (y1 - y2) * (y1 - y2);
                 }
-                // // hardcoded NC = 5;
-                // // stride = 1
-                // // stride = 2
-                // // stride = 4
+                // hardcoded NC = 5;
+                // stride = 1
+                // stride = 2
+                // stride = 4
                 int stride = 1;
                 for(int i_10 = 0; i_10 < NC - stride; i_10+=2) {
                     if(dist[i_10+stride] < dist[i_10]) {

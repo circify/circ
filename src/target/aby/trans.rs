@@ -609,7 +609,7 @@ pub fn to_aby(ir: Computation) -> ABY {
     let mut converter = ToABY::new(md, s_map);
 
     for t in terms {
-        println!("terms: {}", t);
+        // println!("terms: {}", t);
         converter.lower(t.clone());
     }
 

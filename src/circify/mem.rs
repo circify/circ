@@ -135,12 +135,14 @@ impl MemManager {
     }
 
     /// Write the value `val` to index `offset` in the allocation `id`.
-    pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
+    pub fn store(&mut self, id: AllocId, offset: Term, val: Term, cond: Term) {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         assert_eq!(alloc.val_width, check(&val).as_bv());
-        let new = term![Op::Store; alloc.var().clone(), offset, val];
-        alloc.cur_term = new;
+        let old = alloc.cur_term.clone();
+        let new = term![Op::Store; alloc.var().clone(), offset.clone(), val];
+        let ite_store = term![Op::Ite; cond, new, old];
+        alloc.cur_term = ite_store;
         // alloc.next_var();
         // let v = alloc.var().clone();
 

@@ -76,7 +76,7 @@ function mpc_test {
 
 # build div tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
-mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div_2.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div_2.c
 
 
 

@@ -7,7 +7,6 @@ mod types;
 
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
-use crate::circify::mem::MemManager;
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::*;
@@ -19,7 +18,6 @@ use lang_c::span::Node;
 use log::debug;
 
 // use std::collections::HashMap;
-use std::cell::RefMut;
 use std::fmt::{self, Display, Formatter};
 use std::path::PathBuf;
 
@@ -127,22 +125,17 @@ impl CGen {
         r.unwrap_or_else(|e| self.err(e))
     }
 
-    fn get_mem(&self) -> RefMut<MemManager> {
-        self.circ.cir_ctx().mem.borrow_mut()
-    }
-
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
-        let mem = self.get_mem();
         match (array.clone().term, idx.term) {
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
                 Ok(CTerm {
                     term: match ty {
                         Ty::Bool => {
-                            CTermData::CBool(mem.load(i, idx))
+                            CTermData::CBool(self.circ.load(i, idx))
                         }
                         Ty::Int(s,w) => {
-                            CTermData::CInt(s, w, mem.load(i, idx))
+                            CTermData::CInt(s, w, self.circ.load(i, idx))
                         } 
                         // TODO: Flatten array so this case doesn't occur
                         // Ty::Array(_,t) => {
@@ -157,13 +150,12 @@ impl CGen {
         }
     }
 
-    pub fn array_store(&self, array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
+    pub fn array_store(&mut self, array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
         match (array.clone().term, idx.term) {
             (CTermData::CArray(_, id), CTermData::CInt(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
-                let mut mem = self.get_mem();
-                let new_val = val.term.term(&mem);
-                mem.store(i, idx_term, new_val);
+                let new_val = val.term.term(&self.circ);
+                self.circ.store(i, idx_term, new_val);
                 Ok(val.clone())
             }
             (a, b) => Err(format!("[Array Store] cannot index {} by {}", b, a)),
@@ -212,8 +204,7 @@ impl CGen {
     }
     
     fn fold_(&mut self, expr: CTerm) -> i32 {
-        let mem = self.get_mem();
-        let term_ = fold(&expr.term.term(&mem));
+        let term_ = fold(&expr.term.term(&self.circ));
         let cterm_ = CTerm {
             term: CTermData::CInt(true, 32, term_),
             udef: false,
@@ -378,14 +369,13 @@ impl CGen {
                         
                         // TODO: fix hack, const int check for shifting 
                         if f == shl || f == shr {
-                            let mem = self.get_mem();
-                            let a_t = fold(&a.term.term(&mem));
+                            let a_t = fold(&a.term.term(&self.circ));
                             a = CTerm {
                                 term: CTermData::CInt(true, 32, a_t),
                                 udef: false,
                             };
 
-                            let b_t = fold(&b.term.term(&mem));
+                            let b_t = fold(&b.term.term(&self.circ));
                             b = CTerm {
                                 term: CTermData::CInt(true, 32, b_t),
                                 udef: false,
@@ -439,13 +429,12 @@ impl CGen {
                     let expr = self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
                     values.push(expr)
                 }
-                let mut mem = self.get_mem();
-                let id = mem.zero_allocate(values.len(), 32, num_bits(inner_type.clone()));
+                let id = self.circ.zero_allocate(values.len(), 32, num_bits(inner_type.clone()));
 
                 for (i,v) in values.iter().enumerate() {
                     let offset = bv_lit(i, 32);
-                    let v_ = v.term.term(&mem);
-                    mem.store(id, offset, v_);
+                    let v_ = v.term.term(&self.circ);
+                    self.circ.store(id, offset, v_);
                 }
 
                 CTerm {
@@ -468,8 +457,7 @@ impl CGen {
         } else {
             expr = match derived_ty {
                 Ty::Array(size, ref ty) => {
-                    let mut mem = self.get_mem();
-                    let id = mem.zero_allocate(size.unwrap(), 32, num_bits(*ty.clone()));
+                    let id = self.circ.zero_allocate(size.unwrap(), 32, num_bits(*ty.clone()));
                     CTerm {
                         term: CTermData::CArray(*ty.clone(), Some(id)), 
                         udef: false,
@@ -634,15 +622,14 @@ impl CGen {
             }
             Statement::If(node) => {
                 let cond = self.gen_expr(node.node.condition.node);
-                // TODO Cast to boolean for condition ;
-                let t_term = cond.term.term(&self.get_mem());
+                let t_term = cond.term.term(&self.circ);
                 let t_res = self.circ.enter_condition(t_term);
                 self.unwrap(t_res);
                 self.gen_stmt(node.node.then_statement.node);
                 self.circ.exit_condition();
-
+                
                 if let Some(f_cond) = node.node.else_statement {
-                    let f_term = term!(Op::Not; cond.term.term(&self.get_mem()));
+                    let f_term = term!(Op::Not; cond.term.term(&self.circ));
                     let f_res = self.circ.enter_condition(f_term);
                     self.unwrap(f_res);
                     self.gen_stmt(f_cond.node);
@@ -701,14 +688,15 @@ impl CGen {
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
                     self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty);
                     for arg in fn_info.args.iter() {
+                        // TODO: self.gen_decl(arg);
                         let p = &arg.specifiers[0];
                         let vis = self.interpret_visibility(&p.node);
                         let base_ty = d_type_(arg.specifiers[1..].to_vec());
                         let d = &arg.declarator.as_ref().unwrap().node;
                         let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
                         let name = name_from_decl(d);
-                        let r = self.circ.declare(name.clone(), &derived_ty, true, vis);
-                        self.unwrap(r);
+                        let res = self.circ.declare(name.clone(), &derived_ty, true, vis);
+                        self.unwrap(res);
                     }
                     self.gen_stmt(fn_info.body.clone());
                     if let Some(r) = self.circ.exit_fn() {

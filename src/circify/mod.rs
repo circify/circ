@@ -1,4 +1,5 @@
 //! A library for building front-ends
+use crate::circify::mem::AllocId;
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -786,6 +787,22 @@ impl<E: Embeddable> Circify<E> {
     /// Get the constraints from this manager
     pub fn consume(self) -> Rc<RefCell<Computation>> {
         self.cir_ctx.cs
+    }
+
+    /// Load from an AllocID
+    pub fn load(&self, id: AllocId, offset: Term) -> Term {
+        self.cir_ctx.mem.borrow_mut().load(id, offset)
+    }
+
+    /// Store to an AllocID
+    pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
+        let cond = self.condition();
+        self.cir_ctx.mem.borrow_mut().store(id, offset, val, cond);
+    }
+
+    /// Zero allocate an array
+    pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
+        self.cir_ctx.mem.borrow_mut().zero_allocate(size, addr_width, val_width)
     }
 }
 

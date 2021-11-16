@@ -62,6 +62,7 @@ fn main() {
     let cs = match mode {
         Mode::Mpc(_) => opt(
             cs,
+            // vec![],
             vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         _ => unimplemented!(),

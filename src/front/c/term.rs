@@ -1,11 +1,11 @@
 //! C Terms
 use crate::circify::{CirCtx, Embeddable};
-use crate::circify::mem::{AllocId, MemManager};
+use crate::circify::mem::AllocId;
 use crate::front::c::is_signed_int;
+use crate::front::c::Circify;
 use crate::front::c::types::*;
 use crate::ir::term::*;
 use rug::Integer;
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
@@ -39,14 +39,14 @@ impl CTermData {
         terms_tail(self, &mut output);
         output
     }
-    pub fn term(&self, mem: &RefMut<MemManager>) -> Term {
+    pub fn term(&self, circ: &Circify<Ct>) -> Term {
         match self {
             CTermData::CBool(b) => b.clone(),
             CTermData::CInt(_, _, b) => b.clone(),
             CTermData::CArray(_,b) => {
                 // TODO: load all of the array
                 let i = b.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", self));
-                mem.load(i, bv_lit(0,32))
+                circ.load(i, bv_lit(0,32))
             },
         }
     }
@@ -507,8 +507,9 @@ impl Embeddable for Ct {
                     udef: false,
                 };
                 for (i, t) in v.iter().enumerate() {
-                    let val = t.term.term(&mem);
-                    mem.store(id, bv_lit(i, 32), val);
+                    let val = t.term.terms()[0].clone();
+                    let t_term = leaf_term(Op::Const(Value::Bool(true)));
+                    mem.store(id, bv_lit(i, 32), val, t_term);
                 }
                 arr
             },

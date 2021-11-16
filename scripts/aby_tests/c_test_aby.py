@@ -16,8 +16,8 @@ if __name__ == "__main__":
     #     c_array_tests + \
     #     div_tests
 
-    tests = kmeans_tests + div_tests
-    # tests = kmeans_tests
+    # tests = kmeans_tests + div_tests
+    tests = kmeans_tests
     # tests = div_tests
         
         # TODO: add support for return value - int promotion
