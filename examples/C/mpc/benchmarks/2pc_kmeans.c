@@ -88,13 +88,13 @@ int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int
                 // stride = 1
                 // stride = 2
                 // stride = 4
-                int stride = 1;
-                for(int i_10 = 0; i_10 < NC - stride; i_10+=2) {
-                    if(dist[i_10+stride] < dist[i_10]) {
-                        dist[i_10] = dist[i_10+stride];
-                        pos[i_10] = pos[i_10+stride];
-                    }
-                }
+                // int stride = 1;
+                // for(int i_10 = 0; i_10 < NC - stride; i_10+=2) {
+                //     if(dist[i_10+stride] < dist[i_10]) {
+                //         dist[i_10] = dist[i_10+stride];
+                //         pos[i_10] = pos[i_10+stride];
+                //     }
+                // }
                 // stride = 2;
                 // for(int i_11 = 0; i_11 < NC - stride; i_11+=4) {
                 //     if(dist[i_11+stride] < dist[i_11]) {

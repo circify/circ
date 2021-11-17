@@ -4,7 +4,7 @@ set -ex
 
 disable -r time
 
-cargo build --release --example circ_c
+cargo build --release --example circ_c 
 
 BIN=./target/release/examples/circ_c
 

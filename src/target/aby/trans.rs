@@ -606,6 +606,7 @@ pub fn to_aby(ir: Computation) -> ABY {
     } = ir.clone();
     // let s_map: SharingMap = assign(&ir);
     let s_map: SharingMap = some_arith_sharing(&ir);
+    println!("s_map:size: {}", s_map.len());
     let mut converter = ToABY::new(md, s_map);
 
     for t in terms {
