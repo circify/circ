@@ -72,8 +72,9 @@ fn main() {
     match mode {
         Mode::Mpc(_) => {
             println!("Converting to aby");
-            let aby = to_aby(cs);
-            write_aby_exec(aby, "c".to_string(), path_buf);
+            let lang = &String::from("c");
+            to_aby(cs, &path_buf, &lang);
+            write_aby_exec(&path_buf, &lang);
         }
         _ => unimplemented!(),
     }

@@ -4,10 +4,13 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
+use std::fmt;
 use crate::ir::term::*;
 // use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::{some_arith_sharing, ShareType, SharingMap};
-use crate::target::aby::*;
+use crate::target::aby::utils::*;
+
+use std::path::PathBuf;
 
 const NO_ROLE: u8 = u8::MAX;
 const SERVER: u8 = 0;
@@ -20,22 +23,32 @@ enum EmbeddedTerm {
     Bv(String),
 }
 
+impl fmt::Display for EmbeddedTerm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 struct ToABY {
-    aby: ABY,
     md: ComputationMetadata,
     inputs: TermMap<Option<PartyId>>,
     cache: TermMap<EmbeddedTerm>,
     s_map: SharingMap,
+    share_cnt: i32,
+    setup_fname: String,
+    circuit_fname: String
 }
 
 impl ToABY {
-    fn new(metadata: ComputationMetadata, s_map: SharingMap) -> Self {
+    fn new(metadata: ComputationMetadata, s_map: SharingMap, path_buf: &PathBuf, lang: &String) -> Self {
         Self {
-            aby: ABY::new(),
             md: metadata,
             inputs: TermMap::new(),
             cache: TermMap::new(),
             s_map: s_map,
+            share_cnt: 0,
+            setup_fname: get_path(path_buf, lang, &String::from("setup")),
+            circuit_fname: get_path(path_buf, lang, &String::from("circuit")),
         }
     }
 
@@ -44,6 +57,14 @@ impl ToABY {
             Op::Var(name, _) =>  if b { name.to_string().clone().replace(".", "_") } else { name.to_string() }, 
             _ => panic!("Term {} is not of type Var", t),
         }
+    }
+
+    fn get_share_name(&mut self) -> String {
+        format!("s_{}", self.share_cnt)
+    }
+
+    fn inc_share(&mut self) {
+        self.share_cnt += 1;
     }
 
     /// Parse variable name from IR representation of a variable
@@ -100,7 +121,7 @@ impl ToABY {
         let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t.clone());
         format!(
-            "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);",
+            "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);\n",
             name, s_circ, name
         )
         .to_string()
@@ -110,7 +131,7 @@ impl ToABY {
         let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t.clone());
         format!(
-            "\ts_{} = {}->PutINGate({}, bitlen, {});",
+            "\ts_{} = {}->PutINGate({}, bitlen, {});\n",
             name, s_circ, name, role
         )
         .to_string()
@@ -119,7 +140,7 @@ impl ToABY {
     fn add_dummy_gate(&self, t: Term) -> String {
         let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t.clone());
-        format!("\ts_{} = {}->PutDummyINGate(bitlen);", name, s_circ).to_string()
+        format!("\ts_{} = {}->PutDummyINGate(bitlen);\n", name, s_circ).to_string()
     }
 
     /// Initialize private and public inputs from each party
@@ -129,19 +150,21 @@ impl ToABY {
         let mut client_inputs = TermSet::new();
         let mut public_inputs = TermSet::new();
 
+
         // Parse input parameters from command line as uint32_t variables
         // Initialize shares for each party
         for (t, party) in self.inputs.iter() {
             let name = ToABY::get_var_name(t.clone(), false);
             let name_ = ToABY::get_var_name(t.clone(), true);
-            self.aby.setup.push(format!(
-                "uint32_t {} = std::atoi(params[\"{}\"].c_str());",
+
+            write_line_to_file(&self.setup_fname, &format!(
+                "uint32_t {} = std::atoi(params[\"{}\"].c_str());\n",
                 name_,
                 self.parse_var_name(name.to_string())
             ));
-            self.aby
-                .setup
-                .push(format!("share *s_{};", name_).to_string());
+
+            write_line_to_file(&self.setup_fname, &format!("share* s_{};\n", name_).to_string());
+
             let role = party.unwrap_or_else(|| NO_ROLE);
             if role == SERVER {
                 server_inputs.insert(t.clone());
@@ -156,42 +179,40 @@ impl ToABY {
 
         // Initialize public inputs as CONS gateshares
         for t in public_inputs.iter() {
-            self.aby.setup.push(self.add_cons_gate(t.clone()));
+            write_line_to_file(&self.setup_fname, &self.add_cons_gate(t.clone()));
         }
 
         // Initialize Server inputs
-        self.aby.setup.push("if (role == SERVER) {".to_string());
+        write_line_to_file(&self.setup_fname, &String::from("if (role == SERVER) {\n"));
         // TODO: add in gates based on type / number of inputs 
         for t in server_inputs.iter() {
-            self.aby
-                .setup
-                .push(self.add_in_gate(t.clone(), "SERVER".to_string()));
+            write_line_to_file(&self.setup_fname, &self.add_in_gate(t.clone(), "SERVER".to_string()));
         }
         for t in client_inputs.iter() {
-            self.aby.setup.push(self.add_dummy_gate(t.clone()));
+            write_line_to_file(&self.setup_fname, &self.add_dummy_gate(t.clone()));
         }
-        self.aby.setup.push("}".to_string());
+        write_line_to_file(&self.setup_fname, &String::from("}\n"));
 
         // Initialize Client inputs
-        self.aby.setup.push("if (role == CLIENT) {".to_string());
+        write_line_to_file(&self.setup_fname, &String::from("if (role == CLIENT) {\n"));
         for t in client_inputs.iter() {
-            self.aby
-                .setup
-                .push(self.add_in_gate(t.clone(), "CLIENT".to_string()));
+            write_line_to_file(&self.setup_fname, &self.add_in_gate(t.clone(), "CLIENT".to_string()));
         }
         for t in server_inputs.iter() {
-            self.aby.setup.push(self.add_dummy_gate(t.clone()));
+            write_line_to_file(&self.setup_fname, &self.add_dummy_gate(t.clone()));
         }
-        self.aby.setup.push("}\n".to_string());
+        write_line_to_file(&self.setup_fname, &String::from("}\n"));
     }
 
     /// Return constant gate evaluating to 0
+    // TODO: const should not be hardcoded to bcirc
     #[allow(dead_code)]
     fn zero() -> String {
         format!("bcirc->PutCONSGate((uint64_t)0, (uint32_t)1)")
     }
 
     /// Return constant gate evaluating to 1
+    // TODO: const should not be hardcoded to bcirc
     fn one() -> String {
         format!("bcirc->PutCONSGate((uint64_t)1, (uint32_t)1)")
     }
@@ -210,7 +231,7 @@ impl ToABY {
         }
     }
 
-    fn embed_eq(&mut self, t: Term, a: Term, b: Term) -> String {
+    fn embed_eq(&mut self, t: Term, a: Term, b: Term) {
         let s_circ = self.get_sharetype_circ(t.clone());
         match check(&a) {
             Sort::Bool => {
@@ -220,16 +241,23 @@ impl ToABY {
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
 
+                let share = self.get_share_name();
+                self.inc_share();
                 let s = format!(
-                    "{}->PutXORGate({}->PutXORGate({}, {}), {})",
+                    "share* {} = {}->PutXORGate({}->PutXORGate({}, {}), {});\n",
+                    share,
                     s_circ,
                     s_circ,
                     a_conv,
                     b_conv,
                     ToABY::one()
                 );
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
-                s
+                write_line_to_file(&self.circuit_fname, &s);
+
+                self.cache.insert(
+                    t.clone(),
+                    EmbeddedTerm::Bool(share),
+                );
             }
             Sort::BitVector(_) => {
                 let a_circ = self.get_bv(&a).clone();
@@ -238,12 +266,14 @@ impl ToABY {
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
 
+                let share = self.get_share_name();
+                self.inc_share();
                 let s = format!(
-                    "{}->PutXORGate({}->PutXORGate({}->PutGTGate({}, {}), {}->PutGTGate({}, {})), {})",
-                    s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one()
+                    "share* {} = {}->PutXORGate({}->PutXORGate({}->PutGTGate({}, {}), {}->PutGTGate({}, {})), {});\n",
+                    share, s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one()
                 );
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
-                s
+                write_line_to_file(&self.circuit_fname, &s);
+                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
             }
             e => panic!("Unimplemented sort for Eq: {:?}", e),
         }
@@ -276,16 +306,24 @@ impl ToABY {
                 }
             }
             Op::Const(Value::Bool(b)) => {
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = format!(
+                    "share* {} = {}->PutCONSGate((uint64_t){}, (uint32_t){});\n",
+                    share,
+                    s_circ,
+                    *b as isize, 
+                    BOOLEAN_BITLEN
+                );
+                write_line_to_file(&self.circuit_fname, &s);
+
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "{}->PutCONSGate((uint64_t){}, (uint32_t){})",
-                        s_circ, *b as isize, BOOLEAN_BITLEN
-                    )),
+                    EmbeddedTerm::Bool(share),
                 );
             }
             Op::Eq => {
-                let _s = self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
+                self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
             }
             Op::Ite => {
                 let sel_circ = self.get_bool(&t.cs[0]).clone();
@@ -296,23 +334,32 @@ impl ToABY {
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), t.cs[2].clone(), b_circ);
 
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = format!(
+                    "share* {} = {}->PutMUXGate({}, {}, {});\n",
+                    share, s_circ, a_conv, b_conv, sel_conv
+                );
+                write_line_to_file(&self.circuit_fname, &s);
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "{}->PutMUXGate({}, {}, {})",
-                        s_circ, a_conv, b_conv, sel_conv
-                    )),
+                    EmbeddedTerm::Bool(share),
                 );
             }
             Op::Not => {
                 let a_circ = self.get_bool(&t.cs[0]);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
+
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = format!(
+                    "share* {} = ((BooleanCircuit *) {})->PutINVGate({});\n",
+                    share, s_circ, a_conv
+                );
+                write_line_to_file(&self.circuit_fname, &s);
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "((BooleanCircuit *) {})->PutINVGate({})",
-                        s_circ, a_conv
-                    )),
+                    EmbeddedTerm::Bool(share),
                 );
             }
             Op::BoolNaryOp(o) => {
@@ -337,19 +384,24 @@ impl ToABY {
                         s_circ = format!("((BooleanCircuit *) {})", s_circ);
                     }
 
+                    let share = self.get_share_name();
+                    self.inc_share();
+                    let s = format!(
+                        "share* {} = {}->{}({}, {});\n",
+                        share,
+                        s_circ,
+                        match o {
+                            BoolNaryOp::Or => "PutORGate",
+                            BoolNaryOp::And => "PutANDGate",
+                            BoolNaryOp::Xor => "PutXORGate",
+                        },
+                        a_conv,
+                        b_conv
+                    );
+                    write_line_to_file(&self.circuit_fname, &s);
                     self.cache.insert(
                         t.clone(),
-                        EmbeddedTerm::Bool(format!(
-                            "{}->{}({}, {})",
-                            s_circ,
-                            match o {
-                                BoolNaryOp::Or => "PutORGate",
-                                BoolNaryOp::And => "PutANDGate",
-                                BoolNaryOp::Xor => "PutXORGate",
-                            },
-                            a_conv,
-                            b_conv
-                        )),
+                        EmbeddedTerm::Bool(share),
                     );
                 }
             }
@@ -360,49 +412,43 @@ impl ToABY {
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), b_circ);
 
-                match op {
-                    BvBinPred::Uge => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!(
-                                "((BooleanCircuit *){})->PutINVGate({}->PutGTGate({}, {}))",
-                                s_circ, s_circ, b_conv, a_conv
-                            )),
-                        );
-                    }
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = match op {
                     BvBinPred::Ugt => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!(
-                                "{}->PutGTGate({}, {})",
-                                s_circ, a_conv, b_conv
-                            )),
-                        );
-                    }
-                    BvBinPred::Ule => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!(
-                                "((BooleanCircuit *){})->PutINVGate({}->PutGTGate({}, {}))",
-                                s_circ, s_circ, a_conv, b_conv
-                            )),
-                        );
+                        format!(
+                            "share* {} = {}->PutGTGate({}, {});\n",
+                            share, s_circ, a_conv, b_conv
+                        )
                     }
                     BvBinPred::Ult => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bool(format!(
-                                "{}->PutGTGate({}, {})",
-                                s_circ, b_conv, a_conv
-                            )),
-                        );
+                        format!(
+                            "share* {} = {}->PutGTGate({}, {});\n",
+                            share, s_circ, b_conv, a_conv
+                        )
+                    }
+                    BvBinPred::Uge => {
+                        format!(
+                            "share* {} = ((BooleanCircuit *){})->PutINVGate({}->PutGTGate({}, {}));\n",
+                            share, s_circ, s_circ, b_conv, a_conv
+                        )
+                    }
+                    BvBinPred::Ule => {
+                        format!(
+                            "share* {} = ((BooleanCircuit *){})->PutINVGate({}->PutGTGate({}, {}));\n",
+                            share, s_circ, s_circ, a_conv, b_conv
+                        )
                     }
                     _ => panic!("Non-field in bool BvBinPred: {}", op),
-                }
+                };
+                write_line_to_file(&self.circuit_fname, &s);
+                self.cache.insert(
+                    t.clone(),
+                    EmbeddedTerm::Bool(share),
+                );
             }
             _ => panic!("Non-field in embed_bool: {}", t),
         }
-
         self.get_bool(&t)
     }
 
@@ -433,14 +479,20 @@ impl ToABY {
                 }
             }
             Op::Const(Value::BitVector(b)) => {
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = format!(
+                    "share* {} = {}->PutCONSGate((uint64_t){}, (uint32_t){});\n",
+                    share,
+                    s_circ,
+                    format!("{}", b).replace("#", "0"),
+                    b.width()
+                );
+                write_line_to_file(&self.circuit_fname, &s);
+
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bv(format!(
-                        "{}->PutCONSGate((uint64_t){}, (uint32_t){})",
-                        s_circ,
-                        format!("{}", b).replace("#", "0"),
-                        b.width()
-                    )),
+                    EmbeddedTerm::Bv(share),
                 );
             }
             Op::Ite => {
@@ -452,12 +504,17 @@ impl ToABY {
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), t.cs[2].clone(), b_circ);
 
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = format!(
+                    "share* {} = {}->PutMUXGate({}, {}, {});\n",
+                    share, s_circ, a_conv, b_conv, sel_conv
+                );
+                write_line_to_file(&self.circuit_fname, &s);
+
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bv(format!(
-                        "{}->PutMUXGate({}, {}, {})",
-                        s_circ, a_conv, b_conv, sel_conv
-                    )),
+                    EmbeddedTerm::Bv(share),
                 );
             }
             Op::BvNaryOp(o) => {
@@ -471,21 +528,27 @@ impl ToABY {
                     s_circ = format!("((BooleanCircuit *){})", s_circ);
                 }
 
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = format!(
+                    "share* {} = {}->{}({}, {});\n",
+                    share,
+                    s_circ,
+                    match o {
+                        BvNaryOp::Xor => "PutXORGate",
+                        BvNaryOp::Or => "PutORGate",
+                        BvNaryOp::And => "PutANDGate",
+                        BvNaryOp::Add => "PutADDGate",
+                        BvNaryOp::Mul => "PutMULGate",
+                    },
+                    a_conv,
+                    b_conv
+                );
+                write_line_to_file(&self.circuit_fname, &s);
+                
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bv(format!(
-                        "{}->{}({}, {})",
-                        s_circ,
-                        match o {
-                            BvNaryOp::Xor => "PutXORGate",
-                            BvNaryOp::Or => "PutORGate",
-                            BvNaryOp::And => "PutANDGate",
-                            BvNaryOp::Add => "PutADDGate",
-                            BvNaryOp::Mul => "PutMULGate",
-                        },
-                        a_conv,
-                        b_conv
-                    )),
+                    EmbeddedTerm::Bv(share),
                 );
             }
             Op::BvBinOp(o) => {
@@ -495,66 +558,43 @@ impl ToABY {
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), b_circ);
 
-                match o {
+                let share = self.get_share_name();
+                self.inc_share();
+                let s = match o {
                     BvBinOp::Sub => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "{}->PutSUBGate({}, {})",
-                                s_circ, a_conv, b_conv
-                            )),
-                        );
+                        format!(
+                            "share* {} = {}->PutSUBGate({}, {});\n",
+                            share,
+                            s_circ,
+                            a_conv,
+                            b_conv
+                        )
                     }
-                    BvBinOp::Udiv => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "signeddivbl({}, {}, {})",
-                                s_circ, a_conv, b_conv
-                            )),
-                        );
+                    _ => {
+                        format!(
+                            "share* {} = {}({}, {}, {});\n",
+                            share,
+                            match o {
+                                BvBinOp::Udiv => "signeddivbl",
+                                BvBinOp::Urem => "signedmodbl",
+                                BvBinOp::Shl => "left_shift",
+                                BvBinOp::Lshr => "logical_right_shift",
+                                BvBinOp::Ashr => "arithmetic_right_shift",
+                                _ => unreachable!(),
+                            },
+                            s_circ,
+                            a_conv,
+                            b_conv,
+                        )
                     }
-                    BvBinOp::Urem => {
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "signedmodal({}, {}, {})",
-                                s_circ, a_conv, b_conv
-                            )),
-                        );
-                    }
-                    BvBinOp::Shl => {
-                        let b_val = self.remove_cons_gate(b_conv);
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "left_shift({}, {}, {})",
-                                s_circ, a_conv, b_val
-                            )),
-                        );
-                    }
-                    BvBinOp::Lshr => {
-                        let b_val = self.remove_cons_gate(b_conv);
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "logical_right_shift({}, {}, {})",
-                                s_circ, a_conv, b_val
-                            )),
-                        );
-                    }
-                    BvBinOp::Ashr => {
-                        let b_val = self.remove_cons_gate(b_conv);
-                        self.cache.insert(
-                            t.clone(),
-                            EmbeddedTerm::Bv(format!(
-                                "arithmetic_right_shift({}, {}, {})",
-                                s_circ, a_conv, b_val
-                            )),
-                        );
-                    }
-                }
+                };
+                write_line_to_file(&self.circuit_fname, &s);
+                self.cache.insert(
+                    t.clone(),
+                    EmbeddedTerm::Bv(share),
+                );
             }
+            // TODO
             Op::BvExtract(_start, _end) => {}
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
@@ -566,39 +606,43 @@ impl ToABY {
     /// the circuit to a share      
     ///
     /// Return a String of the resulting Circuit
-    fn format_output_circuit(&self, t: Term, circ: String) -> String {
-        format!(
-            "\tadd_to_output_queue(out_q, {}->PutOUTGate({}, ALL), role, std::cout);\n",
-            self.get_sharetype_circ(t),
-            circ
-        )
+    fn format_output_circuit(&self, t: Term) -> String {
+        match self.cache.get(&t) {
+            Some(EmbeddedTerm::Bool(s)) | Some(EmbeddedTerm::Bv(s))  => {
+                format!(
+                    "add_to_output_queue(out_q, {}->PutOUTGate({}, ALL), role, std::cout);\n",
+                    self.get_sharetype_circ(t),
+                    s
+                )
+            }
+            None => panic!("Term not found in cache: {:#?}", t),
+        }
     }
 
     fn embed(&mut self, t: Term) -> String {
-        let mut circ = String::new();
         for c in PostOrderIter::new(t.clone()) {
             match check(&c) {
                 Sort::Bool => {
-                    circ = self.embed_bool(c);
+                    self.embed_bool(c);
                 }
                 Sort::BitVector(_) => {
-                    circ = self.embed_bv(c);
+                    self.embed_bv(c);
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
         }
-        self.format_output_circuit(t, circ)
+        self.format_output_circuit(t)
     }
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self, t: Term) {
-        let circ = self.embed(t.clone());
-        self.aby.circs.push(circ);
+        let s = self.embed(t.clone());
+        write_line_to_file(&self.circuit_fname, &s);
     }
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation) -> ABY {
+pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String) {
     let Computation {
         outputs: terms,
         metadata: md,
@@ -606,8 +650,7 @@ pub fn to_aby(ir: Computation) -> ABY {
     } = ir.clone();
     // let s_map: SharingMap = assign(&ir);
     let s_map: SharingMap = some_arith_sharing(&ir);
-    println!("s_map:size: {}", s_map.len());
-    let mut converter = ToABY::new(md, s_map);
+    let mut converter = ToABY::new(md, s_map, path_buf, lang);
 
     for t in terms {
         // println!("terms: {}", t);
@@ -618,6 +661,4 @@ pub fn to_aby(ir: Computation) -> ABY {
     // are the input parameters for the ABY circuit.
     // Call init_inputs here after self.inputs is populated.
     converter.init_inputs();
-
-    converter.aby
 }

@@ -6,64 +6,64 @@ arithmetic_tests = [
         {"a": 1, "b": 0},
         {"a": 0, "b": 2},
     ], 
-    [
-        "Add two numbers - 2",
-        2,
-        "./third_party/ABY/build/bin/2pc_add",
-        {"a": 0, "b": 0},
-        {"a": 0, "b": 2},
-    ], 
-    [
-        "Subtract two numbers",
-        1,
-        "./third_party/ABY/build/bin/2pc_sub",
-        {"a": 3, "b": 0},
-        {"a": 0, "b": 2},
-    ], 
-    [
-        "Subtract two numbers, negative -1 == 4294967295 because u32",
-        4294967295,
-        "./third_party/ABY/build/bin/2pc_sub",
-        {"a": 2, "b": 0},
-        {"a": 0, "b": 3},
-    ],
-    [
-        "Multiply two numbers - 1",
-        0,
-        "./third_party/ABY/build/bin/2pc_mult",
-        {"a": 0, "b": 0},
-        {"a": 0, "b": 5},
-    ], 
-        [
-        "Multiply two numbers - 2",
-        5,
-        "./third_party/ABY/build/bin/2pc_mult",
-        {"a": 1, "b": 0},
-        {"a": 0, "b": 5},
-    ], 
-        [
-        "Multiply two numbers - 3",
-        10,
-        "./third_party/ABY/build/bin/2pc_mult",
-        {"a": 2, "b": 0},
-        {"a": 0, "b": 5},
-    ], 
-    [
-        # only server side public value works 
-        "Multiply two numbers together and add with public value",
-        42,
-        "./third_party/ABY/build/bin/2pc_mult_add_pub",
-        {"a": 5, "b": 0, "v": 7},
-        {"a": 0, "b": 7, "v": 7},
-    ], 
-    [
-        # only server side public value works 
-        "Multiply two numbers together and add with public value, check only server side public value is added",
-        42,
-        "./third_party/ABY/build/bin/2pc_mult_add_pub",
-        {"a": 5, "b": 0, "v": 7},
-        {"a": 0, "b": 7, "v": 0},
-    ], 
+    # [
+    #     "Add two numbers - 2",
+    #     2,
+    #     "./third_party/ABY/build/bin/2pc_add",
+    #     {"a": 0, "b": 0},
+    #     {"a": 0, "b": 2},
+    # ], 
+    # [
+    #     "Subtract two numbers",
+    #     1,
+    #     "./third_party/ABY/build/bin/2pc_sub",
+    #     {"a": 3, "b": 0},
+    #     {"a": 0, "b": 2},
+    # ], 
+    # [
+    #     "Subtract two numbers, negative -1 == 4294967295 because u32",
+    #     4294967295,
+    #     "./third_party/ABY/build/bin/2pc_sub",
+    #     {"a": 2, "b": 0},
+    #     {"a": 0, "b": 3},
+    # ],
+    # [
+    #     "Multiply two numbers - 1",
+    #     0,
+    #     "./third_party/ABY/build/bin/2pc_mult",
+    #     {"a": 0, "b": 0},
+    #     {"a": 0, "b": 5},
+    # ], 
+    #     [
+    #     "Multiply two numbers - 2",
+    #     5,
+    #     "./third_party/ABY/build/bin/2pc_mult",
+    #     {"a": 1, "b": 0},
+    #     {"a": 0, "b": 5},
+    # ], 
+    #     [
+    #     "Multiply two numbers - 3",
+    #     10,
+    #     "./third_party/ABY/build/bin/2pc_mult",
+    #     {"a": 2, "b": 0},
+    #     {"a": 0, "b": 5},
+    # ], 
+    # [
+    #     # only server side public value works 
+    #     "Multiply two numbers together and add with public value",
+    #     42,
+    #     "./third_party/ABY/build/bin/2pc_mult_add_pub",
+    #     {"a": 5, "b": 0, "v": 7},
+    #     {"a": 0, "b": 7, "v": 7},
+    # ], 
+    # [
+    #     # only server side public value works 
+    #     "Multiply two numbers together and add with public value, check only server side public value is added",
+    #     42,
+    #     "./third_party/ABY/build/bin/2pc_mult_add_pub",
+    #     {"a": 5, "b": 0, "v": 7},
+    #     {"a": 0, "b": 7, "v": 0},
+    # ], 
 ]
 
 mod_tests = [

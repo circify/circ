@@ -18,6 +18,7 @@ if __name__ == "__main__":
 
     # tests = kmeans_tests + div_tests
     tests = kmeans_tests
+    # tests = arithmetic_tests
     # tests = div_tests
         
         # TODO: add support for return value - int promotion

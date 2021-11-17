@@ -23,7 +23,7 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN -p $parties $zpath
 }
 
-# # build mpc arithmetic tests
+# # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add_unsigned.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
@@ -57,7 +57,7 @@ function mpc_test {
 # mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
 
-# build if statement tests
+# # build if statement tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
@@ -65,16 +65,17 @@ function mpc_test {
 
 # # build array tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum_2.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index_2.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_ret.c
+# # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum_2.c
 
-# build shift tests
-# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 
-# build div tests
+# # # build shift tests
+# # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
+# # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
+
+# # build div tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div_2.c
 

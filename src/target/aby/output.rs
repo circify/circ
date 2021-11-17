@@ -1,6 +1,5 @@
 //! Utility functions to write compiler output to ABY
 
-use crate::target::aby::*;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, BufRead, BufReader};
@@ -8,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 /// Given PathBuf `path_buf`, return the filename of the path
-fn get_filename(path_buf: PathBuf) -> String {
+fn get_filename(path_buf: &PathBuf) -> String {
     Path::new(&path_buf.iter().last().unwrap().to_os_string())
         .file_stem()
         .unwrap()
@@ -96,7 +95,19 @@ fn write_h_file(filename: &String) {
 }
 
 /// Using the cpp_template.txt, write the .cpp file for the new test case
-fn write_circ_file(filename: &String, circ: String, output: &String) {
+fn write_circ_file(filename: &String) {
+    let setup_file_path = format!("third_party/ABY/src/examples/{}_setup_tmp.txt", *filename);
+    let mut setup_file = File::open(setup_file_path).expect("Unable to open the file");
+    let mut setup = String::new();
+    setup_file.read_to_string(&mut setup).expect("Unable to read the file");
+
+    let circuit_file_path = format!("third_party/ABY/src/examples/{}_circuit_tmp.txt", *filename);
+    let mut circuit_file = File::open(circuit_file_path).expect("Unable to open the file");
+    let mut circuit = String::new();
+    circuit_file.read_to_string(&mut circuit).expect("Unable to read the file");
+
+    let content = format!("{}\n{}", setup, circuit);
+
     let template = fs::read_to_string("third_party/ABY_templates/cpp_template.txt")
         .expect("Unable to read file");
     let path = format!(
@@ -108,14 +119,13 @@ fn write_circ_file(filename: &String, circ: String, output: &String) {
         path.clone(),
         template
             .replace("{fn}", &*filename)
-            .replace("{circ}", &circ)
-            .replace("{output}", &output),
+            .replace("{circ}", &content)
     )
     .expect("Failed to write to cpp file");
 }
 
 /// Write circuit output from translation later to ABY
-pub fn write_aby_exec(aby: ABY, lang: String, path_buf: PathBuf) {
+pub fn write_aby_exec(path_buf: &PathBuf, lang: &String) {
     let filename = get_filename(path_buf);
     let name = format!("{}_{}", filename, lang);
     create_dir_in_aby(&name);
@@ -123,6 +133,5 @@ pub fn write_aby_exec(aby: ABY, lang: String, path_buf: PathBuf) {
     write_test_cmake_file(&name);
     write_test_file(&name);
     write_h_file(&name);
-    let circ_str = aby.setup.join("\n\t") + &aby.circs.join("\n\t");
-    write_circ_file(&name, circ_str, &aby.output.join("\n\t"));
+    write_circ_file(&name);
 }
