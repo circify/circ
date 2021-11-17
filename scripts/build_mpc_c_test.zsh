@@ -71,9 +71,9 @@ function mpc_test {
 # # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum_2.c
 
 
-# # # build shift tests
-# # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
-# # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
+# # build shift tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 
 # # build div tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
