@@ -1,7 +1,7 @@
 int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int b[200]) { 
     int D = 2;
-    int NA = 100;
-    int NB = 100;
+    int NA = 50;
+    int NB = 50;
     int NC = 5;
     int PRECISION = 4;
     int LEN = NA + NB;
@@ -151,8 +151,8 @@ int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int
         // Compute mean
         for(int i_15 = 0; i_15 < NC; i_15++) {  
             if (count[i_15] > 0) {
-                new_cluster[i_15*D] = new_cluster[i_15*D] / count[i_15];
-                new_cluster[i_15*D+1] = new_cluster[i_15*D] / count[i_15];
+                new_cluster[i_15*D] /= count[i_15];
+                new_cluster[i_15*D+1] /= count[i_15];
             } 
         }
         // ======================= iteration_unrolled_outer
