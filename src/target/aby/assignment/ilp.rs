@@ -131,7 +131,6 @@ impl CostModel {
 
 /// Uses an ILP to assign...
 pub fn assign(c: &Computation) -> SharingMap {
-    println!("{:#?}", c);
     let p = format!(
         "{}/third_party/opa/sample_costs.json",
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
@@ -205,7 +204,6 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                         variable().binary(),
                         format!("c_{}_{}2{}", def_i, from_ty.char(), to_ty.char()),
                     );
-                    dbg!((from_ty, to_ty));
                     conv_vars.insert(
                         (def.clone(), *from_ty, *to_ty),
                         (v, *costs.conversions.get(&(*from_ty, *to_ty)).unwrap()),
@@ -311,7 +309,6 @@ mod tests {
             values: None,
         };
         let assignment = build_ilp(&cs, &costs);
-        dbg!(&assignment);
     }
 
     #[test]
