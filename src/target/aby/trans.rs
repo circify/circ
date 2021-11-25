@@ -6,7 +6,7 @@
 
 use std::fmt;
 use crate::ir::term::*;
-// use crate::target::aby::assignment::ilp::assign;
+use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::{some_arith_sharing, ShareType, SharingMap};
 use crate::target::aby::utils::*;
 
@@ -648,8 +648,8 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String) {
         metadata: md,
         values: _,
     } = ir.clone();
-    // let s_map: SharingMap = assign(&ir);
-    let s_map: SharingMap = some_arith_sharing(&ir);
+    let s_map: SharingMap = assign(&ir);
+    // let s_map: SharingMap = some_arith_sharing(&ir);
     let mut converter = ToABY::new(md, s_map, path_buf, lang);
 
     for t in terms {

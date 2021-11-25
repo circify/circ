@@ -103,7 +103,8 @@ impl CostModel {
                     "shr" => vec![BV_LSHR],
                     "sub" => vec![BV_SUB],
                     "mux" => vec![ITE],
-                    "ne" => vec![],
+                    "ne" => vec![Op::Not, Op::Eq],
+                    "bvudiv" => vec![BV_UDIV],
                     _ => panic!("Unknown operator name: {}", name),
                 }
             };
@@ -131,7 +132,7 @@ impl CostModel {
 
 /// Uses an ILP to assign...
 pub fn assign(c: &Computation) -> SharingMap {
-    println!("{:#?}", c);
+    // println!("{:#?}", c);
     let p = format!(
         "{}/third_party/opa/sample_costs.json",
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
@@ -155,6 +156,8 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     let mut term_vars: AHashMap<(Term, ShareType), (Variable, f64, String)> = AHashMap::new();
     let mut conv_vars: AHashMap<(Term, ShareType, ShareType), (Variable, f64)> = AHashMap::new();
     let mut ilp = Ilp::new();
+
+    println!("building terms for assingments");
 
     // build variables for all term assignments
     for (t, i) in terms.iter() {
@@ -190,6 +193,9 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 >> 1.0,
         );
     }
+
+    println!("building variables for assingments");
+
 
     // build variables for all conversions assignments
     for (def, use_) in &def_uses {
@@ -240,6 +246,8 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
         }
     }
 
+    println!("running maximize");
+
     ilp.maximize(
         -conv_vars
             .values()
@@ -250,7 +258,12 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             }),
     );
 
+    println!("found solution");
+
     let (_opt, solution) = ilp.default_solve().unwrap();
+
+    println!("solution:");
+    dbg!(&solution);
 
     let mut assignment = TermMap::new();
     for ((term, ty), (_, _, var_name)) in &term_vars {

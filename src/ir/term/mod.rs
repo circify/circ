@@ -1006,8 +1006,10 @@ impl Value {
 
 /// Evaluate the term `t`, using variable values in `h`.
 pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
+    println!("In eval!");
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
+        dbg!(&c);
         let v = match &c.op {
             Op::Var(n, _) => h
                 .get(n)
