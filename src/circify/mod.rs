@@ -154,7 +154,7 @@ impl<Ty: Display> LexScope<Ty> {
     fn with_prefix(prefix: String) -> Self {
         Self {
             prefix,
-            entries: HashMap::new(),
+            entries: HashMap::default(),
         }
     }
     fn declare(&mut self, name: VarName, ty: Ty) -> Result<&SsaName> {
@@ -429,7 +429,7 @@ impl<E: Embeddable> Circify<E> {
         let cs = Rc::new(RefCell::new(Computation::new(e.values())));
         Self {
             e,
-            vals: HashMap::new(),
+            vals: HashMap::default(),
             fn_stack: Vec::new(),
             fn_ctr: 0,
             globals: LexScope::with_prefix("global".to_string()),
@@ -438,7 +438,7 @@ impl<E: Embeddable> Circify<E> {
                 cs,
             },
             condition: leaf_term(Op::Const(Value::Bool(true))),
-            typedefs: HashMap::new(),
+            typedefs: HashMap::default(),
         }
     }
 

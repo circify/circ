@@ -24,7 +24,7 @@ pub struct Letified(pub Term);
 impl Display for Letified {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         //let parent_count = {
-        //    let mut parent_count = HashMap::new();
+        //    let mut parent_count = HashMap::default();
         //    for t in PostOrderIter::new(self.0.clone()) {
         //        for c in &t.cs {
         //            let mut parents = parent_count.entry(&c).or_insert_with(|| 0);

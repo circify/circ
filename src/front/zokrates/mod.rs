@@ -118,8 +118,8 @@ impl<'ast> ZGen<'ast> {
             asts,
             stdlib: parser::ZStdLib::new(),
             file_stack: vec![],
-            functions: HashMap::new(),
-            import_map: HashMap::new(),
+            functions: HashMap::default(),
+            import_map: HashMap::default(),
             mode,
         };
         this.circ

@@ -1,7 +1,7 @@
 //! Optimizations over R1CS
 use super::*;
 use crate::util::once::OnceQueue;
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::debug;
 
 struct LinReducer<S: Eq + Hash> {
@@ -23,7 +23,7 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
             .cloned()
             .collect();
         let mut uses: HashMap<usize, HashSet<usize>> =
-            sigs.into_iter().map(|i| (i, HashSet::new())).collect();
+            sigs.into_iter().map(|i| (i, HashSet::default())).collect();
         for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
             let mut add = |y: &Lc| {
                 for x in y.monomials.keys() {

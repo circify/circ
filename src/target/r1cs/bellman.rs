@@ -68,7 +68,7 @@ impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F
                     .for_each(|(i, _)| *uses.get_mut(i).unwrap() += 1)
             });
         }
-        let mut vars = HashMap::new();
+        let mut vars = HashMap::default();
         for (i, s) in self.idxs_signals.iter() {
             if uses.get(i).unwrap() > &0 {
                 debug!("var: {}", s);

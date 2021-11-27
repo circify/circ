@@ -22,7 +22,7 @@
 //!    * [Value]: a variable-free (and evaluated) term
 //!
 use crate::util::once::OnceQueue;
-use ahash::{AHashMap, AHashSet};
+use fxhash::{FxHashMap, FxHashSet};
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
@@ -808,7 +808,7 @@ pub type Term = HConsed<TermData>;
 pub type TTerm = WHConsed<TermData>;
 
 struct TermTable {
-    map: AHashMap<TermData, TTerm>,
+    map: FxHashMap<TermData, TTerm>,
     count: u64,
 }
 
@@ -872,7 +872,7 @@ impl TermTable {
 
 lazy_static! {
     static ref TERMS: RwLock<TermTable> = RwLock::new(TermTable {
-        map: AHashMap::new(),
+        map: FxHashMap::default(),
         count: 0,
     });
 }
@@ -1005,7 +1005,7 @@ impl Value {
 }
 
 /// Evaluate the term `t`, using variable values in `h`.
-pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
+pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
         let v = match &c.op {
@@ -1241,11 +1241,11 @@ pub type PartyId = u8;
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
-    pub party_ids: AHashMap<String, PartyId>,
+    pub party_ids: FxHashMap<String, PartyId>,
     /// The next free id.
     pub next_party_id: PartyId,
     /// All inputs, including who knows them. If no visibility is set, the input is public.
-    pub inputs: AHashMap<String, Option<PartyId>>,
+    pub inputs: FxHashMap<String, Option<PartyId>>,
 }
 
 impl ComputationMetadata {
@@ -1297,7 +1297,7 @@ pub struct Computation {
     /// The values of variables in the system.
     ///
     /// These are tracked when doing witness extension for proof systems.
-    pub values: Option<AHashMap<String, Value>>,
+    pub values: Option<FxHashMap<String, Value>>,
     /// Metadata about the computation. I.e. who knows what inputs
     pub metadata: ComputationMetadata,
 }
@@ -1364,7 +1364,7 @@ impl Computation {
         Self {
             outputs: Vec::new(),
             metadata: ComputationMetadata::default(),
-            values: if values { Some(AHashMap::new()) } else { None },
+            values: if values { Some(FxHashMap::default()) } else { None },
         }
     }
     // TODO: rm
@@ -1380,14 +1380,14 @@ impl Computation {
     }
     // TODO: rm
     //    /// Consume this system, yielding its parts: (assertions, public inputs, values)
-    //    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<AHashMap<String, Value>>) {
+    //    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<FxHashMap<String, Value>>) {
     //        (self.assertions, self.metadata, self.values)
     //    }
     //    /// Build a system from its parts: (assertions, public inputs, values)
     //    pub fn from_parts(
     //        assertions: Vec<Term>,
-    //        public_inputs: AHashSet<String>,
-    //        values: Option<AHashMap<String, Value>>,
+    //        public_inputs: FxHashSet<String>,
+    //        values: Option<FxHashMap<String, Value>>,
     //    ) -> Self {
     //        Self {
     //            assertions,
@@ -1401,7 +1401,7 @@ impl Computation {
     //    }
     /// How many total (unique) terms are there?
     pub fn terms(&self) -> usize {
-        let mut terms = AHashSet::<Term>::new();
+        let mut terms = FxHashSet::<Term>::default();
         for a in &self.outputs {
             for s in PostOrderIter::new(a.clone()) {
                 terms.insert(s);

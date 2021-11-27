@@ -309,7 +309,7 @@ pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
 mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
-    use ahash::AHashMap as HashMap;
+    use fxhash::FxHashMap as HashMap;
     use quickcheck_macros::quickcheck;
     use rug::Integer;
 

@@ -7,7 +7,7 @@ use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use crate::target::r1cs::*;
 
-use ahash::{AHashMap, AHashSet};
+use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use rug::ops::Pow;
 use rug::Integer;
@@ -36,16 +36,16 @@ enum EmbeddedTerm {
 struct ToR1cs {
     r1cs: R1cs<String>,
     cache: TermMap<EmbeddedTerm>,
-    values: Option<AHashMap<String, Value>>,
-    public_inputs: AHashSet<String>,
+    values: Option<FxHashMap<String, Value>>,
+    public_inputs: FxHashSet<String>,
     next_idx: usize,
 }
 
 impl ToR1cs {
     fn new(
         modulus: Integer,
-        values: Option<AHashMap<String, Value>>,
-        public_inputs: AHashSet<String>,
+        values: Option<FxHashMap<String, Value>>,
+        public_inputs: FxHashSet<String>,
     ) -> Self {
         Self {
             r1cs: R1cs::new(modulus, values.is_some()),
@@ -915,13 +915,13 @@ pub mod test {
     }
 
     #[derive(Clone, Debug)]
-    pub struct PureBool(pub Term, pub AHashMap<String, Value>);
+    pub struct PureBool(pub Term, pub FxHashMap<String, Value>);
 
     impl Arbitrary for PureBool {
         fn arbitrary(g: &mut Gen) -> Self {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             let t = PureBoolDist(g.size()).sample(&mut rng);
-            let values: AHashMap<String, Value> = PostOrderIter::new(t.clone())
+            let values: FxHashMap<String, Value> = PostOrderIter::new(t.clone())
                 .filter_map(|c| {
                     if let Op::Var(n, _) = &c.op {
                         Some((n.clone(), Value::Bool(bool::arbitrary(g))))
@@ -953,7 +953,7 @@ pub mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -962,7 +962,7 @@ pub mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -972,7 +972,7 @@ pub mod test {
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -983,7 +983,7 @@ pub mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -1014,12 +1014,12 @@ pub mod test {
     fn not_opt_test() {
         init();
         let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
-        let values: AHashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
+        let values: FxHashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
             .into_iter()
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], AHashSet::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
