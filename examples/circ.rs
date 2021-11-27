@@ -175,7 +175,6 @@ fn main() {
         ),
     };
     println!("Done with IR optimization");
-    dbg!(&cs);
 
     match options.backend {
         Backend::R1cs { action, proof, prover_key, verifier_key, .. } => {
