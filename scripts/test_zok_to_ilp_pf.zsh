@@ -17,7 +17,7 @@ function ilp_test {
         $BIN --value-threshold $max $zpath r1cs --action setup
         $BIN --value-threshold $max --inputs assignment.txt $zpath r1cs --action prove
         echo "pass: $zpath"
-        rm assignment.txt
+        rm assignment.txt P V pi
     else
         echo "fail: $zpath"
         echo "expected max:  $expected_max"
