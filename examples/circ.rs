@@ -2,10 +2,10 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::groth16::{
     create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
-    verify_proof, Parameters,
+    verify_proof, Parameters, VerifyingKey, Proof,
 };
 use bellman::Circuit;
-use bls12_381::Scalar;
+use bls12_381::{Scalar, Bls12};
 use circ::front::zokrates::{Inputs, Mode, Zokrates};
 use circ::front::FrontEnd;
 use circ::ir::opt::{opt, Opt};
@@ -21,6 +21,58 @@ use std::io::Write;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "circ", about = "CirC: the circuit compiler")]
+struct Options2 {
+    /// Input file
+    #[structopt(parse(from_os_str), name = "PATH")]
+    path: PathBuf,
+
+    #[structopt(flatten)]
+    frontend: FrontendOptions,
+
+    /// Number of parties for an MPC.
+    #[structopt(long, default_value = "2", name = "PARTIES")]
+    parties: u8,
+
+    #[structopt(subcommand)]
+    backend: Backend,
+}
+
+#[derive(Debug, StructOpt)]
+struct FrontendOptions {
+    /// Input language
+    #[structopt(long, default_value = "auto", name = "LANG")]
+    language: Langauge,
+
+    /// Value threshold
+    #[structopt(long)]
+    value_threshold: Option<u64>,
+
+    /// File with input witness
+    #[structopt(long, name = "FILE", parse(from_os_str))]
+    inputs: Option<PathBuf>,
+}
+
+#[derive(Debug, StructOpt)]
+enum Backend {
+    R1cs {
+        #[structopt(long, default_value = "P", parse(from_os_str))]
+        prover_key: PathBuf,
+        #[structopt(long, default_value = "V", parse(from_os_str))]
+        verifier_key: PathBuf,
+        #[structopt(long, default_value = "pi", parse(from_os_str))]
+        proof: PathBuf,
+        #[structopt(long, default_value = "x", parse(from_os_str))]
+        instance: PathBuf,
+        #[structopt(long, default_value = "count")]
+        action: ProofAction,
+    },
+    Smt {},
+    Ilp {},
+    Mpc {},
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -53,6 +105,25 @@ struct Options {
 
 arg_enum! {
     #[derive(PartialEq, Debug)]
+    enum Langauge {
+        ZoKrates,
+        Datalog,
+        Auto,
+    }
+}
+
+arg_enum! {
+    #[derive(PartialEq, Debug)]
+    enum ProofAction {
+        Count,
+        Prove,
+        Setup,
+        Verify,
+    }
+}
+
+arg_enum! {
+    #[derive(PartialEq, Debug)]
     enum ProofOption {
         Count,
         Prove,
@@ -64,24 +135,18 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
-    let path_buf = options.zokrates_path.clone();
+    let options = Options2::from_args();
+    let path_buf = options.path.clone();
     println!("{:?}", options);
-    let mode = if options.maximize {
-        Mode::Opt
-    } else {
-        if let Some(v) = options.prove_high_value {
-            Mode::ProofOfHighValue(v)
-        } else {
-            match options.parties {
-                Some(p) => Mode::Mpc(p),
-                None => Mode::Proof,
-            }
-        }
+    let mode = match options.backend {
+        Backend::R1cs { .. } => Mode::Proof,
+        Backend::Ilp { .. } => Mode::Opt,
+        Backend::Mpc { .. } => Mode::Mpc(options.parties),
+        Backend::Smt { .. } => unimplemented!(),
     };
     let inputs = Inputs {
-        file: options.zokrates_path,
-        inputs: options.inputs,
+        file: options.path,
+        inputs: options.frontend.inputs,
         mode: mode.clone(),
     };
     let cs = Zokrates::gen(inputs);
@@ -92,8 +157,7 @@ fn main() {
             vec![],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
-        Mode::Proof |
-        Mode::ProofOfHighValue(_) => opt(
+        Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
                 Opt::Flatten,
@@ -112,33 +176,51 @@ fn main() {
     };
     println!("Done with IR optimization");
 
-    match mode {
-        Mode::Proof | Mode::ProofOfHighValue(_) => {
+    match options.backend {
+        Backend::R1cs { action, proof, prover_key, verifier_key, .. } => {
             println!("Converting to r1cs");
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
-            match options.proof_action {
-                ProofOption::Count => {
+            match action {
+                ProofAction::Count => {
                     println!("Final R1cs size: {}", r1cs.constraints().len());
                 }
-                ProofOption::Prove => {
+                ProofAction::Prove => {
                     println!("Proving");
                     let rng = &mut rand::thread_rng();
-                    let p = generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
-                    let pf = create_random_proof(&r1cs, &p, rng).unwrap();
+                    let mut pk_file = File::open(prover_key).unwrap();
+                    let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
+                    let pf = create_random_proof(&r1cs, &pk, rng).unwrap();
+                    let mut pf_file = File::create(proof).unwrap();
+                    pf.write(&mut pf_file).unwrap();
+                }
+                ProofAction::Setup => {
+                    let rng = &mut rand::thread_rng();
+                    let p =
+                        generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
+                    let mut pk_file = File::create(prover_key).unwrap();
+                    p.write(&mut pk_file).unwrap();
+                    let mut vk_file = File::create(verifier_key).unwrap();
+                    p.vk.write(&mut vk_file).unwrap();
+                }
+                ProofAction::Verify => {
                     println!("Verifying");
-                    let pvk = prepare_verifying_key(&p.vk);
+                    let mut vk_file = File::open(verifier_key).unwrap();
+                    let vk = VerifyingKey::<Bls12>::read(&mut vk_file).unwrap();
+                    let pvk = prepare_verifying_key(&vk);
+                    let mut pf_file = File::open(proof).unwrap();
+                    let pf = Proof::read(&mut pf_file).unwrap();
                     verify_proof(&pvk, &pf, &[]).unwrap();
                 }
             }
         }
-        Mode::Mpc(_) => {
+        Backend::Mpc { .. } => {
             println!("Converting to aby");
             let aby = to_aby(cs);
             write_aby_exec(aby, path_buf);
         }
-        Mode::Opt => {
+        Backend::Ilp { .. } => {
             println!("Converting to ilp");
             let ilp = to_ilp(cs);
             let solver_result = ilp.solve(default_solver);
@@ -159,14 +241,8 @@ fn main() {
                 }
             }
         }
+        Backend::Smt { .. } => {
+            todo!()
+        }
     }
-
-    //r1cs.check_all();
-    //let mut cs = TestConstraintSystem::<Scalar>::new();
-    //r1cs.synthesize(&mut cs).unwrap();
-    //println!("Num constraints: {}", cs.num_constraints());
-    //println!("{}", cs.pretty_print());
-    //if let Some(c) = cs.which_is_unsatisfied() {
-    //    panic!("Unsat: {}", c);
-    //}
 }

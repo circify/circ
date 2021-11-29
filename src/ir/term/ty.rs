@@ -4,7 +4,7 @@ use super::*;
 
 lazy_static! {
     /// Cache of all types
-    pub static ref TERM_TYPES: RwLock<AHashMap<TTerm, Sort>> = RwLock::new(AHashMap::new());
+    pub static ref TERM_TYPES: RwLock<FxHashMap<TTerm, Sort>> = RwLock::new(FxHashMap::default());
 }
 
 #[track_caller]

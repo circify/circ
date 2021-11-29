@@ -22,7 +22,7 @@ pub trait Loader: Sized {
         &self,
         p: &P,
     ) -> Result<HashMap<PathBuf, Self::AST>, Self::ParseError> {
-        let mut m = HashMap::new();
+        let mut m = HashMap::default();
         let mut q = VecDeque::new();
         q.push_back(p.as_ref().to_path_buf());
         while let Some(p) = q.pop_front() {

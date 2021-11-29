@@ -70,7 +70,7 @@ impl MemManager {
     /// Create a new manager, with an empty stack.
     pub fn new(cs: Rc<RefCell<Computation>>) -> Self {
         Self {
-            allocs: HashMap::new(),
+            allocs: HashMap::default(),
             next_id: 0,
             cs,
         }

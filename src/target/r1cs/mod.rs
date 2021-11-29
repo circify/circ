@@ -1,6 +1,6 @@
 //! Rank 1 Constraint Systems
 
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::debug;
 use rug::ops::{RemRounding, RemRoundingAssign};
 use rug::Integer;
@@ -247,11 +247,11 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     pub fn new(modulus: Integer, values: bool) -> Self {
         R1cs {
             modulus: Rc::new(modulus),
-            signal_idxs: HashMap::new(),
-            idxs_signals: HashMap::new(),
+            signal_idxs: HashMap::default(),
+            idxs_signals: HashMap::default(),
             next_idx: 0,
-            public_idxs: HashSet::new(),
-            values: if values { Some(HashMap::new()) } else { None },
+            public_idxs: HashSet::default(),
+            values: if values { Some(HashMap::default()) } else { None },
             constraints: Vec::new(),
         }
     }
@@ -260,7 +260,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         Lc {
             modulus: self.modulus.clone(),
             constant: Integer::from(0),
-            monomials: HashMap::new(),
+            monomials: HashMap::default(),
         }
     }
     /// Get combination which is just the wire `s`.

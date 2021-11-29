@@ -29,7 +29,7 @@
 //! will be set to the smallest value possible (0) if either of the variables on the right of (2)
 //! are 0.  If they are both 1 (for ANY `s`), then it must be 1.
 
-use ahash::{AHashMap, AHashSet};
+use fxhash::{FxHashMap, FxHashSet};
 use serde_json::Value;
 
 use super::{ShareType, SharingMap, SHARE_TYPES};
@@ -43,10 +43,10 @@ use std::{env::var, fs::File, path::Path};
 #[derive(Debug)]
 pub struct CostModel {
     /// Conversion costs: maps (from, to) pairs to cost
-    conversions: AHashMap<(ShareType, ShareType), f64>,
+    conversions: FxHashMap<(ShareType, ShareType), f64>,
 
     /// Operator costs: maps (op, type) to cost
-    ops: AHashMap<Op, AHashMap<ShareType, f64>>,
+    ops: FxHashMap<Op, FxHashMap<ShareType, f64>>,
 }
 
 impl CostModel {
@@ -66,8 +66,8 @@ impl CostModel {
         let get_cost = |op_name: &str, obj: &serde_json::map::Map<String, Value>| -> f64 {
             get_cost_opt(op_name, obj).unwrap()
         };
-        let mut conversions = AHashMap::new();
-        let mut ops = AHashMap::new();
+        let mut conversions = FxHashMap::default();
+        let mut ops = FxHashMap::default();
         let f = File::open(p).expect("Missing file");
         let json: Value = serde_json::from_reader(f).expect("Bad JSON");
         let obj = json.as_object().unwrap();
@@ -117,7 +117,7 @@ impl CostModel {
                         {
                             if let Some(cost) = get_cost_opt(share_name, obj) {
                                 ops.entry(op.clone())
-                                    .or_insert_with(|| AHashMap::new())
+                                    .or_insert_with(|| FxHashMap::default())
                                     .insert(*share_type, cost);
                             }
                         }
@@ -141,7 +141,7 @@ pub fn assign(c: &Computation) -> SharingMap {
 
 fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     let mut terms: TermSet = TermSet::new();
-    let mut def_uses: AHashSet<(Term, Term)> = AHashSet::new();
+    let mut def_uses: FxHashSet<(Term, Term)> = FxHashSet::default();
     for o in &c.outputs {
         for t in PostOrderIter::new(o.clone()) {
             terms.insert(t.clone());
@@ -150,9 +150,9 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             }
         }
     }
-    let terms: AHashMap<Term, usize> = terms.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
-    let mut term_vars: AHashMap<(Term, ShareType), (Variable, f64, String)> = AHashMap::new();
-    let mut conv_vars: AHashMap<(Term, ShareType, ShareType), (Variable, f64)> = AHashMap::new();
+    let terms: FxHashMap<Term, usize> = terms.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
+    let mut term_vars: FxHashMap<(Term, ShareType), (Variable, f64, String)> = FxHashMap::default();
+    let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> = FxHashMap::default();
     let mut ilp = Ilp::new();
 
     // build variables for all term assignments
@@ -213,8 +213,8 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
         }
     }
 
-    let def_uses: AHashMap<Term, Vec<Term>> = {
-        let mut t = AHashMap::new();
+    let def_uses: FxHashMap<Term, Vec<Term>> = {
+        let mut t = FxHashMap::default();
         for (d, u) in def_uses {
             t.entry(d).or_insert_with(|| Vec::new()).push(u);
         }

@@ -1,7 +1,7 @@
 //! Proof-system-specfic extensions to [crate::ir] types.
 
 use super::term::*;
-use ahash::{AHashMap, AHashSet};
+use fxhash::{FxHashMap, FxHashSet};
 /// The prover's canonical party name
 pub const PROVER_NAME: &str = "prover";
 /// The verifier's canonical party name
@@ -29,20 +29,20 @@ pub trait Constraints {
     /// Build a [Computation] from assertions, a list of public inputs, and values
     fn from_constraint_system_parts(
         assertions: Vec<Term>,
-        public_inputs: AHashSet<String>,
-        values: Option<AHashMap<String, Value>>,
+        public_inputs: FxHashSet<String>,
+        values: Option<FxHashMap<String, Value>>,
     ) -> Self;
 }
 
 impl Constraints for Computation {
     fn from_constraint_system_parts(
         assertions: Vec<Term>,
-        public_inputs: AHashSet<String>,
-        values: Option<AHashMap<String, Value>>,
+        public_inputs: FxHashSet<String>,
+        values: Option<FxHashMap<String, Value>>,
     ) -> Self {
         let mut metadata = ComputationMetadata::default();
         let all_vars = {
-            let mut set = AHashSet::new();
+            let mut set = FxHashSet::default();
             for a in &assertions {
                 for t in PostOrderIter::new(a.clone()) {
                     match &t.op {

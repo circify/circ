@@ -24,7 +24,7 @@ use typed_arena::Arena;
 /// x.y -7
 /// ```
 pub fn parse_inputs(p: PathBuf) -> HashMap<String, Integer> {
-    let mut m = HashMap::new();
+    let mut m = HashMap::default();
     for l in BufReader::new(File::open(p).unwrap()).lines() {
         let l = l.unwrap();
         let l = l.trim();

@@ -19,7 +19,7 @@ esac
 
 function r1cs_test {
     zpath=$1
-    measure_time $BIN $zpath
+    measure_time $BIN $zpath r1cs --action count
 }
 
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
@@ -35,3 +35,10 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/utils/casts/bool_128_to_
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
+
+
+# Test prove workflow
+$BIN examples/ZoKrates/pf/3_plus.zok r1cs --action setup
+$BIN --inputs examples/ZoKrates/pf/3_plus.zok.in examples/ZoKrates/pf/3_plus.zok r1cs --action prove
+$BIN examples/ZoKrates/pf/3_plus.zok r1cs --action verify
+rm -rf P V pi
