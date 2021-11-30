@@ -9,4 +9,4 @@ hash(X: u8[5], Y: u8[5], decreasing n: u8) :-
     hash(Z, Y, n-0x01).
 
 main(X: private u8[5], Y: public u8[5]) :-
-  hash(X, Y, 5).
+  hash(X, Y, 0x05).

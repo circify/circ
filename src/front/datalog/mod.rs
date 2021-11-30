@@ -5,7 +5,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use ahash::AHashMap;
+use fxhash::FxHashMap;
 use log::debug;
 use rug::Integer;
 
@@ -36,8 +36,8 @@ pub struct Inputs {
 }
 
 struct Gen<'ast> {
-    rules: AHashMap<&'ast str, &'ast ast::Rule_<'ast>>,
-    stack_by_fn: AHashMap<&'ast str, Vec<Option<Integer>>>,
+    rules: FxHashMap<&'ast str, &'ast ast::Rule_<'ast>>,
+    stack_by_fn: FxHashMap<&'ast str, Vec<Option<Integer>>>,
     rec_limit: usize,
     circ: Circify<term::Datalog>,
 }
@@ -45,9 +45,9 @@ struct Gen<'ast> {
 impl<'ast> Gen<'ast> {
     fn new(rec_limit: usize) -> Self {
         Self {
-            rules: AHashMap::new(),
+            rules: FxHashMap::default(),
             rec_limit,
-            stack_by_fn: AHashMap::new(),
+            stack_by_fn: FxHashMap::default(),
             // TODO: values !?
             circ: Circify::new(term::Datalog::new()),
         }

@@ -16,7 +16,6 @@ use circ::target::ilp::trans::to_ilp;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use circ::target::smt::find_model;
-use clap::arg_enum;
 use env_logger;
 use good_lp::default_solver;
 use std::fs::File;
@@ -24,7 +23,6 @@ use std::io::Write;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
 use std::io::Read;
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -156,18 +154,18 @@ fn main() {
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
         DeterminedLanguage::Zokrates => {
-        let inputs = Inputs {
-            file: options.path,
-            inputs: options.frontend.inputs,
-            mode: mode.clone(),
-        };
+            let inputs = zokrates::Inputs {
+                file: options.path,
+                inputs: options.frontend.inputs,
+                mode: mode.clone(),
+            };
             Zokrates::gen(inputs)
         }
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs {
                 file: options.path,
-                rec_limit: options.rec_limit,
-                lint_prim_rec: options.lint_prim_rec,
+                rec_limit: options.frontend.rec_limit,
+                lint_prim_rec: options.frontend.lint_prim_rec,
             };
             Datalog::gen(inputs)
         }
@@ -198,7 +196,6 @@ fn main() {
     };
     println!("Done with IR optimization");
 
-<<<<<<< HEAD
     match options.backend {
         Backend::R1cs { action, proof, prover_key, verifier_key, .. } => {
             println!("Converting to r1cs");
@@ -264,7 +261,7 @@ fn main() {
             }
         }
         Backend::Smt { .. } => {
-            if options.lint_prim_rec {
+            if options.frontend.lint_prim_rec {
                 assert_eq!(cs.outputs.len(), 1);
                 match find_model(&cs.outputs[0]) {
                     Some(m) => {
