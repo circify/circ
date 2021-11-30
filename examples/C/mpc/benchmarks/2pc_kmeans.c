@@ -1,8 +1,8 @@
 int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int b[200])
 {
     int D = 2;
-    int NA = 50;
-    int NB = 50;
+    int NA = 10;
+    int NB = 10;
     int NC = 5;
     int PRECISION = 4;
     int LEN = NA + NB;

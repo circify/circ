@@ -211,7 +211,6 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                         variable().binary(),
                         format!("c_{}_{}2{}", def_i, from_ty.char(), to_ty.char()),
                     );
-                    dbg!((from_ty, to_ty));
                     conv_vars.insert(
                         (def.clone(), *from_ty, *to_ty),
                         (v, *costs.conversions.get(&(*from_ty, *to_ty)).unwrap()),

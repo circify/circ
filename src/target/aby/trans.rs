@@ -205,16 +205,16 @@ impl ToABY {
     }
 
     /// Return constant gate evaluating to 0
-    // TODO: const should not be hardcoded to bcirc
+    // TODO: const should not be hardcoded to acirc
     #[allow(dead_code)]
     fn zero() -> String {
-        format!("bcirc->PutCONSGate((uint64_t)0, (uint32_t)1)")
+        format!("acirc->PutCONSGate((uint64_t)0, (uint32_t)1)")
     }
 
     /// Return constant gate evaluating to 1
-    // TODO: const should not be hardcoded to bcirc
+    // TODO: const should not be hardcoded to acirc
     fn one() -> String {
-        format!("bcirc->PutCONSGate((uint64_t)1, (uint32_t)1)")
+        format!("acirc->PutCONSGate((uint64_t)1, (uint32_t)1)")
     }
 
     fn remove_cons_gate(&self, circ: String) -> String {
