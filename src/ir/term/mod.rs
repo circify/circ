@@ -114,6 +114,10 @@ pub enum Op {
     PfUnOp(PfUnOp),
     /// Prime-field n-ary operator
     PfNaryOp(PfNaryOp),
+    /// Unsigned bit-vector to prime-field
+    ///
+    /// Takes the modulus.
+    UbvToPf(Arc<Integer>),
 
     // key sort, size
     /// A unary operator.
@@ -242,6 +246,7 @@ impl Op {
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
+            Op::UbvToPf(_) => Some(1),
             Op::ConstArray(_, _) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
@@ -283,6 +288,7 @@ impl Display for Op {
             Op::FpToFp(a) => write!(f, "fp2fp {}", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
+            Op::UbvToPf(a) => write!(f, "bv2pf {}", a),
             Op::ConstArray(_, s) => write!(f, "const-array {}", s),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
@@ -1137,6 +1143,10 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
                         PfNaryOp::Mul => std::ops::Mul::mul,
                     },
                 )
+            }),
+            Op::UbvToPf(m) => Value::Field({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+                field::FieldElem::new(a.uint().clone(), m.clone())
             }),
             Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
             Op::Field(i) => {

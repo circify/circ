@@ -75,7 +75,8 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 cs = tuple::eliminate_tuples(cs);
             }
         }
-        debug!("After {:?}: {}", i, cs.terms());
+        debug!("After {:?}: {} outputs", i, cs.outputs.len());
+        debug!("After {:?}: {} terms", i, cs.terms());
     }
     garbage_collect();
     cs

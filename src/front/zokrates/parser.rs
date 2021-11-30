@@ -120,7 +120,11 @@ impl<'a> Loader for &'a ZLoad {
         File::open(p).unwrap().read_to_string(&mut s).unwrap();
         debug!("Parsing: {}", p.as_ref().display());
         let s = self.sources.alloc(s);
-        Ok(ast::generate_ast(s).unwrap())
+        let ast = ast::generate_ast(s);
+        if ast.is_err() {
+            panic!("{}", ast.unwrap_err());
+        }
+        Ok(ast.unwrap())
     }
     fn includes<P: AsRef<Path>>(&self, ast: &Self::AST, p: &P) -> Vec<PathBuf> {
         let mut c = p.as_ref().to_path_buf();

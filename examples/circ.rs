@@ -6,25 +6,28 @@ use bellman::groth16::{
 };
 use bellman::Circuit;
 use bls12_381::{Scalar, Bls12};
-use circ::front::zokrates::{Inputs, Mode, Zokrates};
+use circ::front::datalog::{self, Datalog};
+use circ::front::zokrates::{self, Mode, Zokrates};
 use circ::front::FrontEnd;
-use circ::ir::opt::{opt, Opt};
+use circ::ir::{opt::{opt, Opt}, term::extras::Letified};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+use circ::target::smt::find_model;
 use env_logger;
 use good_lp::default_solver;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
+use std::io::Read;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
-struct Options2 {
+struct Options {
     /// Input file
     #[structopt(parse(from_os_str), name = "PATH")]
     path: PathBuf,
@@ -44,7 +47,7 @@ struct Options2 {
 struct FrontendOptions {
     /// Input language
     #[structopt(long, default_value = "auto", name = "LANG")]
-    language: Langauge,
+    language: Language,
 
     /// Value threshold
     #[structopt(long)]
@@ -53,6 +56,14 @@ struct FrontendOptions {
     /// File with input witness
     #[structopt(long, name = "FILE", parse(from_os_str))]
     inputs: Option<PathBuf>,
+
+    /// How many recursions to allow (datalog)
+    #[structopt(short, long, name = "N", default_value = "5")]
+    rec_limit: usize,
+
+    /// Lint recursions that are allegedly primitive recursive (datalog)
+    #[structopt(long)]
+    lint_prim_rec: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -72,44 +83,22 @@ enum Backend {
     Smt {},
     Ilp {},
     Mpc {},
-}
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "circ", about = "CirC: the circuit compiler")]
-struct Options {
-    /// Input file
-    #[structopt(parse(from_os_str))]
-    zokrates_path: PathBuf,
-
-    /// File with input witness
-    #[structopt(short, long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
-
-    /// Number of parties for an MPC. If missing, generates a proof circuit.
-    #[structopt(short, long, name = "PARTIES")]
-    parties: Option<u8>,
-
-    /// Whether to maximize the output
-    #[structopt(short, long)]
-    maximize: bool,
-
-    /// Whether to find an prove knowledge of inputs that yeild an output of sufficiently large
-    /// value.
-    #[structopt(long)]
-    prove_high_value: Option<u64>,
-
-    /// What do do with the R1CS.
-    #[structopt(long, default_value = "count")]
-    proof_action: ProofOption,
 }
 
 arg_enum! {
     #[derive(PartialEq, Debug)]
-    enum Langauge {
-        ZoKrates,
+    enum Language {
+        Zokrates,
         Datalog,
         Auto,
     }
+}
+
+#[derive(PartialEq, Debug)]
+enum DeterminedLanguage {
+    Zokrates,
+    Datalog,
 }
 
 arg_enum! {
@@ -130,26 +119,57 @@ arg_enum! {
     }
 }
 
+fn determine_language(l: &Language, input_path: &PathBuf) -> DeterminedLanguage {
+    match l {
+        &Language::Datalog => DeterminedLanguage::Datalog,
+        &Language::Zokrates => DeterminedLanguage::Zokrates,
+        &Language::Auto =>  {
+            let p = input_path.to_str().unwrap();
+            if p.ends_with(".zok") {
+                DeterminedLanguage::Zokrates
+            } else if p.ends_with(".pl") {
+                DeterminedLanguage::Datalog
+            } else {
+                println!("Could not deduce the input language from path '{}', please set the language manually", p);
+                std::process::exit(2)
+            }
+        }
+    }
+}
+
 fn main() {
     env_logger::Builder::from_default_env()
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options2::from_args();
+    let options = Options::from_args();
     let path_buf = options.path.clone();
     println!("{:?}", options);
     let mode = match options.backend {
         Backend::R1cs { .. } => Mode::Proof,
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
-        Backend::Smt { .. } => unimplemented!(),
+        Backend::Smt { .. } => Mode::Proof,
     };
-    let inputs = Inputs {
-        file: options.path,
-        inputs: options.frontend.inputs,
-        mode: mode.clone(),
+    let language = determine_language(&options.frontend.language, &options.path);
+    let cs = match language {
+        DeterminedLanguage::Zokrates => {
+            let inputs = zokrates::Inputs {
+                file: options.path,
+                inputs: options.frontend.inputs,
+                mode: mode.clone(),
+            };
+            Zokrates::gen(inputs)
+        }
+        DeterminedLanguage::Datalog => {
+            let inputs = datalog::Inputs {
+                file: options.path,
+                rec_limit: options.frontend.rec_limit,
+                lint_prim_rec: options.frontend.lint_prim_rec,
+            };
+            Datalog::gen(inputs)
+        }
     };
-    let cs = Zokrates::gen(inputs);
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
@@ -164,11 +184,11 @@ fn main() {
                 Opt::Sha,
                 Opt::ConstantFold,
                 Opt::Flatten,
-                Opt::FlattenAssertions,
+                //Opt::FlattenAssertions,
                 Opt::Inline,
                 Opt::Mem,
                 Opt::Flatten,
-                Opt::FlattenAssertions,
+                //Opt::FlattenAssertions,
                 Opt::ConstantFold,
                 Opt::Inline,
             ],
@@ -227,7 +247,6 @@ fn main() {
             let (max, vars) = solver_result.expect("ILP could not be solved");
             println!("Max value: {}", max.round() as u64);
             println!("Assignment:");
-
             for (var, val) in &vars {
                 println!("  {}: {}", var, val.round() as u64);
             }
@@ -242,7 +261,23 @@ fn main() {
             }
         }
         Backend::Smt { .. } => {
-            todo!()
+            if options.frontend.lint_prim_rec {
+                assert_eq!(cs.outputs.len(), 1);
+                match find_model(&cs.outputs[0]) {
+                    Some(m) => {
+                        println!("Not primitive recursive!");
+                        for (var, val) in m {
+                            println!("{} -> {}", var, val);
+                        }
+                        std::process::exit(1)
+                    }
+                    None => {
+                        println!("Primitive recursive");
+                    }
+                }
+            } else {
+                    todo!()
+            }
         }
     }
 }

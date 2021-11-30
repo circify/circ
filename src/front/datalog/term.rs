@@ -1,0 +1,455 @@
+//! Terms in our datalog variant
+
+use std::fmt::{self, Display, Formatter};
+use std::sync::Arc;
+
+use rug::Integer;
+
+use super::error::ErrorKind;
+use super::ty::Ty;
+
+use crate::circify::{CirCtx, Embeddable};
+use crate::front::zokrates::ZOKRATES_MODULUS_ARC;
+use crate::ir::term::*;
+
+/// A term
+#[derive(Debug, Clone)]
+pub struct T {
+    /// The IR term that backs this
+    pub ir: Term,
+    /// the type
+    pub ty: Ty,
+}
+
+impl T {
+    /// Create a new term, checking that the explicit type and IR type agree.
+    pub fn new(ir: Term, ty: Ty) -> Self {
+        let ir_ty = check(&ir);
+        let res = Self { ir, ty: ty.clone() };
+        Self::check_ty(&ir_ty, &res.ty);
+        res
+    }
+
+    fn check_ty(ir: &Sort, ty: &Ty) {
+        match (ty, ir) {
+            (Ty::Bool, Sort::Bool) | (Ty::Field, Sort::Field(_)) => {}
+            (Ty::Uint(w), Sort::BitVector(w2)) if *w as usize == *w2 => {}
+            (Ty::Array(l, t), Sort::Array(_, t2, l2)) if l == l2 => Self::check_ty(t2, t),
+            _ => panic!("IR sort {} doesn't match datalog type {}", ir, ty),
+        }
+    }
+
+    /// Assert this is a boolean, and get it.
+    #[track_caller]
+    pub fn as_bool(&self) -> Term {
+        match &self.ty {
+            &Ty::Bool => self.ir.clone(),
+            _ => panic!("{} is not a bool", self),
+        }
+    }
+}
+
+/// A fallible result
+pub type Result<T> = std::result::Result<T, ErrorKind>;
+
+/// Initialize a prime field literal
+pub fn pf_lit<I>(i: I) -> T
+where
+    Integer: From<I>,
+{
+    T::new(pf_ir_lit(i), Ty::Field)
+}
+/// Initialize a prime field literal
+pub fn pf_ir_lit<I>(i: I) -> Term
+where
+    Integer: From<I>,
+{
+    leaf_term(Op::Const(Value::Field(FieldElem::new(
+        Integer::from(i),
+        ZOKRATES_MODULUS_ARC.clone(),
+    ))))
+}
+
+/// Initialize a boolean literal
+pub fn bool_lit(b: bool) -> T {
+    T::new(leaf_term(Op::Const(Value::Bool(b))), Ty::Bool)
+}
+
+/// Initialize an unsigned integer literal
+pub fn uint_lit(v: u64, w: u8) -> T {
+    T::new(bv_lit(v, w as usize), Ty::Uint(w))
+}
+
+impl Ty {
+    fn default(&self) -> T {
+        T::new(self.default_ir(), self.clone())
+    }
+    fn default_ir(&self) -> Term {
+        match self {
+            Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
+            Self::Uint(w) => bv_lit(0, *w as usize),
+            Self::Field => pf_ir_lit(0),
+            Self::Array(l, t) => {
+                term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()]
+            }
+        }
+    }
+}
+impl Display for T {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.ir, self.ty)
+    }
+}
+
+/// Operator unary-
+pub fn neg(t: &T) -> Result<T> {
+    match &t.ty {
+        Ty::Field => Ok(T::new(term![PF_NEG; t.ir.clone()], t.ty.clone())),
+        Ty::Uint(_) => Ok(T::new(term![BV_NEG; t.ir.clone()], t.ty.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("unary-".into(), t.clone())),
+    }
+}
+
+/// Operator unary!
+pub fn not(t: &T) -> Result<T> {
+    match &t.ty {
+        Ty::Bool => Ok(T::new(term![Op::Not; t.ir.clone()], t.ty.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("unary!".into(), t.clone())),
+    }
+}
+
+/// Operator unary~
+pub fn bitnot(t: &T) -> Result<T> {
+    match &t.ty {
+        Ty::Uint(_) => Ok(T::new(term![BV_NOT; t.ir.clone()], t.ty.clone())),
+        _ => Err(ErrorKind::InvalidUnOp("unary~".into(), t.clone())),
+    }
+}
+
+/// Operator +
+pub fn add(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_ADD; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        (Ty::Field, Ty::Field) => Ok(T::new(
+            term![PF_ADD; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("+".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator -
+pub fn sub(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_SUB; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        (Ty::Field, Ty::Field) => Ok(T::new(
+            term![PF_ADD; s.ir.clone(), term![PF_NEG; t.ir.clone()]],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("-".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator *
+pub fn mul(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_MUL; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        (Ty::Field, Ty::Field) => Ok(T::new(
+            term![PF_MUL; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("*".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator /
+pub fn div(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_UDIV; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("/".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator %
+pub fn rem(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_UREM; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("%".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator ==
+pub fn eq(s: &T, t: &T) -> Result<T> {
+    if s.ty == t.ty {
+        Ok(T::new(term![EQ; s.ir.clone(), t.ir.clone()], Ty::Bool))
+    } else {
+        Err(ErrorKind::InvalidBinOp("=".into(), s.clone(), t.clone()))
+    }
+}
+
+/// Operator <<
+pub fn shl(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_SHL; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("<<".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator >>
+pub fn shr(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_LSHR; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp(">>".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator <
+pub fn lt(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
+            Ok(T::new(term![BV_ULT; s.ir.clone(), t.ir.clone()], Ty::Bool))
+        }
+        _ => Err(ErrorKind::InvalidBinOp("<".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator >
+pub fn gt(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
+            Ok(T::new(term![BV_UGT; s.ir.clone(), t.ir.clone()], Ty::Bool))
+        }
+        _ => Err(ErrorKind::InvalidBinOp(">".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator <=
+pub fn lte(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
+            Ok(T::new(term![BV_ULE; s.ir.clone(), t.ir.clone()], Ty::Bool))
+        }
+        _ => Err(ErrorKind::InvalidBinOp("<=".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator >=
+pub fn gte(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => {
+            Ok(T::new(term![BV_UGE; s.ir.clone(), t.ir.clone()], Ty::Bool))
+        }
+        _ => Err(ErrorKind::InvalidBinOp(">=".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator |
+pub fn bitor(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_OR; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("|".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator &
+pub fn bitand(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_AND; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("&".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator ^
+pub fn bitxor(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Uint(w1), Ty::Uint(w2)) if w1 == w2 => Ok(T::new(
+            term![BV_XOR; s.ir.clone(), t.ir.clone()],
+            t.ty.clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp("^".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator &&
+pub fn and(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Bool, Ty::Bool) => Ok(T::new(term![AND; s.ir.clone(), t.ir.clone()], Ty::Bool)),
+        _ => Err(ErrorKind::InvalidBinOp("&&".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Operator ||
+pub fn or(s: &T, t: &T) -> Result<T> {
+    match (&s.ty, &t.ty) {
+        (Ty::Bool, Ty::Bool) => Ok(T::new(term![OR; s.ir.clone(), t.ir.clone()], Ty::Bool)),
+        _ => Err(ErrorKind::InvalidBinOp("||".into(), s.clone(), t.clone())),
+    }
+}
+
+/// Uint to field
+pub fn uint_to_field(s: &T) -> Result<T> {
+    match &s.ty {
+        Ty::Uint(_) => Ok(T::new(
+            term![Op::UbvToPf(ZOKRATES_MODULUS_ARC.clone()); s.ir.clone()],
+            Ty::Field,
+        )),
+        _ => Err(ErrorKind::InvalidUnOp("to_field".into(), s.clone())),
+    }
+}
+
+/// Uint to field
+pub fn array_idx(a: &T, i: &T) -> Result<T> {
+    match (&a.ty, &i.ty) {
+        (&Ty::Array(_, ref elem_ty), &Ty::Field) => Ok(T::new(
+            term![Op::Select; a.ir.clone(), i.ir.clone()],
+            (**elem_ty).clone(),
+        )),
+        _ => Err(ErrorKind::InvalidBinOp(
+            "array[idx]".into(),
+            a.clone(),
+            i.clone(),
+        )),
+    }
+}
+
+/// Datalog lang def
+pub struct Datalog {
+    modulus: Arc<Integer>,
+}
+
+impl Embeddable for Datalog {
+    type T = T;
+    type Ty = Ty;
+    fn declare(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        raw_name: String,
+        user_name: Option<String>,
+        visibility: Option<PartyId>,
+    ) -> Self::T {
+        let get_int_val = || -> Integer { panic!("No values in Datalog") };
+        match ty {
+            Ty::Bool => T::new(
+                ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::Bool,
+                    || Value::Bool(get_int_val() != 0),
+                    visibility,
+                ),
+                Ty::Bool,
+            ),
+            Ty::Field => T::new(
+                ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::Field(self.modulus.clone()),
+                    || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
+                    visibility,
+                ),
+                Ty::Field,
+            ),
+            Ty::Uint(w) => T::new(
+                ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::BitVector(*w as usize),
+                    || Value::BitVector(BitVector::new(get_int_val(), *w as usize)),
+                    visibility,
+                ),
+                ty.clone(),
+            ),
+            Ty::Array(n, inner_ty) => T::new(
+                (0..*n)
+                    .map(|i| {
+                        self.declare(
+                            ctx,
+                            &*inner_ty,
+                            idx_name(&raw_name, i),
+                            user_name.as_ref().map(|u| idx_name(u, i)),
+                            visibility.clone(),
+                        )
+                    })
+                    .enumerate()
+                    .fold(
+                        ty.default_ir(),
+                        |arr, (i, v)| term![Op::Store; arr, pf_ir_lit(i), v.ir],
+                    ),
+                ty.clone(),
+            ),
+        }
+    }
+    fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+        if t.ty == f.ty {
+            T::new(
+                term![Op::Ite; cond.clone(), t.ir.clone(), f.ir.clone()],
+                t.ty.clone(),
+            )
+        } else {
+            panic!("Cannot ITE {} and {}", t, f)
+        }
+    }
+    fn assign(
+        &self,
+        ctx: &mut CirCtx,
+        ty: &Self::Ty,
+        name: String,
+        t: Self::T,
+        visibility: Option<PartyId>,
+    ) -> Self::T {
+        assert!(&t.ty == ty);
+        T::new(
+            ctx.cs.borrow_mut().assign(&name, t.ir, visibility),
+            ty.clone(),
+        )
+    }
+    fn values(&self) -> bool {
+        false
+    }
+
+    fn type_of(&self, term: &Self::T) -> Self::Ty {
+        term.ty.clone()
+    }
+
+    fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
+        ty.default()
+    }
+}
+
+impl Datalog {
+    /// Initialize the Datalog lang def
+    pub fn new() -> Self {
+        Self {
+            modulus: ZOKRATES_MODULUS_ARC.clone(),
+        }
+    }
+}
+
+fn idx_name(struct_name: &str, idx: usize) -> String {
+    format!("{}.{}", struct_name, idx)
+}

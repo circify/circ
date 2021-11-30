@@ -19,9 +19,13 @@ use term::*;
 
 /// The modulus for the ZoKrates language.
 pub use term::ZOKRATES_MODULUS;
+/// The modulus for the ZoKrates language.
+pub use term::ZOKRATES_MODULUS_ARC;
 
-const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
-const PUBLIC_VIS: Option<PartyId> = None;
+/// The prover visibility
+pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
+/// Public visibility
+pub const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the ZoKrates compilier
 pub struct Inputs {
