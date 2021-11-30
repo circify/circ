@@ -149,7 +149,7 @@ fn main() {
         Backend::R1cs { .. } => Mode::Proof,
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
-        Backend::Smt { .. } => unimplemented!(),
+        Backend::Smt { .. } => Mode::Proof,
     };
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
@@ -269,7 +269,7 @@ fn main() {
                         for (var, val) in m {
                             println!("{} -> {}", var, val);
                         }
-                        panic!()
+                        std::process::exit(1)
                     }
                     None => {
                         println!("Primitive recursive");

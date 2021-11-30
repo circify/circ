@@ -19,3 +19,8 @@ size=$(($BIN --language datalog ./examples/datalog/dumb_hash.pl -r 4 r1cs --acti
 ($BIN --language datalog ./examples/datalog/dumb_hash.pl -r 5 r1cs --action count || true) | egrep "Final R1cs size: 356"
 ($BIN --language datalog ./examples/datalog/dumb_hash.pl -r 10 r1cs --action count || true) | egrep "Final R1cs size: 356"
 ($BIN --language datalog ./examples/datalog/dec.pl -r 2 r1cs --action count || true) | egrep "Final R1cs size: 356"
+
+# Test prim-rec test
+$BIN --language datalog ./examples/datalog/dec.pl --lint-prim-rec smt
+
+($BIN --language datalog ./examples/datalog/not_dec.pl --lint-prim-rec smt || true) | egrep 'Not prim'
