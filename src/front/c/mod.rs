@@ -5,7 +5,7 @@ mod parser;
 mod term;
 mod types;
 
-use super::FrontEnd;
+use super::{FrontEnd, Mode};
 use crate::circify::{Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
@@ -18,7 +18,7 @@ use lang_c::span::Node;
 use log::debug;
 
 // use std::collections::HashMap;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::Display;
 use std::path::PathBuf;
 
 const PUBLIC_VIS: Option<PartyId> = None;
@@ -40,28 +40,6 @@ pub struct Inputs {
     pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
-}
-
-#[derive(Clone, Copy, Debug)]
-/// Kind of circuit to generate. Effects privacy labels.
-pub enum Mode {
-    /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
-    Mpc(u8),
-    /// Generating for a proof circuit. Inputs are public of private (to the prover).
-    Proof,
-    /// Generating for an optimization circuit. Inputs are existentially quantified.
-    /// There should be only one output, which will be maximized.
-    Opt,
-}
-
-impl Display for Mode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            &Mode::Mpc(n) => write!(f, "{}-pc", n),
-            &Mode::Proof => write!(f, "proof"),
-            &Mode::Opt => write!(f, "opt"),
-        }
-    }
 }
 
 /// The C front-end. Implements [FrontEnd].

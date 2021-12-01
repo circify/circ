@@ -85,7 +85,7 @@ pub trait MemVisitor {
             for x in t.cs.iter() {
                 new_cs.push(cache.get(&x).unwrap_or_else(|| x).clone());
             }
-            let new_t = term(t.op.clone(), new_cs);                        
+            let new_t = term(t.op.clone(), new_cs);
 
             cache.insert(t.clone(), new_t_opt.unwrap_or_else(|| new_t.clone()));
         }

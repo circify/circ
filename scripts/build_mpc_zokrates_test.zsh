@@ -20,7 +20,7 @@ esac
 function mpc_test {
     parties=$1
     zpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN -p $parties $zpath
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $zpath mpc
 }
 
 # build mpc arithmetic tests

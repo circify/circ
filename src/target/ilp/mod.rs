@@ -2,7 +2,7 @@
 
 pub mod trans;
 
-use ahash::AHashMap as HashMap;
+use fxhash::FxHashMap as HashMap;
 pub(crate) use good_lp::{
     variable, Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver,
     SolverModel, Variable, VariableDefinition,
@@ -36,7 +36,7 @@ impl Ilp {
     /// Create an empty ILP
     pub fn new() -> Self {
         Self {
-            var_names: HashMap::new(),
+            var_names: HashMap::default(),
             variables: ProblemVariables::new(),
             constraints: Vec::new(),
             maximize: Expression::from(0),

@@ -314,7 +314,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 pub mod test {
     use super::*;
 
-    use ahash::AHashMap as HashMap;
+    use fxhash::FxHashMap as HashMap;
     use quickcheck::{Arbitrary, Gen};
     use rand::distributions::Distribution;
     use rand::SeedableRng;

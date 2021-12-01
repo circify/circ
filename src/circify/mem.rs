@@ -65,7 +65,7 @@ impl MemManager {
     /// Create a new manager, with an empty stack.
     pub fn new(cs: Rc<RefCell<Computation>>) -> Self {
         Self {
-            allocs: HashMap::new(),
+            allocs: HashMap::default(),
             next_id: 0,
             _cs: cs,
         }
@@ -185,7 +185,7 @@ mod test {
         let mut mem = MemManager::new(cs.clone());
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(id0, bv_lit(3, 4), bv_lit(2, 8));
+        mem.store(id0, bv_lit(3, 4), bv_lit(2, 8), leaf_term(Op::Const(Value::Bool(true))));
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
@@ -203,7 +203,7 @@ mod test {
         let mut mem = MemManager::new(cs.clone());
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(id0, bv_lit(3, 4), bv_var("a", 8));
+        mem.store(id0, bv_lit(3, 4), bv_var("a", 8), leaf_term(Op::Const(Value::Bool(true))));
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(3, 4));
         let t = term![Op::Not; term![Op::Eq; a, b]];

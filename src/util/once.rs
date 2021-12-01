@@ -2,7 +2,7 @@
 //!
 //! A "once queue".
 
-use ahash::AHashSet;
+use fxhash::FxHashSet;
 use std::collections::VecDeque;
 use std::hash::Hash;
 
@@ -11,7 +11,7 @@ use std::hash::Hash;
 /// It's a FIFO queue, which ignores insertions of elements already present.
 pub struct OnceQueue<T> {
     queue: VecDeque<T>,
-    set: AHashSet<T>,
+    set: FxHashSet<T>,
 }
 
 impl<T: Eq + Hash + Clone> OnceQueue<T> {
@@ -32,7 +32,7 @@ impl<T: Eq + Hash + Clone> OnceQueue<T> {
     pub fn new() -> Self {
         Self {
             queue: VecDeque::new(),
-            set: AHashSet::new(),
+            set: FxHashSet::default(),
         }
     }
 }
