@@ -45,7 +45,7 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
     assert len(client_cmd) > 3, "client cmd does not have enough arguments"
 
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
-
+    
     try:
         server_proc = Popen(server_cmd, stdout=PIPE, stderr=PIPE)
         client_proc = Popen(client_cmd, stdout=PIPE, stderr=PIPE)

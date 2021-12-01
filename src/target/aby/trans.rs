@@ -213,8 +213,8 @@ impl ToABY {
 
     /// Return constant gate evaluating to 1
     // TODO: const should not be hardcoded to acirc
-    fn one() -> String {
-        format!("acirc->PutCONSGate((uint64_t)1, (uint32_t)1)")
+    fn one(s_type: &String) -> String {
+        format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
     }
 
     fn remove_cons_gate(&self, circ: String) -> String {
@@ -250,7 +250,7 @@ impl ToABY {
                     s_circ,
                     a_conv,
                     b_conv,
-                    ToABY::one()
+                    ToABY::one(&s_circ)
                 );
                 write_line_to_file(&self.circuit_fname, &s);
 
@@ -270,7 +270,7 @@ impl ToABY {
                 self.inc_share();
                 let s = format!(
                     "share* {} = {}->PutXORGate({}->PutXORGate({}->PutGTGate({}, {}), {}->PutGTGate({}, {})), {});\n",
-                    share, s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one()
+                    share, s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one(&s_circ)
                 );
                 write_line_to_file(&self.circuit_fname, &s);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));

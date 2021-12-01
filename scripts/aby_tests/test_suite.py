@@ -6,64 +6,64 @@ arithmetic_tests = [
         {"a": 1, "b": 0},
         {"a": 0, "b": 2},
     ], 
-    # [
-    #     "Add two numbers - 2",
-    #     2,
-    #     "./third_party/ABY/build/bin/2pc_add",
-    #     {"a": 0, "b": 0},
-    #     {"a": 0, "b": 2},
-    # ], 
-    # [
-    #     "Subtract two numbers",
-    #     1,
-    #     "./third_party/ABY/build/bin/2pc_sub",
-    #     {"a": 3, "b": 0},
-    #     {"a": 0, "b": 2},
-    # ], 
-    # [
-    #     "Subtract two numbers, negative -1 == 4294967295 because u32",
-    #     4294967295,
-    #     "./third_party/ABY/build/bin/2pc_sub",
-    #     {"a": 2, "b": 0},
-    #     {"a": 0, "b": 3},
-    # ],
-    # [
-    #     "Multiply two numbers - 1",
-    #     0,
-    #     "./third_party/ABY/build/bin/2pc_mult",
-    #     {"a": 0, "b": 0},
-    #     {"a": 0, "b": 5},
-    # ], 
-    #     [
-    #     "Multiply two numbers - 2",
-    #     5,
-    #     "./third_party/ABY/build/bin/2pc_mult",
-    #     {"a": 1, "b": 0},
-    #     {"a": 0, "b": 5},
-    # ], 
-    #     [
-    #     "Multiply two numbers - 3",
-    #     10,
-    #     "./third_party/ABY/build/bin/2pc_mult",
-    #     {"a": 2, "b": 0},
-    #     {"a": 0, "b": 5},
-    # ], 
-    # [
-    #     # only server side public value works 
-    #     "Multiply two numbers together and add with public value",
-    #     42,
-    #     "./third_party/ABY/build/bin/2pc_mult_add_pub",
-    #     {"a": 5, "b": 0, "v": 7},
-    #     {"a": 0, "b": 7, "v": 7},
-    # ], 
-    # [
-    #     # only server side public value works 
-    #     "Multiply two numbers together and add with public value, check only server side public value is added",
-    #     42,
-    #     "./third_party/ABY/build/bin/2pc_mult_add_pub",
-    #     {"a": 5, "b": 0, "v": 7},
-    #     {"a": 0, "b": 7, "v": 0},
-    # ], 
+    [
+        "Add two numbers - 2",
+        2,
+        "./third_party/ABY/build/bin/2pc_add",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Subtract two numbers",
+        1,
+        "./third_party/ABY/build/bin/2pc_sub",
+        {"a": 3, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Subtract two numbers, negative -1 == 4294967295 because u32",
+        4294967295,
+        "./third_party/ABY/build/bin/2pc_sub",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 3},
+    ],
+    [
+        "Multiply two numbers - 1",
+        0,
+        "./third_party/ABY/build/bin/2pc_mult",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 5},
+    ], 
+        [
+        "Multiply two numbers - 2",
+        5,
+        "./third_party/ABY/build/bin/2pc_mult",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 5},
+    ], 
+        [
+        "Multiply two numbers - 3",
+        10,
+        "./third_party/ABY/build/bin/2pc_mult",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 5},
+    ], 
+    [
+        # only server side public value works 
+        "Multiply two numbers together and add with public value",
+        42,
+        "./third_party/ABY/build/bin/2pc_mult_add_pub",
+        {"a": 5, "b": 0, "v": 7},
+        {"a": 0, "b": 7, "v": 7},
+    ], 
+    [
+        # only server side public value works 
+        "Multiply two numbers together and add with public value, check only server side public value is added",
+        42,
+        "./third_party/ABY/build/bin/2pc_mult_add_pub",
+        {"a": 5, "b": 0, "v": 7},
+        {"a": 0, "b": 7, "v": 0},
+    ], 
 ]
 
 mod_tests = [
@@ -690,20 +690,98 @@ misc_tests = [
 kmeans_tests = [
     [
         "kmeans",
-        283,
+        103,
         "./third_party/ABY/build/bin/2pc_kmeans",
-        {"a": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99], "b": 0},
-        {"a": 0, "b": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99]},
-    ], 
-    
+        {"a": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19], "b": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]},
+        {"a": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19], "b": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]},
+        # {"a": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99], "b": 0},
+        # {"a": 0, "b": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99]},
+    ],     
 ]
 
-ree_tests = [
+ilp_benchmark_tests = [
     [
-        "Array sum test 2",
-        6,
-        "./third_party/ABY/build/bin/2pc_array_sum_2",
+        "ilp bench - array sum 1",
+        1000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_1",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],     
+    [
+        "ilp bench - array sum 2",
+        2000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_2",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],   
+    [
+        "ilp bench - array sum 3",
+        3000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_3",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],   
+    [
+        "ilp bench - array sum 4",
+        4000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_4",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],   
+    [
+        "ilp bench - array sum 5",
+        5000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_5",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],   
+    [
+        "ilp bench - array sum 6",
+        6000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_6",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],  
+    [
+        "ilp bench - array sum 7",
+        7000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_7",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],  
+        [
+        "ilp bench - array sum 8",
+        8000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_8",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],  
+        [
+        "ilp bench - array sum 9",
+        9000,
+        "./third_party/ABY/build/bin/2pc_ilp_bench_9",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ],  
+
+]
+
+millionaires_test = [
+    [
+        "Millionaire's problem",
+        0,
+        "./third_party/ABY/build/bin/2pc_millionaires",
         {"a": 2, "b": 0},
         {"a": 0, "b": 1},
     ], 
 ]
+
+# ree_tests = [
+#     [
+#         "Array sum test 2",
+#         6,
+#         "./third_party/ABY/build/bin/2pc_array_sum_2",
+#         {"a": 2, "b": 0},
+#         {"a": 0, "b": 1},
+#     ], 
+# ]

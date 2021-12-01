@@ -1,4 +1,4 @@
-int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int b[200])
+int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
 {
     int D = 2;
     int NA = 10;
@@ -108,20 +108,24 @@ int main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int
                         pos[i_10] = pos[i_10 + stride];
                     }
                 }
-                // stride = 2;
-                // for(int i_11 = 0; i_11 < NC - stride; i_11+=4) {
-                //     if(dist[i_11+stride] < dist[i_11]) {
-                //         dist[i_11] = dist[i_11+stride];
-                //         pos[i_11] = pos[i_11+stride];
-                //     }
-                // }
-                // stride = 4;
-                // for(int i_12 = 0; i_12 < NC - stride; i_12+=8) {
-                //     if(dist[i_12+stride] < dist[i_12]) {
-                //         dist[i_12] = dist[i_12+stride];
-                //         pos[i_12] = pos[i_12+stride];
-                //     }
-                // }
+                stride = 2;
+                for (int i_11 = 0; i_11 < NC - stride; i_11 += 4)
+                {
+                    if (dist[i_11 + stride] < dist[i_11])
+                    {
+                        dist[i_11] = dist[i_11 + stride];
+                        pos[i_11] = pos[i_11 + stride];
+                    }
+                }
+                stride = 4;
+                for (int i_12 = 0; i_12 < NC - stride; i_12 += 8)
+                {
+                    if (dist[i_12 + stride] < dist[i_12])
+                    {
+                        dist[i_12] = dist[i_12 + stride];
+                        pos[i_12] = pos[i_12 + stride];
+                    }
+                }
                 bestMap_inner[i_8] = pos[0];
                 int cc = bestMap_inner[i_8];
                 cluster_inner[cc * D] += data_inner[i_8 * D];
