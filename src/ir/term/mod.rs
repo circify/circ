@@ -1014,7 +1014,6 @@ impl Value {
 pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
-        dbg!(&c);
         let v = match &c.op {
             Op::Var(n, _) => h
                 .get(n)

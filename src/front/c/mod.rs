@@ -11,7 +11,7 @@ use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::*;
 use crate::ir::opt::cfold::fold;
-use crate::ir::proof::ConstraintMetadata;
+use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
 use lang_c::ast::*;
 use lang_c::span::Node;
@@ -21,6 +21,9 @@ use log::debug;
 use std::fmt::Display;
 use std::path::PathBuf;
 
+/// The prover visibility
+const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
+/// Public visibility
 const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the C compiler
@@ -256,6 +259,9 @@ impl CGen {
                                     num_val, n_parties
                                 ))
                             }
+                        }
+                        Mode::Proof => {
+                            PROVER_VIS.clone()
                         }
                         _ => unimplemented!("Mode {} is not supported.", self.mode),
                     },

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from utils import run_tests
 from test_suite import *
 

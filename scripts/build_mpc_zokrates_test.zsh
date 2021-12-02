@@ -7,6 +7,7 @@ disable -r time
 cargo build --release --example circ
 
 BIN=./target/release/examples/circ
+export CARGO_MANIFEST_DIR=$(pwd)
 
 case "$OSTYPE" in 
     darwin*)
