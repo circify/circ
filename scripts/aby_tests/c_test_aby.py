@@ -26,5 +26,5 @@ if __name__ == "__main__":
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
 
-    tests = millionaires_test
+    tests = biomatch_tests
     run_tests('c', tests)
