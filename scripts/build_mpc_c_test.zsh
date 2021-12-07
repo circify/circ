@@ -23,7 +23,7 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN -p $parties $zpath
 }
 
-# # # build mpc arithmetic tests
+# # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add_unsigned.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
@@ -70,7 +70,6 @@ function mpc_test {
 # # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_ret.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum_2.c
 
-
 # # build shift tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
@@ -90,7 +89,21 @@ function mpc_test {
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 
 # benchmarks
-mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
+mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c
+
+# ilp benchmarks
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_1.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_2.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_3.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_4.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_5.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_6.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_7.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_8.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_9.c
+# mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench.c
 
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_loop_add.c
 
+# mpc_test 2 ./examples/C/mpc/2pc_millionaires.c
