@@ -3,14 +3,14 @@
 mod parser;
 mod term;
 
-use super::FrontEnd;
+use super::{FrontEnd, Mode};
 use crate::circify::{Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
 use log::debug;
 use rug::Integer;
 use std::collections::HashMap;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use zokrates_pest_ast as ast;
@@ -19,9 +19,13 @@ use term::*;
 
 /// The modulus for the ZoKrates language.
 pub use term::ZOKRATES_MODULUS;
+/// The modulus for the ZoKrates language.
+pub use term::ZOKRATES_MODULUS_ARC;
 
-const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
-const PUBLIC_VIS: Option<PartyId> = None;
+/// The prover visibility
+pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
+/// Public visibility
+pub const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the ZoKrates compiler
 pub struct Inputs {
@@ -40,32 +44,6 @@ pub struct Inputs {
     pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
-}
-
-#[derive(Clone, Copy, Debug)]
-/// Kind of circuit to generate. Effects privacy labels.
-pub enum Mode {
-    /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
-    Mpc(u8),
-    /// Generating for a proof circuit. Inputs are public of private (to the prover).
-    Proof,
-    /// Generating for an optimization circuit. Inputs are existentially quantified.
-    /// There should be only one output, which will be maximized.
-    Opt,
-    /// Find inputs that yeild an output at least this large,
-    /// and then prove knowledge of them.
-    ProofOfHighValue(u64),
-}
-
-impl Display for Mode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            &Mode::Mpc(n) => write!(f, "{}-pc", n),
-            &Mode::Proof => write!(f, "proof"),
-            &Mode::Opt => write!(f, "opt"),
-            &Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),
-        }
-    }
 }
 
 /// The ZoKrates front-end. Implements [FrontEnd].
@@ -118,8 +96,8 @@ impl<'ast> ZGen<'ast> {
             asts,
             stdlib: parser::ZStdLib::new(),
             file_stack: vec![],
-            functions: HashMap::new(),
-            import_map: HashMap::new(),
+            functions: HashMap::default(),
+            import_map: HashMap::default(),
             mode,
         };
         this.circ

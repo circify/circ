@@ -2,8 +2,8 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::Circuit;
 use bls12_381::Scalar;
-use circ::front::c::{Inputs, Mode, C};
-use circ::front::FrontEnd;
+use circ::front::c::{Inputs, C};
+use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;

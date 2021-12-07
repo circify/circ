@@ -50,8 +50,8 @@ def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[s
         server_proc = Popen(server_cmd, stdout=PIPE, stderr=PIPE)
         client_proc = Popen(client_cmd, stdout=PIPE, stderr=PIPE)
 
-        server_out, server_err = server_proc.communicate()
-        client_out, client_err = client_proc.communicate()
+        server_out, server_err = server_proc.communicate(timeout=5)
+        client_out, client_err = client_proc.communicate(timeout=5)
 
         assert not server_err, "server cmd has an error"
         assert not client_err, "client cmd has an error"

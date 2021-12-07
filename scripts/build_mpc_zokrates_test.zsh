@@ -7,6 +7,7 @@ disable -r time
 cargo build --release --example circ
 
 BIN=./target/release/examples/circ
+export CARGO_MANIFEST_DIR=$(pwd)
 
 case "$OSTYPE" in 
     darwin*)
@@ -20,7 +21,7 @@ esac
 function mpc_test {
     parties=$1
     zpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN -p $parties $zpath
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $zpath mpc
 }
 
 # build mpc arithmetic tests
@@ -70,8 +71,8 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
 
 # build mpc shift tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_rhs.zok
+# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
+# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_rhs.zok
 
 # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaire.zok

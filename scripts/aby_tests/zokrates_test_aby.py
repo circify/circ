@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from utils import run_tests
 from test_suite import *
 
@@ -13,8 +15,8 @@ if __name__ == "__main__":
         loop_tests + \
         ite_tests + \
         function_tests + \
-        shift_tests + \
         misc_tests
+        # shift_tests + \
         # arr_tests + \
     
     run_tests('zok', tests)

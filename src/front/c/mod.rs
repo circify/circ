@@ -5,22 +5,25 @@ mod parser;
 mod term;
 mod types;
 
-use super::FrontEnd;
+use super::{FrontEnd, Mode};
 use crate::circify::{Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::*;
 use crate::ir::opt::cfold::fold;
-use crate::ir::proof::ConstraintMetadata;
+use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
 use lang_c::ast::*;
 use lang_c::span::Node;
 use log::debug;
 
 // use std::collections::HashMap;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::Display;
 use std::path::PathBuf;
 
+/// The prover visibility
+const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
+/// Public visibility
 const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the C compiler
@@ -40,28 +43,6 @@ pub struct Inputs {
     pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
-}
-
-#[derive(Clone, Copy, Debug)]
-/// Kind of circuit to generate. Effects privacy labels.
-pub enum Mode {
-    /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
-    Mpc(u8),
-    /// Generating for a proof circuit. Inputs are public of private (to the prover).
-    Proof,
-    /// Generating for an optimization circuit. Inputs are existentially quantified.
-    /// There should be only one output, which will be maximized.
-    Opt,
-}
-
-impl Display for Mode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            &Mode::Mpc(n) => write!(f, "{}-pc", n),
-            &Mode::Proof => write!(f, "proof"),
-            &Mode::Opt => write!(f, "opt"),
-        }
-    }
 }
 
 /// The C front-end. Implements [FrontEnd].
@@ -278,6 +259,9 @@ impl CGen {
                                     num_val, n_parties
                                 ))
                             }
+                        }
+                        Mode::Proof => {
+                            PROVER_VIS.clone()
                         }
                         _ => unimplemented!("Mode {} is not supported.", self.mode),
                     },
@@ -686,7 +670,7 @@ impl CGen {
                     debug!("{:#?}", fn_def.node.clone());
                     // println!("function: {:#?}", fn_def.node);
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
-                    self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty);
+                    self.circ.enter_fn(fn_info.name.to_owned(), fn_info.ret_ty.clone());
                     for arg in fn_info.args.iter() {
                         // TODO: self.gen_decl(arg);
                         let p = &arg.specifiers[0];
@@ -700,14 +684,27 @@ impl CGen {
                     }
                     self.gen_stmt(fn_info.body.clone());
                     if let Some(r) = self.circ.exit_fn() {
-                        let ret_term = r.unwrap_term();
-                        let ret_terms = ret_term.term.terms();
-                        self.circ
-                            .cir_ctx()
-                            .cs
-                            .borrow_mut()
-                            .outputs
-                            .extend(ret_terms);
+                        match self.mode {
+                            Mode::Mpc(_) => {
+                                let ret_term = r.unwrap_term();
+                                let ret_terms = ret_term.term.terms();
+                                self.circ
+                                    .cir_ctx()
+                                    .cs
+                                    .borrow_mut()
+                                    .outputs
+                                    .extend(ret_terms);
+                            }
+                            Mode::Proof => {
+                                let ty = fn_info.ret_ty.as_ref().unwrap();
+                                let name = "return".to_owned();
+                                let term = r.unwrap_term();
+                                let _r = self.circ.declare(name.clone(), &ty, false, PROVER_VIS);
+                                self.circ
+                                    .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
+                            }
+                            _ => unimplemented!("Mode: {}", self.mode)
+                        }
                     }
                 }
                 _ => unimplemented!("Haven't implemented node: {:?}", n.node),

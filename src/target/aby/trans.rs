@@ -7,7 +7,7 @@
 use std::fmt;
 use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
-use crate::target::aby::assignment::{some_arith_sharing, ShareType, SharingMap};
+use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
 
 use std::path::PathBuf;
@@ -215,20 +215,6 @@ impl ToABY {
     // TODO: const should not be hardcoded to acirc
     fn one(s_type: &String) -> String {
         format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
-    }
-
-    fn remove_cons_gate(&self, circ: String) -> String {
-        if circ.contains("PutCONSGate(") {
-            circ.split("PutCONSGate(")
-                .last()
-                .unwrap_or("")
-                .split(",")
-                .next()
-                .unwrap_or("")
-                .to_string()
-        } else {
-            panic!("PutCONSGate not found in: {}", circ)
-        }
     }
 
     fn embed_eq(&mut self, t: Term, a: Term, b: Term) {

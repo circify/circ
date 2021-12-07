@@ -20,7 +20,7 @@ esac
 function ilp_test {
     zpath=$1
     expected_max=$2
-    max=$($BIN --maximize $zpath | grep 'Max va'  | awk '{ print $3 }')
+    max=$($BIN $zpath ilp | grep 'Max va'  | awk '{ print $3 }')
     if [[ $max == $expected_max ]]
     then
         echo "pass: $zpath"
