@@ -676,7 +676,6 @@ mod test {
     use crate::ir::proof::Constraints;
     use crate::ir::term::test as test_vecs;
     use crate::target::r1cs::trans::test::{bv, PureBool};
-    use fxhash::FxHashSet;
     use approx::assert_abs_diff_eq;
     use good_lp::default_solver;
     use quickcheck_macros::quickcheck;
@@ -718,7 +717,7 @@ mod test {
         };
         let cs = Computation::from_constraint_system_parts(
             vec![t, leaf_term(Op::Const(Value::Bool(true)))],
-            FxHashSet::default(),
+            Vec::new(),
             Some(values.clone()),
         );
         let mut ilp = to_ilp(cs);
