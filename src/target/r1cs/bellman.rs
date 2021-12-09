@@ -4,6 +4,10 @@ use ff::{PrimeField, PrimeFieldBits};
 use gmp_mpfr_sys::gmp::limb_t;
 use log::debug;
 use std::collections::HashMap;
+use std::path::Path;
+use std::fs::File;
+use std::str::FromStr;
+use std::io::{BufRead, BufReader};
 
 use super::*;
 
@@ -69,28 +73,35 @@ impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F
             });
         }
         let mut vars = HashMap::default();
-        for (i, s) in self.idxs_signals.iter() {
-            if uses.get(i).unwrap() > &0 {
-                debug!("var: {}", s);
-                let v = cs.alloc(
-                    || format!("{}", s),
-                    || {
+        for i in 0..self.next_idx {
+            if let Some(s) = self.idxs_signals.get(&i) {
+                //for (_i, s) in self.idxs_signals.get() {
+                if uses.get(&i).unwrap() > &0 {
+                    let name_f = || format!("{}", s);
+                    let val_f = || {
                         Ok({
                             let i_val = self
                                 .values
                                 .as_ref()
                                 .expect("missing values")
-                                .get(i)
+                                .get(&i)
                                 .unwrap();
                             let ff_val = int_to_ff(i_val);
                             debug!("witness: {} -> {:?} ({})", s, ff_val, i_val);
                             ff_val
                         })
-                    },
-                )?;
-                vars.insert(*i, v);
-            } else {
-                debug!("drop dead var: {}", s);
+                    };
+                    let public = self.public_idxs.contains(&i);
+                    debug!("var: {}, public: {}", s, public);
+                    let v = if public {
+                        cs.alloc_input(name_f, val_f)?
+                    } else {
+                        cs.alloc(name_f, val_f)?
+                    };
+                    vars.insert(i, v);
+                } else {
+                    debug!("drop dead var: {}", s);
+                }
             }
         }
         for (i, (a, b, c)) in self.constraints.iter().enumerate() {
@@ -105,12 +116,23 @@ impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F
     }
 }
 
+/// Convert a (rug) integer to a prime field element.
+pub fn parse_instance<P: AsRef<Path>, F: PrimeField>(path: P) -> Vec<F> {
+    let f = BufReader::new(File::open(path).unwrap());
+    f.lines().map(|line| {
+        let s = line.unwrap();
+        let i = Integer::from_str(&s.trim()).unwrap();
+        int_to_ff(&i)
+    }).collect()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use bls12_381::Scalar;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
+    use std::io::Write;
 
     #[derive(Clone, Debug)]
     struct BlsScalar(Integer);
@@ -164,5 +186,17 @@ mod test {
     #[test]
     fn one() {
         convert(Integer::from(1));
+    }
+
+    #[test]
+    fn parse() {
+        let path = format!("{}/instance", std::env::temp_dir().to_str().unwrap());
+        {
+            let mut f = File::create(&path).unwrap();
+            write!(f, "5\n6").unwrap();
+        }
+        let i = parse_instance::<_, Scalar>(&path);
+        assert_eq!(i[0], Scalar::from(5));
+        assert_eq!(i[1], Scalar::from(6));
     }
 }
