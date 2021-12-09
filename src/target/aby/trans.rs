@@ -628,13 +628,13 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String) {
+pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
     let Computation {
         outputs: terms,
         metadata: md,
         values: _,
     } = ir.clone();
-    let s_map: SharingMap = assign(&ir);
+    let s_map: SharingMap = assign(&ir, cm);
     // let s_map: SharingMap = some_arith_sharing(&ir);
     let mut converter = ToABY::new(md, s_map, path_buf, lang);
 

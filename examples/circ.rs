@@ -40,6 +40,9 @@ struct Options {
     #[structopt(long, default_value = "2", name = "PARTIES")]
     parties: u8,
 
+    #[structopt(long, default_value = "hycc", name = "cost_model")]
+    cost_model: String,
+
     #[structopt(subcommand)]
     backend: Backend,
 }
@@ -98,10 +101,16 @@ arg_enum! {
 }
 
 #[derive(PartialEq, Debug)]
-enum DeterminedLanguage {
+pub enum DeterminedLanguage {
     Zokrates,
     Datalog,
     C,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum CostModelType {
+    Opa,
+    Hycc,
 }
 
 arg_enum! {
@@ -254,9 +263,14 @@ fn main() {
         }
         Backend::Mpc { .. } => {
             println!("Converting to aby");
-            let lang = &String::from("zok");
-            to_aby(cs, &path_buf, &lang);
-            write_aby_exec(&path_buf, &lang);
+            let lang_str = match language {
+                DeterminedLanguage::C => "c".to_string(),
+                DeterminedLanguage::Zokrates => "zok".to_string(),
+                _ => panic!("Language isn't supported by MPC backend: {:#?}", language)
+            };
+            println!("Cost model: {}", options.cost_model);
+            to_aby(cs, &path_buf, &lang_str, &options.cost_model);
+            write_aby_exec(&path_buf, &lang_str);
         }
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
