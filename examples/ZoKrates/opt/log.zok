@@ -6,5 +6,5 @@ def u8log2(u8 x) -> u8:
   endfor
   return acc
 
-def main(u8 x) -> u8:
+def main(private u8 x) -> u8:
   return x + u8log2(x)

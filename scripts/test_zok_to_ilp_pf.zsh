@@ -11,13 +11,16 @@ BIN=./target/release/examples/circ
 function ilp_test {
     zpath=$1
     expected_max=$2
+    # writes to assignment.txt
     max=$($BIN $zpath ilp | grep 'Max va'  | awk '{ print $3 }')
     if [[ $max == $expected_max ]]
     then
         $BIN --value-threshold $max $zpath r1cs --action setup
-        $BIN --value-threshold $max --inputs assignment.txt $zpath r1cs --action prove
+        $BIN --inputs assignment.txt --value-threshold $max $zpath r1cs --action prove
+        touch x
+        $BIN $zpath r1cs --instance x --action verify
         echo "pass: $zpath"
-        rm assignment.txt P V pi
+        rm assignment.txt P V pi x
     else
         echo "fail: $zpath"
         echo "expected max:  $expected_max"

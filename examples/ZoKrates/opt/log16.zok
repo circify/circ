@@ -6,5 +6,5 @@ def u16log2(u16 x) -> u16:
   endfor
   return acc
 
-def main(u16 x) -> u16:
+def main(private u16 x) -> u16:
   return x + u16log2(x)

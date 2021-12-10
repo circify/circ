@@ -149,7 +149,10 @@ fn main() {
     let path_buf = options.path.clone();
     println!("{:?}", options);
     let mode = match options.backend {
-        Backend::R1cs { .. } => Mode::Proof,
+        Backend::R1cs { .. } => match options.frontend.value_threshold {
+            Some(t) => Mode::ProofOfHighValue(t),
+            None => Mode::Proof,
+        },
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
         Backend::Smt { .. } => Mode::Proof,
