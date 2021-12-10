@@ -252,7 +252,7 @@ impl ToABY {
             Op::Var(name, Sort::Bool) => {
                 if !self.inputs.contains_key(&t) {
                     self.inputs
-                        .insert(t.clone(), *self.md.inputs.get(name).unwrap());
+                        .insert(t.clone(), *self.md.input_vis.get(name).unwrap());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache
@@ -397,7 +397,7 @@ impl ToABY {
             Op::Var(name, Sort::BitVector(_)) => {
                 if !self.inputs.contains_key(&t) {
                     self.inputs
-                        .insert(t.clone(), *self.md.inputs.get(name).unwrap());
+                        .insert(t.clone(), *self.md.input_vis.get(name).unwrap());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache

@@ -37,8 +37,14 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zo
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
 
 
-# Test prove workflow
-$BIN examples/ZoKrates/pf/3_plus.zok r1cs --action setup
-$BIN --inputs examples/ZoKrates/pf/3_plus.zok.in examples/ZoKrates/pf/3_plus.zok r1cs --action prove
-$BIN examples/ZoKrates/pf/3_plus.zok r1cs --action verify
-rm -rf P V pi
+# Test prove workflow, given an example name
+function pf_test {
+    ex_name=$1
+    $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
+    $BIN --inputs examples/ZoKrates/pf/$ex_name.zok.in examples/ZoKrates/pf/$ex_name.zok r1cs --action prove
+    $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --instance examples/ZoKrates/pf/$ex_name.zok.x --action verify
+    rm -rf P V pi
+}
+
+pf_test 3_plus
+pf_test xor

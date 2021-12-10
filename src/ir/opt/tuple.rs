@@ -125,7 +125,7 @@ impl Pass {
                 ))
             }
             _ => Rc::new(TreeData::Leaf(
-                if self.cs.metadata.inputs.contains_key(prefix)
+                if self.cs.metadata.is_input(prefix)
                     && self.cs.metadata.is_input_public(prefix)
                     && self
                         .cs

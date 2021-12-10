@@ -2,27 +2,31 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::groth16::{
     create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
-    verify_proof, Parameters, VerifyingKey, Proof,
+    verify_proof, Parameters, Proof, VerifyingKey,
 };
 use bellman::Circuit;
-use bls12_381::{Scalar, Bls12};
+use bls12_381::{Bls12, Scalar};
 use circ::front::datalog::{self, Datalog};
 use circ::front::zokrates::{self, Mode, Zokrates};
 use circ::front::FrontEnd;
-use circ::ir::{opt::{opt, Opt}, term::extras::Letified};
+use circ::ir::{
+    opt::{opt, Opt},
+    term::extras::Letified,
+};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
+use circ::target::r1cs::bellman::parse_instance;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use circ::target::smt::find_model;
 use env_logger;
 use good_lp::default_solver;
 use std::fs::File;
+use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
-use std::io::Read;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -83,7 +87,6 @@ enum Backend {
     Smt {},
     Ilp {},
     Mpc {},
-
 }
 
 arg_enum! {
@@ -123,7 +126,7 @@ fn determine_language(l: &Language, input_path: &PathBuf) -> DeterminedLanguage 
     match l {
         &Language::Datalog => DeterminedLanguage::Datalog,
         &Language::Zokrates => DeterminedLanguage::Zokrates,
-        &Language::Auto =>  {
+        &Language::Auto => {
             let p = input_path.to_str().unwrap();
             if p.ends_with(".zok") {
                 DeterminedLanguage::Zokrates
@@ -146,7 +149,10 @@ fn main() {
     let path_buf = options.path.clone();
     println!("{:?}", options);
     let mode = match options.backend {
-        Backend::R1cs { .. } => Mode::Proof,
+        Backend::R1cs { .. } => match options.frontend.value_threshold {
+            Some(t) => Mode::ProofOfHighValue(t),
+            None => Mode::Proof,
+        },
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
         Backend::Smt { .. } => Mode::Proof,
@@ -197,7 +203,14 @@ fn main() {
     println!("Done with IR optimization");
 
     match options.backend {
-        Backend::R1cs { action, proof, prover_key, verifier_key, .. } => {
+        Backend::R1cs {
+            action,
+            proof,
+            prover_key,
+            verifier_key,
+            instance,
+            ..
+        } => {
             println!("Converting to r1cs");
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
@@ -231,7 +244,8 @@ fn main() {
                     let pvk = prepare_verifying_key(&vk);
                     let mut pf_file = File::open(proof).unwrap();
                     let pf = Proof::read(&mut pf_file).unwrap();
-                    verify_proof(&pvk, &pf, &[]).unwrap();
+                    let instance_vec = parse_instance(&instance);
+                    verify_proof(&pvk, &pf, &instance_vec).unwrap();
                 }
             }
         }
@@ -276,7 +290,7 @@ fn main() {
                     }
                 }
             } else {
-                    todo!()
+                todo!()
             }
         }
     }

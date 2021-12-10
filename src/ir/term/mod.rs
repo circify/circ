@@ -1254,8 +1254,10 @@ pub struct ComputationMetadata {
     pub party_ids: FxHashMap<String, PartyId>,
     /// The next free id.
     pub next_party_id: PartyId,
+    /// The order of the inputs
+    pub inputs: Vec<Term>,
     /// All inputs, including who knows them. If no visibility is set, the input is public.
-    pub inputs: FxHashMap<String, Option<PartyId>>,
+    pub input_vis: FxHashMap<String, Option<PartyId>>,
 }
 
 impl ComputationMetadata {
@@ -1266,22 +1268,29 @@ impl ComputationMetadata {
         self.next_party_id - 1
     }
     /// Add a new input to the computation, visible to `party`, or public if `party` is [None].
-    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>) {
+    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>, sort: Sort) {
+        let term = leaf_term(Op::Var(input_name.clone(), sort));
         debug_assert!(
-            !self.inputs.contains_key(&input_name),
+            !self.input_vis.contains_key(&input_name),
             "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
             input_name,
             party,
-            self.inputs.get(&input_name).unwrap()
+            self.input_vis.get(&input_name).unwrap()
         );
-        self.inputs.insert(input_name, party);
+        self.input_vis.insert(input_name.clone(), party);
+        self.inputs.push(term);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        self.inputs
+        self.input_vis
             .get(input_name)
             .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs))
             .clone()
+    }
+    /// Is this input public?
+    pub fn is_input(&self, input_name: &str) -> bool {
+        self.input_vis
+            .contains_key(input_name)
     }
     /// Is this input public?
     pub fn is_input_public(&self, input_name: &str) -> bool {
@@ -1289,7 +1298,7 @@ impl ComputationMetadata {
     }
     /// Get all public inputs.
     pub fn public_inputs(&self) -> impl Iterator<Item = &str> {
-        self.inputs.iter().filter_map(|(name, party)| {
+        self.input_vis.iter().filter_map(|(name, party)| {
             if party.is_none() {
                 Some(name.as_str())
             } else {
@@ -1333,7 +1342,7 @@ impl Computation {
         party: Option<PartyId>,
     ) -> Term {
         debug!("Var: {} (visibility: {:?})", name, party);
-        self.metadata.new_input(name.to_owned(), party);
+        self.metadata.new_input(name.to_owned(), party, s.clone());
         if let Some(vs) = self.values.as_mut() {
             let val = val_fn();
             debug!("  val = {}", val);
@@ -1341,7 +1350,7 @@ impl Computation {
                 panic!("{} already had a value: {}", name, v);
             }
         }
-        leaf_term(Op::Var(name.to_string(), s))
+        leaf_term(Op::Var(name.to_owned(), s))
     }
     /// Create a new variable, `name` in the constraint system, and set it equal to `term`.
     /// `public` indicates whether this variable is public in the constraint system.

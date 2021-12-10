@@ -1,9 +1,10 @@
 /target
-pf
+/pf
 assignment.txt
 params
 __pycache__
-P
-V
-pi
+/P
+/V
+/pi
+/x
 perf.data*

@@ -29,7 +29,7 @@ pub trait Constraints {
     /// Build a [Computation] from assertions, a list of public inputs, and values
     fn from_constraint_system_parts(
         assertions: Vec<Term>,
-        public_inputs: FxHashSet<String>,
+        public_inputs: Vec<Term>,
         values: Option<FxHashMap<String, Value>>,
     ) -> Self;
 }
@@ -37,7 +37,7 @@ pub trait Constraints {
 impl Constraints for Computation {
     fn from_constraint_system_parts(
         assertions: Vec<Term>,
-        public_inputs: FxHashSet<String>,
+        public_inputs: Vec<Term>,
         values: Option<FxHashMap<String, Value>>,
     ) -> Self {
         let mut metadata = ComputationMetadata::default();
@@ -46,8 +46,8 @@ impl Constraints for Computation {
             for a in &assertions {
                 for t in PostOrderIter::new(a.clone()) {
                     match &t.op {
-                        Op::Var(name, _) => {
-                            set.insert(name.to_owned());
+                        Op::Var(_, _) => {
+                            set.insert(t.clone());
                         }
                         _ => {}
                     }
@@ -55,11 +55,31 @@ impl Constraints for Computation {
             }
             set
         };
-        for v in all_vars {
-            if public_inputs.contains(&v) {
-                metadata.new_input(v, None);
+        let public_inputs_set: FxHashSet<String> = public_inputs
+            .iter()
+            .filter_map(|t| {
+                if let Op::Var(n, _) = &t.op {
+                    Some(n.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for v in public_inputs {
+            if let Op::Var(n, s) = &v.op {
+                metadata.new_input(n.to_owned(), None, s.clone());
             } else {
-                metadata.new_input(v, Some(PROVER_ID));
+                panic!()
+            }
+        }
+        for v in all_vars {
+            if let Op::Var(n, s) = &v.op {
+                if !public_inputs_set.contains(n) {
+                    metadata.new_input(n.to_owned(), Some(PROVER_ID), s.clone());
+                }
+            } else {
+                panic!()
             }
         }
         Self {

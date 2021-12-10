@@ -308,7 +308,7 @@ mod tests {
             metadata: ComputationMetadata::default(),
             values: None,
         };
-        let assignment = build_ilp(&cs, &costs);
+        let _assignment = build_ilp(&cs, &costs);
     }
 
     #[test]
