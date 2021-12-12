@@ -266,6 +266,7 @@ impl<'ast> ZGen<'ast> {
             .map_err(|e| format!("{}", e))?
             .unwrap_term();
         let new = self.apply_lval_mod(old, l, t)?;
+        debug!("Assign: {:?} = {:?}", var, new);
         self.circ
             .assign(var, Val::Term(new))
             .map_err(|e| format!("{}", e))

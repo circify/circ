@@ -122,8 +122,20 @@ impl Display for T {
             T::Bool(x) => write!(f, "Bool({})", x),
             T::Uint(_, x) => write!(f, "Uint({})", x),
             T::Field(x) => write!(f, "Field({})", x),
-            T::Struct(_, _) => write!(f, "struct"),
-            T::Array(_, _) => write!(f, "array"),
+            T::Struct(name, fields) => {
+                let mut d = f.debug_struct(name);
+                for (f, t) in fields {
+                    d.field(f, t);
+                }
+                d.finish()
+            }
+            T::Array(_, elems) => {
+                let mut d = f.debug_list();
+                for e in elems {
+                    d.entry(e);
+                }
+                d.finish()
+            }
         }
     }
 }
@@ -652,33 +664,8 @@ impl Embeddable for ZoKrates {
             ),
         }
     }
-    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
-        match (t, f) {
-            (T::Bool(a), T::Bool(b)) => T::Bool(term![Op::Ite; cond, a, b]),
-            (T::Uint(wa, a), T::Uint(wb, b)) if wa == wb => T::Uint(wa, term![Op::Ite; cond, a, b]),
-            (T::Field(a), T::Field(b)) => T::Field(term![Op::Ite; cond, a, b]),
-            (T::Array(a_ty, a), T::Array(b_ty, b)) if a_ty == b_ty => T::Array(
-                a_ty,
-                a.into_iter()
-                    .zip(b.into_iter())
-                    .map(|(a_i, b_i)| self.ite(ctx, cond.clone(), a_i, b_i))
-                    .collect(),
-            ),
-            (T::Struct(a_nm, a), T::Struct(b_nm, b)) if a_nm == b_nm => T::Struct(
-                a_nm,
-                a.into_iter()
-                    .zip(b.into_iter())
-                    .map(|((a_f, a_i), (b_f, b_i))| {
-                        if a_f == b_f {
-                            (a_f, self.ite(ctx, cond.clone(), a_i, b_i))
-                        } else {
-                            panic!("Field mismatch: '{}' vs '{}'", a_f, b_f)
-                        }
-                    })
-                    .collect(),
-            ),
-            (t, f) => panic!("Cannot ITE {} and {}", t, f),
-        }
+    fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+        ite(cond, t, f).unwrap()
     }
     fn assign(
         &self,

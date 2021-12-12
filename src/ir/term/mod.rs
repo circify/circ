@@ -142,6 +142,8 @@ pub enum Op {
     Tuple,
     /// Get the n'th element of a tuple
     Field(usize),
+    /// Update (tuple, element)
+    Update(usize),
 }
 
 /// Boolean AND
@@ -252,6 +254,7 @@ impl Op {
             Op::Store => Some(3),
             Op::Tuple => None,
             Op::Field(_) => Some(1),
+            Op::Update(_) => Some(2),
         }
     }
 }
@@ -294,6 +297,7 @@ impl Display for Op {
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "field{}", i),
+            Op::Update(i) => write!(f, "update{}", i),
         }
     }
 }
@@ -1153,6 +1157,13 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
                 let t = vs.get(&c.cs[0]).unwrap().as_tuple();
                 assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
                 t[*i].clone()
+            }
+            Op::Update(i) => {
+                let mut t = vs.get(&c.cs[0]).unwrap().as_tuple().clone();
+                assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
+                let e = vs.get(&c.cs[1]).unwrap().clone();
+                t[*i] = e;
+                Value::Tuple(t)
             }
             o => unimplemented!("eval: {:?}", o),
         };

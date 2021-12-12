@@ -39,6 +39,16 @@ impl TreeData {
             d => panic!("expected tuple, got {:?}", d),
         }
     }
+    fn update(&self, idx: usize, elem: Tree) -> Tree {
+        match self {
+            TreeData::Tuple(l) => {
+                let mut v = l.clone();
+                v[idx] = elem.clone();
+                Rc::new(TreeData::Tuple(v))
+            }
+            d => panic!("expected tuple for update, got {:?}", d),
+        }
+    }
     fn unfold_tuple_into(&self, terms: &mut Vec<Term>) {
         match self {
             TreeData::Leaf(l) => terms.push(l.clone()),
@@ -176,6 +186,11 @@ impl Pass {
                     )
                 }
                 Op::Field(i) => self.get_tree(&t.cs[0]).unwrap_tuple()[*i].clone(),
+                Op::Update(i) => {
+                    let tuple = self.get_tree(&t.cs[0]);
+                    let elem = self.get_tree(&t.cs[1]);
+                    tuple.update(*i, elem.clone())
+                }
                 o => panic!("Bad tuple operator: {}", o),
             }
         } else {

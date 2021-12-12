@@ -109,6 +109,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                 )))
             }
         }
+        Op::Update(_i) => Ok(check_raw(&t.cs[0])?),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     };
     let mut term_tys = TERM_TYPES.write().unwrap();
@@ -278,6 +279,17 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     }
                     (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
                         if i < &t.len() {
+                            Ok(t[*i].clone())
+                        } else {
+                            Err(TypeErrorReason::OutOfBounds(format!(
+                                "index {} in tuple of sort {}",
+                                i, a
+                            )))
+                        }
+                    }),
+                    (Op::Field(i), &[a, b]) => tuple_or(a, "tuple field update").and_then(|t| {
+                        if i < &t.len() {
+                            eq_or(&t[*i], b, "tuple update")?;
                             Ok(t[*i].clone())
                         } else {
                             Err(TypeErrorReason::OutOfBounds(format!(
