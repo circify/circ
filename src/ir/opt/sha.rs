@@ -170,9 +170,9 @@ mod test {
 
     #[test]
     fn undo() {
-        let a = bv_lit(0, 1);
-        let b = bv_lit(0, 1);
-        let c = bv_lit(0, 1);
+        let a = bool_lit(false);
+        let b = bool_lit(false);
+        let c = bool_lit(false);
         let t = term![Op::BoolMaj; a.clone(), b.clone(),c.clone()];
         let tt = term![OR; term![AND; a.clone(), b.clone()], term![AND; b.clone(), c.clone()], term![AND; c.clone(), a.clone()]];
         assert_eq!(tt, sha_maj_elim(&t));

@@ -1,5 +1,5 @@
 //! Symbolic ZoKrates terms
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
@@ -19,6 +19,7 @@ lazy_static! {
     .unwrap();
     /// The modulus for ZoKrates, as an ARC
     pub static ref ZOKRATES_MODULUS_ARC: Arc<Integer> = Arc::new(ZOKRATES_MODULUS.clone());
+    pub static ref ZOKRATES_FIELD_SORT: Sort = Sort::Field(ZOKRATES_MODULUS_ARC.clone());
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -26,8 +27,13 @@ pub enum Ty {
     Uint(usize),
     Bool,
     Field,
-    Struct(String, BTreeMap<String, Ty>),
+    Struct(String, Vec<(String, Ty)>),
     Array(usize, Box<Ty>),
+}
+
+fn lookup<'a>(map: &'a Vec<(String, Ty)>, key: &str) -> Option<(usize, &'a Ty)> {
+    let idx = map.binary_search_by_key(&key, |p| p.0.as_str()).ok()?;
+    Some((idx, &map[idx].1))
 }
 
 impl Display for Ty {
@@ -36,7 +42,13 @@ impl Display for Ty {
             Ty::Bool => write!(f, "bool"),
             Ty::Uint(w) => write!(f, "u{}", w),
             Ty::Field => write!(f, "field"),
-            Ty::Struct(n, _) => write!(f, "{}", n),
+            Ty::Struct(n, fields) => {
+                let mut o = f.debug_struct(n);
+                for (f_name, f_ty) in fields {
+                    o.field(f_name, f_ty);
+                }
+                o.finish()
+            }
             Ty::Array(n, b) => write!(f, "{}[{}]", b, n),
         }
     }
@@ -49,100 +61,109 @@ impl fmt::Debug for Ty {
 }
 
 impl Ty {
-    fn default(&self) -> T {
+    fn default_ir_term(&self) -> Term {
         match self {
-            Self::Bool => T::Bool(leaf_term(Op::Const(Value::Bool(false)))),
-            Self::Uint(w) => T::Uint(*w, bv_lit(0, *w)),
-            Self::Field => T::Field(pf_lit(0)),
-            Self::Array(n, b) => T::Array((**b).clone(), vec![b.default(); *n]),
-            Self::Struct(n, fs) => T::Struct(
-                n.clone(),
+            Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
+            Self::Uint(w) => bv_lit(0, *w),
+            Self::Field => pf_lit_ir(0),
+            Self::Array(n, b) => term![Op::ConstArray(ZOKRATES_FIELD_SORT.clone(), *n); b.default_ir_term()],
+            Self::Struct(_name, fs) => term(
+                Op::Tuple,
                 fs.iter()
-                    .map(|(f_name, f_ty)| (f_name.to_owned(), f_ty.default()))
+                    .map(|(_f_name, f_ty)| f_ty.default_ir_term())
                     .collect(),
             ),
         }
     }
+    fn default(&self) -> T {
+        T {
+            term: self.default_ir_term(),
+            ty: self.clone(),
+        }
+    }
+    /// Creates a new structure type, sorting the keys.
+    pub fn new_struct<I: IntoIterator<Item = (String, Ty)>>(name: String, fields: I) -> Self {
+        let mut v: Vec<_> = fields.into_iter().collect();
+        v.sort_by_cached_key(|p| p.0.clone());
+        Self::Struct(name, v)
+    }
 }
 
-#[derive(Clone)]
-pub enum T {
-    Uint(usize, Term),
-    Bool(Term),
-    Field(Term),
-    /// TODO: special case primitive arrays with Vec<T>.
-    Array(Ty, Vec<T>),
-    Struct(String, BTreeMap<String, T>),
+#[derive(Clone, Debug)]
+pub struct T {
+    pub ty: Ty,
+    pub term: Term,
 }
 
 impl T {
-    pub fn type_(&self) -> Ty {
-        match self {
-            T::Uint(w, _) => Ty::Uint(*w),
-            T::Bool(_) => Ty::Bool,
-            T::Field(_) => Ty::Field,
-            T::Array(b, v) => Ty::Array(v.len(), Box::new(b.clone())),
-            T::Struct(name, map) => Ty::Struct(
-                name.clone(),
-                map.iter()
-                    .map(|(f_name, f_term)| (f_name.clone(), f_term.type_()))
-                    .collect(),
-            ),
-        }
+    pub fn new(ty: Ty, term: Term) -> Self {
+        Self { ty, term }
+    }
+    pub fn type_(&self) -> &Ty {
+        &self.ty
     }
     /// Get all IR terms inside this value, as a list.
     pub fn terms(&self) -> Vec<Term> {
         let mut output: Vec<Term> = Vec::new();
-        fn terms_tail(term: &T, output: &mut Vec<Term>) {
-            match term {
-                T::Bool(b) => output.push(b.clone()),
-                T::Uint(_, b) => output.push(b.clone()),
-                T::Field(b) => output.push(b.clone()),
-                T::Array(_, v) => v.iter().for_each(|v| terms_tail(v, output)),
-                T::Struct(_, map) => map.iter().for_each(|(_, v)| terms_tail(v, output)),
+        fn terms_tail(term: &Term, output: &mut Vec<Term>) {
+            match check(term) {
+                Sort::Bool | Sort::BitVector(_) | Sort::Field(_) => output.push(term.clone()),
+                Sort::Array(_k, _v, size) => {
+                    for i in 0..size {
+                        terms_tail(&term![Op::Select; term.clone(), pf_lit_ir(i)], output)
+                    }
+                }
+                Sort::Tuple(sorts) => {
+                    for i in 0..sorts.len() {
+                        terms_tail(&term![Op::Field(i); term.clone()], output)
+                    }
+                }
+                s => unreachable!("Unreachable IR sort {} in ZoK", s),
             }
         }
-        terms_tail(self, &mut output);
+        terms_tail(&self.term, &mut output);
         output
     }
+    fn unwrap_array_ir(self) -> Result<Vec<Term>, String> {
+        match &self.ty {
+            Ty::Array(size, _sort) => Ok((0..*size)
+                .map(|i| term![Op::Select; self.term.clone(), pf_lit_ir(i)])
+                .collect()),
+            s => Err(format!("Not an array: {}", s)),
+        }
+    }
     pub fn unwrap_array(self) -> Result<Vec<T>, String> {
-        match self {
-            T::Array(_, v) => Ok(v),
+        match &self.ty {
+            Ty::Array(_size, sort) => {
+                let sort = (**sort).clone();
+                Ok(self
+                    .unwrap_array_ir()?
+                    .into_iter()
+                    .map(|t| T::new(sort.clone(), t))
+                    .collect())
+            }
             s => Err(format!("Not an array: {}", s)),
         }
     }
     pub fn new_array(v: Vec<T>) -> Result<T, String> {
         array(v)
     }
+    pub fn new_struct(
+        name: String,
+        mut fields: Vec<(String, T)>,
+    ) -> T {
+        fields.sort_by_cached_key(|f| f.0.clone());
+        let (field_tys, terms) = fields
+            .into_iter()
+            .map(|(name, t)| ((name, t.ty), t.term))
+            .unzip();
+        T::new(Ty::Struct(name, field_tys), term(Op::Tuple, terms))
+    }
 }
 
 impl Display for T {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            T::Bool(x) => write!(f, "Bool({})", x),
-            T::Uint(_, x) => write!(f, "Uint({})", x),
-            T::Field(x) => write!(f, "Field({})", x),
-            T::Struct(name, fields) => {
-                let mut d = f.debug_struct(name);
-                for (f, t) in fields {
-                    d.field(f, t);
-                }
-                d.finish()
-            }
-            T::Array(_, elems) => {
-                let mut d = f.debug_list();
-                for e in elems {
-                    d.entry(e);
-                }
-                d.finish()
-            }
-        }
-    }
-}
-
-impl fmt::Debug for T {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.term)
     }
 }
 
@@ -154,10 +175,16 @@ fn wrap_bin_op(
     a: T,
     b: T,
 ) -> Result<T, String> {
-    match (a, b, fu, ff, fb) {
-        (T::Uint(na, a), T::Uint(nb, b), Some(fu), _, _) if na == nb => Ok(T::Uint(na, fu(a, b))),
-        (T::Bool(a), T::Bool(b), _, _, Some(fb)) => Ok(T::Bool(fb(a, b))),
-        (T::Field(a), T::Field(b), _, Some(ff), _) => Ok(T::Field(ff(a, b))),
+    match (&a.ty, &b.ty, fu, ff, fb) {
+        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _) if na == nb => {
+            Ok(T::new(Ty::Uint(*na), fu(a.term.clone(), b.term.clone())))
+        }
+        (Ty::Bool, Ty::Bool, _, _, Some(fb)) => {
+            Ok(T::new(Ty::Bool, fb(a.term.clone(), b.term.clone())))
+        }
+        (Ty::Field, Ty::Field, _, Some(ff), _) => {
+            Ok(T::new(Ty::Field, ff(a.term.clone(), b.term.clone())))
+        }
         (x, y, _, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
 }
@@ -170,10 +197,16 @@ fn wrap_bin_pred(
     a: T,
     b: T,
 ) -> Result<T, String> {
-    match (a, b, fu, ff, fb) {
-        (T::Uint(na, a), T::Uint(nb, b), Some(fu), _, _) if na == nb => Ok(T::Bool(fu(a, b))),
-        (T::Bool(a), T::Bool(b), _, _, Some(fb)) => Ok(T::Bool(fb(a, b))),
-        (T::Field(a), T::Field(b), _, Some(ff), _) => Ok(T::Bool(ff(a, b))),
+    match (&a.ty, &b.ty, fu, ff, fb) {
+        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _) if na == nb => {
+            Ok(T::new(Ty::Bool, fu(a.term.clone(), b.term.clone())))
+        }
+        (Ty::Bool, Ty::Bool, _, _, Some(fb)) => {
+            Ok(T::new(Ty::Bool, fb(a.term.clone(), b.term.clone())))
+        }
+        (Ty::Field, Ty::Field, _, Some(ff), _) => {
+            Ok(T::new(Ty::Bool, ff(a.term.clone(), b.term.clone())))
+        }
         (x, y, _, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
 }
@@ -329,10 +362,10 @@ fn wrap_un_op(
     fb: Option<fn(Term) -> Term>,
     a: T,
 ) -> Result<T, String> {
-    match (a, fu, ff, fb) {
-        (T::Uint(na, a), Some(fu), _, _) => Ok(T::Uint(na, fu(a))),
-        (T::Bool(a), _, _, Some(fb)) => Ok(T::Bool(fb(a))),
-        (T::Field(a), _, Some(ff), _) => Ok(T::Field(ff(a))),
+    match (&a.ty, fu, ff, fb) {
+        (Ty::Uint(_), Some(fu), _, _) => Ok(T::new(a.ty.clone(), fu(a.term.clone()))),
+        (Ty::Bool, _, _, Some(fb)) => Ok(T::new(Ty::Bool, fb(a.term.clone()))),
+        (Ty::Field, _, Some(ff), _) => Ok(T::new(Ty::Field, ff(a.term.clone()))),
         (x, _, _, _) => Err(format!("Cannot perform op '{}' on {}", name, x)),
     }
 }
@@ -364,31 +397,28 @@ pub fn not(a: T) -> Result<T, String> {
 }
 
 pub fn const_int(a: T) -> Result<Integer, String> {
-    let s = match &a {
-        T::Field(b) => match &b.op {
-            Op::Const(Value::Field(f)) => Some(f.i().clone()),
-            _ => None,
-        },
-        T::Uint(_, i) => match &i.op {
-            Op::Const(Value::BitVector(f)) => Some(f.uint().clone()),
-            _ => None,
-        },
+    match &a.term.op {
+        Op::Const(Value::Field(f)) => Some(f.i().clone()),
+        Op::Const(Value::BitVector(f)) => Some(f.uint().clone()),
         _ => None,
-    };
-    s.ok_or_else(|| format!("{} is not a constant integer", a))
+    }
+    .ok_or_else(|| format!("{} is not a constant integer", a))
 }
 
 pub fn bool(a: T) -> Result<Term, String> {
-    match a {
-        T::Bool(b) => Ok(b),
+    match &a.ty {
+        Ty::Bool => Ok(a.term),
         a => Err(format!("{} is not a boolean", a)),
     }
 }
 
 fn wrap_shift(name: &str, op: BvBinOp, a: T, b: T) -> Result<T, String> {
     let bc = const_int(b)?;
-    match a {
-        T::Uint(na, a) => Ok(T::Uint(na, term![Op::BvBinOp(op); a, bv_lit(bc, na)])),
+    match &a.ty {
+        &Ty::Uint(na) => Ok(T::new(
+            a.ty,
+            term![Op::BvBinOp(op); a.term, bv_lit(bc, na)],
+        )),
         x => Err(format!("Cannot perform op '{}' on {} and {}", name, x, bc)),
     }
 }
@@ -402,30 +432,10 @@ pub fn shr(a: T, b: T) -> Result<T, String> {
 }
 
 fn ite(c: Term, a: T, b: T) -> Result<T, String> {
-    match (a, b) {
-        (T::Uint(na, a), T::Uint(nb, b)) if na == nb => Ok(T::Uint(na, term![Op::Ite; c, a, b])),
-        (T::Bool(a), T::Bool(b)) => Ok(T::Bool(term![Op::Ite; c, a, b])),
-        (T::Field(a), T::Field(b)) => Ok(T::Field(term![Op::Ite; c, a, b])),
-        (T::Array(ta, a), T::Array(tb, b)) if a.len() == b.len() && ta == tb => Ok(T::Array(
-            ta,
-            a.into_iter()
-                .zip(b.into_iter())
-                .map(|(a_i, b_i)| ite(c.clone(), a_i, b_i))
-                .collect::<Result<Vec<_>, _>>()?,
-        )),
-        (T::Struct(na, a), T::Struct(nb, b)) if na == nb => Ok(T::Struct(na.clone(), {
-            a.into_iter()
-                .zip(b.into_iter())
-                .map(|((af, av), (bf, bv))| {
-                    if af == bf {
-                        Ok((af, ite(c.clone(), av, bv)?))
-                    } else {
-                        Err(format!("Field mismatch: {} vs {}", af, bf))
-                    }
-                })
-                .collect::<Result<BTreeMap<_, _>, String>>()?
-        })),
-        (x, y) => Err(format!("Cannot perform ITE on {} and {}", x, y)),
+    if &a.ty != &b.ty {
+        Err(format!("Cannot perform ITE on {} and {}", a, b))
+    } else {
+        Ok(T::new(a.ty.clone(), term![Op::Ite; c, a.term, b.term]))
     }
 }
 
@@ -433,7 +443,7 @@ pub fn cond(c: T, a: T, b: T) -> Result<T, String> {
     ite(bool(c)?, a, b)
 }
 
-pub fn pf_lit<I>(i: I) -> Term
+pub fn pf_lit_ir<I>(i: I) -> Term
 where
     Integer: From<I>,
 {
@@ -443,76 +453,110 @@ where
     ))))
 }
 
-pub fn slice(array: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
-    match array {
-        T::Array(b, mut list) => {
+pub fn field_lit<I>(i: I) -> T
+where
+    Integer: From<I>,
+{
+    T::new(Ty::Field, pf_lit_ir(i))
+}
+
+pub fn z_bool_lit(v: bool) -> T
+{
+    T::new(Ty::Bool, leaf_term(Op::Const(Value::Bool(v))))
+}
+
+pub fn uint_lit<I>(v: I, bits: usize) -> T
+where
+    Integer: From<I>,
+{
+    T::new(Ty::Uint(bits), bv_lit(v, bits))
+}
+
+pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
+    match &arr.ty {
+        Ty::Array(size, _) => {
             let start = start.unwrap_or(0);
-            let end = end.unwrap_or(list.len());
-            Ok(T::Array(b, list.drain(start..end).collect()))
+            let end = end.unwrap_or(*size);
+            array(arr.unwrap_array()?.drain(start..end))
         }
         a => Err(format!("Cannot slice {}", a)),
     }
 }
 
 pub fn field_select(struct_: &T, field: &str) -> Result<T, String> {
-    match struct_ {
-        T::Struct(_, map) => map
-            .get(field)
-            .cloned()
-            .ok_or_else(|| format!("No field '{}'", field)),
+    match &struct_.ty {
+        Ty::Struct(_, map) => {
+            if let Some((idx, ty)) = lookup(map, field) {
+                Ok(T::new(
+                    ty.clone(),
+                    term![Op::Field(idx); struct_.term.clone()],
+                ))
+            } else {
+                Err(format!("No field '{}'", field))
+            }
+        }
         a => Err(format!("{} is not a struct", a)),
     }
 }
 
 pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
-    match struct_ {
-        T::Struct(name, mut map) => Ok(T::Struct(name, {
-            if map.insert(field.to_owned(), val).is_some() {
-                map
+    match &struct_.ty {
+        Ty::Struct(_, map) => {
+            if let Some((idx, ty)) = lookup(map, field) {
+                if ty == &val.ty {
+                    Ok(T::new(
+                        struct_.ty.clone(),
+                        term![Op::Update(idx); struct_.term.clone(), val.term],
+                    ))
+                } else {
+                    Err(format!(
+                        "term {} assigned to field {} of type {}",
+                        val, field, map[idx].1
+                    ))
+                }
             } else {
-                return Err(format!("No '{}' field", field));
+                Err(format!("No field '{}'", field))
             }
-        })),
+        }
         a => Err(format!("{} is not a struct", a)),
     }
 }
 
 pub fn array_select(array: T, idx: T) -> Result<T, String> {
-    match (array, idx) {
-        (T::Array(_, list), T::Field(idx)) => {
-            let mut it = list.into_iter().enumerate();
-            let first = it
-                .next()
-                .ok_or_else(|| format!("Cannot index empty array"))?;
-            it.fold(Ok(first.1), |acc, (i, elem)| {
-                ite(term![Op::Eq; pf_lit(i), idx.clone()], elem, acc?)
-            })
+    match (array.ty, idx.ty) {
+        (Ty::Array(_size, elem_ty), Ty::Field) => {
+            Ok(T::new(*elem_ty, term![Op::Select; array.term, idx.term]))
         }
         (a, b) => Err(format!("Cannot index {} by {}", b, a)),
     }
 }
 
 pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
-    match (array, idx) {
-        (T::Array(ty, list), T::Field(idx)) => Ok(T::Array(
-            ty,
-            list.into_iter()
-                .enumerate()
-                .map(|(i, elem)| ite(term![Op::Eq; pf_lit(i), idx.clone()], val.clone(), elem))
-                .collect::<Result<Vec<_>, _>>()?,
+    match (&array.ty, idx.ty) {
+        (Ty::Array(_, _), Ty::Field) => Ok(T::new(
+            array.ty,
+            term![Op::Store; array.term, idx.term, val.term],
         )),
         (a, b) => Err(format!("Cannot index {} by {}", b, a)),
     }
 }
 
-fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
+fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
+    make_array(ZOKRATES_FIELD_SORT.clone(), sort, elems.into_iter().collect())
+}
+
+pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
     let v: Vec<T> = elems.into_iter().collect();
     if let Some(e) = v.first() {
         let ty = e.type_();
         if v.iter().skip(1).any(|a| a.type_() != ty) {
             Err(format!("Inconsistent types in array"))
         } else {
-            Ok(T::Array(ty, v))
+            let sort = check(&e.term);
+            Ok(T::new(
+                Ty::Array(v.len(), Box::new(ty.clone())),
+                ir_array(sort, v.into_iter().map(|t| t.term)),
+            ))
         }
     } else {
         Err(format!("Empty array"))
@@ -520,27 +564,29 @@ fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
 }
 
 pub fn uint_to_bits(u: T) -> Result<T, String> {
-    match u {
-        T::Uint(n, t) => Ok(T::Array(
-            Ty::Bool,
-            (0..n)
-                .map(|i| T::Bool(term![Op::BvBit(i); t.clone()]))
-                .collect(),
+    match &u.ty {
+        Ty::Uint(n) => Ok(T::new(
+            Ty::Array(*n, Box::new(Ty::Bool)),
+            ir_array(
+                Sort::Bool,
+                (0..*n).map(|i| term![Op::BvBit(i); u.term.clone()]),
+            ),
         )),
         u => Err(format!("Cannot do uint-to-bits on {}", u)),
     }
 }
 
 pub fn uint_from_bits(u: T) -> Result<T, String> {
-    match u {
-        T::Array(Ty::Bool, list) => match list.len() {
-            8 | 16 | 32 => Ok(T::Uint(
-                list.len(),
+    match &u.ty {
+        Ty::Array(bits, elem_ty) if &**elem_ty == &Ty::Bool => match bits {
+            8 | 16 | 32 => Ok(T::new(
+                Ty::Uint(*bits),
                 term(
                     Op::BvConcat,
-                    list.into_iter()
-                        .map(|z: T| -> Result<Term, String> { Ok(term![Op::BoolToBv; bool(z)?]) })
-                        .collect::<Result<Vec<_>, _>>()?,
+                    u.unwrap_array_ir()?
+                        .into_iter()
+                        .map(|z: Term| -> Term { term![Op::BoolToBv; z] })
+                        .collect(),
                 ),
             )),
             l => Err(format!("Cannot do uint-from-bits on len {} array", l,)),
@@ -550,17 +596,9 @@ pub fn uint_from_bits(u: T) -> Result<T, String> {
 }
 
 pub fn field_to_bits(f: T) -> Result<T, String> {
-    match f {
-        T::Field(t) => {
-            let u = term![Op::PfToBv(254); t];
-            Ok(T::Array(
-                Ty::Bool,
-                (0..254)
-                    .map(|i| T::Bool(term![Op::BvBit(i); u.clone()]))
-                    .collect(),
-            ))
-        }
-        u => Err(format!("Cannot do field-to-bits on {}", u)),
+    match &f.ty {
+        Ty::Field => uint_to_bits(T::new(Ty::Uint(254), term![Op::PfToBv(254); f.term])),
+        u => Err(format!("Cannot do uint-to-bits on {}", u)),
     }
 }
 
@@ -610,20 +648,26 @@ impl Embeddable for ZoKrates {
                 .unwrap_or_else(|| Integer::from(0))
         };
         match ty {
-            Ty::Bool => T::Bool(ctx.cs.borrow_mut().new_var(
-                &raw_name,
-                Sort::Bool,
-                || Value::Bool(get_int_val() != 0),
-                visibility,
-            )),
-            Ty::Field => T::Field(ctx.cs.borrow_mut().new_var(
-                &raw_name,
-                Sort::Field(self.modulus.clone()),
-                || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
-                visibility,
-            )),
-            Ty::Uint(w) => T::Uint(
-                *w,
+            Ty::Bool => T::new(
+                Ty::Bool,
+                ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::Bool,
+                    || Value::Bool(get_int_val() != 0),
+                    visibility,
+                ),
+            ),
+            Ty::Field => T::new(
+                Ty::Field,
+                ctx.cs.borrow_mut().new_var(
+                    &raw_name,
+                    Sort::Field(self.modulus.clone()),
+                    || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
+                    visibility,
+                ),
+            ),
+            Ty::Uint(w) => T::new(
+                Ty::Uint(*w),
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
                     Sort::BitVector(*w),
@@ -631,21 +675,17 @@ impl Embeddable for ZoKrates {
                     visibility,
                 ),
             ),
-            Ty::Array(n, ty) => T::Array(
-                (**ty).clone(),
-                (0..*n)
-                    .map(|i| {
-                        self.declare(
-                            ctx,
-                            &*ty,
-                            idx_name(&raw_name, i),
-                            user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility.clone(),
-                        )
-                    })
-                    .collect(),
-            ),
-            Ty::Struct(n, fs) => T::Struct(
+            Ty::Array(n, ty) => array((0..*n).map(|i| {
+                self.declare(
+                    ctx,
+                    &*ty,
+                    idx_name(&raw_name, i),
+                    user_name.as_ref().map(|u| idx_name(u, i)),
+                    visibility.clone(),
+                )
+            }))
+            .unwrap(),
+            Ty::Struct(n, fs) => T::new_struct(
                 n.clone(),
                 fs.iter()
                     .map(|(f_name, f_ty)| {
@@ -675,47 +715,15 @@ impl Embeddable for ZoKrates {
         t: Self::T,
         visibility: Option<PartyId>,
     ) -> Self::T {
-        assert!(&t.type_() == ty);
-        match (ty, t) {
-            (_, T::Bool(b)) => T::Bool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
-            (_, T::Field(b)) => T::Field(ctx.cs.borrow_mut().assign(&name, b, visibility)),
-            (_, T::Uint(w, b)) => T::Uint(w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
-            (_, T::Array(ety, list)) => T::Array(
-                ety.clone(),
-                list.into_iter()
-                    .enumerate()
-                    .map(|(i, elem)| {
-                        self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
-                    })
-                    .collect(),
-            ),
-            (Ty::Struct(_, tys), T::Struct(s_name, list)) => T::Struct(
-                s_name,
-                list.into_iter()
-                    .zip(tys.into_iter())
-                    .map(|((f_name, elem), (_, f_ty))| {
-                        (
-                            f_name.clone(),
-                            self.assign(
-                                ctx,
-                                &f_ty,
-                                field_name(&name, &f_name),
-                                elem,
-                                visibility.clone(),
-                            ),
-                        )
-                    })
-                    .collect(),
-            ),
-            _ => unimplemented!(),
-        }
+        assert!(t.type_() == ty);
+        T::new(t.ty, ctx.cs.borrow_mut().assign(&name, t.term, visibility))
     }
     fn values(&self) -> bool {
         self.values.is_some()
     }
 
     fn type_of(&self, term: &Self::T) -> Self::Ty {
-        term.type_()
+        term.type_().clone()
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {

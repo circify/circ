@@ -1,7 +1,5 @@
 use crate::ir::term::*;
 
-use log::debug;
-
 /// A visitor for traversing terms, and visiting the array-related parts.
 ///
 /// Visits:
@@ -80,14 +78,14 @@ pub trait MemVisitor {
                     },
                 }
             };
-            let new_t = new_t_opt.unwrap_or_else(|| {
-                term(
-                    t.op.clone(),
-                    t.cs.iter().map(|c| c_get(c).clone()).collect(),
-                )
-            });
-            debug!("rebuild: {}", new_t);
-            cache.insert(t.clone(), new_t);
+            // replace children of in cache
+            let mut new_cs : Vec<Term> = Vec::new();
+            for x in t.cs.iter() {
+                new_cs.push(cache.get(&x).unwrap_or_else(|| x).clone());
+            }
+            let new_t = term(t.op.clone(), new_cs);
+
+            cache.insert(t.clone(), new_t_opt.unwrap_or_else(|| new_t.clone()));
         }
         cache.remove(node).unwrap()
     }

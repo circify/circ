@@ -788,6 +788,29 @@ impl Sort {
             _ => panic!("Cannot iterate over {}", self),
         }
     }
+
+    /// Compute the default term for this sort.
+    ///
+    /// * booleans: false
+    /// * bit-vectors: zero
+    /// * field elements: zero
+    /// * floats: zero
+    /// * tuples/arrays: recursively default
+    pub fn default_term(&self) -> Term {
+        match self {
+            Sort::Bool => leaf_term(Op::Const(Value::Bool(false))),
+            Sort::BitVector(w) => bv_lit(0, *w),
+            Sort::Field(m) => leaf_term(Op::Const(Value::Field(FieldElem::new(
+                Integer::from(0),
+                m.clone(),
+            )))),
+            Sort::Int => leaf_term(Op::Const(Value::Int(0.into()))),
+            Sort::F32 => leaf_term(Op::Const(Value::F32(0.0f32))),
+            Sort::F64 => leaf_term(Op::Const(Value::F64(0.0))),
+            Sort::Tuple(t) => term(Op::Tuple, t.iter().map(Sort::default_term).collect()),
+            Sort::Array(k, v, n) => term(Op::ConstArray((**k).clone(), *n), vec![v.default_term()]),
+        }
+    }
 }
 
 impl Display for Sort {
@@ -1173,14 +1196,37 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
     vs.get(t).unwrap().clone()
 }
 
+/// Make an array from a sequence of terms.
+///
+/// Requires
+///
+/// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
+/// * a value sort, for the array's default
+pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
+    let default_value = value_sort.default_term();
+    let default_arr = term(
+        Op::ConstArray(key_sort.clone(), i.len()),
+        vec![default_value],
+    );
+    i.into_iter()
+        .zip(key_sort.elems_iter())
+        .fold(default_arr, |arr, (val, idx)| {
+            term(Op::Store, vec![arr, idx, val])
+        })
+}
+
 /// Make a term with no arguments, just an operator.
 pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
 /// Make a term with arguments.
+#[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
-    mk(TermData { op, cs })
+    let t = mk(TermData { op, cs });
+    #[cfg(debug_assertions)]
+    check_rec(&t);
+    t
 }
 
 /// Make a bit-vector constant term.
@@ -1192,6 +1238,12 @@ where
         uint.into(),
         width,
     ))))
+}
+
+/// Make a bit-vector constant term.
+pub fn bool_lit(b: bool) -> Term
+{
+    leaf_term(Op::Const(Value::Bool(b)))
 }
 
 #[macro_export]
@@ -1300,8 +1352,7 @@ impl ComputationMetadata {
     }
     /// Is this input public?
     pub fn is_input(&self, input_name: &str) -> bool {
-        self.input_vis
-            .contains_key(input_name)
+        self.input_vis.contains_key(input_name)
     }
     /// Is this input public?
     pub fn is_input_public(&self, input_name: &str) -> bool {
@@ -1394,7 +1445,11 @@ impl Computation {
         Self {
             outputs: Vec::new(),
             metadata: ComputationMetadata::default(),
-            values: if values { Some(FxHashMap::default()) } else { None },
+            values: if values {
+                Some(FxHashMap::default())
+            } else {
+                None
+            },
         }
     }
     // TODO: rm

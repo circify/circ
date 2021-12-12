@@ -192,6 +192,8 @@ fn main() {
                 Opt::Flatten,
                 //Opt::FlattenAssertions,
                 Opt::Inline,
+                Opt::Tuple,
+                Opt::ConstantFold,
                 Opt::Mem,
                 Opt::Flatten,
                 //Opt::FlattenAssertions,
