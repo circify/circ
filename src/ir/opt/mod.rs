@@ -7,7 +7,6 @@ pub mod sha;
 pub mod tuple;
 
 use super::term::*;
-use super::term::extras::Letified;
 use log::debug;
 
 #[derive(Debug)]
@@ -77,7 +76,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
             }
         }
         debug!("After {:?}: {} outputs", i, cs.outputs.len());
-        debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
+        //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
         debug!("After {:?}: {} terms", i, cs.terms());
     }
     garbage_collect();

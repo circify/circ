@@ -7,6 +7,7 @@ use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
+use crate::ir::term::extras::Letified;
 use log::debug;
 use rug::Integer;
 use std::collections::HashMap;
@@ -265,7 +266,7 @@ impl<'ast> ZGen<'ast> {
             .map_err(|e| format!("{}", e))?
             .unwrap_term();
         let new = self.apply_lval_mod(old, l, t)?;
-        debug!("Assign: {:?} = {:?}", var, new);
+        debug!("Assign: {:?} = {}", var, Letified(new.term.clone()));
         self.circ
             .assign(var, Val::Term(new))
             .map_err(|e| format!("{}", e))

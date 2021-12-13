@@ -1426,7 +1426,7 @@ impl Computation {
     /// Assert `s` in the system.
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
-        debug!("Assert: {}", s);
+        debug!("Assert: {}", extras::Letified(s.clone()));
         self.outputs.push(s);
     }
     /// If tracking values, evaluate `term`, and set the result to `name`.
