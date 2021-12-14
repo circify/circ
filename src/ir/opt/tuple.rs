@@ -191,14 +191,20 @@ impl Pass {
                     let elem = self.get_tree(&t.cs[1]);
                     tuple.update(*i, elem.clone())
                 }
+                Op::Select => {
+                    unimplemented!(
+                        "The tuple elimination pass does not support tuples in arrays: {}",
+                        t
+                    );
+                }
                 o => panic!("Bad tuple operator: {}", o),
             }
         } else {
-            match &t.op {
-                Op::Field(i) => self.get_tree(&t.cs[0]).unwrap_tuple()[*i].clone(),
+            (match &t.op {
+                Op::Field(i) => Some(self.get_tree(&t.cs[0]).unwrap_tuple()[*i].clone()),
                 Op::Eq => {
                     let c_sort = check(&t.cs[0]);
-                    Rc::new(TreeData::Leaf(if let Sort::Tuple(_) = c_sort {
+                    Some(Rc::new(TreeData::Leaf(if let Sort::Tuple(_) = c_sort {
                         let xs = self.get_tree(&t.cs[0]).unfold_tuple();
                         let ys = self.get_tree(&t.cs[1]).unfold_tuple();
                         term(
@@ -215,15 +221,28 @@ impl Pass {
                                 .map(|c| self.get_tree(c).unwrap_leaf().clone())
                                 .collect(),
                         )
-                    }))
+                    })))
                 }
-                _ => Rc::new(TreeData::Leaf(term(
+                Op::Store => {
+                    if let Sort::Tuple(_) = check(&t.cs[1]) {
+                        unimplemented!(
+                            "The tuple elimination pass does not support tuples in arrays: {}",
+                            t
+                        )
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                Rc::new(TreeData::Leaf(term(
                     t.op.clone(),
                     t.cs.iter()
                         .map(|c| self.get_tree(c).unwrap_leaf().clone())
                         .collect(),
-                ))),
-            }
+                )))
+            })
         };
         if let TreeData::Leaf(t) = &*tree {
             debug_assert!(tuple_free(t.clone()), "Tuple in {:?}", tree);
