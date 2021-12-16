@@ -12,7 +12,6 @@ use super::{ZConstLiteralRewriter, ZVisitorMut, ZVisitorError, ZVisitorResult, Z
 use super::super::term::{const_int, const_int_ref, Ty};
 use super::super::{ZGen, span_to_string};
 
-use log::debug;
 use std::collections::HashMap;
 use zokrates_pest_ast as ast;
 
@@ -449,40 +448,48 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         }
     }
 
-    fn unify_fdef_call(
+    fn get_call_ty(
         &self,
         fdef: &ast::FunctionDefinition<'ast>,
         call: &mut ast::CallAccess<'ast>,
         rty: Option<&ast::Type<'ast>>,
     ) -> ZResult<ast::Type<'ast>> {
+        // basic consistency checks on Call access
         if call.arguments.expressions.len() != fdef.parameters.len() {
-            return Err(ZVisitorError(format!(
+            Err(format!(
                 "ZStatementWalker: wrong number of arguments to fn {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            )));
+            ))?;
         }
-        // early return if no generics in this function call
-        if fdef.generics.is_empty() {
-            return if call.explicit_generics.is_some() {
-                Err(ZVisitorError(format!(
-                    "ZStatementWalker: got explicit generics for non-generic fn call {}:\n{}",
-                    &fdef.id.value,
-                    span_to_string(&call.span),
-                )))
-            } else {
-                Ok(fdef.returns.first().unwrap().clone())
-            };
+        if fdef.generics.is_empty() && call.explicit_generics.is_some() {
+            Err(format!(
+                "ZStatementWalker: got explicit generics for non-generic fn call {}:\n{}",
+                &fdef.id.value,
+                span_to_string(&call.span),
+            ))?;
         }
-
         if call.explicit_generics.as_ref().map(|eg| eg.values.len() != fdef.generics.len()).unwrap_or(false) {
-            return Err(ZVisitorError(format!(
+            Err(format!(
                 "ZStatementWalker: wrong number of generic args to fn {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            )));
+            ))?;
         }
 
+        // unify args
+        fdef.parameters.iter()
+            .map(|pty| pty.ty.clone())
+            .zip(call.arguments.expressions.iter_mut())
+            .try_for_each(|(pty, arg)| self.unify_expression(pty, arg))?;
+
+
+        Ok(fdef.returns.first().cloned().unwrap_or_else(||
+            ast::Type::Basic(ast::BasicType::Boolean(
+                    ast::BooleanType { span: call.span.clone() }
+        ))))
+    }
+        /*
         use ast::ConstantGenericValue::*;
         if call
             .explicit_generics
@@ -557,7 +564,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         let mut ret_rewriter = ZExpressionRewriter::new(gvmap);
         let mut ret_ty = fdef.returns.first().unwrap().clone();
         ret_rewriter.visit_type(&mut ret_ty).map(|_| ret_ty)
-    }
+        */
 
     fn get_postfix_ty(
         &self,
@@ -593,7 +600,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                     } else {
                         None
                     };
-                    Ok((self.unify_fdef_call(fdef, ca, rty)?, 1))
+                    Ok((self.get_call_ty(fdef, ca, rty)?, 1))
                 }
             })?
         } else {
@@ -975,7 +982,6 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         }
     }
 
-    // XXX(q) unify access expressions?
     fn walk_accesses<F, T>(
         &self,
         mut ty: ast::Type<'ast>,
@@ -999,38 +1005,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                     if let Type::Array(aty) = ty {
                         use ast::RangeOrExpression::*;
                         match &aacc.expression {
-                            Range(r) => {
-                                // XXX(q): range checks here?
-                                // XXX(q): can we simplify exprs here to binops on generics?
-                                let from = Box::new(if let Some(f) = &r.from {
-                                    f.0.clone()
-                                } else {
-                                    let f_expr = ast::U32NumberExpression {
-                                        value: "0x0000".to_string(),
-                                        span: r.span.clone(),
-                                    };
-                                    let f_hlit = ast::HexLiteralExpression {
-                                        value: ast::HexNumberExpression::U32(f_expr),
-                                        span: r.span.clone(),
-                                    };
-                                    let f_lexp = ast::LiteralExpression::HexLiteral(f_hlit);
-                                    ast::Expression::Literal(f_lexp)
-                                });
-                                let to = Box::new(if let Some(t) = &r.to {
-                                    t.0.clone()
-                                } else {
-                                    aty.dimensions[acc_dim_offset].clone()
-                                });
-                                let r_bexp = ast::BinaryExpression {
-                                    op: ast::BinaryOperator::Sub,
-                                    left: to,
-                                    right: from,
-                                    span: r.span.clone(),
-                                };
-                                let mut aty = aty;
-                                aty.dimensions[acc_dim_offset] = ast::Expression::Binary(r_bexp);
-                                Type::Array(aty)
-                            }
+                            Range(_) => Type::Array(aty),
                             Expression(_) => {
                                 if aty.dimensions.len() - acc_dim_offset > 1 {
                                     acc_dim_offset += 1;

@@ -59,8 +59,7 @@ pub fn eq_struct_type<'ast>(ty: &ast::StructType<'ast>, ty2: &ast::StructType<'a
             &ty.id.value, &ty2.id.value,
         )))
     } else {
-        // XXX(rsw) need to check that ExplicitGenerics match
-        // will this require a ref to ZStatementWalker for const def'ns etc?
+        // don't check generics here; they'll get checked after monomorphization
         Ok(())
     }
 }
