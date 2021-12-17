@@ -57,7 +57,7 @@ struct NonOblivComputer {
 
 impl NonOblivComputer {
     fn mark(&mut self, a: &Term) -> bool {
-        if !self.not_obliv.insert(a.clone()) {
+        if !a.is_const() && !self.not_obliv.insert(a.clone()) {
             debug!("Not obliv: {}", a);
             true
         } else {
@@ -66,16 +66,20 @@ impl NonOblivComputer {
     }
 
     fn bi_implicate(&mut self, a: &Term, b: &Term) -> bool {
-        match (self.not_obliv.contains(a), self.not_obliv.contains(b)) {
-            (false, true) => {
-                self.not_obliv.insert(a.clone());
-                true
+        if !a.is_const() && !b.is_const() {
+            match (self.not_obliv.contains(a), self.not_obliv.contains(b)) {
+                (false, true) => {
+                    self.not_obliv.insert(a.clone());
+                    true
+                }
+                (true, false) => {
+                    self.not_obliv.insert(b.clone());
+                    true
+                }
+                _ => false,
             }
-            (true, false) => {
-                self.not_obliv.insert(b.clone());
-                true
-            }
-            _ => false,
+        } else {
+            false
         }
     }
     fn new() -> Self {
@@ -142,7 +146,7 @@ impl ProgressAnalysisPass for NonOblivComputer {
             Op::Tuple => {
                 panic!("Tuple in obliv")
             }
-            _ => false
+            _ => false,
         }
     }
 }
@@ -158,19 +162,43 @@ impl Replacer {
     fn should_replace(&self, a: &Term) -> bool {
         !self.not_obliv.contains(a)
     }
+}
 
+fn rewrite_if_const(a: Term) -> Term {
+    fn arr_to_tup(v: &Value) -> Value {
+        match v {
+            Value::Array(_key, default, map, size) => Value::Tuple({
+                let mut vec: Vec<Value> = vec![arr_to_tup(default); *size];
+                for (i, v) in map {
+                    vec[i.as_usize().expect("non usize key")] = arr_to_tup(v);
+                }
+                vec
+            }),
+            v => v.clone(),
+        }
+    }
+    match &a.op {
+        Op::Const(v @ Value::Array(..)) => leaf_term(Op::Const(arr_to_tup(v))),
+        _ => a,
+    }
+}
+fn arr_sort_to_tup(v: &Sort) -> Sort {
+    match v {
+        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        v => v.clone(),
+    }
 }
 
 impl MemVisitor for Replacer {
-    fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
-        if self.should_replace(orig) {
-            debug!("Will replace constant: {}", orig);
-            self.tuples.insert(
-                orig.clone(),
-                term(Op::Tuple, repeat(val).cloned().take(size).collect()),
-            );
-        }
-    }
+    //fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
+    //    if self.should_replace(orig) {
+    //        debug!("Will replace constant: {}", orig);
+    //        self.tuples.insert(
+    //            orig.clone(),
+    //            term(Op::Tuple, repeat(val).cloned().take(size).collect()),
+    //        );
+    //    }
+    //}
     fn visit_eq(&mut self, orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
         if let Some(a_tup) = self.tuples.get(&orig.cs[0]) {
             let b_tup = self.tuples.get(&orig.cs[1]).expect("inconsistent eq");
@@ -232,9 +260,71 @@ impl MemVisitor for Replacer {
         }
     }
 }
+
+#[track_caller]
+fn get_const(t: &Term) -> usize {
+    as_uint_constant(t)
+        .unwrap_or_else(|| panic!("non-const {}", t))
+        .to_usize()
+        .expect("oversize")
+}
+
 impl RewritePass for Replacer {
     fn visit<F: Fn() -> Vec<Term>>(&mut self, orig: &Term, rewritten_children: F) -> Option<Term> {
-        todo!()
+        //debug!("Visit {}", extras::Letified(orig.clone()));
+        let get_cs = || -> Vec<Term> {
+            rewritten_children()
+                .into_iter()
+                .map(rewrite_if_const)
+                .collect()
+        };
+        match &orig.op {
+            Op::Var(name, sort@Sort::Array(_k, _v, _size)) => {
+                if self.should_replace(orig) {
+                    Some(leaf_term(Op::Var(
+                        name.clone(),
+                        arr_sort_to_tup(sort),
+                    )))
+                } else {
+                    None
+                }
+            }
+            Op::Select => {
+                if self.should_replace(&orig.cs[0]) {
+                    let mut cs = get_cs();
+                    debug_assert_eq!(cs.len(), 2);
+                    let k_const = get_const(&cs.pop().unwrap());
+                    Some(term(Op::Field(k_const), cs))
+                } else {
+                    None
+                }
+            }
+            Op::Store => {
+                if self.should_replace(&orig) {
+                    let mut cs = get_cs();
+                    debug_assert_eq!(cs.len(), 3);
+                    let k_const = get_const(&cs.remove(1));
+                    Some(term(Op::Update(k_const), cs))
+                } else {
+                    None
+                }
+            }
+            Op::Ite => {
+                if self.should_replace(&orig) {
+                    Some(term(Op::Ite, get_cs()))
+                } else {
+                    None
+                }
+            }
+            Op::Eq => {
+                if self.should_replace(&orig.cs[0]) {
+                    Some(term(Op::Eq, get_cs()))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }
 
@@ -268,7 +358,12 @@ mod test {
 
     #[test]
     fn obliv() {
-        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
+        let z = term![Op::Const(Value::Array(
+            Sort::BitVector(4),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            6
+        ))];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
@@ -283,7 +378,12 @@ mod test {
 
     #[test]
     fn not_obliv() {
-        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
+        let z = term![Op::Const(Value::Array(
+            Sort::BitVector(4),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            6
+        ))];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),

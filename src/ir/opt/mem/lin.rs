@@ -22,12 +22,12 @@ struct ArrayLinearizer {
 }
 
 impl MemVisitor for ArrayLinearizer {
-    fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
-        if size <= self.size_thresh {
-            self.sequences
-                .insert(orig.clone(), repeat(val).cloned().take(size).collect());
-        }
-    }
+    //fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
+    //    if size <= self.size_thresh {
+    //        self.sequences
+    //            .insert(orig.clone(), repeat(val).cloned().take(size).collect());
+    //    }
+    //}
     fn visit_eq(&mut self, orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
         // don't map b/c self borrow lifetime & NLL
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
@@ -138,7 +138,12 @@ mod test {
 
     #[test]
     fn select_ite_stores() {
-        let z = term![Op::ConstArray(Sort::BitVector(4), 6); bv_lit(0, 4)];
+        let z = term![Op::Const(Value::Array(
+            Sort::BitVector(4),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            6
+        ))];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
@@ -154,7 +159,12 @@ mod test {
 
     #[test]
     fn select_ite_stores_field() {
-        let z = term![Op::ConstArray(Sort::Field(Arc::new(Integer::from(TEST_FIELD))), 6); bv_lit(0, 4)];
+        let z = term![Op::Const(Value::Array(
+            Sort::Field(Arc::new(Integer::from(TEST_FIELD))),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            6
+        ))];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),

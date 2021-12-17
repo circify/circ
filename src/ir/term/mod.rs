@@ -119,16 +119,6 @@ pub enum Op {
     /// Takes the modulus.
     UbvToPf(Arc<Integer>),
 
-    // key sort, size
-    /// A unary operator.
-    ///
-    /// Make an array from keys of the given sort, which is equal to the provided argument at all
-    /// places.
-    ///
-    /// Has space for the provided number of elements. Note that this assumes an order and starting
-    /// point for keys.
-    ConstArray(Sort, usize),
-
     /// Binary operator, with arguments (array, index).
     ///
     /// Gets the value at index in array.
@@ -249,7 +239,6 @@ impl Op {
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
             Op::UbvToPf(_) => Some(1),
-            Op::ConstArray(_, _) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
             Op::Tuple => None,
@@ -292,7 +281,6 @@ impl Display for Op {
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
             Op::UbvToPf(a) => write!(f, "bv2pf {}", a),
-            Op::ConstArray(_, s) => write!(f, "const-array {}", s),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
@@ -979,6 +967,14 @@ impl TermData {
             false
         }
     }
+    /// Is this a value
+    pub fn is_const(&self) -> bool {
+        if let Op::Const(..) = &self.op {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Value {
@@ -991,7 +987,9 @@ impl Value {
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
             Value::BitVector(b) => Sort::BitVector(b.width()),
-            Value::Array(s, _, _, _) => s.clone(),
+            Value::Array(k, v, _, size) => {
+                Sort::Array(Box::new(k.clone()), Box::new(v.sort()), *size)
+            }
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -1046,6 +1044,16 @@ impl Value {
             Some(b)
         } else {
             None
+        }
+    }
+    /// Compute the sort of this value
+    pub fn as_usize(&self) -> Option<usize> {
+        match &self {
+            Value::Bool(b) => Some(*b as usize),
+            Value::Field(f) => f.i().to_usize(),
+            Value::Int(i) => i.to_usize(),
+            Value::BitVector(b) => b.uint().to_usize(),
+            _ => None,
         }
     }
 }

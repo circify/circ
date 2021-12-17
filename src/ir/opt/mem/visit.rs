@@ -15,6 +15,9 @@ pub trait RewritePass {
             if !cache.contains_key(&top) {
                 // was it missing?
                 if children_added.insert(top.clone()) {
+                    stack.push(top.clone());
+                    stack.extend(top.cs.iter().filter(|c| !cache.contains_key(c)).cloned());
+                } else {
                     let get_children = || -> Vec<Term> {
                         top.cs
                             .iter()
@@ -25,9 +28,6 @@ pub trait RewritePass {
                     let new_t_opt = self.visit(&top, get_children);
                     let new_t = new_t_opt.unwrap_or_else(|| term(top.op.clone(), get_children()));
                     cache.insert(top.clone(), new_t);
-                } else {
-                    stack.push(top.clone());
-                    stack.extend(top.cs.iter().filter(|c| !cache.contains_key(c)).cloned());
                 }
             }
         }
@@ -91,7 +91,7 @@ pub trait ProgressAnalysisPass {
 /// All visitors receive the original term and the rewritten children.
 pub trait MemVisitor {
     /// Visit a const array
-    fn visit_const_array(&mut self, _orig: &Term, _key_sort: &Sort, _val: &Term, _size: usize) {}
+    //fn visit_const_array(&mut self, _orig: &Term, _key_sort: &Sort, _val: &Term, _size: usize) {}
     /// Visit an equality, whose children are `a` and `b`.
     fn visit_eq(&mut self, _orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
         None
@@ -131,9 +131,9 @@ pub trait MemVisitor {
                             Op::Store => {
                                 self.visit_store(&t, get(0), get(1), get(2));
                             }
-                            Op::ConstArray(s, n) => {
-                                self.visit_const_array(&t, s, get(0), *n);
-                            }
+                            //Op::Const(a) => {
+                            //    self.visit_const_array(&t, s, get(0), *n);
+                            //}
                             Op::Field(_) => panic!("array in tuple during mem pass: {}", t),
                             _ => {}
                         };

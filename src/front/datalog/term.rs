@@ -9,7 +9,7 @@ use super::error::ErrorKind;
 use super::ty::Ty;
 
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::zokrates::ZOKRATES_MODULUS_ARC;
+use crate::front::zokrates::{ZOKRATES_MODULUS_ARC, ZOK_FIELD_SORT};
 use crate::ir::term::*;
 
 /// A term
@@ -81,18 +81,21 @@ pub fn uint_lit(v: u64, w: u8) -> T {
 }
 
 impl Ty {
-    fn default(&self) -> T {
-        T::new(self.default_ir(), self.clone())
-    }
-    fn default_ir(&self) -> Term {
+    fn sort(&self) -> Sort {
         match self {
-            Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
-            Self::Uint(w) => bv_lit(0, *w as usize),
-            Self::Field => pf_ir_lit(0),
-            Self::Array(l, t) => {
-                term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()]
+            Self::Bool => Sort::Bool,
+            Self::Uint(w) => Sort::BitVector(*w as usize),
+            Self::Field => ZOK_FIELD_SORT.clone(),
+            Self::Array(n, b) => {
+                Sort::Array(Box::new(ZOK_FIELD_SORT.clone()), Box::new(b.sort()), *n)
             }
         }
+    }
+    fn default_ir_term(&self) -> Term {
+        self.sort().default_term()
+    }
+    fn default(&self) -> T {
+        T::new(self.default_ir_term(), self.clone())
     }
 }
 impl Display for T {
@@ -397,7 +400,7 @@ impl Embeddable for Datalog {
                     })
                     .enumerate()
                     .fold(
-                        ty.default_ir(),
+                        ty.default_ir_term(),
                         |arr, (i, v)| term![Op::Store; arr, pf_ir_lit(i), v.ir],
                     ),
                 ty.clone(),

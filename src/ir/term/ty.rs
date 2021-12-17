@@ -85,11 +85,6 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         Op::PfUnOp(_) => Ok(check_raw(&t.cs[0])?),
         Op::PfNaryOp(_) => Ok(check_raw(&t.cs[0])?),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
-        Op::ConstArray(s, n) => Ok(Sort::Array(
-            Box::new(s.clone()),
-            Box::new(check_raw(&t.cs[0])?),
-            *n,
-        )),
         Op::Select => array_or(&check_raw(&t.cs[0])?, "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(check_raw(&t.cs[0])?),
         Op::Tuple => Ok(Sort::Tuple(
@@ -265,9 +260,6 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                         bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone()))
                     }
                     (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
-                    (Op::ConstArray(s, n), &[a]) => {
-                        Ok(Sort::Array(Box::new(s.clone()), Box::new(a.clone()), *n))
-                    }
                     (Op::Select, &[Sort::Array(k, v, _), a]) => {
                         eq_or(k, a, "select").map(|_| (**v).clone())
                     }

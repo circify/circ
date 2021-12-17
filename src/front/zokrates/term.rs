@@ -19,7 +19,8 @@ lazy_static! {
     .unwrap();
     /// The modulus for ZoKrates, as an ARC
     pub static ref ZOKRATES_MODULUS_ARC: Arc<Integer> = Arc::new(ZOKRATES_MODULUS.clone());
-    pub static ref ZOKRATES_FIELD_SORT: Sort = Sort::Field(ZOKRATES_MODULUS_ARC.clone());
+    /// The modulus for ZoKrates, as an IR sort
+    pub static ref ZOK_FIELD_SORT: Sort = Sort::Field(ZOKRATES_MODULUS_ARC.clone());
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -61,19 +62,21 @@ impl fmt::Debug for Ty {
 }
 
 impl Ty {
-    fn default_ir_term(&self) -> Term {
+    fn sort(&self) -> Sort {
         match self {
-            Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
-            Self::Uint(w) => bv_lit(0, *w),
-            Self::Field => pf_lit_ir(0),
-            Self::Array(n, b) => term![Op::ConstArray(ZOKRATES_FIELD_SORT.clone(), *n); b.default_ir_term()],
-            Self::Struct(_name, fs) => term(
-                Op::Tuple,
-                fs.iter()
-                    .map(|(_f_name, f_ty)| f_ty.default_ir_term())
-                    .collect(),
-            ),
+            Self::Bool => Sort::Bool,
+            Self::Uint(w) => Sort::BitVector(*w),
+            Self::Field => ZOK_FIELD_SORT.clone(),
+            Self::Array(n, b) => {
+                Sort::Array(Box::new(ZOK_FIELD_SORT.clone()), Box::new(b.sort()), *n)
+            }
+            Self::Struct(_name, fs) => {
+                Sort::Tuple(fs.iter().map(|(_f_name, f_ty)| f_ty.sort()).collect())
+            }
         }
+    }
+    fn default_ir_term(&self) -> Term {
+        self.sort().default_term()
     }
     fn default(&self) -> T {
         T {
@@ -148,10 +151,7 @@ impl T {
     pub fn new_array(v: Vec<T>) -> Result<T, String> {
         array(v)
     }
-    pub fn new_struct(
-        name: String,
-        mut fields: Vec<(String, T)>,
-    ) -> T {
+    pub fn new_struct(name: String, mut fields: Vec<(String, T)>) -> T {
         fields.sort_by_cached_key(|f| f.0.clone());
         let (field_tys, terms) = fields
             .into_iter()
@@ -415,10 +415,7 @@ pub fn bool(a: T) -> Result<Term, String> {
 fn wrap_shift(name: &str, op: BvBinOp, a: T, b: T) -> Result<T, String> {
     let bc = const_int(b)?;
     match &a.ty {
-        &Ty::Uint(na) => Ok(T::new(
-            a.ty,
-            term![Op::BvBinOp(op); a.term, bv_lit(bc, na)],
-        )),
+        &Ty::Uint(na) => Ok(T::new(a.ty, term![Op::BvBinOp(op); a.term, bv_lit(bc, na)])),
         x => Err(format!("Cannot perform op '{}' on {} and {}", name, x, bc)),
     }
 }
@@ -460,8 +457,7 @@ where
     T::new(Ty::Field, pf_lit_ir(i))
 }
 
-pub fn z_bool_lit(v: bool) -> T
-{
+pub fn z_bool_lit(v: bool) -> T {
     T::new(Ty::Bool, leaf_term(Op::Const(Value::Bool(v))))
 }
 
@@ -542,7 +538,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
 }
 
 fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
-    make_array(ZOKRATES_FIELD_SORT.clone(), sort, elems.into_iter().collect())
+    make_array(ZOK_FIELD_SORT.clone(), sort, elems.into_iter().collect())
 }
 
 pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {

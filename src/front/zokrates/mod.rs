@@ -22,6 +22,8 @@ use term::*;
 pub use term::ZOKRATES_MODULUS;
 /// The modulus for the ZoKrates language.
 pub use term::ZOKRATES_MODULUS_ARC;
+/// The modulus for the ZoKrates language.
+pub use term::ZOK_FIELD_SORT;
 
 /// The prover visibility
 pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
