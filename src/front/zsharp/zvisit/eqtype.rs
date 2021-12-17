@@ -1,6 +1,6 @@
 //! AST Walker for zokrates_pest_ast
 
-use super::super::{ZVisitorError, ZVisitorResult};
+use super::{ZVisitorError, ZVisitorResult};
 
 use zokrates_pest_ast as ast;
 

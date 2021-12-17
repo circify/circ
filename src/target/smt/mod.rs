@@ -277,7 +277,7 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
 /// Create a solver, which can optionally parse models.
 ///
 /// If [rsmt2::conf::CVC4_ENV_VAR] is set, uses that as the solver's invocation command.
-fn make_solver<P>(parser: P, models: bool) -> rsmt2::Solver<P> {
+fn make_solver<P>(parser: P, models: bool, inc: bool) -> rsmt2::Solver<P> {
     let mut conf = rsmt2::conf::SmtConf::default_cvc4();
     if let Ok(val) = std::env::var(rsmt2::conf::CVC4_ENV_VAR) {
         conf.cmd(val);
@@ -285,12 +285,13 @@ fn make_solver<P>(parser: P, models: bool) -> rsmt2::Solver<P> {
     if models {
         conf.models();
     }
+    conf.set_incremental(inc);
     rsmt2::Solver::new(conf, parser).expect("Error creating SMT solver")
 }
 
 /// Check whether some term is satisfiable.
 pub fn check_sat(t: &Term) -> bool {
-    let mut solver = make_solver((), false);
+    let mut solver = make_solver((), false, false);
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(n, s) = &c.op {
             solver.declare_const(&SmtSymDisp(n), s).unwrap();
@@ -301,9 +302,8 @@ pub fn check_sat(t: &Term) -> bool {
     solver.check_sat().unwrap()
 }
 
-/// Get a satisfying assignment for `t`, assuming it is SAT.
-pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
-    let mut solver = make_solver(Parser, true);
+fn get_model_solver(t: &Term, inc: bool) -> Solver<Parser> {
+    let mut solver = make_solver(Parser, true, true);
     //solver.path_tee("solver_com").unwrap();
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(n, s) = &c.op {
@@ -311,6 +311,12 @@ pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
         }
     }
     assert!(check(t) == Sort::Bool);
+    solver
+}
+
+/// Get a satisfying assignment for `t`, assuming it is SAT.
+pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
+    let mut solver = get_model_solver(t, false);
     solver.assert(&**t).unwrap();
     if solver.check_sat().unwrap() {
         Some(
@@ -323,6 +329,36 @@ pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
         )
     } else {
         None
+    }
+}
+
+/// Get a unique satisfying assignment for `t`, assuming it is SAT.
+pub fn find_unique_model(t: &Term, uniqs: Vec<String>) -> Option<HashMap<String, Value>> {
+    let mut solver = get_model_solver(t, true);
+    solver.assert(&**t).unwrap();
+    // first, get the result
+    let model: HashMap<String, Value> = if solver.check_sat().unwrap() {
+        solver.get_model().unwrap().into_iter().map(|(id, _, _, v)| (id, v)).collect()
+    } else {
+        return None;
+    };
+    // now, assert that any value in uniq is not the value assigned and check unsat
+    match uniqs.into_iter()
+        .flat_map(|n| model.get(&n)
+            .map(|v| term![EQ; term![Op::Var(n, v.sort())], term![Op::Const(v.clone())]])
+        )
+        .reduce(|l,r| term![AND; l, r])
+        .map(|t| term![NOT; t])
+    {
+        None => Some(model),
+        Some(ast) => {
+            solver.push(1).unwrap();
+            solver.assert(&*ast).unwrap();
+            match solver.check_sat().unwrap() {
+                true => None,
+                false => Some(model),
+            }
+        }
     }
 }
 
@@ -419,7 +455,7 @@ mod test {
 
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.
     pub fn smt_eval_test(t: Term, vs: &HashMap<String, Value>) -> bool {
-        let mut solver = make_solver((), false);
+        let mut solver = make_solver((), false, false);
         for (var, val) in vs {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
@@ -434,7 +470,7 @@ mod test {
 
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.
     pub fn smt_eval_alternate_solution(t: Term, vs: &HashMap<String, Value>) -> bool {
-        let mut solver = make_solver((), false);
+        let mut solver = make_solver((), false, false);
         for (var, val) in vs {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&var), &s).unwrap();

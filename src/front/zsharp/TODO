@@ -16,6 +16,7 @@
     [x] and/or: check ZSHARP_STDLIB_PATH envvar
 
 - generic inf: monomorphize at call time
+    - make sure we got a UNIQUE solution! find_unique_model() fn
 
 - add explicit-generic-expr
 
@@ -23,3 +24,7 @@
 
 - optimization: for a < b, only expand a to b's bit width;
   a < b is (a_expansion == a) && (a_expansion < b_expansion)
+
+- field div / divrem
+    - impl unsigned
+    - think about signed

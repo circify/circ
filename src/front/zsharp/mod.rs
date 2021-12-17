@@ -19,7 +19,7 @@ use std::str::FromStr;
 use zokrates_pest_ast as ast;
 
 use term::*;
-use zvisit::{ZConstLiteralRewriter, ZStatementWalker, ZVisitorMut};
+use zvisit::{ZConstLiteralRewriter, ZGenericInf, ZStatementWalker, ZVisitorMut};
 
 /// The modulus for the ZSharp language
 pub use term::ZSHARP_MODULUS;
@@ -89,7 +89,7 @@ impl FrontEnd for ZSharpFE {
         let mut g = ZGen::new(i.inputs, asts, i.mode, loader.stdlib());
         g.visit_files();
         g.file_stack_push(i.file);
-        g.generics_stack_push(Vec::new(), Vec::new());
+        g.generics_stack_push(HashMap::new());
         g.entry_fn("main");
         g.generics_stack_pop();
         g.file_stack_pop();
@@ -107,7 +107,7 @@ impl ZSharpFE {
         let mut g = ZGen::new(i.inputs, asts, i.mode, loader.stdlib());
         g.visit_files();
         g.file_stack_push(i.file);
-        g.generics_stack_push(Vec::new(), Vec::new());
+        g.generics_stack_push(HashMap::new());
         g.const_entry_fn("main")
     }
 }
@@ -124,7 +124,9 @@ struct ZGen<'ast> {
     import_map: HashMap<PathBuf, HashMap<String, (PathBuf, String)>>,
     mode: Mode,
     cvars_stack: RefCell<Vec<Vec<HashMap<String, T>>>>,
-    crets_stack: RefCell<Vec<Option<T>>>,
+    crets_stack: RefCell<Vec<T>>,
+    lhs_ty: RefCell<Option<Ty>>,
+    ret_ty_stack: RefCell<Vec<Ty>>,
 }
 
 struct ZLoc {
@@ -168,6 +170,8 @@ impl<'ast> ZGen<'ast> {
             mode,
             cvars_stack: Default::default(),
             crets_stack: Default::default(),
+            lhs_ty: Default::default(),
+            ret_ty_stack: Default::default(),
         };
         this.circ
             .borrow()
@@ -259,6 +263,7 @@ impl<'ast> ZGen<'ast> {
                 // XXX(unimpl) multi-return unimplemented
                 assert!(r.expressions.len() <= 1);
                 if let Some(e) = r.expressions.first() {
+                    self.set_lhs_ty_ret(r);
                     let ret = self.expr(e);
                     let ret_res = self.circ_return_(Some(ret));
                     self.unwrap(ret_res, &r.span);
@@ -313,7 +318,11 @@ impl<'ast> ZGen<'ast> {
             ast::Statement::Definition(d) => {
                 // XXX(unimpl) multi-assignment unimplemented
                 assert!(d.lhs.len() <= 1);
+
+                // evaluate expression, possibly extracting lhs type first
+                self.set_lhs_ty_defn::<false>(d);
                 let e = self.expr(&d.expression);
+
                 if let Some(l) = d.lhs.first() {
                     let ty = e.type_();
                     match l {
@@ -461,22 +470,19 @@ impl<'ast> ZGen<'ast> {
         self.file_stack.borrow_mut().pop()
     }
 
-    fn generics_stack_push(&self, gvals: Vec<T>, gnames: Vec<ast::IdentifierExpression<'ast>>) {
-        self.generics_stack
-            .borrow_mut()
-            .push(gvals
-                .into_iter()
-                .zip(gnames.into_iter())
-                .map(|(g, n)| (n.value, g))
-                .collect()
-            );
+    fn generics_stack_push(&self, generics: HashMap<String, T>) {
+        self.generics_stack.borrow_mut().push(generics)
     }
 
     fn generics_stack_pop(&self) {
         self.generics_stack.borrow_mut().pop();
     }
 
-    fn explicit_generic_values(&self, eg: Option<&ast::ExplicitGenerics<'ast>>) -> Vec<T> {
+    fn explicit_generic_values(
+        &self,
+        eg: Option<&ast::ExplicitGenerics<'ast>>,
+        gv: Vec<ast::IdentifierExpression<'ast>>,
+    ) -> HashMap<String, T> {
         eg.map(|g| {
             g.values
                 .iter()
@@ -504,9 +510,22 @@ impl<'ast> ZGen<'ast> {
                         );
                     }
                 })
+                .zip(gv.into_iter())
+                .map(|(g, n)| (n.value, g))
                 .collect()
         })
-        .unwrap_or_else(|| Vec::new())
+        .unwrap_or_else(|| HashMap::new())
+    }
+
+    fn identifier_(&self, u: &ast::IdentifierExpression<'ast>) -> T {
+        if let Some(v) = self.generic_lookup_(&u.value) {
+            v
+        } else if let Some(v) = self.const_lookup_(&u.value) {
+            v.clone()
+        } else {
+            self.unwrap(self.circ_get_value(Loc::local(u.value.clone())), &u.span)
+               .unwrap_term()
+        }
     }
 
     fn expr(&self, e: &ast::Expression<'ast>) -> T {
@@ -529,17 +548,7 @@ impl<'ast> ZGen<'ast> {
                 let a = self.expr(&u.expression);
                 f(a)
             }
-            ast::Expression::Identifier(u) => {
-                if let Some(v) = self.generic_lookup_(&u.value) {
-                    Ok(v)
-                } else if let Some(v) = self.const_lookup_(&u.value) {
-                    Ok(v.clone())
-                } else {
-                    Ok(self
-                        .unwrap(self.circ_get_value(Loc::local(u.value.clone())), &u.span)
-                        .unwrap_term())
-                }
-            }
+            ast::Expression::Identifier(u) => Ok(self.identifier_(u)),
             ast::Expression::InlineArray(u) => {
                 let mut avals = Vec::with_capacity(u.expressions.len());
                 u.expressions.iter().for_each(|ee| match ee {
@@ -575,9 +584,10 @@ impl<'ast> ZGen<'ast> {
                         .iter()
                         .map(|e| self.expr(e))
                         .collect::<Vec<_>>();
-                    let generics = self.explicit_generic_values(c.explicit_generics.as_ref());
-                    let res = self.function_call(args, generics, f_path, f_name);
-                     (self.unwrap(res, &c.span), &p.accesses[1..])
+                    let exp_ty = self.lhs_ty_take()
+                        .and_then(|ty| if p.accesses.len() > 1 { None } else { Some(ty) });
+                    let res = self.function_call(args, c, exp_ty, f_path, f_name);
+                    (self.unwrap(res, &c.span), &p.accesses[1..])
                 } else {
                     // assume no calls
                     (
@@ -609,21 +619,32 @@ impl<'ast> ZGen<'ast> {
     fn function_call(
         &self,
         args: Vec<T>,
-        generics: Vec<T>,
+        call: &ast::CallAccess<'ast>,
+        exp_ty: Option<Ty>,
         f_path: PathBuf,
         f_name: String,
     ) -> Result<T, String> {
-        debug!("Function call: {} {:?} {:?} {:?}", f_name, f_path, args, generics);
+        debug!("Function call: {} {:?} {:?}", f_name, f_path, args);
+        let f = self
+            .functions
+            .get(&f_path)
+            .ok_or_else(|| format!("No file '{:?}' attempting fn call", &f_path))?
+            .get(&f_name)
+            .ok_or_else(|| format!("No function '{}' attempting fn call", &f_name))?;
+        let generics = ZGenericInf::new(self, f).unify_generic(call, exp_ty, &args[..])?;
+
         if self.stdlib.is_embed(&f_path) {
+            let mut generics = generics;
+            let generics = f.generics.iter()
+                .map(|gid| generics.remove(&gid.value).ok_or_else(|| format!(
+                    "Failed to find generic argument {} for builtin call {}",
+                    &gid.value,
+                    &f_name,
+                )))
+                .collect::<Result<Vec<_>,_>>()?;
             Self::builtin_call(&f_name, args, generics)
         } else {
-            let f = self
-                .functions
-                .get(&f_path)
-                .ok_or_else(|| format!("No file '{:?}' attempting fn call", &f_path))?
-                .get(&f_name)
-                .ok_or_else(|| format!("No function '{}' attempting fn call", &f_name))?
-                .clone();
+            let f = f.clone();
             if f.generics.len() != generics.len() {
                 return Err("Wrong number of generic params for function call".to_string());
             }
@@ -631,7 +652,8 @@ impl<'ast> ZGen<'ast> {
                 return Err("Wrong nimber of arguments for function call".to_string());
             }
             self.file_stack_push(f_path);
-            self.generics_stack_push(generics, f.generics);
+            self.generics_stack_push(generics);
+            self.ret_ty_stack_push::<false>(&f);
             // XXX(unimpl) tuple returns not supported
             assert!(f.returns.len() <= 1);
             let ret_ty = f.returns.first().map(|r| self.type_(r));
@@ -648,6 +670,7 @@ impl<'ast> ZGen<'ast> {
                 .circ_exit_fn()
                 .map(|a| a.unwrap_term())
                 .unwrap_or_else(|| z_bool_lit(false));
+            self.ret_ty_stack_pop();
             self.generics_stack_pop();
             self.file_stack_pop();
             Ok(ret)
@@ -667,7 +690,7 @@ impl<'ast> ZGen<'ast> {
             panic!("No function '{:?}//{}' attempting const_entry_fn", &f_file, &f_name);
         }
 
-        self.const_function_call_(Vec::new(), Vec::new(), f_file, f_name)
+        self.const_function_call_(Vec::new(), None, None, f_file, f_name)
             .unwrap_or_else(|e| panic!("const_entry_fn failed: {}", e))
     }
 
@@ -919,6 +942,8 @@ impl<'ast> ZGen<'ast> {
             ast::Expression::Postfix(p) => {
                 assert!(p.accesses.len() > 0);
                 let (mut arr, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
+                    // XXX(TODO) use top of lhs_ty_stack if p.accesses.len() == 1
+
                     let (f_path, f_name) = self.deref_import(&p.id.value);
                     debug!("Const call: {} {:?} {:?}", p.id.value, f_path, f_name);
                     let args = c
@@ -927,8 +952,10 @@ impl<'ast> ZGen<'ast> {
                         .iter()
                         .map(|e| self.const_expr_(e))
                         .collect::<Result<Vec<_>, _>>()?;
-                    let generics = self.explicit_generic_values(c.explicit_generics.as_ref());
-                    (self.const_function_call_(args, generics, f_path, f_name)?, &p.accesses[1..])
+                    let exp_ty = self.lhs_ty_take()
+                        .and_then(|ty| if p.accesses.len() > 1 { None } else { Some(ty) });
+                    let res = self.const_function_call_(args, Some(c), exp_ty, f_path, f_name)?;
+                    (res, &p.accesses[1..])
                 } else {
                     (self.const_identifier_(&p.id)?, &p.accesses[..])
                 };
@@ -982,21 +1009,36 @@ impl<'ast> ZGen<'ast> {
     fn const_function_call_(
         &self,
         args: Vec<T>,
-        generics: Vec<T>,
+        call: Option<&ast::CallAccess<'ast>>,
+        exp_ty: Option<Ty>,
         f_path: PathBuf,
         f_name: String,
     ) -> Result<T, String> {
-        debug!("Const function call: {} {:?} {:?} {:?}", f_name, f_path, args, generics);
-        if self.stdlib.is_embed(&f_path) {
-            Self::builtin_call(&f_name, args, generics)
-        } else {
-            let f = self
+        debug!("Const function call: {} {:?} {:?}", f_name, f_path, args);
+        let f = self
                 .functions
                 .get(&f_path)
                 .ok_or_else(|| format!("No file '{:?}' attempting const fn call", &f_path))?
                 .get(&f_name)
-                .ok_or_else(|| format!("No function '{}' attempting const fn call", &f_name))?
-                .clone();
+                .ok_or_else(|| format!("No function '{}' attempting const fn call", &f_name))?;
+        let generics = if let Some(c) = call {
+            ZGenericInf::new(self, f).unify_generic(c, exp_ty, &args[..])?
+        } else {
+            HashMap::new()
+        };
+
+        if self.stdlib.is_embed(&f_path) {
+            let mut generics = generics;
+            let generics = f.generics.iter()
+                .map(|gid| generics.remove(&gid.value).ok_or_else(|| format!(
+                    "Failed to find generic argument {} for const builtin call {}",
+                    &gid.value,
+                    &f_name,
+                )))
+                .collect::<Result<Vec<_>,_>>()?;
+            Self::builtin_call(&f_name, args, generics)
+        } else {
+            let f = f.clone();
             if f.generics.len() != generics.len() {
                 Err("Wrong number of generic params for function call".to_string())?;
             }
@@ -1006,9 +1048,10 @@ impl<'ast> ZGen<'ast> {
             // XXX(unimpl) tuple returns not supported
             assert!(f.returns.len() <= 1);
             self.file_stack_push(f_path);
-            self.generics_stack_push(generics, f.generics);
+            self.generics_stack_push(generics);
+            self.ret_ty_stack_push::<true>(&f);
             self.cvar_enter_function();
-            let ret_ty = f.returns.first().map(|r| self.type_(r)).unwrap_or(Ty::Bool);
+            let ret_ty = f.returns.first().map(|r| self.const_type_(r)).unwrap_or(Ty::Bool);
             for (p, a) in f.parameters.into_iter().zip(args) {
                 let ty = self.const_type_(&p.ty);
                 self.cvar_declare_init(p.id.value, &ty, a)?;
@@ -1016,10 +1059,9 @@ impl<'ast> ZGen<'ast> {
             for s in &f.statements {
                 self.const_stmt_(s)?;
             }
-            let ret = self
-                .crets_pop()
-                .unwrap_or_else(|| z_bool_lit(false));
+            let ret = self.crets_pop();
             self.cvar_exit_function();
+            self.ret_ty_stack_pop();
             self.generics_stack_pop();
             self.file_stack_pop();
             if ret.type_() != ret_ty {
@@ -1036,11 +1078,13 @@ impl<'ast> ZGen<'ast> {
             ast::Statement::Return(r) => {
                 // XXX(unimpl) multi-return unimplemented
                 assert!(r.expressions.len() <= 1);
+                // XXX(TODO) get return type of current function and set_lhs_ty_
                 if let Some(e) = r.expressions.first() {
+                    self.set_lhs_ty_ret(r);
                     let ret = self.const_expr_(e)?;
-                    self.crets_push(Some(ret));
+                    self.crets_push(ret);
                 } else {
-                    self.crets_push(None);
+                    self.crets_push(Self::const_bool(false));
                 }
                 Ok(())
             }
@@ -1087,7 +1131,10 @@ impl<'ast> ZGen<'ast> {
             ast::Statement::Definition(d) => {
                 // XXX(unimpl) multi-assignment unimplemented
                 assert!(d.lhs.len() <= 1);
+
+                self.set_lhs_ty_defn::<true>(d);
                 let e = self.const_expr_(&d.expression)?;
+
                 if let Some(l) = d.lhs.first() {
                     let ty = e.type_();
                     match l {
@@ -1111,6 +1158,64 @@ impl<'ast> ZGen<'ast> {
                 }
             }
         }
+    }
+
+    fn set_lhs_ty_defn<const IS_CNST: bool>(&self, d: &ast::DefinitionStatement<'ast>) {
+        assert!(self.lhs_ty.borrow().is_none());  // starting from nothing...
+        if let ast::Expression::Postfix(pfe) = &d.expression {
+            if matches!(pfe.accesses.first(), Some(ast::Access::Call(_))) {
+                let ty = self.unwrap(
+                    d.lhs.first().map(|ty| self.lhs_type::<IS_CNST>(ty)).transpose(),
+                    &d.span,
+                );
+                self.lhs_ty_put(ty);
+            }
+        }
+    }
+
+    fn set_lhs_ty_ret(&self, r: &ast::ReturnStatement<'ast>) {
+        assert!(self.lhs_ty.borrow().is_none()); // starting from nothing...
+        if let Some(ast::Expression::Postfix(pfe)) = r.expressions.first() {
+            if matches!(pfe.accesses.first(), Some(ast::Access::Call(_))) {
+                let ty = self.ret_ty_stack_last();
+                self.lhs_ty_put(ty);
+            }
+        }
+    }
+
+    fn lhs_type<const IS_CNST: bool>(
+        &self,
+        tya: &ast::TypedIdentifierOrAssignee<'ast>,
+    ) -> Result<Ty, String> {
+        use ast::TypedIdentifierOrAssignee::*;
+        match tya {
+            Assignee(a) => {
+                let t = if IS_CNST { self.const_identifier_(&a.id)? } else { self.identifier_(&a.id) };
+                a.accesses.iter().fold(Ok(t.type_()), |ty, acc| ty.and_then(|ty| match acc {
+                    ast::AssigneeAccess::Select(aa) => match ty {
+                        Ty::Array(sz, ity) => match &aa.expression {
+                            ast::RangeOrExpression::Expression(_) => Ok(*ity),
+                            ast::RangeOrExpression::Range(_) => Ok(Ty::Array(sz, ity)),
+                        }
+                        ty => Err(format!("Attempted array access on non-Array type {}", ty)),
+                    },
+                    ast::AssigneeAccess::Member(sa) => match ty {
+                        Ty::Struct(nm, mut map) => map.remove(&sa.id.value)
+                            .ok_or_else(|| format!("No such member {} of struct {}", &sa.id.value, nm)),
+                        ty => Err(format!("Attempted member access on non-Struct type {}", ty)),
+                    },
+                }))
+            }
+            TypedIdentifier(t) => Ok(self.type_impl_::<IS_CNST>(&t.ty)),
+        }
+    }
+
+    fn lhs_ty_put(&self, lhs_ty: Option<Ty>) {
+        self.lhs_ty.replace(lhs_ty);
+    }
+
+    fn lhs_ty_take(&self) -> Option<Ty> {
+        self.lhs_ty.borrow_mut().take()
     }
 
     fn cvar_enter_scope(&self) {
@@ -1207,11 +1312,24 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn crets_push(&self, ret: Option<T>) {
+    fn ret_ty_stack_push<const IS_CNST: bool>(&self, fn_def: &ast::FunctionDefinition<'ast>) {
+        let ty = fn_def.returns.first().map(|ty| self.type_impl_::<IS_CNST>(ty)).unwrap_or(Ty::Bool);
+        self.ret_ty_stack.borrow_mut().push(ty);
+    }
+
+    fn ret_ty_stack_pop(&self) {
+        self.ret_ty_stack.borrow_mut().pop();
+    }
+
+    fn ret_ty_stack_last(&self) -> Option<Ty> {
+        self.ret_ty_stack.borrow().last().cloned()
+    }
+
+    fn crets_push(&self, ret: T) {
         self.crets_stack.borrow_mut().push(ret)
     }
 
-    fn crets_pop(&self) -> Option<T> {
+    fn crets_pop(&self) -> T {
         assert!(!self.crets_stack.borrow().is_empty());
         self.crets_stack.borrow_mut().pop().unwrap()
     }
@@ -1295,11 +1413,12 @@ impl<'ast> ZGen<'ast> {
                 let sdef = self.get_struct(&s.id.value).unwrap_or_else(||
                     self.err(format!("No such struct {}", &s.id.value), &s.span)
                 ).clone();
-                let generics = self.explicit_generic_values(s.explicit_generics.as_ref());
-                if generics.len() != sdef.generics.len() {
+                let g_len = sdef.generics.len();
+                let generics = self.explicit_generic_values(s.explicit_generics.as_ref(), sdef.generics);
+                if generics.len() != g_len {
                     self.err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value), &s.span);
                 }
-                self.generics_stack_push(generics, sdef.generics);
+                self.generics_stack_push(generics);
                 let ty = Ty::Struct(
                     s.id.value.clone(),
                     sdef.fields.into_iter().map(|f| (f.id.value, self.type_impl_::<IS_CNST>(&f.ty))).collect()

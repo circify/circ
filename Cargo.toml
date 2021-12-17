@@ -13,7 +13,7 @@ rug = "1.11"
 gmp-mpfr-sys = "1.4"
 lazy_static = "1.4"
 rand = "0.8"
-rsmt2 = "0.12"
+rsmt2 = "0.14"
 #rsmt2 = { git = "https://github.com/alex-ozdemir/rsmt2.git" }
 ieee754 = "0.2"
 zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser" }

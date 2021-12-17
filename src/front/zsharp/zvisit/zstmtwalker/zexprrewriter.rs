@@ -1,6 +1,6 @@
 //! AST Walker for zokrates_pest_ast
 
-use super::super::{ZVisitorMut, ZVisitorResult};
+use super::{ZVisitorMut, ZVisitorResult};
 
 use std::collections::HashMap;
 use zokrates_pest_ast as ast;
