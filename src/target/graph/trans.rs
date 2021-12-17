@@ -69,7 +69,7 @@ impl ToChaco {
                 Op::Var(_, _) | Op::Const(_) => {
                     self.insert_node(&c);
                 }
-                Op::Ite | Op::BvBinPred(_) => {
+                Op::Ite | Op::BvBinOp(_) | Op::BvNaryOp(_) | Op::BvBinPred(_) => {
                     for cs in c.cs.iter() {
                         self.insert_edge(&cs, &c);
                     }

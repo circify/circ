@@ -8,9 +8,9 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
-use crate::target::graph::trans::to_chaco;
-use std::fmt;
+// use crate::target::graph::trans::to_chaco;
 
+use std::fmt;
 use std::path::PathBuf;
 
 const NO_ROLE: u8 = u8::MAX;
@@ -624,10 +624,9 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
         values: _,
     } = ir.clone();
 
-    to_chaco(&ir, &path_buf, &lang);
+    // to_chaco(&ir, &path_buf, &lang);
 
     let s_map: SharingMap = assign(&ir, cm);
-    // let s_map: SharingMap = some_arith_sharing(&ir);
     let mut converter = ToABY::new(md, s_map, path_buf, lang);
 
     for t in terms {
