@@ -260,9 +260,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                             .and_then(|t| pf_or(t, ctx))
                             .map(|a| a.clone())
                     }
-                    (Op::UbvToPf(m), &[a]) => {
-                        bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone()))
-                    }
+                    (Op::UbvToPf(m), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone())),
                     (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
                     (Op::ConstArray(s, n), &[a]) => {
                         Ok(Sort::Array(Box::new(s.clone()), Box::new(a.clone()), *n))

@@ -2,15 +2,18 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::groth16::{
     create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
-    verify_proof, Parameters, VerifyingKey, Proof,
+    verify_proof, Parameters, Proof, VerifyingKey,
 };
 use bellman::Circuit;
-use bls12_381::{Scalar, Bls12};
+use bls12_381::{Bls12, Scalar};
+use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
 use circ::front::zokrates::{self, Zokrates};
-use circ::front::c::{self, C};
-use circ::front::{Mode, FrontEnd};
-use circ::ir::{opt::{opt, Opt}, term::extras::Letified};
+use circ::front::{FrontEnd, Mode};
+use circ::ir::{
+    opt::{opt, Opt},
+    term::extras::Letified,
+};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
@@ -20,10 +23,10 @@ use circ::target::smt::find_model;
 use env_logger;
 use good_lp::default_solver;
 use std::fs::File;
+use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
-use std::io::Read;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -87,7 +90,6 @@ enum Backend {
     Smt {},
     Ilp {},
     Mpc {},
-
 }
 
 arg_enum! {
@@ -136,7 +138,7 @@ fn determine_language(l: &Language, input_path: &PathBuf) -> DeterminedLanguage 
         &Language::Datalog => DeterminedLanguage::Datalog,
         &Language::Zokrates => DeterminedLanguage::Zokrates,
         &Language::C => DeterminedLanguage::C,
-        &Language::Auto =>  {
+        &Language::Auto => {
             let p = input_path.to_str().unwrap();
             if p.ends_with(".zok") {
                 DeterminedLanguage::Zokrates
@@ -223,7 +225,13 @@ fn main() {
     println!("Done with IR optimization");
 
     match options.backend {
-        Backend::R1cs { action, proof, prover_key, verifier_key, .. } => {
+        Backend::R1cs {
+            action,
+            proof,
+            prover_key,
+            verifier_key,
+            ..
+        } => {
             println!("Converting to r1cs");
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
@@ -266,7 +274,7 @@ fn main() {
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
                 DeterminedLanguage::Zokrates => "zok".to_string(),
-                _ => panic!("Language isn't supported by MPC backend: {:#?}", language)
+                _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
             println!("Cost model: {}", options.cost_model);
             to_aby(cs, &path_buf, &lang_str, &options.cost_model);
@@ -308,7 +316,7 @@ fn main() {
                     }
                 }
             } else {
-                    todo!()
+                todo!()
             }
         }
     }

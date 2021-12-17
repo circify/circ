@@ -73,15 +73,13 @@ pub trait MemVisitor {
                                 None
                             }
                         }
-                        Op::Select => {
-                            self.visit_select(&t, get(0), get(1))
-                        }
+                        Op::Select => self.visit_select(&t, get(0), get(1)),
                         _ => None,
                     },
                 }
             };
             // replace children of in cache
-            let mut new_cs : Vec<Term> = Vec::new();
+            let mut new_cs: Vec<Term> = Vec::new();
             for x in t.cs.iter() {
                 new_cs.push(cache.get(&x).unwrap_or_else(|| x).clone());
             }

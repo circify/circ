@@ -21,10 +21,11 @@ if __name__ == "__main__":
 
     # tests = ilp_benchmark_tests
     # tests = kmeans_tests + div_tests
-    tests = kmeans_tests
+    # tests = kmeans_tests
     # tests = arithmetic_tests
     # tests = div_tests
-        
+    tests = millionaires_test
+    
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
 

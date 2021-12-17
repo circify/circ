@@ -1,5 +1,5 @@
-use crate::front::c::Expression::Identifier;
 use crate::front::c::types::Ty;
+use crate::front::c::Expression::Identifier;
 use lang_c::ast::*;
 use lang_c::span::Node;
 use std::fmt::{self, Display, Formatter};
@@ -42,29 +42,31 @@ pub fn name_from_ident(ident: &Expression) -> String {
     match ident {
         Identifier(i) => i.node.name.clone(),
         //TODO: make this Option
-        _ => "".to_string(), 
+        _ => "".to_string(),
     }
 }
 
 pub fn d_type_(ds: Vec<Node<DeclarationSpecifier>>) -> Option<Ty> {
     assert!(ds.len() > 0);
-    let res: Vec<Option<Ty>> = ds.iter().map(|d|
-        match &d.node {
+    let res: Vec<Option<Ty>> = ds
+        .iter()
+        .map(|d| match &d.node {
             DeclarationSpecifier::TypeSpecifier(t) => type_(t.node.clone()),
-            _ => unimplemented!("Unimplemented declaration type: {:#?}", d)
-        }
-    ).collect();
+            _ => unimplemented!("Unimplemented declaration type: {:#?}", d),
+        })
+        .collect();
     compress_type(res)
-}   
+}
 
 pub fn s_type_(ss: Vec<Node<SpecifierQualifier>>) -> Option<Ty> {
     assert!(ss.len() > 0);
-    let res: Vec<Option<Ty>> = ss.iter().map(|s|
-        match &s.node {
+    let res: Vec<Option<Ty>> = ss
+        .iter()
+        .map(|s| match &s.node {
             SpecifierQualifier::TypeSpecifier(t) => type_(t.node.clone()),
-            _ => unimplemented!("Unimplemented specifier type: {:#?}", s)
-        }
-    ).collect();
+            _ => unimplemented!("Unimplemented specifier type: {:#?}", s),
+        })
+        .collect();
     compress_type(res)
 }
 
@@ -87,7 +89,7 @@ fn compress_type(ts: Vec<Option<Ty>>) -> Option<Ty> {
                         bit_len += *w;
                     }
                 }
-                _ => unimplemented!("Current type not supported: {:#?}", ts)
+                _ => unimplemented!("Current type not supported: {:#?}", ts),
             }
         }
         Some(Ty::Int(signed, bit_len))
@@ -155,4 +157,3 @@ fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaratio
 fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
 }
-

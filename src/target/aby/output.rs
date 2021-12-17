@@ -99,12 +99,16 @@ fn write_circ_file(filename: &String) {
     let setup_file_path = format!("third_party/ABY/src/examples/{}_setup_tmp.txt", *filename);
     let mut setup_file = File::open(setup_file_path).expect("Unable to open the file");
     let mut setup = String::new();
-    setup_file.read_to_string(&mut setup).expect("Unable to read the file");
+    setup_file
+        .read_to_string(&mut setup)
+        .expect("Unable to read the file");
 
     let circuit_file_path = format!("third_party/ABY/src/examples/{}_circuit_tmp.txt", *filename);
     let mut circuit_file = File::open(circuit_file_path).expect("Unable to open the file");
     let mut circuit = String::new();
-    circuit_file.read_to_string(&mut circuit).expect("Unable to read the file");
+    circuit_file
+        .read_to_string(&mut circuit)
+        .expect("Unable to read the file");
 
     let content = format!("{}\n{}", setup, circuit);
 
@@ -119,7 +123,7 @@ fn write_circ_file(filename: &String) {
         path.clone(),
         template
             .replace("{fn}", &*filename)
-            .replace("{circ}", &content)
+            .replace("{circ}", &content),
     )
     .expect("Failed to write to cpp file");
 }

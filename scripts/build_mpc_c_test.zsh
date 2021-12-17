@@ -90,7 +90,7 @@ function mpc_test {
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 
 # benchmarks
-mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c
 
 # ilp benchmarks
@@ -107,4 +107,4 @@ mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
 
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_loop_add.c
 
-# mpc_test 2 ./examples/C/mpc/2pc_millionaires.c
+mpc_test 2 ./examples/C/mpc/2pc_millionaires.c

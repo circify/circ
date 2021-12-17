@@ -1374,7 +1374,11 @@ impl Computation {
         Self {
             outputs: Vec::new(),
             metadata: ComputationMetadata::default(),
-            values: if values { Some(FxHashMap::default()) } else { None },
+            values: if values {
+                Some(FxHashMap::default())
+            } else {
+                None
+            },
         }
     }
     // TODO: rm

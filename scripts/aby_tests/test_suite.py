@@ -786,7 +786,7 @@ ilp_benchmark_tests = [
 millionaires_test = [
     [
         "Millionaire's problem",
-        0,
+        2,
         "./third_party/ABY/build/bin/2pc_millionaires",
         {"a": 2, "b": 0},
         {"a": 0, "b": 1},

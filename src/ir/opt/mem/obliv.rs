@@ -44,8 +44,8 @@
 //!    * equalities between oblivious arrays are mapped to conjunctions of equalities
 
 use super::visit::*;
-use crate::ir::term::*;
 use crate::ir::term::extras::as_uint_constant;
+use crate::ir::term::*;
 
 use log::debug;
 
@@ -103,7 +103,7 @@ impl MemVisitor for NonOblivComputer {
             self.mark(orig);
         }
     }
-    fn visit_select(&mut self, _orig: &Term, a: &Term, k: &Term) -> Option<Term> {        
+    fn visit_select(&mut self, _orig: &Term, a: &Term, k: &Term) -> Option<Term> {
         if let Op::Const(_) = k.op {
         } else {
             self.mark(a);
@@ -187,7 +187,7 @@ impl MemVisitor for Replacer {
             self.sequences.insert(orig.clone(), a_seq);
         }
     }
-    fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {  
+    fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
         if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
             debug!("Will replace select: {}", orig);
             let k_const = as_uint_constant(k)

@@ -64,13 +64,16 @@ impl CostModel {
                 )
             };
         let get_cost = |op_name: &str, obj: &serde_json::map::Map<String, Value>| -> f64 {
-            let o = obj.get(op_name).unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
+            let o = obj
+                .get(op_name)
+                .unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
             Some(
                 o.get("32")
                     .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
                     .as_f64()
                     .expect("not a number"),
-            ).unwrap()
+            )
+            .unwrap()
         };
         let mut conversions = FxHashMap::default();
         let mut ops = FxHashMap::default();
@@ -118,8 +121,7 @@ impl CostModel {
             // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
             if !op_name.contains("2") {
                 for op in ops_from_name(op_name) {
-                    for (share_type, share_name) in
-                        &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
+                    for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
                     {
                         if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
                             ops.entry(op.clone())
@@ -161,11 +163,13 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             }
         }
     }
-    let terms: FxHashMap<Term, usize> = terms.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
+    let terms: FxHashMap<Term, usize> =
+        terms.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
     let mut term_vars: FxHashMap<(Term, ShareType), (Variable, f64, String)> = FxHashMap::default();
-    let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> = FxHashMap::default();
+    let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> =
+        FxHashMap::default();
     let mut ilp = Ilp::new();
-    
+
     // build variables for all term assignments
     for (t, i) in terms.iter() {
         let mut vars = vec![];
@@ -258,7 +262,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 acc + v.clone() * *cost
             }),
     );
-    
+
     let (_opt, solution) = ilp.default_solve().unwrap();
 
     let mut assignment = TermMap::new();
@@ -277,7 +281,7 @@ mod tests {
     #[test]
     fn parse_cost_model() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let c = CostModel::from_opa_cost_file(&p);
@@ -307,7 +311,7 @@ mod tests {
     #[test]
     fn mul1_bv_opt() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
@@ -319,13 +323,13 @@ mod tests {
             metadata: ComputationMetadata::default(),
             values: None,
         };
-        let assignment = build_ilp(&cs, &costs);
+        let _assignment = build_ilp(&cs, &costs);
     }
 
     #[test]
     fn huge_mul_then_eq() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
@@ -371,7 +375,7 @@ mod tests {
     #[test]
     fn big_mul_then_eq() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);

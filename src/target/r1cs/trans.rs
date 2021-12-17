@@ -954,7 +954,8 @@ pub mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
+        let cs =
+            Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -963,7 +964,8 @@ pub mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
+        let cs =
+            Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -973,7 +975,8 @@ pub mod test {
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
+        let cs =
+            Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -984,7 +987,8 @@ pub mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
+        let cs =
+            Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
@@ -1020,7 +1024,8 @@ pub mod test {
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
+        let cs =
+            Computation::from_constraint_system_parts(vec![t], FxHashSet::default(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
