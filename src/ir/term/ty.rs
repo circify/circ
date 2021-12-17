@@ -287,10 +287,10 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                             )))
                         }
                     }),
-                    (Op::Field(i), &[a, b]) => tuple_or(a, "tuple field update").and_then(|t| {
+                    (Op::Update(i), &[a, b]) => tuple_or(a, "tuple field update").and_then(|t| {
                         if i < &t.len() {
                             eq_or(&t[*i], b, "tuple update")?;
-                            Ok(t[*i].clone())
+                            Ok(a.clone())
                         } else {
                             Err(TypeErrorReason::OutOfBounds(format!(
                                 "index {} in tuple of sort {}",
@@ -340,6 +340,8 @@ pub enum TypeErrorReason {
     ExpectedPf(Sort, &'static str),
     /// A sort should be an array
     ExpectedArray(Sort, &'static str),
+    /// A sort should be a tuple
+    ExpectedTuple(&'static str),
     /// An empty n-ary operator.
     EmptyNary(String),
     /// Something else
@@ -389,7 +391,7 @@ fn pf_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason
 fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Vec<Sort>, TypeErrorReason> {
     match a {
         Sort::Tuple(a) => Ok(a),
-        _ => Err(TypeErrorReason::ExpectedPf(a.clone(), ctx)),
+        _ => Err(TypeErrorReason::ExpectedTuple(ctx)),
     }
 }
 

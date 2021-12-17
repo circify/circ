@@ -18,8 +18,10 @@ pub enum Opt {
     Flatten,
     /// SHA-2 peephole optimizations
     Sha,
-    /// Memory elimination
-    Mem,
+    /// Replace oblivious arrays with tuples
+    Obliv,
+    /// Replace arrays with linear scans
+    LinearScan,
     /// Extract top-level ANDs as distinct outputs
     FlattenAssertions,
     /// Find outputs like `(= variable term)`, and substitute out `variable`
@@ -44,9 +46,12 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                     *a = sha::sha_rewrites(a);
                 }
             }
-            Opt::Mem => {
+            Opt::Obliv => {
+                mem::obliv::elim_obliv(&mut cs);
+            }
+            Opt::LinearScan => {
                 for a in &mut cs.outputs {
-                    *a = mem::array_elim(a);
+                    *a = mem::lin::linearize(a, usize::MAX);
                 }
             }
             Opt::FlattenAssertions => {

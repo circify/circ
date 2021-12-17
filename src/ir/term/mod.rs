@@ -797,18 +797,31 @@ impl Sort {
     /// * floats: zero
     /// * tuples/arrays: recursively default
     pub fn default_term(&self) -> Term {
+        leaf_term(Op::Const(self.default_value()))
+    }
+
+    /// Compute the default value for this sort.
+    ///
+    /// * booleans: false
+    /// * bit-vectors: zero
+    /// * field elements: zero
+    /// * floats: zero
+    /// * tuples/arrays: recursively default
+    pub fn default_value(&self) -> Value {
         match self {
-            Sort::Bool => leaf_term(Op::Const(Value::Bool(false))),
-            Sort::BitVector(w) => bv_lit(0, *w),
-            Sort::Field(m) => leaf_term(Op::Const(Value::Field(FieldElem::new(
-                Integer::from(0),
-                m.clone(),
-            )))),
-            Sort::Int => leaf_term(Op::Const(Value::Int(0.into()))),
-            Sort::F32 => leaf_term(Op::Const(Value::F32(0.0f32))),
-            Sort::F64 => leaf_term(Op::Const(Value::F64(0.0))),
-            Sort::Tuple(t) => term(Op::Tuple, t.iter().map(Sort::default_term).collect()),
-            Sort::Array(k, v, n) => term(Op::ConstArray((**k).clone(), *n), vec![v.default_term()]),
+            Sort::Bool => Value::Bool(false),
+            Sort::BitVector(w) => Value::BitVector(BitVector::new(0.into(), *w)),
+            Sort::Field(m) => Value::Field(FieldElem::new(Integer::from(0), m.clone())),
+            Sort::Int => Value::Int(0.into()),
+            Sort::F32 => Value::F32(0.0f32),
+            Sort::F64 => Value::F64(0.0),
+            Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
+            Sort::Array(k, v, n) => Value::Array(
+                (**k).clone(),
+                Box::new(v.default_value()),
+                Default::default(),
+                *n,
+            ),
         }
     }
 }
@@ -1203,16 +1216,10 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
 /// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
 /// * a value sort, for the array's default
 pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
-    let default_value = value_sort.default_term();
-    let default_arr = term(
-        Op::ConstArray(key_sort.clone(), i.len()),
-        vec![default_value],
-    );
+    let d = Sort::Array(Box::new(key_sort.clone()), Box::new(value_sort), i.len()).default_term();
     i.into_iter()
         .zip(key_sort.elems_iter())
-        .fold(default_arr, |arr, (val, idx)| {
-            term(Op::Store, vec![arr, idx, val])
-        })
+        .fold(d, |arr, (val, idx)| term(Op::Store, vec![arr, idx, val]))
 }
 
 /// Make a term with no arguments, just an operator.
@@ -1241,8 +1248,7 @@ where
 }
 
 /// Make a bit-vector constant term.
-pub fn bool_lit(b: bool) -> Term
-{
+pub fn bool_lit(b: bool) -> Term {
     leaf_term(Op::Const(Value::Bool(b)))
 }
 

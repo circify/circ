@@ -1,7 +1,7 @@
 //! Oblivious Array Elimination
 //!
 //! This module attempts to identify *oblivious* arrays: those that are only accessed at constant
-//! indices. These arrays can be replaced with normal terms.
+//! indices. These arrays can be replaced with tuples.
 //!
 //! It operates in two passes:
 //!
@@ -31,7 +31,7 @@
 //!
 //! The pass maintains:
 //!
-//!    * a map from array terms to lists of values
+//!    * a map from array terms to tuple terms
 //!
 //! It then does a bottom-up formula traversal, performing the following
 //! transformations:
@@ -44,8 +44,8 @@
 //!    * equalities between oblivious arrays are mapped to conjunctions of equalities
 
 use super::visit::*;
-use crate::ir::term::*;
 use crate::ir::term::extras::as_uint_constant;
+use crate::ir::term::*;
 
 use log::debug;
 
@@ -53,77 +53,103 @@ use std::iter::repeat;
 
 struct NonOblivComputer {
     not_obliv: TermSet,
-    progress: bool,
 }
 
 impl NonOblivComputer {
-    fn mark(&mut self, a: &Term) {
-        if !self.not_obliv.contains(a) {
-            self.not_obliv.insert(a.clone());
-            self.progress = true;
+    fn mark(&mut self, a: &Term) -> bool {
+        if !self.not_obliv.insert(a.clone()) {
+            debug!("Not obliv: {}", a);
+            true
+        } else {
+            false
         }
     }
 
-    fn bi_implicate(&mut self, a: &Term, b: &Term) {
+    fn bi_implicate(&mut self, a: &Term, b: &Term) -> bool {
         match (self.not_obliv.contains(a), self.not_obliv.contains(b)) {
             (false, true) => {
                 self.not_obliv.insert(a.clone());
-                self.progress = true;
+                true
             }
             (true, false) => {
                 self.not_obliv.insert(b.clone());
-                self.progress = true;
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
     fn new() -> Self {
         Self {
-            progress: true,
             not_obliv: TermSet::new(),
         }
     }
 }
 
-impl MemVisitor for NonOblivComputer {
-    fn visit_eq(&mut self, _orig: &Term, a: &Term, b: &Term) -> Option<Term> {
-        self.bi_implicate(a, b);
-        None
-    }
-    fn visit_ite(&mut self, orig: &Term, _c: &Term, t: &Term, f: &Term) {
-        self.bi_implicate(orig, t);
-        self.bi_implicate(t, f);
-        self.bi_implicate(orig, f);
-    }
-    fn visit_store(&mut self, orig: &Term, a: &Term, k: &Term, _v: &Term) {
-        if let Op::Const(_) = k.op {
-            self.bi_implicate(orig, a);
-        } else {
-            self.mark(a);
-            self.mark(orig);
+impl ProgressAnalysisPass for NonOblivComputer {
+    fn visit(&mut self, term: &Term) -> bool {
+        match &term.op {
+            Op::Store => {
+                let a = &term.cs[0];
+                let i = &term.cs[1];
+                let v = &term.cs[2];
+                let mut progress = false;
+                if let Sort::Array(..) = check(v) {
+                    // Imprecisely, mark v as non-obliv iff the array is.
+                    progress = progress || self.bi_implicate(term, v);
+                }
+                if let Op::Const(_) = i.op {
+                    progress = progress || self.bi_implicate(term, a);
+                } else {
+                    progress = progress || self.mark(a);
+                    progress = progress || self.mark(term);
+                }
+                if let Sort::Array(..) = check(v) {
+                    // Imprecisely, mark v as non-obliv iff the array is.
+                    progress = progress || self.bi_implicate(term, v);
+                }
+                progress
+            }
+            Op::Select => {
+                let a = &term.cs[0];
+                let i = &term.cs[1];
+                if let Op::Const(_) = i.op {
+                    self.mark(a)
+                } else {
+                    false
+                }
+            }
+            Op::Ite => {
+                let t = &term.cs[1];
+                let f = &term.cs[2];
+                if let Sort::Array(..) = check(t) {
+                    let mut progress = self.bi_implicate(term, t);
+                    progress = progress || self.bi_implicate(t, f);
+                    progress = progress || self.bi_implicate(term, f);
+                    progress
+                } else {
+                    false
+                }
+            }
+            Op::Eq => {
+                let t = &term.cs[0];
+                let f = &term.cs[1];
+                if let Sort::Array(..) = check(t) {
+                    self.bi_implicate(t, f)
+                } else {
+                    false
+                }
+            }
+            Op::Tuple => {
+                panic!("Tuple in obliv")
+            }
+            _ => false
         }
-    }
-    fn visit_select(&mut self, _orig: &Term, a: &Term, k: &Term) -> Option<Term> {
-        if let Op::Const(_) = k.op {
-        } else {
-            self.mark(a);
-        }
-        None
-    }
-}
-
-impl ProgressVisitor for NonOblivComputer {
-    fn check_progress(&self) -> bool {
-        self.progress
-    }
-    fn reset_progress(&mut self) {
-        self.progress = false;
     }
 }
 
 struct Replacer {
     /// A map from (original) replaced terms, to what they were replaced with.
-    sequences: TermMap<Vec<Term>>,
+    tuples: TermMap<Term>,
     /// The maximum size of arrays that will be replaced.
     not_obliv: TermSet,
 }
@@ -132,80 +158,73 @@ impl Replacer {
     fn should_replace(&self, a: &Term) -> bool {
         !self.not_obliv.contains(a)
     }
+
 }
 
 impl MemVisitor for Replacer {
     fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
         if self.should_replace(orig) {
             debug!("Will replace constant: {}", orig);
-            self.sequences
-                .insert(orig.clone(), repeat(val).cloned().take(size).collect());
+            self.tuples.insert(
+                orig.clone(),
+                term(Op::Tuple, repeat(val).cloned().take(size).collect()),
+            );
         }
     }
     fn visit_eq(&mut self, orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
-        if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            let b_seq = self.sequences.get(&orig.cs[1]).expect("inconsistent eq");
-            let eqs: Vec<Term> = a_seq
-                .iter()
-                .zip(b_seq.iter())
-                .map(|(a, b)| term![Op::Eq; a.clone(), b.clone()])
-                .collect();
-            Some(term(Op::BoolNaryOp(BoolNaryOp::And), eqs))
+        if let Some(a_tup) = self.tuples.get(&orig.cs[0]) {
+            let b_tup = self.tuples.get(&orig.cs[1]).expect("inconsistent eq");
+            Some(term![Op::Eq; a_tup.clone(), b_tup.clone()])
         } else {
             None
         }
     }
     fn visit_ite(&mut self, orig: &Term, c: &Term, _t: &Term, _f: &Term) {
         if self.should_replace(orig) {
-            let a_seq = self.sequences.get(&orig.cs[1]).expect("inconsistent ite");
-            let b_seq = self.sequences.get(&orig.cs[2]).expect("inconsistent ite");
-            let ites: Vec<Term> = a_seq
-                .iter()
-                .zip(b_seq.iter())
-                .map(|(a, b)| term![Op::Ite; c.clone(), a.clone(), b.clone()])
-                .collect();
-            self.sequences.insert(orig.clone(), ites);
+            let a_tup = self.tuples.get(&orig.cs[1]).expect("inconsistent ite");
+            let b_tup = self.tuples.get(&orig.cs[2]).expect("inconsistent ite");
+            let ite = term![Op::Ite; c.clone(), a_tup.clone(), b_tup.clone()];
+            self.tuples.insert(orig.clone(), ite);
         }
     }
     fn visit_store(&mut self, orig: &Term, _a: &Term, k: &Term, v: &Term) {
         if self.should_replace(orig) {
-            let mut a_seq = self
-                .sequences
+            let a_tup = self
+                .tuples
                 .get(&orig.cs[0])
-                .expect("inconsistent store")
+                .unwrap_or_else(|| panic!("inconsistent store {}", orig.cs[0].clone()))
                 .clone();
             let k_const = as_uint_constant(k)
                 .expect("not obliv!")
                 .to_usize()
                 .expect("oversize index");
-            a_seq[k_const] = v.clone();
-            self.sequences.insert(orig.clone(), a_seq);
+            debug!("store: {}", orig);
+            self.tuples
+                .insert(orig.clone(), term![Op::Update(k_const); a_tup, v.clone()]);
         }
     }
     fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
-        if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
+        if let Some(a_tup) = self.tuples.get(&orig.cs[0]) {
             debug!("Will replace select: {}", orig);
             let k_const = as_uint_constant(k)
                 .expect("not obliv!")
                 .to_usize()
                 .expect("oversize index");
-            if k_const < a_seq.len() {
-                Some(a_seq[k_const].clone())
-            } else {
-                panic!("Oversize index: {}", k_const)
-            }
+            Some(term![Op::Field(k_const); a_tup.clone()])
         } else {
+            debug!("Will not replace select: {}", orig);
             None
         }
     }
     fn visit_var(&mut self, orig: &Term, name: &String, s: &Sort) {
         if let Sort::Array(_k, v, size) = s {
             if self.should_replace(orig) {
-                self.sequences.insert(
+                self.tuples.insert(
                     orig.clone(),
-                    (0..*size)
-                        .map(|i| leaf_term(Op::Var(format!("{}_{}", name, i), (**v).clone())))
-                        .collect(),
+                    leaf_term(Op::Var(
+                        name.clone(),
+                        Sort::Tuple(repeat((**v).clone()).take(*size).collect()),
+                    )),
                 );
             }
         } else {
@@ -213,16 +232,21 @@ impl MemVisitor for Replacer {
         }
     }
 }
+impl RewritePass for Replacer {
+    fn visit<F: Fn() -> Vec<Term>>(&mut self, orig: &Term, rewritten_children: F) -> Option<Term> {
+        todo!()
+    }
+}
 
 /// Eliminate oblivious arrays. See module documentation.
-pub fn elim_obliv(t: &Term) -> Term {
+pub fn elim_obliv(t: &mut Computation) {
     let mut prop_pass = NonOblivComputer::new();
-    prop_pass.traverse_to_fixpoint(t);
+    prop_pass.traverse(t);
     let mut replace_pass = Replacer {
         not_obliv: prop_pass.not_obliv,
-        sequences: TermMap::new(),
+        tuples: TermMap::new(),
     };
-    replace_pass.traverse(t)
+    <Replacer as RewritePass>::traverse(&mut replace_pass, t)
 }
 
 #[cfg(test)]
