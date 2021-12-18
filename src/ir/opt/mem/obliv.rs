@@ -26,22 +26,8 @@
 //!
 //! In this pass, the goal is to
 //!
-//!    * map array terms to haskell lists of value terms
-//!    * map array selections to specific value terms
-//!
-//! The pass maintains:
-//!
-//!    * a map from array terms to tuple terms
-//!
-//! It then does a bottom-up formula traversal, performing the following
-//! transformations:
-//!
-//!    * oblivious array variables are mapped to a list of (derivative) variables
-//!    * oblivious constant arrays are mapped to a list that replicates the constant
-//!    * accesses to oblivious arrays are mapped to the appropriate term from the
-//!   value list of the array
-//!    * stores to oblivious arrays are mapped to updated value lists
-//!    * equalities between oblivious arrays are mapped to conjunctions of equalities
+//!    * map array terms to tuple terms
+//!    * map array selections to tuple field gets
 
 use super::visit::*;
 use crate::ir::term::extras::as_uint_constant;
@@ -49,15 +35,13 @@ use crate::ir::term::*;
 
 use log::debug;
 
-use std::iter::repeat;
-
 struct NonOblivComputer {
     not_obliv: TermSet,
 }
 
 impl NonOblivComputer {
     fn mark(&mut self, a: &Term) -> bool {
-        if !a.is_const() && !self.not_obliv.insert(a.clone()) {
+        if !a.is_const() && self.not_obliv.insert(a.clone()) {
             debug!("Not obliv: {}", a);
             true
         } else {
@@ -99,17 +83,17 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let mut progress = false;
                 if let Sort::Array(..) = check(v) {
                     // Imprecisely, mark v as non-obliv iff the array is.
-                    progress = progress || self.bi_implicate(term, v);
+                    progress = self.bi_implicate(term, v) || progress;
                 }
                 if let Op::Const(_) = i.op {
-                    progress = progress || self.bi_implicate(term, a);
+                    progress = self.bi_implicate(term, a) || progress;
                 } else {
-                    progress = progress || self.mark(a);
-                    progress = progress || self.mark(term);
+                    progress = self.mark(a) || progress;
+                    progress = self.mark(term) || progress;
                 }
                 if let Sort::Array(..) = check(v) {
                     // Imprecisely, mark v as non-obliv iff the array is.
-                    progress = progress || self.bi_implicate(term, v);
+                    progress = self.bi_implicate(term, v) || progress;
                 }
                 progress
             }
@@ -117,9 +101,9 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let a = &term.cs[0];
                 let i = &term.cs[1];
                 if let Op::Const(_) = i.op {
-                    self.mark(a)
-                } else {
                     false
+                } else {
+                    self.mark(a)
                 }
             }
             Op::Ite => {
@@ -127,18 +111,18 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let f = &term.cs[2];
                 if let Sort::Array(..) = check(t) {
                     let mut progress = self.bi_implicate(term, t);
-                    progress = progress || self.bi_implicate(t, f);
-                    progress = progress || self.bi_implicate(term, f);
+                    progress = self.bi_implicate(t, f) || progress;
+                    progress = self.bi_implicate(term, f) || progress;
                     progress
                 } else {
                     false
                 }
             }
             Op::Eq => {
-                let t = &term.cs[0];
-                let f = &term.cs[1];
-                if let Sort::Array(..) = check(t) {
-                    self.bi_implicate(t, f)
+                let a = &term.cs[0];
+                let b = &term.cs[1];
+                if let Sort::Array(..) = check(a) {
+                    self.bi_implicate(a, b)
                 } else {
                     false
                 }
@@ -152,8 +136,6 @@ impl ProgressAnalysisPass for NonOblivComputer {
 }
 
 struct Replacer {
-    /// A map from (original) replaced terms, to what they were replaced with.
-    tuples: TermMap<Term>,
     /// The maximum size of arrays that will be replaced.
     not_obliv: TermSet,
 }
@@ -163,101 +145,30 @@ impl Replacer {
         !self.not_obliv.contains(a)
     }
 }
-
-fn rewrite_if_const(a: Term) -> Term {
-    fn arr_to_tup(v: &Value) -> Value {
-        match v {
-            Value::Array(_key, default, map, size) => Value::Tuple({
-                let mut vec: Vec<Value> = vec![arr_to_tup(default); *size];
-                for (i, v) in map {
-                    vec[i.as_usize().expect("non usize key")] = arr_to_tup(v);
-                }
-                vec
-            }),
-            v => v.clone(),
-        }
-    }
-    match &a.op {
-        Op::Const(v @ Value::Array(..)) => leaf_term(Op::Const(arr_to_tup(v))),
-        _ => a,
-    }
-}
-fn arr_sort_to_tup(v: &Sort) -> Sort {
+fn arr_val_to_tup(v: &Value) -> Value {
     match v {
-        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        Value::Array(_key, default, map, size) => Value::Tuple({
+            let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
+            for (i, v) in map {
+                vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
+            }
+            vec
+        }),
         v => v.clone(),
     }
 }
 
-impl MemVisitor for Replacer {
-    //fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
-    //    if self.should_replace(orig) {
-    //        debug!("Will replace constant: {}", orig);
-    //        self.tuples.insert(
-    //            orig.clone(),
-    //            term(Op::Tuple, repeat(val).cloned().take(size).collect()),
-    //        );
-    //    }
-    //}
-    fn visit_eq(&mut self, orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
-        if let Some(a_tup) = self.tuples.get(&orig.cs[0]) {
-            let b_tup = self.tuples.get(&orig.cs[1]).expect("inconsistent eq");
-            Some(term![Op::Eq; a_tup.clone(), b_tup.clone()])
-        } else {
-            None
-        }
+fn term_arr_val_to_tup(a: Term) -> Term {
+    match &a.op {
+        Op::Const(v @ Value::Array(..)) => leaf_term(Op::Const(arr_val_to_tup(v))),
+        _ => a,
     }
-    fn visit_ite(&mut self, orig: &Term, c: &Term, _t: &Term, _f: &Term) {
-        if self.should_replace(orig) {
-            let a_tup = self.tuples.get(&orig.cs[1]).expect("inconsistent ite");
-            let b_tup = self.tuples.get(&orig.cs[2]).expect("inconsistent ite");
-            let ite = term![Op::Ite; c.clone(), a_tup.clone(), b_tup.clone()];
-            self.tuples.insert(orig.clone(), ite);
-        }
-    }
-    fn visit_store(&mut self, orig: &Term, _a: &Term, k: &Term, v: &Term) {
-        if self.should_replace(orig) {
-            let a_tup = self
-                .tuples
-                .get(&orig.cs[0])
-                .unwrap_or_else(|| panic!("inconsistent store {}", orig.cs[0].clone()))
-                .clone();
-            let k_const = as_uint_constant(k)
-                .expect("not obliv!")
-                .to_usize()
-                .expect("oversize index");
-            debug!("store: {}", orig);
-            self.tuples
-                .insert(orig.clone(), term![Op::Update(k_const); a_tup, v.clone()]);
-        }
-    }
-    fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
-        if let Some(a_tup) = self.tuples.get(&orig.cs[0]) {
-            debug!("Will replace select: {}", orig);
-            let k_const = as_uint_constant(k)
-                .expect("not obliv!")
-                .to_usize()
-                .expect("oversize index");
-            Some(term![Op::Field(k_const); a_tup.clone()])
-        } else {
-            debug!("Will not replace select: {}", orig);
-            None
-        }
-    }
-    fn visit_var(&mut self, orig: &Term, name: &String, s: &Sort) {
-        if let Sort::Array(_k, v, size) = s {
-            if self.should_replace(orig) {
-                self.tuples.insert(
-                    orig.clone(),
-                    leaf_term(Op::Var(
-                        name.clone(),
-                        Sort::Tuple(repeat((**v).clone()).take(*size).collect()),
-                    )),
-                );
-            }
-        } else {
-            unreachable!("should only visit array vars")
-        }
+}
+
+fn arr_sort_to_tup(v: &Sort) -> Sort {
+    match v {
+        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        v => v.clone(),
     }
 }
 
@@ -275,16 +186,13 @@ impl RewritePass for Replacer {
         let get_cs = || -> Vec<Term> {
             rewritten_children()
                 .into_iter()
-                .map(rewrite_if_const)
+                .map(term_arr_val_to_tup)
                 .collect()
         };
         match &orig.op {
-            Op::Var(name, sort@Sort::Array(_k, _v, _size)) => {
+            Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
                 if self.should_replace(orig) {
-                    Some(leaf_term(Op::Var(
-                        name.clone(),
-                        arr_sort_to_tup(sort),
-                    )))
+                    Some(leaf_term(Op::Var(name.clone(), arr_sort_to_tup(sort))))
                 } else {
                     None
                 }
@@ -334,7 +242,6 @@ pub fn elim_obliv(t: &mut Computation) {
     prop_pass.traverse(t);
     let mut replace_pass = Replacer {
         not_obliv: prop_pass.not_obliv,
-        tuples: TermMap::new(),
     };
     <Replacer as RewritePass>::traverse(&mut replace_pass, t)
 }
@@ -372,8 +279,10 @@ mod test {
             ],
             bv_lit(3, 4)
         ];
-        let tt = elim_obliv(&t);
-        assert!(array_free(&tt));
+        let mut c = Computation::default();
+        c.outputs.push(t);
+        elim_obliv(&mut c);
+        assert!(array_free(&c.outputs[0]));
     }
 
     #[test]
@@ -392,7 +301,9 @@ mod test {
             ],
             bv_lit(3, 4)
         ];
-        let tt = elim_obliv(&t);
-        assert!(!array_free(&tt));
+        let mut c = Computation::default();
+        c.outputs.push(t);
+        elim_obliv(&mut c);
+        assert!(!array_free(&c.outputs[0]));
     }
 }

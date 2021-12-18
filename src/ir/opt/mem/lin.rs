@@ -1,110 +1,79 @@
 //! Linear Memory implementation.
 //!
-//! The idea is to replace each array with a term sequence and use ITEs to linearly scan the array
-//! when needed. A SELECT produces an ITE reduce chain, a STORE produces an ITE map over the
-//! sequence.
-//!
-//! E.g., for length-3 arrays.
-//!
-//! (select A k) => (ite (= k 2) A2 (ite (= k 1) A1 A0))
-//! (store A k v) => (ite (= k 0) v A0), (ite (= k 1) v A1), (ite (= k 2))
-
-use super::visit::MemVisitor;
+//! The idea is to replace each array with a tuple, and use ITEs to account for variable indexing.
+use super::visit::RewritePass;
 use crate::ir::term::*;
 
-use std::iter::repeat;
+struct Linearizer;
 
-struct ArrayLinearizer {
-    /// A map from (original) replaced terms, to what they were replaced with.
-    sequences: TermMap<Vec<Term>>,
-    /// The maximum size of arrays that will be replaced.
-    size_thresh: usize,
+fn arr_val_to_tup(v: &Value) -> Value {
+    match v {
+        Value::Array(_key, default, map, size) => Value::Tuple({
+            let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
+            for (i, v) in map {
+                vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
+            }
+            vec
+        }),
+        v => v.clone(),
+    }
 }
 
-impl MemVisitor for ArrayLinearizer {
-    //fn visit_const_array(&mut self, orig: &Term, _key_sort: &Sort, val: &Term, size: usize) {
-    //    if size <= self.size_thresh {
-    //        self.sequences
-    //            .insert(orig.clone(), repeat(val).cloned().take(size).collect());
-    //    }
-    //}
-    fn visit_eq(&mut self, orig: &Term, _a: &Term, _b: &Term) -> Option<Term> {
-        // don't map b/c self borrow lifetime & NLL
-        if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            let b_seq = self.sequences.get(&orig.cs[1]).expect("inconsistent eq");
-            let eqs: Vec<Term> = a_seq
-                .iter()
-                .zip(b_seq.iter())
-                .map(|(a, b)| term![Op::Eq; a.clone(), b.clone()])
-                .collect();
-            Some(term(Op::BoolNaryOp(BoolNaryOp::And), eqs))
-        } else {
-            None
-        }
+fn arr_sort_to_tup(v: &Sort) -> Sort {
+    match v {
+        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        v => v.clone(),
     }
-    fn visit_ite(&mut self, orig: &Term, c: &Term, _t: &Term, _f: &Term) {
-        if let Some(a_seq) = self.sequences.get(&orig.cs[1]) {
-            let b_seq = self.sequences.get(&orig.cs[2]).expect("inconsistent ite");
-            let ites: Vec<Term> = a_seq
-                .iter()
-                .zip(b_seq.iter())
-                .map(|(a, b)| term![Op::Ite; c.clone(), a.clone(), b.clone()])
-                .collect();
-            self.sequences.insert(orig.clone(), ites);
-        }
-    }
-    fn visit_store(&mut self, orig: &Term, _a: &Term, k: &Term, v: &Term) {
-        if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            let key_sort = check(k);
-            let ites: Vec<Term> = a_seq
-                .iter()
-                .zip(key_sort.elems_iter())
-                .map(|(a_i, key_i)| {
-                    let eq_idx = term![Op::Eq; key_i, k.clone()];
-                    term![Op::Ite; eq_idx, v.clone(), a_i.clone()]
-                })
-                .collect();
-            self.sequences.insert(orig.clone(), ites);
-        }
-    }
-    fn visit_select(&mut self, orig: &Term, _a: &Term, k: &Term) -> Option<Term> {
-        if let Some(a_seq) = self.sequences.get(&orig.cs[0]) {
-            let key_sort = check(k);
-            let first = a_seq.first().expect("empty array in visit_select").clone();
-            Some(a_seq.iter().zip(key_sort.elems_iter()).skip(1).fold(
-                first,
-                |acc, (a_i, key_i)| {
-                    let eq_idx = term![Op::Eq; key_i, k.clone()];
-                    term![Op::Ite; eq_idx, a_i.clone(), acc]
-                },
-            ))
-        } else {
-            None
-        }
-    }
-    fn visit_var(&mut self, orig: &Term, name: &String, s: &Sort) {
-        if let Sort::Array(_k, v, size) = s {
-            if *size <= self.size_thresh {
-                self.sequences.insert(
-                    orig.clone(),
-                    (0..*size)
-                        .map(|i| leaf_term(Op::Var(format!("{}_{}", name, i), (**v).clone())))
-                        .collect(),
-                );
+}
+
+impl RewritePass for Linearizer {
+    fn visit<F: Fn() -> Vec<Term>>(&mut self, orig: &Term, rewritten_children: F) -> Option<Term> {
+        match &orig.op {
+            Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
+            Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
+                Some(leaf_term(Op::Var(name.clone(), arr_sort_to_tup(sort))))
             }
-        } else {
-            unreachable!("should only visit array vars")
+            Op::Select => {
+                let cs = rewritten_children();
+                let idx = &cs[1];
+                let tup = &cs[0];
+                if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
+                    assert!(size > 0);
+                    let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
+                    let first = fields.next().unwrap();
+                    Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
+                        term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
+                    }))
+                } else {
+                    unreachable!()
+                }
+            }
+            Op::Store => {
+                let cs = rewritten_children();
+                let tup = &cs[0];
+                let idx = &cs[1];
+                let val = &cs[2];
+                if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
+                    assert!(size > 0);
+                    let mut updates = (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
+                    let first = updates.next().unwrap();
+                    Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
+                        term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
+                    }))
+                } else {
+                    unreachable!()
+                }
+            }
+            // ITEs and EQs are correctly rewritten by default.
+            _ => None,
         }
     }
 }
 
 /// Eliminate arrays using linear scans. See module documentation.
-pub fn linearize(t: &Term, size_thresh: usize) -> Term {
-    let mut pass = ArrayLinearizer {
-        size_thresh,
-        sequences: TermMap::new(),
-    };
-    pass.traverse(t)
+pub fn linearize(c: &mut Computation) {
+    let mut pass = Linearizer;
+    pass.traverse(c);
 }
 
 #[cfg(test)]
@@ -152,9 +121,11 @@ mod test {
             ],
             bv_lit(3, 4)
         ];
-        let tt = linearize(&t, 6);
-        assert!(array_free(&tt));
-        assert_eq!(6 + 6 + 6 + 5, count_ites(&tt));
+        let mut c = Computation::default();
+        c.outputs.push(t);
+        linearize(&mut c);
+        assert!(array_free(&c.outputs[0]));
+        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
     }
 
     #[test]
@@ -173,8 +144,10 @@ mod test {
             ],
             field_lit(3)
         ];
-        let tt = linearize(&t, 6);
-        assert!(array_free(&tt));
-        assert_eq!(6 + 6 + 6 + 5, count_ites(&tt));
+        let mut c = Computation::default();
+        c.outputs.push(t);
+        linearize(&mut c);
+        assert!(array_free(&c.outputs[0]));
+        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
     }
 }

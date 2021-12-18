@@ -1466,38 +1466,14 @@ impl Computation {
             },
         }
     }
-    // TODO: rm
-    //    /// Make `s` a public input.
-    //    pub fn publicize(&mut self, s: String) {
-    //        self.public_inputs.insert(s);
-    //    }
+
     /// Get the outputs of the computation.
     ///
     /// For proof systems, these are the assertions that must hold.
     pub fn outputs(&self) -> &Vec<Term> {
         &self.outputs
     }
-    // TODO: rm
-    //    /// Consume this system, yielding its parts: (assertions, public inputs, values)
-    //    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<FxHashMap<String, Value>>) {
-    //        (self.assertions, self.metadata, self.values)
-    //    }
-    //    /// Build a system from its parts: (assertions, public inputs, values)
-    //    pub fn from_parts(
-    //        assertions: Vec<Term>,
-    //        public_inputs: FxHashSet<String>,
-    //        values: Option<FxHashMap<String, Value>>,
-    //    ) -> Self {
-    //        Self {
-    //            assertions,
-    //            public_inputs,
-    //            values,
-    //        }
-    //    }
-    //    /// Get the term, (AND all assertions)
-    //    pub fn assertions_as_term(&self) -> Term {
-    //        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
-    //    }
+
     /// How many total (unique) terms are there?
     pub fn terms(&self) -> usize {
         let mut terms = FxHashSet::<Term>::default();

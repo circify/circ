@@ -69,14 +69,16 @@ impl Expr2Smt<()> for Value {
                 }
                 write!(w, ")")?;
             }
-            Value::Array(s, default, map, _size) => {
+            Value::Array(key_s, default, map, size) => {
                 for _ in 0..map.len() {
                     write!(w, "(store ")?;
                 }
+                let val_s = check(&leaf_term(Op::Const((**default).clone())));
+                let s = Sort::Array(Box::new(key_s.clone()), Box::new(val_s), *size);
                 write!(
                     w,
                     "((as const {}) {})",
-                    SmtSortDisp(&*s),
+                    SmtSortDisp(&s),
                     SmtDisp(&**default)
                 )?;
                 for (k, v) in map {

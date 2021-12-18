@@ -50,9 +50,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 mem::obliv::elim_obliv(&mut cs);
             }
             Opt::LinearScan => {
-                for a in &mut cs.outputs {
-                    *a = mem::lin::linearize(a, usize::MAX);
-                }
+                mem::lin::linearize(&mut cs);
             }
             Opt::FlattenAssertions => {
                 let mut new_outputs = Vec::new();

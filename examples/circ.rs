@@ -197,6 +197,7 @@ fn main() {
                 Opt::Obliv,
                 Opt::Tuple,
                 Opt::LinearScan,
+                Opt::Tuple,
                 Opt::Flatten,
                 //Opt::FlattenAssertions,
                 Opt::ConstantFold,
