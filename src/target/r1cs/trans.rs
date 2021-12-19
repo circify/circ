@@ -343,6 +343,27 @@ impl ToR1cs {
         }
     }
 
+    fn assert_eq(&mut self, a: &Term, b: &Term) {
+        match check(a) {
+            Sort::Bool => {
+                let a = self.get_bool(a).clone();
+                let diff = a - self.get_bool(b);
+                self.assert_zero(diff);
+            }
+            Sort::BitVector(_) => {
+                let a = self.get_bv_uint(a);
+                let diff = a - &self.get_bv_uint(b);
+                self.assert_zero(diff);
+            }
+            Sort::Field(_) => {
+                let a = self.get_pf(a).clone();
+                let diff = a - self.get_pf(b);
+                self.assert_zero(diff);
+            }
+            s => panic!("Unimplemented sort for Eq: {:?}", s),
+        }
+    }
+
     fn embed_bool(&mut self, c: Term) -> &Lc {
         //println!("Embed: {}", c);
         debug_assert!(check(&c) == Sort::Bool);
@@ -425,6 +446,23 @@ impl ToR1cs {
         //            println!("-> {}", v);
         //        });
         self.get_bool(&c)
+    }
+
+    fn assert_bool(&mut self, t: &Term) {
+        //println!("Embed: {}", c);
+        // TODO: skip if already embedded
+        if &t.op == &Op::Eq {
+            t.cs.iter().for_each(|c| self.embed(c.clone()));
+            self.assert_eq(&t.cs[0], &t.cs[1]);
+        } else if &t.op == &AND {
+            for c in &t.cs {
+                self.assert_bool(c);
+            }
+        } else {
+            self.embed(t.clone());
+            let lc = self.get_bool(&t).clone();
+            self.assert_zero(lc - 1);
+        }
     }
 
     /// Returns whether `a - b` fits in `size` non-negative bits.
@@ -848,9 +886,8 @@ impl ToR1cs {
     }
     fn assert(&mut self, t: Term) {
         debug!("Assert: {}", Letified(t.clone()));
-        self.embed(t.clone());
-        let lc = self.get_bool(&t).clone();
-        self.assert_zero(lc - 1);
+        debug_assert!(check(&t) == Sort::Bool, "Non bool in assert");
+        self.assert_bool(&t);
     }
 }
 
