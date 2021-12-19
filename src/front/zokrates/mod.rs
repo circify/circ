@@ -102,20 +102,14 @@ struct ZGen<'ast> {
     mode: Mode,
 }
 
-enum ZLoc {
-    Var(Loc),
-    Member(Box<ZLoc>, String),
-    Idx(Box<ZLoc>, T),
+struct ZLoc {
+    var: Loc,
+    accesses: Vec<ZAccess>,
 }
 
-impl ZLoc {
-    fn loc(&self) -> &Loc {
-        match self {
-            ZLoc::Var(l) => l,
-            ZLoc::Member(i, _) => i.loc(),
-            ZLoc::Idx(i, _) => i.loc(),
-        }
-    }
+enum ZAccess {
+    Member(String),
+    Idx(T),
 }
 
 impl<'ast> ZGen<'ast> {
@@ -244,30 +238,30 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn apply_lval_mod(&mut self, base: T, loc: ZLoc, val: T) -> Result<T, String> {
-        match loc {
-            ZLoc::Var(_) => Ok(val),
-            ZLoc::Member(inner_loc, field) => {
-                let old_inner = field_select(&base, &field)?;
-                let new_inner = self.apply_lval_mod(old_inner, *inner_loc, val)?;
-                field_store(base, &field, new_inner)
+    fn apply_lval_mod(&mut self, old: T, loc: Loc, accesses: &[ZAccess], new: T) -> Result<T, String> {
+        match accesses.first() {
+            None => Ok(new),
+            Some(ZAccess::Member(field)) => {
+                let old_inner = field_select(&old, &field)?;
+                let new_inner = self.apply_lval_mod(old_inner, loc, &accesses[1..], new)?;
+                field_store(old, &field, new_inner)
             }
-            ZLoc::Idx(inner_loc, idx) => {
-                let old_inner = array_select(base.clone(), idx.clone())?;
-                let new_inner = self.apply_lval_mod(old_inner, *inner_loc, val)?;
-                array_store(base, idx, new_inner)
+            Some(ZAccess::Idx(idx)) => {
+                let old_inner = array_select(old.clone(), idx.clone())?;
+                let new_inner = self.apply_lval_mod(old_inner, loc, &accesses[1..], new)?;
+                array_store(old, idx.clone(), new_inner)
             }
         }
     }
 
     fn mod_lval(&mut self, l: ZLoc, t: T) -> Result<(), String> {
-        let var = l.loc().clone();
+        let var = l.var.clone();
         let old = self
             .circ
             .get_value(var.clone())
             .map_err(|e| format!("{}", e))?
             .unwrap_term();
-        let new = self.apply_lval_mod(old, l, t)?;
+        let new = self.apply_lval_mod(old, l.var, &l.accesses, t)?;
         debug!("Assign: {:?} = {}", var, Letified(new.term.clone()));
         self.circ
             .assign(var, Val::Term(new))
@@ -276,20 +270,20 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn lval(&mut self, l: &ast::Assignee<'ast>) -> ZLoc {
-        l.accesses.iter().fold(
-            ZLoc::Var(Loc::local(l.id.value.clone())),
-            |inner, acc| match acc {
-                ast::AssigneeAccess::Member(m) => ZLoc::Member(Box::new(inner), m.id.value.clone()),
+        let mut loc = ZLoc { var: Loc::local(l.id.value.clone()), accesses: vec![] };
+        for acc in &l.accesses {
+            loc.accesses.push(match acc {
+                ast::AssigneeAccess::Member(m) => ZAccess::Member(m.id.value.clone()),
                 ast::AssigneeAccess::Select(m) => {
-                    let i = if let ast::RangeOrExpression::Expression(e) = &m.expression {
+                    ZAccess::Idx(if let ast::RangeOrExpression::Expression(e) = &m.expression {
                         self.expr(&e)
                     } else {
                         panic!("Cannot assign to slice")
-                    };
-                    ZLoc::Idx(Box::new(inner), i)
+                    })
                 }
-            },
-        )
+            })
+        }
+        loc
     }
 
     fn const_(&mut self, e: &ast::ConstantExpression<'ast>) -> T {
