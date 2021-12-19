@@ -238,30 +238,30 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn apply_lval_mod(&mut self, old: T, loc: Loc, accesses: &[ZAccess], new: T) -> Result<T, String> {
+    fn apply_lval_mod(&mut self, old: T, accesses: &[ZAccess], new: T) -> Result<T, String> {
         match accesses.first() {
             None => Ok(new),
             Some(ZAccess::Member(field)) => {
                 let old_inner = field_select(&old, &field)?;
-                let new_inner = self.apply_lval_mod(old_inner, loc, &accesses[1..], new)?;
+                let new_inner = self.apply_lval_mod(old_inner, &accesses[1..], new)?;
                 field_store(old, &field, new_inner)
             }
             Some(ZAccess::Idx(idx)) => {
                 let old_inner = array_select(old.clone(), idx.clone())?;
-                let new_inner = self.apply_lval_mod(old_inner, loc, &accesses[1..], new)?;
+                let new_inner = self.apply_lval_mod(old_inner, &accesses[1..], new)?;
                 array_store(old, idx.clone(), new_inner)
             }
         }
     }
 
     fn mod_lval(&mut self, l: ZLoc, t: T) -> Result<(), String> {
-        let var = l.var.clone();
+        let var = l.var;
         let old = self
             .circ
             .get_value(var.clone())
             .map_err(|e| format!("{}", e))?
             .unwrap_term();
-        let new = self.apply_lval_mod(old, l.var, &l.accesses, t)?;
+        let new = self.apply_lval_mod(old, &l.accesses, t)?;
         debug!("Assign: {:?} = {}", var, Letified(new.term.clone()));
         self.circ
             .assign(var, Val::Term(new))
