@@ -6,8 +6,8 @@ mod term;
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
-use crate::ir::term::*;
 use crate::ir::term::extras::Letified;
+use crate::ir::term::*;
 use log::debug;
 use rug::Integer;
 use std::collections::HashMap;
@@ -110,6 +110,22 @@ struct ZLoc {
 enum ZAccess {
     Member(String),
     Idx(T),
+}
+
+fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
+    match loc.first() {
+        None => Ok(val),
+        Some(ZAccess::Member(field)) => {
+            let inner = field_select(&struct_, &field)?;
+            let new_inner = loc_store(inner, &loc[1..], val)?;
+            field_store(struct_, &field, new_inner)
+        }
+        Some(ZAccess::Idx(idx)) => {
+            let old_inner = array_select(struct_.clone(), idx.clone())?;
+            let new_inner = loc_store(old_inner, &loc[1..], val)?;
+            array_store(struct_, idx.clone(), new_inner)
+        }
+    }
 }
 
 impl<'ast> ZGen<'ast> {
@@ -238,49 +254,35 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn apply_lval_mod(&mut self, old: T, accesses: &[ZAccess], new: T) -> Result<T, String> {
-        match accesses.first() {
-            None => Ok(new),
-            Some(ZAccess::Member(field)) => {
-                let old_inner = field_select(&old, &field)?;
-                let new_inner = self.apply_lval_mod(old_inner, &accesses[1..], new)?;
-                field_store(old, &field, new_inner)
-            }
-            Some(ZAccess::Idx(idx)) => {
-                let old_inner = array_select(old.clone(), idx.clone())?;
-                let new_inner = self.apply_lval_mod(old_inner, &accesses[1..], new)?;
-                array_store(old, idx.clone(), new_inner)
-            }
-        }
-    }
-
-    fn mod_lval(&mut self, l: ZLoc, t: T) -> Result<(), String> {
-        let var = l.var;
+    fn mod_lval(&mut self, loc: ZLoc, val: T) -> Result<(), String> {
         let old = self
             .circ
-            .get_value(var.clone())
+            .get_value(loc.var.clone())
             .map_err(|e| format!("{}", e))?
             .unwrap_term();
-        let new = self.apply_lval_mod(old, &l.accesses, t)?;
-        debug!("Assign: {:?} = {}", var, Letified(new.term.clone()));
+        let new = loc_store(old, &loc.accesses, val)?;
+        debug!("Assign: {:?} = {}", loc.var, Letified(new.term.clone()));
         self.circ
-            .assign(var, Val::Term(new))
+            .assign(loc.var, Val::Term(new))
             .map_err(|e| format!("{}", e))
             .map(|_| ())
     }
 
     fn lval(&mut self, l: &ast::Assignee<'ast>) -> ZLoc {
-        let mut loc = ZLoc { var: Loc::local(l.id.value.clone()), accesses: vec![] };
+        let mut loc = ZLoc {
+            var: Loc::local(l.id.value.clone()),
+            accesses: vec![],
+        };
         for acc in &l.accesses {
             loc.accesses.push(match acc {
                 ast::AssigneeAccess::Member(m) => ZAccess::Member(m.id.value.clone()),
-                ast::AssigneeAccess::Select(m) => {
-                    ZAccess::Idx(if let ast::RangeOrExpression::Expression(e) = &m.expression {
+                ast::AssigneeAccess::Select(m) => ZAccess::Idx(
+                    if let ast::RangeOrExpression::Expression(e) = &m.expression {
                         self.expr(&e)
                     } else {
                         panic!("Cannot assign to slice")
-                    })
-                }
+                    },
+                ),
             })
         }
         loc
