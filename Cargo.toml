@@ -11,7 +11,6 @@ edition = "2018"
 hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "phash"}
 rug = "1.11"
 gmp-mpfr-sys = "1.4"
-fnv = "1.0.7"
 lazy_static = "1.4"
 rand = "0.8"
 rsmt2 = "0.12"

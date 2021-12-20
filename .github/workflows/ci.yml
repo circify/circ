@@ -16,18 +16,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install zsh
+    - name: Install dependencies
       if: runner.os == 'Linux'
-      run: sudo apt-get update; sudo apt-get install zsh cvc4
-    - name: install dependencies
-      if: runner.os == 'Linux'
-      run: sudo apt-get install libboost-all-dev libssl-dev coinor-cbc coinor-libcbc-dev
+      run: sudo apt-get update; sudo apt-get install zsh cvc4 libboost-all-dev libssl-dev coinor-cbc coinor-libcbc-dev
     - uses: actions-rs/toolchain@v1
       with:
-        profile: minimal
-        toolchain: nightly
-        override: true
+        toolchain: stable
     - uses: Swatinem/rust-cache@v1
+    - name: Initialize submodules
+      run: make init
     - name: Check
       run: cargo check --verbose
     - name: Build

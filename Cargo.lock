@@ -211,7 +211,6 @@ dependencies = [
  "bls12_381",
  "env_logger",
  "ff",
- "fnv",
  "from-pest",
  "fxhash",
  "gmp-mpfr-sys",
