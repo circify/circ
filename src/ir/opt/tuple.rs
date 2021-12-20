@@ -110,6 +110,7 @@ impl Pass {
         sort: &Sort,
         value: Option<Value>,
         party: Option<PartyId>,
+        new_var_requests: &mut Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
     ) -> Tree {
         match sort {
             Sort::Tuple(sorts) => {
@@ -129,27 +130,26 @@ impl Pass {
                                     .as_mut()
                                     .map(|v| std::mem::replace(&mut v[i], Value::Bool(true))),
                                 party,
+                                new_var_requests,
                             )
                         })
                         .collect(),
                 ))
             }
-            _ => Rc::new(TreeData::Leaf(
-                if self.cs.metadata.is_input(prefix)
-                    && self.cs.metadata.is_input_public(prefix)
-                    && self
+            _ => Rc::new(TreeData::Leaf({
+                if !self.cs.metadata.is_input(prefix)
+                    || !self.cs.metadata.is_input_public(prefix)
+                    || !self
                         .cs
                         .values
                         .as_ref()
                         .map(|v| v.contains_key(prefix))
                         .unwrap_or(false)
                 {
-                    leaf_term(Op::Var(prefix.into(), sort.clone()))
-                } else {
-                    self.cs
-                        .new_var(prefix, sort.clone(), || value.unwrap().clone(), party)
-                },
-            )),
+                    new_var_requests.push((prefix.into(), sort.clone(), value, party));
+                }
+                leaf_term(Op::Var(prefix.into(), sort.clone()))
+            })),
         }
     }
 
@@ -160,7 +160,8 @@ impl Pass {
                 Op::Const(v) => Rc::new(TreeData::from_value(v.clone())),
                 Op::Var(name, sort) => {
                     let party_visibility = self.cs.metadata.get_input_visibility(name);
-                    self.create_vars(
+                    let mut new_var_reqs = Vec::new();
+                    let tree = self.create_vars(
                         name,
                         sort,
                         self.cs
@@ -168,7 +169,12 @@ impl Pass {
                             .as_ref()
                             .map(|v| v.get(name).unwrap().clone()),
                         party_visibility,
-                    )
+                        &mut new_var_reqs,
+                    );
+                    if new_var_reqs.len() > 0 {
+                        self.cs.replace_input(t.clone(), new_var_reqs);
+                    }
+                    tree
                 }
                 Op::Tuple => Rc::new(TreeData::Tuple(
                     t.cs.iter().map(|c| self.get_tree(c).clone()).collect(),

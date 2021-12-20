@@ -1357,6 +1357,42 @@ impl ComputationMetadata {
         self.input_vis.insert(input_name.clone(), party);
         self.inputs.push(term);
     }
+    /// Replace the `original` computation input with `new`, in the order given.
+    ///
+    /// If the old input order was
+    ///
+    ///    w x y z x1 x2 x3
+    ///
+    /// and `x` was replaced with `x1`, `x2`, `x3`, then the new input order is
+    ///
+    ///    w x1 x2 x3 y z
+    ///
+    /// and other metadata associated with `x` is removed.
+    ///
+    /// This is probably called after making the new inputs with `new_input`.
+    pub fn replace_input(&mut self, original: Term, new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>) {
+        let mut i = self.inputs.iter().position(|t| t == &original).unwrap();
+        self.inputs.remove(i);
+        let name = if let Op::Var(n, _) = &original.op {
+            n.to_string()
+        } else {
+            unreachable!()
+        };
+        self.input_vis.remove(&name).unwrap();
+        for (input_name, sort, _, party) in new {
+            let term = leaf_term(Op::Var(input_name.clone(), sort));
+            debug_assert!(
+                !self.input_vis.contains_key(&input_name),
+                "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
+                input_name,
+                party,
+                self.input_vis.get(&input_name).unwrap()
+            );
+            self.input_vis.insert(input_name.clone(), party);
+            self.inputs.insert(i, term);
+            i += 1;
+        }
+    }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
         self.input_vis
@@ -1373,12 +1409,27 @@ impl ComputationMetadata {
         self.get_input_visibility(input_name).is_none()
     }
     /// Get all public inputs.
-    pub fn public_inputs(&self) -> impl Iterator<Item = &str> {
+    pub fn public_input_names(&self) -> impl Iterator<Item = &str> {
         self.input_vis.iter().filter_map(|(name, party)| {
             if party.is_none() {
                 Some(name.as_str())
             } else {
                 None
+            }
+        })
+    }
+    /// Get all public inputs.
+    pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a{
+        self.inputs.iter().filter_map(move |input| {
+            if let Op::Var(name, _) = &input.op {
+                let party = self.get_input_visibility(name);
+                if party.is_none() {
+                    Some(input.clone())
+                } else {
+                    None
+                }
+            } else {
+                unreachable!()
             }
         })
     }
@@ -1428,6 +1479,40 @@ impl Computation {
         }
         leaf_term(Op::Var(name.to_owned(), s))
     }
+    /// Replace the `original` computation input with `new`, in the order given.
+    ///
+    /// If the old input order was
+    ///
+    ///    w x y z
+    ///
+    /// and `x` was replaced with `x1`, `x2`, `x3`, then the new input order is
+    ///
+    ///    w x1 x2 x3 y z
+    ///
+    /// and other metadata associated with `x` is removed.
+    ///
+    /// This is called in place of `new_var` during transformations.
+    pub fn replace_input(&mut self, original: Term, mut new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>) {
+        if let Some(vs) = self.values.as_mut() {
+            if let Op::Var(name, _) = &original.op {
+                vs.remove(name);
+                for (name, _, val_opt, _) in &mut new {
+                    vs.insert(name.clone(), std::mem::take(val_opt).unwrap());
+                }
+            }
+        }
+        self.metadata.replace_input(original, new);
+    }
+
+    /// Change the value associated with an input
+    pub fn map_value(&mut self, name: &str, f: impl FnOnce(Value) -> Value) {
+        if let Some(vs) = self.values.as_mut() {
+            let loc = vs.get_mut(name).unwrap();
+            let v = std::mem::replace(loc, Value::Bool(false));
+            *loc = f(v);
+        }
+    }
+
     /// Create a new variable, `name` in the constraint system, and set it equal to `term`.
     /// `public` indicates whether this variable is public in the constraint system.
     pub fn assign(&mut self, name: &str, term: Term, party: Option<PartyId>) -> Term {

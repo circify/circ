@@ -36,7 +36,6 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zo
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
 
-
 # Test prove workflow, given an example name
 function pf_test {
     ex_name=$1
@@ -48,3 +47,4 @@ function pf_test {
 
 pf_test 3_plus
 pf_test xor
+pf_test many_pub

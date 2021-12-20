@@ -181,7 +181,12 @@ fn get_const(t: &Term) -> usize {
 }
 
 impl RewritePass for Replacer {
-    fn visit<F: Fn() -> Vec<Term>>(&mut self, orig: &Term, rewritten_children: F) -> Option<Term> {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
         //debug!("Visit {}", extras::Letified(orig.clone()));
         let get_cs = || -> Vec<Term> {
             rewritten_children()
@@ -192,7 +197,15 @@ impl RewritePass for Replacer {
         match &orig.op {
             Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
                 if self.should_replace(orig) {
-                    Some(leaf_term(Op::Var(name.clone(), arr_sort_to_tup(sort))))
+                    let new_value = computation
+                        .values
+                        .as_ref()
+                        .map(|vs| arr_val_to_tup(vs.get(name).unwrap()));
+                    let vis = computation.metadata.get_input_visibility(name);
+                    let new_sort = arr_sort_to_tup(sort);
+                    let new_var_info = vec![(name.clone(), new_sort.clone(), new_value, vis)];
+                    computation.replace_input(orig.clone(), new_var_info);
+                    Some(leaf_term(Op::Var(name.clone(), new_sort)))
                 } else {
                     None
                 }

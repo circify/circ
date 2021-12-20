@@ -129,7 +129,7 @@ impl ToR1cs {
     fn eval_bv(&self, var: &str) -> Option<Integer> {
         self.values
             .as_ref()
-            .map(|vs| match vs.get(var).expect("missing value") {
+            .map(|vs| match vs.get(var).unwrap_or_else(|| panic!("missing value for {}", var)) {
                 Value::BitVector(b) => b.uint().clone(),
                 v => panic!("{} should be a bit-vector, but is {:?}", var, v),
             })
@@ -898,7 +898,7 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
         metadata,
         values,
     } = cs;
-    let public_inputs = metadata.public_inputs().map(ToOwned::to_owned).collect();
+    let public_inputs = metadata.public_input_names().map(ToOwned::to_owned).collect();
     debug!("public inputs: {:?}", public_inputs);
     let mut converter = ToR1cs::new(modulus, values, public_inputs);
     debug!(
@@ -908,7 +908,12 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
             .map(|c| PostOrderIter::new(c.clone()).count())
             .sum::<usize>()
     );
-    println!("Printing assertions");
+    debug!("declaring inputs");
+    for i in metadata.public_inputs() {
+        debug!("input {}", i);
+        converter.embed(i);
+    }
+    debug!("Printing assertions");
     for c in assertions {
         converter.assert(c);
     }
@@ -1054,7 +1059,7 @@ pub mod test {
             vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(8))),
+                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8))),
             ],
             Some(
                 vec![(

@@ -5,7 +5,7 @@ pub trait RewritePass {
     /// Visit (and possibly rewrite) a term.
     /// Given the original term and a function to get its rewritten childen.
     /// Returns a term if a rewrite happens.
-    fn visit<F: Fn() -> Vec<Term>>(&mut self, orig: &Term, rewritten_children: F) -> Option<Term>;
+    fn visit<F: Fn() -> Vec<Term>>(&mut self, computation: &mut Computation, orig: &Term, rewritten_children: F) -> Option<Term>;
     fn traverse(&mut self, computation: &mut Computation) {
         let mut cache = TermMap::<Term>::new();
         let mut children_added = TermSet::new();
@@ -25,7 +25,7 @@ pub trait RewritePass {
                             .cloned()
                             .collect()
                     };
-                    let new_t_opt = self.visit(&top, get_children);
+                    let new_t_opt = self.visit(computation, &top, get_children);
                     let new_t = new_t_opt.unwrap_or_else(|| term(top.op.clone(), get_children()));
                     cache.insert(top.clone(), new_t);
                 }

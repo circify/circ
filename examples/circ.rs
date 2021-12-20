@@ -226,6 +226,7 @@ fn main() {
                 }
                 ProofAction::Prove => {
                     println!("Proving");
+                    r1cs.check_all();
                     let rng = &mut rand::thread_rng();
                     let mut pk_file = File::open(prover_key).unwrap();
                     let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();

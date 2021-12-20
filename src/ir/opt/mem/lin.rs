@@ -27,11 +27,24 @@ fn arr_sort_to_tup(v: &Sort) -> Sort {
 }
 
 impl RewritePass for Linearizer {
-    fn visit<F: Fn() -> Vec<Term>>(&mut self, orig: &Term, rewritten_children: F) -> Option<Term> {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
             Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
-                Some(leaf_term(Op::Var(name.clone(), arr_sort_to_tup(sort))))
+                let new_value = computation
+                    .values
+                    .as_ref()
+                    .map(|vs| arr_val_to_tup(vs.get(name).unwrap()));
+                let vis = computation.metadata.get_input_visibility(name);
+                let new_sort = arr_sort_to_tup(sort);
+                let new_var_info = vec![(name.clone(), new_sort.clone(), new_value, vis)];
+                computation.replace_input(orig.clone(), new_var_info);
+                Some(leaf_term(Op::Var(name.clone(), new_sort)))
             }
             Op::Select => {
                 let cs = rewritten_children();
@@ -55,7 +68,8 @@ impl RewritePass for Linearizer {
                 let val = &cs[2];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut updates = (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
+                    let mut updates =
+                        (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
                     let first = updates.next().unwrap();
                     Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
                         term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
