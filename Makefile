@@ -18,3 +18,6 @@ clean:
 	touch ./third_party/ABY/src/examples/2pc_* && rm -r -- ./third_party/ABY/src/examples/2pc_* 
 	sed '/add_subdirectory.*2pc.*/d' -i ./third_party/ABY/src/examples/CMakeLists.txt 
 	rm -rf P V pi perf.data perf.data.old flamegraph.svg
+
+format:
+	cargo fmt --all
