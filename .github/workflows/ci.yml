@@ -27,6 +27,8 @@ jobs:
       run: make init
     - name: Check
       run: cargo check --verbose
+    - name: Check
+      run: cargo fmt -- --check
     - name: Build
       run: cargo build --verbose && make build
     - name: Run tests
