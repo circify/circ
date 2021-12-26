@@ -69,12 +69,12 @@ impl Expr2Smt<()> for Value {
                 }
                 write!(w, ")")?;
             }
-            Value::Array(key_s, default, map, size) => {
+            Value::Array(Array{key_sort, default, map, size}) => {
                 for _ in 0..map.len() {
                     write!(w, "(store ")?;
                 }
                 let val_s = check(&leaf_term(Op::Const((**default).clone())));
-                let s = Sort::Array(Box::new(key_s.clone()), Box::new(val_s), *size);
+                let s = Sort::Array(Box::new(key_sort.clone()), Box::new(val_s), *size);
                 write!(
                     w,
                     "((as const {}) {})",

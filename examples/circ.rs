@@ -177,15 +177,16 @@ fn main() {
         }
     };
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
+        Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![],
+            vec![Opt::ScalarizeVars],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
+                Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold,
@@ -220,10 +221,9 @@ fn main() {
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
+            println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
-                ProofAction::Count => {
-                    println!("Final R1cs size: {}", r1cs.constraints().len());
-                }
+                ProofAction::Count => {}
                 ProofAction::Prove => {
                     println!("Proving");
                     r1cs.check_all();

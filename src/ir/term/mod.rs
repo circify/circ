@@ -621,9 +621,59 @@ pub enum Value {
     /// Boolean
     Bool(bool),
     /// Array
-    Array(Sort, Box<Value>, BTreeMap<Value, Value>, usize),
+    Array(Array),
     /// Tuple
     Tuple(Vec<Value>),
+}
+
+#[derive(Clone, PartialEq, Debug, PartialOrd, Hash)]
+/// An IR array value.
+///
+/// A sized, space array.
+pub struct Array {
+    /// Key sort
+    pub key_sort: Sort,
+    /// Default (fill) value. What is stored when a key is missing from the next member
+    pub default: Box<Value>,
+    /// Key-> Value map
+    pub map: BTreeMap<Value, Value>,
+    /// Size of array. There are this many valid keys.
+    pub size: usize,
+}
+
+impl Array {
+    /// Create a new [Array] from components
+    pub fn new(
+        key_sort: Sort,
+        default: Box<Value>,
+        map: BTreeMap<Value, Value>,
+        size: usize,
+    ) -> Self {
+        Self {
+            key_sort,
+            default,
+            map,
+            size,
+        }
+    }
+    /// Create a new, default-initialized [Array]
+    pub fn default(key_sort: Sort, val_sort: &Sort, size: usize) -> Self {
+        Self::new(
+            key_sort,
+            Box::new(val_sort.default_value()),
+            Default::default(),
+            size,
+        )
+    }
+    /// Store
+    pub fn store(mut self, idx: Value, val: Value) -> Self {
+        self.map.insert(idx, val);
+        self
+    }
+    /// Select
+    pub fn select(&self, idx: &Value) -> Value {
+        self.map.get(idx).unwrap_or(&*self.default).clone()
+    }
 }
 
 impl Display for Value {
@@ -642,10 +692,18 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
-            Value::Array(_s, d, map, size) => {
-                write!(f, "(map default:{} size:{} {:?})", d, size, map)
-            }
+            Value::Array(a) => write!(f, "{}", a),
         }
+    }
+}
+
+impl Display for Array {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "(map default:{} size:{} {:?})",
+            self.default, self.size, self.map
+        )
     }
 }
 
@@ -664,12 +722,7 @@ impl std::hash::Hash for Value {
             Value::Int(bv) => bv.hash(state),
             Value::Field(bv) => bv.hash(state),
             Value::Bool(bv) => bv.hash(state),
-            Value::Array(s, d, a, size) => {
-                s.hash(state);
-                d.hash(state);
-                a.hash(state);
-                size.hash(state);
-            }
+            Value::Array(a) => a.hash(state),
             Value::Tuple(s) => {
                 s.hash(state);
             }
@@ -804,12 +857,7 @@ impl Sort {
             Sort::F32 => Value::F32(0.0f32),
             Sort::F64 => Value::F64(0.0),
             Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
-            Sort::Array(k, v, n) => Value::Array(
-                (**k).clone(),
-                Box::new(v.default_value()),
-                Default::default(),
-                *n,
-            ),
+            Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
         }
     }
 }
@@ -987,9 +1035,12 @@ impl Value {
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
             Value::BitVector(b) => Sort::BitVector(b.width()),
-            Value::Array(k, v, _, size) => {
-                Sort::Array(Box::new(k.clone()), Box::new(v.sort()), *size)
-            }
+            Value::Array(Array {
+                key_sort,
+                default,
+                size,
+                ..
+            }) => Sort::Array(Box::new(key_sort.clone()), Box::new(default.sort()), *size),
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -1029,6 +1080,17 @@ impl Value {
             panic!("Not a tuple: {}", self)
         }
     }
+
+    #[track_caller]
+    /// Unwrap the constituent value of this array, panicking otherwise.
+    pub fn as_array(&self) -> &Array {
+        if let Value::Array(w) = self {
+            &w
+        } else {
+            panic!("{} is not an aray", self)
+        }
+    }
+
 
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
@@ -1196,6 +1258,7 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
                 let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
                 field::FieldElem::new(a.uint().clone(), m.clone())
             }),
+            // tuple
             Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
             Op::Field(i) => {
                 let t = vs.get(&c.cs[0]).unwrap().as_tuple();
@@ -1208,6 +1271,18 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
                 let e = vs.get(&c.cs[1]).unwrap().clone();
                 t[*i] = e;
                 Value::Tuple(t)
+            }
+            // array
+            Op::Store => {
+                let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+                let i = vs.get(&c.cs[1]).unwrap().clone();
+                let v = vs.get(&c.cs[2]).unwrap().clone();
+                Value::Array(a.clone().store(i, v))
+            }
+            Op::Select => {
+                let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+                let i = vs.get(&c.cs[1]).unwrap();
+                a.clone().select(i)
             }
             o => unimplemented!("eval: {:?}", o),
         };
@@ -1370,7 +1445,11 @@ impl ComputationMetadata {
     /// and other metadata associated with `x` is removed.
     ///
     /// This is probably called after making the new inputs with `new_input`.
-    pub fn replace_input(&mut self, original: Term, new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>) {
+    pub fn replace_input(
+        &mut self,
+        original: Term,
+        new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
+    ) {
         let mut i = self.inputs.iter().position(|t| t == &original).unwrap();
         self.inputs.remove(i);
         let name = if let Op::Var(n, _) = &original.op {
@@ -1419,7 +1498,7 @@ impl ComputationMetadata {
         })
     }
     /// Get all public inputs.
-    pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a{
+    pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a {
         self.inputs.iter().filter_map(move |input| {
             if let Op::Var(name, _) = &input.op {
                 let party = self.get_input_visibility(name);
@@ -1492,7 +1571,11 @@ impl Computation {
     /// and other metadata associated with `x` is removed.
     ///
     /// This is called in place of `new_var` during transformations.
-    pub fn replace_input(&mut self, original: Term, mut new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>) {
+    pub fn replace_input(
+        &mut self,
+        original: Term,
+        mut new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
+    ) {
         if let Some(vs) = self.values.as_mut() {
             if let Op::Var(name, _) = &original.op {
                 vs.remove(name);
@@ -1568,6 +1651,14 @@ impl Computation {
             }
         }
         terms.len()
+    }
+
+    /// An iterator that visits each term in the computation, once.
+    pub fn terms_postorder(&self) -> impl Iterator<Item = Term> {
+        let mut terms: Vec<_> = PostOrderIter::new(term(Op::Tuple, self.outputs.clone())).collect();
+        // drop the top-level tuple term.
+        terms.pop();
+        terms.into_iter()
     }
 }
 

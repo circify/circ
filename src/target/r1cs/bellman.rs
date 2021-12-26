@@ -32,9 +32,15 @@ fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
     zero_lc: LinearCombination<F>,
 ) -> LinearCombination<F> {
     let mut lc_bellman = zero_lc;
-    lc_bellman = lc_bellman + (int_to_ff(&lc.constant), CS::one());
+    // This zero test is needed until https://github.com/zkcrypto/bellman/pull/78 is resolved
+    if lc.constant != 0 {
+        lc_bellman = lc_bellman + (int_to_ff(&lc.constant), CS::one());
+    }
     for (v, c) in &lc.monomials {
-        lc_bellman = lc_bellman + (int_to_ff(c), vars.get(v).unwrap().clone());
+        // ditto
+        if c != &0 {
+            lc_bellman = lc_bellman + (int_to_ff(c), vars.get(v).unwrap().clone());
+        }
     }
     lc_bellman
 }
@@ -87,7 +93,7 @@ impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F
                                 .get(&i)
                                 .unwrap();
                             let ff_val = int_to_ff(i_val);
-                            debug!("witness: {} -> {:?} ({})", s, ff_val, i_val);
+                            debug!("value : {} -> {:?} ({})", s, ff_val, i_val);
                             ff_val
                         })
                     };
@@ -112,6 +118,7 @@ impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F
                 |z| lc_to_bellman::<F, CS>(&vars, c, z),
             );
         }
+        debug!("done with synth: {} vars {} cs", vars.len(), self.constraints.len());
         Ok(())
     }
 }

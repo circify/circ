@@ -8,4 +8,3 @@ pub mod obliv;
 ///
 /// Replace arrays with tuples, using ITEs to handle variable indexing.
 pub mod lin;
-mod visit;

@@ -1,14 +1,14 @@
 //! Linear Memory implementation.
 //!
 //! The idea is to replace each array with a tuple, and use ITEs to account for variable indexing.
-use super::visit::RewritePass;
+use super::super::visit::RewritePass;
 use crate::ir::term::*;
 
 struct Linearizer;
 
 fn arr_val_to_tup(v: &Value) -> Value {
     match v {
-        Value::Array(_key, default, map, size) => Value::Tuple({
+        Value::Array(Array{default, map, size, .. }) => Value::Tuple({
             let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
             for (i, v) in map {
                 vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
@@ -121,12 +121,12 @@ mod test {
 
     #[test]
     fn select_ite_stores() {
-        let z = term![Op::Const(Value::Array(
+        let z = term![Op::Const(Value::Array(Array::new(
             Sort::BitVector(4),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
             6
-        ))];
+        )))];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
@@ -144,12 +144,12 @@ mod test {
 
     #[test]
     fn select_ite_stores_field() {
-        let z = term![Op::Const(Value::Array(
+        let z = term![Op::Const(Value::Array(Array::new(
             Sort::Field(Arc::new(Integer::from(TEST_FIELD))),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
             6
-        ))];
+        )))];
         let t = term![Op::Select;
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),

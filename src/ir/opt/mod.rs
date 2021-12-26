@@ -1,4 +1,6 @@
 //! Optimizations
+mod visit;
+pub mod scalarize_vars;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
@@ -12,6 +14,9 @@ use log::debug;
 #[derive(Debug)]
 /// An optimization pass
 pub enum Opt {
+    /// Convert non-scalar (tuple, array) inputs to scalar ones
+    /// The scalar variable names are suffixed with .N, where N indicates the array/tuple position
+    ScalarizeVars,
     /// Fold constants
     ConstantFold,
     /// Flatten n-ary operators
@@ -35,6 +40,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
     for i in optimizations {
         debug!("Applying: {:?}", i);
         match i {
+            Opt::ScalarizeVars => {
+                scalarize_vars::scalarize_inputs(&mut cs);
+            }
             Opt::ConstantFold => {
                 let mut cache = TermMap::new();
                 for a in &mut cs.outputs {
@@ -75,7 +83,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 inline::inline(&mut cs.outputs, &public_inputs);
             }
             Opt::Tuple => {
-                cs = tuple::eliminate_tuples(cs);
+                tuple::eliminate_tuples(&mut cs);
             }
         }
         debug!("After {:?}: {} outputs", i, cs.outputs.len());

@@ -1,10 +1,11 @@
 /target
 /pf
-assignment.txt
-params
+/assignment.txt
+/params
 __pycache__
 /P
 /V
 /pi
 /x
-perf.data*
+/perf.data*
+/.gdb_history

@@ -59,7 +59,7 @@ impl ToR1cs {
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
     fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, value: Option<Integer>, public: bool) -> Lc {
-        let n = format!("{}_v{}", ctx, self.next_idx);
+        let n = format!("{}_n{}", ctx, self.next_idx);
         self.next_idx += 1;
         self.r1cs.add_signal(n.clone(), value);
         if public {
@@ -1021,9 +1021,10 @@ pub mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs =
+        let mut cs =
             Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
+        crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -1044,9 +1045,10 @@ pub mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs =
+        let mut cs =
             Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
+        crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -1212,7 +1214,7 @@ pub mod test {
 
     #[test]
     fn tuple() {
-        let cs = Computation::from_constraint_system_parts(
+        let mut cs = Computation::from_constraint_system_parts(
             vec![
                 term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
                 term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
@@ -1230,7 +1232,7 @@ pub mod test {
                 .collect(),
             ),
         );
-        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(17));
         r1cs.check_all();
     }
