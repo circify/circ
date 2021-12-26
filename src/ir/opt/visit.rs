@@ -5,7 +5,12 @@ pub trait RewritePass {
     /// Visit (and possibly rewrite) a term.
     /// Given the original term and a function to get its rewritten childen.
     /// Returns a term if a rewrite happens.
-    fn visit<F: Fn() -> Vec<Term>>(&mut self, computation: &mut Computation, orig: &Term, rewritten_children: F) -> Option<Term>;
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term>;
     fn traverse(&mut self, computation: &mut Computation) {
         let mut cache = TermMap::<Term>::new();
         let mut children_added = TermSet::new();

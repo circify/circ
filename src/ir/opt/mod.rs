@@ -1,12 +1,12 @@
 //! Optimizations
-mod visit;
-pub mod scalarize_vars;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
 pub mod mem;
+pub mod scalarize_vars;
 pub mod sha;
 pub mod tuple;
+mod visit;
 
 use super::term::*;
 use log::debug;
@@ -79,7 +79,11 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 }
             }
             Opt::Inline => {
-                let public_inputs = cs.metadata.public_input_names().map(ToOwned::to_owned).collect();
+                let public_inputs = cs
+                    .metadata
+                    .public_input_names()
+                    .map(ToOwned::to_owned)
+                    .collect();
                 inline::inline(&mut cs.outputs, &public_inputs);
             }
             Opt::Tuple => {

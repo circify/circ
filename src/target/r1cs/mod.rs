@@ -251,7 +251,11 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             idxs_signals: HashMap::default(),
             next_idx: 0,
             public_idxs: HashSet::default(),
-            values: if values { Some(HashMap::default()) } else { None },
+            values: if values {
+                Some(HashMap::default())
+            } else {
+                None
+            },
             constraints: Vec::new(),
         }
     }

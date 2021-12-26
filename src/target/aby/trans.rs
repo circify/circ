@@ -188,7 +188,13 @@ impl ToABY {
 
     fn remove_cons_gate(&self, circ: String) -> String {
         if circ.contains("PutCONSGate(") {
-           circ.split("PutCONSGate(").last().unwrap_or("").split(",").next().unwrap_or("").to_string()          
+            circ.split("PutCONSGate(")
+                .last()
+                .unwrap_or("")
+                .split(",")
+                .next()
+                .unwrap_or("")
+                .to_string()
         } else {
             panic!("PutCONSGate not found in: {}", circ)
         }
@@ -510,9 +516,7 @@ impl ToABY {
                     _ => panic!("Invalid bv-op in BvBinOp: {:?}", o),
                 }
             }
-            Op::BvExtract(_start, _end) => {
-                
-            }
+            Op::BvExtract(_start, _end) => {}
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
 

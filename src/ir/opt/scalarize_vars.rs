@@ -38,7 +38,9 @@ fn create_vars(
         }
         Sort::Array(key_s, val_s, size) => {
             let mut values = value.map(|v| match v {
-                Value::Array(Array { default, map, size, .. } ) => {
+                Value::Array(Array {
+                    default, map, size, ..
+                }) => {
                     let mut vals = vec![*default; size];
                     for (key_val, val_val) in map.into_iter() {
                         let idx = key_val.as_usize().unwrap();

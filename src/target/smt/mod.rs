@@ -69,7 +69,12 @@ impl Expr2Smt<()> for Value {
                 }
                 write!(w, ")")?;
             }
-            Value::Array(Array{key_sort, default, map, size}) => {
+            Value::Array(Array {
+                key_sort,
+                default,
+                map,
+                size,
+            }) => {
                 for _ in 0..map.len() {
                     write!(w, "(store ")?;
                 }

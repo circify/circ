@@ -8,7 +8,9 @@ struct Linearizer;
 
 fn arr_val_to_tup(v: &Value) -> Value {
     match v {
-        Value::Array(Array{default, map, size, .. }) => Value::Tuple({
+        Value::Array(Array {
+            default, map, size, ..
+        }) => Value::Tuple({
             let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
             for (i, v) in map {
                 vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);

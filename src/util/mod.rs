@@ -23,7 +23,6 @@ mod hash_test {
         assert_eq!(v1, v2);
     }
 
-
     #[test]
     fn test_map_non_det_iter_order() {
         let mut m1: HashMap<usize, usize> = HashMap::new();

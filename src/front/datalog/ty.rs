@@ -1,6 +1,6 @@
 //! Types in our datalog variant
 
-use std::fmt::{Display, Formatter, self};
+use std::fmt::{self, Display, Formatter};
 
 /// A type
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

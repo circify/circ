@@ -1091,7 +1091,6 @@ impl Value {
         }
     }
 
-
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
         if let Value::Bool(b) = self {
