@@ -7,7 +7,8 @@ struct Pts {
 }
 
 def main(private field y) -> field:
-    Pt p = Pt {x: y, y: y}
-    Pts[1] pts = [Pts { pts: [p, p] }]
+    Pt p1 = Pt {x: 2, y: y}
+    Pt p2 = Pt {x: y, y: 2}
+    Pts[1] pts = [Pts { pts: [p1, p2] }]
     return pts[0].pts[0].y * pts[0].pts[1].x
 

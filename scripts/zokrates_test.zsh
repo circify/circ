@@ -54,4 +54,5 @@ pf_test many_pub
 pf_test str_str
 pf_test str_arr_str
 pf_test arr_str_arr_str
+pf_test var_idx_arr_str_arr_str
 pf_test mm
