@@ -25,9 +25,9 @@ jobs:
     - uses: Swatinem/rust-cache@v1
     - name: Initialize submodules
       run: make init
-    - name: Check
+    - name: Typecheck
       run: cargo check --verbose
-    - name: Check
+    - name: Check format
       run: cargo fmt -- --check
     - name: Build
       run: cargo build --verbose && make build
