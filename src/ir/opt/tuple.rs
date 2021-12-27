@@ -2,14 +2,56 @@
 //!
 //! Elimates tuple-related terms.
 //!
-//! The idea is to do a bottom-up pass mapping all terms to tuple-free trees of terms.
+//! The idea is to do a bottom-up pass, in which all tuple's are lift to the top level, and then
+//! then removed.
 //!
-//!    * Tuple variables are suffixed. `x: (bool, bool)` becomes `x.0: bool, x.1: bool`.
-//!    * Tuple constants are replaced with trees
-//!    * Tuple constructors make trees
-//!    * Tuple accesses open up trees
-//!    * Tuple ITEs yield trees of ITEs
-//!    * Tuple EQs yield conjunctions of EQs
+//! ## Phase 1
+//!
+//! Phase 1 (lifting tuples) is defined by the following big-step rewrites.
+//!
+//! Notational conventions:
+//! * lowercase letters are used to match sorts/terms before rewriting.
+//! * uppercase letters denote their (big-step) rewritten counterparts.
+//! * () denote AST structure
+//! * [] denote repeated structures, i.e. like var-args.
+//! * `f(x, *)` denotes a partial application of `f`, i.e. the function that sends `y` to `f(x,y)`.
+//! * In the results of rewriting we often have terms which are tuples at the top-level. I.e. their
+//!   sort contains no tuple sort that is not the child of a tuple sort. Similarly, the terms are
+//!   tuples at the top-level: no field or update operators are present, and the only tuple
+//!   operators are the children of other tuple operators.
+//!   * Such sorts/terms can be viewed as structured collections of non-tuple elements, i.e., as
+//!     functors whose pure elements are non-tuples.
+//!   * The `map`, `bimap`, and `list` functions apply to those functors.
+//!     * i.e., `map f (tuple x tuple y z))` is `(tuple (f x) (tuple (f y) (f z)))`.
+//!     * i.e., `list (tuple x tuple y z))` is `(x y z)`
+//!
+//! Assumptions:
+//! * We assume that array keys are of scalar sort
+//! * We assume that variables are of scalar sort. See [super::scalarize_vars].
+//! * We *do not* describe the pass as applied to constant values. That part of the pass is
+//!   entirely analagous to terms.
+//!
+//! Sort rewrites:
+//! * `(tuple [t_i]_i) -> (tuple [T_i]_i)`
+//! * `(array k t) -> map (array k *) T
+//!
+//! Term rewrites:
+//! * `(ite c t f) -> bimap (ite C * *) T F`
+//! * `(eq c t f) -> (and (list (bimap (= * *) T F)))`
+//! * `(tuple [t_i]_i) -> (tuple [T_i]_i)`
+//! * `(field_j t) -> get T j`
+//! * `(update_j t) -> update T j V`
+//! * `(select a i) -> map (select * I) A`
+//! * `(store a i v) -> bimap (store * I *) A V`
+//! * `(OTHER [t_i]_i) -> (OTHER [T_i]_i)`
+//! * constants: *omitted*
+//!
+//! The result of this phase is a computation whose only tuple-terms are at the top of the
+//! computation graph
+//!
+//! ## Phase 2
+//!
+//! We replace each output `t` with the sequence of outputs `(list T)`.
 
 use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::{

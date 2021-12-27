@@ -1,12 +1,12 @@
 //! Oblivious Array Elimination
 //!
 //! This module attempts to identify *oblivious* arrays: those that are only accessed at constant
-//! indices. These arrays can be replaced with tuples.
+//! indices. These arrays can be replaced with tuples. Then, a tuple elimination pass can be run.
 //!
 //! It operates in two passes:
 //!
 //!    1. determine which arrays are oblivious
-//!    2. replace oblivious arrays with (haskell) lists of terms.
+//!    2. replace oblivious arrays with tuples
 //!
 //!
 //! ## Pass 1: Identifying oblivious arrays
