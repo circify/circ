@@ -1,10 +1,5 @@
 - talk to AO about bit-split
 
-- remove ret requirement for fns - typecheck with bool if no type (and test
-  function_call() for compatibility!)
-
-- unify_inline_array revisit
-
 - const / non-const cleanup
 
 - casts
@@ -12,13 +7,7 @@
     - check narrowing cast correctness!
     - look at unpack functions again
 
-- stdlib rename to avoid confusion with parallel ZoK checkouts
-    [x] and/or: check ZSHARP_STDLIB_PATH envvar
-
-- generic inf: monomorphize at call time
-    - make sure we got a UNIQUE solution! find_unique_model() fn
-
-- add explicit-generic-expr
+- add explicit-generic-expr to parser, e,g., foo::<(N+1)>(5)
 
 - POW width - allow full width operand once we have range analysis
 
@@ -28,3 +17,19 @@
 - field div / divrem
     - impl unsigned
     - think about signed
+
+- multi-returns?
+
+== done ==
+
+[x] generic inf: monomorphize at call time
+    [x] make sure we got a UNIQUE solution! find_unique_model() fn
+
+- stdlib rename to avoid confusion with parallel ZoK checkouts
+    [x] and/or: check ZSHARP_STDLIB_PATH envvar
+
+[WONTFIX] remove ret requirement for fns
+  - typecheck with bool if no type? (and test function_call() for compatibility)
+  - add () or nil type?
+
+[x] unify_inline_array revisit

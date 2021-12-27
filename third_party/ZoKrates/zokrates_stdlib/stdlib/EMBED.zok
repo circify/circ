@@ -13,8 +13,8 @@ const u32 FIELD_SIZE_IN_BITS = get_field_size()
 //snark_verify_bls12_377 as verify
 
 // dummy fn
-def main():
-    return
+def main() -> bool:
+    return false
 
 def u64_from_bits(bool[64] a) -> u64:
     return 0u64

@@ -143,7 +143,6 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         let alen = acc.len();
         let (pf_id_ty, acc_offset) = if let Call(ca) = acc.first_mut().unwrap() {
             // look up function type
-            // XXX(todo) handle EMBED/* functions
             self.get_function(&id.value).and_then(|fdef| {
                 if fdef.returns.is_empty() {
                     // XXX(unimpl) fn without return type not supported

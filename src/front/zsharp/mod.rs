@@ -1617,6 +1617,16 @@ impl<'ast> ZGen<'ast> {
                             .iter_mut()
                             .try_for_each(|p| v.visit_parameter(p))
                             .unwrap_or_else(|e| self.err(e.0, &f.span));
+                        if f_ast.returns.len() != 1 {
+                            // XXX(unimpl) functions MUST return exactly 1 value
+                            self.err(
+                                format!("Functions must return exactly 1 value; {} returns {}",
+                                    &f_ast.id.value,
+                                    f_ast.returns.len(),
+                                ),
+                                &f.span,
+                            );
+                        }
                         f_ast
                             .returns
                             .iter_mut()
