@@ -179,6 +179,9 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
+            Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv|
+                leaf_term(Op::Const(Value::Field(FieldElem::new(bv.uint().clone(), m.clone()))))
+            ),
             _ => None,
         };
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };

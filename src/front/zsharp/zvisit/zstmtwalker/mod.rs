@@ -332,7 +332,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         };
 
         let (lt, rt) = match &be.op {
-            BitXor | BitAnd | BitOr | Rem => match &bt {
+            BitXor | BitAnd | BitOr => match &bt {
                 U8(_) | U16(_) | U32(_) | U64(_) => Ok((Basic(bt.clone()), Basic(bt))),
                 _ => Err(ZVisitorError(
                     "ZStatementWalker: Bit/Rem operators require U* operands".to_owned(),
@@ -355,7 +355,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                     "ZStatementWalker: Logical-And/Or operators require Bool operands".to_owned(),
                 )),
             },
-            Add | Sub | Mul | Div => match &bt {
+            Add | Sub | Mul | Div | Rem => match &bt {
                 Boolean(_) => Err(ZVisitorError(
                     "ZStatementWalker: +,-,*,/ operators require Field or U* operands".to_owned(),
                 )),

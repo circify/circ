@@ -60,7 +60,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     fn visit_expression(&mut self, expr: &mut ast::Expression<'ast>) -> ZVisitorResult {
         use ast::Expression::*;
         if self.ty.is_some() {
-            return Err(ZVisitorError("type found at expression entry?".to_string()));
+            return Err(ZVisitorError("ZExpressionTyper: type found at expression entry?".to_string()));
         }
         match expr {
             Ternary(te) => self.visit_ternary_expression(te),
@@ -125,20 +125,20 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     (None, None) => None,
                 } {
                     if !matches!(&ty, Basic(_)) {
-                        return Err(ZVisitorError("got non-Basic type for a binop".to_string()));
+                        return Err(ZVisitorError("ZExpressionTyper: got non-Basic type for a binop".to_string()));
                     }
                     if matches!(&ty, Basic(Boolean(_))) {
                         return Err(ZVisitorError(
-                            "got Bool for a binop that cannot support it".to_string(),
+                            "ZExpressionTyper: got Bool for a binop that cannot support it".to_string(),
                         ));
                     }
                     if matches!(
                         &be.op,
-                        BitXor | BitAnd | BitOr | RightShift | LeftShift | Rem
+                        BitXor | BitAnd | BitOr | RightShift | LeftShift
                     ) && matches!(&ty, Basic(Field(_)))
                     {
                         return Err(ZVisitorError(
-                            "got Field for a binop that cannot support it".to_string(),
+                            "ZExpressionTyper: got Field for a binop that cannot support it".to_string(),
                         ));
                     }
                     self.ty.replace(ty);
@@ -157,7 +157,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                 if let Some(ty) = &self.ty {
                     if !matches!(ty, Basic(_)) || matches!(ty, Basic(Boolean(_))) {
                         return Err(ZVisitorError(
-                            "got Bool or non-Basic for unary op".to_string(),
+                            "ZExpressionTyper: got Bool or non-Basic for unary op".to_string(),
                         ));
                     }
                 }
@@ -277,7 +277,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                         Ok((ast::Type::Array(at), len))
                     }
                 } else {
-                    Err(format!("Spread expression: expected array, got {:?}", ty))
+                    Err(format!("ZExpressionTyper: Spread expression: expected array, got {:?}", ty))
                 }?;
 
                 if let Some(acc) = &acc_ty {
@@ -292,7 +292,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                 acc_len += 1;
                 Ok(())
             } else {
-                Err(ZVisitorError(format!("Could not type SpreadOrExpression::Spread {:#?}", soe)))
+                Err(ZVisitorError(format!("ZExpressionTyper: Could not type SpreadOrExpression::Spread {:#?}", soe)))
             }
         })?;
 
@@ -301,7 +301,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
             ast::Expression::Literal(ast::LiteralExpression::HexLiteral(
                 ast::HexLiteralExpression {
                     value: ast::HexNumberExpression::U32(ast::U32NumberExpression {
-                        value: format!("0x{:04x}", acc_len),
+                        value: format!("{:04x}", acc_len),
                         span: iae.span.clone(),
                     }),
                     span: iae.span.clone(),
