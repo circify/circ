@@ -15,6 +15,12 @@ pub struct ABY {
     output: Vec<String>,
 }
 
+impl Default for ABY {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ABY {
     /// Initialize ABY circuit
     pub fn new() -> Self {

@@ -13,10 +13,9 @@ use rug::ops::Pow;
 use rug::Integer;
 
 use std::cell::RefCell;
-use std::rc::Rc;
-
 use std::fmt::Display;
 use std::iter::ExactSizeIterator;
+use std::rc::Rc;
 
 struct BvEntry {
     width: usize,
@@ -97,7 +96,7 @@ impl ToR1cs {
                 if x == 0 {
                     Integer::from(0)
                 } else {
-                    Integer::from(x.invert(&self.r1cs.modulus()).unwrap())
+                    x.invert(self.r1cs.modulus()).unwrap()
                 }
             }),
             false,
@@ -179,7 +178,7 @@ impl ToR1cs {
     /// Constrains `x` to fit in `n` (`signed`) bits.
     /// The LSB is at index 0.
     fn bitify<D: Display + ?Sized>(&mut self, d: &D, x: &Lc, n: usize, signed: bool) -> Vec<Lc> {
-        debug!("Bitify({}): {}", n, self.r1cs.format_lc(&x));
+        debug!("Bitify({}): {}", n, self.r1cs.format_lc(x));
         let bits = self.decomp(d, x, n);
         let sum = self.debitify(bits.iter().cloned(), signed);
         self.assert_zero(sum - x);
@@ -246,9 +245,11 @@ impl ToR1cs {
     fn nary_and<I: ExactSizeIterator<Item = Lc>>(&mut self, mut xs: I) -> Lc {
         let n = xs.len();
         if n <= 3 {
-            let first = xs.next().expect("empty AND").clone();
+            let first = xs.next().expect("empty AND");
             xs.fold(first, |a, x| self.mul(a, x))
         } else {
+            // Needed to end the closures borrow of self, before the next line.
+            #[allow(clippy::needless_collect)]
             let negs: Vec<Lc> = xs.map(|x| self.bool_not(&x)).collect();
             let a = self.nary_or(negs.into_iter());
             self.bool_not(&a)
@@ -259,6 +260,8 @@ impl ToR1cs {
     fn nary_or<I: ExactSizeIterator<Item = Lc>>(&mut self, xs: I) -> Lc {
         let n = xs.len();
         if n <= 3 {
+            // Needed to end the closures borrow of self, before the next line.
+            #[allow(clippy::needless_collect)]
             let negs: Vec<Lc> = xs.map(|x| self.bool_not(&x)).collect();
             let a = self.nary_and(negs.into_iter());
             self.bool_not(&a)
@@ -281,6 +284,8 @@ impl ToR1cs {
             debug!("Embed op: {}", c.op);
             // Handle field access once and for all
             if let Op::Field(i) = &c.op {
+                // Need to borrow self in between search and insert. Could refactor.
+                #[allow(clippy::map_entry)]
                 if !self.cache.contains_key(&c) {
                     let t = self.get_field(&c.cs[0], *i);
                     self.cache.insert(c, t);
@@ -297,23 +302,12 @@ impl ToR1cs {
                         self.embed_pf(c);
                     }
                     Sort::Tuple(_) => {
-                        self.embed_tuple(c);
+                        // custom ops?
+                        panic!("Cannot embed tuple term: {}", c)
                     }
                     s => panic!("Unsupported sort in embed: {:?}", s),
                 }
             }
-        }
-    }
-
-    #[allow(unreachable_code)]
-    #[allow(unused_variables)]
-    fn embed_tuple(&mut self, a: Term) {
-        if !self.cache.contains_key(&a) {
-            let t = match &a.op {
-                // May want to support cunstor operators here...
-                _ => panic!("Cannot embed tuple term: {}", a),
-            };
-            self.cache.insert(a, t);
         }
     }
 
@@ -332,8 +326,8 @@ impl ToR1cs {
                 self.bits_are_equal(&a, &b)
             }
             Sort::BitVector(_) => {
-                let a = self.get_bv_uint(a).clone();
-                let b = self.get_bv_uint(b).clone();
+                let a = self.get_bv_uint(a);
+                let b = self.get_bv_uint(b);
                 self.are_equal(a, &b)
             }
             Sort::Field(_) => {
@@ -344,8 +338,7 @@ impl ToR1cs {
             Sort::Tuple(sorts) => {
                 let n = sorts.len();
                 let eqs: Vec<Term> = (0..n).map(|i| {
-                    let t = term![Op::Eq; term![Op::Field(i); a.clone()], term![Op::Field(i); b.clone()]];
-                    t
+                    term![Op::Eq; term![Op::Field(i); a.clone()], term![Op::Field(i); b.clone()]]
                 }).collect();
                 let conj = term(Op::BoolNaryOp(BoolNaryOp::And), eqs);
                 self.embed(conj.clone());
@@ -463,16 +456,16 @@ impl ToR1cs {
     fn assert_bool(&mut self, t: &Term) {
         //println!("Embed: {}", c);
         // TODO: skip if already embedded
-        if &t.op == &Op::Eq {
+        if t.op == Op::Eq {
             t.cs.iter().for_each(|c| self.embed(c.clone()));
             self.assert_eq(&t.cs[0], &t.cs[1]);
-        } else if &t.op == &AND {
+        } else if t.op == AND {
             for c in &t.cs {
                 self.assert_bool(c);
             }
         } else {
             self.embed(t.clone());
-            let lc = self.get_bool(&t).clone();
+            let lc = self.get_bool(t).clone();
             self.assert_zero(lc - 1);
         }
     }
@@ -489,12 +482,12 @@ impl ToR1cs {
         let a = if signed {
             self.get_bv_signed_int(a)
         } else {
-            self.get_bv_uint(a).clone()
+            self.get_bv_uint(a)
         };
         let b = if signed {
             self.get_bv_signed_int(b)
         } else {
-            self.get_bv_uint(b).clone()
+            self.get_bv_uint(b)
         };
         // Use the fact: a > b <=> a - 1 >= b
         self.bv_ge(if strict { a - 1 } else { a }, &b, w)
@@ -551,18 +544,18 @@ impl ToR1cs {
                     }
                     Op::Ite => {
                         let c = self.get_bool(&bv.cs[0]).clone();
-                        let t = self.get_bv_uint(&bv.cs[1]).clone();
-                        let f = self.get_bv_uint(&bv.cs[2]).clone();
+                        let t = self.get_bv_uint(&bv.cs[1]);
+                        let f = self.get_bv_uint(&bv.cs[2]);
                         let ite = self.ite(c, t, &f);
                         self.set_bv_uint(bv, ite, n);
                     }
                     Op::BvUnOp(BvUnOp::Not) => {
-                        let bits = self.get_bv_bits(&bv.cs[0]).clone();
+                        let bits = self.get_bv_bits(&bv.cs[0]);
                         let not_bits = bits.iter().map(|bit| self.bool_not(bit)).collect();
                         self.set_bv_bits(bv, not_bits);
                     }
                     Op::BvUnOp(BvUnOp::Neg) => {
-                        let x = self.get_bv_uint(&bv.cs[0]).clone();
+                        let x = self.get_bv_uint(&bv.cs[0]);
                         // Wrong for x == 0
                         let almost_neg_x = self.r1cs.zero() + &Integer::from(2).pow(n as u32) - &x;
                         let is_zero = self.is_zero(x);
@@ -575,15 +568,14 @@ impl ToR1cs {
                             let ext_bits = std::iter::repeat(self.r1cs.zero()).take(*extra_n);
                             self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
                         } else {
-                            let x = self.get_bv_uint(&bv.cs[0]).clone();
+                            let x = self.get_bv_uint(&bv.cs[0]);
                             self.set_bv_uint(bv, x, n);
                         }
                     }
                     Op::BvSext(extra_n) => {
                         let mut bits = self.get_bv_bits(&bv.cs[0]).into_iter().rev();
-                        let ext_bits =
-                            std::iter::repeat(bits.next().expect("sign ext empty").clone())
-                                .take(extra_n + 1);
+                        let ext_bits = std::iter::repeat(bits.next().expect("sign ext empty"))
+                            .take(extra_n + 1);
 
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }
@@ -604,7 +596,7 @@ impl ToR1cs {
                                 .map(|c| self.get_bv_bits(c))
                                 .collect::<Vec<_>>();
                             let mut bits_bv_idx: Vec<Vec<Lc>> = Vec::new();
-                            while bits_by_bv[0].len() > 0 {
+                            while !bits_by_bv[0].is_empty() {
                                 bits_bv_idx.push(
                                     bits_by_bv.iter_mut().map(|bv| bv.pop().unwrap()).collect(),
                                 );
@@ -624,7 +616,7 @@ impl ToR1cs {
                             let values = bv
                                 .cs
                                 .iter()
-                                .map(|c| self.get_bv_uint(c).clone())
+                                .map(|c| self.get_bv_uint(c))
                                 .collect::<Vec<_>>();
                             let (res, width) = match o {
                                 BvNaryOp::Add => {
@@ -663,14 +655,12 @@ impl ToR1cs {
                         let b = self.get_bv_uint(&bv.cs[1]);
                         match o {
                             BvBinOp::Sub => {
-                                let sum = a.clone() + &(Integer::from(1) << n as u32) - &b;
+                                let sum = a + &(Integer::from(1) << n as u32) - &b;
                                 let mut bits = self.bitify("sub", &sum, n + 1, false);
                                 bits.truncate(n);
                                 self.set_bv_bits(bv, bits);
                             }
                             BvBinOp::Udiv | BvBinOp::Urem => {
-                                let b = b.clone();
-                                let a = a.clone();
                                 let is_zero = self.is_zero(b.clone());
                                 let (q_v, r_v) = self
                                     .r1cs
@@ -705,8 +695,7 @@ impl ToR1cs {
                             }
                             // Shift cases
                             _ => {
-                                let r = b.clone();
-                                let a = a.clone();
+                                let r = b;
                                 let b = bitsize(n - 1);
                                 assert!(1 << b == n);
                                 let mut rb = self.get_bv_bits(&bv.cs[1]);
@@ -776,7 +765,7 @@ impl ToR1cs {
             .get(t)
             .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
         {
-            EmbeddedTerm::Bool(b) => &b,
+            EmbeddedTerm::Bool(b) => b,
             _ => panic!("Non-boolean for {:?}", t),
         }
     }
@@ -818,7 +807,7 @@ impl ToR1cs {
     }
 
     fn bv_has_bits(&self, t: &Term) -> bool {
-        self.get_bv(t).borrow().bits.len() > 0
+        !self.get_bv(t).borrow().bits.is_empty()
     }
 
     fn get_bv_uint(&self, t: &Term) -> Lc {
@@ -826,14 +815,14 @@ impl ToR1cs {
     }
 
     fn get_bv_signed_int(&mut self, t: &Term) -> Lc {
-        let bits = self.get_bv_bits(t).clone();
+        let bits = self.get_bv_bits(t);
         self.debitify(bits.into_iter(), true)
     }
 
     fn get_bv_bits(&mut self, t: &Term) -> Vec<Lc> {
         let entry_rc = self.get_bv(t);
         let mut entry = entry_rc.borrow_mut();
-        if entry.bits.len() == 0 {
+        if entry.bits.is_empty() {
             entry.bits = self.bitify("getbits", &entry.uint, entry.width, false);
         }
         entry.bits.clone()
@@ -871,14 +860,16 @@ impl ToR1cs {
                     match o {
                         PfNaryOp::Add => args.fold(self.r1cs.zero(), std::ops::Add::add),
                         PfNaryOp::Mul => {
+                            // Needed to end the above closures borrow of self, before the mul call
+                            #[allow(clippy::needless_collect)]
                             let args = args.cloned().collect::<Vec<_>>();
                             let mut args_iter = args.into_iter();
                             let first = args_iter.next().unwrap();
-                            args_iter.fold(first, |a, b| self.mul(a, b.clone()))
+                            args_iter.fold(first, |a, b| self.mul(a, b))
                         }
                     }
                 }
-                Op::UbvToPf(_) => self.get_bv_uint(&c.cs[0]).clone(),
+                Op::UbvToPf(_) => self.get_bv_uint(&c.cs[0]),
                 Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
                 Op::PfUnOp(PfUnOp::Recip) => {
                     let x = self.get_pf(&c.cs[0]).clone();
