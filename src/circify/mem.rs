@@ -98,7 +98,7 @@ impl MemManager {
                     let alloc = Alloc::new(id, *addr_width, *val_width, *size);
                     let v = alloc.var().clone();
                     if let Op::Var(n, _) = &v.op {
-                        self.cs.borrow_mut().eval_and_save(&n, &array);
+                        self.cs.borrow_mut().eval_and_save(n, &array);
                     } else {
                         unreachable!()
                     }
@@ -152,7 +152,7 @@ impl MemManager {
         alloc.next_var();
         let v = alloc.var().clone();
         if let Op::Var(n, _) = &v.op {
-            self.cs.borrow_mut().eval_and_save(&n, &new);
+            self.cs.borrow_mut().eval_and_save(n, &new);
         } else {
             unreachable!()
         }
