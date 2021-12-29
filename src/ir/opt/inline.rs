@@ -63,7 +63,7 @@ impl<'a> Inliner<'a> {
                 }
             }
             assert!(
-                self.stale_vars.contains(&key),
+                self.stale_vars.contains(key),
                 "Variable {}, which is being susbstituted",
                 key
             );
@@ -107,7 +107,7 @@ impl<'a> Inliner<'a> {
     ///
     /// Will not return `v` which are protected.
     fn as_fresh_def(&self, t: &Term) -> Option<(Term, Term)> {
-        if &EQ == &t.op {
+        if EQ == t.op {
             if let Op::Var(name, _) = &t.cs[0].op {
                 if !self.stale_vars.contains(&t.cs[0])
                     && !self.protected.contains(name)
@@ -133,7 +133,7 @@ impl<'a> Inliner<'a> {
     ///
     /// If `t` is not a substitution, then its (substituted variant) is returned.
     fn ingest_term(&mut self, t: &Term) -> Option<Term> {
-        if let Some((var, val)) = self.as_fresh_def(&t) {
+        if let Some((var, val)) = self.as_fresh_def(t) {
             //debug!(target: "circ::ir::opt::inline", "Inline: {} -> {}", var, val.clone());
             // Rewrite the substitution
             let subst_val = self.apply(&val);

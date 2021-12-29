@@ -37,7 +37,7 @@ impl FieldElem {
             location
         );
         debug_assert!(
-            &self.i <= &*self.modulus,
+            self.i <= *self.modulus,
             "Too small field elem: {}\n at {}",
             self,
             location

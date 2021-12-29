@@ -45,11 +45,8 @@ impl Constraints for Computation {
             let mut set = FxHashSet::default();
             for a in &assertions {
                 for t in PostOrderIter::new(a.clone()) {
-                    match &t.op {
-                        Op::Var(_, _) => {
-                            set.insert(t.clone());
-                        }
-                        _ => {}
+                    if let Op::Var(..) = t.op {
+                        set.insert(t.clone());
                     }
                 }
             }
