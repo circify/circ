@@ -1,12 +1,14 @@
 //! The SMT back-end.
+//!
+//!
+//! The SMT solver's invocation command can be configured by setting the environmental variable
+//! [rsmt2::conf::CVC4_ENV_VAR].
 
 use crate::ir::term::*;
 
-use rsmt2::conf::SmtConf;
 use rsmt2::errors::SmtRes;
 use rsmt2::parse::{IdentParser, ModelParser, SmtParser};
 use rsmt2::print::{Expr2Smt, Sort2Smt, Sym2Smt};
-use rsmt2::Solver;
 
 use rug::Integer;
 
@@ -265,9 +267,23 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
     }
 }
 
+/// Create a solver, which can optionally parse models.
+///
+/// If [rsmt2::conf::CVC4_ENV_VAR] is set, uses that as the solver's invocation command.
+fn make_solver<P>(parser: P, models: bool) -> rsmt2::Solver<P> {
+    let mut conf = rsmt2::conf::SmtConf::default_cvc4();
+    if let Ok(val) = std::env::var(rsmt2::conf::CVC4_ENV_VAR) {
+        conf.cmd(val);
+    }
+    if models {
+        conf.models();
+    }
+    rsmt2::Solver::new(conf, parser).expect("Error creating SMT solver")
+}
+
 /// Check whether some term is satisfiable.
 pub fn check_sat(t: &Term) -> bool {
-    let mut solver = Solver::default_cvc4(()).unwrap();
+    let mut solver = make_solver((), false);
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(n, s) = &c.op {
             solver.declare_const(&SmtSymDisp(n), s).unwrap();
@@ -280,9 +296,7 @@ pub fn check_sat(t: &Term) -> bool {
 
 /// Get a satisfying assignment for `t`, assuming it is SAT.
 pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
-    let mut conf = SmtConf::default_cvc4();
-    conf.models();
-    let mut solver = Solver::new(conf, Parser).unwrap();
+    let mut solver = make_solver(Parser, true);
     //solver.path_tee("solver_com").unwrap();
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(n, s) = &c.op {
@@ -398,7 +412,7 @@ mod test {
 
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.
     pub fn smt_eval_test(t: Term, vs: &HashMap<String, Value>) -> bool {
-        let mut solver = Solver::default_cvc4(()).unwrap();
+        let mut solver = make_solver((), false);
         for (var, val) in vs {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
@@ -413,7 +427,7 @@ mod test {
 
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.
     pub fn smt_eval_alternate_solution(t: Term, vs: &HashMap<String, Value>) -> bool {
-        let mut solver = Solver::default_cvc4(()).unwrap();
+        let mut solver = make_solver((), false);
         for (var, val) in vs {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
