@@ -1,5 +1,5 @@
 //! Symbolic ZoKrates terms
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
@@ -28,13 +28,42 @@ pub enum Ty {
     Uint(usize),
     Bool,
     Field,
-    Struct(String, Vec<(String, Ty)>),
+    Struct(String, FieldList<Ty>),
     Array(usize, Box<Ty>),
 }
 
-fn lookup<'a>(map: &'a Vec<(String, Ty)>, key: &str) -> Option<(usize, &'a Ty)> {
-    let idx = map.binary_search_by_key(&key, |p| p.0.as_str()).ok()?;
-    Some((idx, &map[idx].1))
+pub use field_list::FieldList;
+
+/// This module contains [FieldList].
+///
+/// It gets its own module so that its member can be private.
+mod field_list {
+
+    #[derive(Clone, PartialEq, Eq)]
+    pub struct FieldList<T> {
+        // must be kept in sorted order
+        list: Vec<(String, T)>,
+    }
+
+    impl<T> FieldList<T> {
+        pub fn new(mut list: Vec<(String, T)>) -> Self {
+            list.sort_by_cached_key(|p| p.0.clone());
+            FieldList { list }
+        }
+        pub fn search(&self, key: &str) -> Option<(usize, &T)> {
+            let idx = self
+                .list
+                .binary_search_by_key(&key, |p| p.0.as_str())
+                .ok()?;
+            Some((idx, &self.list[idx].1))
+        }
+        pub fn get(&self, idx: usize) -> (&str, &T) {
+            (&self.list[idx].0, &self.list[idx].1)
+        }
+        pub fn fields(&self) -> impl Iterator<Item = &(String, T)> {
+            self.list.iter()
+        }
+    }
 }
 
 impl Display for Ty {
@@ -45,7 +74,7 @@ impl Display for Ty {
             Ty::Field => write!(f, "field"),
             Ty::Struct(n, fields) => {
                 let mut o = f.debug_struct(n);
-                for (f_name, f_ty) in fields {
+                for (f_name, f_ty) in fields.fields() {
                     o.field(f_name, f_ty);
                 }
                 o.finish()
@@ -71,7 +100,7 @@ impl Ty {
                 Sort::Array(Box::new(ZOK_FIELD_SORT.clone()), Box::new(b.sort()), *n)
             }
             Self::Struct(_name, fs) => {
-                Sort::Tuple(fs.iter().map(|(_f_name, f_ty)| f_ty.sort()).collect())
+                Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
         }
     }
@@ -86,9 +115,7 @@ impl Ty {
     }
     /// Creates a new structure type, sorting the keys.
     pub fn new_struct<I: IntoIterator<Item = (String, Ty)>>(name: String, fields: I) -> Self {
-        let mut v: Vec<_> = fields.into_iter().collect();
-        v.sort_by_cached_key(|p| p.0.clone());
-        Self::Struct(name, v)
+        Self::Struct(name, FieldList::new(fields.into_iter().collect()))
     }
 }
 
@@ -151,13 +178,20 @@ impl T {
     pub fn new_array(v: Vec<T>) -> Result<T, String> {
         array(v)
     }
-    pub fn new_struct(name: String, mut fields: Vec<(String, T)>) -> T {
-        fields.sort_by_cached_key(|f| f.0.clone());
-        let (field_tys, terms) = fields
+    pub fn new_struct(name: String, fields: Vec<(String, T)>) -> T {
+        let (field_tys, ir_terms): (Vec<_>, Vec<_>) = fields
             .into_iter()
-            .map(|(name, t)| ((name, t.ty), t.term))
+            .map(|(name, t)| ((name.clone(), t.ty), (name, t.term)))
             .unzip();
-        T::new(Ty::Struct(name, field_tys), term(Op::Tuple, terms))
+        let field_ty_list = FieldList::new(field_tys);
+        let ir_term = term(Op::Tuple, {
+            let with_indices: BTreeMap<usize, Term> = ir_terms
+                .into_iter()
+                .map(|(name, t)| (field_ty_list.search(&name).unwrap().0, t))
+                .collect();
+            with_indices.into_iter().map(|(_i, t)| t).collect()
+        });
+        T::new(Ty::Struct(name, field_ty_list), ir_term)
     }
 }
 
@@ -482,7 +516,7 @@ pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, Stri
 pub fn field_select(struct_: &T, field: &str) -> Result<T, String> {
     match &struct_.ty {
         Ty::Struct(_, map) => {
-            if let Some((idx, ty)) = lookup(map, field) {
+            if let Some((idx, ty)) = map.search(field) {
                 Ok(T::new(
                     ty.clone(),
                     term![Op::Field(idx); struct_.term.clone()],
@@ -498,7 +532,7 @@ pub fn field_select(struct_: &T, field: &str) -> Result<T, String> {
 pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
     match &struct_.ty {
         Ty::Struct(_, map) => {
-            if let Some((idx, ty)) = lookup(map, field) {
+            if let Some((idx, ty)) = map.search(field) {
                 if ty == &val.ty {
                     Ok(T::new(
                         struct_.ty.clone(),
@@ -507,7 +541,9 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
                 } else {
                     Err(format!(
                         "term {} assigned to field {} of type {}",
-                        val, field, map[idx].1
+                        val,
+                        field,
+                        map.get(idx).1
                     ))
                 }
             } else {
@@ -683,7 +719,7 @@ impl Embeddable for ZoKrates {
             .unwrap(),
             Ty::Struct(n, fs) => T::new_struct(
                 n.clone(),
-                fs.iter()
+                fs.fields()
                     .map(|(f_name, f_ty)| {
                         (
                             f_name.clone(),

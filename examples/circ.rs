@@ -191,16 +191,17 @@ fn main() {
                 Opt::Sha,
                 Opt::ConstantFold,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::Inline,
+                // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
                 Opt::ConstantFold,
                 Opt::Obliv,
+                // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Tuple,
                 Opt::LinearScan,
+                // The linear scan pass produces more tuples, that must be eliminated
                 Opt::Tuple,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::ConstantFold,
                 Opt::Inline,
             ],
@@ -223,7 +224,7 @@ fn main() {
             let r1cs = reduce_linearities(r1cs);
             println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
-                ProofAction::Count => {}
+                ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
                     r1cs.check_all();
