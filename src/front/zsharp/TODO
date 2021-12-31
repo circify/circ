@@ -1,24 +1,23 @@
-- talk to AO about bit-split
-
-- const / non-const cleanup
-
 - casts
     - widening casts are free!
     - check narrowing cast correctness!
     - look at unpack functions again
 
+- talk to AO about bit-split
+
+- const / non-const cleanup
+
+- multi-returns?
+
 - add explicit-generic-expr to parser, e,g., foo::<(N+1)>(5)
 
 - POW width - allow full width operand once we have range analysis
 
+- correctness: bit width for field comparisons, etc
+  - when lowering to r1cs, enforce MSB=0?
+
 - optimization: for a < b, only expand a to b's bit width;
   a < b is (a_expansion == a) && (a_expansion < b_expansion)
-
-- field div / divrem
-    - impl unsigned
-    - think about signed
-
-- multi-returns?
 
 == done ==
 
@@ -33,3 +32,8 @@
   - add () or nil type?
 
 [x] unify_inline_array revisit
+
+[x] field `%`
+    [x] unsigned
+    - divrem? (is this necessary for efficiency? can just do r=a%b, c=(a-r)/b
+    - signed?
