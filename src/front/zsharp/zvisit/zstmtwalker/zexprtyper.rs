@@ -269,7 +269,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     Ok((ty, 1))
                 } else if let ast::Type::Array(mut at) = ty {
                     assert!(!at.dimensions.is_empty());
-                    let len = self.walker.zgen.const_usize_r_(&at.dimensions[0])?;
+                    let len = self.walker.zgen.const_usize_(&at.dimensions[0])?;
                     if at.dimensions.len() == 1 {
                         Ok((bos_to_type(at.ty), len))
                     } else {

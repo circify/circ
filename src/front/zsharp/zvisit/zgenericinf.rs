@@ -54,7 +54,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
     
     pub fn unify_generic(
         &mut self,
-        call: &ast::CallAccess<'ast>,
+        egv: &[ast::ConstantGenericValue<'ast>],
         rty: Option<Ty>,
         args: &[T],
     ) -> Result<HashMap<String, T>, String> {
@@ -67,20 +67,18 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
         }
 
         // 1. build up the already-known generics
-        if let Some(eg) = call.explicit_generics.as_ref() {
-            for (cgv, id) in eg.values.iter().zip(self.fdef.generics.iter()) {
-                if let Some(v) = match cgv {
-                    CGV::Underscore(_) => None,
-                    CGV::Value(v) => Some(self.zgen.literal_(v)),
-                    CGV::Identifier(i) => Some(self.zgen.const_identifier_(i)),
-                } {
-                    let var = make_varname(&id.value, &self.sfx);
-                    let val = match v? {
-                        T::Uint(32, val) => Ok(val),
-                        v => Err(format!("ZGenericInf: ConstantGenericValue for {} had type {}, expected u32", &id.value, v.type_())),
-                    }?;
-                    self.add_constraint(var, val);
-                }
+        for (cgv, id) in egv.iter().zip(self.fdef.generics.iter()) {
+            if let Some(v) = match cgv {
+                CGV::Underscore(_) => None,
+                CGV::Value(v) => Some(self.zgen.literal_(v)),
+                CGV::Identifier(i) => Some(self.zgen.const_identifier_(i)),
+            } {
+                let var = make_varname(&id.value, &self.sfx);
+                let val = match v? {
+                    T::Uint(32, val) => Ok(val),
+                    v => Err(format!("ZGenericInf: ConstantGenericValue for {} had type {}, expected u32", &id.value, v.type_())),
+                }?;
+                self.add_constraint(var, val);
             }
         }
 
@@ -146,7 +144,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
         bas_ty: &ast::BasicType<'ast>,
     ) -> Result<(), String> {
         // XXX(q) dispatch to const_ or not? does not seem necessary because arg is Type::Basic
-        if arg_ty != self.zgen.const_type_(&ast::Type::Basic(bas_ty.clone())) {
+        if arg_ty != self.zgen.type_impl_::<true>(&ast::Type::Basic(bas_ty.clone()))? {
             Err(format!("Type mismatch unifying generics: got {}, decl was {:?}", arg_ty, bas_ty))
         } else {
             Ok(())

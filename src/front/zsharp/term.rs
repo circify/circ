@@ -594,7 +594,7 @@ pub fn not(a: T) -> Result<T, String> {
     wrap_un_op("!", Some(not_uint), None, Some(not_bool), a)
 }
 
-pub fn const_int_ref(a: &T) -> Result<Integer, String> {
+pub fn const_int(a: T) -> Result<Integer, String> {
     let folded = constant_fold(&a.term);
     match &folded.op {
         Op::Const(Value::Field(f)) => Ok(f.i().clone()),
@@ -603,11 +603,7 @@ pub fn const_int_ref(a: &T) -> Result<Integer, String> {
     }
 }
 
-pub fn const_int(a: T) -> Result<Integer, String> {
-    const_int_ref(&a)
-}
-
-pub fn const_bool_ref(a: &T) -> Result<bool, String> {
+pub fn const_bool(a: T) -> Result<bool, String> {
     let folded = constant_fold(&a.term);
     match folded.op {
         Op::Const(Value::Bool(b)) => Ok(b),

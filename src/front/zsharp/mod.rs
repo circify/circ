@@ -256,105 +256,6 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn stmt(&self, s: &ast::Statement<'ast>) {
-        debug!("Stmt: {}", s.span().as_str());
-        match s {
-            ast::Statement::Return(r) => {
-                // XXX(unimpl) multi-return unimplemented
-                assert!(r.expressions.len() <= 1);
-                if let Some(e) = r.expressions.first() {
-                    self.set_lhs_ty_ret(r);
-                    let ret = self.expr(e);
-                    let ret_res = self.circ_return_(Some(ret));
-                    self.unwrap(ret_res, &r.span);
-                } else {
-                    let ret_res = self.circ_return_(None);
-                    self.unwrap(ret_res, &r.span);
-                }
-            }
-            ast::Statement::Assertion(e) => {
-                // handle constant assertions (useful at compile time)
-                if let Ok(b) = self.const_expr_(&e.expression).and_then(|b| const_bool_ref(&b)) {
-                    if b {
-                        return;
-                    } else {
-                        self.err("const assert failed", &e.span);
-                    }
-                }
-                let b = bool(self.expr(&e.expression));
-                let e = self.unwrap(b, &e.span);
-                self.circ_assert(e);
-            }
-            ast::Statement::Iteration(i) => {
-                let ty = self.type_(&i.ty);
-                // iteration type constructor - must be Field or u*
-                let ival_cons = match ty {
-                    Ty::Field => T::new_field,
-                    Ty::Uint(8) => T::new_u8,
-                    Ty::Uint(16) => T::new_u16,
-                    Ty::Uint(32) => T::new_u32,
-                    Ty::Uint(64) => T::new_u64,
-                    _ => self.err("Iteration variable must be Field or Unit", &i.span),
-                };
-
-                let s = self.const_int(&i.from);
-                let e = self.const_int(&i.to);
-                let v_name = i.index.value.clone();
-                self.circ_enter_scope();
-                let decl_res = self.circ_declare(v_name.clone(), &ty, false, PROVER_VIS);
-                self.unwrap(decl_res, &i.index.span);
-                for j in s..e {
-                    self.circ_enter_scope();
-                    let ass_res = self
-                        .circ_assign(Loc::local(v_name.clone()), Val::Term(ival_cons(j)));
-                    self.unwrap(ass_res, &i.index.span);
-                    for s in &i.statements {
-                        self.stmt(s);
-                    }
-                    self.circ_exit_scope();
-                }
-                self.circ_exit_scope();
-            }
-            ast::Statement::Definition(d) => {
-                // XXX(unimpl) multi-assignment unimplemented
-                assert!(d.lhs.len() <= 1);
-
-                // evaluate expression, possibly extracting lhs type first
-                self.set_lhs_ty_defn::<false>(d);
-                let e = self.expr(&d.expression);
-
-                if let Some(l) = d.lhs.first() {
-                    let ty = e.type_();
-                    match l {
-                        ast::TypedIdentifierOrAssignee::Assignee(l) => {
-                            let lval = self.lval(l);
-                            let mod_res = self.mod_lval(lval, e);
-                            self.unwrap(mod_res, &d.span);
-                        }
-                        ast::TypedIdentifierOrAssignee::TypedIdentifier(l) => {
-                            let decl_ty = self.type_(&l.ty);
-                            if decl_ty != ty {
-                                self.err(
-                                    format!(
-                                        "Assignment type mismatch: {} annotated vs {} actual",
-                                        decl_ty, ty,
-                                    ),
-                                    &d.span,
-                                );
-                            }
-                            let d_res = self.circ_declare_init(
-                                l.identifier.value.clone(),
-                                decl_ty,
-                                Val::Term(e),
-                            );
-                            self.unwrap(d_res, &d.span);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fn mod_lval(&self, loc: ZLoc, val: T) -> Result<(), String> {
         let old = self
             .circ_get_value(loc.var.clone())
@@ -367,6 +268,7 @@ impl<'ast> ZGen<'ast> {
             .map(|_| ())
     }
 
+    // XXX(fixup) iter and collect?
     fn lval(&self, l: &ast::Assignee<'ast>) -> ZLoc {
         let mut loc = ZLoc {
             var: Loc::local(l.id.value.clone()),
@@ -377,7 +279,7 @@ impl<'ast> ZGen<'ast> {
                 ast::AssigneeAccess::Member(m) => ZAccess::Member(m.id.value.clone()),
                 ast::AssigneeAccess::Select(m) => ZAccess::Idx(
                     if let ast::RangeOrExpression::Expression(e) = &m.expression {
-                        self.expr(&e)
+                        self.unwrap(self.expr_impl_::<false>(e), e.span())
                     } else {
                         self.err("Cannot assign to slice", &m.span);
                     },
@@ -478,6 +380,7 @@ impl<'ast> ZGen<'ast> {
         self.generics_stack.borrow_mut().pop();
     }
 
+    // XXX(TODO) cleanup self.err vs returning Result
     fn explicit_generic_values(
         &self,
         eg: Option<&ast::ExplicitGenerics<'ast>>,
@@ -488,21 +391,10 @@ impl<'ast> ZGen<'ast> {
                 .iter()
                 .map(|cgv| match cgv {
                     ast::ConstantGenericValue::Value(l) => self.unwrap(self.literal_(&l), l.span()),
-                    ast::ConstantGenericValue::Identifier(i) => {
-                        if let Some(v) = self.generic_lookup_(&i.value) {
-                            v
-                        } else if let Some(v) = self.const_lookup_(&i.value) {
-                            v.clone()
-                        } else {
-                            self.err(
-                                format!(
-                                    "no const {} in current context",
-                                    &i.value
-                                ),
-                                &i.span,
-                            );
-                        }
-                    }
+                    ast::ConstantGenericValue::Identifier(i) => self.unwrap(
+                        self.identifier_cg_(i).ok_or_else(|| format!("no const {} in current context", &i.value)),
+                        &i.span,
+                    ),
                     ast::ConstantGenericValue::Underscore(u) => {
                         self.err(
                             "non-monomorphized generic argument",
@@ -517,121 +409,26 @@ impl<'ast> ZGen<'ast> {
         .unwrap_or_else(|| HashMap::new())
     }
 
-    fn identifier_(&self, u: &ast::IdentifierExpression<'ast>) -> T {
-        if let Some(v) = self.generic_lookup_(&u.value) {
-            v
-        } else if let Some(v) = self.const_lookup_(&u.value) {
-            v.clone()
-        } else {
-            self.unwrap(self.circ_get_value(Loc::local(u.value.clone())), &u.span)
-               .unwrap_term()
-        }
-    }
-
-    fn expr(&self, e: &ast::Expression<'ast>) -> T {
-        debug!("Expr: {}", e.span().as_str());
-        let res = match e {
-            ast::Expression::Ternary(u) => {
-                let c = self.expr(&u.first);
-                let a = self.expr(&u.second);
-                let b = self.expr(&u.third);
-                cond(c, a, b)
-            }
-            ast::Expression::Binary(u) => {
-                let f = self.bin_op(&u.op);
-                let a = self.expr(&u.left);
-                let b = self.expr(&u.right);
-                f(a, b)
-            }
-            ast::Expression::Unary(u) => {
-                let f = self.unary_op(&u.op);
-                let a = self.expr(&u.expression);
-                f(a)
-            }
-            ast::Expression::Identifier(u) => Ok(self.identifier_(u)),
-            ast::Expression::InlineArray(u) => {
-                let mut avals = Vec::with_capacity(u.expressions.len());
-                u.expressions.iter().for_each(|ee| match ee {
-                    ast::SpreadOrExpression::Expression(eee) => avals.push(self.expr(eee)),
-                    ast::SpreadOrExpression::Spread(s) => {
-                        let arr = self.expr(&s.expression).unwrap_array();
-                        avals.append(&mut self.unwrap(arr, s.expression.span()));
-                    }
-                });
-                T::new_array(avals)
-            }
-            ast::Expression::Literal(l) => self.literal_(l),
-            ast::Expression::InlineStruct(u) => Ok(T::new_struct(
-                u.ty.value.clone(),
-                u.members
-                    .iter()
-                    .map(|m| (m.id.value.clone(), self.expr(&m.expression)))
-                    .collect(),
-            )),
-            ast::Expression::ArrayInitializer(a) => {
-                let v = self.expr(&a.value);
-                let n = self.const_usize(&a.count);
-                array(vec![v; n])
-            }
-            ast::Expression::Postfix(p) => {
-                // assume no functions in arrays, etc.
-                let (base, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
-                    let (f_path, f_name) = self.deref_import(&p.id.value);
-                    debug!("Call: {} {:?} {:?}", p.id.value, f_path, f_name);
-                    let args = c
-                        .arguments
-                        .expressions
-                        .iter()
-                        .map(|e| self.expr(e))
-                        .collect::<Vec<_>>();
-                    let exp_ty = self.lhs_ty_take()
-                        .and_then(|ty| if p.accesses.len() > 1 { None } else { Some(ty) });
-                    let res = self.function_call(args, c, exp_ty, f_path, f_name);
-                    (self.unwrap(res, &c.span), &p.accesses[1..])
-                } else {
-                    // assume no calls
-                    (
-                        self.unwrap(
-                            self.circ_get_value(Loc::local(p.id.value.clone())),
-                            &p.id.span,
-                        )
-                        .unwrap_term(),
-                        &p.accesses[..],
-                    )
-                };
-                accs.iter().fold(Ok(base), |b, acc| match acc {
-                    ast::Access::Member(m) => field_select(&b?, &m.id.value),
-                    ast::Access::Select(a) => match &a.expression {
-                        ast::RangeOrExpression::Expression(e) => array_select(b?, self.expr(e)),
-                        ast::RangeOrExpression::Range(r) => {
-                            let s = r.from.as_ref().map(|s| self.const_usize(&s.0));
-                            let e = r.to.as_ref().map(|s| self.const_usize(&s.0));
-                            slice(b?, s, e)
-                        }
-                    },
-                    ast::Access::Call(_) => unreachable!("stray call"),
-                })
-            }
-        };
-        self.unwrap(res, e.span())
-    }
-
-    fn function_call(
+    fn function_call_impl_<const IS_CNST: bool>(
         &self,
         args: Vec<T>,
-        call: &ast::CallAccess<'ast>,
+        egv: &[ast::ConstantGenericValue<'ast>],
         exp_ty: Option<Ty>,
         f_path: PathBuf,
         f_name: String,
     ) -> Result<T, String> {
-        debug!("Function call: {} {:?} {:?}", f_name, f_path, args);
+        if IS_CNST {
+            debug!("Const function call: {} {:?} {:?}", f_name, f_path, args);
+        } else {
+            debug!("Function call: {} {:?} {:?}", f_name, f_path, args);
+        }
         let f = self
             .functions
             .get(&f_path)
             .ok_or_else(|| format!("No file '{:?}' attempting fn call", &f_path))?
             .get(&f_name)
             .ok_or_else(|| format!("No function '{}' attempting fn call", &f_name))?;
-        let generics = ZGenericInf::new(self, f).unify_generic(call, exp_ty, &args[..])?;
+        let generics = ZGenericInf::new(self, f).unify_generic(egv, exp_ty, &args[..])?;
 
         if self.stdlib.is_embed(&f_path) {
             let mut generics = generics;
@@ -644,35 +441,64 @@ impl<'ast> ZGen<'ast> {
                 .collect::<Result<Vec<_>,_>>()?;
             Self::builtin_call(&f_name, args, generics)
         } else {
-            let f = f.clone();
+            // XXX(unimpl) multi-return unimplemented
+            assert!(f.returns.len() <= 1);
             if f.generics.len() != generics.len() {
                 return Err("Wrong number of generic params for function call".to_string());
             }
             if f.parameters.len() != args.len() {
                 return Err("Wrong nimber of arguments for function call".to_string());
             }
+
+            let f = f.clone();
             self.file_stack_push(f_path);
             self.generics_stack_push(generics);
-            self.ret_ty_stack_push::<false>(&f);
-            // XXX(unimpl) tuple returns not supported
-            assert!(f.returns.len() <= 1);
-            let ret_ty = f.returns.first().map(|r| self.type_(r));
-            self.circ_enter_fn(f_name, ret_ty);
+            self.ret_ty_stack_push::<IS_CNST>(&f)?;
+
+            // XXX(unimpl) multi-return unimplemented
+            let ret_ty = f.returns.first().map(|r| self.type_impl_::<IS_CNST>(r)).transpose()?;
+            let ret_ty = if IS_CNST {
+                self.cvar_enter_function();
+                ret_ty
+            } else {
+                self.circ_enter_fn(f_name, ret_ty);
+                None
+            };
+
             for (p, a) in f.parameters.into_iter().zip(args) {
-                let ty = self.type_(&p.ty);
-                self.circ_declare_init(p.id.value, ty, Val::Term(a))
-                    .map_err(|e| format!("{}", e))?;
+                let ty = self.type_impl_::<IS_CNST>(&p.ty)?;
+                if IS_CNST {
+                    self.cvar_declare_init(p.id.value, &ty, a)?;
+                } else {
+                    self.circ_declare_init(p.id.value, ty, Val::Term(a))
+                        .map_err(|e| format!("{}", e))?;
+                }
             }
+
             for s in &f.statements {
-                self.stmt(s);
+                self.stmt_impl_::<IS_CNST>(s)?;
             }
-            let ret = self
-                .circ_exit_fn()
-                .map(|a| a.unwrap_term())
-                .unwrap_or_else(|| z_bool_lit(false));
+
+            let ret = if IS_CNST {
+                self.cvar_exit_function();
+                self.crets_pop()
+            } else {
+                self.circ_exit_fn()
+                    .map(|a| a.unwrap_term())
+                    .unwrap_or_else(|| z_bool_lit(false))
+            };
+
             self.ret_ty_stack_pop();
             self.generics_stack_pop();
             self.file_stack_pop();
+
+            if IS_CNST {
+                let ret_ty = ret_ty.unwrap_or(Ty::Bool);
+                if ret.type_() != ret_ty {
+                    Err(format!("Return type mismatch: expected {}, got {}", ret_ty, ret.type_()))?;
+                }
+            }
+
             Ok(ret)
         }
     }
@@ -690,7 +516,7 @@ impl<'ast> ZGen<'ast> {
             panic!("No function '{:?}//{}' attempting const_entry_fn", &f_file, &f_name);
         }
 
-        self.const_function_call_(Vec::new(), None, None, f_file, f_name)
+        self.function_call_impl_::<true>(Vec::new(), &[][..], None, f_file, f_name)
             .unwrap_or_else(|e| panic!("const_entry_fn failed: {}", e))
     }
 
@@ -722,7 +548,7 @@ impl<'ast> ZGen<'ast> {
             self.unwrap(r, &p.span);
         }
         for s in &f.statements {
-            self.stmt(s);
+            self.unwrap(self.stmt_impl_::<false>(s), s.span());
         }
         if let Some(r) = self.circ_exit_fn() {
             match self.mode {
@@ -839,15 +665,6 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or_else(|| (self.cur_path(), s.to_string()))
     }
 
-    fn const_int(&self, e: &ast::Expression<'ast>) -> isize {
-        let i = const_int(self.expr(e));
-        self.unwrap(i, e.span()).to_isize().unwrap()
-    }
-
-    fn const_usize(&self, e: &ast::Expression<'ast>) -> usize {
-        self.unwrap(const_int(self.expr(e)), e.span()).to_usize().unwrap()
-    }
-
     fn generic_lookup_(&self, i: &str) -> Option<T> {
         self.generics_stack.borrow().last().and_then(|m| m.get(i)).cloned()
     }
@@ -876,129 +693,170 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or(false)
     }
 
-    fn const_identifier_(&self, i: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
-        self.generic_lookup_(i.value.as_ref())
-            .or_else(|| self.const_lookup_(i.value.as_ref()).cloned())
-            .or_else(|| self.cvar_lookup(i.value.as_ref()))
-            .ok_or_else(|| format!("Undefined const identifier {}", &i.value))
+    fn identifier_cg_(&self, i: &ast::IdentifierExpression<'ast>) -> Option<T> {
+        self.generic_lookup_(&i.value).or_else(|| self.const_lookup_(&i.value).cloned())
     }
 
-    fn const_isize_r_(&self, e: &ast::Expression<'ast>) -> Result<isize, String> {
-        const_int(self.const_expr_(e)?)?
+    fn identifier_impl_<const IS_CNST: bool>(&self, i: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
+        match self.identifier_cg_(i) {
+            Some(v) => Ok(v),
+            None if IS_CNST => self.cvar_lookup(&i.value)
+                    .ok_or_else(|| format!("Undefined const identifier {}", &i.value)),
+            _ => match self
+                .circ_get_value(Loc::local(i.value.clone()))
+                .map_err(|e| format!("{}", e))? {
+                    Val::Term(t) => Ok(t),
+                    _ => Err(format!("Non-const identifier {}", &i.value)),
+            }
+        }
+    }
+
+    fn const_identifier_(&self, i: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
+        self.identifier_impl_::<true>(i)
+    }
+
+    fn const_isize_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<isize, String> {
+        const_int(self.expr_impl_::<IS_CNST>(e)?)?
             .to_isize()
             .ok_or_else(|| "Constant integer outside isize range".to_string())
     }
 
-    fn const_usize_r_(&self, e: &ast::Expression<'ast>) -> Result<usize, String> {
-        const_int(self.const_expr_(e)?)?
+    fn const_usize_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<usize, String> {
+        const_int(self.expr_impl_::<IS_CNST>(e)?)?
             .to_usize()
             .ok_or_else(|| "Constant integer outside usize range".to_string())
     }
 
-    fn const_usize_(&self, e: &ast::Expression<'ast>) -> usize {
-        let res = self.const_usize_r_(e);
-        self.unwrap(res, e.span())
+    fn const_usize_(&self, e: &ast::Expression<'ast>) -> Result<usize, String> {
+        self.const_usize_impl_::<true>(e)
     }
 
-    // XXX(rsw) make Result<T, (String, &Span)> to give more precise error messages?
-    fn const_expr_(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
-        debug!("Const expr: {}", e.span().as_str());
+    fn member_access_impl_<const IS_CNST: bool>(&self, acc: &ast::MemberAccess<'ast>, val: T) -> Result<T, String> {
+        if IS_CNST {
+            match val {
+                T::Struct(ty, mut m) => m.remove(&acc.id.value)
+                    .ok_or_else(|| format!("No field '{}' accessing const struct of type {:?}", &acc.id.value, ty)),
+                x => Err(format!("Tried to access member of non-Struct type {}", x.type_())),
+            }
+        } else {
+            field_select(&val, &acc.id.value)
+        }
+    }
+
+    fn array_access_impl_<const IS_CNST: bool>(&self, acc: &ast::ArrayAccess<'ast>, val: T) -> Result<T, String> {
+        if IS_CNST {
+            match val {
+                T::Array(ty, mut v) => match &acc.expression {
+                    ast::RangeOrExpression::Expression(e) => {
+                        let idx = self.const_usize_impl_::<IS_CNST>(e)?;
+                        if v.len() > idx {
+                            Ok(v.swap_remove(idx))
+                        } else {
+                            Err(format!("Out-of-bounds array access: wanted {}, but len was {}", idx, v.len()))
+                        }
+                    }
+                    ast::RangeOrExpression::Range(r) => {
+                        let start = r.from.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?.unwrap_or(0);
+                        let end = r.to.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?.unwrap_or(v.len());
+                        if start > end || end > v.len() {
+                            Err(format!("Got bad range {}..{} for vec of length {}", start, end, v.len()))
+                        } else {
+                            Ok(T::Array(ty, v.drain(start..end).collect()))
+                        }
+                    }
+                }
+                x => Err(format!("Tried to index into non-Array type {}", x.type_())),
+            }
+        } else {
+            match &acc.expression {
+                ast::RangeOrExpression::Expression(e) => array_select(val, self.expr_impl_::<IS_CNST>(e)?),
+                ast::RangeOrExpression::Range(r) => {
+                    // XXX(unimpl) Range expressions must be constant!
+                    let s = r.from.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
+                    let e = r.to.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
+                    slice(val, s, e)
+                }
+            }
+        }
+    }
+
+    // XXX(rsw) make Result<T, (String, Span)> to give more precise error messages?
+    fn expr_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
+        if IS_CNST {
+            debug!("Const expr: {}", e.span().as_str());
+        } else {
+            debug!("Expr: {}", e.span().as_str());
+        }
+
         match e {
             ast::Expression::Ternary(u) => {
-                match self.const_expr_(&u.first).and_then(|b| const_bool_ref(&b)) {
-                    Ok(true) => self.const_expr_(&u.second),
-                    Ok(false) => self.const_expr_(&u.third),
-                    Err(e) => self.err(format!("ternary condition not const bool: {}", e), &u.span),
+                match self.expr_impl_::<true>(&u.first).ok().and_then(|b| const_bool(b)) {
+                    Some(true) => self.expr_impl_::<IS_CNST>(&u.second),
+                    Some(false) => self.expr_impl_::<IS_CNST>(&u.third),
+                    None if IS_CNST => Err("ternary condition not const bool".to_string()),
+                    _ => {
+                        let c = self.expr_impl_::<false>(&u.first)?;
+                        let a = self.expr_impl_::<false>(&u.second)?;
+                        let b = self.expr_impl_::<false>(&u.third)?;
+                        cond(c, a, b)
+                    }
                 }
             }
             ast::Expression::Binary(b) => {
-                let left = self.const_expr_(&b.left)?;
-                let right = self.const_expr_(&b.right)?;
+                let left = self.expr_impl_::<IS_CNST>(&b.left)?;
+                let right = self.expr_impl_::<IS_CNST>(&b.right)?;
                 let op = self.bin_op(&b.op);
-                op(left, right).and_then(|res| const_val(res))
+                op(left, right).and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
             }
             ast::Expression::Unary(u) => {
-                let arg = self.const_expr_(&u.expression)?;
+                let arg = self.expr_impl_::<IS_CNST>(&u.expression)?;
                 let op = self.unary_op(&u.op);
-                op(arg).and_then(|res| const_val(res))
+                op(arg).and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
             }
-            ast::Expression::Identifier(i) => self.const_identifier_(i),
+            ast::Expression::Identifier(i) => self.identifier_impl_::<IS_CNST>(i),
             ast::Expression::Literal(l) => self.literal_(l),
             ast::Expression::InlineArray(ia) => {
                 let mut avals = Vec::with_capacity(ia.expressions.len());
                 ia.expressions.iter().try_for_each::<_, Result<_, String>>(|ee| match ee {
-                    ast::SpreadOrExpression::Expression(eee) => Ok(avals.push(self.const_expr_(eee)?)),
+                    ast::SpreadOrExpression::Expression(eee) => Ok(avals.push(self.expr_impl_::<IS_CNST>(eee)?)),
                     ast::SpreadOrExpression::Spread(s) => Ok(avals.append(
-                        &mut self.const_expr_(&s.expression)?.unwrap_array()?
+                        &mut self.expr_impl_::<IS_CNST>(&s.expression)?.unwrap_array()?
                     )),
                 })?;
                 T::new_array(avals)
             }
             ast::Expression::ArrayInitializer(ai) => {
-                let val = self.const_expr_(&ai.value)?;
-                let num = self.const_usize_r_(&ai.count)?;
+                let val = self.expr_impl_::<IS_CNST>(&ai.value)?;
+                let num = self.const_usize_impl_::<IS_CNST>(&ai.count)?;
                 array(vec![val; num])
             }
             ast::Expression::Postfix(p) => {
+                // assume no functions in arrays, etc.
                 assert!(p.accesses.len() > 0);
-                let (mut arr, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
-                    // XXX(TODO) use top of lhs_ty_stack if p.accesses.len() == 1
-
+                let (val, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
                     let (f_path, f_name) = self.deref_import(&p.id.value);
-                    debug!("Const call: {} {:?} {:?}", p.id.value, f_path, f_name);
                     let args = c
                         .arguments
                         .expressions
                         .iter()
-                        .map(|e| self.const_expr_(e))
+                        .map(|e| self.expr_impl_::<IS_CNST>(e))
                         .collect::<Result<Vec<_>, _>>()?;
                     let exp_ty = self.lhs_ty_take()
                         .and_then(|ty| if p.accesses.len() > 1 { None } else { Some(ty) });
-                    let res = self.const_function_call_(args, Some(c), exp_ty, f_path, f_name)?;
+                    let egv = c.explicit_generics.as_ref().map(|eg| &eg.values[..]).unwrap_or(&[][..]);
+                    let res = self.function_call_impl_::<IS_CNST>(args, egv, exp_ty, f_path, f_name)?;
                     (res, &p.accesses[1..])
                 } else {
-                    (self.const_identifier_(&p.id)?, &p.accesses[..])
+                    (self.identifier_impl_::<IS_CNST>(&p.id)?, &p.accesses[..])
                 };
-                for acc in accs.into_iter() {
-                    match acc {
-                        ast::Access::Call(_) => Err("Function call in non-first-acc position in const expr".to_string())?,
-                        ast::Access::Member(a) => {
-                            arr = match arr {
-                                T::Struct(ty, mut m) => m.remove(&a.id.value)
-                                    .ok_or_else(|| format!("No field '{}' accessing const struct of type {:?}", &a.id.value, ty)),
-                                x => Err(format!("Tried to access member of non-Struct type {}", x.type_())),
-                            }?;
-                        }
-                        ast::Access::Select(s) => {
-                            arr = match arr {
-                                T::Array(ty, mut v) => match &s.expression {
-                                    ast::RangeOrExpression::Expression(e) => {
-                                        let idx = self.const_usize_r_(e)?;
-                                        if v.len() > idx {
-                                            Ok(v.swap_remove(idx))
-                                        } else {
-                                            Err(format!("Out-of-bounds array access: wanted {}, but len was {}", idx, v.len()))
-                                        }
-                                    }
-                                    ast::RangeOrExpression::Range(r) => {
-                                        let start = r.from.as_ref().map(|s| self.const_usize_r_(&s.0)).transpose()?.unwrap_or(0);
-                                        let end = r.to.as_ref().map(|s| self.const_usize_r_(&s.0)).transpose()?.unwrap_or(v.len());
-                                        if start > end || end > v.len() {
-                                            Err(format!("Got bad range {}..{} for vec of length {}", start, end, v.len()))
-                                        } else {
-                                            Ok(T::Array(ty, v.drain(start..end).collect()))
-                                        }
-                                    }
-                                }
-                                x => Err(format!("Tried to index into non-Array type {}", x.type_())),
-                            }?;
-                        }
-                    }
-                }
-                Ok(arr)
+                accs.iter().fold(Ok(val), |v, acc| match acc {
+                    ast::Access::Call(_) => Err("Function call in non-first-access position in expr".to_string()),
+                    ast::Access::Member(a) => self.member_access_impl_::<IS_CNST>(a, v?),
+                    ast::Access::Select(s) => self.array_access_impl_::<IS_CNST>(s, v?),
+                })
             }
             ast::Expression::InlineStruct(u) => u.members.iter()
-                    .map(|m| self.const_expr_(&m.expression)
+                    .map(|m| self.expr_impl_::<IS_CNST>(&m.expression)
                         .map(|m_expr| (m.id.value.clone(), m_expr))
                     )
                     .collect::<Result<BTreeMap<_,_>,String>>()
@@ -1006,154 +864,138 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn const_function_call_(
-        &self,
-        args: Vec<T>,
-        call: Option<&ast::CallAccess<'ast>>,
-        exp_ty: Option<Ty>,
-        f_path: PathBuf,
-        f_name: String,
-    ) -> Result<T, String> {
-        debug!("Const function call: {} {:?} {:?}", f_name, f_path, args);
-        let f = self
-                .functions
-                .get(&f_path)
-                .ok_or_else(|| format!("No file '{:?}' attempting const fn call", &f_path))?
-                .get(&f_name)
-                .ok_or_else(|| format!("No function '{}' attempting const fn call", &f_name))?;
-        let generics = if let Some(c) = call {
-            ZGenericInf::new(self, f).unify_generic(c, exp_ty, &args[..])?
+    fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
+        if IS_CNST {
+            self.crets_push(ret.unwrap_or_else(|| Self::bool_lit(false)));
+            Ok(())
         } else {
-            HashMap::new()
-        };
-
-        if self.stdlib.is_embed(&f_path) {
-            let mut generics = generics;
-            let generics = f.generics.iter()
-                .map(|gid| generics.remove(&gid.value).ok_or_else(|| format!(
-                    "Failed to find generic argument {} for const builtin call {}",
-                    &gid.value,
-                    &f_name,
-                )))
-                .collect::<Result<Vec<_>,_>>()?;
-            Self::builtin_call(&f_name, args, generics)
-        } else {
-            let f = f.clone();
-            if f.generics.len() != generics.len() {
-                Err("Wrong number of generic params for function call".to_string())?;
-            }
-            if f.parameters.len() != args.len() {
-                Err("Wrong number of arguments for function call".to_string())?;
-            }
-            // XXX(unimpl) tuple returns not supported
-            assert!(f.returns.len() <= 1);
-            self.file_stack_push(f_path);
-            self.generics_stack_push(generics);
-            self.ret_ty_stack_push::<true>(&f);
-            self.cvar_enter_function();
-            let ret_ty = f.returns.first().map(|r| self.const_type_(r)).unwrap_or(Ty::Bool);
-            for (p, a) in f.parameters.into_iter().zip(args) {
-                let ty = self.const_type_(&p.ty);
-                self.cvar_declare_init(p.id.value, &ty, a)?;
-            }
-            for s in &f.statements {
-                self.const_stmt_(s)?;
-            }
-            let ret = self.crets_pop();
-            self.cvar_exit_function();
-            self.ret_ty_stack_pop();
-            self.generics_stack_pop();
-            self.file_stack_pop();
-            if ret.type_() != ret_ty {
-                Err(format!("Return type mismatch: expected {}, got {}", ret_ty, ret.type_()))
-            } else {
-                Ok(ret)
-            }
+            self.circ_return_(ret)
         }
     }
 
-    fn const_stmt_(&self, s: &ast::Statement<'ast>) -> Result<(), String> {
-        debug!("Const stmt: {}", s.span().as_str());
+    fn decl_impl_<const IS_CNST: bool>(&self, name: String, ty: &Ty) -> Result<(), String> {
+        if IS_CNST {
+            self.cvar_declare(name, ty)
+        } else {
+            self.circ_declare(name, ty, false, PROVER_VIS).map_err(|e| format!("{}", e))
+        }
+    }
+
+    fn assign_impl_<const IS_CNST: bool>(&self, name: &str, val: T) -> Result<(), String> {
+        if IS_CNST {
+            self.cvar_assign(name, &[][..], val)
+        } else {
+            self.circ_assign(Loc::local(name.to_owned()), Val::Term(val))
+                .map(|_| ())
+                .map_err(|e| format!("{}", e))
+        }
+    }
+
+    fn assignee_impl_<const IS_CNST: bool>(&self, asgn: &ast::Assignee<'ast>, val: T) -> Result<(), String> {
+        if IS_CNST {
+            self.cvar_assign(&asgn.id.value, asgn.accesses.as_ref(), val)
+        } else {
+            self.mod_lval(self.lval(asgn), val)
+        }
+    }
+
+    fn declare_init_impl_<const IS_CNST: bool>(&self, name: String, ty: Ty, val: T) -> Result<(), String> {
+        if IS_CNST {
+            self.cvar_declare_init(name, &ty, val)
+        } else {
+            self.circ_declare_init(name, ty, Val::Term(val))
+                .map(|_| ())
+                .map_err(|e| format!("{}", e))
+        }
+    }
+
+    fn stmt_impl_<const IS_CNST: bool>(&self, s: &ast::Statement<'ast>) -> Result<(), String> {
+        if IS_CNST {
+            debug!("Const stmt: {}", s.span().as_str());
+        } else {
+            debug!("Stmt: {}", s.span().as_str());
+        }
+
         match s {
             ast::Statement::Return(r) => {
                 // XXX(unimpl) multi-return unimplemented
                 assert!(r.expressions.len() <= 1);
-                // XXX(TODO) get return type of current function and set_lhs_ty_
                 if let Some(e) = r.expressions.first() {
                     self.set_lhs_ty_ret(r);
-                    let ret = self.const_expr_(e)?;
-                    self.crets_push(ret);
+                    let ret = self.expr_impl_::<IS_CNST>(e)?;
+                    self.ret_impl_::<IS_CNST>(Some(ret))
                 } else {
-                    self.crets_push(Self::const_bool(false));
+                    self.ret_impl_::<IS_CNST>(None)
                 }
-                Ok(())
+                .map_err(|e| format!("{}", e))
             }
             ast::Statement::Assertion(e) => {
-                if self.const_expr_(&e.expression)
-                    .and_then(|b| const_bool_ref(&b))
-                    .or_else(|err| Err(format!(
-                        "Const bool expression {} eval failed: {}",
+                match self.expr_impl_::<true>(&e.expression).ok().and_then(|b| const_bool(b)) {
+                    Some(true) => Ok(()),
+                    Some(false) => Err("Const assert failed".to_string()),
+                    None if IS_CNST => Err(format!("Const assert expression eval failed: {}",
                         span_to_string(e.expression.span()),
-                        err,
-                    )))? {
-                    Ok(())
-                } else {
-                    Err(format!("Const assert failed:\n{}", span_to_string(s.span())))
+                    )),
+                    _ => {
+                        let b = bool(self.expr_impl_::<false>(&e.expression)?)?;
+                        self.circ_assert(b);
+                        Ok(())
+                    }
                 }
             }
             ast::Statement::Iteration(i) => {
-                let ty = self.const_type_(&i.ty);
+                let ty = self.type_impl_::<IS_CNST>(&i.ty)?;
                 let ival_cons = match ty {
                     Ty::Field => T::new_field,
                     Ty::Uint(8) => T::new_u8,
                     Ty::Uint(16) => T::new_u16,
                     Ty::Uint(32) => T::new_u32,
                     Ty::Uint(64) => T::new_u64,
-                    _ => { return Err(format!("Iteration variable must be Field or Uint, got {:?}", ty)); }
+                    _ => Err(format!("Iteration variable must be Field or Uint, got {:?}", ty))?,
                 };
                 // XXX(rsw) CHECK does this work if the range includes negative numbers?
-                let s = self.const_isize_r_(&i.from)?;
-                let e = self.const_isize_r_(&i.to)?;
+                let s = self.const_isize_impl_::<IS_CNST>(&i.from)?;
+                let e = self.const_isize_impl_::<IS_CNST>(&i.to)?;
                 let v_name = i.index.value.clone();
-                self.cvar_enter_scope();
-                self.cvar_declare(v_name, &ty)?;
+                self.enter_scope_impl_::<IS_CNST>();
+                self.decl_impl_::<IS_CNST>(v_name, &ty)?;
                 for j in s..e {
-                    self.cvar_enter_scope();
-                    self.cvar_assign(&i.index.value, &[][..], ival_cons(j))?;
+                    self.enter_scope_impl_::<IS_CNST>();
+                    self.assign_impl_::<IS_CNST>(&i.index.value, ival_cons(j))?;
                     for s in &i.statements {
-                        self.const_stmt_(s)?;
+                        self.stmt_impl_::<IS_CNST>(s)?;
                     }
-                    self.cvar_exit_scope();
+                    self.exit_scope_impl_::<IS_CNST>();
                 }
-                self.cvar_exit_scope();
+                self.exit_scope_impl_::<IS_CNST>();
                 Ok(())
             }
             ast::Statement::Definition(d) => {
                 // XXX(unimpl) multi-assignment unimplemented
                 assert!(d.lhs.len() <= 1);
 
-                self.set_lhs_ty_defn::<true>(d);
-                let e = self.const_expr_(&d.expression)?;
+                self.set_lhs_ty_defn::<IS_CNST>(d);
+                let e = self.expr_impl_::<IS_CNST>(&d.expression)?;
 
                 if let Some(l) = d.lhs.first() {
-                    let ty = e.type_();
                     match l {
                         ast::TypedIdentifierOrAssignee::Assignee(l) => {
-                            self.cvar_assign(&l.id.value, l.accesses.as_ref(), e)
+                            self.assignee_impl_::<IS_CNST>(l, e)
                         }
                         ast::TypedIdentifierOrAssignee::TypedIdentifier(l) => {
-                            let decl_ty = self.const_type_(&l.ty);
+                            let decl_ty = self.type_impl_::<IS_CNST>(&l.ty)?;
+                            let ty = e.type_();
                             if decl_ty != ty {
                                 Err(format!(
-                                    "Const assignment type mismatch: {} annotated vs {} actual",
+                                    "Assignment type mismatch: {} annotated vs {} actual",
                                     decl_ty, ty,
                                 ))?;
                             }
-                            self.cvar_declare_init(l.identifier.value.clone(), &decl_ty, e)
+                            self.declare_init_impl_::<IS_CNST>(l.identifier.value.clone(), decl_ty, e)
                         }
                     }
                 } else {
-                    warn!("Const statement with no LHS!");
+                    warn!("Statement with no LHS!");
                     Ok(())
                 }
             }
@@ -1190,7 +1032,7 @@ impl<'ast> ZGen<'ast> {
         use ast::TypedIdentifierOrAssignee::*;
         match tya {
             Assignee(a) => {
-                let t = if IS_CNST { self.const_identifier_(&a.id)? } else { self.identifier_(&a.id) };
+                let t = self.identifier_impl_::<IS_CNST>(&a.id)?;
                 a.accesses.iter().fold(Ok(t.type_()), |ty, acc| ty.and_then(|ty| match acc {
                     ast::AssigneeAccess::Select(aa) => match ty {
                         Ty::Array(sz, ity) => match &aa.expression {
@@ -1206,7 +1048,7 @@ impl<'ast> ZGen<'ast> {
                     },
                 }))
             }
-            TypedIdentifier(t) => Ok(self.type_impl_::<IS_CNST>(&t.ty)),
+            TypedIdentifier(t) => self.type_impl_::<IS_CNST>(&t.ty),
         }
     }
 
@@ -1218,9 +1060,25 @@ impl<'ast> ZGen<'ast> {
         self.lhs_ty.borrow_mut().take()
     }
 
+    fn enter_scope_impl_<const IS_CNST: bool>(&self) {
+        if IS_CNST {
+            self.cvar_enter_scope()
+        } else {
+            self.circ_enter_scope()
+        }
+    }
+
     fn cvar_enter_scope(&self) {
         assert!(!self.cvars_stack.borrow().is_empty());
         self.cvars_stack.borrow_mut().last_mut().unwrap().push(HashMap::new());
+    }
+
+    fn exit_scope_impl_<const IS_CNST: bool>(&self) {
+        if IS_CNST {
+            self.cvar_exit_scope()
+        } else {
+            self.circ_exit_scope()
+        }
     }
 
     fn cvar_exit_scope(&self) {
@@ -1246,7 +1104,7 @@ impl<'ast> ZGen<'ast> {
         accs.iter().try_for_each(|acc| match acc {
             ast::AssigneeAccess::Select(a) => match &a.expression {
                 ast::RangeOrExpression::Range(_) => Err("cvar_assign cannot assign to Range".to_string()),
-                ast::RangeOrExpression::Expression(e) => Ok(cvmsaccs.push(CVMSAcc::Sel(self.const_usize_r_(e)?))),
+                ast::RangeOrExpression::Expression(e) => Ok(cvmsaccs.push(CVMSAcc::Sel(self.const_usize_impl_::<true>(e)?))),
             },
             ast::AssigneeAccess::Member(a) => Ok(cvmsaccs.push(CVMSAcc::Mem(&a.id.value))),
         })?;
@@ -1287,7 +1145,7 @@ impl<'ast> ZGen<'ast> {
 
     fn cvar_declare_init(&self, name: String, ty: &Ty, val: T) -> Result<(), String> {
         assert!(!self.cvars_stack.borrow().last().unwrap().is_empty());
-        if val.type_() != *ty {
+        if &val.type_() != ty {
             Err(format!("Const decl_init: {} type mismatch: expected {}, got {}", name, ty, val.type_()))?;
         }
         self.cvars_stack
@@ -1312,9 +1170,10 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn ret_ty_stack_push<const IS_CNST: bool>(&self, fn_def: &ast::FunctionDefinition<'ast>) {
-        let ty = fn_def.returns.first().map(|ty| self.type_impl_::<IS_CNST>(ty)).unwrap_or(Ty::Bool);
+    fn ret_ty_stack_push<const IS_CNST: bool>(&self, fn_def: &ast::FunctionDefinition<'ast>) -> Result<(), String> {
+        let ty = fn_def.returns.first().map(|ty| self.type_impl_::<IS_CNST>(ty)).transpose()?.unwrap_or(Ty::Bool);
         self.ret_ty_stack.borrow_mut().push(ty);
+        Ok(())
     }
 
     fn ret_ty_stack_pop(&self) {
@@ -1350,7 +1209,7 @@ impl<'ast> ZGen<'ast> {
         let mut v = ZConstLiteralRewriter::new(None);
         v.visit_type(&mut c.ty)
             .unwrap_or_else(|e| self.err(e.0, &c.span));
-        let ctype = self.const_type_(&c.ty);
+        let ctype = self.unwrap(self.type_impl_::<true>(&c.ty), type_span(&c.ty));
         // handle literal type inference using declared type
         v.replace(Some(ctype.clone()));
         v.visit_expression(&mut c.expression)
@@ -1358,7 +1217,7 @@ impl<'ast> ZGen<'ast> {
 
         // evaluate the expression and check the resulting type
         let value = self
-            .const_expr_(&c.expression)
+            .expr_impl_::<true>(&c.expression)
             .unwrap_or_else(|e| self.err(e, c.expression.span()));
         if ctype != value.type_() {
             self.err(format!("Type mismatch in constant definition: expected {:?}, got {:?}", ctype, value.type_()), &c.span);
@@ -1377,16 +1236,15 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn type_(&self, t: &ast::Type<'ast>) -> Ty {
-        debug!("Type: {:?}", t);
-        self.type_impl_::<false>(t)
+        self.unwrap(self.type_impl_::<false>(t), type_span(t))
     }
 
-    fn const_type_(&self, t: &ast::Type<'ast>) -> Ty {
-        debug!("Const type: {:?}", t);
-        self.type_impl_::<true>(t)
-    }
-
-    fn type_impl_<const IS_CNST: bool>(&self, t: &ast::Type<'ast>) -> Ty {
+    fn type_impl_<const IS_CNST: bool>(&self, t: &ast::Type<'ast>) -> Result<Ty, String> {
+        if IS_CNST {
+            debug!("Const type: {:?}", t);
+        } else {
+            debug!("Type: {:?}", t);
+        }
         fn lift<'ast>(t: &ast::BasicOrStructType<'ast>) -> ast::Type<'ast> {
             match t {
                 ast::BasicOrStructType::Basic(b) => ast::Type::Basic(b.clone()),
@@ -1394,37 +1252,38 @@ impl<'ast> ZGen<'ast> {
             }
         }
         match t {
-            ast::Type::Basic(ast::BasicType::U8(_)) => Ty::Uint(8),
-            ast::Type::Basic(ast::BasicType::U16(_)) => Ty::Uint(16),
-            ast::Type::Basic(ast::BasicType::U32(_)) => Ty::Uint(32),
-            ast::Type::Basic(ast::BasicType::U64(_)) => Ty::Uint(64),
-            ast::Type::Basic(ast::BasicType::Boolean(_)) => Ty::Bool,
-            ast::Type::Basic(ast::BasicType::Field(_)) => Ty::Field,
+            ast::Type::Basic(ast::BasicType::U8(_)) => Ok(Ty::Uint(8)),
+            ast::Type::Basic(ast::BasicType::U16(_)) => Ok(Ty::Uint(16)),
+            ast::Type::Basic(ast::BasicType::U32(_)) => Ok(Ty::Uint(32)),
+            ast::Type::Basic(ast::BasicType::U64(_)) => Ok(Ty::Uint(64)),
+            ast::Type::Basic(ast::BasicType::Boolean(_)) => Ok(Ty::Bool),
+            ast::Type::Basic(ast::BasicType::Field(_)) => Ok(Ty::Field),
             ast::Type::Array(a) => {
                 let b = self.type_impl_::<IS_CNST>(&lift(&a.ty));
-                let f = if IS_CNST { Self::const_usize_ } else { Self::const_usize };
                 a.dimensions
                     .iter()
                     .rev()
-                    .map(|d| f(self, d))
-                    .fold(b, |b, d| Ty::Array(d as usize, Box::new(b)))
+                    .map(|d| self.const_usize_impl_::<IS_CNST>(d))
+                    .fold(b, |b, d| Ok(Ty::Array(d?, Box::new(b?))))
             }
             ast::Type::Struct(s) => {
-                let sdef = self.get_struct(&s.id.value).unwrap_or_else(||
-                    self.err(format!("No such struct {}", &s.id.value), &s.span)
-                ).clone();
+                let sdef = self.get_struct(&s.id.value)
+                    .ok_or_else(|| format!("No such struct {}", &s.id.value))?
+                    .clone();
                 let g_len = sdef.generics.len();
                 let generics = self.explicit_generic_values(s.explicit_generics.as_ref(), sdef.generics);
                 if generics.len() != g_len {
-                    self.err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value), &s.span);
+                    Err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value))?;
                 }
                 self.generics_stack_push(generics);
                 let ty = Ty::Struct(
                     s.id.value.clone(),
-                    sdef.fields.into_iter().map(|f| (f.id.value, self.type_impl_::<IS_CNST>(&f.ty))).collect()
+                    sdef.fields.into_iter()
+                        .map::<Result<_,String>,_>(|f| Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?)))
+                        .collect::<Result<BTreeMap<_,_>, _>>()?
                 );
                 self.generics_stack_pop();
-                ty
+                Ok(ty)
             }
         }
     }
@@ -1724,4 +1583,21 @@ fn span_to_string(span: &ast::Span) -> String {
 enum CVMSAcc<'t> {
     Sel(usize),
     Mem(&'t str),
+}
+
+fn type_span<'ast, 'a>(ty: &'a ast::Type<'ast>) -> &'a ast::Span<'ast> {
+    use ast::Type::*;
+    use ast::BasicType::*;
+    match ty {
+        Array(a) => &a.span,
+        Struct(s) => &s.span,
+        Basic(b) => match b {
+            Field(f) => &f.span,
+            Boolean(b) => &b.span,
+            U8(u) => &u.span,
+            U16(u) => &u.span,
+            U32(u) => &u.span,
+            U64(u) => &u.span,
+        }
+    }
 }
