@@ -25,7 +25,7 @@ impl T {
     /// Create a new term, checking that the explicit type and IR type agree.
     pub fn new(ir: Term, ty: Ty) -> Self {
         let ir_ty = check(&ir);
-        let res = Self { ir, ty: ty.clone() };
+        let res = Self { ir, ty };
         Self::check_ty(&ir_ty, &res.ty);
         res
     }
@@ -43,7 +43,7 @@ impl T {
     #[track_caller]
     pub fn as_bool(&self) -> Term {
         match &self.ty {
-            &Ty::Bool => self.ir.clone(),
+            Ty::Bool => self.ir.clone(),
             _ => panic!("{} is not a bool", self),
         }
     }
@@ -395,7 +395,7 @@ impl Embeddable for Datalog {
                             &*inner_ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility.clone(),
+                            visibility,
                         )
                     })
                     .enumerate()
@@ -409,10 +409,7 @@ impl Embeddable for Datalog {
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         if t.ty == f.ty {
-            T::new(
-                term![Op::Ite; cond.clone(), t.ir.clone(), f.ir.clone()],
-                t.ty.clone(),
-            )
+            T::new(term![Op::Ite; cond, t.ir, f.ir], t.ty)
         } else {
             panic!("Cannot ITE {} and {}", t, f)
         }
@@ -441,6 +438,12 @@ impl Embeddable for Datalog {
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
         ty.default()
+    }
+}
+
+impl Default for Datalog {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

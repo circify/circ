@@ -41,7 +41,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         Op::BvConcat => t
             .cs
             .iter()
-            .map(|c| check_raw(c))
+            .map(check_raw)
             .try_fold(
                 Ok(0),
                 |l: Result<usize, TypeErrorReason>,
@@ -88,9 +88,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         Op::Select => array_or(&check_raw(&t.cs[0])?, "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(check_raw(&t.cs[0])?),
         Op::Tuple => Ok(Sort::Tuple(
-            t.cs.iter()
-                .map(|c| check_raw(c))
-                .collect::<Result<Vec<_>, _>>()?,
+            t.cs.iter().map(check_raw).collect::<Result<Vec<_>, _>>()?,
         )),
         Op::Field(i) => {
             let sort = check_raw(&t.cs[0])?;
@@ -127,20 +125,17 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
         let mut term_tys = TERM_TYPES.write().unwrap();
         // to_check is a stack of (node, cs checked) pairs.
         let mut to_check = vec![(t.clone(), false)];
-        while to_check.len() > 0 {
+        while !to_check.is_empty() {
             let back = to_check.last_mut().unwrap();
             let weak = back.0.to_weak();
             // The idea here is to check that
-            match term_tys.get_key_value(&weak) {
-                Some((p, _)) => {
-                    if p.to_hconsed().is_some() {
-                        to_check.pop();
-                        continue;
-                    } else {
-                        term_tys.remove(&weak);
-                    }
+            if let Some((p, _)) = term_tys.get_key_value(&weak) {
+                if p.to_hconsed().is_some() {
+                    to_check.pop();
+                    continue;
+                } else {
+                    term_tys.remove(&weak);
                 }
-                None => {}
             }
             if !back.1 {
                 back.1 = true;
@@ -173,7 +168,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     }
                     (Op::BvNaryOp(_), a) => {
                         let ctx = "bv nary op";
-                        all_eq_or(a.into_iter().cloned(), ctx)
+                        all_eq_or(a.iter().cloned(), ctx)
                             .and_then(|t| bv_or(t, ctx))
                             .map(|a| a.clone())
                     }
@@ -207,7 +202,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     }
                     (Op::BoolNaryOp(_), a) => {
                         let ctx = "bool nary op";
-                        all_eq_or(a.into_iter().cloned(), ctx)
+                        all_eq_or(a.iter().cloned(), ctx)
                             .and_then(|t| bool_or(t, ctx))
                             .map(|a| a.clone())
                     }
@@ -252,7 +247,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     (Op::FpToFp(32), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F32),
                     (Op::PfNaryOp(_), a) => {
                         let ctx = "pf nary op";
-                        all_eq_or(a.into_iter().cloned(), ctx)
+                        all_eq_or(a.iter().cloned(), ctx)
                             .and_then(|t| pf_or(t, ctx))
                             .map(|a| a.clone())
                     }
@@ -264,9 +259,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
                         .and_then(|_| eq_or(v, b, "store"))
                         .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
-                    (Op::Tuple, a) => {
-                        Ok(Sort::Tuple(a.into_iter().map(|a| (*a).clone()).collect()))
-                    }
+                    (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
                     (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
                         if i < &t.len() {
                             Ok(t[*i].clone())
@@ -288,7 +281,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                             )))
                         }
                     }),
-                    (_, _) => Err(TypeErrorReason::Custom(format!("other"))),
+                    (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
                 })
                 .map_err(|reason| TypeError {
                     op: back.0.op.clone(),
@@ -357,7 +350,7 @@ fn array_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<(&'a Sort, &'a Sort), 
 }
 
 fn bool_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason> {
-    if let &Sort::Bool = a {
+    if let Sort::Bool = a {
         Ok(a)
     } else {
         Err(TypeErrorReason::ExpectedBool(a.clone(), ctx))

@@ -24,7 +24,7 @@ struct SmtDisp<'a, T>(pub &'a T);
 impl<'a, T: Expr2Smt<()> + 'a> Display for SmtDisp<'a, T> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut s = Vec::new();
-        <T as Expr2Smt<()>>::expr_to_smt2(&self.0, &mut s, ()).unwrap();
+        <T as Expr2Smt<()>>::expr_to_smt2(self.0, &mut s, ()).unwrap();
         write!(f, "{}", std::str::from_utf8(&s).unwrap())?;
         Ok(())
     }
@@ -34,7 +34,7 @@ struct SmtSortDisp<'a, T>(pub &'a T);
 impl<'a, T: Sort2Smt + 'a> Display for SmtSortDisp<'a, T> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut s = Vec::new();
-        <T as Sort2Smt>::sort_to_smt2(&self.0, &mut s).unwrap();
+        <T as Sort2Smt>::sort_to_smt2(self.0, &mut s).unwrap();
         write!(f, "{}", std::str::from_utf8(&s).unwrap())?;
         Ok(())
     }

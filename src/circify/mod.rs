@@ -267,7 +267,8 @@ impl<Ty: Display> FnFrame<Ty> {
     }
     fn enter_condition(&mut self, condition: Term) -> Result<()> {
         if check(&condition) == Sort::Bool {
-            Ok(self.stack.push(StateEntry::Cond(condition)))
+            self.stack.push(StateEntry::Cond(condition));
+            Ok(())
         } else {
             Err(CircError::NotBool(condition))
         }
@@ -313,7 +314,7 @@ impl<Ty: Display> FnFrame<Ty> {
                 StateEntry::Cond(c) => break_if.push(c.clone()),
                 StateEntry::Break(name_, ref mut break_conds) => {
                     if name_ == name {
-                        break_conds.push(if break_if.len() == 0 {
+                        break_conds.push(if break_if.is_empty() {
                             leaf_term(Op::Const(Value::Bool(true)))
                         } else {
                             term(Op::BoolNaryOp(BoolNaryOp::And), break_if)
@@ -394,6 +395,8 @@ pub trait Embeddable {
 
     /// Create a new term for the default return value of a function returning type `ty`.
     /// The name `ssa_name` is globally unique, and can be used if needed.
+    // Because the type alias may change.
+    #[allow(clippy::ptr_arg)]
     fn initialize_return(&self, ty: &Self::Ty, ssa_name: &SsaName) -> Self::T;
 }
 
@@ -450,9 +453,9 @@ impl<E: Embeddable> Circify<E> {
     /// Initialize environment entry binding `name` to `ty`.
     fn declare_env_name(&mut self, name: VarName, ty: &E::Ty) -> Result<&SsaName> {
         if let Some(back) = self.fn_stack.last_mut() {
-            back.declare(name.clone(), ty.clone())
+            back.declare(name, ty.clone())
         } else {
-            self.globals.declare(name.clone(), ty.clone())
+            self.globals.declare(name, ty.clone())
         }
     }
 
@@ -484,19 +487,18 @@ impl<E: Embeddable> Circify<E> {
     /// Returns `None` if it's in the global scope.
     /// Returns `Some` if it's in a local scope.
     /// Errors if the name cannot be found.
+    // Because the type alias may change.
+    #[allow(clippy::ptr_arg)]
     fn mk_abs(&self, name: &VarName) -> Result<Option<ScopeIdx>> {
         if let Some(fn_) = self.fn_stack.last() {
             for (lex_i, e) in fn_.stack.iter().enumerate().rev() {
-                match e {
-                    StateEntry::Lex(l) => {
-                        if l.has_name(name) {
-                            return Ok(Some(ScopeIdx {
-                                lex: lex_i,
-                                fn_: self.fn_stack.len() - 1,
-                            }));
-                        }
+                if let StateEntry::Lex(l) = e {
+                    if l.has_name(name) {
+                        return Ok(Some(ScopeIdx {
+                            lex: lex_i,
+                            fn_: self.fn_stack.len() - 1,
+                        }));
                     }
-                    _ => {}
                 }
             }
         }
@@ -551,7 +553,7 @@ impl<E: Embeddable> Circify<E> {
     ///
     /// If `public`, then make it a public (fixed) rather than private (existential) circuit input.
     pub fn declare_init(&mut self, name: VarName, ty: E::Ty, val: Val<E::T>) -> Result<Val<E::T>> {
-        let ssa_name = self.declare_env_name(name.clone(), &ty)?.clone();
+        let ssa_name = self.declare_env_name(name, &ty)?.clone();
         // TODO: add language-specific coersion here if needed
         assert!(self.vals.insert(ssa_name, val.clone()).is_none());
         Ok(val)
@@ -566,7 +568,7 @@ impl<E: Embeddable> Circify<E> {
         ty: &E::Ty,
         visiblity: Option<PartyId>,
     ) {
-        self.e.assign(&mut self.cir_ctx, &ty, name, term, visiblity);
+        self.e.assign(&mut self.cir_ctx, ty, name, term, visiblity);
     }
 
     /// Assign `loc` in the current scope to `val`.
@@ -669,7 +671,7 @@ impl<E: Embeddable> Circify<E> {
     pub fn condition(&self) -> Term {
         // TODO:  more precise conditions, depending on lex scopes.
         let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions()).collect();
-        if cs.len() == 0 {
+        if cs.is_empty() {
             leaf_term(Op::Const(Value::Bool(true)))
         } else {
             term(Op::BoolNaryOp(BoolNaryOp::And), cs)
@@ -748,7 +750,7 @@ impl<E: Embeddable> Circify<E> {
         self.vals
             .get(l.get_name(&loc.name)?)
             .cloned()
-            .ok_or_else(|| CircError::InvalidLoc(loc))
+            .ok_or(CircError::InvalidLoc(loc))
     }
 
     /// Dereference a reference into a location.
@@ -762,6 +764,8 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Create a reference to a variable.
+    // Because the type alias may change.
+    #[allow(clippy::ptr_arg)]
     pub fn ref_(&self, name: &VarName) -> Result<Val<E::T>> {
         let idx = self.mk_abs(name)?;
         Ok(Val::Ref(Loc {

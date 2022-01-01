@@ -68,7 +68,7 @@ impl TupleTree {
     fn flatten(&self) -> impl Iterator<Item = Term> {
         let mut out = Vec::new();
         fn rec_unroll_into(t: &Term, out: &mut Vec<Term>) {
-            if &t.op == &Op::Tuple {
+            if t.op == Op::Tuple {
                 for c in &t.cs {
                     rec_unroll_into(c, out);
                 }
@@ -81,7 +81,7 @@ impl TupleTree {
     }
     fn structure(&self, flattened: impl IntoIterator<Item = Term>) -> Self {
         fn term_structure(t: &Term, iter: &mut impl Iterator<Item = Term>) -> Term {
-            if &t.op == &Op::Tuple {
+            if t.op == Op::Tuple {
                 term(
                     Op::Tuple,
                     t.cs.iter().map(|c| term_structure(c, iter)).collect(),
@@ -94,9 +94,9 @@ impl TupleTree {
     }
     fn well_formed(&self) -> bool {
         for t in PostOrderIter::new(self.0.clone()) {
-            if &t.op != &Op::Tuple {
+            if t.op != Op::Tuple {
                 for c in &t.cs {
-                    if &c.op == &Op::Tuple {
+                    if c.op == Op::Tuple {
                         return false;
                     }
                 }
@@ -267,11 +267,9 @@ impl RewritePass for TupleLifter {
     }
 }
 
+#[allow(dead_code)]
 fn tuple_free(t: Term) -> bool {
-    !PostOrderIter::new(t).any(|c| match check(&c) {
-        Sort::Tuple(_) => true,
-        _ => false,
-    })
+    PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
 }
 
 /// Run the tuple elimination pass.

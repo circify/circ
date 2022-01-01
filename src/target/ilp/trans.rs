@@ -2,6 +2,9 @@
 //!
 //!
 
+// Needed until https://github.com/rust-lang/rust-clippy/pull/8183 is resolved.
+#![allow(clippy::identity_op)]
+
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use crate::target::ilp::Ilp;
@@ -115,8 +118,8 @@ impl ToMilp {
         let mut bounds = Vec::new();
         for x in xs {
             n += 1;
-            sum = sum + x;
-            bounds.push(r.clone() - x << 0);
+            sum += x;
+            bounds.push((r.clone() - x) << 0);
         }
         assert!(n >= 1);
         self.ilp.new_constraint(sum << (n as i32 - 1));
@@ -172,8 +175,8 @@ impl ToMilp {
                 self.bits_are_equal(&a, &b)
             }
             Sort::BitVector(n) => {
-                let a = self.get_bv_uint(a).clone();
-                let b = self.get_bv_uint(b).clone();
+                let a = self.get_bv_uint(a);
+                let b = self.get_bv_uint(b);
                 self.bv_cmp_eq(&a, &b, n)
             }
             s => panic!("Unimplemented sort for Eq: {:?}", s),
@@ -259,18 +262,18 @@ impl ToMilp {
                     }
                     Op::Ite => {
                         let c = self.get_bool(&bv.cs[0]).clone();
-                        let t = self.get_bv_uint(&bv.cs[1]).clone();
-                        let f = self.get_bv_uint(&bv.cs[2]).clone();
+                        let t = self.get_bv_uint(&bv.cs[1]);
+                        let f = self.get_bv_uint(&bv.cs[2]);
                         let ite = self.bv_ite(&c, &t, &f, n);
                         self.set_bv_uint(bv, ite, n);
                     }
                     Op::BvUnOp(BvUnOp::Not) => {
-                        let bits = self.get_bv_bits(&bv.cs[0]).clone();
+                        let bits = self.get_bv_bits(&bv.cs[0]);
                         let not_bits = bits.iter().map(|bit| self.bit_not(bit)).collect();
                         self.set_bv_bits(bv, not_bits);
                     }
                     Op::BvUnOp(BvUnOp::Neg) => {
-                        let x = self.get_bv_uint(&bv.cs[0]).clone();
+                        let x = self.get_bv_uint(&bv.cs[0]);
                         // Wrong for x == 0
                         let almost_neg_x = 2f64.powi(n as i32) - x.clone();
                         let is_zero = self.bv_cmp_eq(&x, &0.into(), n);
@@ -283,15 +286,14 @@ impl ToMilp {
                             let ext_bits = std::iter::repeat(Expression::from(0)).take(*extra_n);
                             self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
                         } else {
-                            let x = self.get_bv_uint(&bv.cs[0]).clone();
+                            let x = self.get_bv_uint(&bv.cs[0]);
                             self.set_bv_uint(bv, x, n);
                         }
                     }
                     Op::BvSext(extra_n) => {
                         let mut bits = self.get_bv_bits(&bv.cs[0]).into_iter().rev();
-                        let ext_bits =
-                            std::iter::repeat(bits.next().expect("sign ext empty").clone())
-                                .take(extra_n + 1);
+                        let ext_bits = std::iter::repeat(bits.next().expect("sign ext empty"))
+                            .take(extra_n + 1);
 
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }
@@ -307,7 +309,7 @@ impl ToMilp {
                                 .map(|c| self.get_bv_bits(c))
                                 .collect::<Vec<_>>();
                             let mut bits_bv_idx: Vec<Vec<Expression>> = Vec::new();
-                            while bits_by_bv[0].len() > 0 {
+                            while !bits_by_bv[0].is_empty() {
                                 bits_bv_idx.push(
                                     bits_by_bv.iter_mut().map(|bv| bv.pop().unwrap()).collect(),
                                 );
@@ -327,7 +329,7 @@ impl ToMilp {
                             let values = bv
                                 .cs
                                 .iter()
-                                .map(|c| self.get_bv_uint(c).clone())
+                                .map(|c| self.get_bv_uint(c))
                                 .collect::<Vec<_>>();
                             let r = match o {
                                 BvNaryOp::Add => self.bv_add(&values, n),
@@ -463,18 +465,18 @@ impl ToMilp {
         let r = self.fresh_bv("bv_ite", n_bits);
         let m = bv_modulus(n_bits);
         self.ilp
-            .new_constraint(r.clone() - a.clone() - m * (1 - s.clone()) << 0);
+            .new_constraint((r.clone() - a.clone() - m * (1 - s.clone())) << 0);
         self.ilp
-            .new_constraint(a.clone() - r.clone() - m * (1 - s.clone()) << 0);
+            .new_constraint((a.clone() - r.clone() - m * (1 - s.clone())) << 0);
         self.ilp
-            .new_constraint(r.clone() - b.clone() - m * s.clone() << 0);
+            .new_constraint((r.clone() - b.clone() - m * s.clone()) << 0);
         self.ilp
-            .new_constraint(b.clone() - r.clone() - m * s.clone() << 0);
+            .new_constraint((b.clone() - r.clone() - m * s.clone()) << 0);
         r
     }
 
     /// [Equations 7](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=915055).
-    fn bv_bin_mul<'a>(&mut self, a: &Expression, b: &Expression, n_bits: usize) -> Expression {
+    fn bv_bin_mul(&mut self, a: &Expression, b: &Expression, n_bits: usize) -> Expression {
         debug!("({:?}) * ({:?})", a, b);
         let a_bits = self.bit_decomp(a, n_bits);
         let bit_prods: Vec<_> = a_bits
@@ -512,9 +514,9 @@ impl ToMilp {
         let s = self.fresh_bit("bv_le");
         let m = bv_modulus(n_bits);
         self.ilp
-            .new_constraint(a.clone() - b.clone() - m * (1 - s.clone()) << -1);
+            .new_constraint((a.clone() - b.clone() - m * (1 - s.clone())) << -1);
         self.ilp
-            .new_constraint(a.clone() - b.clone() + m * s.clone() >> 0);
+            .new_constraint((a.clone() - b.clone() + m * s.clone()) >> 0);
         s
     }
 
@@ -531,12 +533,12 @@ impl ToMilp {
         let a = if signed {
             self.get_bv_signed_int(a)
         } else {
-            self.get_bv_uint(a).clone()
+            self.get_bv_uint(a)
         };
         let b = if signed {
             self.get_bv_signed_int(b)
         } else {
-            self.get_bv_uint(b).clone()
+            self.get_bv_uint(b)
         };
         if strict {
             self.bv_cmp_lt(&b, &a, w)
@@ -571,7 +573,7 @@ impl ToMilp {
             .get(t)
             .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
         {
-            EmbeddedTerm::Bool(b) => &b,
+            EmbeddedTerm::Bool(b) => b,
             _ => panic!("Non-bool for {:?}", t),
         }
     }
@@ -614,7 +616,7 @@ impl ToMilp {
     }
 
     fn bv_has_bits(&self, t: &Term) -> bool {
-        self.get_bv(t).borrow().bits.len() > 0
+        !self.get_bv(t).borrow().bits.is_empty()
     }
 
     fn get_bv_uint(&self, t: &Term) -> Expression {
@@ -622,14 +624,14 @@ impl ToMilp {
     }
 
     fn get_bv_signed_int(&mut self, t: &Term) -> Expression {
-        let bits = self.get_bv_bits(t).clone();
+        let bits = self.get_bv_bits(t);
         self.debitify(bits.into_iter(), true)
     }
 
     fn get_bv_bits(&mut self, t: &Term) -> Vec<Expression> {
         let entry_rc = self.get_bv(t);
         let mut entry = entry_rc.borrow_mut();
-        if entry.bits.len() == 0 {
+        if entry.bits.is_empty() {
             entry.bits = self.bit_decomp(&entry.uint, entry.width);
         }
         entry.bits.clone()
@@ -644,7 +646,7 @@ impl ToMilp {
 }
 
 fn bv_modulus(n_bits: usize) -> f64 {
-    2.0f64.powi(n_bits.try_into().unwrap()).into()
+    2.0f64.powi(n_bits.try_into().unwrap())
 }
 
 /// Convert this (IR) constraint system `cs` to an MILP.
@@ -663,7 +665,7 @@ pub fn to_ilp(cs: Computation) -> Ilp {
             converter.ilp.maximize(converter.get_bool(&opt).clone());
         }
         Sort::BitVector(_) => {
-            converter.ilp.maximize(converter.get_bv_uint(&opt).clone());
+            converter.ilp.maximize(converter.get_bv_uint(&opt));
         }
         s => panic!("Cannot optimize term of sort {}", s),
     };

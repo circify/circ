@@ -32,6 +32,12 @@ impl Debug for Ilp {
     }
 }
 
+impl Default for Ilp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ilp {
     /// Create an empty ILP
     pub fn new() -> Self {

@@ -1,6 +1,7 @@
 //! Input language front-ends
 
 pub mod datalog;
+#[allow(clippy::all)]
 pub mod zokrates;
 
 use super::ir::term::Computation;

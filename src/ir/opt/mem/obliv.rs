@@ -223,7 +223,7 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Store => {
-                if self.should_replace(&orig) {
+                if self.should_replace(orig) {
                     let mut cs = get_cs();
                     debug_assert_eq!(cs.len(), 3);
                     let k_const = get_const(&cs.remove(1));
@@ -233,7 +233,7 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Ite => {
-                if self.should_replace(&orig) {
+                if self.should_replace(orig) {
                     Some(term(Op::Ite, get_cs()))
                 } else {
                     None

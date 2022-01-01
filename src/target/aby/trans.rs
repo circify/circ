@@ -35,7 +35,7 @@ impl ToABY {
             md: metadata,
             inputs: TermMap::new(),
             cache: TermMap::new(),
-            s_map: s_map,
+            s_map,
         }
     }
 
@@ -48,7 +48,7 @@ impl ToABY {
 
     /// Parse variable name from IR representation of a variable
     fn parse_var_name(&self, full_name: String) -> String {
-        let parsed: Vec<String> = full_name.split("_").map(str::to_string).collect();
+        let parsed: Vec<String> = full_name.split('_').map(str::to_string).collect();
         if parsed.len() < 2 {
             panic!("Invalid variable name: {}", full_name);
         }
@@ -90,28 +90,26 @@ impl ToABY {
 
     fn add_cons_gate(&self, t: Term) -> String {
         let name = ToABY::get_var_name(t.clone());
-        let s_circ = self.get_sharetype_circ(t.clone());
+        let s_circ = self.get_sharetype_circ(t);
         format!(
             "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);",
             name, s_circ, name
         )
-        .to_string()
     }
 
     fn add_in_gate(&self, t: Term, role: String) -> String {
         let name = ToABY::get_var_name(t.clone());
-        let s_circ = self.get_sharetype_circ(t.clone());
+        let s_circ = self.get_sharetype_circ(t);
         format!(
             "\ts_{} = {}->PutINGate({}, bitlen, {});",
             name, s_circ, name, role
         )
-        .to_string()
     }
 
     fn add_dummy_gate(&self, t: Term) -> String {
         let name = ToABY::get_var_name(t.clone());
-        let s_circ = self.get_sharetype_circ(t.clone());
-        format!("\ts_{} = {}->PutDummyINGate(bitlen);", name, s_circ).to_string()
+        let s_circ = self.get_sharetype_circ(t);
+        format!("\ts_{} = {}->PutDummyINGate(bitlen);", name, s_circ)
     }
 
     /// Initialize private and public inputs from each party
@@ -177,13 +175,13 @@ impl ToABY {
 
     /// Return constant gate evaluating to 0
     #[allow(dead_code)]
-    fn zero() -> String {
-        format!("bcirc->PutCONSGate((uint64_t)0, (uint32_t)1)")
+    fn zero() -> &'static str {
+        "bcirc->PutCONSGate((uint64_t)0, (uint32_t)1)"
     }
 
     /// Return constant gate evaluating to 1
-    fn one() -> String {
-        format!("bcirc->PutCONSGate((uint64_t)1, (uint32_t)1)")
+    fn one() -> &'static str {
+        "bcirc->PutCONSGate((uint64_t)1, (uint32_t)1)"
     }
 
     fn remove_cons_gate(&self, circ: String) -> String {
@@ -191,7 +189,7 @@ impl ToABY {
             circ.split("PutCONSGate(")
                 .last()
                 .unwrap_or("")
-                .split(",")
+                .split(',')
                 .next()
                 .unwrap_or("")
                 .to_string()
@@ -204,8 +202,8 @@ impl ToABY {
         let s_circ = self.get_sharetype_circ(t.clone());
         match check(&a) {
             Sort::Bool => {
-                let a_circ = self.get_bool(&a).clone();
-                let b_circ = self.get_bool(&b).clone();
+                let a_circ = self.get_bool(&a);
+                let b_circ = self.get_bool(&b);
 
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
@@ -218,12 +216,12 @@ impl ToABY {
                     b_conv,
                     ToABY::one()
                 );
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
+                self.cache.insert(t, EmbeddedTerm::Bool(s.clone()));
                 s
             }
             Sort::BitVector(_) => {
-                let a_circ = self.get_bv(&a).clone();
-                let b_circ = self.get_bv(&b).clone();
+                let a_circ = self.get_bv(&a);
+                let b_circ = self.get_bv(&b);
 
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
@@ -232,7 +230,7 @@ impl ToABY {
                     "{}->PutXORGate({}->PutXORGate({}->PutGTGate({}, {}), {}->PutGTGate({}, {})), {})",
                     s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one()
                 );
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(s.clone()));
+                self.cache.insert(t, EmbeddedTerm::Bool(s.clone()));
                 s
             }
             e => panic!("Unimplemented sort for Eq: {:?}", e),
@@ -278,9 +276,9 @@ impl ToABY {
                 let _s = self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
             }
             Op::Ite => {
-                let sel_circ = self.get_bool(&t.cs[0]).clone();
-                let a_circ = self.get_bool(&t.cs[1]).clone();
-                let b_circ = self.get_bool(&t.cs[2]).clone();
+                let sel_circ = self.get_bool(&t.cs[0]);
+                let a_circ = self.get_bool(&t.cs[1]);
+                let b_circ = self.get_bool(&t.cs[2]);
 
                 let sel_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), sel_circ);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
@@ -306,8 +304,8 @@ impl ToABY {
                 );
             }
             Op::BoolNaryOp(o) => {
-                let a_circ = self.get_bool(&t.cs[0]).clone();
-                let b_circ = self.get_bool(&t.cs[1]).clone();
+                let a_circ = self.get_bool(&t.cs[0]);
+                let b_circ = self.get_bool(&t.cs[1]);
 
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), b_circ);
@@ -422,9 +420,9 @@ impl ToABY {
                 );
             }
             Op::Ite => {
-                let sel_circ = self.get_bool(&t.cs[0]).clone();
-                let a_circ = self.get_bv(&t.cs[1]).clone();
-                let b_circ = self.get_bv(&t.cs[2]).clone();
+                let sel_circ = self.get_bool(&t.cs[0]);
+                let a_circ = self.get_bv(&t.cs[1]);
+                let b_circ = self.get_bv(&t.cs[2]);
 
                 let sel_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), sel_circ);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
@@ -554,7 +552,7 @@ impl ToABY {
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self, t: Term) {
-        let circ = self.embed(t.clone());
+        let circ = self.embed(t);
         self.aby.circs.push(circ);
     }
 }

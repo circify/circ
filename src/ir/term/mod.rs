@@ -708,11 +708,17 @@ impl Display for Array {
 }
 
 impl std::cmp::Eq for Value {}
+// We walk in danger here, intentionally. One day we may fix it.
+// FP is the heart of the problem.
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl std::cmp::Ord for Value {
     fn cmp(&self, o: &Self) -> std::cmp::Ordering {
         self.partial_cmp(o).expect("broken Value cmp")
     }
 }
+// We walk in danger here, intentionally. One day we may fix it.
+// FP is the heart of the problem.
+#[allow(clippy::derive_hash_xor_eq)]
 impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
@@ -778,7 +784,7 @@ impl Sort {
     /// Unwrap the constituent sorts of this tuple, panicking otherwise.
     pub fn as_tuple(&self) -> &Vec<Sort> {
         if let Sort::Tuple(w) = self {
-            &w
+            w
         } else {
             panic!("{} is not a tuple", self)
         }
@@ -815,7 +821,7 @@ impl Sort {
                 Box::new(
                     std::iter::successors(Some(Integer::from(0)), move |p| {
                         let q = p.clone() + 1;
-                        if &q < &*m {
+                        if q < *m {
                             Some(q)
                         } else {
                             None
@@ -927,21 +933,18 @@ impl TermTable {
             if val.elm.upgrade().is_some() {
                 true
             } else {
-                to_check.extend(key.cs.iter().map(|i| i.clone()));
+                to_check.extend(key.cs.iter().cloned());
                 false
             }
         });
         while let Some(t) = to_check.pop() {
             let data: TermData = (*t).clone();
             std::mem::drop(t);
-            match self.map.entry(data) {
-                std::collections::hash_map::Entry::Occupied(e) => {
-                    if e.get().elm.upgrade().is_none() {
-                        let (key, _val) = e.remove_entry();
-                        to_check.extend(key.cs.iter().map(|i| i.clone()));
-                    }
+            if let std::collections::hash_map::Entry::Occupied(e) = self.map.entry(data) {
+                if e.get().elm.upgrade().is_none() {
+                    let (key, _val) = e.remove_entry();
+                    to_check.extend(key.cs.iter().cloned());
                 }
-                _ => {}
             }
         }
         let new_size = self.map.len();
@@ -1009,19 +1012,11 @@ impl TermData {
     }
     /// Is this a variable?
     pub fn is_var(&self) -> bool {
-        if let Op::Var(..) = &self.op {
-            true
-        } else {
-            false
-        }
+        matches!(&self.op, Op::Var(..))
     }
     /// Is this a value
     pub fn is_const(&self) -> bool {
-        if let Op::Const(..) = &self.op {
-            true
-        } else {
-            false
-        }
+        matches!(&self.op, Op::Const(..))
     }
 }
 
@@ -1085,7 +1080,7 @@ impl Value {
     /// Unwrap the constituent value of this array, panicking otherwise.
     pub fn as_array(&self) -> &Array {
         if let Value::Array(w) = self {
-            &w
+            w
         } else {
             panic!("{} is not an aray", self)
         }
@@ -1377,7 +1372,7 @@ impl std::iter::Iterator for PostOrderIter {
     type Item = Term;
     fn next(&mut self) -> Option<Term> {
         while let Some((children_pushed, t)) = self.stack.last() {
-            if self.visited.contains(&t) {
+            if self.visited.contains(t) {
                 self.stack.pop();
             } else if !children_pushed {
                 self.stack.last_mut().unwrap().0 = true;
@@ -1428,7 +1423,7 @@ impl ComputationMetadata {
             party,
             self.input_vis.get(&input_name).unwrap()
         );
-        self.input_vis.insert(input_name.clone(), party);
+        self.input_vis.insert(input_name, party);
         self.inputs.push(term);
     }
     /// Replace the `original` computation input with `new`, in the order given.
@@ -1473,10 +1468,10 @@ impl ComputationMetadata {
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        self.input_vis
+        *self
+            .input_vis
             .get(input_name)
             .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs))
-            .clone()
     }
     /// Is this input public?
     pub fn is_input(&self, input_name: &str) -> bool {
@@ -1497,6 +1492,9 @@ impl ComputationMetadata {
         })
     }
     /// Get all public inputs.
+    // I think the lint is just broken here.
+    // TODO: submit a patch
+    #[allow(clippy::needless_lifetimes)]
     pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a {
         self.inputs.iter().filter_map(move |input| {
             if let Op::Var(name, _) = &input.op {
@@ -1513,7 +1511,7 @@ impl ComputationMetadata {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
@@ -1524,16 +1522,6 @@ pub struct Computation {
     pub values: Option<FxHashMap<String, Value>>,
     /// Metadata about the computation. I.e. who knows what inputs
     pub metadata: ComputationMetadata,
-}
-
-impl std::default::Default for Computation {
-    fn default() -> Self {
-        Self {
-            outputs: Vec::new(),
-            metadata: ComputationMetadata::default(),
-            values: None,
-        }
-    }
 }
 
 impl Computation {

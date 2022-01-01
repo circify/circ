@@ -95,7 +95,7 @@ impl RewritePass for Pass {
                 party_visibility,
                 &mut new_var_reqs,
             );
-            if new_var_reqs.len() > 0 {
+            if !new_var_reqs.is_empty() {
                 computation.replace_input(orig.clone(), new_var_reqs);
             }
             Some(new)

@@ -18,8 +18,8 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                 if t.cs.len() == 2 {
                     let a = get(0);
                     let b = get(1);
-                    if &a.op == &b.op
-                        && &a.op == &BV_AND
+                    if a.op == b.op
+                        && a.op == BV_AND
                         && b.cs[0].op == BV_NOT
                         && b.cs[0].cs[0] == a.cs[0]
                     {
@@ -46,9 +46,9 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                     let c0 = get(0);
                     let c1 = get(1);
                     let c2 = get(2);
-                    if &c0.op == &c1.op
-                        && &c1.op == &c2.op
-                        && &c2.op == &BV_AND
+                    if c0.op == c1.op
+                        && c1.op == c2.op
+                        && c2.op == BV_AND
                         && c0.cs.len() == 2
                         && c1.cs.len() == 2
                         && c2.cs.len() == 2
@@ -62,7 +62,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                         {
                             debug!("SHA MAJ");
                             let items = s0.union(&s1).collect::<Vec<_>>();
-                            let w = check(&c0).as_bv();
+                            let w = check(c0).as_bv();
                             Some(term(
                                 BV_CONCAT,
                                 (0..w)
@@ -95,7 +95,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
         });
         cache.insert(t, new_t);
     }
-    cache.get(&term_).unwrap().clone()
+    cache.get(term_).unwrap().clone()
 }
 
 /// Eliminate the SHA majority operator, replacing it with ands and ors.
@@ -105,9 +105,9 @@ pub fn sha_maj_elim(term_: &Term) -> Term {
     for t in PostOrderIter::new(term_.clone()) {
         let c_get = |x: &Term| cache.get(x).unwrap();
         let get = |i: usize| c_get(&t.cs[i]);
-        let new_t = match &t.op {
+        let new_t = match t.op {
             // maj(a, b, c) = (a & b) | (b & c) | (c & a)
-            &Op::BoolMaj => {
+            Op::BoolMaj => {
                 let a = get(0);
                 let b = get(1);
                 let c = get(2);
@@ -126,7 +126,7 @@ pub fn sha_maj_elim(term_: &Term) -> Term {
         });
         cache.insert(t, new_t);
     }
-    cache.get(&term_).unwrap().clone()
+    cache.get(term_).unwrap().clone()
 }
 
 #[cfg(test)]

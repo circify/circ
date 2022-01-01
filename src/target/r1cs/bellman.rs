@@ -39,7 +39,7 @@ fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
     for (v, c) in &lc.monomials {
         // ditto
         if c != &0 {
-            lc_bellman = lc_bellman + (int_to_ff(c), vars.get(v).unwrap().clone());
+            lc_bellman = lc_bellman + (int_to_ff(c), *vars.get(v).unwrap());
         }
     }
     lc_bellman
@@ -49,7 +49,7 @@ fn modulus_as_int<F: PrimeFieldBits>() -> Integer {
     let mut bits = F::char_le_bits().to_bitvec();
     let mut acc = Integer::from(0);
     while let Some(b) = bits.pop() {
-        acc = acc << 1;
+        acc <<= 1;
         acc += b as u8;
     }
     acc
@@ -133,7 +133,7 @@ pub fn parse_instance<P: AsRef<Path>, F: PrimeField>(path: P) -> Vec<F> {
     f.lines()
         .map(|line| {
             let s = line.unwrap();
-            let i = Integer::from_str(&s.trim()).unwrap();
+            let i = Integer::from_str(s.trim()).unwrap();
             int_to_ff(&i)
         })
         .collect()

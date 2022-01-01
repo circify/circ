@@ -229,7 +229,7 @@ pub mod ast {
             match self {
                 Expression::Binary(b) => &b.span,
                 Expression::Identifier(i) => &i.span,
-                Expression::Literal(c) => &c.span(),
+                Expression::Literal(c) => c.span(),
                 Expression::Unary(u) => &u.span,
                 Expression::Call(u) => &u.span,
                 Expression::Access(u) => &u.span,
@@ -530,7 +530,7 @@ pub mod ast {
 }
 
 pub fn parse(file_string: &str) -> Result<ast::Program, Error<Rule>> {
-    let mut pest_pairs = MyParser::parse(Rule::program, &file_string)?;
+    let mut pest_pairs = MyParser::parse(Rule::program, file_string)?;
     use from_pest::FromPest;
     Ok(ast::Program::from_pest(&mut pest_pairs).expect("bug in AST construction"))
 }
