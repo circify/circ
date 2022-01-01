@@ -409,10 +409,7 @@ impl Embeddable for Datalog {
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         if t.ty == f.ty {
-            T::new(
-                term![Op::Ite; cond, t.ir, f.ir],
-                t.ty,
-            )
+            T::new(term![Op::Ite; cond, t.ir, f.ir], t.ty)
         } else {
             panic!("Cannot ITE {} and {}", t, f)
         }

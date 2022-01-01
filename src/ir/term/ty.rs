@@ -259,9 +259,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
                         .and_then(|_| eq_or(v, b, "store"))
                         .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
-                    (Op::Tuple, a) => {
-                        Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect()))
-                    }
+                    (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
                     (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
                         if i < &t.len() {
                             Ok(t[*i].clone())

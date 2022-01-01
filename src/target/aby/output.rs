@@ -78,8 +78,7 @@ fn write_test_file(filename: &str) {
         filename, filename
     );
 
-    fs::write(&path, template.replace("{fn}", filename))
-        .expect("Failed to write to test file");
+    fs::write(&path, template.replace("{fn}", filename)).expect("Failed to write to test file");
 }
 
 /// Using the h_template.txt, write the .h file for the new test case
@@ -91,8 +90,7 @@ fn write_h_file(filename: &str) {
         filename, filename
     );
 
-    fs::write(&path, template.replace("{fn}", &*filename))
-        .expect("Failed to write to h file");
+    fs::write(&path, template.replace("{fn}", &*filename)).expect("Failed to write to h file");
 }
 
 /// Using the cpp_template.txt, write the .cpp file for the new test case

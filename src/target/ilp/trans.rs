@@ -292,9 +292,8 @@ impl ToMilp {
                     }
                     Op::BvSext(extra_n) => {
                         let mut bits = self.get_bv_bits(&bv.cs[0]).into_iter().rev();
-                        let ext_bits =
-                            std::iter::repeat(bits.next().expect("sign ext empty"))
-                                .take(extra_n + 1);
+                        let ext_bits = std::iter::repeat(bits.next().expect("sign ext empty"))
+                            .take(extra_n + 1);
 
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }

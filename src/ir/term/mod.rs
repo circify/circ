@@ -1468,7 +1468,8 @@ impl ComputationMetadata {
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        *self.input_vis
+        *self
+            .input_vis
             .get(input_name)
             .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs))
     }
