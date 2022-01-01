@@ -2,225 +2,268 @@
 //!
 //! Elimates tuple-related terms.
 //!
-//! The idea is to do a bottom-up pass mapping all terms to tuple-free trees of terms.
+//! The idea is to do a bottom-up pass, in which all tuple's are lift to the top level, and then
+//! then removed.
 //!
-//!    * Tuple variables are suffixed. `x: (bool, bool)` becomes `x.0: bool, x.1: bool`.
-//!    * Tuple constants are replaced with trees
-//!    * Tuple constructors make trees
-//!    * Tuple accesses open up trees
-//!    * Tuple ITEs yield trees of ITEs
-//!    * Tuple EQs yield conjunctions of EQs
+//! ## Phase 1
+//!
+//! Phase 1 (lifting tuples) is defined by the following big-step rewrites.
+//!
+//! Notational conventions:
+//! * lowercase letters are used to match sorts/terms before rewriting.
+//! * uppercase letters denote their (big-step) rewritten counterparts.
+//! * () denote AST structure
+//! * [] denote repeated structures, i.e. like var-args.
+//! * `f(x, *)` denotes a partial application of `f`, i.e. the function that sends `y` to `f(x,y)`.
+//! * In the results of rewriting we often have terms which are tuples at the top-level. I.e. their
+//!   sort contains no tuple sort that is not the child of a tuple sort. Similarly, the terms are
+//!   tuples at the top-level: no field or update operators are present, and the only tuple
+//!   operators are the children of other tuple operators.
+//!   * Such sorts/terms can be viewed as structured collections of non-tuple elements, i.e., as
+//!     functors whose pure elements are non-tuples.
+//!   * The `map`, `bimap`, and `list` functions apply to those functors.
+//!     * i.e., `map f (tuple x tuple y z))` is `(tuple (f x) (tuple (f y) (f z)))`.
+//!     * i.e., `list (tuple x tuple y z))` is `(x y z)`
+//!
+//! Assumptions:
+//! * We assume that array keys are of scalar sort
+//! * We assume that variables are of scalar sort. See [super::scalarize_vars].
+//! * We *do not* describe the pass as applied to constant values. That part of the pass is
+//!   entirely analagous to terms.
+//!
+//! Sort rewrites:
+//! * `(tuple [t_i]_i) -> (tuple [T_i]_i)`
+//! * `(array k t) -> map (array k *) T
+//!
+//! Term rewrites:
+//! * `(ite c t f) -> bimap (ite C * *) T F`
+//! * `(eq c t f) -> (and (list (bimap (= * *) T F)))`
+//! * `(tuple [t_i]_i) -> (tuple [T_i]_i)`
+//! * `(field_j t) -> get T j`
+//! * `(update_j t) -> update T j V`
+//! * `(select a i) -> map (select * I) A`
+//! * `(store a i v) -> bimap (store * I *) A V`
+//! * `(OTHER [t_i]_i) -> (OTHER [T_i]_i)`
+//! * constants: *omitted*
+//!
+//! The result of this phase is a computation whose only tuple-terms are at the top of the
+//! computation graph
+//!
+//! ## Phase 2
+//!
+//! We replace each output `t` with the sequence of outputs `(list T)`.
 
-use std::rc::Rc;
-
+use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::{
-    check, leaf_term, term, BoolNaryOp, Computation, Op, PartyId, PostOrderIter, Sort, Term,
-    TermMap, Value,
+    check, extras, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, Value, AND,
 };
+use std::collections::BTreeMap;
 
-type Tree = Rc<TreeData>;
+use itertools::zip_eq;
 
-#[derive(Clone, Debug)]
-enum TreeData {
-    Leaf(Term),
-    Tuple(Vec<Tree>),
-}
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct TupleTree(Term);
 
-impl TreeData {
-    fn unwrap_leaf(&self) -> &Term {
-        match self {
-            TreeData::Leaf(l) => l,
-            d => panic!("expected leaf, got {:?}", d),
-        }
-    }
-    fn unwrap_tuple(&self) -> &Vec<Tree> {
-        match self {
-            TreeData::Tuple(l) => l,
-            d => panic!("expected tuple, got {:?}", d),
-        }
-    }
-    fn unfold_tuple_into(&self, terms: &mut Vec<Term>) {
-        match self {
-            TreeData::Leaf(l) => terms.push(l.clone()),
-            TreeData::Tuple(l) => l.iter().for_each(|x| x.unfold_tuple_into(terms)),
-        }
-    }
-    fn unfold_tuple(&self) -> Vec<Term> {
-        let mut terms = Vec::new();
-        self.unfold_tuple_into(&mut terms);
-        terms
-    }
-    fn from_value(v: Value) -> TreeData {
-        match v {
-            Value::Tuple(vs) => {
-                TreeData::Tuple(vs.into_iter().map(Self::from_value).map(Rc::new).collect())
+impl TupleTree {
+    fn flatten(&self) -> impl Iterator<Item = Term> {
+        let mut out = Vec::new();
+        fn rec_unroll_into(t: &Term, out: &mut Vec<Term>) {
+            if &t.op == &Op::Tuple {
+                for c in &t.cs {
+                    rec_unroll_into(c, out);
+                }
+            } else {
+                out.push(t.clone());
             }
-            v => TreeData::Leaf(leaf_term(Op::Const(v))),
         }
+        rec_unroll_into(&self.0, &mut out);
+        out.into_iter()
+    }
+    fn structure(&self, flattened: impl IntoIterator<Item = Term>) -> Self {
+        fn term_structure(t: &Term, iter: &mut impl Iterator<Item = Term>) -> Term {
+            if &t.op == &Op::Tuple {
+                term(
+                    Op::Tuple,
+                    t.cs.iter().map(|c| term_structure(c, iter)).collect(),
+                )
+            } else {
+                iter.next().expect("bad structure")
+            }
+        }
+        Self(term_structure(&self.0, &mut flattened.into_iter()))
+    }
+    fn well_formed(&self) -> bool {
+        for t in PostOrderIter::new(self.0.clone()) {
+            if &t.op != &Op::Tuple {
+                for c in &t.cs {
+                    if &c.op == &Op::Tuple {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+    #[allow(dead_code)]
+    fn assert_well_formed(&self) {
+        assert!(
+            self.well_formed(),
+            "The following is not a well-formed tuple tree {}",
+            extras::Letified(self.0.clone())
+        );
+    }
+    fn map(&self, f: impl FnMut(Term) -> Term) -> Self {
+        self.structure(self.flatten().map(f))
+    }
+    fn bimap(&self, mut f: impl FnMut(Term, Term) -> Term, other: &Self) -> Self {
+        self.structure(itertools::zip_eq(self.flatten(), other.flatten()).map(|(a, b)| f(a, b)))
+    }
+    fn get(&self, i: usize) -> Self {
+        assert_eq!(&self.0.op, &Op::Tuple);
+        assert!(i < self.0.cs.len());
+        Self(self.0.cs[i].clone())
+    }
+    fn update(&self, i: usize, v: &Term) -> Self {
+        assert_eq!(&self.0.op, &Op::Tuple);
+        assert!(i < self.0.cs.len());
+        let mut cs = self.0.cs.clone();
+        cs[i] = v.clone();
+        Self(term(Op::Tuple, cs))
     }
 }
 
-fn restructure(sort: &Sort, items: &mut impl Iterator<Item = Term>) -> Tree {
-    if let Sort::Tuple(sorts) = sort {
-        Rc::new(TreeData::Tuple(
-            sorts.iter().map(|c| restructure(c, items)).collect(),
-        ))
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct ValueTupleTree(Value);
+
+impl ValueTupleTree {
+    fn flatten(&self) -> Vec<Value> {
+        let mut out = Vec::new();
+        fn rec_unroll_into(t: &Value, out: &mut Vec<Value>) {
+            match t {
+                Value::Tuple(vs) => {
+                    for c in vs {
+                        rec_unroll_into(c, out);
+                    }
+                }
+                _ => out.push(t.clone()),
+            }
+        }
+        rec_unroll_into(&self.0, &mut out);
+        out
+    }
+    fn structure(&self, flattened: impl IntoIterator<Item = Value>) -> Self {
+        fn term_structure(t: &Value, iter: &mut impl Iterator<Item = Value>) -> Value {
+            match t {
+                Value::Tuple(vs) => {
+                    Value::Tuple(vs.iter().map(|c| term_structure(c, iter)).collect())
+                }
+                _ => iter.next().expect("bad structure"),
+            }
+        }
+        Self(term_structure(&self.0, &mut flattened.into_iter()))
+    }
+}
+
+fn termify_val_tuples(v: Value) -> Term {
+    if let Value::Tuple(vs) = v {
+        term(Op::Tuple, vs.into_iter().map(termify_val_tuples).collect())
     } else {
-        Rc::new(TreeData::Leaf(
-            items
-                .next()
-                .unwrap_or_else(|| panic!("No term when building {}", sort)),
-        ))
+        leaf_term(Op::Const(v))
     }
 }
 
-struct Pass {
-    map: TermMap<Tree>,
-    cs: Computation,
-}
-
-impl Pass {
-    fn new(cs: Computation) -> Self {
-        Self {
-            map: TermMap::new(),
-            cs,
+fn untuple_value(v: &Value) -> Value {
+    match v {
+        Value::Tuple(xs) => Value::Tuple(xs.iter().map(untuple_value).collect()),
+        Value::Array(Array {
+            key_sort,
+            default,
+            map,
+            size,
+        }) => {
+            let def = untuple_value(default);
+            let flat_def = ValueTupleTree(def.clone()).flatten();
+            let mut map: BTreeMap<_, _> = map
+                .iter()
+                .map(|(k, v)| (k, ValueTupleTree(untuple_value(v)).flatten()))
+                .collect();
+            let mut flat_out: Vec<Value> = flat_def
+                .into_iter()
+                .rev()
+                .map(|d| {
+                    let mut submap: BTreeMap<Value, Value> = BTreeMap::new();
+                    for (k, v) in &mut map {
+                        submap.insert((**k).clone(), v.pop().unwrap());
+                    }
+                    Value::Array(Array::new(key_sort.clone(), Box::new(d), submap, *size))
+                })
+                .collect();
+            flat_out.reverse();
+            ValueTupleTree(def).structure(flat_out).0
         }
+        _ => v.clone(),
     }
+}
 
-    #[track_caller]
-    fn get_tree(&self, t: &Term) -> &Tree {
-        self.map
-            .get(t)
-            .unwrap_or_else(|| panic!("missing tree for term: {} in {:?}", t, self.map))
-    }
+struct TupleLifter;
 
-    fn create_vars(
+impl RewritePass for TupleLifter {
+    fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
-        prefix: &str,
-        sort: &Sort,
-        value: Option<Value>,
-        party: Option<PartyId>,
-    ) -> Tree {
-        match sort {
-            Sort::Tuple(sorts) => {
-                let mut values = value.map(|v| match v {
-                    Value::Tuple(t) => t,
-                    _ => panic!(),
-                });
-                Rc::new(TreeData::Tuple(
-                    sorts
-                        .iter()
-                        .enumerate()
-                        .map(|(i, sort)| {
-                            self.create_vars(
-                                &format!("{}.{}", prefix, i),
-                                sort,
-                                values
-                                    .as_mut()
-                                    .map(|v| std::mem::replace(&mut v[i], Value::Bool(true))),
-                                party,
-                            )
-                        })
-                        .collect(),
-                ))
+        _computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        match &orig.op {
+            Op::Const(v) => Some(termify_val_tuples(untuple_value(v))),
+            Op::Ite => {
+                let mut cs = rewritten_children();
+                let f = TupleTree(cs.pop().unwrap());
+                let t = TupleTree(cs.pop().unwrap());
+                let c = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                Some(t.bimap(|a, b| term![Op::Ite; c.clone(), a, b], &f).0)
             }
-            _ => Rc::new(TreeData::Leaf(
-                if self.cs.metadata.is_input(prefix)
-                    && self.cs.metadata.is_input_public(prefix)
-                    && self
-                        .cs
-                        .values
-                        .as_ref()
-                        .map(|v| v.contains_key(prefix))
-                        .unwrap_or(false)
-                {
-                    leaf_term(Op::Var(prefix.into(), sort.clone()))
-                } else {
-                    self.cs
-                        .new_var(prefix, sort.clone(), || value.unwrap().clone(), party)
-                },
-            )),
-        }
-    }
-
-    fn embed_step(&mut self, t: &Term) {
-        let s = check(t);
-        let tree = if let Sort::Tuple(_) = s {
-            match &t.op {
-                Op::Const(v) => Rc::new(TreeData::from_value(v.clone())),
-                Op::Var(name, sort) => {
-                    let party_visibility = self.cs.metadata.get_input_visibility(name);
-                    self.create_vars(
-                        name,
-                        sort,
-                        self.cs
-                            .values
-                            .as_ref()
-                            .map(|v| v.get(name).unwrap().clone()),
-                        party_visibility,
-                    )
-                }
-                Op::Tuple => Rc::new(TreeData::Tuple(
-                    t.cs.iter().map(|c| self.get_tree(c).clone()).collect(),
-                )),
-                Op::Ite => {
-                    let cond = self.get_tree(&t.cs[0]).unwrap_leaf();
-                    let trues = self.get_tree(&t.cs[1]).unfold_tuple();
-                    let falses = self.get_tree(&t.cs[2]).unfold_tuple();
-                    restructure(
-                        &s,
-                        &mut trues
-                            .into_iter()
-                            .zip(falses.into_iter())
-                            .map(|(a, b)| term![Op::Ite; cond.clone(), a, b]),
-                    )
-                }
-                Op::Field(i) => self.get_tree(&t.cs[0]).unwrap_tuple()[*i].clone(),
-                o => panic!("Bad tuple operator: {}", o),
+            Op::Eq => {
+                let mut cs = rewritten_children();
+                let b = TupleTree(cs.pop().unwrap());
+                let a = TupleTree(cs.pop().unwrap());
+                debug_assert!(cs.is_empty());
+                let eqs = zip_eq(a.flatten(), b.flatten()).map(|(a, b)| term![Op::Eq; a, b]);
+                Some(term(AND, eqs.collect()))
             }
-        } else {
-            match &t.op {
-                Op::Field(i) => self.get_tree(&t.cs[0]).unwrap_tuple()[*i].clone(),
-                Op::Eq => {
-                    let c_sort = check(&t.cs[0]);
-                    Rc::new(TreeData::Leaf(if let Sort::Tuple(_) = c_sort {
-                        let xs = self.get_tree(&t.cs[0]).unfold_tuple();
-                        let ys = self.get_tree(&t.cs[1]).unfold_tuple();
-                        term(
-                            Op::BoolNaryOp(BoolNaryOp::And),
-                            xs.into_iter()
-                                .zip(ys.into_iter())
-                                .map(|(x, y)| term![Op::Eq; x, y])
-                                .collect(),
-                        )
-                    } else {
-                        term(
-                            t.op.clone(),
-                            t.cs.iter()
-                                .map(|c| self.get_tree(c).unwrap_leaf().clone())
-                                .collect(),
-                        )
-                    }))
-                }
-                _ => Rc::new(TreeData::Leaf(term(
-                    t.op.clone(),
-                    t.cs.iter()
-                        .map(|c| self.get_tree(c).unwrap_leaf().clone())
-                        .collect(),
-                ))),
+            Op::Store => {
+                let mut cs = rewritten_children();
+                let v = TupleTree(cs.pop().unwrap());
+                let i = cs.pop().unwrap();
+                let a = TupleTree(cs.pop().unwrap());
+                debug_assert!(cs.is_empty());
+                Some(a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v).0)
             }
-        };
-        if let TreeData::Leaf(t) = &*tree {
-            debug_assert!(tuple_free(t.clone()), "Tuple in {:?}", tree);
+            Op::Select => {
+                let mut cs = rewritten_children();
+                let i = cs.pop().unwrap();
+                let a = TupleTree(cs.pop().unwrap());
+                debug_assert!(cs.is_empty());
+                Some(a.map(|a| term![Op::Select; a, i.clone()]).0)
+            }
+            Op::Field(i) => {
+                let mut cs = rewritten_children();
+                let t = TupleTree(cs.pop().unwrap());
+                debug_assert!(cs.is_empty());
+                Some(t.get(*i).0)
+            }
+            Op::Update(i) => {
+                let mut cs = rewritten_children();
+                let v = cs.pop().unwrap();
+                let t = TupleTree(cs.pop().unwrap());
+                debug_assert!(cs.is_empty());
+                Some(t.update(*i, &v).0)
+            }
+            // The default rewrite is correct here.
+            Op::Tuple => None,
+            _ => None,
         }
-        self.map.insert(t.clone(), tree);
-    }
-
-    fn embed(&mut self, t: &Term) -> Tree {
-        for c in PostOrderIter::new(t.clone()) {
-            self.embed_step(&c);
-        }
-        self.get_tree(t).clone()
     }
 }
 
@@ -232,16 +275,15 @@ fn tuple_free(t: Term) -> bool {
 }
 
 /// Run the tuple elimination pass.
-pub fn eliminate_tuples(mut cs: Computation) -> Computation {
-    let outputs = std::mem::take(&mut cs.outputs);
-    let mut pass = Pass::new(cs);
-    for output in &outputs {
-        pass.embed(&output);
-    }
-    let new_ouputs: Vec<Term> = outputs
-        .iter()
-        .map(|c| pass.get_tree(c).unwrap_leaf().clone())
+pub fn eliminate_tuples(cs: &mut Computation) {
+    let mut pass = TupleLifter;
+    pass.traverse(cs);
+    cs.outputs = std::mem::take(&mut cs.outputs)
+        .into_iter()
+        .flat_map(|o| TupleTree(o).flatten())
         .collect();
-    pass.cs.outputs = new_ouputs;
-    pass.cs
+    #[cfg(debug_assertions)]
+    for o in &cs.outputs {
+        assert!(tuple_free(o.clone()));
+    }
 }

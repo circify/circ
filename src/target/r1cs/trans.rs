@@ -58,8 +58,13 @@ impl ToR1cs {
 
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
-    fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, value: Option<Integer>, public: bool) -> Lc {
-        let n = format!("{}_v{}", ctx, self.next_idx);
+    fn fresh_var<D: Display + ?Sized>(
+        &mut self,
+        ctx: &D,
+        value: Option<Integer>,
+        public: bool,
+    ) -> Lc {
+        let n = format!("{}_n{}", ctx, self.next_idx);
         self.next_idx += 1;
         self.r1cs.add_signal(n.clone(), value);
         if public {
@@ -97,7 +102,11 @@ impl ToR1cs {
             }),
             false,
         );
-        let is_zero = self.fresh_var("is_zero", self.r1cs.eval(&x).map(|x| Integer::from(x == 0)), false);
+        let is_zero = self.fresh_var(
+            "is_zero",
+            self.r1cs.eval(&x).map(|x| Integer::from(x == 0)),
+            false,
+        );
         self.r1cs.constraint(m, x.clone(), -is_zero.clone() + 1);
         self.r1cs.constraint(is_zero.clone(), x, self.r1cs.zero());
         is_zero
@@ -127,12 +136,15 @@ impl ToR1cs {
     /// Evaluate `var`'s value as an (integer-casted) bit-vector.
     /// Returns `None` if values are not stored.
     fn eval_bv(&self, var: &str) -> Option<Integer> {
-        self.values
-            .as_ref()
-            .map(|vs| match vs.get(var).expect("missing value") {
+        self.values.as_ref().map(|vs| {
+            match vs
+                .get(var)
+                .unwrap_or_else(|| panic!("missing value for {}", var))
+            {
                 Value::BitVector(b) => b.uint().clone(),
                 v => panic!("{} should be a bit-vector, but is {:?}", var, v),
-            })
+            }
+        })
     }
 
     /// Evaluate `var`'s value as an (integer-casted) field element
@@ -343,6 +355,27 @@ impl ToR1cs {
         }
     }
 
+    fn assert_eq(&mut self, a: &Term, b: &Term) {
+        match check(a) {
+            Sort::Bool => {
+                let a = self.get_bool(a).clone();
+                let diff = a - self.get_bool(b);
+                self.assert_zero(diff);
+            }
+            Sort::BitVector(_) => {
+                let a = self.get_bv_uint(a);
+                let diff = a - &self.get_bv_uint(b);
+                self.assert_zero(diff);
+            }
+            Sort::Field(_) => {
+                let a = self.get_pf(a).clone();
+                let diff = a - self.get_pf(b);
+                self.assert_zero(diff);
+            }
+            s => panic!("Unimplemented sort for Eq: {:?}", s),
+        }
+    }
+
     fn embed_bool(&mut self, c: Term) -> &Lc {
         //println!("Embed: {}", c);
         debug_assert!(check(&c) == Sort::Bool);
@@ -425,6 +458,23 @@ impl ToR1cs {
         //            println!("-> {}", v);
         //        });
         self.get_bool(&c)
+    }
+
+    fn assert_bool(&mut self, t: &Term) {
+        //println!("Embed: {}", c);
+        // TODO: skip if already embedded
+        if &t.op == &Op::Eq {
+            t.cs.iter().for_each(|c| self.embed(c.clone()));
+            self.assert_eq(&t.cs[0], &t.cs[1]);
+        } else if &t.op == &AND {
+            for c in &t.cs {
+                self.assert_bool(c);
+            }
+        } else {
+            self.embed(t.clone());
+            let lc = self.get_bool(&t).clone();
+            self.assert_zero(lc - 1);
+        }
     }
 
     /// Returns whether `a - b` fits in `size` non-negative bits.
@@ -848,9 +898,8 @@ impl ToR1cs {
     }
     fn assert(&mut self, t: Term) {
         debug!("Assert: {}", Letified(t.clone()));
-        self.embed(t.clone());
-        let lc = self.get_bool(&t).clone();
-        self.assert_zero(lc - 1);
+        debug_assert!(check(&t) == Sort::Bool, "Non bool in assert");
+        self.assert_bool(&t);
     }
 }
 
@@ -861,7 +910,10 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
         metadata,
         values,
     } = cs;
-    let public_inputs = metadata.public_inputs().map(ToOwned::to_owned).collect();
+    let public_inputs = metadata
+        .public_input_names()
+        .map(ToOwned::to_owned)
+        .collect();
     debug!("public inputs: {:?}", public_inputs);
     let mut converter = ToR1cs::new(modulus, values, public_inputs);
     debug!(
@@ -871,7 +923,12 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
             .map(|c| PostOrderIter::new(c.clone()).count())
             .sum::<usize>()
     );
-    println!("Printing assertions");
+    debug!("declaring inputs");
+    for i in metadata.public_inputs() {
+        debug!("input {}", i);
+        converter.embed(i);
+    }
+    debug!("Printing assertions");
     for c in assertions {
         converter.assert(c);
     }
@@ -969,8 +1026,7 @@ pub mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs =
-            Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -979,9 +1035,9 @@ pub mod test {
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs =
-            Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
+        let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
+        crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
     }
@@ -990,8 +1046,7 @@ pub mod test {
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs =
-            Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -1002,9 +1057,9 @@ pub mod test {
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs =
-            Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
+        let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
+        crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -1016,9 +1071,7 @@ pub mod test {
         let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
-            vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(8))),
-            ],
+            vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
             Some(
                 vec![(
                     "b".to_owned(),
@@ -1041,8 +1094,7 @@ pub mod test {
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs =
-            Computation::from_constraint_system_parts(vec![t], vec![], Some(values));
+        let cs = Computation::from_constraint_system_parts(vec![t], vec![], Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
         let r1cs2 = reduce_linearities(r1cs);
@@ -1170,7 +1222,7 @@ pub mod test {
 
     #[test]
     fn tuple() {
-        let cs = Computation::from_constraint_system_parts(
+        let mut cs = Computation::from_constraint_system_parts(
             vec![
                 term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
                 term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
@@ -1188,7 +1240,7 @@ pub mod test {
                 .collect(),
             ),
         );
-        let cs = crate::ir::opt::tuple::eliminate_tuples(cs);
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(17));
         r1cs.check_all();
     }

@@ -6,6 +6,7 @@ mod term;
 use super::FrontEnd;
 use crate::circify::{Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
+use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use log::debug;
 use rug::Integer;
@@ -21,6 +22,8 @@ use term::*;
 pub use term::ZOKRATES_MODULUS;
 /// The modulus for the ZoKrates language.
 pub use term::ZOKRATES_MODULUS_ARC;
+/// The modulus for the ZoKrates language.
+pub use term::ZOK_FIELD_SORT;
 
 /// The prover visibility
 pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
@@ -99,18 +102,28 @@ struct ZGen<'ast> {
     mode: Mode,
 }
 
-enum ZLoc {
-    Var(Loc),
-    Member(Box<ZLoc>, String),
-    Idx(Box<ZLoc>, T),
+struct ZLoc {
+    var: Loc,
+    accesses: Vec<ZAccess>,
 }
 
-impl ZLoc {
-    fn loc(&self) -> &Loc {
-        match self {
-            ZLoc::Var(l) => l,
-            ZLoc::Member(i, _) => i.loc(),
-            ZLoc::Idx(i, _) => i.loc(),
+enum ZAccess {
+    Member(String),
+    Idx(T),
+}
+
+fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
+    match loc.first() {
+        None => Ok(val),
+        Some(ZAccess::Member(field)) => {
+            let inner = field_select(&struct_, &field)?;
+            let new_inner = loc_store(inner, &loc[1..], val)?;
+            field_store(struct_, &field, new_inner)
+        }
+        Some(ZAccess::Idx(idx)) => {
+            let old_inner = array_select(struct_.clone(), idx.clone())?;
+            let new_inner = loc_store(old_inner, &loc[1..], val)?;
+            array_store(struct_, idx.clone(), new_inner)
         }
     }
 }
@@ -191,17 +204,16 @@ impl<'ast> ZGen<'ast> {
                 self.unwrap(decl_res, &i.index.span);
                 for j in s..e {
                     self.circ.enter_scope();
-                    let ass_res = self
-                        .circ
-                        .assign(Loc::local(v_name.clone()), Val::Term(
-                            match ty {
-                                Ty::Uint(8) => T::Uint(8, bv_lit(j, 8)),
-                                Ty::Uint(16) => T::Uint(16, bv_lit(j, 16)),
-                                Ty::Uint(32) => T::Uint(32, bv_lit(j, 32)),
-                                Ty::Field =>  T::Field(pf_lit(j)),
-                                _ => panic!("Unexpected type for iteration: {:?}", ty),
-                            }
-                        ));
+                    let ass_res = self.circ.assign(
+                        Loc::local(v_name.clone()),
+                        Val::Term(match ty {
+                            Ty::Uint(8) => uint_lit(j, 8),
+                            Ty::Uint(16) => uint_lit(j, 16),
+                            Ty::Uint(32) => uint_lit(j, 32),
+                            Ty::Field => field_lit(j),
+                            _ => panic!("Unexpected type for iteration: {:?}", ty),
+                        }),
+                    );
                     self.unwrap(ass_res, &i.index.span);
                     for s in &i.statements {
                         self.stmt(s);
@@ -217,7 +229,7 @@ impl<'ast> ZGen<'ast> {
                     let ty = e.type_();
                     if let Some(t) = l.ty.as_ref() {
                         let decl_ty = self.type_(t);
-                        if decl_ty != ty {
+                        if &decl_ty != ty {
                             self.err(
                                 format!(
                                     "Assignment type mismatch: {} annotated vs {} actual",
@@ -242,77 +254,58 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn apply_lval_mod(&mut self, base: T, loc: ZLoc, val: T) -> Result<T, String> {
-        match loc {
-            ZLoc::Var(_) => Ok(val),
-            ZLoc::Member(inner_loc, field) => {
-                let old_inner = field_select(&base, &field)?;
-                let new_inner = self.apply_lval_mod(old_inner, *inner_loc, val)?;
-                field_store(base, &field, new_inner)
-            }
-            ZLoc::Idx(inner_loc, idx) => {
-                let old_inner = array_select(base.clone(), idx.clone())?;
-                let new_inner = self.apply_lval_mod(old_inner, *inner_loc, val)?;
-                array_store(base, idx, new_inner)
-            }
-        }
-    }
-
-    fn mod_lval(&mut self, l: ZLoc, t: T) -> Result<(), String> {
-        let var = l.loc().clone();
+    fn mod_lval(&mut self, loc: ZLoc, val: T) -> Result<(), String> {
         let old = self
             .circ
-            .get_value(var.clone())
+            .get_value(loc.var.clone())
             .map_err(|e| format!("{}", e))?
             .unwrap_term();
-        let new = self.apply_lval_mod(old, l, t)?;
+        let new = loc_store(old, &loc.accesses, val)?;
+        debug!("Assign: {:?} = {}", loc.var, Letified(new.term.clone()));
         self.circ
-            .assign(var, Val::Term(new))
+            .assign(loc.var, Val::Term(new))
             .map_err(|e| format!("{}", e))
             .map(|_| ())
     }
 
     fn lval(&mut self, l: &ast::Assignee<'ast>) -> ZLoc {
-        l.accesses.iter().fold(
-            ZLoc::Var(Loc::local(l.id.value.clone())),
-            |inner, acc| match acc {
-                ast::AssigneeAccess::Member(m) => ZLoc::Member(Box::new(inner), m.id.value.clone()),
-                ast::AssigneeAccess::Select(m) => {
-                    let i = if let ast::RangeOrExpression::Expression(e) = &m.expression {
+        let mut loc = ZLoc {
+            var: Loc::local(l.id.value.clone()),
+            accesses: vec![],
+        };
+        for acc in &l.accesses {
+            loc.accesses.push(match acc {
+                ast::AssigneeAccess::Member(m) => ZAccess::Member(m.id.value.clone()),
+                ast::AssigneeAccess::Select(m) => ZAccess::Idx(
+                    if let ast::RangeOrExpression::Expression(e) = &m.expression {
                         self.expr(&e)
                     } else {
                         panic!("Cannot assign to slice")
-                    };
-                    ZLoc::Idx(Box::new(inner), i)
-                }
-            },
-        )
+                    },
+                ),
+            })
+        }
+        loc
     }
 
     fn const_(&mut self, e: &ast::ConstantExpression<'ast>) -> T {
         match e {
             ast::ConstantExpression::U8(u) => {
-                T::Uint(8, bv_lit(u8::from_str_radix(&u.value[2..], 16).unwrap(), 8))
+                uint_lit(u8::from_str_radix(&u.value[2..], 16).unwrap(), 8)
             }
-            ast::ConstantExpression::U16(u) => T::Uint(
-                16,
-                bv_lit(u16::from_str_radix(&u.value[2..], 16).unwrap(), 16),
-            ),
-            ast::ConstantExpression::U32(u) => T::Uint(
-                32,
-                bv_lit(u32::from_str_radix(&u.value[2..], 16).unwrap(), 32),
-            ),
+            ast::ConstantExpression::U16(u) => {
+                uint_lit(u16::from_str_radix(&u.value[2..], 16).unwrap(), 16)
+            }
+            ast::ConstantExpression::U32(u) => {
+                uint_lit(u32::from_str_radix(&u.value[2..], 16).unwrap(), 32)
+            }
             ast::ConstantExpression::DecimalNumber(u) => {
-                T::Field(pf_lit(Integer::from_str_radix(&u.value, 10).unwrap()))
+                field_lit(Integer::from_str_radix(&u.value, 10).unwrap())
             }
             ast::ConstantExpression::BooleanLiteral(u) => {
-                Self::const_bool(bool::from_str(&u.value).unwrap())
+                z_bool_lit(bool::from_str(&u.value).unwrap())
             }
         }
-    }
-
-    fn const_bool(b: bool) -> T {
-        T::Bool(leaf_term(Op::Const(Value::Bool(b))))
     }
 
     fn bin_op(&self, o: &ast::BinaryOperator) -> fn(T, T) -> Result<T, String> {
@@ -364,7 +357,7 @@ impl<'ast> ZGen<'ast> {
                     .flat_map(|x| self.array_lit_elem(x))
                     .collect(),
             ),
-            ast::Expression::InlineStruct(u) => Ok(T::Struct(
+            ast::Expression::InlineStruct(u) => Ok(T::new_struct(
                 u.ty.value.clone(),
                 u.members
                     .iter()
@@ -373,12 +366,11 @@ impl<'ast> ZGen<'ast> {
             )),
             ast::Expression::ArrayInitializer(a) => {
                 let v = self.expr(&a.value);
-                let ty = v.type_();
                 let n = const_int(self.const_(&a.count))
                     .unwrap()
                     .to_usize()
                     .unwrap();
-                Ok(T::Array(ty, vec![v; n]))
+                array(vec![v; n])
             }
             ast::Expression::Postfix(p) => {
                 // Assume no functions in arrays, etc.
@@ -417,7 +409,7 @@ impl<'ast> ZGen<'ast> {
                             .circ
                             .exit_fn()
                             .map(|a| a.unwrap_term())
-                            .unwrap_or_else(|| Self::const_bool(false));
+                            .unwrap_or_else(|| z_bool_lit(false));
                         self.file_stack.pop();
                         ret
                     };
@@ -510,9 +502,7 @@ impl<'ast> ZGen<'ast> {
                     let t = ret_terms.into_iter().next().unwrap();
                     match check(&t) {
                         Sort::BitVector(_) => {}
-                        s => {
-                            panic!("Cannot maximize output of type {}", s)
-                        }
+                        s => panic!("Cannot maximize output of type {}", s),
                     }
                     self.circ.cir_ctx().cs.borrow_mut().outputs.push(t);
                 }
@@ -525,12 +515,8 @@ impl<'ast> ZGen<'ast> {
                     );
                     let t = ret_terms.into_iter().next().unwrap();
                     let cmp = match check(&t) {
-                        Sort::BitVector(w) => {
-                            term![BV_UGE; t, bv_lit(v, w)]
-                        }
-                        s => {
-                            panic!("Cannot maximize output of type {}", s)
-                        }
+                        Sort::BitVector(w) => term![BV_UGE; t, bv_lit(v, w)],
+                        s => panic!("Cannot maximize output of type {}", s),
                     };
                     self.circ.cir_ctx().cs.borrow_mut().outputs.push(cmp);
                 }
@@ -669,13 +655,12 @@ impl<'ast> ZGen<'ast> {
                 );
             }
             for s in &f.structs {
-                let ty = Ty::Struct(
+                let ty = Ty::new_struct(
                     s.id.value.clone(),
                     s.fields
                         .clone()
                         .iter()
-                        .map(|f| (f.id.value.clone(), self.type_(&f.ty)))
-                        .collect(),
+                        .map(|f| (f.id.value.clone(), self.type_(&f.ty))),
                 );
                 debug!("struct {}", s.id.value);
                 self.circ.def_type(&s.id.value, ty);

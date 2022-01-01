@@ -150,9 +150,11 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             }
         }
     }
-    let terms: FxHashMap<Term, usize> = terms.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
+    let terms: FxHashMap<Term, usize> =
+        terms.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
     let mut term_vars: FxHashMap<(Term, ShareType), (Variable, f64, String)> = FxHashMap::default();
-    let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> = FxHashMap::default();
+    let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> =
+        FxHashMap::default();
     let mut ilp = Ilp::new();
 
     // build variables for all term assignments

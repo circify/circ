@@ -177,24 +177,31 @@ fn main() {
         }
     };
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
+        Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![],
+            vec![Opt::ScalarizeVars],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
+                Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::Inline,
-                Opt::Mem,
+                // Tuples must be eliminated before oblivious array elim
+                Opt::Tuple,
+                Opt::ConstantFold,
+                Opt::Obliv,
+                // The obliv elim pass produces more tuples, that must be eliminated
+                Opt::Tuple,
+                Opt::LinearScan,
+                // The linear scan pass produces more tuples, that must be eliminated
+                Opt::Tuple,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::ConstantFold,
                 Opt::Inline,
             ],
@@ -215,12 +222,12 @@ fn main() {
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
+            println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
-                ProofAction::Count => {
-                    println!("Final R1cs size: {}", r1cs.constraints().len());
-                }
+                ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
+                    r1cs.check_all();
                     let rng = &mut rand::thread_rng();
                     let mut pk_file = File::open(prover_key).unwrap();
                     let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();

@@ -3,8 +3,10 @@ pub mod cfold;
 pub mod flat;
 pub mod inline;
 pub mod mem;
+pub mod scalarize_vars;
 pub mod sha;
 pub mod tuple;
+mod visit;
 
 use super::term::*;
 use log::debug;
@@ -12,14 +14,19 @@ use log::debug;
 #[derive(Debug)]
 /// An optimization pass
 pub enum Opt {
+    /// Convert non-scalar (tuple, array) inputs to scalar ones
+    /// The scalar variable names are suffixed with .N, where N indicates the array/tuple position
+    ScalarizeVars,
     /// Fold constants
     ConstantFold,
     /// Flatten n-ary operators
     Flatten,
     /// SHA-2 peephole optimizations
     Sha,
-    /// Memory elimination
-    Mem,
+    /// Replace oblivious arrays with tuples
+    Obliv,
+    /// Replace arrays with linear scans
+    LinearScan,
     /// Extract top-level ANDs as distinct outputs
     FlattenAssertions,
     /// Find outputs like `(= variable term)`, and substitute out `variable`
@@ -33,6 +40,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
     for i in optimizations {
         debug!("Applying: {:?}", i);
         match i {
+            Opt::ScalarizeVars => {
+                scalarize_vars::scalarize_inputs(&mut cs);
+            }
             Opt::ConstantFold => {
                 let mut cache = TermMap::new();
                 for a in &mut cs.outputs {
@@ -44,10 +54,11 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                     *a = sha::sha_rewrites(a);
                 }
             }
-            Opt::Mem => {
-                for a in &mut cs.outputs {
-                    *a = mem::array_elim(a);
-                }
+            Opt::Obliv => {
+                mem::obliv::elim_obliv(&mut cs);
+            }
+            Opt::LinearScan => {
+                mem::lin::linearize(&mut cs);
             }
             Opt::FlattenAssertions => {
                 let mut new_outputs = Vec::new();
@@ -68,14 +79,19 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 }
             }
             Opt::Inline => {
-                let public_inputs = cs.metadata.public_inputs().map(ToOwned::to_owned).collect();
+                let public_inputs = cs
+                    .metadata
+                    .public_input_names()
+                    .map(ToOwned::to_owned)
+                    .collect();
                 inline::inline(&mut cs.outputs, &public_inputs);
             }
             Opt::Tuple => {
-                cs = tuple::eliminate_tuples(cs);
+                tuple::eliminate_tuples(&mut cs);
             }
         }
         debug!("After {:?}: {} outputs", i, cs.outputs.len());
+        //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
         debug!("After {:?}: {} terms", i, cs.terms());
     }
     garbage_collect();
