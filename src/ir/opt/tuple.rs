@@ -267,6 +267,7 @@ impl RewritePass for TupleLifter {
     }
 }
 
+#[cfg(debug_assertions)]
 fn tuple_free(t: Term) -> bool {
     PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
 }
