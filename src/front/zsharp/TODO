@@ -5,8 +5,6 @@
 
 - talk to AO about bit-split
 
-- const / non-const cleanup
-
 - multi-returns?
 
 - add explicit-generic-expr to parser, e,g., foo::<(N+1)>(5)
@@ -37,3 +35,5 @@
     [x] unsigned
     - divrem? (is this necessary for efficiency? can just do r=a%b, c=(a-r)/b
     - signed?
+
+[x] const / non-const cleanup
