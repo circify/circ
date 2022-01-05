@@ -4,7 +4,7 @@ mod parser;
 mod term;
 pub mod zvisit;
 
-use super::FrontEnd;
+use super::{FrontEnd, Mode};
 use crate::circify::{CircError, Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::extras::Letified;
@@ -12,9 +12,9 @@ use crate::ir::term::*;
 use log::{debug, warn};
 use rug::Integer;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
-use std::fmt::{self, Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::path::PathBuf;
 use std::str::FromStr;
 use zokrates_pest_ast as ast;
 
@@ -33,7 +33,7 @@ pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
 /// Public visibility
 pub const PUBLIC_VIS: Option<PartyId> = None;
 
-/// Inputs to the Z# compilier
+/// Inputs to the Z# compiler
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
@@ -50,32 +50,6 @@ pub struct Inputs {
     pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
-}
-
-#[derive(Clone, Copy, Debug)]
-/// Kind of circuit to generate. Effects privacy labels.
-pub enum Mode {
-    /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
-    Mpc(u8),
-    /// Generating for a proof circuit. Inputs are public of private (to the prover).
-    Proof,
-    /// Generating for an optimization circuit. Inputs are existentially quantified.
-    /// There should be only one output, which will be maximized.
-    Opt,
-    /// Find inputs that yeild an output at least this large,
-    /// and then prove knowledge of them.
-    ProofOfHighValue(u64),
-}
-
-impl Display for Mode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            &Mode::Mpc(n) => write!(f, "{}-pc", n),
-            &Mode::Proof => write!(f, "proof"),
-            &Mode::Opt => write!(f, "opt"),
-            &Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),
-        }
-    }
 }
 
 /// The Z# front-end. Implements [FrontEnd].
@@ -127,11 +101,6 @@ struct ZGen<'ast> {
     crets_stack: RefCell<Vec<T>>,
     lhs_ty: RefCell<Option<Ty>>,
     ret_ty_stack: RefCell<Vec<Ty>>,
-}
-
-struct ZLoc {
-    var: Loc,
-    accesses: Vec<ZAccess>,
 }
 
 enum ZAccess {
@@ -256,37 +225,45 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn mod_lval(&self, loc: ZLoc, val: T) -> Result<(), String> {
-        let old = self
-            .circ_get_value(loc.var.clone())
-            .map_err(|e| format!("{}", e))?
-            .unwrap_term();
-        let new = loc_store(old, &loc.accesses, val)?;
-        debug!("Assign: {:?} = {}", loc.var, Letified(new.term.clone()));
-        self.circ_assign(loc.var, Val::Term(new))
-            .map_err(|e| format!("{}", e))
-            .map(|_| ())
+    fn assign_impl_<const IS_CNST: bool>(
+        &self,
+        name: &str,
+        accs: &[ast::AssigneeAccess<'ast>],
+        val: T
+    ) -> Result<(), String> {
+        let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
+        let old = if IS_CNST {
+            self.cvar_lookup(name)
+                .ok_or_else(|| format!("Assignment failed: no const variable {}", name))?
+        } else {
+            self.circ_get_value(Loc::local(name.to_string()))
+                .map_err(|e| format!("{}", e))?
+                .unwrap_term()
+        };
+        let new = loc_store(old, &zaccs[..], val)?;
+        debug!("Assign: {} = {}", name, Letified(new.term.clone()));
+        if IS_CNST {
+            self.cvar_assign(name, new)
+        } else {
+            self.circ_assign(Loc::local(name.to_string()), Val::Term(new))
+                .map_err(|e| format!("{}", e))
+                .map(|_| ())
+        }
     }
 
-    // XXX(fixup) iter and collect?
-    fn lval(&self, l: &ast::Assignee<'ast>) -> ZLoc {
-        let mut loc = ZLoc {
-            var: Loc::local(l.id.value.clone()),
-            accesses: vec![],
-        };
-        for acc in &l.accesses {
-            loc.accesses.push(match acc {
-                ast::AssigneeAccess::Member(m) => ZAccess::Member(m.id.value.clone()),
-                ast::AssigneeAccess::Select(m) => ZAccess::Idx(
-                    if let ast::RangeOrExpression::Expression(e) = &m.expression {
-                        self.unwrap(self.expr_impl_::<false>(e), e.span())
-                    } else {
-                        self.err("Cannot assign to slice", &m.span);
-                    },
-                ),
-            })
-        }
-        loc
+    fn zaccs_impl_<const IS_CNST: bool>(
+        &self,
+        accs: &[ast::AssigneeAccess<'ast>]
+    ) -> Result<Vec<ZAccess>, String> {
+        accs.iter().map(|acc| match acc {
+            ast::AssigneeAccess::Member(m) => Ok(ZAccess::Member(m.id.value.clone())),
+            ast::AssigneeAccess::Select(m) => match &m.expression {
+                ast::RangeOrExpression::Expression(e) =>
+                    self.expr_impl_::<IS_CNST>(e).map(ZAccess::Idx),
+                _ => Err(format!("Cannot assign to slice: {}", span_to_string(&m.span))),
+            }
+        })
+        .collect()
     }
 
     fn literal_(&self, e: &ast::LiteralExpression<'ast>) -> Result<T, String> {
@@ -494,7 +471,7 @@ impl<'ast> ZGen<'ast> {
 
             if IS_CNST {
                 let ret_ty = ret_ty.unwrap_or(Ty::Bool);
-                if ret.type_() != ret_ty {
+                if ret.type_() != &ret_ty {
                     Err(format!("Return type mismatch: expected {}, got {}", ret_ty, ret.type_()))?;
                 }
             }
@@ -732,51 +709,28 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn member_access_impl_<const IS_CNST: bool>(&self, acc: &ast::MemberAccess<'ast>, val: T) -> Result<T, String> {
+        let ret = field_select(&val, &acc.id.value);
         if IS_CNST {
-            match val {
-                T::Struct(ty, mut m) => m.remove(&acc.id.value)
-                    .ok_or_else(|| format!("No field '{}' accessing const struct of type {:?}", &acc.id.value, ty)),
-                x => Err(format!("Tried to access member of non-Struct type {}", x.type_())),
-            }
+            const_val(ret?)
         } else {
-            field_select(&val, &acc.id.value)
+            ret
         }
     }
 
     fn array_access_impl_<const IS_CNST: bool>(&self, acc: &ast::ArrayAccess<'ast>, val: T) -> Result<T, String> {
+        let ret = match &acc.expression {
+            ast::RangeOrExpression::Expression(e) => array_select(val, self.expr_impl_::<IS_CNST>(e)?),
+            ast::RangeOrExpression::Range(r) => {
+                // XXX(unimpl) Range expressions must be constant!
+                let s = r.from.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
+                let e = r.to.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
+                slice(val, s, e)
+            }
+        };
         if IS_CNST {
-            match val {
-                T::Array(ty, mut v) => match &acc.expression {
-                    ast::RangeOrExpression::Expression(e) => {
-                        let idx = self.const_usize_impl_::<IS_CNST>(e)?;
-                        if v.len() > idx {
-                            Ok(v.swap_remove(idx))
-                        } else {
-                            Err(format!("Out-of-bounds array access: wanted {}, but len was {}", idx, v.len()))
-                        }
-                    }
-                    ast::RangeOrExpression::Range(r) => {
-                        let start = r.from.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?.unwrap_or(0);
-                        let end = r.to.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?.unwrap_or(v.len());
-                        if start > end || end > v.len() {
-                            Err(format!("Got bad range {}..{} for vec of length {}", start, end, v.len()))
-                        } else {
-                            Ok(T::Array(ty, v.drain(start..end).collect()))
-                        }
-                    }
-                }
-                x => Err(format!("Tried to index into non-Array type {}", x.type_())),
-            }
+            const_val(ret?)
         } else {
-            match &acc.expression {
-                ast::RangeOrExpression::Expression(e) => array_select(val, self.expr_impl_::<IS_CNST>(e)?),
-                ast::RangeOrExpression::Range(r) => {
-                    // XXX(unimpl) Range expressions must be constant!
-                    let s = r.from.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
-                    let e = r.to.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
-                    slice(val, s, e)
-                }
-            }
+            ret
         }
     }
 
@@ -859,14 +813,14 @@ impl<'ast> ZGen<'ast> {
                     .map(|m| self.expr_impl_::<IS_CNST>(&m.expression)
                         .map(|m_expr| (m.id.value.clone(), m_expr))
                     )
-                    .collect::<Result<BTreeMap<_,_>,String>>()
-                    .map(|members| T::Struct(u.ty.value.clone(), members)),
+                    .collect::<Result<Vec<_>,String>>()
+                    .map(|members| T::new_struct(u.ty.value.clone(), members)),
         }
     }
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
         if IS_CNST {
-            self.crets_push(ret.unwrap_or_else(|| Self::bool_lit(false)));
+            self.crets_push(ret.unwrap_or_else(|| z_bool_lit(false)));
             Ok(())
         } else {
             self.circ_return_(ret)
@@ -878,24 +832,6 @@ impl<'ast> ZGen<'ast> {
             self.cvar_declare(name, ty)
         } else {
             self.circ_declare(name, ty, false, PROVER_VIS).map_err(|e| format!("{}", e))
-        }
-    }
-
-    fn assign_impl_<const IS_CNST: bool>(&self, name: &str, val: T) -> Result<(), String> {
-        if IS_CNST {
-            self.cvar_assign(name, &[][..], val)
-        } else {
-            self.circ_assign(Loc::local(name.to_owned()), Val::Term(val))
-                .map(|_| ())
-                .map_err(|e| format!("{}", e))
-        }
-    }
-
-    fn assignee_impl_<const IS_CNST: bool>(&self, asgn: &ast::Assignee<'ast>, val: T) -> Result<(), String> {
-        if IS_CNST {
-            self.cvar_assign(&asgn.id.value, asgn.accesses.as_ref(), val)
-        } else {
-            self.mod_lval(self.lval(asgn), val)
         }
     }
 
@@ -961,7 +897,7 @@ impl<'ast> ZGen<'ast> {
                 self.decl_impl_::<IS_CNST>(v_name, &ty)?;
                 for j in s..e {
                     self.enter_scope_impl_::<IS_CNST>();
-                    self.assign_impl_::<IS_CNST>(&i.index.value, ival_cons(j))?;
+                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j))?;
                     for s in &i.statements {
                         self.stmt_impl_::<IS_CNST>(s)?;
                     }
@@ -980,12 +916,12 @@ impl<'ast> ZGen<'ast> {
                 if let Some(l) = d.lhs.first() {
                     match l {
                         ast::TypedIdentifierOrAssignee::Assignee(l) => {
-                            self.assignee_impl_::<IS_CNST>(l, e)
+                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e)
                         }
                         ast::TypedIdentifierOrAssignee::TypedIdentifier(l) => {
                             let decl_ty = self.type_impl_::<IS_CNST>(&l.ty)?;
                             let ty = e.type_();
-                            if decl_ty != ty {
+                            if &decl_ty != ty {
                                 Err(format!(
                                     "Assignment type mismatch: {} annotated vs {} actual",
                                     decl_ty, ty,
@@ -1033,7 +969,7 @@ impl<'ast> ZGen<'ast> {
         match tya {
             Assignee(a) => {
                 let t = self.identifier_impl_::<IS_CNST>(&a.id)?;
-                a.accesses.iter().fold(Ok(t.type_()), |ty, acc| ty.and_then(|ty| match acc {
+                a.accesses.iter().fold(Ok(t.ty), |ty, acc| ty.and_then(|ty| match acc {
                     ast::AssigneeAccess::Select(aa) => match ty {
                         Ty::Array(sz, ity) => match &aa.expression {
                             ast::RangeOrExpression::Expression(_) => Ok(*ity),
@@ -1042,7 +978,8 @@ impl<'ast> ZGen<'ast> {
                         ty => Err(format!("Attempted array access on non-Array type {}", ty)),
                     },
                     ast::AssigneeAccess::Member(sa) => match ty {
-                        Ty::Struct(nm, mut map) => map.remove(&sa.id.value)
+                        Ty::Struct(nm, map) => map.search(&sa.id.value)
+                            .map(|r| r.1.clone())
                             .ok_or_else(|| format!("No such member {} of struct {}", &sa.id.value, nm)),
                         ty => Err(format!("Attempted member access on non-Struct type {}", ty)),
                     },
@@ -1095,57 +1032,17 @@ impl<'ast> ZGen<'ast> {
         self.cvars_stack.borrow_mut().pop();
     }
 
-    fn cvar_assign(&self, name: &str, accs: &[ast::AssigneeAccess<'ast>], val: T) -> Result<(), String> {
+    fn cvar_assign(&self, name: &str, val: T) -> Result<(), String> {
         assert!(!self.cvars_stack.borrow().last().unwrap().is_empty());
-
-        // compute path to updated value before borrowing cvars_stack (because
-        // we might need to evaluate expressions while walking the accesses)
-        let mut cvmsaccs = Vec::with_capacity(accs.len());
-        accs.iter().try_for_each(|acc| match acc {
-            ast::AssigneeAccess::Select(a) => match &a.expression {
-                ast::RangeOrExpression::Range(_) => Err("cvar_assign cannot assign to Range".to_string()),
-                ast::RangeOrExpression::Expression(e) => Ok(cvmsaccs.push(CVMSAcc::Sel(self.const_usize_impl_::<true>(e)?))),
-            },
-            ast::AssigneeAccess::Member(a) => Ok(cvmsaccs.push(CVMSAcc::Mem(&a.id.value))),
-        })?;
-
-        match self.cvars_stack.borrow_mut().last_mut().unwrap().iter_mut().rev().find_map(|v| v.get_mut(name)) {
-            None => Err(format!("Const assign failed: no variable {} in scope", name)),
-            Some(mut old_val) => {
-                // walk previously computed accesses
-                for acc in cvmsaccs.into_iter() {
-                    match acc {
-                        CVMSAcc::Sel(idx) => {
-                            old_val = match old_val {
-                                T::Array(_, v) => v.get_mut(idx).ok_or_else(|| format!("Tried to access idx {}, which was out of bounds", idx)),
-                                _ => Err(format!("Tried to index into non-Array type {}", old_val.type_())),
-                            }?;
-                        }
-                        CVMSAcc::Mem(name) => {
-                            old_val = match old_val {
-                                T::Struct(_, m) => m.get_mut(name).ok_or_else(|| format!("No field '{}' accessing const struct", name)),
-                                _ => Err(format!("Tried to access member '{}' in non-Struct type", name)),
-                            }?;
-                        }
-                    }
-                }
-                if old_val.type_() != val.type_() {
-                    Err(format!(
-                        "Const assign type mismatch: got {}, expected {}",
-                        val.type_(),
-                        old_val.type_(),
-                    ))
-                } else {
-                    *old_val = val;
-                    Ok(())
-                }
-            }
-        }
+        self.cvars_stack.borrow_mut().last_mut().unwrap().iter_mut().rev()
+            .find_map(|v| v.get_mut(name))
+            .map(|old_val| { *old_val = val; })
+            .ok_or_else(|| format!("Const assign failed: no variable {} in scope", name))
     }
 
     fn cvar_declare_init(&self, name: String, ty: &Ty, val: T) -> Result<(), String> {
         assert!(!self.cvars_stack.borrow().last().unwrap().is_empty());
-        if &val.type_() != ty {
+        if val.type_() != ty {
             Err(format!("Const decl_init: {} type mismatch: expected {}, got {}", name, ty, val.type_()))?;
         }
         self.cvars_stack
@@ -1211,7 +1108,7 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or_else(|e| self.err(e.0, &c.span));
         let ctype = self.unwrap(self.type_impl_::<true>(&c.ty), type_span(&c.ty));
         // handle literal type inference using declared type
-        v.replace(Some(ctype.clone()));
+        v.replace(Some(ctype));
         v.visit_expression(&mut c.expression)
             .unwrap_or_else(|e| self.err(e.0, &c.span));
 
@@ -1219,7 +1116,8 @@ impl<'ast> ZGen<'ast> {
         let value = self
             .expr_impl_::<true>(&c.expression)
             .unwrap_or_else(|e| self.err(e, c.expression.span()));
-        if ctype != value.type_() {
+        let ctype = v.replace(None).unwrap();
+        if &ctype != value.type_() {
             self.err(format!("Type mismatch in constant definition: expected {:?}, got {:?}", ctype, value.type_()), &c.span);
         }
 
@@ -1276,11 +1174,11 @@ impl<'ast> ZGen<'ast> {
                     Err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value))?;
                 }
                 self.generics_stack_push(generics);
-                let ty = Ty::Struct(
+                let ty = Ty::new_struct(
                     s.id.value.clone(),
                     sdef.fields.into_iter()
                         .map::<Result<_,String>,_>(|f| Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?)))
-                        .collect::<Result<BTreeMap<_,_>, _>>()?
+                        .collect::<Result<Vec<_>, _>>()?
                 );
                 self.generics_stack_pop();
                 Ok(ty)
@@ -1578,11 +1476,6 @@ impl<'ast> ZGen<'ast> {
 
 fn span_to_string(span: &ast::Span) -> String {
     span.lines().collect::<String>()
-}
-
-enum CVMSAcc<'t> {
-    Sel(usize),
-    Mem(&'t str),
 }
 
 fn type_span<'ast, 'a>(ty: &'a ast::Type<'ast>) -> &'a ast::Span<'ast> {

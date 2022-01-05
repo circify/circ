@@ -302,8 +302,8 @@ pub fn check_sat(t: &Term) -> bool {
     solver.check_sat().unwrap()
 }
 
-fn get_model_solver(t: &Term, inc: bool) -> Solver<Parser> {
-    let mut solver = make_solver(Parser, true, true);
+fn get_model_solver(t: &Term, inc: bool) -> rsmt2::Solver<Parser> {
+    let mut solver = make_solver(Parser, true, inc);
     //solver.path_tee("solver_com").unwrap();
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(n, s) = &c.op {

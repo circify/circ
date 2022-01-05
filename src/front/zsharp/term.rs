@@ -55,6 +55,7 @@ pub use field_list::FieldList;
 ///
 /// It gets its own module so that its member can be private.
 mod field_list {
+    use std::collections::BTreeMap;
 
     #[derive(Clone, PartialEq, Eq)]
     pub struct FieldList<T> {
@@ -80,6 +81,9 @@ mod field_list {
         pub fn fields(&self) -> impl Iterator<Item = &(String, T)> {
             self.list.iter()
         }
+        pub fn into_map(self) -> BTreeMap<String, T> {
+            self.list.into_iter().collect()
+        }
     }
 }
 
@@ -96,8 +100,6 @@ impl Display for Ty {
                 }
                 o.finish()
             }
-            Ty::Array(n, b) => write!(f, "{}[{}]", b, n),
-            /*
             Ty::Array(n, b) => {
                 let mut dims = Vec::new();
                 dims.push(n);
@@ -114,7 +116,6 @@ impl Display for Ty {
                 write!(f, "{}", bb)?;
                 dims.iter().try_for_each(|d| write!(f, "[{}]", d))
             }
-            */
         }
     }
 }
@@ -142,10 +143,10 @@ impl Ty {
     fn default_ir_term(&self) -> Term {
         self.sort().default_term()
     }
-    fn default(&self) -> T {
+    pub fn default(&self) -> T {
         T {
-            term: self.default_ir_term(),
             ty: self.clone(),
+            term: self.default_ir_term(),
         }
     }
     /// Creates a new structure type, sorting the keys.
@@ -231,37 +232,37 @@ impl T {
     }
 
     // XXX(rsw) hrm is there a nicer way to do this?
-    pub fn new_field<T>(v: T) -> Self
+    pub fn new_field<I>(v: I) -> Self
     where
-        Integer: From<T>,
+        Integer: From<I>,
     {
         T::new(Ty::Field, pf_lit_ir(v))
     }
 
-    pub fn new_u8<T>(v: T) -> Self
+    pub fn new_u8<I>(v: I) -> Self
     where
-        Integer: From<T>,
+        Integer: From<I>,
     {
         T::new(Ty::Uint(8), bv_lit(v, 8))
     }
 
-    pub fn new_u16<T>(v: T) -> Self
+    pub fn new_u16<I>(v: I) -> Self
     where
-        Integer: From<T>,
+        Integer: From<I>,
     {
         T::new(Ty::Uint(16), bv_lit(v, 16))
     }
 
-    pub fn new_u32<T>(v: T) -> Self
+    pub fn new_u32<I>(v: I) -> Self
     where
-        Integer: From<T>,
+        Integer: From<I>,
     {
         T::new(Ty::Uint(32), bv_lit(v, 32))
     }
 
-    pub fn new_u64<T>(v: T) -> Self
+    pub fn new_u64<I>(v: I) -> Self
     where
-        Integer: From<T>,
+        Integer: From<I>,
     {
         T::new(Ty::Uint(64), bv_lit(v, 64))
     }
@@ -420,54 +421,20 @@ pub fn and(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("&&", None, None, Some(and_bool), a, b)
 }
 
-fn eq_base(a: Term, b: Term) -> Term {
-    term![Op::Eq; a, b]
+fn eq_base(a: T, b: T) -> Result<Term, String> {
+    if a.ty != b.ty {
+        Err(format!("Cannot '==' dissimilar types {} and {}", a.type_(), b.type_()))
+    } else {
+        Ok(term![Op::Eq; a.term, b.term])
+    }
 }
 
 pub fn eq(a: T, b: T) -> Result<T, String> {
-    unimplemented!()
-    /*
-    if a.type_() != b.type_() {
-        Err(format!("Cannot '==' dissimilar types {} and {}", a.type_(), b.type_()))?;
-    }
-
-    match (a, b) {
-        (T::Array(_, al), T::Array(_, bl)) => al.into_iter()
-            .zip(bl.into_iter())
-            .map(|(at, bt)| eq(at, bt))
-            .try_fold(T::Bool(leaf_term(Op::Const(Value::Bool(true)))), |acc, nxt| and(acc, nxt?)),
-        (T::Struct(_, am), T::Struct(_, bm)) => am.into_iter()
-            .zip(bm.into_iter())
-            .map(|((ak, av), (bk, bv))| { assert_eq!(ak, bk); eq(av, bv) })
-            .try_fold(T::Bool(leaf_term(Op::Const(Value::Bool(true)))), |acc, nxt| and(acc, nxt?)),
-        (a, b) => wrap_bin_pred("==", Some(eq_base), Some(eq_base), Some(eq_base), a, b),
-    }
-    */
-}
-
-fn neq_base(a: Term, b: Term) -> Term {
-    term![Op::Not; term![Op::Eq; a, b]]
+    Ok(T::new(Ty::Bool, eq_base(a, b)?))
 }
 
 pub fn neq(a: T, b: T) -> Result<T, String> {
-    unimplemented!()
-    /*
-    if a.type_() != b.type_() {
-        Err(format!("Cannot '!=' on dissimilar types {} and {}", a.type_(), b.type_()))?;
-    }
-
-    match (a, b) {
-        (T::Array(_, al), T::Array(_, bl)) => al.into_iter()
-            .zip(bl.into_iter())
-            .map(|(at, bt)| neq(at, bt))
-            .try_fold(T::Bool(leaf_term(Op::Const(Value::Bool(false)))), |acc, nxt| or(acc, nxt?)),
-        (T::Struct(_, am), T::Struct(_, bm)) => am.into_iter()
-            .zip(bm.into_iter())
-            .map(|((ak, av), (bk, bv))| { assert_eq!(ak, bk); neq(av, bv) })
-            .try_fold(T::Bool(leaf_term(Op::Const(Value::Bool(false)))), |acc, nxt| or(acc, nxt?)),
-        (a, b) => wrap_bin_pred("!=", Some(neq_base), Some(neq_base), Some(neq_base), a, b),
-    }
-    */
+    Ok(T::new(Ty::Bool, not_bool(eq_base(a, b)?)))
 }
 
 fn ult_uint(a: Term, b: Term) -> Term {
@@ -528,30 +495,27 @@ pub fn uge(a: T, b: T) -> Result<T, String> {
 }
 
 pub fn pow(a: T, b: T) -> Result<T, String> {
-    unimplemented!()
-    /*
-    if !matches!(b, T::Uint(32, _)) || !matches!(a, T::Field(_)) {
-        Err(format!("Cannot compute {} ** {} : must be Field ** U32", a, b))
-    } else if let T::Field(a) = a {
-        let b = const_int(b)?;
-        if b == 0 {
-            return Ok(T::Field(pf_lit(Integer::from(1))));
-        }
-        let res = (0..b.significant_bits() - 1)
-            .rev()
-            .fold(a.clone(), |acc, ix| {
-                let acc = mul_field(acc.clone(), acc);
-                if b.get_bit(ix) {
-                    mul_field(acc, a.clone())
-                } else {
-                    acc
-                }
-            });
-        Ok(T::Field(res))
-    } else {
-        unreachable!()
+    if a.ty != Ty::Field || b.ty != Ty::Uint(32) {
+        Err(format!("Cannot compute {} ** {} : must be Field ** U32", a, b))?;
     }
-    */
+
+    let a = a.term;
+    let b = const_int(b)?;
+    if b == 0 {
+        return Ok(field_lit(1));
+    }
+
+    let res = (0..b.significant_bits() - 1)
+        .rev()
+        .fold(a.clone(), |acc, ix| {
+            let acc = mul_field(acc.clone(), acc);
+            if b.get_bit(ix) {
+                mul_field(acc, a.clone())
+            } else {
+                acc
+            }
+        });
+    Ok(T::new(Ty::Field, res))
 }
 
 fn wrap_un_op(
@@ -603,11 +567,11 @@ pub fn const_int(a: T) -> Result<Integer, String> {
     }
 }
 
-pub fn const_bool(a: T) -> Result<bool, String> {
+pub fn const_bool(a: T) -> Option<bool> {
     let folded = constant_fold(&a.term);
     match folded.op {
-        Op::Const(Value::Bool(b)) => Ok(b),
-        _ => Err(format!("{} is not a constant bool", a)),
+        Op::Const(Value::Bool(b)) => Some(b),
+        _ => None,
     }
 }
 
@@ -734,23 +698,33 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
     }
 }
 
-// XXX(q) allow indexing with U* too?
 // XXX(opt) can this take &T instead of T?
 pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match array.ty {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
-            Ok(T::new(*elem_ty, term![Op::Select; array.term, idx.term]))
+            let iterm = if matches!(idx.ty, Ty::Uint(_)) {
+                warn!("warning: indexing array with Uint type");
+                unimplemented!()
+            } else {
+                idx.term
+            };
+            Ok(T::new(*elem_ty, term![Op::Select; array.term, iterm]))
         }
-        (a, b) => Err(format!("Cannot index {} using {}", a, b)),
+        _ => Err(format!("Cannot index {} using {}", &array.ty, &idx.ty)),
     }
 }
 
-// XXX(q) allow indexing with U* too?
 // XXX(opt) can this take &T instead of T?
 pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
-        Ok(T::new(array.ty, term![Op::Store; array.term, idx.term, val.term]))
+        let iterm = if matches!(idx.ty, Ty::Uint(_)) {
+            warn!("warning: indexing array with Uint type");
+            unimplemented!()
+        } else {
+            idx.term
+        };
+        Ok(T::new(array.ty, term![Op::Store; array.term, iterm, val.term]))
     } else {
         Err(format!("Cannot index {} using {}", &array.ty, &idx.ty))
     }
@@ -818,35 +792,34 @@ pub fn field_to_bits(f: T, n: usize) -> Result<T, String> {
     }
 }
 
-/*
-fn bv_from_bits(list: Vec<T>) -> Result<Term, String> {
-    Ok(term(
+fn bv_from_bits(barr: Term, size: usize) -> Term {
+    term(
         Op::BvConcat,
-        list.into_iter()
-            .map(|z: T| -> Result<Term, String> { Ok(term![Op::BoolToBv; bool(z)?]) })
-            .collect::<Result<Vec<_>, _>>()?
-    ))
+        (0..size)
+            .map(|i| term![Op::BoolToBv; term![Op::Select; barr.clone(), pf_lit_ir(i)]])
+            .collect(),
+    )
 }
-*/
 
 pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
-    unimplemented!()
-    /*
-    match (a, b) {
-        (T::Array(Ty::Bool, lsa), T::Array(Ty::Bool, lsb)) => {
-            if lsa.len() != lsb.len() {
-                Err(format!("bit-array-le called on arrays with lengths {} != {}", lsa.len(), lsb.len()))
-            } else if lsa.len() != n || lsb.len() != n {
-                Err(format!("bit-array-le::<{}> called on arrays with length {}", n, lsa.len()))
+    match (&a.ty, &b.ty) {
+        (Ty::Array(la, ta), Ty::Array(lb, tb)) => {
+            if **ta != Ty::Bool || **tb != Ty::Bool {
+                Err(format!("bit-array-le must be called on arrays of Bools"))
+            } else if la != lb {
+                Err(format!("bit-array-le called on arrays with lengths {} != {}", la, lb))
+            } else if *la != n {
+                Err(format!("bit-array-le::<{}> called on arrays with length {}", n, la))
             } else {
-                let at = bv_from_bits(lsa)?;
-                let bt = bv_from_bits(lsb)?;
-                Ok(T::Bool(term![Op::BvBinPred(BvBinPred::Ule); at, bt]))
+                Ok(())
             }
         }
-        (a, b) => Err(format!("Cannot do bit-array-le on ({}, {})", a, b)),
-    }
-    */
+        _ => Err(format!("Cannot do bit-array-le on ({}, {})", &a.ty, &b.ty)),
+    }?;
+
+    let at = bv_from_bits(a.term, n);
+    let bt = bv_from_bits(b.term, n);
+    Ok(T::new(Ty::Bool, term![Op::BvBinPred(BvBinPred::Ule); at, bt]))
 }
 
 pub struct ZSharp {

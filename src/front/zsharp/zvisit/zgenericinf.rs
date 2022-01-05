@@ -73,10 +73,11 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
                 CGV::Value(v) => Some(self.zgen.literal_(v)),
                 CGV::Identifier(i) => Some(self.zgen.const_identifier_(i)),
             } {
+                let v = v?;
                 let var = make_varname(&id.value, &self.sfx);
-                let val = match v? {
-                    T::Uint(32, val) => Ok(val),
-                    v => Err(format!("ZGenericInf: ConstantGenericValue for {} had type {}, expected u32", &id.value, v.type_())),
+                let val = match v.ty {
+                    Ty::Uint(32) => Ok(v.term),
+                    ty => Err(format!("ZGenericInf: ConstantGenericValue for {} had type {}, expected u32", &id.value, ty)),
                 }?;
                 self.add_constraint(var, val);
             }
@@ -84,8 +85,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
 
         // 2. for each argument, update the const generic values
         for (pty, arg) in self.fdef.parameters.iter().map(|p| &p.ty).zip(args.iter()) {
-            let aty = arg.type_();
-            self.fdef_gen_ty(aty, pty)?;
+            self.fdef_gen_ty(arg.type_().clone(), pty)?;
         }
         // bracketing invariant
         assert!(self.gens == &self.fdef.generics[..]);
@@ -119,7 +119,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
                 }
                 g_name.truncate(self.gens[idx].value.len());
                 g_name.shrink_to_fit();
-                assert!(res.insert(g_name, T::Uint(32, term![Op::Const(g_val)])).is_none());
+                assert!(res.insert(g_name, T::new(Ty::Uint(32), term![Op::Const(g_val)])).is_none());
             }
         });
         Ok(res)
@@ -211,7 +211,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
     ) -> Result<(), String> {
         // check type and struct name
         let mut aty_map = match arg_ty {
-            Ty::Struct(aty_n, aty_map) if &aty_n == &def_ty.id.value => Ok(aty_map),
+            Ty::Struct(aty_n, aty_map) if &aty_n == &def_ty.id.value => Ok(aty_map.into_map()),
             Ty::Struct(aty_n, _) => Err(format!("Type mismatch: got struct {}, decl was struct {}", &aty_n, &def_ty.id.value)),
             arg_ty => Err(format!("Type mismatch unifying generics: got {}, decl was Struct", arg_ty)),
         }?;
@@ -330,7 +330,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
             }
             Identifier(id) => {
                 if self.is_generic_var(&id.value) {
-                    Ok(T::Uint(32, make_varname(&id.value, &self.sfx)))
+                    Ok(T::new(Ty::Uint(32), make_varname(&id.value, &self.sfx)))
                 } else {
                     self.zgen.const_identifier_(&id)
                 }
@@ -345,9 +345,9 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
 }
 
 fn u32_term(t: T) -> Result<Term, String> {
-    match t {
-        T::Uint(32, t) => Ok(t),
-        e => Err(format!("ZGenericInf: got {} for expr, expected T::Uint(32)", e.type_())),
+    match t.ty {
+        Ty::Uint(32) => Ok(t.term),
+        ty => Err(format!("ZGenericInf: got {} for expr, expected T::Uint(32)", ty)),
     }
 }
 

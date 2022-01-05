@@ -182,7 +182,8 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
             Ok(None)
         }?;
 
-        if let Some(mut ty_map) = ty_map {
+        if let Some(ty_map) = ty_map {
+            let mut ty_map = ty_map.into_map();
             let (mem, str_name) = (&mut ise.members, &ise.ty.value);
             mem.iter_mut()
                 .try_for_each(|m| ty_map
