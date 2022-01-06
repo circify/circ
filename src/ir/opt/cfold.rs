@@ -45,8 +45,8 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
         let get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
-            &NOT => get(0).as_bool_opt().and_then(|c| cbool(!c)),
-            &IMPLIES => match get(0).as_bool_opt() {
+            Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
+            Op::Implies => match get(0).as_bool_opt() {
                 Some(true) => Some(get(1).clone()),
                 Some(false) => cbool(true),
                 None => match get(1).as_bool_opt() {
@@ -63,12 +63,17 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             Op::Eq => {
                 let c0 = get(0);
                 let c1 = get(1);
-                match (&c0.op, &c1.op) {
-                    (Op::Const(Value::Bool(b0)), Op::Const(Value::Bool(b1))) => cbool(*b0 == *b1),
-                    (Op::Const(Value::BitVector(b0)), Op::Const(Value::BitVector(b1))) => {
-                        cbool(*b0 == *b1)
+                match (c0.as_value_opt(), c1.as_value_opt()) {
+                    (Some(Value::BitVector(b0)), Some(Value::BitVector(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::F32(b0)), Some(Value::F32(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::F64(b0)), Some(Value::F64(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Int(b0)), Some(Value::Int(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Field(b0)), Some(Value::Field(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Bool(b0)), Some(Value::Bool(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Tuple(t0)), Some(Value::Tuple(t1))) => cbool(*t0 == *t1),
+                    (Some(Value::Array(a0)), Some(Value::Array(a1))) => {
+                        cbool(a0.size == a1.size && a0.map == a1.map)
                     }
-                    (Op::Const(Value::Field(b0)), Op::Const(Value::Field(b1))) => cbool(*b0 == *b1),
                     _ => None,
                 }
             }
@@ -182,17 +187,25 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv|
                 leaf_term(Op::Const(Value::Field(FieldElem::new(bv.uint().clone(), m.clone()))))
             ),
-            Op::Store => match (get(0).as_array_opt(), get(1).as_value_opt(), get(2).as_value_opt()) {
-                (Some(arr), Some(idx), Some(val)) => {
-                    let new_arr = arr.clone().store(idx.clone(), val.clone());
-                    Some(leaf_term(Op::Const(Value::Array(new_arr))))
+            Op::Store => {
+                match (get(0).as_array_opt(), get(1).as_value_opt(), get(2).as_value_opt()) {
+                    (Some(arr), Some(idx), Some(val)) => {
+                        let new_arr = arr.clone().store(idx.clone(), val.clone());
+                        Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
+            }
             Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
                 (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
                 _ => None,
             },
+            Op::Tuple => {
+                match t.cs.iter().map(|c| c_get(c).as_value_opt().cloned()).collect() {
+                    Some(v) => Some(leaf_term(Op::Const(Value::Tuple(v)))),
+                    _ => None,
+                }
+            }
             _ => None,
         };
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
