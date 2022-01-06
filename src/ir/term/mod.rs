@@ -665,13 +665,32 @@ impl Array {
             size,
         )
     }
+
+    // consistency check for index
+    fn check_idx(&self, isrt: Sort) {
+        if isrt != self.key_sort {
+            panic!("Tried to index array with key {}, but {} was expected", isrt, self.key_sort);
+        }
+    }
+
+    // consistency check for value
+    fn check_val(&self, vsrt: Sort) {
+        if vsrt != self.default.sort() {
+            panic!("Attempted to store {} to an array of {}", vsrt, self.default.sort());
+        }
+    }
+
     /// Store
     pub fn store(mut self, idx: Value, val: Value) -> Self {
+        self.check_idx(idx.sort());
+        self.check_val(val.sort());
         self.map.insert(idx, val);
         self
     }
+
     /// Select
     pub fn select(&self, idx: &Value) -> Value {
+        self.check_idx(idx.sort());
         self.map.get(idx).unwrap_or(&*self.default).clone()
     }
 }

@@ -698,13 +698,12 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
     }
 }
 
-// XXX(opt) can this take &T instead of T?
 pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match array.ty {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
             let iterm = if matches!(idx.ty, Ty::Uint(_)) {
                 warn!("warning: indexing array with Uint type");
-                unimplemented!()
+                term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); idx.term]
             } else {
                 idx.term
             };
@@ -714,13 +713,12 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
     }
 }
 
-// XXX(opt) can this take &T instead of T?
 pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
             warn!("warning: indexing array with Uint type");
-            unimplemented!()
+            term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); idx.term]
         } else {
             idx.term
         };
