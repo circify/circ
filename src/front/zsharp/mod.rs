@@ -421,10 +421,10 @@ impl<'ast> ZGen<'ast> {
             // XXX(unimpl) multi-return unimplemented
             assert!(f.returns.len() <= 1);
             if f.generics.len() != generics.len() {
-                return Err("Wrong number of generic params for function call".to_string());
+                Err(format!("Wrong number of generic params calling {} (got {}, expected {})", &f.id.value, generics.len(), f.generics.len()))?;
             }
             if f.parameters.len() != args.len() {
-                return Err("Wrong nimber of arguments for function call".to_string());
+                Err(format!("Wrong nimber of arguments calling {} (got {}, expected {})", &f.id.value, args.len(), f.parameters.len()))?;
             }
 
             let f = f.clone();
