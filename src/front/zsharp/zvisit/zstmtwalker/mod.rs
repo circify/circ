@@ -967,7 +967,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
             Expression(e) => {
                 let mut zty = ZExpressionTyper::new(self);
                 if self.type_expression(e, &mut zty)?.is_none() {
-                    let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Uint(32)));
+                    let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Field));
                     zrw.visit_expression(e)?;
                 }
                 self.visit_expression(e)
@@ -986,7 +986,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
             .map(|texp| self.type_expression(&mut texp.0, &mut zty)).transpose()?.flatten();
         match (fty, tty) {
             (None, None) => {
-                let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Uint(32)));
+                let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Field));
                 rng.from.as_mut().map(|fexp| zrw.visit_expression(&mut fexp.0)).transpose()?;
                 rng.to.as_mut().map(|texp| zrw.visit_expression(&mut texp.0)).transpose()?;
                 Ok(())

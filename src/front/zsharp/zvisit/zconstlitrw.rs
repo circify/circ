@@ -153,14 +153,6 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         self.visit_span(&mut aie.span)
     }
 
-    fn visit_array_access(&mut self, acc: &mut ast::ArrayAccess<'ast>) -> ZVisitorResult {
-        // always rewrite ArrayAccess literals to type U32
-        let to_ty = self.replace(Some(Ty::Uint(32)));
-        walk_array_access(self, acc)?;
-        self.to_ty = to_ty;
-        Ok(())
-    }
-
     fn visit_inline_struct_expression(
         &mut self,
         ise: &mut ast::InlineStructExpression<'ast>,
