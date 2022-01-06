@@ -182,6 +182,17 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv|
                 leaf_term(Op::Const(Value::Field(FieldElem::new(bv.uint().clone(), m.clone()))))
             ),
+            Op::Store => match (get(0).as_array_opt(), get(1).as_value_opt(), get(2).as_value_opt()) {
+                (Some(arr), Some(idx), Some(val)) => {
+                    let new_arr = arr.clone().store(idx.clone(), val.clone());
+                    Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                }
+                _ => None,
+            },
+            Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
+                (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
+                _ => None,
+            },
             _ => None,
         };
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };

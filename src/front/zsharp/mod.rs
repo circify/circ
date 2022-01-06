@@ -708,17 +708,8 @@ impl<'ast> ZGen<'ast> {
         self.const_usize_impl_::<true>(e)
     }
 
-    fn member_access_impl_<const IS_CNST: bool>(&self, acc: &ast::MemberAccess<'ast>, val: T) -> Result<T, String> {
-        let ret = field_select(&val, &acc.id.value);
-        if IS_CNST {
-            const_val(ret?)
-        } else {
-            ret
-        }
-    }
-
     fn array_access_impl_<const IS_CNST: bool>(&self, acc: &ast::ArrayAccess<'ast>, val: T) -> Result<T, String> {
-        let ret = match &acc.expression {
+        match &acc.expression {
             ast::RangeOrExpression::Expression(e) => array_select(val, self.expr_impl_::<IS_CNST>(e)?),
             ast::RangeOrExpression::Range(r) => {
                 // XXX(unimpl) Range expressions must be constant!
@@ -726,11 +717,6 @@ impl<'ast> ZGen<'ast> {
                 let e = r.to.as_ref().map(|s| self.const_usize_impl_::<IS_CNST>(&s.0)).transpose()?;
                 slice(val, s, e)
             }
-        };
-        if IS_CNST {
-            const_val(ret?)
-        } else {
-            ret
         }
     }
 
@@ -760,12 +746,12 @@ impl<'ast> ZGen<'ast> {
                 let left = self.expr_impl_::<IS_CNST>(&b.left)?;
                 let right = self.expr_impl_::<IS_CNST>(&b.right)?;
                 let op = self.bin_op(&b.op);
-                op(left, right).and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
+                op(left, right)
             }
             ast::Expression::Unary(u) => {
                 let arg = self.expr_impl_::<IS_CNST>(&u.expression)?;
                 let op = self.unary_op(&u.op);
-                op(arg).and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
+                op(arg)
             }
             ast::Expression::Identifier(i) => self.identifier_impl_::<IS_CNST>(i),
             ast::Expression::Literal(l) => self.literal_(l),
@@ -805,7 +791,7 @@ impl<'ast> ZGen<'ast> {
                 };
                 accs.iter().fold(Ok(val), |v, acc| match acc {
                     ast::Access::Call(_) => Err("Function call in non-first-access position in expr".to_string()),
-                    ast::Access::Member(a) => self.member_access_impl_::<IS_CNST>(a, v?),
+                    ast::Access::Member(a) => field_select(&v?, &a.id.value),
                     ast::Access::Select(s) => self.array_access_impl_::<IS_CNST>(s, v?),
                 })
             }
@@ -816,6 +802,7 @@ impl<'ast> ZGen<'ast> {
                     .collect::<Result<Vec<_>,String>>()
                     .map(|members| T::new_struct(u.ty.value.clone(), members)),
         }
+        .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
     }
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {

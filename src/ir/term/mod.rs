@@ -1010,10 +1010,30 @@ impl TermData {
             None
         }
     }
+
+    /// Get the underlying array constant, if possible.
+    pub fn as_array_opt(&self) -> Option<&Array> {
+        if let Op::Const(Value::Array(a)) = &self.op {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying constant value, if possible.
+    pub fn as_value_opt(&self) -> Option<&Value> {
+        if let Op::Const(v) = &self.op {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
     /// Is this a variable?
     pub fn is_var(&self) -> bool {
         matches!(&self.op, Op::Var(..))
     }
+
     /// Is this a value
     pub fn is_const(&self) -> bool {
         matches!(&self.op, Op::Const(..))
