@@ -28,7 +28,7 @@ jobs:
     - name: Cache submodule build
       uses: actions/cache@v2
       with:
-        path: third_party
+        path: third_party/ABY/build
         key: ${{ runner.os }}
     - name: Build submodules
       run: make build_deps
