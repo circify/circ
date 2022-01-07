@@ -206,6 +206,18 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                     _ => None,
                 }
             }
+            Op::Field(n) => match get(0).as_tuple_opt() {
+                Some(t) => Some(leaf_term(Op::Const(t[*n].clone()))),
+                _ => None,
+            },
+            Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
+                (Some(t), Some(v)) => {
+                    let mut new_vec = t.clone();
+                    new_vec[*n] = v.clone();
+                    Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
+                }
+                _ => None,
+            }
             _ => None,
         };
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };

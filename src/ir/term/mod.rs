@@ -1030,6 +1030,15 @@ impl TermData {
         }
     }
 
+    /// Get the underlying tuple constant, if possible.
+    pub fn as_tuple_opt(&self) -> Option<&Vec<Value>> {
+        if let Op::Const(Value::Tuple(t)) = &self.op {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
     /// Get the underlying array constant, if possible.
     pub fn as_array_opt(&self) -> Option<&Array> {
         if let Op::Const(Value::Array(a)) = &self.op {
