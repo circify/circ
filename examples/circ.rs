@@ -87,6 +87,7 @@ enum Backend {
     Smt {},
     Ilp {},
     Mpc {},
+    Fhe {},
 }
 
 arg_enum! {
@@ -156,6 +157,7 @@ fn main() {
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
         Backend::Smt { .. } => Mode::Proof,
+        Backend::Fhe { .. } => Mode::Fhe,
     };
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
@@ -178,6 +180,7 @@ fn main() {
     };
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
+        Mode::Fhe => opt(cs, vec![]),
         Mode::Mpc(_) => opt(
             cs,
             vec![Opt::ScalarizeVars],
@@ -299,6 +302,9 @@ fn main() {
             } else {
                 todo!()
             }
+        }
+        Backend::Fhe { .. } => {
+            todo!()
         }
     }
 }

@@ -54,6 +54,8 @@ pub struct Inputs {
 pub enum Mode {
     /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
     Mpc(u8),
+    /// Generating an FHE circuit using the SEAL library.
+    Fhe,
     /// Generating for a proof circuit. Inputs are public of private (to the prover).
     Proof,
     /// Generating for an optimization circuit. Inputs are existentially quantified.
@@ -71,6 +73,7 @@ impl Display for Mode {
             &Mode::Proof => write!(f, "proof"),
             &Mode::Opt => write!(f, "opt"),
             &Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),
+            &Mode::Fhe => write!(f, "fhe"),
         }
     }
 }
@@ -520,6 +523,16 @@ impl<'ast> ZGen<'ast> {
                     };
                     self.circ.cir_ctx().cs.borrow_mut().outputs.push(cmp);
                 }
+                Mode::Fhe => {
+                    let ret_term = r.unwrap_term();
+                    let ret_terms = ret_term.terms();
+                    self.circ
+                        .cir_ctx()
+                        .cs
+                        .borrow_mut()
+                        .outputs
+                        .extend(ret_terms);
+                }
             }
         }
     }
@@ -527,7 +540,7 @@ impl<'ast> ZGen<'ast> {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS.clone(),
             Some(ast::Visibility::Private(private)) => match self.mode {
-                Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
+                Mode::Fhe | Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
                         self.err(
                             format!(
