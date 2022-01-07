@@ -1,16 +1,26 @@
-all: build test 
+all: test
 
-build: init
-	cargo build --release --example circ && ./scripts/build_mpc_zokrates_test.zsh && ./scripts/build_aby.zsh
-
-test:
-	cargo test && ./scripts/zokrates_test.zsh && python3 ./scripts/test_aby.py && ./scripts/test_zok_to_ilp.zsh && ./scripts/test_zok_to_ilp_pf.zsh && ./scripts/test_datalog.zsh
-
-init:
+fetch_deps:
 	git submodule update --init
 
-aby:
-	./scripts/build_mpc_zokrates_test.zsh && ./scripts/build_aby.zsh && python3 ./scripts/test_aby.py
+build_deps: fetch_deps
+	./scripts/build_aby.zsh
+
+build_aby_zokrates: build_deps
+	cargo build --release --example circ
+	./scripts/build_mpc_zokrates_test.zsh
+	./scripts/build_aby.zsh
+
+test: build_aby_zokrates
+	cargo test
+	./scripts/zokrates_test.zsh
+	python3 ./scripts/test_aby.py
+	./scripts/test_zok_to_ilp.zsh
+	./scripts/test_zok_to_ilp_pf.zsh
+	./scripts/test_datalog.zsh
+
+aby: build_aby_zokrates
+	python3 ./scripts/test_aby.py
 
 clean:
 	# remove all generated files
