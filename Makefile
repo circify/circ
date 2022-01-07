@@ -6,12 +6,15 @@ fetch_deps:
 build_deps: fetch_deps
 	./scripts/build_aby.zsh
 
-build_aby_zokrates: build_deps
-	cargo build --release --example circ
+build_aby_zokrates: build_deps build
 	./scripts/build_mpc_zokrates_test.zsh
 	./scripts/build_aby.zsh
 
-test: build_aby_zokrates
+build:
+	cargo build --release --example circ
+	cargo build --example circ
+
+test: build build_aby_zokrates
 	cargo test
 	./scripts/zokrates_test.zsh
 	python3 ./scripts/test_aby.py

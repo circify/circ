@@ -25,13 +25,13 @@ jobs:
     - uses: Swatinem/rust-cache@v1
     - name: Initialize submodules
       run: make fetch_deps
-    - name: Build submodules
-      run: make build_deps
     - name: Cache submodule build
       uses: actions/cache@v2
       with:
         path: third_party
         key: ${{ runner.os }}
+    - name: Build submodules
+      run: make build_deps
     - name: Typecheck
       run: cargo check --verbose
     - name: Check format
