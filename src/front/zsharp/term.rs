@@ -728,6 +728,9 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     }
 }
 
+// XXX(perf) separate into leaf- and non-leaf terms, initialize array
+// with leaf terms, then build up stack of array updates for non-leaf
+// terms only. This would help perf when building huge const arrays.
 fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
     make_array(ZSHARP_FIELD_SORT.clone(), sort, elems.into_iter().collect())
 }
