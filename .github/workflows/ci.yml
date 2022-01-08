@@ -9,6 +9,13 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+cache:
+  paths:
+    - third_party/ABY
+
+before_script:
+  - make submodules
+
 jobs:
   build:
 
