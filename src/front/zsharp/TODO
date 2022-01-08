@@ -1,3 +1,7 @@
+- solver-related optimizations
+  - duh, don't call the solver if not needed
+  - cache generic inf results
+
 - casts
     - widening casts are free!
     - check narrowing cast correctness!
