@@ -2,6 +2,10 @@
   - duh, don't call the solver if not needed
   - cache generic inf results
 
+- oob array read fix
+
+- tuple typecheck on update
+
 - casts
     - widening casts are free!
     - check narrowing cast correctness!
