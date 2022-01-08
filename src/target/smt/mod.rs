@@ -94,7 +94,7 @@ impl Expr2Smt<()> for Value {
             }
             Value::Tuple(fs) => {
                 write!(w, "(mkTuple")?;
-                for t in fs {
+                for t in fs.iter() {
                     write!(w, " {}", SmtDisp(t))?;
                 }
                 write!(w, ")")?;
@@ -176,7 +176,7 @@ impl Sort2Smt for Sort {
             Sort::Int => write!(w, "Int")?,
             Sort::Tuple(fs) => {
                 write!(w, "(Tuple")?;
-                for t in fs {
+                for t in fs.iter() {
                     write!(w, " {}", SmtSortDisp(t))?;
                 }
                 write!(w, ")")?;
@@ -406,7 +406,7 @@ mod test {
     fn tuple_is_sat() {
         let t = term![Op::Eq; term![Op::Field(0); term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)]], leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
         assert!(check_sat(&t));
-        let t = term![Op::Eq; term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)], leaf_term(Op::Var("a".into(), Sort::Tuple(vec![Sort::BitVector(4), Sort::BitVector(6)])))];
+        let t = term![Op::Eq; term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)], leaf_term(Op::Var("a".into(), Sort::Tuple(vec![Sort::BitVector(4), Sort::BitVector(6)].into_boxed_slice())))];
         assert!(check_sat(&t));
     }
 

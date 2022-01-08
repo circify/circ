@@ -150,7 +150,7 @@ fn arr_val_to_tup(v: &Value) -> Value {
         Value::Array(Array {
             default, map, size, ..
         }) => Value::Tuple({
-            let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
+            let mut vec = vec![arr_val_to_tup(default); *size].into_boxed_slice();
             for (i, v) in map {
                 vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
             }
@@ -169,7 +169,8 @@ fn term_arr_val_to_tup(a: Term) -> Term {
 
 fn arr_sort_to_tup(v: &Sort) -> Sort {
     match v {
-        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        Sort::Array(_key, value, size) =>
+            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice()),
         v => v.clone(),
     }
 }

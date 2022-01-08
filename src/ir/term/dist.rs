@@ -179,7 +179,7 @@ impl FixedSizeDist {
             }],
             Op::Tuple => {
                 if let Sort::Tuple(sorts) = sort {
-                    sorts.clone()
+                    sorts.to_vec()
                 } else {
                     unreachable!("Bad sort for tuple cons: {}", sort)
                 }

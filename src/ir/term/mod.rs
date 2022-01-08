@@ -623,7 +623,7 @@ pub enum Value {
     /// Array
     Array(Array),
     /// Tuple
-    Tuple(Vec<Value>),
+    Tuple(Box<[Value]>),
 }
 
 #[derive(Clone, PartialEq, Debug, PartialOrd, Hash)]
@@ -706,7 +706,7 @@ impl Display for Value {
             Value::BitVector(b) => write!(f, "{}", b),
             Value::Tuple(fields) => {
                 write!(f, "(tuple")?;
-                for field in fields {
+                for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
                 write!(f, ")")
@@ -775,7 +775,7 @@ pub enum Sort {
     /// size presumes an order, and a zero, for the key sort.
     Array(Box<Sort>, Box<Sort>, usize),
     /// A tuple
-    Tuple(Vec<Sort>),
+    Tuple(Box<[Sort]>),
 }
 
 impl Sort {
@@ -801,7 +801,7 @@ impl Sort {
 
     #[track_caller]
     /// Unwrap the constituent sorts of this tuple, panicking otherwise.
-    pub fn as_tuple(&self) -> &Vec<Sort> {
+    pub fn as_tuple(&self) -> &Box<[Sort]> {
         if let Sort::Tuple(w) = self {
             w
         } else {
@@ -899,7 +899,7 @@ impl Display for Sort {
             Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
-                for field in fields {
+                for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
                 write!(f, ")")
@@ -1031,7 +1031,7 @@ impl TermData {
     }
 
     /// Get the underlying tuple constant, if possible.
-    pub fn as_tuple_opt(&self) -> Option<&Vec<Value>> {
+    pub fn as_tuple_opt(&self) -> Option<&Box<[Value]>> {
         if let Op::Const(Value::Tuple(t)) = &self.op {
             Some(t)
         } else {
@@ -1116,7 +1116,7 @@ impl Value {
     }
     #[track_caller]
     /// Get the underlying tuple's constituent values, if possible.
-    pub fn as_tuple(&self) -> &Vec<Value> {
+    pub fn as_tuple(&self) -> &Box<[Value]> {
         if let Value::Tuple(b) = self {
             b
         } else {
@@ -1150,7 +1150,8 @@ impl Value {
             None
         }
     }
-    /// Compute the sort of this value
+
+    /// Convert this value into a usize if possible
     pub fn as_usize(&self) -> Option<usize> {
         match &self {
             Value::Bool(b) => Some(*b as usize),

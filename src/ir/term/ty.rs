@@ -88,7 +88,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         Op::Select => array_or(&check_raw(&t.cs[0])?, "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(check_raw(&t.cs[0])?),
         Op::Tuple => Ok(Sort::Tuple(
-            t.cs.iter().map(check_raw).collect::<Result<Vec<_>, _>>()?,
+            t.cs.iter().map(check_raw).collect::<Result<_, _>>()?,
         )),
         Op::Field(i) => {
             let sort = check_raw(&t.cs[0])?;
@@ -371,7 +371,7 @@ fn pf_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason
     }
 }
 
-fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Vec<Sort>, TypeErrorReason> {
+fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Box<[Sort]>, TypeErrorReason> {
     match a {
         Sort::Tuple(a) => Ok(a),
         _ => Err(TypeErrorReason::ExpectedTuple(ctx)),
