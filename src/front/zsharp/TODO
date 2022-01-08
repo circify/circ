@@ -4,20 +4,18 @@
 
 - oob array read fix
 
-- tuple typecheck on update
-
 - casts
     - widening casts are free!
     - check narrowing cast correctness!
     - look at unpack functions again
 
 - talk to AO about bit-split
-
-- multi-returns?
+  - generalized bit-split, i.e., into vector-of-bitvectors?
+    goes nicely with lookup table--based range checks...
 
 - add explicit-generic-expr to parser, e,g., foo::<(N+1)>(5)
 
-- POW width - allow full width operand once we have range analysis
+- POW width - allow full width operand once we have range analysis?
 
 - correctness: bit width for field comparisons, etc
   - when lowering to r1cs, enforce MSB=0?
@@ -47,3 +45,8 @@
 [x] const / non-const cleanup
 
 [x] tuples: Box<[_]> rather than Vec<_>
+
+[x] tuple typecheck on update
+
+[x] multi-returns?
+  - no. if we need tuples, we'll add them to the type system properly
