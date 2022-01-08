@@ -213,6 +213,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
                 (Some(t), Some(v)) => {
                     let mut new_vec = t.clone();
+                    assert_eq!(new_vec[*n].sort(), v.sort());
                     new_vec[*n] = v.clone();
                     Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
                 }

@@ -1312,6 +1312,7 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
                 let mut t = vs.get(&c.cs[0]).unwrap().as_tuple().clone();
                 assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
                 let e = vs.get(&c.cs[1]).unwrap().clone();
+                assert_eq!(t[*i].sort(), e.sort());
                 t[*i] = e;
                 Value::Tuple(t)
             }
