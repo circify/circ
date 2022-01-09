@@ -86,27 +86,19 @@ impl MemManager {
     /// Allocate a new stack array, equal to `array`.
     pub fn allocate(&mut self, array: Term) -> AllocId {
         let s = check(&array);
-        if let Sort::Array(box Sort::BitVector(addr_width), box Sort::BitVector(val_width), size) =
-            s
-        {
-            let id = self.take_next_id();
-            let alloc = Alloc::new(id, addr_width, val_width, size, array);
-
-            // let v = alloc.var().clone();
-            // TODO: add computations to ctx without assert
-            // if let Op::Var(n, _) = &v.op {
-            //     self.cs.borrow_mut().eval_and_save(&n, &array);
-            // } else {
-            //     unreachable!()
-            // }
-            // self.assert(term![Op::Eq; v, array]);
-            // self.cs.borrow_mut().outputs.push(term![Op::Eq; v, array]);
-
-            // output some term 
-            // store term with name somewhere in context? 
-
-            self.allocs.insert(id, alloc);
-            id
+        if let Sort::Array(box_addr_width, box_val_width, size) = s {
+            if let Sort::BitVector(addr_width) = *box_addr_width {
+                if let Sort::BitVector(val_width) = *box_val_width {
+                    let id = self.take_next_id();
+                    let alloc = Alloc::new(id, addr_width, val_width, size, array);
+                    self.allocs.insert(id, alloc);
+                    id
+                } else {
+                    panic!("Cannot access val_width")
+                }
+            } else {
+                panic!("Cannot access addr_width")
+            }
         } else {
             panic!("Cannot allocate array of sort: {}", s)
         }
@@ -178,7 +170,6 @@ mod test {
     fn bv_var(s: &str, w: usize) -> Term {
         leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
     }
-
     #[test]
     fn sat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));

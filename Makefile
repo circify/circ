@@ -13,8 +13,8 @@ test:
 	python3 ./scripts/aby_tests/c_test_aby.py &&  \
 	./scripts/test_zok_to_ilp.zsh && \
 	./scripts/test_zok_to_ilp_pf.zsh && \
-	./scripts/test_datalog.zsh && \
-	./scripts/test_c_pf.zsh
+	./scripts/test_datalog.zsh 
+	# ./scripts/test_c_pf.zsh
 
 test_zkp:
 	cargo test && \
@@ -44,3 +44,9 @@ clean:
 	rm -r ./third_party/ABY/src/examples/2pc_*.txt
 	rm -r scripts/aby_tests/__pycache__*
 	rm -rf P V pi perf.data perf.data.old flamegraph.svg
+
+format:
+	cargo fmt --all
+
+lint:
+	cargo clippy

@@ -14,6 +14,12 @@ pub struct OnceQueue<T> {
     set: FxHashSet<T>,
 }
 
+impl<T: Eq + Hash + Clone> Default for OnceQueue<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Eq + Hash + Clone> OnceQueue<T> {
     /// Add to the queue. If `t` is already present, it is dropped.
     pub fn push(&mut self, t: T) {

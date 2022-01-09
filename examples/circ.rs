@@ -2,10 +2,10 @@
 use bellman::gadgets::test::TestConstraintSystem;
 use bellman::groth16::{
     create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
-    verify_proof, Parameters, VerifyingKey, Proof,
+    verify_proof, Parameters, Proof, VerifyingKey,
 };
 use bellman::Circuit;
-use bls12_381::{Scalar, Bls12};
+use bls12_381::{Bls12, Scalar};
 use circ::front::datalog::{self, Datalog};
 use circ::front::zokrates::{self, Zokrates};
 use circ::front::c::{self, C};
@@ -14,16 +14,17 @@ use circ::ir::{opt::{opt, Opt}, term::extras::Letified};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
+use circ::target::r1cs::bellman::parse_instance;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use circ::target::smt::find_model;
 use env_logger;
 use good_lp::default_solver;
 use std::fs::File;
+use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
-use std::io::Read;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -87,7 +88,6 @@ enum Backend {
     Smt {},
     Ilp {},
     Mpc {},
-
 }
 
 arg_enum! {
@@ -165,7 +165,10 @@ fn main() {
     let path_buf = options.path.clone();
     println!("{:?}", options);
     let mode = match options.backend {
-        Backend::R1cs { .. } => Mode::Proof,
+        Backend::R1cs { .. } => match options.frontend.value_threshold {
+            Some(t) => Mode::ProofOfHighValue(t),
+            None => Mode::Proof,
+        },
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
         Backend::Smt { .. } => Mode::Proof,
@@ -198,23 +201,31 @@ fn main() {
         }
     };
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
+        Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![Opt::ScalarizeVars],
+            // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
+                Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::Inline,
-                Opt::Mem,
+                // Tuples must be eliminated before oblivious array elim
+                Opt::Tuple,
+                Opt::ConstantFold,
+                Opt::Obliv,
+                // The obliv elim pass produces more tuples, that must be eliminated
+                Opt::Tuple,
+                Opt::LinearScan,
+                // The linear scan pass produces more tuples, that must be eliminated
+                Opt::Tuple,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::ConstantFold,
                 Opt::Inline,
             ],
@@ -223,17 +234,24 @@ fn main() {
     println!("Done with IR optimization");
 
     match options.backend {
-        Backend::R1cs { action, proof, prover_key, verifier_key, .. } => {
+        Backend::R1cs {
+            action,
+            proof,
+            prover_key,
+            verifier_key,
+            instance,
+            ..
+        } => {
             println!("Converting to r1cs");
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
+            println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
-                ProofAction::Count => {
-                    println!("Final R1cs size: {}", r1cs.constraints().len());
-                }
+                ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
+                    r1cs.check_all();
                     let rng = &mut rand::thread_rng();
                     let mut pk_file = File::open(prover_key).unwrap();
                     let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
@@ -257,7 +275,8 @@ fn main() {
                     let pvk = prepare_verifying_key(&vk);
                     let mut pf_file = File::open(proof).unwrap();
                     let pf = Proof::read(&mut pf_file).unwrap();
-                    verify_proof(&pvk, &pf, &[]).unwrap();
+                    let instance_vec = parse_instance(&instance);
+                    verify_proof(&pvk, &pf, &instance_vec).unwrap();
                 }
             }
         }
@@ -308,7 +327,7 @@ fn main() {
                     }
                 }
             } else {
-                    todo!()
+                todo!()
             }
         }
     }

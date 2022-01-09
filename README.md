@@ -62,6 +62,16 @@ in it.
   * `examples/circ.rs`
     * This is the entry point to the zokrates copiler
 
+## Backends
+
+### SMT
+
+The SMT backend can be changed between [CVC4](https://cvc4.github.io/)
+and [cvc5](https://cvc5.github.io/) by setting the
+[RSMT2_CVC4_CMD](https://docs.rs/rsmt2/latest/rsmt2/conf/constant.CVC4_ENV_VAR.html)
+environmental variable to the SMT solver's invocation command (`cvc4` or
+`cvc5`).
+
 ## Todo List
 
 - [ ] Intern variable names

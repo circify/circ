@@ -2,9 +2,8 @@
 //!
 //! A compiler infrastructure for compiling programs to circuits
 
-#![feature(drain_filter)]
-#![feature(box_patterns)]
 #![warn(missing_docs)]
+#![deny(warnings)]
 
 #[macro_use]
 pub mod ir;

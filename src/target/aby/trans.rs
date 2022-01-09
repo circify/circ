@@ -69,7 +69,7 @@ impl ToABY {
 
     /// Parse variable name from IR representation of a variable
     fn parse_var_name(&self, full_name: String) -> String {
-        let parsed: Vec<String> = full_name.split("_").map(str::to_string).collect();
+        let parsed: Vec<String> = full_name.split('_').map(str::to_string).collect();
         if parsed.len() < 2 {
             panic!("Invalid variable name: {}", full_name);
         }
@@ -124,7 +124,6 @@ impl ToABY {
             "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);\n",
             name, s_circ, name
         )
-        .to_string()
     }
 
     fn add_in_gate(&self, t: Term, role: String) -> String {
@@ -134,7 +133,6 @@ impl ToABY {
             "\ts_{} = {}->PutINGate({}, bitlen, {});\n",
             name, s_circ, name, role
         )
-        .to_string()
     }
 
     fn add_dummy_gate(&self, t: Term) -> String {
@@ -212,7 +210,6 @@ impl ToABY {
     }
 
     /// Return constant gate evaluating to 1
-    // TODO: const should not be hardcoded to acirc
     fn one(s_type: &String) -> String {
         format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
     }
@@ -221,8 +218,8 @@ impl ToABY {
         let s_circ = self.get_sharetype_circ(t.clone());
         match check(&a) {
             Sort::Bool => {
-                let a_circ = self.get_bool(&a).clone();
-                let b_circ = self.get_bool(&b).clone();
+                let a_circ = self.get_bool(&a);
+                let b_circ = self.get_bool(&b);
 
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
@@ -246,8 +243,8 @@ impl ToABY {
                 );
             }
             Sort::BitVector(_) => {
-                let a_circ = self.get_bv(&a).clone();
-                let b_circ = self.get_bv(&b).clone();
+                let a_circ = self.get_bv(&a);
+                let b_circ = self.get_bv(&b);
 
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
@@ -284,7 +281,7 @@ impl ToABY {
             Op::Var(name, Sort::Bool) => {
                 if !self.inputs.contains_key(&t) {
                     self.inputs
-                        .insert(t.clone(), *self.md.inputs.get(name).unwrap());
+                        .insert(t.clone(), *self.md.input_vis.get(name).unwrap());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache
@@ -312,9 +309,9 @@ impl ToABY {
                 self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
             }
             Op::Ite => {
-                let sel_circ = self.get_bool(&t.cs[0]).clone();
-                let a_circ = self.get_bool(&t.cs[1]).clone();
-                let b_circ = self.get_bool(&t.cs[2]).clone();
+                let sel_circ = self.get_bool(&t.cs[0]);
+                let a_circ = self.get_bool(&t.cs[1]);
+                let b_circ = self.get_bool(&t.cs[2]);
 
                 let sel_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), sel_circ);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
@@ -457,7 +454,7 @@ impl ToABY {
             Op::Var(name, Sort::BitVector(_)) => {
                 if !self.inputs.contains_key(&t) {
                     self.inputs
-                        .insert(t.clone(), *self.md.inputs.get(name).unwrap());
+                        .insert(t.clone(), *self.md.input_vis.get(name).unwrap());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache
@@ -482,9 +479,9 @@ impl ToABY {
                 );
             }
             Op::Ite => {
-                let sel_circ = self.get_bool(&t.cs[0]).clone();
-                let a_circ = self.get_bv(&t.cs[1]).clone();
-                let b_circ = self.get_bv(&t.cs[2]).clone();
+                let sel_circ = self.get_bool(&t.cs[0]);
+                let a_circ = self.get_bv(&t.cs[1]);
+                let b_circ = self.get_bv(&t.cs[2]);
 
                 let sel_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), sel_circ);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);

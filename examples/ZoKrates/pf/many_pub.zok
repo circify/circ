@@ -1,0 +1,3 @@
+// Making sure we get input order right
+def main(public u16 a, public u16 b, public u16 c, public u16 d) -> u16:
+    return a ^ b ^ c ^ d

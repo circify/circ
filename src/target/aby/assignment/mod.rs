@@ -21,9 +21,9 @@ pub const SHARE_TYPES: [ShareType; 3] = [ShareType::Arithmetic, ShareType::Boole
 impl ShareType {
     fn char(&self) -> char {
         match self {
-            &ShareType::Arithmetic => 'a',
-            &ShareType::Yao => 'y',
-            &ShareType::Boolean => 'b',
+            ShareType::Arithmetic => 'a',
+            ShareType::Yao => 'y',
+            ShareType::Boolean => 'b',
         }
     }
 }
@@ -36,7 +36,7 @@ pub fn all_boolean_sharing(c: &Computation) -> SharingMap {
     c.outputs
         .iter()
         .flat_map(|output| {
-            PostOrderIter::new(output.clone()).map(|term| (term.clone(), ShareType::Boolean))
+            PostOrderIter::new(output.clone()).map(|term| (term, ShareType::Boolean))
         })
         .collect()
 }

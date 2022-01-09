@@ -1,8 +1,8 @@
 //! Datalog parser
 #![allow(missing_docs)]
 
-use pest::Parser;
 use pest::error::Error;
+use pest::Parser;
 use pest_derive::Parser;
 
 // Issue with the proc macro
@@ -193,7 +193,6 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-
     #[derive(Debug, PartialEq, Clone)]
     pub struct BinaryExpression<'ast> {
         pub op: BinaryOperator,
@@ -230,7 +229,7 @@ pub mod ast {
             match self {
                 Expression::Binary(b) => &b.span,
                 Expression::Identifier(i) => &i.span,
-                Expression::Literal(c) => &c.span(),
+                Expression::Literal(c) => c.span(),
                 Expression::Unary(u) => &u.span,
                 Expression::Call(u) => &u.span,
                 Expression::Access(u) => &u.span,
@@ -314,17 +313,20 @@ pub mod ast {
                 match next.as_rule() {
                     // this happens when we have an expression in parentheses: it needs to be processed as another sequence of terms and operators
                     Rule::paren_expr => Expression::Paren(
-                        Box::new(Expression::from_pest(
+                        Box::new(
+                            Expression::from_pest(
                                 &mut pair.into_inner().next().unwrap().into_inner(),
-                            ).unwrap()),
+                            )
+                            .unwrap(),
+                        ),
                         next.as_span(),
                     ),
                     Rule::literal => {
                         Expression::Literal(Literal::from_pest(&mut pair.into_inner()).unwrap())
                     }
-                    Rule::identifier => Expression::Identifier(
-                        Ident::from_pest(&mut pair.into_inner()).unwrap(),
-                    ),
+                    Rule::identifier => {
+                        Expression::Identifier(Ident::from_pest(&mut pair.into_inner()).unwrap())
+                    }
                     Rule::unary_expression => {
                         let span = next.as_span();
                         let mut inner = next.into_inner();
@@ -345,9 +347,9 @@ pub mod ast {
                             span,
                         })
                     }
-                    Rule::call_expr => Expression::Call(
-                        CallExpression::from_pest(&mut pair.into_inner()).unwrap(),
-                    ),
+                    Rule::call_expr => {
+                        Expression::Call(CallExpression::from_pest(&mut pair.into_inner()).unwrap())
+                    }
                     Rule::access_expr => Expression::Access(
                         AccessExpression::from_pest(&mut pair.into_inner()).unwrap(),
                     ),
@@ -528,7 +530,7 @@ pub mod ast {
 }
 
 pub fn parse(file_string: &str) -> Result<ast::Program, Error<Rule>> {
-    let mut pest_pairs = MyParser::parse(Rule::program, &file_string)?;
+    let mut pest_pairs = MyParser::parse(Rule::program, file_string)?;
     use from_pest::FromPest;
     Ok(ast::Program::from_pest(&mut pest_pairs).expect("bug in AST construction"))
 }
