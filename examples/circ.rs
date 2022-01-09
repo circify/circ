@@ -6,11 +6,14 @@ use bellman::groth16::{
 };
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
+use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
 use circ::front::zokrates::{self, Zokrates};
-use circ::front::c::{self, C};
-use circ::front::{Mode, FrontEnd};
-use circ::ir::{opt::{opt, Opt}, term::extras::Letified};
+use circ::front::{FrontEnd, Mode};
+use circ::ir::{
+    opt::{opt, Opt},
+    term::extras::Letified,
+};
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
@@ -136,7 +139,7 @@ fn determine_language(l: &Language, input_path: &PathBuf) -> DeterminedLanguage 
         &Language::Datalog => DeterminedLanguage::Datalog,
         &Language::Zokrates => DeterminedLanguage::Zokrates,
         &Language::C => DeterminedLanguage::C,
-        &Language::Auto =>  {
+        &Language::Auto => {
             let p = input_path.to_str().unwrap();
             if p.ends_with(".zok") {
                 DeterminedLanguage::Zokrates
@@ -285,7 +288,7 @@ fn main() {
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
                 DeterminedLanguage::Zokrates => "zok".to_string(),
-                _ => panic!("Language isn't supported by MPC backend: {:#?}", language)
+                _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
             println!("Cost model: {}", options.cost_model);
             to_aby(cs, &path_buf, &lang_str, &options.cost_model);

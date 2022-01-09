@@ -806,7 +806,10 @@ impl<E: Embeddable> Circify<E> {
 
     /// Zero allocate an array
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        self.cir_ctx.mem.borrow_mut().zero_allocate(size, addr_width, val_width)
+        self.cir_ctx
+            .mem
+            .borrow_mut()
+            .zero_allocate(size, addr_width, val_width)
     }
 }
 

@@ -64,13 +64,16 @@ impl CostModel {
                 )
             };
         let get_cost = |op_name: &str, obj: &serde_json::map::Map<String, Value>| -> f64 {
-            let o = obj.get(op_name).unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
+            let o = obj
+                .get(op_name)
+                .unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
             Some(
                 o.get("32")
                     .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
                     .as_f64()
                     .expect("not a number"),
-            ).unwrap()
+            )
+            .unwrap()
         };
         let mut conversions = FxHashMap::default();
         let mut ops = FxHashMap::default();
@@ -118,8 +121,7 @@ impl CostModel {
             // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
             if !op_name.contains("2") {
                 for op in ops_from_name(op_name) {
-                    for (share_type, share_name) in
-                        &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
+                    for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
                     {
                         if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
                             ops.entry(op.clone())
@@ -167,7 +169,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> =
         FxHashMap::default();
     let mut ilp = Ilp::new();
-    
+
     // build variables for all term assignments
     for (t, i) in terms.iter() {
         let mut vars = vec![];
@@ -256,7 +258,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             .chain(term_vars.values().map(|(a, b, _)| (a, b)))
             .fold(0.0.into(), |acc: Expression, (v, cost)| acc + *v * *cost),
     );
-    
+
     let (_opt, solution) = ilp.default_solve().unwrap();
 
     let mut assignment = TermMap::new();

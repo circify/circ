@@ -23,12 +23,10 @@ impl Ty {
                 term: CTermData::CInt(*s, *w, bv_lit(0, *w)),
                 udef: false,
             },
-            Self::Array(_s, ty) => {
-                CTerm {
-                    term: CTermData::CArray(*ty.clone(), None),
-                    udef: false,
-                }
-            }
+            Self::Array(_s, ty) => CTerm {
+                term: CTermData::CArray(*ty.clone(), None),
+                udef: false,
+            },
         }
     }
 }
@@ -37,7 +35,13 @@ impl Display for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Ty::Bool => write!(f, "bool"),
-            Ty::Int(s, w) => if *s { write!(f, "s{}", w) } else { write!(f, "u{}", w) },
+            Ty::Int(s, w) => {
+                if *s {
+                    write!(f, "s{}", w)
+                } else {
+                    write!(f, "u{}", w)
+                }
+            }
             Ty::Array(_, b) => write!(f, "{}[]", b),
         }
     }
@@ -52,7 +56,7 @@ impl fmt::Debug for Ty {
 pub fn is_arith_type(t: &CTerm) -> bool {
     let ty = t.term.type_();
     match ty {
-        Ty::Int(_,_) | Ty::Bool => true,
+        Ty::Int(_, _) | Ty::Bool => true,
         _ => false,
     }
 }
@@ -83,7 +87,7 @@ pub fn is_integer_type(ty: Ty) -> bool {
 
 pub fn int_conversion_rank(ty: Ty) -> usize {
     match ty {
-        Ty::Int(_,w) => w,
+        Ty::Int(_, w) => w,
         Ty::Bool => 1,
         _ => panic!("int_conversion_rank received a non-int type: {:#?}", ty),
     }
@@ -91,7 +95,7 @@ pub fn int_conversion_rank(ty: Ty) -> usize {
 
 pub fn _total_num_bits(ty: Ty) -> usize {
     match ty {
-        Ty::Int(_,w) => w,
+        Ty::Int(_, w) => w,
         Ty::Bool => 1,
         Ty::Array(s, t) => s.unwrap() * num_bits(*t),
     }
@@ -99,7 +103,7 @@ pub fn _total_num_bits(ty: Ty) -> usize {
 
 pub fn num_bits(ty: Ty) -> usize {
     match ty {
-        Ty::Int(_,w) => w,
+        Ty::Int(_, w) => w,
         Ty::Bool => 1,
         Ty::Array(_, _) => 32,
     }
@@ -107,7 +111,7 @@ pub fn num_bits(ty: Ty) -> usize {
 
 pub fn inner_ty(ty: Ty) -> Ty {
     match ty {
-        Ty::Int(_,_) => ty,
+        Ty::Int(_, _) => ty,
         Ty::Bool => ty,
         Ty::Array(_, t) => *t,
     }

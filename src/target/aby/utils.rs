@@ -1,7 +1,7 @@
 //! Utility functions to write compiler output to ABY
 
 use std::fs;
-use std::io::{prelude::*};
+use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -17,11 +17,7 @@ pub fn get_path(path_buf: &PathBuf, lang: &String, t: &String) -> String {
     let name = format!("{}_{}", filename, lang);
 
     // TODO: clean
-    let path = format!(
-        "third_party/ABY/src/examples/{}_{}_tmp.txt",
-        name,
-        t
-    );
+    let path = format!("third_party/ABY/src/examples/{}_{}_tmp.txt", name, t);
 
     if Path::new(&path).exists() {
         fs::remove_file(&path).expect("Failed to remove old circuit_tmp file");
@@ -34,12 +30,13 @@ pub fn write_line_to_file(path: &String, line: &String) {
     if !Path::new(&path).exists() {
         fs::File::create(&path).expect("Failed to create tmp file");
     }
-    
-    let mut file = fs::OpenOptions::new()
-      .write(true)
-      .append(true)
-      .open(path)
-      .expect("Failed to open circuit_tmp file");
 
-    file.write_all(line.as_bytes()).expect("Failed to write to circuit_tmp file");
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(path)
+        .expect("Failed to open circuit_tmp file");
+
+    file.write_all(line.as_bytes())
+        .expect("Failed to write to circuit_tmp file");
 }
