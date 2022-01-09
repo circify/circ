@@ -362,7 +362,7 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
         CTermData::CInt(s, _, i) => match &i.op {
             Op::Const(Value::BitVector(f)) => {
                 if *s {
-                    Some(f.as_sint().clone())
+                    Some(f.as_sint())
                 } else {
                     Some(f.uint().clone())
                 }
@@ -492,7 +492,7 @@ impl Embeddable for Ct {
                             &*ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility.clone(),
+                            visibility,
                         )
                     })
                     .collect();

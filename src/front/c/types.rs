@@ -55,10 +55,7 @@ impl fmt::Debug for Ty {
 
 pub fn is_arith_type(t: &CTerm) -> bool {
     let ty = t.term.type_();
-    match ty {
-        Ty::Int(_, _) | Ty::Bool => true,
-        _ => false,
-    }
+    matches!(ty, Ty::Int(_, _) | Ty::Bool)
 }
 
 pub fn is_signed_int(ty: Ty) -> bool {
@@ -68,7 +65,7 @@ pub fn is_signed_int(ty: Ty) -> bool {
         }
         return false;
     }
-    return false;
+    false
 }
 
 pub fn is_unsigned_int(ty: Ty) -> bool {
@@ -78,11 +75,11 @@ pub fn is_unsigned_int(ty: Ty) -> bool {
         }
         return s;
     }
-    return false;
+    false
 }
 
 pub fn is_integer_type(ty: Ty) -> bool {
-    is_signed_int(ty.clone()) || is_unsigned_int(ty.clone())
+    is_signed_int(ty.clone()) || is_unsigned_int(ty)
 }
 
 pub fn int_conversion_rank(ty: Ty) -> usize {

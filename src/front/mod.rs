@@ -34,11 +34,11 @@ pub enum Mode {
 
 impl Display for Mode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            &Mode::Mpc(n) => write!(f, "{}-pc", n),
-            &Mode::Proof => write!(f, "proof"),
-            &Mode::Opt => write!(f, "opt"),
-            &Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),
+        match *self {
+            Mode::Mpc(n) => write!(f, "{}-pc", n),
+            Mode::Proof => write!(f, "proof"),
+            Mode::Opt => write!(f, "opt"),
+            Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),
         }
     }
 }

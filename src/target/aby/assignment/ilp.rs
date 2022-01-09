@@ -119,13 +119,13 @@ impl CostModel {
         };
         for (op_name, cost) in costs {
             // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
-            if !op_name.contains("2") {
+            if !op_name.contains('2') {
                 for op in ops_from_name(op_name) {
                     for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
                     {
                         if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
                             ops.entry(op.clone())
-                                .or_insert_with(|| FxHashMap::default())
+                                .or_insert_with(FxHashMap::default)
                                 .insert(*share_type, c);
                         }
                     }
@@ -137,8 +137,8 @@ impl CostModel {
 }
 
 /// Uses an ILP to assign...
-pub fn assign(c: &Computation, cm: &String) -> SharingMap {
-    let base_dir = match cm.as_ref() {
+pub fn assign(c: &Computation, cm: &str) -> SharingMap {
+    let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
         _ => panic!("Unknown cost model type: {}", cm),

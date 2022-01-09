@@ -82,7 +82,7 @@ impl CLoc {
 impl CGen {
     fn new(inputs: Option<PathBuf>, mode: Mode, tu: TranslationUnit) -> Self {
         let this = Self {
-            circ: Circify::new(Ct::new(inputs.map(|i| parser::parse_inputs(i)))),
+            circ: Circify::new(Ct::new(inputs.map(parser::parse_inputs))),
             mode,
             tu,
         };
@@ -133,7 +133,7 @@ impl CGen {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
                 let new_val = val.term.term(&self.circ);
                 self.circ.store(i, idx_term, new_val);
-                Ok(val.clone())
+                Ok(val)
             }
             (a, b) => Err(format!("[Array Store] cannot index {} by {}", b, a)),
         }
@@ -157,7 +157,7 @@ impl CGen {
         }
     }
 
-    fn lval(&mut self, expr: Box<Node<Expression>>) -> CLoc {
+    fn lval(&mut self, expr: Node<Expression>) -> CLoc {
         match expr.node {
             Expression::Identifier(_) => {
                 let base_name = name_from_ident(&expr.node);
@@ -196,7 +196,7 @@ impl CGen {
                     let size = self.fold_(expr_) as usize;
                     return Ty::Array(Some(size), Box::new(base_ty));
                 }
-                return Ty::Array(None, Box::new(base_ty));
+                Ty::Array(None, Box::new(base_ty))
             }
             DerivedDeclarator::Pointer(_ptr) => {
                 unimplemented!("pointers not implemented yet");
@@ -206,7 +206,7 @@ impl CGen {
     }
 
     fn derived_type_(&mut self, base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Ty {
-        if derived.len() == 0 {
+        if derived.is_empty() {
             return base_ty;
         }
         let mut derived_ty = base_ty.clone();
@@ -228,7 +228,7 @@ impl CGen {
             if let Extension::Attribute(attr) = &node.node {
                 let name = &attr.name;
                 return match name.node.as_str() {
-                    "public" => PUBLIC_VIS.clone(),
+                    "public" => PUBLIC_VIS,
                     "private" => match self.mode {
                         Mode::Mpc(n_parties) => {
                             assert!(attr.arguments.len() == 1);
@@ -244,7 +244,7 @@ impl CGen {
                                 ))
                             }
                         }
-                        Mode::Proof => PROVER_VIS.clone(),
+                        Mode::Proof => PROVER_VIS,
                         _ => unimplemented!("Mode {} is not supported.", self.mode),
                     },
                     _ => panic!("Unknown visibility: {:#?}", name),
@@ -308,7 +308,7 @@ impl CGen {
                 match bin_op.operator.node {
                     BinaryOperator::Assign => {
                         let e = self.gen_expr(bin_op.rhs.node);
-                        let lval = self.lval(bin_op.lhs);
+                        let lval = self.lval(*bin_op.lhs);
                         let mod_res = self.mod_lval(lval, e.clone());
                         self.unwrap(mod_res);
                         Ok(e)
@@ -318,7 +318,7 @@ impl CGen {
                         let i = self.gen_expr(bin_op.lhs.node.clone());
                         let rhs = self.gen_expr(bin_op.rhs.node);
                         let e = f(i, rhs).unwrap();
-                        let lval = self.lval(bin_op.lhs);
+                        let lval = self.lval(*bin_op.lhs);
                         let mod_res = self.mod_lval(lval, e.clone());
                         self.unwrap(mod_res);
                         Ok(e)
@@ -329,12 +329,14 @@ impl CGen {
                         self.array_select(a, b)
                     }
                     _ => {
-                        let f = self.get_bin_op(bin_op.operator.node);
+                        let f = self.get_bin_op(bin_op.operator.node.clone());
                         let mut a = self.gen_expr(bin_op.lhs.node);
                         let mut b = self.gen_expr(bin_op.rhs.node);
 
                         // TODO: fix hack, const int check for shifting
-                        if f == shl || f == shr {
+                        if bin_op.operator.node == BinaryOperator::ShiftLeft
+                            || bin_op.operator.node == BinaryOperator::ShiftRight
+                        {
                             let a_t = fold(&a.term.term(&self.circ));
                             a = CTerm {
                                 term: CTermData::CInt(true, 32, a_t),
@@ -362,7 +364,7 @@ impl CGen {
                             udef: false,
                         };
                         let e = f(i, one).unwrap();
-                        let lval = self.lval(u_op.operand);
+                        let lval = self.lval(*u_op.operand);
                         let mod_res = self.mod_lval(lval, e.clone());
                         self.unwrap(mod_res);
                         Ok(e)
@@ -390,7 +392,7 @@ impl CGen {
             Initializer::List(l) => {
                 // TODO: check length of values to initialized number
                 let mut values: Vec<CTerm> = Vec::new();
-                let inner_type = inner_ty(derived_ty.clone());
+                let inner_type = inner_ty(derived_ty);
                 for li in l.clone() {
                     let expr = self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
                     values.push(expr)
@@ -440,7 +442,7 @@ impl CGen {
         let res = self.circ.declare_init(
             decl_info.name,
             derived_ty.clone(),
-            Val::Term(cast(Some(derived_ty.clone()), expr.clone())),
+            Val::Term(cast(Some(derived_ty), expr.clone())),
         );
         self.unwrap(res);
         expr
@@ -451,7 +453,7 @@ impl CGen {
             ForInitializer::Declaration(d) => {
                 let decl_info = get_decl_info(d.node.clone());
                 let name = decl_info.name;
-                let expr = self.gen_decl(d.node.clone());
+                let expr = self.gen_decl(d.node);
                 let val = self.fold_(expr);
                 Some(ConstIteration { name, val })
             }
@@ -459,7 +461,7 @@ impl CGen {
                 if let Expression::BinaryOperator(bin_op) = e.node {
                     let name = name_from_ident(&bin_op.node.lhs.node);
                     let expr = self.gen_expr(bin_op.node.rhs.node);
-                    let val = self.fold_(expr.clone());
+                    let val = self.fold_(expr);
                     // let ass_res = self.circ.assign(
                     //     Loc::local(name.clone()),
                     //     Val::Term(expr.clone()),
@@ -479,7 +481,7 @@ impl CGen {
                 let expr = self.gen_expr(bin_op.node.rhs.node);
                 let val = self.fold_(expr);
                 match bin_op.node.operator.node {
-                    BinaryOperator::Less => Some(ConstIteration { name, val: val }),
+                    BinaryOperator::Less => Some(ConstIteration { name, val }),
                     BinaryOperator::LessOrEqual => Some(ConstIteration { name, val: val + 1 }),
                     _ => None,
                 }
@@ -524,7 +526,7 @@ impl CGen {
         let incr = incr_.val;
 
         // TODO: fix naming
-        if cond_name == "" {
+        if cond_name.is_empty() {
             cond_name = init_name.clone();
         }
 
@@ -652,9 +654,8 @@ impl CGen {
                                 let ty = fn_info.ret_ty.as_ref().unwrap();
                                 let name = "return".to_owned();
                                 let term = r.unwrap_term();
-                                let _r = self.circ.declare(name.clone(), &ty, false, PROVER_VIS);
-                                self.circ
-                                    .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
+                                let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
+                                self.circ.assign_with_assertions(name, term, ty, PUBLIC_VIS);
                             }
                             _ => unimplemented!("Mode: {}", self.mode),
                         }

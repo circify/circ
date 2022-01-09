@@ -4,11 +4,10 @@ use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, BufRead, BufReader};
 use std::path::Path;
-use std::path::PathBuf;
 
-/// Given PathBuf `path_buf`, return the filename of the path
-fn get_filename(path_buf: &PathBuf) -> String {
-    Path::new(&path_buf.iter().last().unwrap().to_os_string())
+/// Given Path `path`, return the filename of the path
+fn get_filename(path: &Path) -> String {
+    Path::new(&path.iter().last().unwrap().to_os_string())
         .file_stem()
         .unwrap()
         .to_os_string()
@@ -93,15 +92,15 @@ fn write_h_file(filename: &str) {
 }
 
 /// Using the cpp_template.txt, write the .cpp file for the new test case
-fn write_circ_file(filename: &String) {
-    let setup_file_path = format!("third_party/ABY/src/examples/{}_setup_tmp.txt", *filename);
+fn write_circ_file(filename: &str) {
+    let setup_file_path = format!("third_party/ABY/src/examples/{}_setup_tmp.txt", filename);
     let mut setup_file = File::open(setup_file_path).expect("Unable to open the file");
     let mut setup = String::new();
     setup_file
         .read_to_string(&mut setup)
         .expect("Unable to read the file");
 
-    let circuit_file_path = format!("third_party/ABY/src/examples/{}_circuit_tmp.txt", *filename);
+    let circuit_file_path = format!("third_party/ABY/src/examples/{}_circuit_tmp.txt", filename);
     let mut circuit_file = File::open(circuit_file_path).expect("Unable to open the file");
     let mut circuit = String::new();
     circuit_file
@@ -127,8 +126,8 @@ fn write_circ_file(filename: &String) {
 }
 
 /// Write circuit output from translation later to ABY
-pub fn write_aby_exec(path_buf: &PathBuf, lang: &String) {
-    let filename = get_filename(path_buf);
+pub fn write_aby_exec(path: &Path, lang: &str) {
+    let filename = get_filename(path);
     let name = format!("{}_{}", filename, lang);
     create_dir_in_aby(&name);
     update_cmake_file(&name);
