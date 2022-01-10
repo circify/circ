@@ -2,7 +2,7 @@
   - duh, don't call the solver if not needed
   - cache generic inf results
 
-- oob array read fix
+- lowering IR arrays: enforce bounds checks!
 
 - casts
     - widening casts are free!
@@ -50,3 +50,5 @@
 
 [x] multi-returns?
   - no. if we need tuples, we'll add them to the type system properly
+
+[x] oob array read fix
