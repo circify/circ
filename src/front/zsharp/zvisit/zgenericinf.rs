@@ -7,6 +7,7 @@ use super::super::{ZGen, span_to_string};
 use super::super::term::{Ty, T, cond, const_val};
 
 use lazy_static::lazy_static;
+use log::debug;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::RwLock;
@@ -107,10 +108,10 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         // 2. for each argument, update the const generic values
         for (pty, arg_ty) in self.fdef.parameters.iter().map(|p| &p.ty).zip(arg_tys) {
             self.fdef_gen_ty(arg_ty, pty)?;
+            // bracketing invariant
+            assert!(self.gens == &self.fdef.generics[..]);
+            assert!(self.sfx.ends_with(&self.fdef.id.value));
         }
-        // bracketing invariant
-        assert!(self.gens == &self.fdef.generics[..]);
-        assert!(self.sfx.ends_with(&self.fdef.id.value));
 
         // 3. unify the return type
         match (rty, self.fdef.returns.first()) {
@@ -125,6 +126,9 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
 
         // 4. run the solver on the term stack, if it's not already cached
         if let Some(res) = self.constr.as_ref().and_then(|t| CACHE.read().unwrap().get(t).cloned()) {
+            assert!(self.gens.len() == res.len());
+            assert!(self.gens.iter().all(|g| res.contains_key(&g.value)));
+            debug!("Returning cached solver result for {}", &self.sfx);
             return Ok(res);
         }
         let g_names = self.gens.iter().map(|gid| make_varname_str(&gid.value, &self.sfx)).collect::<Vec<_>>();
