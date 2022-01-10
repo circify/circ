@@ -649,6 +649,9 @@ impl Array {
         map: BTreeMap<Value, Value>,
         size: usize,
     ) -> Self {
+        if key_sort.default_value().as_usize().is_none() {
+            panic!("IR Arrays cannot have {} index (Int, BitVector, Bool, or Field only)", key_sort);
+        }
         Self {
             key_sort,
             default,
@@ -667,9 +670,14 @@ impl Array {
     }
 
     // consistency check for index
-    fn check_idx(&self, isrt: Sort) {
-        if isrt != self.key_sort {
-            panic!("Tried to index array with key {}, but {} was expected", isrt, self.key_sort);
+    fn check_idx(&self, idx: &Value) {
+        if idx.sort() != self.key_sort {
+            panic!("Tried to index array with key {}, but {} was expected", idx.sort(), self.key_sort);
+        }
+        match idx.as_usize() {
+            Some(idx_u) if idx_u < self.size => (),
+            Some(idx_u) => panic!("IR Array out of range: accessed {}, size is {}", idx_u, self.size),
+            _ => panic!("IR Array index {} not convertible to usize", idx),
         }
     }
 
@@ -682,7 +690,7 @@ impl Array {
 
     /// Store
     pub fn store(mut self, idx: Value, val: Value) -> Self {
-        self.check_idx(idx.sort());
+        self.check_idx(&idx);
         self.check_val(val.sort());
         self.map.insert(idx, val);
         self
@@ -690,7 +698,7 @@ impl Array {
 
     /// Select
     pub fn select(&self, idx: &Value) -> Value {
-        self.check_idx(idx.sort());
+        self.check_idx(&idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
     }
 }
