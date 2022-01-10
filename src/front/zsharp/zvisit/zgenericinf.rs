@@ -6,9 +6,15 @@ use crate::target::smt::find_unique_model;
 use super::super::{ZGen, span_to_string};
 use super::super::term::{Ty, T, cond, const_val};
 
-use rand::{distributions::Alphanumeric, Rng};
+use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::RwLock;
 use zokrates_pest_ast as ast;
+
+lazy_static! {
+    static ref CACHE: RwLock<HashMap<Term, HashMap<String, T>>> = RwLock::new(HashMap::new());
+}
 
 pub(in super::super) struct ZGenericInf<'ast, 'gen, const IS_CNST: bool> {
     zgen: &'gen ZGen<'ast>,
@@ -19,16 +25,20 @@ pub(in super::super) struct ZGenericInf<'ast, 'gen, const IS_CNST: bool> {
 }
 
 impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
-    pub fn new(zgen: &'gen ZGen<'ast>, fdef: &'gen ast::FunctionDefinition<'ast>) -> Self {
+    pub fn new(
+        zgen: &'gen ZGen<'ast>,
+        fdef: &'gen ast::FunctionDefinition<'ast>,
+        path: &Path,
+        name: &str,
+    ) -> Self {
         let gens = fdef.generics.as_ref();
-        let sfx = make_sfx(
-            (&mut rand::thread_rng())
-                .sample_iter(Alphanumeric)
-                .map(char::from)
-                .take(8)
-                .collect(),
-            &fdef.id.value,
-        );
+        let mut path_str = "___".to_string();
+        path_str.push_str(&path.to_string_lossy());
+        path_str.push_str("___");
+        path_str.push_str(name);
+        path_str.push_str("___");
+        path_str.push_str(&fdef.id.value);
+        let sfx = make_sfx(path_str, &fdef.id.value);
         Self {
             zgen,
             fdef,
@@ -56,11 +66,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         self.zgen.identifier_impl_::<IS_CNST>(id).and_then(|res| const_val(res))
     }
     
-    pub fn unify_generic(
+    pub fn unify_generic<ATIter: Iterator<Item=Ty>>(
         &mut self,
         egv: &[ast::ConstantGenericValue<'ast>],
         rty: Option<Ty>,
-        args: &[T],
+        arg_tys: ATIter,
     ) -> Result<HashMap<String, T>, String> {
         use ast::ConstantGenericValue as CGV;
         self.constr = None;
@@ -95,8 +105,8 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         }
 
         // 2. for each argument, update the const generic values
-        for (pty, arg) in self.fdef.parameters.iter().map(|p| &p.ty).zip(args.iter()) {
-            self.fdef_gen_ty(arg.type_().clone(), pty)?;
+        for (pty, arg_ty) in self.fdef.parameters.iter().map(|p| &p.ty).zip(arg_tys) {
+            self.fdef_gen_ty(arg_ty, pty)?;
         }
         // bracketing invariant
         assert!(self.gens == &self.fdef.generics[..]);
@@ -113,14 +123,17 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         assert!(self.gens == &self.fdef.generics[..]);
         assert!(self.sfx.ends_with(&self.fdef.id.value));
 
-        // 4. run the solver on the term stack
+        // 4. run the solver on the term stack, if it's not already cached
+        if let Some(res) = self.constr.as_ref().and_then(|t| CACHE.read().unwrap().get(t).cloned()) {
+            return Ok(res);
+        }
         let g_names = self.gens.iter().map(|gid| make_varname_str(&gid.value, &self.sfx)).collect::<Vec<_>>();
         let mut solved = self.constr.as_ref()
             .and_then(|t| find_unique_model(t, g_names.clone()))
             .unwrap_or_else(|| HashMap::new());
 
         // 5. extract the assignments from the solver result
-        let mut res = HashMap::new();
+        let mut res = HashMap::with_capacity(g_names.len());
         assert_eq!(g_names.len(), self.gens.len());
         g_names.into_iter().enumerate().for_each(|(idx, mut g_name)| {
             if let Some(g_val) = solved.remove(&g_name) {
@@ -133,6 +146,9 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 assert!(res.insert(g_name, T::new(Ty::Uint(32), term![Op::Const(g_val)])).is_none());
             }
         });
+        if self.constr.is_some() {
+            CACHE.write().unwrap().insert(self.constr.take().unwrap(), res.clone());
+        }
         Ok(res)
     }
 

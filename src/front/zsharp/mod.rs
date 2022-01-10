@@ -395,7 +395,9 @@ impl<'ast> ZGen<'ast> {
             .ok_or_else(|| format!("No file '{:?}' attempting fn call", &f_path))?
             .get(&f_name)
             .ok_or_else(|| format!("No function '{}' attempting fn call", &f_name))?;
-        let generics = ZGenericInf::<IS_CNST>::new(self, f).unify_generic(egv, exp_ty, &args[..])?;
+        let arg_tys = args.iter().map(|arg| arg.type_().clone());
+        let generics = ZGenericInf::<IS_CNST>::new(self, f, &f_path, &f_name)
+            .unify_generic(egv, exp_ty, arg_tys)?;
 
         if self.stdlib.is_embed(&f_path) {
             let mut generics = generics;
