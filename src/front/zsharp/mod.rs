@@ -357,7 +357,6 @@ impl<'ast> ZGen<'ast> {
         self.generics_stack.borrow_mut().pop();
     }
 
-    // XXX(TODO) cleanup self.err vs returning Result
     fn egvs_impl_<const IS_CNST: bool>(
         &self,
         egv: &[ast::ConstantGenericValue<'ast>],
@@ -880,7 +879,7 @@ impl<'ast> ZGen<'ast> {
                 // XXX(unimpl) multi-assignment unimplemented
                 assert!(d.lhs.len() <= 1);
 
-                self.set_lhs_ty_defn::<IS_CNST>(d);
+                self.set_lhs_ty_defn::<IS_CNST>(d)?;
                 let e = self.expr_impl_::<IS_CNST>(&d.expression)?;
 
                 if let Some(l) = d.lhs.first() {
@@ -908,17 +907,18 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn set_lhs_ty_defn<const IS_CNST: bool>(&self, d: &ast::DefinitionStatement<'ast>) {
+    fn set_lhs_ty_defn<const IS_CNST: bool>(
+        &self,
+        d: &ast::DefinitionStatement<'ast>
+    ) -> Result<(), String> {
         assert!(self.lhs_ty.borrow().is_none());  // starting from nothing...
         if let ast::Expression::Postfix(pfe) = &d.expression {
             if matches!(pfe.accesses.first(), Some(ast::Access::Call(_))) {
-                let ty = self.unwrap(
-                    d.lhs.first().map(|ty| self.lhs_type::<IS_CNST>(ty)).transpose(),
-                    &d.span,
-                );
+                let ty = d.lhs.first().map(|ty| self.lhs_type::<IS_CNST>(ty)).transpose()?;
                 self.lhs_ty_put(ty);
             }
         }
+        Ok(())
     }
 
     fn set_lhs_ty_ret(&self, r: &ast::ReturnStatement<'ast>) {
