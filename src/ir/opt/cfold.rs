@@ -219,6 +219,8 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                 }
                 _ => None,
             }
+            Op::BvConcat => t.cs.iter().map(|c| c_get(c).as_bv_opt().cloned()).collect::<Option<Vec<_>>>().map(|v| v.into_iter().reduce(BitVector::concat)).flatten().map(|bv| leaf_term(Op::Const(Value::BitVector(bv)))),
+            Op::BoolToBv => get(0).as_bool_opt().map(|b| leaf_term(Op::Const(Value::BitVector(BitVector::new(Integer::from(b), 1))))),
             _ => None,
         };
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };

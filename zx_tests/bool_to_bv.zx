@@ -1,0 +1,52 @@
+import "utils/casts/bool_array_to_u32_array"
+
+def main() -> u32:
+    bool[2] ones = [true, true]
+    bool[6] zeros = [false, false, false, false, false, false]
+
+    bool[8] byte0 = [...ones, ...zeros]     // 0xc0
+    bool[8] byte1 = [...zeros, ...ones]     // 0x03
+
+    bool[16] word0 = [...byte0, ...byte0]   // 0xc0c0
+    bool[16] word1 = [...byte0, ...byte1]   // 0xc003
+    bool[16] word2 = [...byte1, ...byte0]   // 0x03c0
+    bool[16] word3 = [...byte1, ...byte1]   // 0x0303
+
+    bool[32] dwrd0 = [...word0, ...word0]
+    bool[32] dwrd1 = [...word0, ...word1]
+    bool[32] dwrd2 = [...word0, ...word2]
+    bool[32] dwrd3 = [...word0, ...word3]
+    bool[32] dwrd4 = [...word1, ...word0]
+    bool[32] dwrd5 = [...word1, ...word1]
+    bool[32] dwrd6 = [...word1, ...word2]
+    bool[32] dwrd7 = [...word1, ...word3]
+    bool[32] dwrd8 = [...word2, ...word0]
+    bool[32] dwrd9 = [...word2, ...word1]
+    bool[32] dwrdA = [...word2, ...word2]
+    bool[32] dwrdB = [...word2, ...word3]
+    bool[32] dwrdC = [...word3, ...word0]
+    bool[32] dwrdD = [...word3, ...word1]
+    bool[32] dwrdE = [...word3, ...word2]
+    bool[32] dwrdF = [...word3, ...word3]
+
+    bool[16 * 32] foo = [...dwrd0, ...dwrd1, ...dwrd2, ...dwrd3, ...dwrd4, ...dwrd5, ...dwrd6, ...dwrd7, ...dwrd8, ...dwrd9, ...dwrdA, ...dwrdB, ...dwrdC, ...dwrdD, ...dwrdE, ...dwrdF ]
+    u32[16] a = bool_array_to_u32_array(foo)
+
+    assert(a[0] == 0xc0c0c0c0)
+    assert(a[1] == 0xc0c0c003)
+    assert(a[2] == 0xc0c003c0)
+    assert(a[3] == 0xc0c00303)
+    assert(a[4] == 0xc003c0c0)
+    assert(a[5] == 0xc003c003)
+    assert(a[6] == 0xc00303c0)
+    assert(a[7] == 0xc0030303)
+    assert(a[8] == 0x03c0c0c0)
+    assert(a[9] == 0x03c0c003)
+    assert(a[10] == 0x03c003c0)
+    assert(a[11] == 0x03c00303)
+    assert(a[12] == 0x0303c0c0)
+    assert(a[13] == 0x0303c003)
+    assert(a[14] == 0x030303c0)
+    assert(a[15] == 0x03030303)
+
+    return a[0]
