@@ -4,13 +4,13 @@
 use crate::ir::term::{bv_lit, leaf_term, term, BoolNaryOp, Op, Sort, Term, Value};
 use crate::target::smt::find_unique_model;
 use super::super::{ZGen, span_to_string};
-use super::super::term::{Ty, T, cond};
+use super::super::term::{Ty, T, cond, const_val};
 
 use rand::{distributions::Alphanumeric, Rng};
 use std::collections::HashMap;
 use zokrates_pest_ast as ast;
 
-pub(in super::super) struct ZGenericInf<'ast, 'gen> {
+pub(in super::super) struct ZGenericInf<'ast, 'gen, const IS_CNST: bool> {
     zgen: &'gen ZGen<'ast>,
     fdef: &'gen ast::FunctionDefinition<'ast>,
     gens: &'gen [ast::IdentifierExpression<'ast>],
@@ -18,7 +18,7 @@ pub(in super::super) struct ZGenericInf<'ast, 'gen> {
     constr: Option<Term>,
 }
 
-impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
+impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     pub fn new(zgen: &'gen ZGen<'ast>, fdef: &'gen ast::FunctionDefinition<'ast>) -> Self {
         let gens = fdef.generics.as_ref();
         let sfx = make_sfx(
@@ -51,6 +51,10 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
         };
         self.constr = Some(new_term);
     }
+
+    fn const_id_(&self, id: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
+        self.zgen.identifier_impl_::<IS_CNST>(id).and_then(|res| const_val(res))
+    }
     
     pub fn unify_generic(
         &mut self,
@@ -59,11 +63,18 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
         args: &[T],
     ) -> Result<HashMap<String, T>, String> {
         use ast::ConstantGenericValue as CGV;
-        // start from an empty constraint
         self.constr = None;
         self.gens = &self.fdef.generics[..];
+
+        // early returns: monomorphized or not generic
         if self.gens.is_empty() {
             return Ok(HashMap::new());
+        }
+        if egv.len() == self.gens.len() && !egv.iter().any(|cgv| matches!(cgv, CGV::Underscore(_))) {
+            match self.zgen.egvs_impl_::<IS_CNST>(egv, self.fdef.generics.clone()) {
+                Ok(gens) if gens.len() == self.gens.len() => { return Ok(gens); }
+                _ => (),
+            };
         }
 
         // 1. build up the already-known generics
@@ -71,7 +82,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
             if let Some(v) = match cgv {
                 CGV::Underscore(_) => None,
                 CGV::Value(v) => Some(self.zgen.literal_(v)),
-                CGV::Identifier(i) => Some(self.zgen.const_identifier_(i)),
+                CGV::Identifier(i) => Some(self.const_id_(i)),
             } {
                 let v = v?;
                 let var = make_varname(&id.value, &self.sfx);
@@ -144,7 +155,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
         bas_ty: &ast::BasicType<'ast>,
     ) -> Result<(), String> {
         // XXX(q) dispatch to const_ or not? does not seem necessary because arg is Type::Basic
-        if arg_ty != self.zgen.type_impl_::<true>(&ast::Type::Basic(bas_ty.clone()))? {
+        if arg_ty != self.zgen.type_impl_::<IS_CNST>(&ast::Type::Basic(bas_ty.clone()))? {
             Err(format!("Type mismatch unifying generics: got {}, decl was {:?}", arg_ty, bas_ty))
         } else {
             Ok(())
@@ -260,7 +271,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
                         if self.is_generic_var(&id.value) {
                             make_varname(&id.value, &self.sfx)
                         } else {
-                            u32_term(self.zgen.const_identifier_(&id)?)?
+                            u32_term(self.const_id_(&id)?)?
                         }
                     }
                 };
@@ -332,7 +343,7 @@ impl<'ast, 'gen> ZGenericInf<'ast, 'gen> {
                 if self.is_generic_var(&id.value) {
                     Ok(T::new(Ty::Uint(32), make_varname(&id.value, &self.sfx)))
                 } else {
-                    self.zgen.const_identifier_(&id)
+                    self.const_id_(&id)
                 }
             }
             Literal(le) => self.zgen.literal_(le),

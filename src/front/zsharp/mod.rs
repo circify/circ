@@ -358,32 +358,23 @@ impl<'ast> ZGen<'ast> {
     }
 
     // XXX(TODO) cleanup self.err vs returning Result
-    fn explicit_generic_values(
+    fn egvs_impl_<const IS_CNST: bool>(
         &self,
-        eg: Option<&ast::ExplicitGenerics<'ast>>,
-        gv: Vec<ast::IdentifierExpression<'ast>>,
-    ) -> HashMap<String, T> {
-        eg.map(|g| {
-            g.values
-                .iter()
-                .map(|cgv| match cgv {
-                    ast::ConstantGenericValue::Value(l) => self.unwrap(self.literal_(&l), l.span()),
-                    ast::ConstantGenericValue::Identifier(i) => self.unwrap(
-                        self.identifier_cg_(i).ok_or_else(|| format!("no const {} in current context", &i.value)),
-                        &i.span,
-                    ),
-                    ast::ConstantGenericValue::Underscore(u) => {
-                        self.err(
-                            "non-monomorphized generic argument",
-                            &u.span,
-                        );
-                    }
-                })
-                .zip(gv.into_iter())
-                .map(|(g, n)| (n.value, g))
-                .collect()
-        })
-        .unwrap_or_else(|| HashMap::new())
+        egv: &[ast::ConstantGenericValue<'ast>],
+        gens: Vec<ast::IdentifierExpression<'ast>>,
+    ) -> Result<HashMap<String, T>, String> {
+        egv.iter()
+            .map(|cgv| match cgv {
+                ast::ConstantGenericValue::Value(l) => self.literal_(&l),
+                ast::ConstantGenericValue::Identifier(i) => self
+                    .identifier_impl_::<IS_CNST>(i)
+                    .and_then(|res| const_val(res)),
+                ast::ConstantGenericValue::Underscore(_) =>
+                    Err("explicit_generic_values got non-monomorphized generic argument".to_string()),
+            })
+            .zip(gens.into_iter())
+            .map(|(g, n)| Ok((n.value, g?)))
+            .collect()
     }
 
     fn function_call_impl_<const IS_CNST: bool>(
@@ -405,7 +396,7 @@ impl<'ast> ZGen<'ast> {
             .ok_or_else(|| format!("No file '{:?}' attempting fn call", &f_path))?
             .get(&f_name)
             .ok_or_else(|| format!("No function '{}' attempting fn call", &f_name))?;
-        let generics = ZGenericInf::new(self, f).unify_generic(egv, exp_ty, &args[..])?;
+        let generics = ZGenericInf::<IS_CNST>::new(self, f).unify_generic(egv, exp_ty, &args[..])?;
 
         if self.stdlib.is_embed(&f_path) {
             let mut generics = generics;
@@ -670,12 +661,8 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or(false)
     }
 
-    fn identifier_cg_(&self, i: &ast::IdentifierExpression<'ast>) -> Option<T> {
-        self.generic_lookup_(&i.value).or_else(|| self.const_lookup_(&i.value).cloned())
-    }
-
     fn identifier_impl_<const IS_CNST: bool>(&self, i: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
-        match self.identifier_cg_(i) {
+        match self.generic_lookup_(&i.value).or_else(|| self.const_lookup_(&i.value).cloned()) {
             Some(v) => Ok(v),
             None if IS_CNST => self.cvar_lookup(&i.value)
                     .ok_or_else(|| format!("Undefined const identifier {}", &i.value)),
@@ -683,13 +670,9 @@ impl<'ast> ZGen<'ast> {
                 .circ_get_value(Loc::local(i.value.clone()))
                 .map_err(|e| format!("{}", e))? {
                     Val::Term(t) => Ok(t),
-                    _ => Err(format!("Non-const identifier {}", &i.value)),
+                    _ => Err(format!("Non-Term identifier {}", &i.value)),
             }
         }
-    }
-
-    fn const_identifier_(&self, i: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
-        self.identifier_impl_::<true>(i)
     }
 
     fn const_isize_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<isize, String> {
@@ -1156,7 +1139,8 @@ impl<'ast> ZGen<'ast> {
                     .ok_or_else(|| format!("No such struct {}", &s.id.value))?
                     .clone();
                 let g_len = sdef.generics.len();
-                let generics = self.explicit_generic_values(s.explicit_generics.as_ref(), sdef.generics);
+                let egv = s.explicit_generics.as_ref().map(|eg| eg.values.as_ref()).unwrap_or(&[][..]);
+                let generics = self.egvs_impl_::<IS_CNST>(egv, sdef.generics)?;
                 if generics.len() != g_len {
                     Err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value))?;
                 }

@@ -1,5 +1,5 @@
 - solver-related optimizations
-  - duh, don't call the solver if not needed
+  [x] duh, don't call the solver if not needed
   - cache generic inf results
 
 - lowering IR arrays: enforce bounds checks!
