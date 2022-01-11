@@ -1,7 +1,3 @@
-- solver-related optimizations
-  [x] duh, don't call the solver if not needed
-  - cache generic inf results
-
 - lowering IR arrays: enforce bounds checks!
 
 - casts
@@ -52,3 +48,9 @@
   - no. if we need tuples, we'll add them to the type system properly
 
 [x] oob array read fix
+
+[x] solver-related optimizations
+  [x] duh, don't call the solver if not needed
+  [x] cache generic inf results
+
+[x] array construction optimization
