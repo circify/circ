@@ -38,5 +38,3 @@ impl<'ast> ZVisitorMut<'ast> for ZExpressionRewriter<'ast> {
         }
     }
 }
-
-

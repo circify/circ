@@ -4,6 +4,6 @@ import "../bool/pack"
 // pack N big-endian bits into one field element
 def main<N>(u32[N] input) -> field:
 
-	bool[N * 32] bits = to_bits(input)
+    bool[N * 32] bits = to_bits(input)
 
     return pack(bits)

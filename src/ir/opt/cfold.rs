@@ -184,11 +184,18 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
-            Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv|
-                leaf_term(Op::Const(Value::Field(FieldElem::new(bv.uint().clone(), m.clone()))))
-            ),
+            Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv| {
+                leaf_term(Op::Const(Value::Field(FieldElem::new(
+                    bv.uint().clone(),
+                    m.clone(),
+                ))))
+            }),
             Op::Store => {
-                match (get(0).as_array_opt(), get(1).as_value_opt(), get(2).as_value_opt()) {
+                match (
+                    get(0).as_array_opt(),
+                    get(1).as_value_opt(),
+                    get(2).as_value_opt(),
+                ) {
                     (Some(arr), Some(idx), Some(val)) => {
                         let new_arr = arr.clone().store(idx.clone(), val.clone());
                         Some(leaf_term(Op::Const(Value::Array(new_arr))))
@@ -200,8 +207,15 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                 (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
                 _ => None,
             },
-            Op::Tuple => t.cs.iter().map(|c| c_get(c).as_value_opt().cloned()).collect::<Option<_>>().map(|v| leaf_term(Op::Const(Value::Tuple(v)))),
-            Op::Field(n) => get(0).as_tuple_opt().map(|t| leaf_term(Op::Const(t[*n].clone()))),
+            Op::Tuple => {
+                t.cs.iter()
+                    .map(|c| c_get(c).as_value_opt().cloned())
+                    .collect::<Option<_>>()
+                    .map(|v| leaf_term(Op::Const(Value::Tuple(v))))
+            }
+            Op::Field(n) => get(0)
+                .as_tuple_opt()
+                .map(|t| leaf_term(Op::Const(t[*n].clone()))),
             Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
                 (Some(t), Some(v)) => {
                     let mut new_vec = Vec::from(t).into_boxed_slice();
@@ -210,9 +224,21 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                     Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
                 }
                 _ => None,
+            },
+            Op::BvConcat => {
+                t.cs.iter()
+                    .map(|c| c_get(c).as_bv_opt().cloned())
+                    .collect::<Option<Vec<_>>>()
+                    .map(|v| v.into_iter().reduce(BitVector::concat))
+                    .flatten()
+                    .map(|bv| leaf_term(Op::Const(Value::BitVector(bv))))
             }
-            Op::BvConcat => t.cs.iter().map(|c| c_get(c).as_bv_opt().cloned()).collect::<Option<Vec<_>>>().map(|v| v.into_iter().reduce(BitVector::concat)).flatten().map(|bv| leaf_term(Op::Const(Value::BitVector(bv)))),
-            Op::BoolToBv => get(0).as_bool_opt().map(|b| leaf_term(Op::Const(Value::BitVector(BitVector::new(Integer::from(b), 1))))),
+            Op::BoolToBv => get(0).as_bool_opt().map(|b| {
+                leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                    Integer::from(b),
+                    1,
+                ))))
+            }),
             _ => None,
         };
         let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };

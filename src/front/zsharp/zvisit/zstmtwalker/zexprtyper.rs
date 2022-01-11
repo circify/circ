@@ -1,8 +1,8 @@
 //! AST Walker for zokrates_pest_ast
 
-use super::ZStatementWalker;
-use super::super::{bos_to_type, ZVisitorError, ZVisitorMut, ZVisitorResult};
 use super::super::eqtype::*;
+use super::super::{bos_to_type, ZVisitorError, ZVisitorMut, ZVisitorResult};
+use super::ZStatementWalker;
 
 use zokrates_pest_ast as ast;
 
@@ -60,7 +60,9 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     fn visit_expression(&mut self, expr: &mut ast::Expression<'ast>) -> ZVisitorResult {
         use ast::Expression::*;
         if self.ty.is_some() {
-            return Err(ZVisitorError("ZExpressionTyper: type found at expression entry?".to_string()));
+            return Err(ZVisitorError(
+                "ZExpressionTyper: type found at expression entry?".to_string(),
+            ));
         }
         match expr {
             Ternary(te) => self.visit_ternary_expression(te),
@@ -125,20 +127,22 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     (None, None) => None,
                 } {
                     if !matches!(&ty, Basic(_)) {
-                        return Err(ZVisitorError("ZExpressionTyper: got non-Basic type for a binop".to_string()));
+                        return Err(ZVisitorError(
+                            "ZExpressionTyper: got non-Basic type for a binop".to_string(),
+                        ));
                     }
                     if matches!(&ty, Basic(Boolean(_))) {
                         return Err(ZVisitorError(
-                            "ZExpressionTyper: got Bool for a binop that cannot support it".to_string(),
+                            "ZExpressionTyper: got Bool for a binop that cannot support it"
+                                .to_string(),
                         ));
                     }
-                    if matches!(
-                        &be.op,
-                        BitXor | BitAnd | BitOr | RightShift | LeftShift
-                    ) && matches!(&ty, Basic(Field(_)))
+                    if matches!(&be.op, BitXor | BitAnd | BitOr | RightShift | LeftShift)
+                        && matches!(&ty, Basic(Field(_)))
                     {
                         return Err(ZVisitorError(
-                            "ZExpressionTyper: got Field for a binop that cannot support it".to_string(),
+                            "ZExpressionTyper: got Field for a binop that cannot support it"
+                                .to_string(),
                         ));
                     }
                     self.ty.replace(ty);
@@ -262,53 +266,63 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
 
         let mut acc_ty = None;
         let mut acc_len = 0;
-        iae.expressions.iter_mut().try_for_each::<_, ZVisitorResult>(|soe| {
-            self.visit_spread_or_expression(soe)?;
-            if let Some(ty) = self.take() {
-                let (nty, nln) = if matches!(soe, ast::SpreadOrExpression::Expression(_)) {
-                    Ok((ty, 1))
-                } else if let ast::Type::Array(mut at) = ty {
-                    assert!(!at.dimensions.is_empty());
-                    let len = self.walker.zgen.const_usize_(&at.dimensions[0])?;
-                    if at.dimensions.len() == 1 {
-                        Ok((bos_to_type(at.ty), len))
+        iae.expressions
+            .iter_mut()
+            .try_for_each::<_, ZVisitorResult>(|soe| {
+                self.visit_spread_or_expression(soe)?;
+                if let Some(ty) = self.take() {
+                    let (nty, nln) = if matches!(soe, ast::SpreadOrExpression::Expression(_)) {
+                        Ok((ty, 1))
+                    } else if let ast::Type::Array(mut at) = ty {
+                        assert!(!at.dimensions.is_empty());
+                        let len = self.walker.zgen.const_usize_(&at.dimensions[0])?;
+                        if at.dimensions.len() == 1 {
+                            Ok((bos_to_type(at.ty), len))
+                        } else {
+                            at.dimensions.remove(0);
+                            Ok((ast::Type::Array(at), len))
+                        }
                     } else {
-                        at.dimensions.remove(0);
-                        Ok((ast::Type::Array(at), len))
+                        Err(format!(
+                            "ZExpressionTyper: Spread expression: expected array, got {:?}",
+                            ty
+                        ))
+                    }?;
+
+                    if let Some(acc) = &acc_ty {
+                        eq_type(acc, &nty)?;
+                    } else {
+                        acc_ty.replace(nty);
                     }
+                    acc_len += nln;
+                    Ok(())
+                } else if matches!(soe, ast::SpreadOrExpression::Expression(_)) {
+                    // assume expression type is OK, just increment count
+                    acc_len += 1;
+                    Ok(())
                 } else {
-                    Err(format!("ZExpressionTyper: Spread expression: expected array, got {:?}", ty))
-                }?;
-
-                if let Some(acc) = &acc_ty {
-                    eq_type(acc, &nty)?;
-                } else {
-                    acc_ty.replace(nty);
+                    Err(ZVisitorError(format!(
+                        "ZExpressionTyper: Could not type SpreadOrExpression::Spread {:#?}",
+                        soe
+                    )))
                 }
-                acc_len += nln;
-                Ok(())
-            } else if matches!(soe, ast::SpreadOrExpression::Expression(_)) {
-                // assume expression type is OK, just increment count
-                acc_len += 1;
-                Ok(())
-            } else {
-                Err(ZVisitorError(format!("ZExpressionTyper: Could not type SpreadOrExpression::Spread {:#?}", soe)))
-            }
-        })?;
+            })?;
 
-        self.ty = acc_ty.map(|at| ast::Type::Array(self.arrayize(
-            at,
-            ast::Expression::Literal(ast::LiteralExpression::HexLiteral(
-                ast::HexLiteralExpression {
-                    value: ast::HexNumberExpression::U32(ast::U32NumberExpression {
-                        value: format!("{:04x}", acc_len),
+        self.ty = acc_ty.map(|at| {
+            ast::Type::Array(self.arrayize(
+                at,
+                ast::Expression::Literal(ast::LiteralExpression::HexLiteral(
+                    ast::HexLiteralExpression {
+                        value: ast::HexNumberExpression::U32(ast::U32NumberExpression {
+                            value: format!("{:04x}", acc_len),
+                            span: iae.span.clone(),
+                        }),
                         span: iae.span.clone(),
-                    }),
-                    span: iae.span.clone(),
-                },
-            )),
-            &iae.span
-        )));
+                    },
+                )),
+                &iae.span,
+            ))
+        });
         Ok(())
     }
 

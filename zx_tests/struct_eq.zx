@@ -10,7 +10,7 @@ struct Foo {
     Bar d
 }
 
-def main() -> bool:
+def main() -> Foo:
     Bar w = Bar { d: 0, e: 0 }
     assert(w == w)
 
@@ -19,4 +19,4 @@ def main() -> bool:
 
     assert(x != y)
     assert(!(x == y))
-    return x == y || x != y
+    return x

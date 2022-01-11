@@ -166,7 +166,10 @@ impl ValueTupleTree {
 
 fn termify_val_tuples(v: Value) -> Term {
     if let Value::Tuple(vs) = v {
-        term(Op::Tuple, Vec::from(vs).into_iter().map(termify_val_tuples).collect())
+        term(
+            Op::Tuple,
+            Vec::from(vs).into_iter().map(termify_val_tuples).collect(),
+        )
     } else {
         leaf_term(Op::Const(v))
     }

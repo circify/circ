@@ -1,8 +1,8 @@
 //! AST Walker for zokrates_pest_ast
 
-use super::{ZVisitorMut, ZVisitorError, ZVisitorResult};
 use super::super::term::Ty;
 use super::walkfns::*;
+use super::{ZVisitorError, ZVisitorMut, ZVisitorResult};
 
 use zokrates_pest_ast as ast;
 
@@ -138,7 +138,11 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 self.visit_expression(&mut aie.value)?;
                 self.to_ty = to_ty;
             } else {
-                return Err("ZConstLiteralRewriter: rewriting ArrayInitializerExpression to non-Array type".to_string().into());
+                return Err(
+                    "ZConstLiteralRewriter: rewriting ArrayInitializerExpression to non-Array type"
+                        .to_string()
+                        .into(),
+                );
             }
         }
 
@@ -165,7 +169,10 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                     Ok(Some(ty_map.clone()))
                 }
             } else {
-                Err("ZConstLiteralRewriter: rewriting InlineStructExpression to non-Struct type".to_string())
+                Err(
+                    "ZConstLiteralRewriter: rewriting InlineStructExpression to non-Struct type"
+                        .to_string(),
+                )
             }
         } else {
             Ok(None)
@@ -193,7 +200,8 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                     "ZConstLiteralRewriter: inline expression for struct {} has extra fields: {:?}",
                     &ise.ty.value,
                     ty_map.keys().collect::<Vec<_>>(),
-                ).into());
+                )
+                .into());
             }
         } else {
             ise.members
@@ -213,7 +221,10 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
             if let Ty::Array(_, arr_ty) = t.clone() {
                 Ok(Some(*arr_ty))
             } else {
-                Err("ZConstLiteralRewriter: rewriting InlineArrayExpression to non-Array type".to_string())
+                Err(
+                    "ZConstLiteralRewriter: rewriting InlineArrayExpression to non-Array type"
+                        .to_string(),
+                )
             }
         } else {
             Ok(None)
@@ -255,10 +266,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         self.visit_span(&mut pe.span)
     }
 
-    fn visit_array_type(
-        &mut self,
-        aty: &mut ast::ArrayType<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_array_type(&mut self, aty: &mut ast::ArrayType<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() {
             if let Ty::Array(_, arr_ty) = self.to_ty.clone().unwrap() {
                 // ArrayType::value should match arr_ty
@@ -266,22 +274,25 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 self.visit_basic_or_struct_type(&mut aty.ty)?;
                 self.to_ty = to_ty;
             } else {
-                return Err("ZConstLiteralRewriter: rewriting ArrayType to non-Array type".to_string().into());
+                return Err(
+                    "ZConstLiteralRewriter: rewriting ArrayType to non-Array type"
+                        .to_string()
+                        .into(),
+                );
             }
         }
 
         // always rewrite ArrayType::dimensions literals to type U32
         let to_ty = self.replace(Some(Ty::Uint(32)));
-        aty.dimensions.iter_mut().try_for_each(|d| self.visit_expression(d))?;
+        aty.dimensions
+            .iter_mut()
+            .try_for_each(|d| self.visit_expression(d))?;
         self.to_ty = to_ty;
 
         self.visit_span(&mut aty.span)
     }
 
-    fn visit_explicit_generics(
-        &mut self,
-        eg: &mut ast::ExplicitGenerics<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_explicit_generics(&mut self, eg: &mut ast::ExplicitGenerics<'ast>) -> ZVisitorResult {
         // always rewrite ConstantGenericValue literals to type U32
         let to_ty = self.replace(Some(Ty::Uint(32)));
         walk_explicit_generics(self, eg)?;
@@ -289,64 +300,55 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         Ok(())
     }
 
-    fn visit_field_type(
-        &mut self,
-        fty: &mut ast::FieldType<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_field_type(&mut self, fty: &mut ast::FieldType<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Field)) {
-            return Err("ZConstLiteralRewriter: Field type mismatch".to_string().into());
+            return Err("ZConstLiteralRewriter: Field type mismatch"
+                .to_string()
+                .into());
         }
         walk_field_type(self, fty)
     }
 
-    fn visit_boolean_type(
-        &mut self,
-        bty: &mut ast::BooleanType<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_boolean_type(&mut self, bty: &mut ast::BooleanType<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Bool)) {
-            return Err("ZConstLiteralRewriter: Bool type mismatch".to_string().into());
+            return Err("ZConstLiteralRewriter: Bool type mismatch"
+                .to_string()
+                .into());
         }
         walk_boolean_type(self, bty)
     }
 
-    fn visit_u8_type(
-        &mut self,
-        u8ty: &mut ast::U8Type<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_u8_type(&mut self, u8ty: &mut ast::U8Type<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(8))) {
             return Err("ZConstLiteralRewriter: u8 type mismatch".to_string().into());
         }
         walk_u8_type(self, u8ty)
     }
 
-    fn visit_u16_type(
-        &mut self,
-        u16ty: &mut ast::U16Type<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_u16_type(&mut self, u16ty: &mut ast::U16Type<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(16))) {
-            return Err("ZConstLiteralRewriter: u16 type mismatch".to_string().into());
+            return Err("ZConstLiteralRewriter: u16 type mismatch"
+                .to_string()
+                .into());
         }
         walk_u16_type(self, u16ty)
     }
 
-    fn visit_u32_type(
-        &mut self,
-        u32ty: &mut ast::U32Type<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_u32_type(&mut self, u32ty: &mut ast::U32Type<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(32))) {
-            return Err("ZConstLiteralRewriter: u32 type mismatch".to_string().into());
+            return Err("ZConstLiteralRewriter: u32 type mismatch"
+                .to_string()
+                .into());
         }
         walk_u32_type(self, u32ty)
     }
 
-    fn visit_u64_type(
-        &mut self,
-        u64ty: &mut ast::U64Type<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_u64_type(&mut self, u64ty: &mut ast::U64Type<'ast>) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(64))) {
-            return Err("ZConstLiteralRewriter: u64 type mismatch".to_string().into());
+            return Err("ZConstLiteralRewriter: u64 type mismatch"
+                .to_string()
+                .into());
         }
         walk_u64_type(self, u64ty)
     }
 }
-

@@ -1,6 +1,6 @@
 //! AST Walker for zokrates_pest_ast
 
-use super::{ZVisitorResult, ZVisitorMut};
+use super::{ZVisitorMut, ZVisitorResult};
 use zokrates_pest_ast as ast;
 
 pub fn walk_file<'ast, Z: ZVisitorMut<'ast>>(

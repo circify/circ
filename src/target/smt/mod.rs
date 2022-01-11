@@ -338,16 +338,24 @@ pub fn find_unique_model(t: &Term, uniqs: Vec<String>) -> Option<HashMap<String,
     solver.assert(&**t).unwrap();
     // first, get the result
     let model: HashMap<String, Value> = if solver.check_sat().unwrap() {
-        solver.get_model().unwrap().into_iter().map(|(id, _, _, v)| (id, v)).collect()
+        solver
+            .get_model()
+            .unwrap()
+            .into_iter()
+            .map(|(id, _, _, v)| (id, v))
+            .collect()
     } else {
         return None;
     };
     // now, assert that any value in uniq is not the value assigned and check unsat
-    match uniqs.into_iter()
-        .flat_map(|n| model.get(&n)
-            .map(|v| term![EQ; term![Op::Var(n, v.sort())], term![Op::Const(v.clone())]])
-        )
-        .reduce(|l,r| term![AND; l, r])
+    match uniqs
+        .into_iter()
+        .flat_map(|n| {
+            model
+                .get(&n)
+                .map(|v| term![EQ; term![Op::Var(n, v.sort())], term![Op::Const(v.clone())]])
+        })
+        .reduce(|l, r| term![AND; l, r])
         .map(|t| term![NOT; t])
     {
         None => Some(model),

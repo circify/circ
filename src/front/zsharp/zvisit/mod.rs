@@ -8,10 +8,10 @@ mod zgenericinf;
 mod zstmtwalker;
 mod zvmut;
 
-pub use zvmut::ZVisitorMut;
 pub(super) use zconstlitrw::ZConstLiteralRewriter;
 pub(super) use zgenericinf::ZGenericInf;
 pub(super) use zstmtwalker::ZStatementWalker;
+pub use zvmut::ZVisitorMut;
 
 use zokrates_pest_ast as ast;
 

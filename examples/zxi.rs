@@ -54,5 +54,7 @@ fn main() {
         mode: mode.clone(),
     };
     let cs = ZSharpFE::interpret(inputs);
-    println!("{:?}", cs);
+    cs.pretty(&mut std::io::stdout().lock())
+        .expect("error pretty-printing value");
+    println!();
 }

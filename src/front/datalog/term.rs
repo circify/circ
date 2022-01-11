@@ -9,7 +9,7 @@ use super::error::ErrorKind;
 use super::ty::Ty;
 
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::zsharp::{ZSHARP_MODULUS_ARC, ZSHARP_FIELD_SORT};
+use crate::front::zsharp::{ZSHARP_FIELD_SORT, ZSHARP_MODULUS_ARC};
 use crate::ir::term::*;
 
 /// A term

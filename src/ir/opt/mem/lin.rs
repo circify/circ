@@ -23,8 +23,9 @@ fn arr_val_to_tup(v: &Value) -> Value {
 
 fn arr_sort_to_tup(v: &Sort) -> Sort {
     match v {
-        Sort::Array(_key, value, size) =>
-            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice()),
+        Sort::Array(_key, value, size) => {
+            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice())
+        }
         v => v.clone(),
     }
 }

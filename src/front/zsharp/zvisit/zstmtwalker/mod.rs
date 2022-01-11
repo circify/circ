@@ -3,11 +3,13 @@
 mod zexprrewriter;
 mod zexprtyper;
 
+use super::super::term::Ty;
+use super::super::{span_to_string, ZGen};
 use super::eqtype::*;
 use super::walkfns::*;
-use super::{bos_to_type, ZConstLiteralRewriter, ZVisitorMut, ZVisitorError, ZVisitorResult, ZResult};
-use super::super::term::Ty;
-use super::super::{ZGen, span_to_string};
+use super::{
+    bos_to_type, ZConstLiteralRewriter, ZResult, ZVisitorError, ZVisitorMut, ZVisitorResult,
+};
 use zexprrewriter::ZExpressionRewriter;
 use zexprtyper::ZExpressionTyper;
 
@@ -60,7 +62,8 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         // start with the simple constant literal rewrites
         let mut rewriter = ZConstLiteralRewriter::new(None);
         rewriter.visit_expression(expr)?;
-        ty.map(|ty| self.unify_expression(ty, expr)).unwrap_or(Ok(()))
+        ty.map(|ty| self.unify_expression(ty, expr))
+            .unwrap_or(Ok(()))
     }
 
     fn unify_expression(
@@ -94,35 +97,43 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 "ZStatementWalker: wrong number of arguments to fn {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            ).into());
+            )
+            .into());
         }
         if fdef.generics.is_empty() && call.explicit_generics.is_some() {
             return Err(format!(
                 "ZStatementWalker: got explicit generics for non-generic fn call {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            ).into());
+            )
+            .into());
         }
-        if call.explicit_generics.as_ref().map(|eg| eg.values.len() != fdef.generics.len()).unwrap_or(false) {
+        if call
+            .explicit_generics
+            .as_ref()
+            .map(|eg| eg.values.len() != fdef.generics.len())
+            .unwrap_or(false)
+        {
             return Err(format!(
                 "ZStatementWalker: wrong number of generic args to fn {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            ).into());
+            )
+            .into());
         }
 
         // unify args
-        fdef.parameters.iter()
+        fdef.parameters
+            .iter()
             .map(|pty| pty.ty.clone())
             .zip(call.arguments.expressions.iter_mut())
             .try_for_each(|(pty, arg)| self.unify_expression(pty, arg))?;
 
-
-        let ret_ty = fdef.returns.first().cloned()
-            .unwrap_or_else(||
-                ast::Type::Basic(ast::BasicType::Boolean(
-                        ast::BooleanType { span: call.span.clone() }
-            )));
+        let ret_ty = fdef.returns.first().cloned().unwrap_or_else(|| {
+            ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType {
+                span: call.span.clone(),
+            }))
+        });
         if let Some(ty) = rty {
             eq_type(ty, &ret_ty)?;
         }
@@ -157,11 +168,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                         &id.value,
                     )))
                 } else {
-                    let rty = if alen == 1 {
-                        rty
-                    } else {
-                        None
-                    };
+                    let rty = if alen == 1 { rty } else { None };
                     Ok((self.get_call_ty(fdef, ca, rty)?, 1))
                 }
             })?
@@ -231,7 +238,8 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             )));
         };
 
-        let mut sm_types = self.monomorphize_struct(&st)?
+        let mut sm_types = self
+            .monomorphize_struct(&st)?
             .fields
             .into_iter()
             .map(|sf| (sf.id.value, sf.ty))
@@ -708,7 +716,10 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         self.vars.pop();
     }
 
-    fn monomorphize_struct(&self, sty: &ast::StructType<'ast>) -> ZResult<ast::StructDefinition<'ast>> {
+    fn monomorphize_struct(
+        &self,
+        sty: &ast::StructType<'ast>,
+    ) -> ZResult<ast::StructDefinition<'ast>> {
         let mut sdef = self.get_struct(&sty.id.value)?.clone();
         // short circuit for non-generic structs
         if sdef.generics.is_empty() {
@@ -727,7 +738,6 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             return Err(ZVisitorError(format!(
                 "ZStatementWalker: no explicit generics found monomorphizing struct {}",
                 &sty.id.value,
-
             )));
         }
 
@@ -820,7 +830,8 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
 
         // rewrite untyped literals
         let mut rewriter = ZConstLiteralRewriter::new(None);
-        eg.values.iter_mut()
+        eg.values
+            .iter_mut()
             .try_for_each(|cgv| rewriter.visit_constant_generic_value(cgv))?;
 
         // put gen_values back
@@ -929,10 +940,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         self.visit_span(&mut def.span)
     }
 
-    fn visit_assignee(
-        &mut self,
-        asgn: &mut ast::Assignee<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_assignee(&mut self, asgn: &mut ast::Assignee<'ast>) -> ZVisitorResult {
         if !self.var_defined(&asgn.id.value) {
             Err(ZVisitorError(format!(
                 "ZStatementWalker: assignment to undeclared variable {}",
@@ -943,10 +951,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         }
     }
 
-    fn visit_typed_identifier(
-        &mut self,
-        ti: &mut ast::TypedIdentifier<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_typed_identifier(&mut self, ti: &mut ast::TypedIdentifier<'ast>) -> ZVisitorResult {
         ZConstLiteralRewriter::new(None).visit_type(&mut ti.ty)?;
         let ty = if let ast::Type::Struct(sty) = &mut ti.ty {
             self.monomorphic_struct(sty)?
@@ -975,30 +980,50 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         }
     }
 
-    fn visit_range(
-        &mut self,
-        rng: &mut ast::Range<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_range(&mut self, rng: &mut ast::Range<'ast>) -> ZVisitorResult {
         let mut zty = ZExpressionTyper::new(self);
-        let fty = rng.from.as_mut()
-            .map(|fexp| self.type_expression(&mut fexp.0, &mut zty)).transpose()?.flatten();
-        let tty = rng.to.as_mut()
-            .map(|texp| self.type_expression(&mut texp.0, &mut zty)).transpose()?.flatten();
+        let fty = rng
+            .from
+            .as_mut()
+            .map(|fexp| self.type_expression(&mut fexp.0, &mut zty))
+            .transpose()?
+            .flatten();
+        let tty = rng
+            .to
+            .as_mut()
+            .map(|texp| self.type_expression(&mut texp.0, &mut zty))
+            .transpose()?
+            .flatten();
         match (fty, tty) {
             (None, None) => {
                 let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Field));
-                rng.from.as_mut().map(|fexp| zrw.visit_expression(&mut fexp.0)).transpose()?;
-                rng.to.as_mut().map(|texp| zrw.visit_expression(&mut texp.0)).transpose()?;
+                rng.from
+                    .as_mut()
+                    .map(|fexp| zrw.visit_expression(&mut fexp.0))
+                    .transpose()?;
+                rng.to
+                    .as_mut()
+                    .map(|texp| zrw.visit_expression(&mut texp.0))
+                    .transpose()?;
                 Ok(())
             }
-            (Some(fty), None) => rng.to.as_mut().map(|texp| self.unify_expression(fty, &mut texp.0)).unwrap_or(Ok(())),
-            (None, Some(tty)) => rng.from.as_mut().map(|fexp| self.unify_expression(tty, &mut fexp.0)).unwrap_or(Ok(())),
-            (Some(fty), Some(tty)) => eq_type(&fty, &tty)
-                .map_err(|e| ZVisitorError(format!(
+            (Some(fty), None) => rng
+                .to
+                .as_mut()
+                .map(|texp| self.unify_expression(fty, &mut texp.0))
+                .unwrap_or(Ok(())),
+            (None, Some(tty)) => rng
+                .from
+                .as_mut()
+                .map(|fexp| self.unify_expression(tty, &mut fexp.0))
+                .unwrap_or(Ok(())),
+            (Some(fty), Some(tty)) => eq_type(&fty, &tty).map_err(|e| {
+                ZVisitorError(format!(
                     "typing Range: {}\n{}",
                     e.0,
                     span_to_string(&rng.span),
-                ))),
+                ))
+            }),
         }?;
         self.visit_span(&mut rng.span)
     }

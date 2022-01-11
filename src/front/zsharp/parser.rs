@@ -54,7 +54,10 @@ impl ZStdLib {
             if p.exists() {
                 return Self { path: p };
             } else {
-                panic!("ZStdLib: ZSHARP_STDLIB_PATH {:?} does not appear to exist", p);
+                panic!(
+                    "ZStdLib: ZSHARP_STDLIB_PATH {:?} does not appear to exist",
+                    p
+                );
             }
         }
 
@@ -93,7 +96,8 @@ impl ZStdLib {
     }
     /// check if this path is the EMBED prototypes path
     pub fn is_embed<P: AsRef<Path>>(&self, p: P) -> bool {
-        p.as_ref().starts_with(&self.path) && p.as_ref().file_stem().map(|s| s.to_str()).flatten() == Some("EMBED")
+        p.as_ref().starts_with(&self.path)
+            && p.as_ref().file_stem().map(|s| s.to_str()).flatten() == Some("EMBED")
     }
 }
 

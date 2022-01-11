@@ -17,7 +17,10 @@ pub fn eq_type<'ast>(ty: &ast::Type<'ast>, ty2: &ast::Type<'ast>) -> ZVisitorRes
     }
 }
 
-pub fn eq_basic_type<'ast>(ty: &ast::BasicType<'ast>, ty2: &ast::BasicType<'ast>) -> ZVisitorResult {
+pub fn eq_basic_type<'ast>(
+    ty: &ast::BasicType<'ast>,
+    ty2: &ast::BasicType<'ast>,
+) -> ZVisitorResult {
     use ast::BasicType::*;
     match (ty, ty2) {
         (Field(_), Field(_)) => Ok(()),
@@ -33,7 +36,10 @@ pub fn eq_basic_type<'ast>(ty: &ast::BasicType<'ast>, ty2: &ast::BasicType<'ast>
     }
 }
 
-pub fn eq_array_type<'ast>(ty: &ast::ArrayType<'ast>, ty2: &ast::ArrayType<'ast>) -> ZVisitorResult {
+pub fn eq_array_type<'ast>(
+    ty: &ast::ArrayType<'ast>,
+    ty2: &ast::ArrayType<'ast>,
+) -> ZVisitorResult {
     use ast::BasicOrStructType::*;
     if ty.dimensions.len() != ty2.dimensions.len() {
         return Err(ZVisitorError(format!(
@@ -52,7 +58,10 @@ pub fn eq_array_type<'ast>(ty: &ast::ArrayType<'ast>, ty2: &ast::ArrayType<'ast>
     }
 }
 
-pub fn eq_struct_type<'ast>(ty: &ast::StructType<'ast>, ty2: &ast::StructType<'ast>) -> ZVisitorResult {
+pub fn eq_struct_type<'ast>(
+    ty: &ast::StructType<'ast>,
+    ty2: &ast::StructType<'ast>,
+) -> ZVisitorResult {
     if ty.id.value != ty2.id.value {
         Err(ZVisitorError(format!(
             "struct type mismatch: expected {:?}, found {:?}",

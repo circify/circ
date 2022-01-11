@@ -260,6 +260,66 @@ impl T {
     {
         T::new(Ty::Uint(64), bv_lit(v, 64))
     }
+
+    pub fn pretty<W: std::io::Write>(&self, f: &mut W) -> Result<(), std::io::Error> {
+        use std::io::{Error, ErrorKind};
+        let val = match &self.term.op {
+            Op::Const(v) => Ok(v),
+            _ => Err(Error::new(ErrorKind::Other, "not a const val")),
+        }?;
+        match val {
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Field(fe) => write!(f, "{}f", fe.i()),
+            Value::BitVector(bv) => match bv.width() {
+                8 => write!(f, "0x{:02x}", bv.uint()),
+                16 => write!(f, "0x{:04x}", bv.uint()),
+                32 => write!(f, "0x{:08x}", bv.uint()),
+                64 => write!(f, "0x{:016x}", bv.uint()),
+                _ => unreachable!(),
+            },
+            Value::Tuple(vs) => {
+                let (n, fl) = if let Ty::Struct(n, fl) = &self.ty {
+                    Ok((n, fl))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::Other,
+                        "expected struct, got something else",
+                    ))
+                }?;
+                write!(f, "{} {{ ", n)?;
+                fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
+                    write!(f, "{}: ", n)?;
+                    T::new(ty.clone(), leaf_term(Op::Const(v.clone()))).pretty(f)?;
+                    write!(f, ", ")
+                })?;
+                write!(f, "}}")
+            }
+            Value::Array(arr) => {
+                let inner_ty = if let Ty::Array(_, ty) = &self.ty {
+                    Ok(ty)
+                } else {
+                    Err(Error::new(
+                        ErrorKind::Other,
+                        "expected array, got something else",
+                    ))
+                }?;
+                write!(f, "[")?;
+                arr.key_sort
+                    .elems_iter()
+                    .take(arr.size)
+                    .try_for_each(|idx| {
+                        T::new(
+                            *inner_ty.clone(),
+                            leaf_term(Op::Const(arr.select(idx.as_value_opt().unwrap()))),
+                        )
+                        .pretty(f)?;
+                        write!(f, ", ")
+                    })?;
+                write!(f, "]")
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Display for T {
@@ -417,7 +477,11 @@ pub fn and(a: T, b: T) -> Result<T, String> {
 
 fn eq_base(a: T, b: T) -> Result<Term, String> {
     if a.ty != b.ty {
-        Err(format!("Cannot '==' dissimilar types {} and {}", a.type_(), b.type_()))
+        Err(format!(
+            "Cannot '==' dissimilar types {} and {}",
+            a.type_(),
+            b.type_()
+        ))
     } else {
         Ok(term![Op::Eq; a.term, b.term])
     }
@@ -490,7 +554,10 @@ pub fn uge(a: T, b: T) -> Result<T, String> {
 
 pub fn pow(a: T, b: T) -> Result<T, String> {
     if a.ty != Ty::Field || b.ty != Ty::Uint(32) {
-        return Err(format!("Cannot compute {} ** {} : must be Field ** U32", a, b));
+        return Err(format!(
+            "Cannot compute {} ** {} : must be Field ** U32",
+            a, b
+        ));
     }
 
     let a = a.term;
@@ -725,7 +792,10 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
         } else {
             idx.term
         };
-        Ok(T::new(array.ty, term![Op::Store; array.term, iterm, val.term]))
+        Ok(T::new(
+            array.ty,
+            term![Op::Store; array.term, iterm, val.term],
+        ))
     } else {
         Err(format!("Cannot index {} using {}", &array.ty, &idx.ty))
     }
@@ -733,15 +803,19 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
 
 fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
     let mut values = BTreeMap::new();
-    let to_insert = elems.into_iter().enumerate().filter_map(|(i, t)| {
-        let i_val = pf_val(i);
-        match const_value(&t) {
-            Some(v) => {
-                values.insert(i_val, v);
-                None
+    let to_insert = elems
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, t)| {
+            let i_val = pf_val(i);
+            match const_value(&t) {
+                Some(v) => {
+                    values.insert(i_val, v);
+                    None
+                }
+                None => Some((leaf_term(Op::Const(i_val)), t)),
             }
-            None => Some((leaf_term(Op::Const(i_val)), t)),
-        }})
+        })
         .collect::<Vec<(Term, Term)>>();
     let len = values.len() + to_insert.len();
     let arr = leaf_term(Op::Const(Value::Array(Array::new(
@@ -750,7 +824,9 @@ fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
         values,
         len,
     ))));
-    to_insert.into_iter().fold(arr, |arr, (idx, val)| term![Op::Store; arr, idx, val])
+    to_insert
+        .into_iter()
+        .fold(arr, |arr, (idx, val)| term![Op::Store; arr, idx, val])
 }
 
 pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
@@ -826,9 +902,15 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
             if **ta != Ty::Bool || **tb != Ty::Bool {
                 Err("bit-array-le must be called on arrays of Bools".to_string())
             } else if la != lb {
-                Err(format!("bit-array-le called on arrays with lengths {} != {}", la, lb))
+                Err(format!(
+                    "bit-array-le called on arrays with lengths {} != {}",
+                    la, lb
+                ))
             } else if *la != n {
-                Err(format!("bit-array-le::<{}> called on arrays with length {}", n, la))
+                Err(format!(
+                    "bit-array-le::<{}> called on arrays with length {}",
+                    n, la
+                ))
             } else {
                 Ok(())
             }
@@ -838,7 +920,10 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
 
     let at = bv_from_bits(a.term, n);
     let bt = bv_from_bits(b.term, n);
-    Ok(T::new(Ty::Bool, term![Op::BvBinPred(BvBinPred::Ule); at, bt]))
+    Ok(T::new(
+        Ty::Bool,
+        term![Op::BvBinPred(BvBinPred::Ule); at, bt],
+    ))
 }
 
 pub struct ZSharp {
