@@ -559,27 +559,32 @@ pub fn not(a: T) -> Result<T, String> {
 }
 
 pub fn const_int(a: T) -> Result<Integer, String> {
-    let folded = constant_fold(&a.term);
-    match &folded.op {
-        Op::Const(Value::Field(f)) => Ok(f.i().clone()),
-        Op::Const(Value::BitVector(f)) => Ok(f.uint().clone()),
+    match const_value(&a.term) {
+        Some(Value::Field(f)) => Ok(f.i().clone()),
+        Some(Value::BitVector(f)) => Ok(f.uint().clone()),
         _ => Err(format!("{} is not a constant integer", a)),
     }
 }
 
 pub fn const_bool(a: T) -> Option<bool> {
-    let folded = constant_fold(&a.term);
-    match folded.op {
-        Op::Const(Value::Bool(b)) => Some(b),
+    match const_value(&a.term) {
+        Some(Value::Bool(b)) => Some(b),
         _ => None,
     }
 }
 
 pub fn const_val(a: T) -> Result<T, String> {
-    let folded = constant_fold(&a.term);
+    match const_value(&a.term) {
+        Some(v) => Ok(T::new(a.ty, leaf_term(Op::Const(v)))),
+        _ => Err(format!("{} is not a constant basic type", &a)),
+    }
+}
+
+fn const_value(t: &Term) -> Option<Value> {
+    let folded = constant_fold(t);
     match &folded.op {
-        Op::Const(_) => Ok(T::new(a.ty, folded)),
-        _ => Err(format!("{} is not a constant basic type", a)),
+        Op::Const(v) => Some(v.clone()),
+        _ => None,
     }
 }
 
@@ -622,10 +627,14 @@ pub fn pf_lit_ir<I>(i: I) -> Term
 where
     Integer: From<I>,
 {
-    leaf_term(Op::Const(Value::Field(FieldElem::new(
-        Integer::from(i),
-        ZSHARP_MODULUS_ARC.clone(),
-    ))))
+    leaf_term(Op::Const(pf_val(i)))
+}
+
+fn pf_val<I>(i: I) -> Value
+where
+    Integer: From<I>,
+{
+    Value::Field(FieldElem::new(Integer::from(i), ZSHARP_MODULUS_ARC.clone()))
 }
 
 pub fn field_lit<I>(i: I) -> T
@@ -728,11 +737,26 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     }
 }
 
-// XXX(perf) separate into leaf- and non-leaf terms, initialize array
-// with leaf terms, then build up stack of array updates for non-leaf
-// terms only. This would help perf when building huge const arrays.
 fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
-    make_array(ZSHARP_FIELD_SORT.clone(), sort, elems.into_iter().collect())
+    let mut values = BTreeMap::new();
+    let to_insert = elems.into_iter().enumerate().filter_map(|(i, t)| {
+        let i_val = pf_val(i);
+        match const_value(&t) {
+            Some(v) => {
+                values.insert(i_val, v);
+                None
+            }
+            None => Some((leaf_term(Op::Const(i_val)), t)),
+        }})
+        .collect::<Vec<(Term, Term)>>();
+    let len = values.len() + to_insert.len();
+    let arr = leaf_term(Op::Const(Value::Array(Array::new(
+        ZSHARP_FIELD_SORT.clone(),
+        Box::new(sort.default_value()),
+        values,
+        len,
+    ))));
+    to_insert.into_iter().fold(arr, |arr, (idx, val)| term![Op::Store; arr, idx, val])
 }
 
 pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
