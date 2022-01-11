@@ -29,7 +29,7 @@ pub fn parse_inputs(p: PathBuf) -> HashMap<String, Integer> {
     for l in BufReader::new(File::open(p).unwrap()).lines() {
         let l = l.unwrap();
         let l = l.trim();
-        if l.len() > 0 {
+        if !l.is_empty() {
             let mut s = l.split_whitespace();
             let key = s.next().unwrap().to_owned();
             let value = Integer::from(Integer::parse_radix(&s.next().unwrap(), 10).unwrap());
@@ -40,6 +40,7 @@ pub fn parse_inputs(p: PathBuf) -> HashMap<String, Integer> {
 }
 
 /// A representation of the standard libary's location.
+#[derive(Default)]
 pub struct ZStdLib {
     path: PathBuf,
 }
@@ -97,6 +98,7 @@ impl ZStdLib {
 }
 
 /// A recrusive Z# loader
+#[derive(Default)]
 pub struct ZLoad {
     sources: Arena<String>,
     stdlib: ZStdLib,

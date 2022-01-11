@@ -74,7 +74,9 @@ impl FrontEnd for ZSharpFE {
 impl ZSharpFE {
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
     pub fn interpret(i: Inputs) -> T {
-        i.inputs.as_ref().map(|_| panic!("zsharp::interpret() requires main() to take no args"));
+        if i.inputs.is_some() {
+            panic!("zsharp::interpret() requires main() to take no args");
+        }
 
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
@@ -112,9 +114,9 @@ fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
     match loc.first() {
         None => Ok(val),
         Some(ZAccess::Member(field)) => {
-            let inner = field_select(&struct_, &field)?;
+            let inner = field_select(&struct_, field)?;
             let new_inner = loc_store(inner, &loc[1..], val)?;
-            field_store(struct_, &field, new_inner)
+            field_store(struct_, field, new_inner)
         }
         Some(ZAccess::Idx(idx)) => {
             let old_inner = array_select(struct_.clone(), idx.clone())?;
@@ -127,7 +129,7 @@ fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
 impl<'ast> ZGen<'ast> {
     fn new(inputs: Option<PathBuf>, asts: HashMap<PathBuf, ast::File<'ast>>, mode: Mode, stdlib: &'ast parser::ZStdLib) -> Self {
         let this = Self {
-            circ: RefCell::new(Circify::new(ZSharp::new(inputs.map(|i| parser::parse_inputs(i))))),
+            circ: RefCell::new(Circify::new(ZSharp::new(inputs.map(parser::parse_inputs)))),
             asts,
             stdlib,
             file_stack: Default::default(),
@@ -213,7 +215,7 @@ impl<'ast> ZGen<'ast> {
                 }
             }
             "get_field_size" => {
-                if args.len() != 0 {
+                if !args.is_empty() {
                     Err(format!("Got {} args to EMBED/get_field_size, expected 0", args.len()))
                 } else if !generics.is_empty() {
                     Err(format!("Got {} generic args to EMBED/get_field_size, expected 0", generics.len()))
@@ -272,16 +274,16 @@ impl<'ast> ZGen<'ast> {
                 let vstr = &d.value.span.as_str();
                 match &d.suffix {
                     Some(ast::DecimalSuffix::U8(_)) => {
-                        Ok(uint_lit(u8::from_str_radix(vstr, 10).unwrap(), 8))
+                        Ok(uint_lit(vstr.parse::<u8>().unwrap(), 8))
                     }
                     Some(ast::DecimalSuffix::U16(_)) => {
-                        Ok(uint_lit(u16::from_str_radix(vstr, 10).unwrap(), 16))
+                        Ok(uint_lit(vstr.parse::<u16>().unwrap(), 16))
                     }
                     Some(ast::DecimalSuffix::U32(_)) => {
-                        Ok(uint_lit(u32::from_str_radix(vstr, 10).unwrap(), 32))
+                        Ok(uint_lit(vstr.parse::<u32>().unwrap(), 32))
                     }
                     Some(ast::DecimalSuffix::U64(_)) => {
-                        Ok(uint_lit(u64::from_str_radix(vstr, 10).unwrap(), 64))
+                        Ok(uint_lit(vstr.parse::<u64>().unwrap(), 64))
                     }
                     Some(ast::DecimalSuffix::Field(_)) => {
                         Ok(field_lit(Integer::from_str_radix(vstr, 10).unwrap()))
@@ -311,7 +313,7 @@ impl<'ast> ZGen<'ast> {
 
     fn unary_op(&self, o: &ast::UnaryOperator) -> fn(T) -> Result<T, String> {
         match o {
-            ast::UnaryOperator::Pos(_) => |x| Ok(x),
+            ast::UnaryOperator::Pos(_) => Ok,
             ast::UnaryOperator::Neg(_) => neg,
             ast::UnaryOperator::Not(_) => not,
         }
@@ -364,10 +366,10 @@ impl<'ast> ZGen<'ast> {
     ) -> Result<HashMap<String, T>, String> {
         egv.iter()
             .map(|cgv| match cgv {
-                ast::ConstantGenericValue::Value(l) => self.literal_(&l),
+                ast::ConstantGenericValue::Value(l) => self.literal_(l),
                 ast::ConstantGenericValue::Identifier(i) => self
                     .identifier_impl_::<IS_CNST>(i)
-                    .and_then(|res| const_val(res)),
+                    .and_then(const_val),
                 ast::ConstantGenericValue::Underscore(_) =>
                     Err("explicit_generic_values got non-monomorphized generic argument".to_string()),
             })
@@ -413,10 +415,10 @@ impl<'ast> ZGen<'ast> {
             // XXX(unimpl) multi-return unimplemented
             assert!(f.returns.len() <= 1);
             if f.generics.len() != generics.len() {
-                Err(format!("Wrong number of generic params calling {} (got {}, expected {})", &f.id.value, generics.len(), f.generics.len()))?;
+                return Err(format!("Wrong number of generic params calling {} (got {}, expected {})", &f.id.value, generics.len(), f.generics.len()));
             }
             if f.parameters.len() != args.len() {
-                Err(format!("Wrong nimber of arguments calling {} (got {}, expected {})", &f.id.value, args.len(), f.parameters.len()))?;
+                return Err(format!("Wrong nimber of arguments calling {} (got {}, expected {})", &f.id.value, args.len(), f.parameters.len()));
             }
 
             let f = f.clone();
@@ -464,7 +466,7 @@ impl<'ast> ZGen<'ast> {
             if IS_CNST {
                 let ret_ty = ret_ty.unwrap_or(Ty::Bool);
                 if ret.type_() != &ret_ty {
-                    Err(format!("Return type mismatch: expected {}, got {}", ret_ty, ret.type_()))?;
+                    return Err(format!("Return type mismatch: expected {}, got {}", ret_ty, ret.type_()));
                 }
             }
 
@@ -536,8 +538,8 @@ impl<'ast> ZGen<'ast> {
                     let ty = ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
                     let term = r.unwrap_term();
-                    let _r = self.circ_declare(name.clone(), &ty, false, PROVER_VIS);
-                    self.circ_assign_with_assertions(name, term, &ty, PUBLIC_VIS);
+                    self.circ_declare(name.clone(), ty, false, PROVER_VIS).expect("circ_declare return");
+                    self.circ_assign_with_assertions(name, term, ty, PUBLIC_VIS);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
@@ -572,7 +574,7 @@ impl<'ast> ZGen<'ast> {
     }
     fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> Option<PartyId> {
         match visibility {
-            None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS.clone(),
+            None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS,
             Some(ast::Visibility::Private(private)) => match self.mode {
                 Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
@@ -584,7 +586,7 @@ impl<'ast> ZGen<'ast> {
                             &private.span,
                         );
                     }
-                    PROVER_VIS.clone()
+                    PROVER_VIS
                 }
                 Mode::Mpc(n_parties) => {
                     let num_str = private
@@ -592,7 +594,7 @@ impl<'ast> ZGen<'ast> {
                         .as_ref()
                         .unwrap_or_else(|| self.err("No party number", &private.span));
                     let num_val =
-                        u8::from_str_radix(&num_str.value[1..num_str.value.len() - 1], 10)
+                        (&num_str.value[1..num_str.value.len() - 1]).parse::<u8>()
                             .unwrap_or_else(|e| {
                                 self.err(format!("Bad party number: {}", e), &private.span)
                             });
@@ -714,7 +716,7 @@ impl<'ast> ZGen<'ast> {
 
         match e {
             ast::Expression::Ternary(u) => {
-                match self.expr_impl_::<true>(&u.first).ok().and_then(|b| const_bool(b)) {
+                match self.expr_impl_::<true>(&u.first).ok().and_then(const_bool) {
                     Some(true) => self.expr_impl_::<IS_CNST>(&u.second),
                     Some(false) => self.expr_impl_::<IS_CNST>(&u.third),
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),
@@ -742,10 +744,14 @@ impl<'ast> ZGen<'ast> {
             ast::Expression::InlineArray(ia) => {
                 let mut avals = Vec::with_capacity(ia.expressions.len());
                 ia.expressions.iter().try_for_each::<_, Result<_, String>>(|ee| match ee {
-                    ast::SpreadOrExpression::Expression(eee) => Ok(avals.push(self.expr_impl_::<IS_CNST>(eee)?)),
-                    ast::SpreadOrExpression::Spread(s) => Ok(avals.append(
-                        &mut self.expr_impl_::<IS_CNST>(&s.expression)?.unwrap_array()?
-                    )),
+                    ast::SpreadOrExpression::Expression(eee) => {
+                        avals.push(self.expr_impl_::<IS_CNST>(eee)?);
+                        Ok(())
+                    }
+                    ast::SpreadOrExpression::Spread(s) => {
+                        avals.append(&mut self.expr_impl_::<IS_CNST>(&s.expression)?.unwrap_array()?);
+                        Ok(())
+                    }
                 })?;
                 T::new_array(avals)
             }
@@ -756,7 +762,7 @@ impl<'ast> ZGen<'ast> {
             }
             ast::Expression::Postfix(p) => {
                 // assume no functions in arrays, etc.
-                assert!(p.accesses.len() > 0);
+                assert!(!p.accesses.is_empty());
                 let (val, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
                     let (f_path, f_name) = self.deref_import(&p.id.value);
                     let args = c
@@ -837,7 +843,7 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))
             }
             ast::Statement::Assertion(e) => {
-                match self.expr_impl_::<true>(&e.expression).ok().and_then(|b| const_bool(b)) {
+                match self.expr_impl_::<true>(&e.expression).ok().and_then(const_bool) {
                     Some(true) => Ok(()),
                     Some(false) => Err("Const assert failed".to_string()),
                     None if IS_CNST => Err(format!("Const assert expression eval failed: {}",
@@ -858,7 +864,7 @@ impl<'ast> ZGen<'ast> {
                     Ty::Uint(16) => T::new_u16,
                     Ty::Uint(32) => T::new_u32,
                     Ty::Uint(64) => T::new_u64,
-                    _ => Err(format!("Iteration variable must be Field or Uint, got {:?}", ty))?,
+                    _ => { return Err(format!("Iteration variable must be Field or Uint, got {:?}", ty)); }
                 };
                 // XXX(rsw) CHECK does this work if the range includes negative numbers?
                 let s = self.const_isize_impl_::<IS_CNST>(&i.from)?;
@@ -893,10 +899,10 @@ impl<'ast> ZGen<'ast> {
                             let decl_ty = self.type_impl_::<IS_CNST>(&l.ty)?;
                             let ty = e.type_();
                             if &decl_ty != ty {
-                                Err(format!(
+                                return Err(format!(
                                     "Assignment type mismatch: {} annotated vs {} actual",
                                     decl_ty, ty,
-                                ))?;
+                                ));
                             }
                             self.declare_init_impl_::<IS_CNST>(l.identifier.value.clone(), decl_ty, e)
                         }
@@ -1015,7 +1021,7 @@ impl<'ast> ZGen<'ast> {
     fn cvar_declare_init(&self, name: String, ty: &Ty, val: T) -> Result<(), String> {
         assert!(!self.cvars_stack.borrow().last().unwrap().is_empty());
         if val.type_() != ty {
-            Err(format!("Const decl_init: {} type mismatch: expected {}, got {}", name, ty, val.type_()))?;
+            return Err(format!("Const decl_init: {} type mismatch: expected {}, got {}", name, ty, val.type_()));
         }
         self.cvars_stack
             .borrow_mut()
@@ -1144,7 +1150,7 @@ impl<'ast> ZGen<'ast> {
                 let egv = s.explicit_generics.as_ref().map(|eg| eg.values.as_ref()).unwrap_or(&[][..]);
                 let generics = self.egvs_impl_::<IS_CNST>(egv, sdef.generics)?;
                 if generics.len() != g_len {
-                    Err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value))?;
+                    return Err(format!("Struct {} is not monomorphized or wrong number of generic parameters", &s.id.value));
                 }
                 self.generics_stack_push(generics);
                 let ty = Ty::new_struct(
@@ -1219,7 +1225,7 @@ impl<'ast> ZGen<'ast> {
                             &m.span,
                         ),
                     };
-                    assert!(src_names.len() > 0);
+                    assert!(!src_names.is_empty());
                     let abs_src_path = self.stdlib.canonicalize(&self.cur_dir(), src_path.as_str());
                     debug!(
                         "Import of {:?} from {} as {:?}",
@@ -1330,11 +1336,12 @@ impl<'ast> ZGen<'ast> {
                         clr.visit_struct_definition(&mut s_ast)
                             .unwrap_or_else(|e| self.err(e.0, &s.span));
 
-                        self.structs
-                            .get_mut(self.file_stack.borrow().last().unwrap())
-                            .unwrap()
-                            .insert(s.id.value.clone(), s_ast)
-                            .map(|_| self.err(format!("Struct {} redefined", &s.id.value), &s.span));
+                        if self.structs
+                            .get_mut(self.file_stack.borrow().last().unwrap()).unwrap()
+                            .insert(s.id.value.clone(), s_ast).is_some()
+                        {
+                            self.err(format!("Struct {} redefined", &s.id.value), &s.span);
+                        }
                     }
                     ast::SymbolDeclaration::Function(f) => {
                         debug!("processing decl: fn {} in {}", f.id.value, p.display());
@@ -1376,11 +1383,12 @@ impl<'ast> ZGen<'ast> {
                             .try_for_each(|s| sw.visit_statement(s))
                             .unwrap_or_else(|e| self.err(e.0, &f.span));
 
-                        self.functions
-                            .get_mut(self.file_stack.borrow().last().unwrap())
-                            .unwrap()
-                            .insert(f.id.value.clone(), f_ast)
-                            .map(|_| self.err(format!("Function {} redefined", &f.id.value), &f.span));
+                        if self.functions
+                            .get_mut(self.file_stack.borrow().last().unwrap()).unwrap()
+                            .insert(f.id.value.clone(), f_ast).is_some()
+                        {
+                            self.err(format!("Function {} redefined", &f.id.value), &f.span);
+                        }
                     }
                     ast::SymbolDeclaration::Import(_) => (), // already handled in visit_imports
                 }

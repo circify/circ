@@ -50,7 +50,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     }
 
     fn is_generic_var(&self, var: &str) -> bool {
-        self.gens.iter().any(|id| &id.value == var)
+        self.gens.iter().any(|id| id.value == var)
     }
 
     fn add_constraint(&mut self, lhs: Term, rhs: Term) {
@@ -64,7 +64,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     }
 
     fn const_id_(&self, id: &ast::IdentifierExpression<'ast>) -> Result<T, String> {
-        self.zgen.identifier_impl_::<IS_CNST>(id).and_then(|res| const_val(res))
+        self.zgen.identifier_impl_::<IS_CNST>(id).and_then(const_val)
     }
     
     pub fn unify_generic<ATIter: Iterator<Item=Ty>>(
@@ -115,11 +115,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
 
         // 3. unify the return type
         match (rty, self.fdef.returns.first()) {
-            (Some(rty), Some(ret)) => self.fdef_gen_ty(rty, ret)?,
-            (Some(rty), None) if rty != Ty::Bool => Err(format!("Function {} expected implicit Bool ret, but got {}", &self.fdef.id.value, rty))?,
-            (Some(_), None) => (),
-            (None, _) => (),
-        }
+            (Some(rty), Some(ret)) => self.fdef_gen_ty(rty, ret),
+            (Some(rty), None) if rty != Ty::Bool => Err(format!("Function {} expected implicit Bool ret, but got {}", &self.fdef.id.value, rty)),
+            (Some(_), None) => Ok(()),
+            (None, _) => Ok(()),
+        }?;
         // bracketing invariant
         assert!(self.gens == &self.fdef.generics[..]);
         assert!(self.sfx.ends_with(&self.fdef.id.value));
@@ -134,7 +134,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         let g_names = self.gens.iter().map(|gid| make_varname_str(&gid.value, &self.sfx)).collect::<Vec<_>>();
         let mut solved = self.constr.as_ref()
             .and_then(|t| find_unique_model(t, g_names.clone()))
-            .unwrap_or_else(|| HashMap::new());
+            .unwrap_or_else(HashMap::new);
 
         // 5. extract the assignments from the solver result
         let mut res = HashMap::with_capacity(g_names.len());
@@ -188,7 +188,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         def_ty: &ast::ArrayType<'ast>,
     ) -> Result<(), String> {
         if !matches!(arg_ty, Ty::Array(_, _)) {
-            Err(format!("Type mismatch unifying generics: got {}, decl was Array", arg_ty))?;
+            return Err(format!("Type mismatch unifying generics: got {}, decl was Array", arg_ty));
         }
 
         // iterate through array dimensions, unifying each with fn decl
@@ -198,11 +198,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 Ty::Array(arg_dim, nty) => {
                     // make sure that we expect at least one more array dim
                     if dim_off >= def_ty.dimensions.len() {
-                        Err(format!(
+                        return Err(format!(
                             "Type mismatch: got >={}-dim array, decl was {} dims",
                             dim_off,
                             def_ty.dimensions.len(),
-                        ))?;
+                        ));
                     }
 
                     // unify actual dimension with dim expression
@@ -215,11 +215,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 nty => {
                     // make sure we didn't expect any more array dims!
                     if dim_off != def_ty.dimensions.len() {
-                        Err(format!(
+                        return Err(format!(
                             "Type mismatch: got {}-dim array, decl had {} dims",
                             dim_off,
                             def_ty.dimensions.len(),
-                        ))?;
+                        ));
                     }
 
                     arg_ty = nty;
@@ -242,7 +242,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     ) -> Result<(), String> {
         // check type and struct name
         let mut aty_map = match arg_ty {
-            Ty::Struct(aty_n, aty_map) if &aty_n == &def_ty.id.value => Ok(aty_map.into_map()),
+            Ty::Struct(aty_n, aty_map) if aty_n == def_ty.id.value => Ok(aty_map.into_map()),
             Ty::Struct(aty_n, _) => Err(format!("Type mismatch: got struct {}, decl was struct {}", &aty_n, &def_ty.id.value)),
             arg_ty => Err(format!("Type mismatch unifying generics: got {}, decl was Struct", arg_ty)),
         }?;
@@ -269,11 +269,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             .map(|eg| eg.values.iter().any(|eg| matches!(eg, CGV::Underscore(_))))
             .unwrap_or(true)
         {
-            Err(format!(
+            return Err(format!(
                 "Cannot infer generic values for struct {} arg to function {}\nGeneric structs in fn defns must have explicit generics (in terms of fn generic vars)",
                 &def_ty.id.value,
                 &self.fdef.id.value,
-            ))?;
+            ));
         }
 
         // 1. set up mapping from outer explicit generics to inner explicit generics
@@ -291,7 +291,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                         if self.is_generic_var(&id.value) {
                             make_varname(&id.value, &self.sfx)
                         } else {
-                            u32_term(self.const_id_(&id)?)?
+                            u32_term(self.const_id_(id)?)?
                         }
                     }
                 };
@@ -306,17 +306,17 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             if let Some(t) = aty_map.remove(&id.value) {
                 self.fdef_gen_ty(t, ty)?;
             } else {
-                Err(format!("ZGenericInf: missing member {} in struct {} value",
+                return Err(format!("ZGenericInf: missing member {} in struct {} value",
                     &id.value,
                     &def_ty.id.value,
-                ))?;
+                ));
             }
         }
         if !aty_map.is_empty() {
-            Err(format!("ZGenericInf: struct {} value had extra members: {:?}",
+            return Err(format!("ZGenericInf: struct {} value had extra members: {:?}",
                 &def_ty.id.value,
                 aty_map.keys().collect::<Vec<_>>(),
-            ))?;
+            ));
         }
 
         // 3. pop stack and continue
@@ -363,7 +363,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 if self.is_generic_var(&id.value) {
                     Ok(T::new(Ty::Uint(32), make_varname(&id.value, &self.sfx)))
                 } else {
-                    self.const_id_(&id)
+                    self.const_id_(id)
                 }
             }
             Literal(le) => self.zgen.literal_(le),

@@ -25,7 +25,7 @@ impl From<String> for ZVisitorError {
     }
 }
 
-fn bos_to_type<'ast>(bos: ast::BasicOrStructType<'ast>) -> ast::Type<'ast> {
+fn bos_to_type(bos: ast::BasicOrStructType) -> ast::Type {
     use ast::{BasicOrStructType::*, Type};
     match bos {
         Struct(st) => Type::Struct(st),

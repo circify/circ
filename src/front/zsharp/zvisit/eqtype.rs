@@ -53,7 +53,7 @@ pub fn eq_array_type<'ast>(ty: &ast::ArrayType<'ast>, ty2: &ast::ArrayType<'ast>
 }
 
 pub fn eq_struct_type<'ast>(ty: &ast::StructType<'ast>, ty2: &ast::StructType<'ast>) -> ZVisitorResult {
-    if &ty.id.value != &ty2.id.value {
+    if ty.id.value != ty2.id.value {
         Err(ZVisitorError(format!(
             "struct type mismatch: expected {:?}, found {:?}",
             &ty.id.value, &ty2.id.value,

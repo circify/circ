@@ -138,10 +138,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 self.visit_expression(&mut aie.value)?;
                 self.to_ty = to_ty;
             } else {
-                Err(
-                    "ZConstLiteralRewriter: rewriting ArrayInitializerExpression to non-Array type"
-                        .to_string(),
-                )?;
+                return Err("ZConstLiteralRewriter: rewriting ArrayInitializerExpression to non-Array type".to_string().into());
             }
         }
 
@@ -192,11 +189,11 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 )?;
 
             if !ty_map.is_empty() {
-                Err(format!(
+                return Err(format!(
                     "ZConstLiteralRewriter: inline expression for struct {} has extra fields: {:?}",
                     &ise.ty.value,
                     ty_map.keys().collect::<Vec<_>>(),
-                ))?;
+                ).into());
             }
         } else {
             ise.members
@@ -269,7 +266,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 self.visit_basic_or_struct_type(&mut aty.ty)?;
                 self.to_ty = to_ty;
             } else {
-                Err("ZConstLiteralRewriter: rewriting ArrayType to non-Array type".to_string())?;
+                return Err("ZConstLiteralRewriter: rewriting ArrayType to non-Array type".to_string().into());
             }
         }
 
@@ -297,7 +294,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         fty: &mut ast::FieldType<'ast>,
     ) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Field)) {
-            Err("ZConstLiteralRewriter: Field type mismatch".to_string())?;
+            return Err("ZConstLiteralRewriter: Field type mismatch".to_string().into());
         }
         walk_field_type(self, fty)
     }
@@ -307,7 +304,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         bty: &mut ast::BooleanType<'ast>,
     ) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Bool)) {
-            Err("ZConstLiteralRewriter: Bool type mismatch".to_string())?;
+            return Err("ZConstLiteralRewriter: Bool type mismatch".to_string().into());
         }
         walk_boolean_type(self, bty)
     }
@@ -317,7 +314,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         u8ty: &mut ast::U8Type<'ast>,
     ) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(8))) {
-            Err("ZConstLiteralRewriter: u8 type mismatch".to_string())?;
+            return Err("ZConstLiteralRewriter: u8 type mismatch".to_string().into());
         }
         walk_u8_type(self, u8ty)
     }
@@ -327,7 +324,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         u16ty: &mut ast::U16Type<'ast>,
     ) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(16))) {
-            Err("ZConstLiteralRewriter: u16 type mismatch".to_string())?;
+            return Err("ZConstLiteralRewriter: u16 type mismatch".to_string().into());
         }
         walk_u16_type(self, u16ty)
     }
@@ -337,7 +334,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         u32ty: &mut ast::U32Type<'ast>,
     ) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(32))) {
-            Err("ZConstLiteralRewriter: u32 type mismatch".to_string())?;
+            return Err("ZConstLiteralRewriter: u32 type mismatch".to_string().into());
         }
         walk_u32_type(self, u32ty)
     }
@@ -347,7 +344,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         u64ty: &mut ast::U64Type<'ast>,
     ) -> ZVisitorResult {
         if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Uint(64))) {
-            Err("ZConstLiteralRewriter: u64 type mismatch".to_string())?;
+            return Err("ZConstLiteralRewriter: u64 type mismatch".to_string().into());
         }
         walk_u64_type(self, u64ty)
     }

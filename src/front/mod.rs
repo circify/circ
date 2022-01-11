@@ -2,7 +2,6 @@
 
 pub mod c;
 pub mod datalog;
-#[allow(clippy::all)]
 pub mod zsharp;
 
 use super::ir::term::Computation;

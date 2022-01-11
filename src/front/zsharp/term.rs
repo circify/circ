@@ -101,17 +101,11 @@ impl Display for Ty {
                 o.finish()
             }
             Ty::Array(n, b) => {
-                let mut dims = Vec::new();
-                dims.push(n);
+                let mut dims = vec![n];
                 let mut bb = b.as_ref();
-                loop {
-                    match bb {
-                        Ty::Array(n, b) => {
-                            bb = b.as_ref();
-                            dims.push(n);
-                        }
-                        _ => break,
-                    }
+                while let Ty::Array(n, b) = bb {
+                    bb = b.as_ref();
+                    dims.push(n);
                 }
                 write!(f, "{}", bb)?;
                 dims.iter().try_for_each(|d| write!(f, "[{}]", d))
@@ -496,7 +490,7 @@ pub fn uge(a: T, b: T) -> Result<T, String> {
 
 pub fn pow(a: T, b: T) -> Result<T, String> {
     if a.ty != Ty::Field || b.ty != Ty::Uint(32) {
-        Err(format!("Cannot compute {} ** {} : must be Field ** U32", a, b))?;
+        return Err(format!("Cannot compute {} ** {} : must be Field ** U32", a, b));
     }
 
     let a = a.term;
@@ -612,7 +606,7 @@ pub fn shr(a: T, b: T) -> Result<T, String> {
 }
 
 fn ite(c: Term, a: T, b: T) -> Result<T, String> {
-    if &a.ty != &b.ty {
+    if a.ty != b.ty {
         Err(format!("Cannot perform ITE on {} and {}", a, b))
     } else {
         Ok(T::new(a.ty.clone(), term![Op::Ite; c, a.term, b.term]))
@@ -764,7 +758,7 @@ pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
     if let Some(e) = v.first() {
         let ty = e.type_();
         if v.iter().skip(1).any(|a| a.type_() != ty) {
-            Err(format!("Inconsistent types in array"))
+            Err("Inconsistent types in array".to_string())
         } else {
             let sort = check(&e.term);
             Ok(T::new(
@@ -773,7 +767,7 @@ pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
             ))
         }
     } else {
-        Err(format!("Empty array"))
+        Err("Empty array".to_string())
     }
 }
 
@@ -793,7 +787,7 @@ pub fn uint_to_bits(u: T) -> Result<T, String> {
 // XXX(rsw) is it correct to enforce length here, vs. in (say) builtin_call in mod.rs?
 pub fn uint_from_bits(u: T) -> Result<T, String> {
     match &u.ty {
-        Ty::Array(bits, elem_ty) if &**elem_ty == &Ty::Bool => match bits {
+        Ty::Array(bits, elem_ty) if **elem_ty == Ty::Bool => match bits {
             8 | 16 | 32 | 64 => Ok(T::new(
                 Ty::Uint(*bits),
                 term(
@@ -830,7 +824,7 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
     match (&a.ty, &b.ty) {
         (Ty::Array(la, ta), Ty::Array(lb, tb)) => {
             if **ta != Ty::Bool || **tb != Ty::Bool {
-                Err(format!("bit-array-le must be called on arrays of Bools"))
+                Err("bit-array-le must be called on arrays of Bools".to_string())
             } else if la != lb {
                 Err(format!("bit-array-le called on arrays with lengths {} != {}", la, lb))
             } else if *la != n {
@@ -926,7 +920,7 @@ impl Embeddable for ZSharp {
                     &*ty,
                     idx_name(&raw_name, i),
                     user_name.as_ref().map(|u| idx_name(u, i)),
-                    visibility.clone(),
+                    visibility,
                 )
             }))
             .unwrap(),
@@ -941,7 +935,7 @@ impl Embeddable for ZSharp {
                                 f_ty,
                                 field_name(&raw_name, f_name),
                                 user_name.as_ref().map(|u| field_name(u, f_name)),
-                                visibility.clone(),
+                                visibility,
                             ),
                         )
                     })

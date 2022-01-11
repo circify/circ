@@ -90,25 +90,25 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     ) -> ZResult<ast::Type<'ast>> {
         // basic consistency checks on Call access
         if call.arguments.expressions.len() != fdef.parameters.len() {
-            Err(format!(
+            return Err(format!(
                 "ZStatementWalker: wrong number of arguments to fn {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            ))?;
+            ).into());
         }
         if fdef.generics.is_empty() && call.explicit_generics.is_some() {
-            Err(format!(
+            return Err(format!(
                 "ZStatementWalker: got explicit generics for non-generic fn call {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            ))?;
+            ).into());
         }
         if call.explicit_generics.as_ref().map(|eg| eg.values.len() != fdef.generics.len()).unwrap_or(false) {
-            Err(format!(
+            return Err(format!(
                 "ZStatementWalker: wrong number of generic args to fn {}:\n{}",
                 &fdef.id.value,
                 span_to_string(&call.span),
-            ))?;
+            ).into());
         }
 
         // unify args
@@ -590,7 +590,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                         self.monomorphize_struct(&sty)?
                             .fields
                             .iter()
-                            .find(|f| &f.id.value == &macc.id.value)
+                            .find(|f| f.id.value == macc.id.value)
                             .ok_or_else(|| {
                                 ZVisitorError(format!(
                                     "ZStatementWalker: struct {} has no member {}",
@@ -642,7 +642,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     fn generic_defined(&self, id: &str) -> bool {
         // XXX(perf) if self.gens is long this could be improved with a HashSet.
         // Realistically, a function will have a small number of generic params.
-        self.gens.iter().any(|g| &g.value == id)
+        self.gens.iter().any(|g| g.value == id)
     }
 
     fn var_defined(&self, id: &str) -> bool {
