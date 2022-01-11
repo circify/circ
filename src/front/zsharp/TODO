@@ -1,20 +1,22 @@
-- lowering IR arrays: enforce bounds checks!
-
 - casts
     - widening casts are free!
     - check narrowing cast correctness!
     - look at unpack functions again
+    - look at pack: advantage to builtin?
 
 - talk to AO about bit-split
   - generalized bit-split, i.e., into vector-of-bitvectors?
     goes nicely with lookup table--based range checks...
 
 - add explicit-generic-expr to parser, e,g., foo::<(N+1)>(5)
+  - maybe not necessary: can just say `u32 Np1 = N + 1 ; foo::<Np1>(5)`
 
-- POW width - allow full width operand once we have range analysis?
+- POW width - allow full-width rhs? (const only? in that case, easy)
 
 - correctness: bit width for field comparisons, etc
   - when lowering to r1cs, enforce MSB=0?
+
+- correctness: when lowering IR arrays, enforce bounds checks!
 
 - optimization: for a < b, only expand a to b's bit width;
   a < b is (a_expansion == a) && (a_expansion < b_expansion)
