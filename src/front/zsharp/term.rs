@@ -783,7 +783,7 @@ pub fn uint_to_bits(u: T) -> Result<T, String> {
             Ty::Array(*n, Box::new(Ty::Bool)),
             ir_array(
                 Sort::Bool,
-                (0..*n).map(|i| term![Op::BvBit(i); u.term.clone()]),
+                (0..*n).rev().map(|i| term![Op::BvBit(i); u.term.clone()]),
             ),
         )),
         u => Err(format!("Cannot do uint-to-bits on {}", u)),
