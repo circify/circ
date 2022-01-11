@@ -1365,6 +1365,7 @@ pub fn leaf_term(op: Op) -> Term {
 /// Make a term with arguments.
 #[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
+    #[cfg_attr(not(debug_assertions), allow(clippy::let_and_return))]
     let t = mk(TermData { op, cs });
     #[cfg(debug_assertions)]
     check_rec(&t);
