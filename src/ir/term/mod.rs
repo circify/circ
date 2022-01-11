@@ -698,7 +698,7 @@ impl Array {
 
     /// Select
     pub fn select(&self, idx: &Value) -> Value {
-        self.check_idx(&idx);
+        self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
     }
 }
@@ -809,7 +809,7 @@ impl Sort {
 
     #[track_caller]
     /// Unwrap the constituent sorts of this tuple, panicking otherwise.
-    pub fn as_tuple(&self) -> &Box<[Sort]> {
+    pub fn as_tuple(&self) -> &[Sort] {
         if let Sort::Tuple(w) = self {
             w
         } else {
@@ -1039,7 +1039,7 @@ impl TermData {
     }
 
     /// Get the underlying tuple constant, if possible.
-    pub fn as_tuple_opt(&self) -> Option<&Box<[Value]>> {
+    pub fn as_tuple_opt(&self) -> Option<&[Value]> {
         if let Op::Const(Value::Tuple(t)) = &self.op {
             Some(t)
         } else {
@@ -1124,7 +1124,7 @@ impl Value {
     }
     #[track_caller]
     /// Get the underlying tuple's constituent values, if possible.
-    pub fn as_tuple(&self) -> &Box<[Value]> {
+    pub fn as_tuple(&self) -> &[Value] {
         if let Value::Tuple(b) = self {
             b
         } else {
@@ -1317,7 +1317,7 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
                 t[*i].clone()
             }
             Op::Update(i) => {
-                let mut t = vs.get(&c.cs[0]).unwrap().as_tuple().clone();
+                let mut t = Vec::from(vs.get(&c.cs[0]).unwrap().as_tuple()).into_boxed_slice();
                 assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
                 let e = vs.get(&c.cs[1]).unwrap().clone();
                 assert_eq!(t[*i].sort(), e.sort());

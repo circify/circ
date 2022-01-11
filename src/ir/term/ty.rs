@@ -371,7 +371,7 @@ fn pf_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason
     }
 }
 
-fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Box<[Sort]>, TypeErrorReason> {
+fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a [Sort], TypeErrorReason> {
     match a {
         Sort::Tuple(a) => Ok(a),
         _ => Err(TypeErrorReason::ExpectedTuple(ctx)),

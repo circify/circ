@@ -200,19 +200,11 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                 (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
                 _ => None,
             },
-            Op::Tuple => {
-                match t.cs.iter().map(|c| c_get(c).as_value_opt().cloned()).collect() {
-                    Some(v) => Some(leaf_term(Op::Const(Value::Tuple(v)))),
-                    _ => None,
-                }
-            }
-            Op::Field(n) => match get(0).as_tuple_opt() {
-                Some(t) => Some(leaf_term(Op::Const(t[*n].clone()))),
-                _ => None,
-            },
+            Op::Tuple => t.cs.iter().map(|c| c_get(c).as_value_opt().cloned()).collect::<Option<_>>().map(|v| leaf_term(Op::Const(Value::Tuple(v)))),
+            Op::Field(n) => get(0).as_tuple_opt().map(|t| leaf_term(Op::Const(t[*n].clone()))),
             Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
                 (Some(t), Some(v)) => {
-                    let mut new_vec = t.clone();
+                    let mut new_vec = Vec::from(t).into_boxed_slice();
                     assert_eq!(new_vec[*n].sort(), v.sort());
                     new_vec[*n] = v.clone();
                     Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
