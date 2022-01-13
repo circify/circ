@@ -43,6 +43,7 @@ struct ToChaco {
     num_nodes: usize,
     num_edges: usize,
     next_idx: usize,
+    max_parts: usize,
     term_to_node: HashMap<Term, Node>,
     node_to_term: HashMap<Node, Term>,
     term_to_part: HashMap<Term, usize>,
@@ -55,6 +56,7 @@ impl ToChaco {
             num_nodes: 0,
             num_edges: 0,
             next_idx: 0,
+            max_parts: 0,
             term_to_node: HashMap::new(),
             node_to_term: HashMap::new(),
             term_to_part: HashMap::new(),
@@ -89,8 +91,8 @@ impl ToChaco {
         }
     }
 
-    fn embed(&mut self, t: Term) {
-        for c in PostOrderIter::new(t) {
+    fn convert(&mut self, t: &Term) {
+        for c in PostOrderIter::new(t.clone()) {
             match &c.op {
                 Op::Var(_, _) | Op::Const(_) => {
                     self.insert_node(&c);
@@ -106,10 +108,6 @@ impl ToChaco {
                 _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
             }
         }
-    }
-
-    fn convert(&mut self, t: Term) {
-        self.embed(t.clone());
     }
 
     fn get_graph_path(&self, path_buf: &PathBuf, lang: &String) -> String {
@@ -218,16 +216,47 @@ impl ToChaco {
     }
 
     /// Partitioning functions
-    fn paritition_ir(&self, path: String) {
+    fn make_ir_paritition_map(&mut self, path: &String) {
         if let Ok(lines) = self.read_lines(path) {
             // Consumes the iterator, returns an (Optional) String
-            for line in lines {
-                if let Ok(part) = line {
-                    println!("{}", part);
+            for line in lines.into_iter().enumerate() {
+                if let (i, Ok(part)) = line {
+                    let node = Node { idx: i + 1 };
+                    let term = self.node_to_term.get(&node);
+                    let part_num = part.parse::<usize>().unwrap();
+                    if part_num > self.max_parts {
+                        self.max_parts = part_num;
+                    }
+                    if let Some(t) = term {
+                        self.term_to_part.insert(t.clone(), part_num);
+                    } else {
+                        panic!("Node: {} - was not mapped in node_to_term map", i + 1);
+                    }
                 }
             }
         }
-        // self.term_to_part
+    }
+
+    fn partition_ir(&self, t: &Term) {
+        // return a vector of computations
+        for c in PostOrderIter::new(t.clone()) {
+            // println!("Term: {}", self.term_to_part.get(&c).unwrap());
+
+            // match &c.op {
+            //     Op::Var(_, _) | Op::Const(_) => {
+            //         self.insert_node(&c);
+            //     }
+            //     Op::Ite | Op::Eq | Op::BvBinOp(_) | Op::BvNaryOp(_) | Op::BvBinPred(_) => {
+            //         for cs in c.cs.iter() {
+            //             self.insert_edge(&cs, &c);
+            //         }
+            //         for cs in c.cs.iter().rev() {
+            //             self.insert_edge(&c, &cs);
+            //         }
+            //     }
+            //     _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
+            // }
+        }
     }
 }
 
@@ -238,7 +267,7 @@ pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) {
     println!("Writing IR to Chaco format");
     let Computation { outputs, .. } = cs.clone();
     let mut converter = ToChaco::new();
-    for t in outputs {
+    for t in &outputs {
         converter.convert(t);
     }
     let graph_path = converter.get_graph_path(path, lang);
@@ -246,9 +275,16 @@ pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) {
 
     let part_path = converter.get_part_path(path, lang);
 
-    // call partitioner here
+    // call partitioner
     converter.check_graph(&graph_path);
     converter.partition_graph(&graph_path, &part_path);
+
+    // read partition
+    converter.make_ir_paritition_map(&part_path);
+
+    for t in &outputs {
+        converter.partition_ir(t);
+    }
 }
 
 #[cfg(test)]
@@ -258,6 +294,11 @@ mod test {
     #[test]
     fn sample_test() {
         // Millionaire's example
+        let ts = Computation {
+            outputs: vec![term![ITE]],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
         let cs = Computation {
             outputs: vec![term![ITE;
                 term![BV_ULT;
@@ -270,7 +311,7 @@ mod test {
         };
         let Computation { outputs, .. } = cs.clone();
         let mut converter = ToChaco::new();
-        for t in outputs {
+        for t in &outputs {
             converter.convert(t);
         }
         assert_eq!(converter.num_nodes, 4);

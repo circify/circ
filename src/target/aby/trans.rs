@@ -5,7 +5,8 @@
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
-use crate::target::aby::assignment::ilp::assign;
+// use crate::target::aby::assignment::ilp::assign;
+use crate::target::aby::assignment::some_arith_sharing;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
 use crate::target::graph::trans::partition;
@@ -626,7 +627,8 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
 
     partition(&ir, &path_buf, &lang);
 
-    let s_map: SharingMap = assign(&ir, cm);
+    // let s_map: SharingMap = assign(&ir, cm);
+    let s_map = some_arith_sharing(&ir);
     let mut converter = ToABY::new(md, s_map, path_buf, lang);
 
     for t in terms {
