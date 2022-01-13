@@ -8,7 +8,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
-// use crate::target::graph::trans::to_chaco;
+use crate::target::graph::trans::partition;
 
 use std::fmt;
 use std::path::PathBuf;
@@ -624,7 +624,7 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
         values: _,
     } = ir.clone();
 
-    // to_chaco(&ir, &path_buf, &lang);
+    partition(&ir, &path_buf, &lang);
 
     let s_map: SharingMap = assign(&ir, cm);
     let mut converter = ToABY::new(md, s_map, path_buf, lang);

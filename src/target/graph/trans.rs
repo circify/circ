@@ -6,9 +6,12 @@
 use crate::ir::term::*;
 use std::collections::HashMap;
 use std::fs;
+use std::fs::File;
 use std::io::prelude::*;
+use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 #[derive(Clone, Hash, Eq)]
 struct Node {
@@ -21,12 +24,29 @@ impl PartialEq for Node {
     }
 }
 
+#[derive(Clone)]
+struct Edges<T> {
+    vec: Vec<T>,
+}
+
+impl<T: PartialEq> Edges<T> {
+    fn add(&mut self, item: T) -> bool {
+        if !self.vec.contains(&item) {
+            self.vec.push(item);
+            return true;
+        }
+        false
+    }
+}
+
 struct ToChaco {
     num_nodes: usize,
     num_edges: usize,
     next_idx: usize,
     term_to_node: HashMap<Term, Node>,
-    edges: HashMap<Node, Vec<Node>>,
+    node_to_term: HashMap<Node, Term>,
+    term_to_part: HashMap<Term, usize>,
+    edges: HashMap<Node, Edges<Node>>,
 }
 
 impl ToChaco {
@@ -34,17 +54,20 @@ impl ToChaco {
         Self {
             num_nodes: 0,
             num_edges: 0,
-            next_idx: 1,
+            next_idx: 0,
             term_to_node: HashMap::new(),
+            node_to_term: HashMap::new(),
+            term_to_part: HashMap::new(),
             edges: HashMap::new(),
         }
     }
 
     fn insert_node(&mut self, t: &Term) {
         if !self.term_to_node.contains_key(t) {
-            let new_node = Node { idx: self.next_idx };
-            self.term_to_node.insert(t.clone(), new_node);
             self.next_idx += 1;
+            let new_node = Node { idx: self.next_idx };
+            self.term_to_node.insert(t.clone(), new_node.clone());
+            self.node_to_term.insert(new_node, t.clone());
             self.num_nodes += 1;
         }
     }
@@ -57,10 +80,13 @@ impl ToChaco {
         let to_node = self.term_to_node.get(&to).unwrap().clone();
 
         if !self.edges.contains_key(&from_node) {
-            self.edges.insert(from_node.clone(), Vec::new());
+            self.edges
+                .insert(from_node.clone(), Edges { vec: Vec::new() });
         }
-        self.edges.get_mut(&from_node).unwrap().push(to_node);
-        self.num_edges += 1;
+        let added = self.edges.get_mut(&from_node).unwrap().add(to_node);
+        if added {
+            self.num_edges += 1;
+        }
     }
 
     fn embed(&mut self, t: Term) {
@@ -69,9 +95,12 @@ impl ToChaco {
                 Op::Var(_, _) | Op::Const(_) => {
                     self.insert_node(&c);
                 }
-                Op::Ite | Op::BvBinOp(_) | Op::BvNaryOp(_) | Op::BvBinPred(_) => {
+                Op::Ite | Op::Eq | Op::BvBinOp(_) | Op::BvNaryOp(_) | Op::BvBinPred(_) => {
                     for cs in c.cs.iter() {
                         self.insert_edge(&cs, &c);
+                    }
+                    for cs in c.cs.iter().rev() {
+                        self.insert_edge(&c, &cs);
                     }
                 }
                 _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
@@ -83,7 +112,7 @@ impl ToChaco {
         self.embed(t.clone());
     }
 
-    fn get_output_path(&self, path_buf: &PathBuf, lang: &String) -> String {
+    fn get_graph_path(&self, path_buf: &PathBuf, lang: &String) -> String {
         let filename = Path::new(&path_buf.iter().last().unwrap().to_os_string())
             .file_stem()
             .unwrap()
@@ -91,9 +120,24 @@ impl ToChaco {
             .into_string()
             .unwrap();
         let name = format!("{}_{}", filename, lang);
-        let path = format!("third_party/ABY/src/examples/{}_graph.txt", name);
+        let path = format!("third_party/ABY/src/examples/{}.graph", name);
         if Path::new(&path).exists() {
             fs::remove_file(&path).expect("Failed to remove old graph file");
+        }
+        path
+    }
+
+    fn get_part_path(&self, path_buf: &PathBuf, lang: &String) -> String {
+        let filename = Path::new(&path_buf.iter().last().unwrap().to_os_string())
+            .file_stem()
+            .unwrap()
+            .to_os_string()
+            .into_string()
+            .unwrap();
+        let name = format!("{}_{}", filename, lang);
+        let path = format!("third_party/ABY/src/examples/{}.part", name);
+        if Path::new(&path).exists() {
+            fs::remove_file(&path).expect("Failed to remove old partition file");
         }
         path
     }
@@ -109,18 +153,22 @@ impl ToChaco {
             .expect("Failed to open graph file");
 
         // write number of nodes and edges
-        file.write_all(format!("{} {}\n", self.num_nodes, self.num_edges).as_bytes())
+        file.write_all(format!("{} {}\n", self.num_nodes, self.num_edges / 2).as_bytes())
             .expect("Failed to write to graph file");
 
         // for Nodes 1..N, write their neighbors
         for i in 0..(self.num_nodes) {
-            let node = Node {
-                idx: i+1
-            };
-            
+            let node = Node { idx: i + 1 };
+
             match self.edges.get(&node) {
                 Some(edges) => {
-                    let line = edges.into_iter().map(|node| node.idx.to_string()).collect::<Vec<String>>().join(" ");
+                    let line = edges
+                        .vec
+                        .clone()
+                        .into_iter()
+                        .map(|node| node.idx.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ");
                     file.write_all(line.as_bytes())
                         .expect("Failed to write to graph file");
                 }
@@ -134,20 +182,73 @@ impl ToChaco {
                 .expect("Failed to write to graph file");
         }
     }
+
+    fn check_graph(&self, graph_path: &String) {
+        //TODO: fix path
+        let output = Command::new("../KaHIP/deploy/graphchecker")
+            .arg(graph_path)
+            .stdout(Stdio::piped())
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("The graph format seems correct."));
+    }
+
+    fn partition_graph(&self, graph_path: &String, part_path: &String) {
+        //TODO: fix path
+        let output = Command::new("../KaHIP/deploy/kaffpa")
+            .arg(graph_path)
+            .arg("--k")
+            .arg("4") //TODO: make this a function on the number of terms
+            .arg("--preconfiguration=strong")
+            .arg(format!("--output_filename={}", part_path))
+            .stdout(Stdio::piped())
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains(&format!("writing partition to {}", part_path)));
+    }
+
+    fn read_lines<P>(&self, filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+    where
+        P: AsRef<Path>,
+    {
+        let file = File::open(filename)?;
+        Ok(io::BufReader::new(file).lines())
+    }
+
+    /// Partitioning functions
+    fn paritition_ir(&self, path: String) {
+        if let Ok(lines) = self.read_lines(path) {
+            // Consumes the iterator, returns an (Optional) String
+            for line in lines {
+                if let Ok(part) = line {
+                    println!("{}", part);
+                }
+            }
+        }
+        // self.term_to_part
+    }
 }
 
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
-pub fn to_chaco(cs: &Computation, output_path: &PathBuf, lang: &String) {
+pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) {
     println!("Writing IR to Chaco format");
     let Computation { outputs, .. } = cs.clone();
     let mut converter = ToChaco::new();
     for t in outputs {
         converter.convert(t);
     }
-    let path = converter.get_output_path(output_path, lang);
-    converter.write_graph(&path);
+    let graph_path = converter.get_graph_path(path, lang);
+    converter.write_graph(&graph_path);
+
+    let part_path = converter.get_part_path(path, lang);
+
+    // call partitioner here
+    converter.check_graph(&graph_path);
+    converter.partition_graph(&graph_path, &part_path);
 }
 
 #[cfg(test)]
@@ -158,14 +259,12 @@ mod test {
     fn sample_test() {
         // Millionaire's example
         let cs = Computation {
-            outputs: vec![
-                term![ITE;
+            outputs: vec![term![ITE;
                 term![BV_ULT;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
                 leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))],
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))],
-            ],
+                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))]],
             metadata: ComputationMetadata::default(),
             values: None,
         };
@@ -178,4 +277,3 @@ mod test {
         assert_eq!(converter.num_edges, 5);
     }
 }
-

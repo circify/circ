@@ -31,6 +31,9 @@ c_aby:
 	./scripts/build_aby.zsh && \
 	python3 ./scripts/aby_tests/c_test_aby.py
 
+c_build:
+	./scripts/build_mpc_c_test.zsh 
+
 z_aby:
 	./scripts/build_mpc_zokrates_test.zsh && \
 	./scripts/build_aby.zsh && \
@@ -42,5 +45,6 @@ clean:
 	touch ./third_party/ABY/src/examples/2pc_* && rm -r -- ./third_party/ABY/src/examples/2pc_* 
 	sed '/add_subdirectory.*2pc.*/d' -i ./third_party/ABY/src/examples/CMakeLists.txt 
 	rm -r ./third_party/ABY/src/examples/2pc_*.txt
+	rm -r ./third_party/ABY/src/examples/*.graph
 	rm -r scripts/aby_tests/__pycache__*
 	rm -rf P V pi perf.data perf.data.old flamegraph.svg
