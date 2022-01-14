@@ -3,4 +3,4 @@
 	url = https://github.com/edwjchen/ABY.git
 [submodule "third_party/SEAL"]
 	path = third_party/SEAL
-	url = git@github.com:microsoft/SEAL.git
+	url = https://github.com/microsoft/SEAL.git

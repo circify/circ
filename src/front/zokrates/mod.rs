@@ -477,7 +477,7 @@ impl<'ast> ZGen<'ast> {
         }
         if let Some(r) = self.circ.exit_fn() {
             match self.mode {
-                Mode::Mpc(_) => {
+                Mode::Mpc(_) | Mode::Fhe => {
                     let ret_term = r.unwrap_term();
                     let ret_terms = ret_term.terms();
                     self.circ
@@ -522,16 +522,6 @@ impl<'ast> ZGen<'ast> {
                         s => panic!("Cannot maximize output of type {}", s),
                     };
                     self.circ.cir_ctx().cs.borrow_mut().outputs.push(cmp);
-                }
-                Mode::Fhe => {
-                    let ret_term = r.unwrap_term();
-                    let ret_terms = ret_term.terms();
-                    self.circ
-                        .cir_ctx()
-                        .cs
-                        .borrow_mut()
-                        .outputs
-                        .extend(ret_terms);
                 }
             }
         }

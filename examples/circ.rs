@@ -180,8 +180,7 @@ fn main() {
     };
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
-        Mode::Fhe => opt(cs, vec![]),
-        Mode::Mpc(_) => opt(
+        Mode::Mpc(_) | Mode::Fhe => opt(
             cs,
             vec![Opt::ScalarizeVars],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
