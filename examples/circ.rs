@@ -303,7 +303,9 @@ fn main() {
             }
         }
         Backend::Fhe { .. } => {
-            todo!()
+            println!("Converting to fhe");
+            let fhe = to_fhe(cs);
+            write_fhe_exec(fhe, path_buf);
         }
     }
 }
