@@ -119,16 +119,6 @@ pub enum Op {
     /// Takes the modulus.
     UbvToPf(Arc<Integer>),
 
-    // key sort, size
-    /// A unary operator.
-    ///
-    /// Make an array from keys of the given sort, which is equal to the provided argument at all
-    /// places.
-    ///
-    /// Has space for the provided number of elements. Note that this assumes an order and starting
-    /// point for keys.
-    ConstArray(Sort, usize),
-
     /// Binary operator, with arguments (array, index).
     ///
     /// Gets the value at index in array.
@@ -249,7 +239,6 @@ impl Op {
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
             Op::UbvToPf(_) => Some(1),
-            Op::ConstArray(_, _) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
             Op::Tuple => None,
@@ -292,7 +281,6 @@ impl Display for Op {
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
             Op::UbvToPf(a) => write!(f, "bv2pf {}", a),
-            Op::ConstArray(_, s) => write!(f, "const-array {}", s),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),

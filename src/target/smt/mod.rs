@@ -151,12 +151,6 @@ impl Expr2Smt<()> for TermData {
                 write!(w, "((_ tupSel {})", i)?;
                 true
             }
-            Op::ConstArray(key_sort, length) => {
-                let val_sort = check(&self.cs[0]);
-                let arr_sort = Sort::Array(Box::new(key_sort.clone()), Box::new(val_sort), *length);
-                write!(w, "((as const {})", SmtSortDisp(&arr_sort))?;
-                true
-            }
             o => panic!("Cannot give {} to SMT solver", o),
         };
         if s_expr_children {

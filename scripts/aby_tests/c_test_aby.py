@@ -13,15 +13,16 @@ if __name__ == "__main__":
         nary_boolean_tests + \
         const_arith_tests + \
         const_bool_tests + \
-        ite_tests
-        # array_tests + \
-        # c_array_tests + \
+        ite_tests + \
+        c_array_tests + \
+        array_tests 
         # div_tests + \
         # shift_tests
-
+    
     # tests = ilp_benchmark_tests
     # tests = kmeans_tests + div_tests
     # tests = kmeans_tests
+    # tests = array_tests
     # tests = arithmetic_tests
     # tests = div_tests
         

@@ -116,7 +116,11 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        self.allocate(term![Op::ConstArray(Sort::BitVector(addr_width), size); leaf_term(Op::Const(Value::BitVector(BitVector::zeros(val_width))))])
+        self.allocate(term![Op::Const(Value::Array(Array::default(
+            Sort::BitVector(addr_width),
+            &Sort::BitVector(val_width),
+            size
+        )))])
     }
 
     /// Load the value of index `offset` from the allocation `id`.

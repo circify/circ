@@ -207,7 +207,19 @@ fn main() {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![Opt::ScalarizeVars],
+            vec![
+                Opt::Sha,
+                Opt::ConstantFold,
+                Opt::ScalarizeVars,
+                Opt::ConstantFold,
+                Opt::Obliv,
+                Opt::Tuple,
+                Opt::LinearScan,
+                Opt::Tuple,
+                Opt::Flatten,
+                Opt::ConstantFold,
+                Opt::Binarize,
+            ],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(

@@ -613,12 +613,16 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
         metadata: md,
         values: _,
     } = ir.clone();
+    for t in terms.clone() {
+        println!("terms: {}", t);
+    }
+
     let s_map: SharingMap = assign(&ir, cm);
     // let s_map: SharingMap = some_arith_sharing(&ir);
     let mut converter = ToABY::new(md, s_map, path, lang);
 
     for t in terms {
-        // println!("terms: {}", t);
+        println!("terms: {}", t);
         converter.lower(t.clone());
     }
 
