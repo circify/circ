@@ -9,6 +9,8 @@
     u32: u8 u16     |         u64 field
     u64: u8 u16 u32 |             field
 
+- error messages: (String, &Span) instead of String to avoid recursively
+  expanding Spans on error?
 
 - talk to AO about bit-split
   - generalized bit-split, i.e., into vector-of-bitvectors?
