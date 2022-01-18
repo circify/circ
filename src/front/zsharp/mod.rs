@@ -927,6 +927,7 @@ impl<'ast> ZGen<'ast> {
                 .map(|members| T::new_struct(u.ty.value.clone(), members)),
         }
         .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
+        .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
@@ -1067,6 +1068,7 @@ impl<'ast> ZGen<'ast> {
                 }
             }
         }
+        .map_err(|err| format!("{}; context:\n{}", err, span_to_string(s.span())))
     }
 
     fn set_lhs_ty_defn<const IS_CNST: bool>(
