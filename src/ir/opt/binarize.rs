@@ -13,9 +13,9 @@ impl Cache {
     }
 }
 
-fn binarize(op: &Op, children: &Vec<Term>) -> Term {
+fn binarize(op: &Op, children: &[Term]) -> Term {
     if children.is_empty() || children.len() == 1 {
-        return term(op.clone(), children.clone());
+        term(op.clone(), children.to_vec())
     } else if children.len() == 2 {
         return term![op.clone(); children[0].clone(), children[1].clone()];
     } else {
@@ -52,7 +52,7 @@ pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cach
     for t in PostOrderIter::new(term_.clone()) {
         let mut children = Vec::new();
         for c in &t.cs {
-            if let Some(rewritten_c) = rewritten.get(&c) {
+            if let Some(rewritten_c) = rewritten.get(c) {
                 children.push(rewritten_c.clone());
             } else {
                 children.push(c.clone());
@@ -66,7 +66,7 @@ pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cach
     }
 
     if let Some(t) = rewritten.get(&term_) {
-        return t.clone();
+        t.clone()
     } else {
         panic!("Couldn't find rewritten binarized term: {}", term_);
     }

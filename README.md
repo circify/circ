@@ -1,7 +1,5 @@
 # CirC: The Circuit Compiler
 
-This repository holds an in-progress rewrite of CirC.
-
 CirC is a *compiler infrastructure* which supports compilation from
 high-level (stateful, uniform) languages to (state-free, non-uniform,
 existentially quantified) circuits.
@@ -19,9 +17,7 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
 You'll also need the COIN-OR CBC solver. On Arch linux, this is `coin-or-cbc`.
 On Ubuntu `coinor-cbc` and `coinor-libcbc-dev`.
 
-You'll also need a Rust nightly compiler. You can set the nightly channel as
-Rust's default for the circ directory by running `rustup override set nightly`
-in it.
+You'll also need a stable Rust compiler.
 
 ## Architecture
 

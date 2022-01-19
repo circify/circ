@@ -24,14 +24,21 @@ jobs:
         toolchain: stable
     - uses: Swatinem/rust-cache@v1
     - name: Initialize submodules
-      run: make init
+      run: make fetch_deps
+    - name: Cache submodule build
+      uses: actions/cache@v2
+      with:
+        path: third_party/ABY/build
+        key: ${{ runner.os }}
+    - name: Build submodules
+      run: make build_deps
     - name: Typecheck
-      run: cargo check --verbose
+      run: cargo check
     - name: Check format
       run: cargo fmt -- --check
     - name: Lint
       run: cargo clippy
     - name: Build
-      run: cargo build --verbose && make build
+      run: make build
     - name: Run tests
       run: make test
