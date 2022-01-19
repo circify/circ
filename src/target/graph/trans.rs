@@ -197,7 +197,7 @@ impl ToChaco {
         let output = Command::new("../KaHIP/deploy/kaffpa")
             .arg(graph_path)
             .arg("--k")
-            .arg("4") //TODO: make this a function on the number of terms
+            .arg("2") //TODO: make this a function on the number of terms
             .arg("--preconfiguration=strong")
             .arg(format!("--output_filename={}", part_path))
             .stdout(Stdio::piped())
@@ -237,33 +237,54 @@ impl ToChaco {
         }
     }
 
-    fn partition_ir(&self, t: &Term) {
-        // return a vector of computations
-        for c in PostOrderIter::new(t.clone()) {
-            // println!("Term: {}", self.term_to_part.get(&c).unwrap());
+    fn partition_ir(&self, cs: &Computation) -> Vec<Computation> {
+        let Computation { outputs, .. } = cs.clone();
+        let mut rewritten: HashMap<usize, TermMap<Term>> = HashMap::new();
+        let mut res: HashMap<usize, Term> = HashMap::new();
 
-            // match &c.op {
-            //     Op::Var(_, _) | Op::Const(_) => {
-            //         self.insert_node(&c);
-            //     }
-            //     Op::Ite | Op::Eq | Op::BvBinOp(_) | Op::BvNaryOp(_) | Op::BvBinPred(_) => {
-            //         for cs in c.cs.iter() {
-            //             self.insert_edge(&cs, &c);
-            //         }
-            //         for cs in c.cs.iter().rev() {
-            //             self.insert_edge(&c, &cs);
-            //         }
-            //     }
-            //     _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
-            // }
+        for _term in &outputs {
+            for t in PostOrderIter::new(_term.clone()) {
+                println!("Term: {}, {}", t, self.term_to_part.get(&t).unwrap());
+
+                // Dynamically initialize rewritten cache
+                let part = self.term_to_part.get(&t).unwrap();
+                if !rewritten.contains_key(part) {
+                    rewritten.insert(*part, TermMap::new());
+                }
+
+                // only add children of the same partition
+                let mut children: Vec<Term> = Vec::new();
+                for c in t.cs.iter() {
+                    let child_part = self.term_to_part.get(&c).unwrap();
+                    println!("Child: {}, {}", c, self.term_to_part.get(&c).unwrap());
+                    if part == child_part && rewritten.get_mut(part).unwrap().contains_key(c) {
+                        children.push(rewritten.get_mut(part).unwrap().get(c).unwrap().clone());
+                    }
+                }
+                let rewrite = term(t.op.clone(), children);
+                println!("Rewrite: {}", rewrite);
+                rewritten.get_mut(part).unwrap().insert(t, rewrite.clone());
+                res.insert(*part, rewrite);
+                println!("");
+            }
         }
+        let mut partitions: Vec<Computation> = Vec::new();
+        for part in 0..res.len() {
+            partitions.push(Computation {
+                outputs: vec![res.get(&part).unwrap().clone()],
+                values: cs.values.clone(),
+                metadata: cs.metadata.clone(),
+            })
+        }
+
+        partitions
     }
 }
 
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
-pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) {
+pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) -> Vec<Computation> {
     println!("Writing IR to Chaco format");
     let Computation { outputs, .. } = cs.clone();
     let mut converter = ToChaco::new();
@@ -281,10 +302,7 @@ pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) {
 
     // read partition
     converter.make_ir_paritition_map(&part_path);
-
-    for t in &outputs {
-        converter.partition_ir(t);
-    }
+    converter.partition_ir(cs)
 }
 
 #[cfg(test)]
@@ -292,7 +310,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn sample_test() {
+    fn convert_millionaires_graph() {
         // Millionaire's example
         let ts = Computation {
             outputs: vec![term![ITE]],
