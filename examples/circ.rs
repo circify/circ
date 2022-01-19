@@ -212,12 +212,15 @@ fn main() {
                 Opt::ConstantFold,
                 Opt::ScalarizeVars,
                 Opt::ConstantFold,
+                // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Obliv,
                 Opt::Tuple,
+                // The linear scan pass produces more tuples, that must be eliminated
                 Opt::LinearScan,
                 Opt::Tuple,
                 Opt::Flatten,
                 Opt::ConstantFold,
+                // Binarize nary terms
                 Opt::Binarize,
             ],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],

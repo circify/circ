@@ -15,19 +15,11 @@ if __name__ == "__main__":
         const_bool_tests + \
         ite_tests + \
         c_array_tests + \
+        div_tests + \
         array_tests 
-        # div_tests + \
         # shift_tests
-    
-    # tests = ilp_benchmark_tests
-    # tests = kmeans_tests + div_tests
-    # tests = kmeans_tests
-    # tests = array_tests
-    # tests = arithmetic_tests
-    # tests = div_tests
-        
+   
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
 
-    # tests = biomatch_tests
     run_tests('c', tests)

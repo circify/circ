@@ -647,13 +647,6 @@ div_tests = [
         {"a": 49, "b": 0},
         {"a": 0, "b": 50},
     ], 
-    [
-        "Divide - 2",
-        4,
-        "./third_party/ABY/build/bin/2pc_div_2",
-        {"a": 49, "b": 0},
-        {"a": 0, "b": 50},
-    ], 
 ]
 
 misc_tests = [

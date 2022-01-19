@@ -63,6 +63,9 @@ mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
 mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
 mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
 
+# build div tests
+mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
+
 # build array tests
 mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
 mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
@@ -79,9 +82,6 @@ mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 
-# # # build div tests
-# # mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
-# # mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div_2.c
 
 
 # # benchmarks
