@@ -393,7 +393,7 @@ impl CGen {
                 // TODO: check length of values to initialized number
                 let mut values: Vec<CTerm> = Vec::new();
                 let inner_type = inner_ty(derived_ty);
-                for li in l.clone() {
+                for li in l {
                     let expr = self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
                     values.push(expr)
                 }

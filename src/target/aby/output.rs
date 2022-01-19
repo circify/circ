@@ -44,8 +44,7 @@ fn update_cmake_file(filename: &str) {
             .open(cmake_filename)
             .unwrap();
 
-        writeln!(file, "{}", format!("add_subdirectory({})", filename))
-            .expect("Failed to write to cmake file");
+        writeln!(file, "add_subdirectory({})", filename).expect("Failed to write to cmake file");
     }
 }
 
