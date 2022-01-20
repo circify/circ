@@ -627,13 +627,17 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
 
     let partitions = partition(&ir, &path_buf, &lang);
 
+    let mut local_share_maps: Vec<SharingMap> = Vec::new();
     for p in partitions {
         let s_map = assign(&ir, cm);
+        local_share_maps.push(s_map.clone());
         println!("s_map made!");
         for (key, value) in &*s_map {
             println!("{} : {:#?}", key, value);
         }
     }
+
+    // for now, use local assignments for global assignment
 
     // let s_map: SharingMap = assign(&ir, cm);
     let s_map = some_arith_sharing(&ir);

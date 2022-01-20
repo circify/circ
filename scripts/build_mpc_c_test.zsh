@@ -104,4 +104,4 @@ mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
 # mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_9.c
 # mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench.c
 
-mpc_test 2 ./examples/C/mpc/2pc_millionaires.c
+# mpc_test 2 ./examples/C/mpc/2pc_millionaires.c
