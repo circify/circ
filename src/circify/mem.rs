@@ -1,7 +1,6 @@
 //! The stack-allocation memory manager
 
 use crate::ir::term::*;
-use rug::Integer;
 use std::collections::HashMap;
 
 /// Identifier for an Allocation block in memory
@@ -115,7 +114,7 @@ impl MemManager {
     pub fn in_bounds(&self, id: AllocId, offset: Term) -> Term {
         let alloc = self.allocs.get(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
-        term![Op::BvBinPred(BvBinPred::Ult); offset, bv_lit(Integer::from(alloc.size), alloc.addr_width)]
+        term![Op::BvBinPred(BvBinPred::Ult); offset, bv_lit(alloc.size, alloc.addr_width)]
     }
 
     /// Get size of the array at the allocation `id`
@@ -143,12 +142,12 @@ mod test {
         let _id1 = mem.zero_allocate(6, 4, 8);
         mem.store(
             id0,
-            bv_lit(Integer::from(3), 4),
-            bv_lit(Integer::from(2), 8),
+            bv_lit(3, 4),
+            bv_lit(2, 8),
             leaf_term(Op::Const(Value::Bool(true))),
         );
-        let a = mem.load(id0, bv_lit(Integer::from(3), 4));
-        let b = mem.load(id0, bv_lit(Integer::from(1), 4));
+        let a = mem.load(id0, bv_lit(3, 4));
+        let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
         cs.borrow_mut().assert(t);
         let sys = term(
@@ -166,12 +165,12 @@ mod test {
         let _id1 = mem.zero_allocate(6, 4, 8);
         mem.store(
             id0,
-            bv_lit(Integer::from(3), 4),
+            bv_lit(3, 4),
             bv_var("a", 8),
             leaf_term(Op::Const(Value::Bool(true))),
         );
-        let a = mem.load(id0, bv_lit(Integer::from(3), 4));
-        let b = mem.load(id0, bv_lit(Integer::from(3), 4));
+        let a = mem.load(id0, bv_lit(3, 4));
+        let b = mem.load(id0, bv_lit(3, 4));
         let t = term![Op::Not; term![Op::Eq; a, b]];
         cs.borrow_mut().assert(t);
         let sys = term(
