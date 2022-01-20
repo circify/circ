@@ -16,10 +16,11 @@ impl Cache {
 fn binarize(op: &Op, children: &[Term]) -> Term {
     if children.is_empty() || children.len() == 1 {
         term(op.clone(), children.to_vec())
-    } else if children.len() == 2 {
-        return term![op.clone(); children[0].clone(), children[1].clone()];
     } else {
-        return term![op.clone(); children[0].clone(), binarize(op, &children[1..].to_vec())];
+        children[2..].to_vec().iter().fold(
+            term![op.clone(); children[1].clone(), children[0].clone()],
+            |acc, x| term![op.clone(); x.clone(), acc],
+        )
     }
 }
 

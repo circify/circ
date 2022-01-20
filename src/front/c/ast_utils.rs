@@ -17,7 +17,6 @@ pub struct DeclInfo {
 }
 
 pub struct ConstIteration {
-    pub name: String,
     pub val: i32,
 }
 

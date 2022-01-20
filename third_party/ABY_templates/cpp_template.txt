@@ -22,5 +22,6 @@ int32_t test_{fn}_circuit(std::map<std::string, std::string> params, e_role role
 
 	party->ExecCircuit();
 	flush_output_queue(out_q, role, bitlen);
+	delete party;
 	return 0;
 }

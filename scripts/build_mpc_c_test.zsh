@@ -21,7 +21,7 @@ esac
 function mpc_test {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties --cost-model "hycc" $cpath mpc 
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc"
 }
 
 # build mpc arithmetic tests

@@ -44,9 +44,6 @@ struct Options {
     #[structopt(long, default_value = "2", name = "PARTIES")]
     parties: u8,
 
-    #[structopt(long, default_value = "hycc", name = "cost_model")]
-    cost_model: String,
-
     #[structopt(subcommand)]
     backend: Backend,
 }
@@ -90,7 +87,10 @@ enum Backend {
     },
     Smt {},
     Ilp {},
-    Mpc {},
+    Mpc {
+        #[structopt(long, default_value = "hycc", name = "cost_model")]
+        cost_model: String,
+    },
 }
 
 arg_enum! {
@@ -218,7 +218,6 @@ fn main() {
                 // The linear scan pass produces more tuples, that must be eliminated
                 Opt::LinearScan,
                 Opt::Tuple,
-                Opt::Flatten,
                 Opt::ConstantFold,
                 // Binarize nary terms
                 Opt::Binarize,
@@ -298,15 +297,15 @@ fn main() {
                 }
             }
         }
-        Backend::Mpc { .. } => {
+        Backend::Mpc { cost_model } => {
             println!("Converting to aby");
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
                 DeterminedLanguage::Zokrates => "zok".to_string(),
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
-            println!("Cost model: {}", options.cost_model);
-            to_aby(cs, &path_buf, &lang_str, &options.cost_model);
+            println!("Cost model: {}", cost_model);
+            to_aby(cs, &path_buf, &lang_str, &cost_model);
             write_aby_exec(&path_buf, &lang_str);
         }
         Backend::Ilp { .. } => {
