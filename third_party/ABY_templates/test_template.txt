@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <ctype.h>
+
 #include <ENCRYPTO_utils/crypto/crypto.h>
 #include <ENCRYPTO_utils/parse_options.h>
 
@@ -56,14 +59,37 @@ std::map<std::string, std::string> parameters_to_map(std::string s, std::string 
     }
     v.push_back(s.substr(start, end - start));
 
+	// TODO: this input parameter map does not support strings since it 
+	// uses strings as parameter keys
+	
 	std::map<std::string, std::string> m;
-	for (int i = 0; i < v.size(); i += 2) {
-		if (i+1 < v.size()) {
-			m[v[i]] = v[i+1];
+	int idx = 0;
+	std::string base_key = "";
+	for (int i = 0; i < v.size(); i++) {
+		if (!isdigit(*v[i].c_str())) {
+			idx = 0;
+			base_key = v[i];
+		} else {
+			std::string key = "";
+			if (i+1 < v.size()) {
+				if (idx == 0 && !isdigit(*v[i+1].c_str())) {
+					key = base_key;
+				}
+				else {
+					key = base_key + '_' + std::to_string(idx);
+					idx++;
+				}
+			} else if (idx > 0) {
+				key = base_key + '_' + std::to_string(idx);
+			} else {
+				key = base_key;
+			}
+			m[key] = v[i];
 		}
 	}
 	return m;
 }
+
 
 int main(int argc, char** argv) {
 

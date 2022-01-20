@@ -6,9 +6,10 @@ use bellman::groth16::{
 };
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
+use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
-use circ::front::zokrates::{self, Mode, Zokrates};
-use circ::front::FrontEnd;
+use circ::front::zokrates::{self, Zokrates};
+use circ::front::{FrontEnd, Mode};
 use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
@@ -86,7 +87,10 @@ enum Backend {
     },
     Smt {},
     Ilp {},
-    Mpc {},
+    Mpc {
+        #[structopt(long, default_value = "hycc", name = "cost_model")]
+        cost_model: String,
+    },
 }
 
 arg_enum! {
@@ -94,14 +98,22 @@ arg_enum! {
     enum Language {
         Zokrates,
         Datalog,
+        C,
         Auto,
     }
 }
 
 #[derive(PartialEq, Debug)]
-enum DeterminedLanguage {
+pub enum DeterminedLanguage {
     Zokrates,
     Datalog,
+    C,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum CostModelType {
+    Opa,
+    Hycc,
 }
 
 arg_enum! {
@@ -126,12 +138,19 @@ fn determine_language(l: &Language, input_path: &PathBuf) -> DeterminedLanguage 
     match l {
         &Language::Datalog => DeterminedLanguage::Datalog,
         &Language::Zokrates => DeterminedLanguage::Zokrates,
+        &Language::C => DeterminedLanguage::C,
         &Language::Auto => {
             let p = input_path.to_str().unwrap();
             if p.ends_with(".zok") {
                 DeterminedLanguage::Zokrates
             } else if p.ends_with(".pl") {
                 DeterminedLanguage::Datalog
+            } else if p.ends_with(".c") {
+                DeterminedLanguage::C
+            } else if p.ends_with(".cpp") {
+                DeterminedLanguage::C
+            } else if p.ends_with(".cc") {
+                DeterminedLanguage::C
             } else {
                 println!("Could not deduce the input language from path '{}', please set the language manually", p);
                 std::process::exit(2)
@@ -175,12 +194,34 @@ fn main() {
             };
             Datalog::gen(inputs)
         }
+        DeterminedLanguage::C => {
+            let inputs = c::Inputs {
+                file: options.path,
+                inputs: options.frontend.inputs,
+                mode: mode.clone(),
+            };
+            C::gen(inputs)
+        }
     };
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![Opt::ScalarizeVars],
+            vec![
+                Opt::Sha,
+                Opt::ConstantFold,
+                Opt::ScalarizeVars,
+                Opt::ConstantFold,
+                // The obliv elim pass produces more tuples, that must be eliminated
+                Opt::Obliv,
+                Opt::Tuple,
+                // The linear scan pass produces more tuples, that must be eliminated
+                Opt::LinearScan,
+                Opt::Tuple,
+                Opt::ConstantFold,
+                // Binarize nary terms
+                Opt::Binarize,
+            ],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
@@ -256,10 +297,16 @@ fn main() {
                 }
             }
         }
-        Backend::Mpc { .. } => {
+        Backend::Mpc { cost_model } => {
             println!("Converting to aby");
-            let aby = to_aby(cs);
-            write_aby_exec(aby, path_buf);
+            let lang_str = match language {
+                DeterminedLanguage::C => "c".to_string(),
+                DeterminedLanguage::Zokrates => "zok".to_string(),
+                _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
+            };
+            println!("Cost model: {}", cost_model);
+            to_aby(cs, &path_buf, &lang_str, &cost_model);
+            write_aby_exec(&path_buf, &lang_str);
         }
         Backend::Ilp { .. } => {
             println!("Converting to ilp");

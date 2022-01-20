@@ -54,72 +54,79 @@ impl CostModel {
     pub fn from_opa_cost_file(p: &impl AsRef<Path>) -> CostModel {
         use ShareType::*;
         let get_cost_opt =
-            |op_name: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
-                let o = obj.get(op_name)?;
+            |share_name: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
+                let o = obj.get(share_name)?;
                 Some(
-                    o.get("1")
-                        .unwrap_or_else(|| panic!("Missing op '1' entry in {:#?}", o))
+                    o.get("32")
+                        .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
                         .as_f64()
                         .expect("not a number"),
                 )
             };
         let get_cost = |op_name: &str, obj: &serde_json::map::Map<String, Value>| -> f64 {
-            get_cost_opt(op_name, obj).unwrap()
+            let o = obj
+                .get(op_name)
+                .unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
+            Some(
+                o.get("32")
+                    .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
+                    .as_f64()
+                    .expect("not a number"),
+            )
+            .unwrap()
         };
         let mut conversions = FxHashMap::default();
         let mut ops = FxHashMap::default();
         let f = File::open(p).expect("Missing file");
         let json: Value = serde_json::from_reader(f).expect("Bad JSON");
-        let obj = json.as_object().unwrap();
-        for (_width, json) in obj {
-            //let w = u32::from_str(width).expect("bad width");
-            let obj = json.as_object().unwrap();
+        let costs = json.as_object().unwrap();
+        // conversions
+        conversions.insert((Arithmetic, Boolean), get_cost("a2b", costs));
+        conversions.insert((Boolean, Arithmetic), get_cost("b2a", costs));
+        conversions.insert((Yao, Boolean), get_cost("y2b", costs));
+        conversions.insert((Boolean, Yao), get_cost("b2y", costs));
+        conversions.insert((Yao, Arithmetic), get_cost("y2a", costs));
+        conversions.insert((Arithmetic, Yao), get_cost("a2y", costs));
 
-            // conversions
-            conversions.insert((Arithmetic, Boolean), get_cost("a2b", obj));
-            conversions.insert((Boolean, Arithmetic), get_cost("b2a", obj));
-            conversions.insert((Yao, Boolean), get_cost("y2b", obj));
-            conversions.insert((Boolean, Yao), get_cost("b2y", obj));
-            conversions.insert((Yao, Arithmetic), get_cost("y2a", obj));
-            conversions.insert((Arithmetic, Yao), get_cost("a2y", obj));
-
-            let ops_from_name = |name: &str| {
-                match name {
-                    // assume comparisions are unsigned
-                    "ge" => vec![BV_UGE],
-                    "le" => vec![BV_ULE],
-                    "gt" => vec![BV_UGT],
-                    "lt" => vec![BV_ULT],
-                    // assume n-ary ops apply to BVs
-                    "add" => vec![BV_ADD],
-                    "mul" => vec![BV_MUL],
-                    "and" => vec![BV_AND],
-                    "or" => vec![BV_OR],
-                    "xor" => vec![BV_XOR],
-                    // assume eq applies to BVs
-                    "eq" => vec![Op::Eq],
-                    "shl" => vec![BV_SHL],
-                    // assume shr is logical, not arithmetic
-                    "shr" => vec![BV_LSHR],
-                    "sub" => vec![BV_SUB],
-                    "mux" => vec![ITE],
-                    "ne" => vec![],
-                    _ => panic!("Unknown operator name: {}", name),
-                }
-            };
-            for (op_name, json) in obj {
-                // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
-                if !op_name.contains('2') {
-                    for op in ops_from_name(op_name) {
-                        let obj = json.as_object().unwrap();
-                        for (share_type, share_name) in
-                            &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
-                        {
-                            if let Some(cost) = get_cost_opt(share_name, obj) {
-                                ops.entry(op.clone())
-                                    .or_insert_with(FxHashMap::default)
-                                    .insert(*share_type, cost);
-                            }
+        let ops_from_name = |name: &str| {
+            match name {
+                // assume comparisions are unsigned
+                "ge" => vec![BV_UGE],
+                "le" => vec![BV_ULE],
+                "gt" => vec![BV_UGT],
+                "lt" => vec![BV_ULT],
+                // assume n-ary ops apply to BVs
+                "add" => vec![BV_ADD],
+                "mul" => vec![BV_MUL],
+                "and" => vec![BV_AND],
+                "or" => vec![BV_OR],
+                "xor" => vec![BV_XOR],
+                // assume eq applies to BVs
+                "eq" => vec![Op::Eq],
+                "shl" => vec![BV_SHL],
+                // assume shr is logical, not arithmetic
+                "shr" => vec![BV_LSHR],
+                "sub" => vec![BV_SUB],
+                "mux" => vec![ITE],
+                "ne" => vec![Op::Not, Op::Eq],
+                "div" => vec![BV_UDIV],
+                "rem" => vec![BV_UREM],
+                // added to pass test case
+                "&&" => vec![AND],
+                "||" => vec![OR],
+                _ => panic!("Unknown operator name: {}", name),
+            }
+        };
+        for (op_name, cost) in costs {
+            // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
+            if !op_name.contains('2') {
+                for op in ops_from_name(op_name) {
+                    for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
+                    {
+                        if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
+                            ops.entry(op.clone())
+                                .or_insert_with(FxHashMap::default)
+                                .insert(*share_type, c);
                         }
                     }
                 }
@@ -130,10 +137,16 @@ impl CostModel {
 }
 
 /// Uses an ILP to assign...
-pub fn assign(c: &Computation) -> SharingMap {
+pub fn assign(c: &Computation, cm: &str) -> SharingMap {
+    let base_dir = match cm {
+        "opa" => "opa",
+        "hycc" => "hycc",
+        _ => panic!("Unknown cost model type: {}", cm),
+    };
     let p = format!(
-        "{}/third_party/opa/sample_costs.json",
-        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        base_dir
     );
     let costs = CostModel::from_opa_cost_file(&p);
     build_ilp(c, &costs)
@@ -264,7 +277,7 @@ mod tests {
     #[test]
     fn parse_cost_model() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let c = CostModel::from_opa_cost_file(&p);
@@ -294,7 +307,7 @@ mod tests {
     #[test]
     fn mul1_bv_opt() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
@@ -312,7 +325,7 @@ mod tests {
     #[test]
     fn huge_mul_then_eq() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
@@ -358,7 +371,7 @@ mod tests {
     #[test]
     fn big_mul_then_eq() {
         let p = format!(
-            "{}/third_party/opa/sample_costs.json",
+            "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);

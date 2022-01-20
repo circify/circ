@@ -102,6 +102,197 @@ share* arithmetic_right_shift(Circuit* c, share* val, uint32_t shift_factor) {
   return c->PutMUXGate(x, c->PutSUBGate(get_zero_share(c, bitlen), x), is_pos);
 }
 
+
+share* signedgtbl(Circuit* c, share* x, share* y){
+  share* ux = x;
+  share* uy = y;
+  int32_t __tac_var1 = ( (int32_t)1 <<  (int32_t)31);
+  share* __tac_var2 = put_cons32_gate(c, __tac_var1);
+  share* signBitX = c->PutANDGate(x, __tac_var2);
+  int32_t __tac_var3 = __tac_var1;
+  share* __tac_var4 = __tac_var2;
+  share* signBitY = c->PutANDGate(y, __tac_var2);
+  share* __tac_var5 = c->PutXORGate(signBitX, signBitY);
+  share* __tac_var6 = put_cons32_gate(c,  (uint32_t)0);
+  share* __tac_var7 = c->PutGTGate(__tac_var5, __tac_var6);
+  share* __tac_var8 = __tac_var6;
+  share* __tac_var9 = c->PutGTGate(signBitX, __tac_var6);
+  share* __tac_var10 = put_cons1_gate(c, 0);
+  share* __tac_var11 = put_cons1_gate(c, 1);
+  share* __tac_var12 = c->PutMUXGate(__tac_var10, __tac_var11, __tac_var9);
+  share* __tac_var13 = c->PutGTGate(ux, uy);
+  share* __tac_var14 = c->PutMUXGate(__tac_var12, __tac_var13, __tac_var7);
+  return __tac_var14;
+}
+
+share* signedarshiftbl(Circuit* c, share* x, uint32_t y){
+  share* ux = x;
+  int32_t __tac_var15 = ( (int32_t)1 <<  (int32_t)31);
+  share* __tac_var16 = put_cons32_gate(c, __tac_var15);
+  share* signBitX = c->PutANDGate(x, __tac_var16);
+  share* __tac_var17 = put_cons32_gate(c,  (uint32_t)0);
+  share* __tac_var18 = c->PutGTGate(signBitX, __tac_var17);
+  share* __tac_var19 = __tac_var17;
+  share* __tac_var20 = __tac_var17;
+  share* __tac_var21 = c->PutSUBGate(__tac_var17, ux);
+  share* __tac_var22 = arithmetic_right_shift(c, __tac_var21, y);
+  share* __tac_var23 = c->PutSUBGate(__tac_var17, __tac_var22);
+  share* __tac_var24 = arithmetic_right_shift(c, ux, y);
+  share* __tac_var25 = c->PutMUXGate(__tac_var23, __tac_var24, __tac_var18);
+  return __tac_var25;
+}
+
+share* unsignedltbl(Circuit* c, share* x, share* y){
+  share* __tac_var26 = c->PutGTGate(y, x);
+  return __tac_var26;
+}
+
+share* signedltbl(Circuit* c, share* x, share* y){
+  share* __tac_var27 = signedgtbl(c, y, x);
+  return __tac_var27;
+}
+
+share* unsignedleqbl(Circuit* c, share* x, share* y){
+  share* __tac_var28 = c->PutGTGate(x, y);
+  share* __tac_var29 = ((BooleanCircuit *) c)->PutINVGate(__tac_var28);
+  return __tac_var29;
+}
+
+share* signedleqbl(Circuit* c, share* x, share* y){
+  share* __tac_var30 = signedgtbl(c, x, y);
+  share* __tac_var31 = ((BooleanCircuit *) c)->PutINVGate(__tac_var30);
+  return __tac_var31;
+}
+
+share* unsignedgeqbl(Circuit* c, share* x, share* y){
+  share* __tac_var32 = c->PutGTGate(y, x);
+  share* __tac_var33 = ((BooleanCircuit *) c)->PutINVGate(__tac_var32);
+  return __tac_var33;
+}
+
+share* signedgeqbl(Circuit* c, share* x, share* y){
+  share* __tac_var34 = signedgtbl(c, y, x);
+  share* __tac_var35 = ((BooleanCircuit *) c)->PutINVGate(__tac_var34);
+  return __tac_var35;
+}
+
+share* unsignedequalsbl(Circuit* c, share* x, share* y){
+  share* __tac_var36 = unsignedltbl(c, x, y);
+  share* __tac_var37 = ((BooleanCircuit *) c)->PutINVGate(__tac_var36);
+  share* __tac_var38 = unsignedltbl(c, y, x);
+  share* __tac_var39 = ((BooleanCircuit *) c)->PutINVGate(__tac_var38);
+  share* __tac_var40 = c->PutANDGate(__tac_var37, __tac_var39);
+  return __tac_var40;
+}
+
+share* signedequalsbl(Circuit* c, share* x, share* y){
+  share* __tac_var41 = signedltbl(c, x, y);
+  share* __tac_var42 = ((BooleanCircuit *) c)->PutINVGate(__tac_var41);
+  share* __tac_var43 = signedltbl(c, y, x);
+  share* __tac_var44 = ((BooleanCircuit *) c)->PutINVGate(__tac_var43);
+  share* __tac_var45 = c->PutANDGate(__tac_var42, __tac_var44);
+  return __tac_var45;
+}
+
+share* longDivision(Circuit* c, share* x, share* y, uint32_t getQuotient){
+  share* q = put_cons32_gate(c,  (uint32_t)0);
+  share* divisor = q;
+  share* cond = put_cons1_gate(c, 0);
+  for (uint32_t iter =  (int32_t)0; iter <  (int32_t)32; iter++){
+    uint32_t i = ( (int32_t)31 - iter);
+    divisor = left_shift(c, divisor,  (uint32_t)1);
+    uint32_t __tac_var46 = ( (uint32_t)1 << i);
+    share* __tac_var47 = put_cons32_gate(c, __tac_var46);
+    share* __tac_var48 = c->PutANDGate(x, __tac_var47);
+    share* __tac_var49 = logical_right_shift(c, __tac_var48, i);
+    divisor = c->PutADDGate(divisor, __tac_var49);
+    cond = unsignedgeqbl(c, divisor, y);
+    share* __tac_var50 = c->PutSUBGate(divisor, y);
+    divisor = c->PutMUXGate(__tac_var50, divisor, cond);
+    q = left_shift(c, q,  (uint32_t)1);
+    share* __tac_var51 = put_cons32_gate(c,  (uint32_t)1);
+    share* __tac_var52 = c->PutADDGate(q, __tac_var51);
+    q = c->PutMUXGate(__tac_var52, q, cond);
+  }
+  share* __tac_var53 = getQuotient ? q : divisor;
+  return __tac_var53;
+}
+
+share* unsigneddivbl(Circuit* c, share* x, share* y){
+  share* __tac_var54 = longDivision(c, x, y, 1);
+  return __tac_var54;
+}
+
+share* unsigneddival(Circuit* c, share* x, share* y){
+  share* bx = c->PutA2YGate(x);
+  share* by = c->PutA2YGate(y);
+  share* __tac_var55 = unsigneddivbl(c, bx, by);
+  return __tac_var55;
+}
+
+share* signeddivbl(Circuit* c, share* x, share* y){
+  share* __tac_var56 = put_cons32_gate(c,  (int32_t)0);
+  share* isXNeg = signedltbl(c, x, __tac_var56);
+  share* __tac_var57 = __tac_var56;
+  share* isYNeg = signedltbl(c, y, __tac_var56);
+  share* __tac_var58 = __tac_var56;
+  share* __tac_var59 = c->PutSUBGate(__tac_var56, x);
+  share* ux = c->PutMUXGate(__tac_var59, x, isXNeg);
+  share* __tac_var60 = __tac_var56;
+  share* __tac_var61 = c->PutSUBGate(__tac_var56, y);
+  share* uy = c->PutMUXGate(__tac_var61, y, isYNeg);
+  share* ures = unsigneddivbl(c, ux, uy);
+  share* isResNeg = c->PutXORGate(isXNeg, isYNeg);
+  share* __tac_var62 = put_cons32_gate(c,  (uint32_t)0);
+  share* __tac_var63 = c->PutSUBGate(__tac_var62, ures);
+  share* __tac_var64 = c->PutMUXGate(__tac_var63, ures, isResNeg);
+  return __tac_var64;
+}
+
+share* signeddival(Circuit* c, share* x, share* y){
+  share* bx = c->PutA2YGate(x);
+  share* by = c->PutA2YGate(y);
+  share* __tac_var65 = signeddivbl(c, bx, by);
+  return __tac_var65;
+}
+
+share* unsignedmodbl(Circuit* c, share* x, share* y){
+  share* __tac_var66 = longDivision(c, x, y, 0);
+  return __tac_var66;
+}
+
+share* unsignedmodal(Circuit* c, share* x, share* y){
+  share* bx = c->PutA2YGate(x);
+  share* by = c->PutA2YGate(y);
+  share* __tac_var67 = unsignedmodbl(c, bx, by);
+  return __tac_var67;
+}
+
+share* signedmodbl(Circuit* c, share* x, share* y){
+  share* __tac_var68 = put_cons32_gate(c,  (int32_t)0);
+  share* isXNeg = signedltbl(c, x, __tac_var68);
+  share* __tac_var69 = __tac_var68;
+  share* isYNeg = signedltbl(c, y, __tac_var68);
+  share* __tac_var70 = __tac_var68;
+  share* __tac_var71 = c->PutSUBGate(__tac_var68, x);
+  share* ux = c->PutMUXGate(__tac_var71, x, isXNeg);
+  share* __tac_var72 = __tac_var68;
+  share* __tac_var73 = c->PutSUBGate(__tac_var68, y);
+  share* uy = c->PutMUXGate(__tac_var73, y, isYNeg);
+  share* urem = unsignedmodbl(c, ux, uy);
+  share* __tac_var74 = put_cons32_gate(c,  (uint32_t)0);
+  share* __tac_var75 = c->PutSUBGate(__tac_var74, urem);
+  share* __tac_var76 = c->PutMUXGate(__tac_var75, urem, isXNeg);
+  return __tac_var76;
+}
+
+share* signedmodal(Circuit* c, share* x, share* y){
+  share* bx = c->PutA2YGate(x);
+  share* by = c->PutA2YGate(y);
+  share* __tac_var77 = signedmodbl(c, bx, by);
+  return __tac_var77;
+}
+
 /*
  * we maintain a queue of outputs
  * basically every OUTPUT adds an OUTGate,

@@ -85,6 +85,10 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                 match (o, c0.as_bv_opt(), c1.as_bv_opt()) {
                     (Sub, Some(a), Some(b)) => cbv(a.clone() - b.clone()),
                     (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0.clone()),
+                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(0) => Some(bv_lit(
+                        (Integer::from(1) << b.width() as u32) - 1,
+                        b.width(),
+                    )),
                     (Udiv, Some(a), Some(b)) => cbv(a.clone() / b),
                     (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0.clone()),
                     (Udiv, _, Some(b)) if b.uint() == &Integer::from(-1) => {

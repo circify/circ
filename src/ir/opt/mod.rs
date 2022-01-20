@@ -1,4 +1,5 @@
 //! Optimizations
+pub mod binarize;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
@@ -21,6 +22,8 @@ pub enum Opt {
     ConstantFold,
     /// Flatten n-ary operators
     Flatten,
+    /// Binarize n-ary operators
+    Binarize,
     /// SHA-2 peephole optimizations
     Sha,
     /// Replace oblivious arrays with tuples
@@ -76,6 +79,12 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 let mut cache = flat::Cache::new();
                 for a in &mut cs.outputs {
                     *a = flat::flatten_nary_ops_cached(a.clone(), &mut cache);
+                }
+            }
+            Opt::Binarize => {
+                let mut cache = binarize::Cache::new();
+                for a in &mut cs.outputs {
+                    *a = binarize::binarize_nary_ops_cached(a.clone(), &mut cache);
                 }
             }
             Opt::Inline => {

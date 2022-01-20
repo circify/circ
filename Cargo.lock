@@ -218,6 +218,7 @@ dependencies = [
  "hashconsing",
  "ieee754",
  "itertools 0.10.3",
+ "lang-c",
  "lazy_static",
  "log",
  "lp-solvers",
@@ -546,6 +547,12 @@ name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
+
+[[package]]
+name = "lang-c"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a597343db6f9affec95665270028e3113864b48a1a0ba9257c1553ade3840207"
 
 [[package]]
 name = "lazy_static"
