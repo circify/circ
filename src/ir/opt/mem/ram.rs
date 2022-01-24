@@ -1,6 +1,5 @@
 /// RAM extraction
 ///
-
 use log::debug;
 
 use crate::ir::opt::visit::RewritePass;
