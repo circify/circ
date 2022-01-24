@@ -7,6 +7,10 @@ const field FIELD_MAX = -1
 def main() -> bool:
     return false
 
+// Tests if `a` is divisible by `q`.
+// `a` is interpreted as a signed integer in [-(Q+1)/2, (Q+1)/2).
+// Q the field modulus. `q` is interpreted as an unsigned integer
+// in [0, Q).
 def s_divisible(field a, field q) -> bool:
     field neg_a = -a
     bool is_neg = a > neg_a
@@ -14,6 +18,10 @@ def s_divisible(field a, field q) -> bool:
     field rem = to_rem % q
     return rem == 0
 
+// Computes `a mod q`.
+// `a` is interpreted as a signed integer in [-(Q+1)/2, (Q+1)/2).
+// Q the field modulus. `q` is interpreted as an unsigned integer
+// in [0, Q). The return value is in [0, q).
 def s_remainder(field a, field q) -> field:
     field neg_a = -a
     bool is_neg = a > neg_a
