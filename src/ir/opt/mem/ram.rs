@@ -1,5 +1,6 @@
 /// RAM extraction
 ///
+/// See the documentation for [extract]
 use log::debug;
 
 use crate::ir::opt::visit::RewritePass;
@@ -301,6 +302,11 @@ impl RewritePass for Extactor {
 ///   2. Builds a transcript for each RAM.
 ///
 /// A conditional store must have form (ite C (store A I V) I) to be detected.
+/// 
+/// Limitations:
+/// * This pass doesn't handle shared stuff very well. If there are two
+///   different RAMs with the same init sequence of instructions, this pass will
+///   not recognize them...
 #[allow(dead_code)]
 pub fn extract(c: &mut Computation) -> Vec<Ram> {
     let mut extractor = Extactor::new(c);
