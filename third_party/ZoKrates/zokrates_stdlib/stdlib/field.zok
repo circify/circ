@@ -6,3 +6,19 @@ const field FIELD_MAX = -1
 // A dummy `main` function
 def main() -> bool:
     return false
+
+def s_divisible(field a, field q) -> bool:
+    field neg_a = -a
+    bool is_neg = a > neg_a
+    field to_rem = if is_neg then neg_a else a fi
+    field rem = to_rem % q
+    return rem == 0
+
+def s_remainder(field a, field q) -> field:
+    field neg_a = -a
+    bool is_neg = a > neg_a
+    field to_rem = if is_neg then neg_a else a fi
+    field rem = to_rem % q
+    field neg_rem = if rem == 0 then 0 else q - rem fi
+    field res = if is_neg then neg_rem else rem fi
+    return res
