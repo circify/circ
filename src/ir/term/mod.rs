@@ -1393,7 +1393,7 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
@@ -1511,7 +1511,7 @@ impl ComputationMetadata {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.

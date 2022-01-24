@@ -1,89 +1,21 @@
-// TODO: remove
-#![warn(warnings)]
+/// RAM extraction
+///
 
 use log::debug;
 
-use crate::ir::opt::visit::ProgressAnalysisPass;
+use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 
-/// Computes which terms are not RAM
 #[derive(Debug)]
-struct NonRamComputer {
-    non_ram: TermSet,
-}
-
-impl NonRamComputer {
-    /// Mark `t` as non-RAM. Return whether this fact is new.
-    fn mark(&mut self, t: &Term) -> bool {
-        if t.is_const() {
-            self.non_ram.insert(t.clone())
-        } else {
-            false
-        }
-    }
-
-    fn bi_implicate(&mut self, a: &Term, b: &Term) -> bool {
-        if !a.is_const() && !b.is_const() {
-            match (self.non_ram.contains(a), self.non_ram.contains(b)) {
-                (false, true) => self.non_ram.insert(a.clone()),
-                (true, false) => self.non_ram.insert(b.clone()),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn new(mut parents: &TermMap<Vec<Term>>) -> Self {
-        let mut this = NonRamComputer {
-            non_ram: TermSet::new(),
-        };
-        for (c, ps) in parents {
-            if ps.iter().filter(|p| p.op == Op::Store).count() > 1 {
-                this.mark(c);
-            }
-        }
-        this
-    }
-}
-
-impl ProgressAnalysisPass for NonRamComputer {
-    fn visit(&mut self, term: &Term) -> bool {
-        let mut progress = false;
-        if let s @ Sort::Array(..) = check(term) {
-            match &term.op {
-                Op::Ite => {
-                    if term.cs[1].op != Op::Store || term.cs[1].cs[0] != term.cs[2] {
-                        debug!("Non-RAM {}", extras::Letified(term.clone()));
-                        progress = self.mark(&term) || progress;
-                        progress = self.mark(&term.cs[1]) || progress;
-                        progress = self.mark(&term.cs[2]) || progress;
-                    }
-                }
-                Op::Store => {
-                    progress = self.bi_implicate(term, &term.cs[0]) || progress;
-                }
-                Op::Var(..) => panic!("array var in ram extraction"),
-                _ => {}
-            }
-        } else {
-            match &term.op {
-                Op::Select => {
-                    progress = self.bi_implicate(term, &term.cs[0]) || progress;
-                }
-                _ => {}
-            }
-        }
-        progress
-    }
-}
-
-#[derive(Debug)]
-struct Access {
-    is_write: Term,
-    idx: Term,
-    val: Term,
+/// An access to a RAM
+pub struct Access {
+    /// Whether this is a read or a write.
+    pub is_write: Term,
+    /// The index/address.
+    pub idx: Term,
+    /// The value written or read.
+    pub val: Term,
 }
 
 impl Access {
@@ -104,13 +36,20 @@ impl Access {
 }
 
 #[derive(Debug)]
-struct Ram {
-    id: usize,
-    init_val: Value,
-    size: usize,
-    accesses: Vec<Access>,
-    idx_sort: Sort,
-    val_sort: Sort,
+/// A RAM transcript
+pub struct Ram {
+    /// The unique id of this RAM
+    pub id: usize,
+    /// The starting value of all cells
+    pub init_val: Value,
+    /// The size
+    pub size: usize,
+    /// The list of accesses (in access order)
+    pub accesses: Vec<Access>,
+    /// The index sort
+    pub idx_sort: Sort,
+    /// The value sort
+    pub val_sort: Sort,
 }
 
 impl Ram {
@@ -155,6 +94,10 @@ fn parse_cond_store(ite: &Term) -> Option<ConditionalStore> {
     }
 }
 
+#[derive(Debug)]
+/// Data about a conditional store: term = (ite guard (store arr idx val) arr)
+///
+/// The store field is (store arr idx val)
 struct ConditionalStore {
     arr: Term,
     idx: Term,
@@ -163,54 +106,106 @@ struct ConditionalStore {
     store: Term,
 }
 
-struct ConditionalStoreData {
-    parents: TermMap<Vec<Term>>,
-    c_stores: TermMap<ConditionalStore>,
-    subsumed_stores: TermSet,
-    stores: TermSet,
-    nca_parents: TermMap<Vec<Term>>,
-    nca_children: TermMap<Vec<Term>>,
+/// Graph of the *arrays* in the computation.
+///
+/// Nodes are *most* of the array-sorted term (see "subsumed store" for the exception).
+///
+/// Edges go from dependent arrays to their dependencies and represent stores,
+/// ITEs, and conditional stores.
+///
+/// A conditional store has form T = (ite C (store A I V) A).
+///
+/// It is regarded as a single edge from T to A, so long as the interior store
+/// (store A I V) has no other dependents. In this case, the interior store is
+/// called a "subsumed store", and is not part of the array graph itself.
+///
+/// The "constant-free" graph has constant arrays removed.
+///
+/// An array term in the graph is non-RAM if is is connected (undirectedly) in
+/// the constant-free graph to any node with multiple parents or children in the
+/// constant-free graph.
+///
+#[derive(Debug)]
+struct ArrayGraph {
+    /// Map from array terms to their children (dependencies)
+    children: TermMap<Vec<Term>>,
+    /// Set of all array terms.
+    array_terms: TermSet,
+    /// Set of non-RAM array terms.
+    non_ram: TermSet,
 }
 
-impl ConditionalStoreData {
+impl ArrayGraph {
     fn new(c: &Computation) -> Self {
-        let parents = extras::parents_map(c);
+        let term_parents = extras::parents_map(c);
         let mut c_stores = TermMap::default();
-        let mut subsumed_stores = TermSet::default();
-        for t in c.terms_postorder() {
-            if let Some(c_store) = parse_cond_store(t) {
-                if parents.get(&c_store.store).unwrap().len() == 1 {
+        let mut ps = TermMap::default();
+        let mut cs = TermMap::default();
+        let mut arrs = TermSet::default();
+        let mut subsumed = TermSet::default();
+        // We go parent->children to see conditional stores before their subsumed stores.
+        let terms: Vec<_> = c.terms_postorder().collect();
+        for t in terms.into_iter().rev() {
+            let mut is_c_store = false;
+            if let Some(c_store) = parse_cond_store(&t) {
+                if term_parents.get(&c_store.store).unwrap().len() == 1 {
                     debug!("cond store: {}", Letified(t.clone()));
-                    subsumed_stores.insert(c_store.store.clone());
-                    c_stores.insert(t, c_store);
+                    subsumed.insert(c_store.store.clone());
+                    ps.entry(c_store.arr.clone())
+                        .or_insert_with(Vec::new)
+                        .push(t.clone());
+                    cs.entry(t.clone())
+                        .or_insert_with(Vec::new)
+                        .push(c_store.arr.clone());
+                    arrs.insert(t.clone());
+                    c_stores.insert(t.clone(), c_store);
+                    is_c_store = true;
+                }
+            }
+            if !is_c_store && !subsumed.contains(&t) {
+                if let Sort::Array(..) = check(&t) {
+                    for c in &t.cs {
+                        if let Sort::Array(..) = check(&c) {
+                            arrs.insert(t.clone());
+                            ps.entry(c.clone()).or_insert_with(Vec::new).push(t.clone());
+                            cs.entry(t.clone()).or_insert_with(Vec::new).push(c.clone());
+                        }
+                    }
                 }
             }
         }
-        let stores: TermSet = c
-            .terms_postorder()
-            .filter(|t| !t.is_const() && matches!(check(t), Sort::Array(..)))
-            .collect();
-        let mut nca_parents: TermMap<Vec<Term>> = stores.iter().cloned().map(|s| (s, Vec::new())).collect();
-        let mut nca_children: TermMap<Vec<Term>> = stores.iter().cloned().map(|s| (s, Vec::new())).collect();
-        for s in &stores {
-            if let Some(c_store) = c_stores.get(s) {
-                nca_parents.get_mut(&c_store.arr).unwrap().push(s.clone());
-                nca_parents.get_mut(s).unwrap().push(c_store.arr.clone());
-            } else {
-                match &s.op {
-                    Op::Ite => {
-                        nca_parents.get_mut(&c_store.arr).unwrap().push(s.clone());
-                        nca_parents.get_mut(s).unwrap().push(c_store.arr.clone());
-
+        let mut non_ram: TermSet = TermSet::default();
+        {
+            let mut stack: Vec<Term> = arrs
+                .iter()
+                .filter(|a| {
+                    !a.is_const()
+                        && (ps.get(a).map(|ps| ps.len() > 1).unwrap_or(false)
+                            || cs.get(a).map(|cs| cs.len() > 1).unwrap_or(false))
+                })
+                .cloned()
+                .collect();
+            while let Some(t) = stack.pop() {
+                if !t.is_const() && !non_ram.contains(&t) {
+                    debug!("Non-RAM: {}", Letified(t.clone()));
+                    non_ram.insert(t.clone());
+                    for t in ps.get(&t).into_iter().flatten() {
+                        stack.push(t.clone());
+                    }
+                    for t in cs.get(&t).into_iter().flatten() {
+                        stack.push(t.clone());
                     }
                 }
             }
         }
         Self {
-            parents,
-            c_stores,
-            subsumed_stores,
+            children: cs,
+            array_terms: arrs,
+            non_ram,
         }
+    }
+    fn is_ram(&self, t: &Term) -> bool {
+        !t.is_const() && self.array_terms.contains(t) && !self.non_ram.contains(t)
     }
 }
 
@@ -219,11 +214,21 @@ struct Extactor {
     rams: Vec<Ram>,
     term_ram: TermMap<RamId>,
     read_terms: TermMap<Term>,
+    graph: ArrayGraph,
 }
 
 type RamId = usize;
 
 impl Extactor {
+    fn new(c: &Computation) -> Self {
+        let graph = ArrayGraph::new(c);
+        Self {
+            rams: Vec::new(),
+            term_ram: TermMap::default(),
+            read_terms: TermMap::default(),
+            graph,
+        }
+    }
     // If this term is a constant array, start a new RAM. Otherwise, look this term up.
     fn get_or_start(&mut self, t: &Term) -> RamId {
         match &t.op {
@@ -235,26 +240,230 @@ impl Extactor {
             _ => *self
                 .term_ram
                 .get(t)
-                .unwrap_or_else(|| panic!("No RAM for term {}", extras::Letified(t))),
+                .unwrap_or_else(|| panic!("No RAM for term {}", extras::Letified(t.clone()))),
         }
     }
-    fn visit(&mut self, t: &Term) {
-        match &t.op {
-            Op::Select => {
-                let ram_id = self.get_or_start(&t.cs[0]);
-                let ram = &mut self.rams[ram_id];
-                let read_value = ram.new_read(t.cs[1].clone());
-                self.read_terms.insert(t.clone(), read_value.clone());
-            }
-            Op::Store => {
-                let ram_id = self.get_or_start(&t.cs[0]);
-                let ram = &mut self.rams[ram_id];
-                let read_value = ram.new_read(t.cs[1].clone());
-                self.read_terms.insert(t.clone(), read_value.clone());
+}
+
+impl RewritePass for Extactor {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        _computation: &mut Computation,
+        t: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        // First, we rewrite RAM terms.
+        if self.graph.is_ram(t) {
+            // Since this is a "RAM" term, it is non-constant and either a c-store or a store.
+            assert!(matches!(t.op, Op::Store | Op::Ite));
+            debug_assert!(self.graph.children.get(t).is_some());
+            debug_assert_eq!(1, self.graph.children.get(t).unwrap().len());
+            // Get dependency's RAM
+            let child = self.graph.children.get(t).unwrap()[0].clone();
+            let ram_id = self.get_or_start(&child);
+            let ram = &mut self.rams[ram_id];
+            // Build new term, and parse as a c-store
+            let new = term(t.op.clone(), rewritten_children());
+            let c_store = parse_cond_store(&new).unwrap_or_else(|| {
+                // this is a plain store then, map it to a c-store
+                assert_eq!(Op::Store, new.op);
+                ConditionalStore {
+                    arr: new.cs[0].clone(),
+                    idx: new.cs[1].clone(),
+                    val: new.cs[2].clone(),
+                    guard: bool_lit(true),
+                    store: bool_lit(false), // dummy; unused.
+                }
+            });
+            // Add the write to the RAM
+            ram.new_write(c_store.idx, c_store.val, c_store.guard);
+            let id = ram.id;
+            self.term_ram.insert(t.clone(), id);
+            None
+        } else {
+            match &t.op {
+                // Rewrite select's whose array is a RAM term
+                Op::Select if self.graph.is_ram(&t.cs[0]) => {
+                    let ram_id = self.get_or_start(&t.cs[0]);
+                    let ram = &mut self.rams[ram_id];
+                    let read_value = ram.new_read(t.cs[1].clone());
+                    self.read_terms.insert(t.clone(), read_value.clone());
+                    Some(read_value)
+                }
+                _ => None,
             }
         }
     }
 }
 
+/// Find arrays which are RAMs (i.e., accessed with a linear sequences of
+/// selects, stores, and conditional stores) and
+///   1. Replaces reads from these RAMs with new variables.
+///   2. Builds a transcript for each RAM.
+///
+/// A conditional store must have form (ite C (store A I V) I) to be detected.
+#[allow(dead_code)]
+pub fn extract(c: &mut Computation) -> Vec<Ram> {
+    let mut extractor = Extactor::new(c);
+    extractor.traverse(c);
+    extractor.rams
+}
+
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+
+    #[test]
+    fn non_ram() {
+        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::BitVector(4),
+            4,
+        ))));
+        let store_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 4)];
+        let store_2 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(2, 4)];
+        let ite = term![Op::Ite; bool_lit(true), store_1, store_2];
+        let select = term![Op::Select; ite, bv_lit(0, 4)];
+        let mut cs = Computation::default();
+        cs.outputs.push(select);
+        let mut cs2 = cs.clone();
+        let rams = extract(&mut cs2);
+        assert_eq!(0, rams.len());
+        assert_eq!(cs, cs2);
+    }
+
+    #[test]
+    fn simple_store_chain() {
+        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::BitVector(3),
+            4,
+        ))));
+        let store_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)];
+        let store_2 = term![Op::Store; store_1.clone(), bv_lit(1, 4), bv_lit(2, 3)];
+        let select = term![Op::Select; store_2, bv_lit(0, 4)];
+        let mut cs = Computation::default();
+        cs.outputs.push(select);
+        let mut cs2 = cs.clone();
+        let rams = extract(&mut cs2);
+        assert_ne!(cs, cs2);
+        assert_eq!(1, rams.len());
+        assert_eq!(Sort::BitVector(4), rams[0].idx_sort);
+        assert_eq!(Sort::BitVector(3), rams[0].val_sort);
+        assert_eq!(3, rams[0].accesses.len());
+        assert_eq!(bool_lit(true), rams[0].accesses[0].is_write);
+        assert_eq!(bool_lit(true), rams[0].accesses[1].is_write);
+        assert_eq!(bool_lit(false), rams[0].accesses[2].is_write);
+        assert_eq!(bv_lit(0, 4), rams[0].accesses[0].idx);
+        assert_eq!(bv_lit(1, 4), rams[0].accesses[1].idx);
+        assert_eq!(bv_lit(0, 4), rams[0].accesses[2].idx);
+        assert_eq!(bv_lit(1, 3), rams[0].accesses[0].val);
+        assert_eq!(bv_lit(2, 3), rams[0].accesses[1].val);
+        assert!(rams[0].accesses[2].val.is_var());
+    }
+
+    #[test]
+    fn c_store_chain() {
+        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::BitVector(3),
+            4,
+        ))));
+        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let store_1 = term![Op::Ite; a.clone(), term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)], c_array];
+        let store_2 = term![Op::Ite; a.clone(), term![Op::Store; store_1.clone(), bv_lit(1, 4), bv_lit(1, 3)], store_1];
+        let select = term![Op::Select; store_2, bv_lit(0, 4)];
+        let mut cs = Computation::default();
+        cs.outputs.push(select);
+        let mut cs2 = cs.clone();
+        let rams = extract(&mut cs2);
+        assert_ne!(cs, cs2);
+        assert_eq!(1, rams.len());
+        assert_eq!(Sort::BitVector(4), rams[0].idx_sort);
+        assert_eq!(Sort::BitVector(3), rams[0].val_sort);
+        assert_eq!(3, rams[0].accesses.len());
+        assert_eq!(a, rams[0].accesses[0].is_write);
+        assert_eq!(a, rams[0].accesses[1].is_write);
+        assert_eq!(bool_lit(false), rams[0].accesses[2].is_write);
+        assert_eq!(bv_lit(0, 4), rams[0].accesses[0].idx);
+        assert_eq!(bv_lit(1, 4), rams[0].accesses[1].idx);
+        assert_eq!(bv_lit(0, 4), rams[0].accesses[2].idx);
+        assert_eq!(bv_lit(1, 3), rams[0].accesses[0].val);
+        assert_eq!(bv_lit(1, 3), rams[0].accesses[1].val);
+        assert!(rams[0].accesses[2].val.is_var());
+    }
+
+    #[test]
+    fn mix_store_chain() {
+        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::BitVector(3),
+            4,
+        ))));
+        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let store_1 = term![Op::Ite; a.clone(), term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)], c_array];
+        let store_2 = term![Op::Store; store_1.clone(), bv_lit(1, 4), bv_lit(1, 3)];
+        let store_3 = term![Op::Ite; a.clone(), term![Op::Store; store_2.clone(), bv_lit(2, 4), bv_lit(1, 3)], store_2];
+        let store_4 = term![Op::Store; store_3.clone(), bv_lit(3, 4), bv_lit(1, 3)];
+        let select = term![Op::Select; store_4, bv_lit(0, 4)];
+        let mut cs = Computation::default();
+        cs.outputs.push(select);
+        let mut cs2 = cs.clone();
+        let rams = extract(&mut cs2);
+        assert_ne!(cs, cs2);
+        assert_eq!(1, rams.len());
+        assert_eq!(Sort::BitVector(4), rams[0].idx_sort);
+        assert_eq!(Sort::BitVector(3), rams[0].val_sort);
+        assert_eq!(5, rams[0].accesses.len());
+        assert_eq!(a, rams[0].accesses[0].is_write);
+        assert_eq!(bool_lit(true), rams[0].accesses[1].is_write);
+        assert_eq!(a, rams[0].accesses[2].is_write);
+        assert_eq!(bool_lit(true), rams[0].accesses[3].is_write);
+        assert_eq!(bool_lit(false), rams[0].accesses[4].is_write);
+        assert_eq!(bv_lit(0, 4), rams[0].accesses[0].idx);
+        assert_eq!(bv_lit(1, 4), rams[0].accesses[1].idx);
+        assert_eq!(bv_lit(2, 4), rams[0].accesses[2].idx);
+        assert_eq!(bv_lit(3, 4), rams[0].accesses[3].idx);
+        assert_eq!(bv_lit(0, 4), rams[0].accesses[4].idx);
+    }
+
+    #[test]
+    fn two_rams_and_one_non_ram() {
+        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::BitVector(3),
+            4,
+        ))));
+        let mut cs = Computation::default();
+        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+
+        // connected component 0: simple store chain
+        let store_0_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)];
+        let store_0_2 = term![Op::Store; store_0_1.clone(), bv_lit(1, 4), bv_lit(1, 3)];
+        let select_0 = term![Op::Select; store_0_2, bv_lit(0, 4)];
+        cs.outputs.push(select_0);
+
+        // connected component 1: conditional store chain
+        let store_1_1 = term![Op::Ite; a.clone(), term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(2, 3)], c_array.clone()];
+        let store_1_2 = term![Op::Ite; a.clone(), term![Op::Store; store_1_1.clone(), bv_lit(1, 4), bv_lit(2, 3)], store_1_1];
+        let select_1 = term![Op::Select; store_1_2, bv_lit(0, 4)];
+        cs.outputs.push(select_1);
+
+        // connected component 2: not a RAM
+        let store_2_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(3, 3)];
+        let store_2_2 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(3, 3)];
+        let ite = term![Op::Ite; bool_lit(true), store_2_1, store_2_2];
+        let select_2 = term![Op::Select; ite, bv_lit(0, 4)];
+        cs.outputs.push(select_2);
+        assert_eq!(3, cs.outputs.len());
+
+        let mut cs2 = cs.clone();
+        let rams = extract(&mut cs2);
+        assert_eq!(3, cs2.outputs.len());
+        assert_ne!(cs, cs2);
+        assert_eq!(2, rams.len());
+        assert_eq!(cs.outputs[2], cs2.outputs[2]);
+        assert_eq!(3, rams[0].accesses.len());
+        assert_eq!(3, rams[1].accesses.len());
+    }
+}

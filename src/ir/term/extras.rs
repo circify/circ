@@ -44,7 +44,14 @@ impl Display for Letified {
 
         writeln!(f, "(let (")?;
         for t in PostOrderIter::new(self.0.clone()) {
-            if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
+            let letify = if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
+                true
+            } else if let Op::Const(Value::Array(..)) = &t.op {
+                true
+            } else {
+                false
+            };
+            if letify {
                 let name = format!("let_{}", let_ct);
                 let_ct += 1;
                 let sort = check(&t);
@@ -143,7 +150,7 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
 }
 
 /// Build a map from every term in the computation to its parents.
-/// 
+///
 /// Guarantees that every computation term is a key in the map. If there are no
 /// parents, the value will be empty.
 pub fn parents_map(c: &Computation) -> TermMap<Vec<Term>> {
