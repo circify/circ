@@ -142,6 +142,21 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
     }
 }
 
+/// Build a map from every term in the computation to its parents.
+/// 
+/// Guarantees that every computation term is a key in the map. If there are no
+/// parents, the value will be empty.
+pub fn parents_map(c: &Computation) -> TermMap<Vec<Term>> {
+    let mut parents = TermMap::new();
+    for t in c.terms_postorder() {
+        parents.insert(t.clone(), Vec::new());
+        for c in &t.cs {
+            parents.get_mut(c).unwrap().push(t.clone());
+        }
+    }
+    parents
+}
+
 #[cfg(test)]
 mod test {
 
