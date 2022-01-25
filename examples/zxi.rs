@@ -1,14 +1,4 @@
-#![allow(unused_imports)]
-use bellman::gadgets::test::TestConstraintSystem;
-use bellman::Circuit;
-use bls12_381::Scalar;
 use circ::front::zsharp::{Inputs, Mode, ZSharpFE};
-use circ::front::FrontEnd;
-use circ::ir::opt::{opt, Opt};
-use circ::target::aby::output::write_aby_exec;
-use circ::target::aby::trans::to_aby;
-use circ::target::r1cs::opt::reduce_linearities;
-use circ::target::r1cs::trans::to_r1cs;
 use env_logger;
 use std::path::PathBuf;
 use structopt::StructOpt;
