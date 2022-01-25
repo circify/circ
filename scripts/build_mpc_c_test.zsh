@@ -67,7 +67,7 @@ function mpc_test {
 
 
 # # build array tests
-mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index_2.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_ret.c
@@ -89,7 +89,7 @@ mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 
 # benchmarks
-# mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
+mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c
 
 # # ilp benchmarks

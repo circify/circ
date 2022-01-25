@@ -9,7 +9,7 @@ use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::some_arith_sharing;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
-use crate::target::graph::trans::partition;
+use crate::target::graph::trans::{combine, partition};
 
 use std::fmt;
 use std::path::PathBuf;
@@ -625,23 +625,28 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
         values: _,
     } = ir.clone();
 
-    let partitions = partition(&ir, &path_buf, &lang);
+    let (partitions, term_to_part, rewritten) = partition(&ir, &path_buf, &lang);
 
     let mut local_share_maps: Vec<SharingMap> = Vec::new();
     for p in partitions {
-        let s_map = assign(&ir, cm);
+        let s_map = assign(&p, cm);
         local_share_maps.push(s_map.clone());
         println!("s_map made!");
-        for (key, value) in &*s_map {
-            println!("{} : {:#?}", key, value);
-        }
     }
 
+    let global_share_map: SharingMap = combine(&ir, &local_share_maps, &term_to_part, &rewritten);
+    println!("");
+    println!("Global share map!");
+    // for (key, value) in &*global_share_map {
+    //     println!("{} : {:#?}", key, value);
+    // }
+
     // for now, use local assignments for global assignment
+    // combine sharing map to a single map, pass to converter.
 
     // let s_map: SharingMap = assign(&ir, cm);
-    let s_map = some_arith_sharing(&ir);
-    let mut converter = ToABY::new(md, s_map, path_buf, lang);
+    // let s_map = some_arith_sharing(&ir);
+    let mut converter = ToABY::new(md, global_share_map, path_buf, lang);
 
     for t in terms {
         // println!("terms: {}", t);

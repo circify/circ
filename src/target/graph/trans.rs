@@ -4,6 +4,7 @@
 //!
 
 use crate::ir::term::*;
+use crate::target::aby::assignment::SharingMap;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -43,24 +44,26 @@ struct ToChaco {
     num_nodes: usize,
     num_edges: usize,
     next_idx: usize,
-    max_parts: usize,
+    num_parts: usize,
     term_to_node: HashMap<Term, Node>,
     node_to_term: HashMap<Node, Term>,
     term_to_part: HashMap<Term, usize>,
     edges: HashMap<Node, Edges<Node>>,
+    rewritten: HashMap<usize, TermMap<Term>>,
 }
 
 impl ToChaco {
-    fn new() -> Self {
+    fn new(num_parts: usize) -> Self {
         Self {
             num_nodes: 0,
             num_edges: 0,
             next_idx: 0,
-            max_parts: 0,
+            num_parts,
             term_to_node: HashMap::new(),
             node_to_term: HashMap::new(),
             term_to_part: HashMap::new(),
             edges: HashMap::new(),
+            rewritten: HashMap::new(),
         }
     }
 
@@ -97,7 +100,12 @@ impl ToChaco {
                 Op::Var(_, _) | Op::Const(_) => {
                     self.insert_node(&c);
                 }
-                Op::Ite | Op::Eq | Op::BvBinOp(_) | Op::BvNaryOp(_) | Op::BvBinPred(_) => {
+                Op::Ite
+                | Op::Eq
+                | Op::BvBinOp(_)
+                | Op::BvNaryOp(_)
+                | Op::BvBinPred(_)
+                | Op::BoolNaryOp(_) => {
                     for cs in c.cs.iter() {
                         self.insert_edge(&cs, &c);
                     }
@@ -197,13 +205,14 @@ impl ToChaco {
         let output = Command::new("../KaHIP/deploy/kaffpa")
             .arg(graph_path)
             .arg("--k")
-            .arg("2") //TODO: make this a function on the number of terms
-            .arg("--preconfiguration=strong")
+            .arg(self.num_parts.to_string()) //TODO: make this a function on the number of terms
+            .arg("--preconfiguration=fast")
             .arg(format!("--output_filename={}", part_path))
             .stdout(Stdio::piped())
             .output()
             .unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
+        println!("stdout: {}", stdout);
         assert!(stdout.contains(&format!("writing partition to {}", part_path)));
     }
 
@@ -224,10 +233,8 @@ impl ToChaco {
                     let node = Node { idx: i + 1 };
                     let term = self.node_to_term.get(&node);
                     let part_num = part.parse::<usize>().unwrap();
-                    if part_num > self.max_parts {
-                        self.max_parts = part_num;
-                    }
                     if let Some(t) = term {
+                        // println!("Parts: {}, {}", part_num, t.clone());
                         self.term_to_part.insert(t.clone(), part_num);
                     } else {
                         panic!("Node: {} - was not mapped in node_to_term map", i + 1);
@@ -237,57 +244,91 @@ impl ToChaco {
         }
     }
 
-    fn partition_ir(&self, cs: &Computation) -> Vec<Computation> {
+    fn partition_ir(&mut self, cs: &Computation) -> Vec<Computation> {
         let Computation { outputs, .. } = cs.clone();
-        let mut rewritten: HashMap<usize, TermMap<Term>> = HashMap::new();
         let mut res: HashMap<usize, Term> = HashMap::new();
+
+        // initialize all TermMaps
+        for i in 0..self.num_parts {
+            self.rewritten.insert(i, TermMap::new());
+        }
 
         for _term in &outputs {
             for t in PostOrderIter::new(_term.clone()) {
-                println!("Term: {}, {}", t, self.term_to_part.get(&t).unwrap());
-
-                // Dynamically initialize rewritten cache
+                // println!("Term: {}, {}", t, self.term_to_part.get(&t).unwrap());
                 let part = self.term_to_part.get(&t).unwrap();
-                if !rewritten.contains_key(part) {
-                    rewritten.insert(*part, TermMap::new());
-                }
 
                 // only add children of the same partition
                 let mut children: Vec<Term> = Vec::new();
                 for c in t.cs.iter() {
                     let child_part = self.term_to_part.get(&c).unwrap();
-                    println!("Child: {}, {}", c, self.term_to_part.get(&c).unwrap());
-                    if part == child_part && rewritten.get_mut(part).unwrap().contains_key(c) {
-                        children.push(rewritten.get_mut(part).unwrap().get(c).unwrap().clone());
+                    // println!("Child: {}, {}", c, self.term_to_part.get(&c).unwrap());
+                    if part == child_part && self.rewritten.get_mut(part).unwrap().contains_key(c) {
+                        children.push(
+                            self.rewritten
+                                .get_mut(part)
+                                .unwrap()
+                                .get(c)
+                                .unwrap()
+                                .clone(),
+                        );
                     }
                 }
                 let rewrite = term(t.op.clone(), children);
-                println!("Rewrite: {}", rewrite);
-                rewritten.get_mut(part).unwrap().insert(t, rewrite.clone());
+                // println!("Rewrite: {}, {}", rewrite, part);
+                self.rewritten
+                    .get_mut(part)
+                    .unwrap()
+                    .insert(t, rewrite.clone());
                 res.insert(*part, rewrite);
-                println!("");
+                // println!("");
             }
         }
         let mut partitions: Vec<Computation> = Vec::new();
-        for part in 0..res.len() {
-            partitions.push(Computation {
-                outputs: vec![res.get(&part).unwrap().clone()],
-                values: cs.values.clone(),
-                metadata: cs.metadata.clone(),
-            })
+        for part in 0..self.num_parts {
+            if res.contains_key(&part) {
+                // println!("partition {}, {}", part, res.get(&part).unwrap().clone());
+                partitions.push(Computation {
+                    outputs: vec![res.get(&part).unwrap().clone()],
+                    values: cs.values.clone(),
+                    metadata: cs.metadata.clone(),
+                })
+            } else {
+                partitions.push(Computation {
+                    outputs: vec![],
+                    values: cs.values.clone(),
+                    metadata: cs.metadata.clone(),
+                })
+            }
         }
-
         partitions
+    }
+
+    fn get_term_to_part(&self) -> HashMap<Term, usize> {
+        self.term_to_part.clone()
+    }
+
+    fn get_rewritten(&self) -> HashMap<usize, TermMap<Term>> {
+        self.rewritten.clone()
     }
 }
 
+/// TODO: update
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
-pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) -> Vec<Computation> {
+pub fn partition(
+    cs: &Computation,
+    path: &PathBuf,
+    lang: &String,
+) -> (
+    Vec<Computation>,
+    HashMap<Term, usize>,
+    HashMap<usize, TermMap<Term>>,
+) {
     println!("Writing IR to Chaco format");
     let Computation { outputs, .. } = cs.clone();
-    let mut converter = ToChaco::new();
+    let mut converter = ToChaco::new(4);
     for t in &outputs {
         converter.convert(t);
     }
@@ -302,7 +343,50 @@ pub fn partition(cs: &Computation, path: &PathBuf, lang: &String) -> Vec<Computa
 
     // read partition
     converter.make_ir_paritition_map(&part_path);
-    converter.partition_ir(cs)
+    (
+        converter.partition_ir(cs),
+        converter.get_term_to_part(),
+        converter.get_rewritten(),
+    )
+}
+
+/// TODO: write descriptive comment
+pub fn combine(
+    ir: &Computation,
+    local_share_maps: &Vec<SharingMap>,
+    term_to_part: &HashMap<Term, usize>,
+    rewritten: &HashMap<usize, TermMap<Term>>,
+) -> SharingMap {
+    // for s_map in local_share_maps.iter() {
+    //     println!("share map ====================");
+    //     for (key, value) in &*s_map {
+    //         println!("{} : {:#?}", key, value);
+    //     }
+    // }
+
+    let Computation { outputs, .. } = ir.clone();
+    let mut global_share_map: SharingMap = SharingMap::new();
+    for term_ in &outputs {
+        for t in PostOrderIter::new(term_.clone()) {
+            // println!("term: {}", t);
+            // println!("term_to_part: {}", term_to_part.get(&t).unwrap());
+            let part = term_to_part.get(&t).unwrap();
+            // get rewrite for part
+            let term_map = rewritten.get(part).unwrap();
+            let s_map = local_share_maps.get(*part).unwrap();
+            // assign original term part
+
+            let rewrite = term_map.get(&t).unwrap();
+            // println!("why: {}", s_map.get(&rewrite).unwrap());
+            // println!("s map ====================");
+            // for (key, _) in &*s_map {
+            //     println!("{} : {:#?}", key, *key == *rewrite);
+            // }
+            let share_type = s_map.get(rewrite).unwrap();
+            global_share_map.insert(t.clone(), *share_type);
+        }
+    }
+    global_share_map
 }
 
 #[cfg(test)]
@@ -312,11 +396,6 @@ mod test {
     #[test]
     fn convert_millionaires_graph() {
         // Millionaire's example
-        let ts = Computation {
-            outputs: vec![term![ITE]],
-            metadata: ComputationMetadata::default(),
-            values: None,
-        };
         let cs = Computation {
             outputs: vec![term![ITE;
                 term![BV_ULT;
@@ -328,11 +407,11 @@ mod test {
             values: None,
         };
         let Computation { outputs, .. } = cs.clone();
-        let mut converter = ToChaco::new();
+        let mut converter = ToChaco::new(2);
         for t in &outputs {
             converter.convert(t);
         }
         assert_eq!(converter.num_nodes, 4);
-        assert_eq!(converter.num_edges, 5);
+        assert_eq!(converter.num_edges / 2, 5);
     }
 }
