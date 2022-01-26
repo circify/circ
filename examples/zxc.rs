@@ -135,7 +135,9 @@ fn main() {
     let r1cs = reduce_linearities(r1cs);
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
-        ProofAction::Count => (),
+        ProofAction::Count => {
+            println!("{:#?}", r1cs.constraints());
+        }
         ProofAction::Prove => {
             unimplemented!()
             /*
