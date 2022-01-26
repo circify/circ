@@ -11,7 +11,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 #[derive(Clone, Hash, Eq)]
@@ -101,6 +100,7 @@ impl ToChaco {
                     self.insert_node(&c);
                 }
                 Op::Ite
+                | Op::Not
                 | Op::Eq
                 | Op::BvBinOp(_)
                 | Op::BvNaryOp(_)
@@ -118,8 +118,8 @@ impl ToChaco {
         }
     }
 
-    fn get_graph_path(&self, path_buf: &PathBuf, lang: &String) -> String {
-        let filename = Path::new(&path_buf.iter().last().unwrap().to_os_string())
+    fn get_graph_path(&self, path: &Path, lang: &str) -> String {
+        let filename = Path::new(&path.iter().last().unwrap().to_os_string())
             .file_stem()
             .unwrap()
             .to_os_string()
@@ -133,8 +133,8 @@ impl ToChaco {
         path
     }
 
-    fn get_part_path(&self, path_buf: &PathBuf, lang: &String) -> String {
-        let filename = Path::new(&path_buf.iter().last().unwrap().to_os_string())
+    fn get_part_path(&self, path: &Path, lang: &str) -> String {
+        let filename = Path::new(&path.iter().last().unwrap().to_os_string())
             .file_stem()
             .unwrap()
             .to_os_string()
@@ -319,8 +319,8 @@ impl ToChaco {
 /// Write the result to the input file path.
 pub fn partition(
     cs: &Computation,
-    path: &PathBuf,
-    lang: &String,
+    path: &Path,
+    lang: &str,
 ) -> (
     Vec<Computation>,
     HashMap<Term, usize>,

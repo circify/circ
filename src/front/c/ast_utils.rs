@@ -17,7 +17,6 @@ pub struct DeclInfo {
 }
 
 pub struct ConstIteration {
-    pub name: String,
     pub val: i32,
 }
 
@@ -47,7 +46,7 @@ pub fn name_from_ident(ident: &Expression) -> String {
 }
 
 pub fn d_type_(ds: Vec<Node<DeclarationSpecifier>>) -> Option<Ty> {
-    assert!(ds.len() > 0);
+    assert!(!ds.is_empty());
     let res: Vec<Option<Ty>> = ds
         .iter()
         .map(|d| match &d.node {
@@ -59,7 +58,7 @@ pub fn d_type_(ds: Vec<Node<DeclarationSpecifier>>) -> Option<Ty> {
 }
 
 pub fn s_type_(ss: Vec<Node<SpecifierQualifier>>) -> Option<Ty> {
-    assert!(ss.len() > 0);
+    assert!(!ss.is_empty());
     let res: Vec<Option<Ty>> = ss
         .iter()
         .map(|s| match &s.node {
@@ -112,7 +111,7 @@ pub fn get_decl_info(decl: Declaration) -> DeclInfo {
     assert!(decl.declarators.len() == 1);
     let decls = decl.declarators.first().unwrap().node.clone();
     let name = name_from_decl(&decls.declarator.node);
-    DeclInfo { name: name, ty: ty }
+    DeclInfo { name, ty }
 }
 
 pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
@@ -125,7 +124,7 @@ pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
         name,
         ret_ty,
         args: args.to_vec(),
-        body: body,
+        body,
     }
 }
 

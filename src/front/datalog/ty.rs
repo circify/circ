@@ -18,10 +18,10 @@ pub enum Ty {
 impl Display for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match &self {
-            &Ty::Bool => write!(f, "bool"),
-            &Ty::Field => write!(f, "field"),
-            &Ty::Uint(w) => write!(f, "u{}", w),
-            &Ty::Array(l, t) => write!(f, "{}[{}]", t, l),
+            Ty::Bool => write!(f, "bool"),
+            Ty::Field => write!(f, "field"),
+            Ty::Uint(w) => write!(f, "u{}", w),
+            Ty::Array(l, t) => write!(f, "{}[{}]", t, l),
         }
     }
 }

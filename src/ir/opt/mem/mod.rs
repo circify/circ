@@ -1,12 +1,10 @@
 //! Memory optimizations
 
+/// Oblivious array elimination.
+///
+/// Replace arrays with tuples, using ITEs to handle variable indexing.
 pub mod lin;
+/// Oblivious array elimination.
+///
+/// Replace arrays that are accessed at constant indices with tuples.
 pub mod obliv;
-mod visit;
-
-use crate::ir::term::*;
-
-/// Eliminates arrays, first oblivious ones, and then all arrays.
-pub fn array_elim(t: &Term) -> Term {
-    lin::linearize(&obliv::elim_obliv(t), usize::MAX)
-}

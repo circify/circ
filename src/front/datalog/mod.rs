@@ -56,7 +56,7 @@ impl<'ast> Gen<'ast> {
     /// Attempt to enter a funciton.
     /// Returns `false` if doing so would violate the recursion limit.
     fn enter_function(&mut self, name: &'ast str, dec_value: Option<Integer>) -> bool {
-        let e = self.stack_by_fn.entry(name).or_insert_with(|| Vec::new());
+        let e = self.stack_by_fn.entry(name).or_insert_with(Vec::new);
         //assert_eq!(e.last().and_then(|l| l.as_ref()).is_some(), dec_value.is_some());
         let do_enter = if let (Some(last_val), Some(this_val)) =
             (e.last().and_then(|l| l.as_ref()), dec_value.as_ref())
@@ -86,7 +86,7 @@ impl<'ast> Gen<'ast> {
     fn register_rules(&mut self, pgm: &'ast ast::Program<'ast>) {
         for r in &pgm.rules {
             assert!(!self.rules.contains_key(&r.name.value));
-            self.rules.insert(&r.name.value, r);
+            self.rules.insert(r.name.value, r);
         }
     }
 
@@ -102,7 +102,7 @@ impl<'ast> Gen<'ast> {
                     }
                 },
                 |t, size| {
-                    let size = usize::from_str(&size.value).expect("bad array size");
+                    let size = usize::from_str(size.value).expect("bad array size");
                     ty::Ty::Array(size, Box::new(t))
                 },
             ),
@@ -127,7 +127,7 @@ impl<'ast> Gen<'ast> {
             let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
             self.circ.declare(d.ident.value.into(), &ty, public, vis)?;
         }
-        let r = self.rule_cases(&rule)?;
+        let r = self.rule_cases(rule)?;
         self.exit_function(name);
         self.circ.assert(r.as_bool());
         Ok(())
@@ -165,19 +165,19 @@ impl<'ast> Gen<'ast> {
     /// * `top_level` indicates whether this expression is a top-level expression in a condition.
     fn expr(&mut self, e: &'ast ast::Expression, top_level: bool) -> Result<'ast, term::T> {
         match e {
-            &ast::Expression::Binary(ref b) => self.bin_expr(b),
-            &ast::Expression::Unary(ref u) => self.un_expr(u),
-            &ast::Expression::Paren(ref i, _) => self.expr(i, top_level),
-            &ast::Expression::Identifier(ref i) => self.ident(i),
-            &ast::Expression::Literal(ref i) => self.literal(i),
-            &ast::Expression::Access(ref c) => {
+            ast::Expression::Binary(ref b) => self.bin_expr(b),
+            ast::Expression::Unary(ref u) => self.un_expr(u),
+            ast::Expression::Paren(ref i, _) => self.expr(i, top_level),
+            ast::Expression::Identifier(ref i) => self.ident(i),
+            ast::Expression::Literal(ref i) => self.literal(i),
+            ast::Expression::Access(ref c) => {
                 let arr = self.ident(&c.arr)?;
                 c.idxs.iter().try_fold(arr, |arr, idx| {
                     let idx_v = self.expr(idx, false)?;
                     term::array_idx(&arr, &idx_v).map_err(|err| Error::new(err, idx.span().clone()))
                 })
             }
-            &ast::Expression::Call(ref c) => {
+            ast::Expression::Call(ref c) => {
                 let args = c
                     .args
                     .iter()
@@ -202,8 +202,7 @@ impl<'ast> Gen<'ast> {
                             .args
                             .iter()
                             .enumerate()
-                            .filter(|&(_, arg)| arg.dec.is_some())
-                            .next()
+                            .find(|&(_, arg)| arg.dec.is_some())
                         {
                             let ir = &args[i].ir;
                             let reduced_ir = fold(ir);
@@ -225,7 +224,7 @@ impl<'ast> Gen<'ast> {
                                     )
                                     .unwrap();
                             }
-                            let r = self.rule_cases(&rule)?;
+                            let r = self.rule_cases(rule)?;
                             self.exit_function(name);
                             Ok(r)
                         } else {
@@ -238,22 +237,22 @@ impl<'ast> Gen<'ast> {
     }
     fn literal(&mut self, e: &ast::Literal) -> Result<'ast, term::T> {
         match e {
-            &ast::Literal::BinLiteral(ref b) => {
+            ast::Literal::BinLiteral(ref b) => {
                 let len = b.value.len() as u8 - 2;
                 let val = u64::from_str_radix(&b.value[2..], 2).unwrap();
                 Ok(term::uint_lit(val, len))
             }
-            &ast::Literal::HexLiteral(ref b) => {
+            ast::Literal::HexLiteral(ref b) => {
                 let len = (b.value.len() as u8 - 2) * 4;
                 let val = u64::from_str_radix(&b.value[2..], 16).unwrap();
                 Ok(term::uint_lit(val, len))
             }
-            &ast::Literal::DecimalLiteral(ref b) => {
-                let val = Integer::from_str(&b.value).unwrap();
+            ast::Literal::DecimalLiteral(ref b) => {
+                let val = Integer::from_str(b.value).unwrap();
                 Ok(term::pf_lit(val))
             }
-            &ast::Literal::BooleanLiteral(ref b) => {
-                let val = bool::from_str(&b.value).unwrap();
+            ast::Literal::BooleanLiteral(ref b) => {
+                let val = bool::from_str(b.value).unwrap();
                 Ok(term::bool_lit(val))
             }
         }
@@ -310,7 +309,7 @@ impl<'ast> Gen<'ast> {
             .enumerate()
             .find(|(_, arg)| arg.dec.is_some())
         {
-            self.enter_function(&rule.name.value, None);
+            self.enter_function(rule.name.value, None);
             for d in &rule.args {
                 let (ty, public) = self.ty(&d.ty);
                 let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
@@ -330,7 +329,7 @@ impl<'ast> Gen<'ast> {
                 let mut bad_recursion = Vec::new();
                 for atom in &cond.exprs {
                     if let ast::Expression::Call(c) = &atom {
-                        if &c.fn_name.value == &rule.name.value {
+                        if c.fn_name.value == rule.name.value {
                             let formal_arg = self
                                 .circ
                                 .get_value(Loc::local(rule.args[arg_idx].ident.value.to_owned()))?
@@ -362,7 +361,7 @@ impl<'ast> Gen<'ast> {
                 )?);
                 self.circ.exit_scope();
             }
-            self.exit_function(&rule.name.value);
+            self.exit_function(rule.name.value);
             bug_in_rule_if_any
                 .into_iter()
                 .try_fold(term::bool_lit(false), |x, y| {

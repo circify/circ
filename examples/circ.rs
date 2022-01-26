@@ -17,6 +17,7 @@ use circ::ir::{
 use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
+use circ::target::r1cs::bellman::parse_instance;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use circ::target::smt::find_model;
@@ -42,9 +43,6 @@ struct Options {
     /// Number of parties for an MPC.
     #[structopt(long, default_value = "2", name = "PARTIES")]
     parties: u8,
-
-    #[structopt(long, default_value = "hycc", name = "cost_model")]
-    cost_model: String,
 
     #[structopt(subcommand)]
     backend: Backend,
@@ -89,7 +87,10 @@ enum Backend {
     },
     Smt {},
     Ilp {},
-    Mpc {},
+    Mpc {
+        #[structopt(long, default_value = "hycc", name = "cost_model")]
+        cost_model: String,
+    },
 }
 
 arg_enum! {
@@ -167,7 +168,10 @@ fn main() {
     let path_buf = options.path.clone();
     println!("{:?}", options);
     let mode = match options.backend {
-        Backend::R1cs { .. } => Mode::Proof,
+        Backend::R1cs { .. } => match options.frontend.value_threshold {
+            Some(t) => Mode::ProofOfHighValue(t),
+            None => Mode::Proof,
+        },
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
         Backend::Smt { .. } => Mode::Proof,
@@ -200,23 +204,45 @@ fn main() {
         }
     };
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ConstantFold]),
+        Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
             cs,
-            vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![
+                Opt::Sha,
+                Opt::ConstantFold,
+                Opt::ScalarizeVars,
+                Opt::ConstantFold,
+                // The obliv elim pass produces more tuples, that must be eliminated
+                Opt::Obliv,
+                Opt::Tuple,
+                // The linear scan pass produces more tuples, that must be eliminated
+                Opt::LinearScan,
+                Opt::Tuple,
+                Opt::ConstantFold,
+                // Binarize nary terms
+                Opt::Binarize,
+            ],
+            // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
+                Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::Inline,
-                Opt::Mem,
+                // Tuples must be eliminated before oblivious array elim
+                Opt::Tuple,
+                Opt::ConstantFold,
+                Opt::Obliv,
+                // The obliv elim pass produces more tuples, that must be eliminated
+                Opt::Tuple,
+                Opt::LinearScan,
+                // The linear scan pass produces more tuples, that must be eliminated
+                Opt::Tuple,
                 Opt::Flatten,
-                //Opt::FlattenAssertions,
                 Opt::ConstantFold,
                 Opt::Inline,
             ],
@@ -230,18 +256,19 @@ fn main() {
             proof,
             prover_key,
             verifier_key,
+            instance,
             ..
         } => {
             println!("Converting to r1cs");
             let r1cs = to_r1cs(cs, circ::front::zokrates::ZOKRATES_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
+            println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
-                ProofAction::Count => {
-                    println!("Final R1cs size: {}", r1cs.constraints().len());
-                }
+                ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
+                    r1cs.check_all();
                     let rng = &mut rand::thread_rng();
                     let mut pk_file = File::open(prover_key).unwrap();
                     let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
@@ -265,19 +292,20 @@ fn main() {
                     let pvk = prepare_verifying_key(&vk);
                     let mut pf_file = File::open(proof).unwrap();
                     let pf = Proof::read(&mut pf_file).unwrap();
-                    verify_proof(&pvk, &pf, &[]).unwrap();
+                    let instance_vec = parse_instance(&instance);
+                    verify_proof(&pvk, &pf, &instance_vec).unwrap();
                 }
             }
         }
-        Backend::Mpc { .. } => {
+        Backend::Mpc { cost_model } => {
             println!("Converting to aby");
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
                 DeterminedLanguage::Zokrates => "zok".to_string(),
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
-            println!("Cost model: {}", options.cost_model);
-            to_aby(cs, &path_buf, &lang_str, &options.cost_model);
+            println!("Cost model: {}", cost_model);
+            to_aby(cs, &path_buf, &lang_str, &cost_model);
             write_aby_exec(&path_buf, &lang_str);
         }
         Backend::Ilp { .. } => {

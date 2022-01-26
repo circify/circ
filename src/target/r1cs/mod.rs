@@ -36,7 +36,7 @@ pub struct Lc {
 impl Lc {
     /// Is this the zero combination?
     pub fn is_zero(&self) -> bool {
-        self.monomials.len() == 0 && &self.constant == &0
+        self.monomials.is_empty() && self.constant == 0
     }
     /// Make this the zero combination.
     pub fn clear(&mut self) {
@@ -55,7 +55,7 @@ impl Lc {
     }
     /// Is this a constant? If so, return that constant.
     pub fn as_const(&self) -> Option<&Integer> {
-        (self.monomials.len() == 0).then(|| &self.constant)
+        self.monomials.is_empty().then(|| &self.constant)
     }
 }
 
@@ -187,7 +187,7 @@ impl std::ops::Neg for Lc {
     fn neg(mut self) -> Lc {
         self.constant = -self.constant;
         self.constant.rem_floor_assign(&*self.modulus);
-        for (_, v) in &mut self.monomials {
+        for v in &mut self.monomials.values_mut() {
             *v *= Integer::from(-1);
             v.rem_floor_assign(&*self.modulus);
         }
@@ -210,7 +210,7 @@ impl std::ops::MulAssign<&Integer> for Lc {
         if other == &Integer::from(0) {
             self.monomials.clear();
         } else {
-            for (_, v) in &mut self.monomials {
+            for v in &mut self.monomials.values_mut() {
                 *v *= other;
                 v.rem_floor_assign(&*self.modulus);
             }
@@ -233,7 +233,7 @@ impl std::ops::MulAssign<isize> for Lc {
         if other == 0 {
             self.monomials.clear();
         } else {
-            for (_, v) in &mut self.monomials {
+            for v in &mut self.monomials.values_mut() {
                 *v *= Integer::from(other);
                 v.rem_floor_assign(&*self.modulus);
             }
@@ -283,7 +283,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let n = self.next_idx;
         self.next_idx += 1;
         self.signal_idxs.insert(s.clone(), n);
-        self.idxs_signals.insert(n, s.clone());
+        self.idxs_signals.insert(n, s);
         match (self.values.as_mut(), v) {
             (Some(vs), Some(v)) => {
                 //println!("{} -> {}", &s, &v);
@@ -331,7 +331,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let sign = |i: &Integer| if i < &half_m { "+" } else { "-" };
         let format_i = |i: &Integer| format!("{}{}", sign(i), abs(i));
 
-        s.extend(format_i(&Integer::from(&a.constant)).chars());
+        s.push_str(&format_i(&Integer::from(&a.constant)));
         for (idx, coeff) in &a.monomials {
             s.extend(
                 format!(
@@ -361,7 +361,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         let av = self.eval(a).unwrap();
         let bv = self.eval(b).unwrap();
         let cv = self.eval(c).unwrap();
-        if &((av.clone() * &bv).rem_floor(&*self.modulus)) != &cv {
+        if (av.clone() * &bv).rem_floor(&*self.modulus) != cv {
             panic!(
                 "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
                 self.format_lc(a),

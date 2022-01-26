@@ -119,13 +119,13 @@ impl CostModel {
         };
         for (op_name, cost) in costs {
             // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
-            if !op_name.contains("2") {
+            if !op_name.contains('2') {
                 for op in ops_from_name(op_name) {
                     for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
                     {
                         if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
                             ops.entry(op.clone())
-                                .or_insert_with(|| FxHashMap::default())
+                                .or_insert_with(FxHashMap::default)
                                 .insert(*share_type, c);
                         }
                     }
@@ -137,8 +137,8 @@ impl CostModel {
 }
 
 /// Uses an ILP to assign...
-pub fn assign(c: &Computation, cm: &String) -> SharingMap {
-    let base_dir = match cm.as_ref() {
+pub fn assign(c: &Computation, cm: &str) -> SharingMap {
+    let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
         _ => panic!("Unknown cost model type: {}", cm),
@@ -173,29 +173,27 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     // build variables for all term assignments
     for (t, i) in terms.iter() {
         let mut vars = vec![];
-        if let Op::Var(_, _) = &t.op {
-            for ty in &SHARE_TYPES {
-                let name = format!("t_{}_{}", i, ty.char());
-                let v = ilp.new_variable(variable().binary(), name.clone());
-                term_vars.insert((t.clone(), *ty), (v, 0.0, name));
-                vars.push(v);
+        match &t.op {
+            Op::Var(..) | Op::Const(_) => {
+                for ty in &SHARE_TYPES {
+                    let name = format!("t_{}_{}", i, ty.char());
+                    let v = ilp.new_variable(variable().binary(), name.clone());
+                    term_vars.insert((t.clone(), *ty), (v, 0.0, name));
+                    vars.push(v);
+                }
             }
-        } else if let Op::Const(_) = &t.op {
-            for ty in &SHARE_TYPES {
-                let name = format!("t_{}_{}", i, ty.char());
-                let v = ilp.new_variable(variable().binary(), name.clone());
-                term_vars.insert((t.clone(), *ty), (v, 0.0, name));
-                vars.push(v);
+            _ => {
+                if let Some(costs) = costs.ops.get(&t.op) {
+                    for (ty, cost) in costs {
+                        let name = format!("t_{}_{}", i, ty.char());
+                        let v = ilp.new_variable(variable().binary(), name.clone());
+                        term_vars.insert((t.clone(), *ty), (v, *cost, name));
+                        vars.push(v);
+                    }
+                } else {
+                    panic!("No cost for op {}", &t.op)
+                }
             }
-        } else if let Some(costs) = costs.ops.get(&t.op) {
-            for (ty, cost) in costs {
-                let name = format!("t_{}_{}", i, ty.char());
-                let v = ilp.new_variable(variable().binary(), name.clone());
-                term_vars.insert((t.clone(), *ty), (v, *cost, name));
-                vars.push(v);
-            }
-        } else {
-            panic!("No cost for op {}", &t.op)
         }
         // Sum of assignments is at least 1.
         ilp.new_constraint(
@@ -231,7 +229,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     let def_uses: FxHashMap<Term, Vec<Term>> = {
         let mut t = FxHashMap::default();
         for (d, u) in def_uses {
-            t.entry(d).or_insert_with(|| Vec::new()).push(u);
+            t.entry(d).or_insert_with(Vec::new).push(u);
         }
         t
     };
@@ -245,7 +243,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                             // c[term i from pi to pi'] >= t[term j with pi'] + t[term i with pi] - 1
                             term_vars
                                 .get(&(use_.clone(), *to_ty))
-                                .map(|t_to| ilp.new_constraint(c.0 >> t_from.0 + t_to.0 - 1.0))
+                                .map(|t_to| ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0)))
                         })
                     });
                 }
@@ -258,9 +256,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
             .values()
             .map(|(a, b)| (a, b))
             .chain(term_vars.values().map(|(a, b, _)| (a, b)))
-            .fold(0.0.into(), |acc: Expression, (v, cost)| {
-                acc + v.clone() * *cost
-            }),
+            .fold(0.0.into(), |acc: Expression, (v, cost)| acc + *v * *cost),
     );
 
     let (_opt, solution) = ilp.default_solve().unwrap();

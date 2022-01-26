@@ -1,7 +1,6 @@
 //! C Terms
 use crate::circify::mem::AllocId;
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::c::is_signed_int;
 use crate::front::c::types::*;
 use crate::front::c::Circify;
 use crate::ir::term::*;
@@ -78,6 +77,13 @@ impl Display for CTerm {
     }
 }
 
+pub fn cterm(data: CTermData) -> CTerm {
+    CTerm {
+        term: data,
+        udef: false,
+    }
+}
+
 pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
     let ty = t.term.type_();
     match t.term {
@@ -111,7 +117,7 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
 /// Implementation of integer promotion (C11, 6.3.1.1.3)
 fn int_promotion(t: &CTerm) -> CTerm {
     let ty = t.term.type_();
-    if (is_integer_type(ty.clone()) || Ty::Bool == ty) && int_conversion_rank(ty) < 32 {
+    if (ty.is_integer_type() || Ty::Bool == ty) && ty.int_conversion_rank() < 32 {
         match &t.term {
             // "If an int can represent all values ... converted to an int ...
             // otherwise an unsigned int"
@@ -144,21 +150,20 @@ fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
     let b_prom_ty = b_prom.term.type_();
 
     if a_prom_ty == b_prom_ty {
-        return (a_prom, b_prom);
-    } else if is_signed_int(a_prom_ty.clone()) == is_signed_int(b_prom_ty.clone()) {
-        if int_conversion_rank(a_prom_ty.clone()) < int_conversion_rank(b_prom_ty.clone()) {
-            return (cast(Some(b_prom_ty), a_prom), b_prom);
+        (a_prom, b_prom)
+    } else if a_prom_ty.is_signed_int() == b_prom_ty.is_signed_int() {
+        if a_prom_ty.int_conversion_rank() < b_prom_ty.int_conversion_rank() {
+            (cast(Some(b_prom_ty), a_prom), b_prom)
         } else {
-            return (a_prom, cast(Some(a_prom_ty), b_prom));
+            (a_prom, cast(Some(a_prom_ty), b_prom))
         }
     } else {
+        unimplemented!("Not implemented case in iUAC");
     }
-
-    unimplemented!("Not implemented case in iUAC");
 }
 
 fn usual_arith_conversions(a: CTerm, b: CTerm) -> (CTerm, CTerm) {
-    if is_arith_type(&a) && is_arith_type(&b) {
+    if a.term.type_().is_arith_type() && b.term.type_().is_arith_type() {
         let (a_, b_) = inner_usual_arith_conversions(&a, &b);
         if a_.term.type_() == b_.term.type_() {
             (a_, b_)
@@ -362,7 +367,7 @@ pub fn const_int(a: CTerm) -> Result<Integer, String> {
         CTermData::CInt(s, _, i) => match &i.op {
             Op::Const(Value::BitVector(f)) => {
                 if *s {
-                    Some(f.as_sint().clone())
+                    Some(f.as_sint())
                 } else {
                     Some(f.uint().clone())
                 }
@@ -492,12 +497,12 @@ impl Embeddable for Ct {
                             &*ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility.clone(),
+                            visibility,
                         )
                     })
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
-                let id = mem.zero_allocate(n.unwrap(), 32, num_bits(*ty.clone()));
+                let id = mem.zero_allocate(n.unwrap(), 32, ty.num_bits());
                 let arr = Self::T {
                     term: CTermData::CArray(*ty.clone(), Some(id)),
                     udef: false,

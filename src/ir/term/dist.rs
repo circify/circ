@@ -122,8 +122,8 @@ impl FixedSizeDist {
                 Op::Var(self.sample_ident(&format!("bv{}", w), rng), sort.clone()),
                 Op::BvUnOp(BvUnOp::Neg),
                 Op::BvUnOp(BvUnOp::Not),
-                Op::BvUext(rng.gen_range(0..w.clone())),
-                Op::BvSext(rng.gen_range(0..w.clone())),
+                Op::BvUext(rng.gen_range(0..*w)),
+                Op::BvSext(rng.gen_range(0..*w)),
                 Op::BvBinOp(BvBinOp::Sub),
                 Op::BvBinOp(BvBinOp::Udiv),
                 Op::BvBinOp(BvBinOp::Urem),
@@ -292,7 +292,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Term {
         let op = self.sample_op(&self.sort, rng);
         let sorts = self.sample_child_sorts(&self.sort, &op, rng);
-        if sorts.len() == 0 {
+        if sorts.is_empty() {
             leaf_term(op)
         } else {
             let mut dists: Vec<FixedSizeDist> = sorts

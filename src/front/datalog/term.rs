@@ -9,7 +9,7 @@ use super::error::ErrorKind;
 use super::ty::Ty;
 
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::zokrates::ZOKRATES_MODULUS_ARC;
+use crate::front::zokrates::{ZOKRATES_MODULUS_ARC, ZOK_FIELD_SORT};
 use crate::ir::term::*;
 
 /// A term
@@ -25,7 +25,7 @@ impl T {
     /// Create a new term, checking that the explicit type and IR type agree.
     pub fn new(ir: Term, ty: Ty) -> Self {
         let ir_ty = check(&ir);
-        let res = Self { ir, ty: ty.clone() };
+        let res = Self { ir, ty };
         Self::check_ty(&ir_ty, &res.ty);
         res
     }
@@ -43,7 +43,7 @@ impl T {
     #[track_caller]
     pub fn as_bool(&self) -> Term {
         match &self.ty {
-            &Ty::Bool => self.ir.clone(),
+            Ty::Bool => self.ir.clone(),
             _ => panic!("{} is not a bool", self),
         }
     }
@@ -81,18 +81,21 @@ pub fn uint_lit(v: u64, w: u8) -> T {
 }
 
 impl Ty {
-    fn default(&self) -> T {
-        T::new(self.default_ir(), self.clone())
-    }
-    fn default_ir(&self) -> Term {
+    fn sort(&self) -> Sort {
         match self {
-            Self::Bool => leaf_term(Op::Const(Value::Bool(false))),
-            Self::Uint(w) => bv_lit(0, *w as usize),
-            Self::Field => pf_ir_lit(0),
-            Self::Array(l, t) => {
-                term![Op::ConstArray(Sort::Field(ZOKRATES_MODULUS_ARC.clone()), *l); t.default_ir()]
+            Self::Bool => Sort::Bool,
+            Self::Uint(w) => Sort::BitVector(*w as usize),
+            Self::Field => ZOK_FIELD_SORT.clone(),
+            Self::Array(n, b) => {
+                Sort::Array(Box::new(ZOK_FIELD_SORT.clone()), Box::new(b.sort()), *n)
             }
         }
+    }
+    fn default_ir_term(&self) -> Term {
+        self.sort().default_term()
+    }
+    fn default(&self) -> T {
+        T::new(self.default_ir_term(), self.clone())
     }
 }
 impl Display for T {
@@ -392,12 +395,12 @@ impl Embeddable for Datalog {
                             &*inner_ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility.clone(),
+                            visibility,
                         )
                     })
                     .enumerate()
                     .fold(
-                        ty.default_ir(),
+                        ty.default_ir_term(),
                         |arr, (i, v)| term![Op::Store; arr, pf_ir_lit(i), v.ir],
                     ),
                 ty.clone(),
@@ -406,10 +409,7 @@ impl Embeddable for Datalog {
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         if t.ty == f.ty {
-            T::new(
-                term![Op::Ite; cond.clone(), t.ir.clone(), f.ir.clone()],
-                t.ty.clone(),
-            )
+            T::new(term![Op::Ite; cond, t.ir, f.ir], t.ty)
         } else {
             panic!("Cannot ITE {} and {}", t, f)
         }
@@ -438,6 +438,12 @@ impl Embeddable for Datalog {
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
         ty.default()
+    }
+}
+
+impl Default for Datalog {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

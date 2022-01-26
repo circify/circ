@@ -1,17 +1,16 @@
 //! Extra algorithms over terms (e.g. substitutions)
 
 use super::*;
+use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 
 /// Convert `t` to width `w`, though unsigned extension or extraction
 pub fn to_width(t: &Term, w: usize) -> Term {
     let old_w = check(t).as_bv();
-    if old_w < w {
-        term(Op::BvUext(w - old_w), vec![t.clone()])
-    } else if old_w == w {
-        t.clone()
-    } else {
-        term(Op::BvExtract(w - 1, 0), vec![t.clone()])
+    match old_w.cmp(&w) {
+        Ordering::Less => term(Op::BvUext(w - old_w), vec![t.clone()]),
+        Ordering::Equal => t.clone(),
+        Ordering::Greater => term(Op::BvExtract(w - 1, 0), vec![t.clone()]),
     }
 }
 
@@ -45,7 +44,7 @@ impl Display for Letified {
 
         writeln!(f, "(let (")?;
         for t in PostOrderIter::new(self.0.clone()) {
-            if parent_counts.get(&t).unwrap_or(&0) > &1 && t.cs.len() > 0 {
+            if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
                 let name = format!("let_{}", let_ct);
                 let_ct += 1;
                 let sort = check(&t);
@@ -131,7 +130,7 @@ pub fn free_in(v: &str, t: Term) -> bool {
             _ => {}
         }
     }
-    return false;
+    false
 }
 
 /// If this term is a constant field or bit-vector, get the unsigned int value.

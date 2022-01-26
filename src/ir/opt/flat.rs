@@ -23,7 +23,7 @@ impl<T: Clone> PersistentConcatList<T> {
             match &*t {
                 PersistentConcatList::Leaf(t) => v.push((**t).clone()),
                 PersistentConcatList::Concat(ts) => {
-                    ts.into_iter().for_each(|c| stack.push(c.clone()));
+                    ts.iter().for_each(|c| stack.push(c.clone()));
                 }
             }
         }
@@ -32,7 +32,7 @@ impl<T: Clone> PersistentConcatList<T> {
 }
 
 impl Entry {
-    fn to_term(&mut self) -> Term {
+    fn as_term(&mut self) -> Term {
         match self {
             Entry::Term(t) => (**t).clone(),
             Entry::NaryTerm(o, ts, maybe_term) => {
@@ -47,6 +47,7 @@ impl Entry {
 }
 
 /// Flattening cache.
+#[derive(Default)]
 pub struct Cache(TermMap<Entry>);
 
 impl Cache {
@@ -99,7 +100,7 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
                         }
                         e => {
                             children
-                                .push(Rc::new(PersistentConcatList::Leaf(Rc::new(e.to_term()))));
+                                .push(Rc::new(PersistentConcatList::Leaf(Rc::new(e.as_term()))));
                         }
                     }
                 }
@@ -112,13 +113,13 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
             _ => Entry::Term(Rc::new(term(
                 t.op.clone(),
                 t.cs.iter()
-                    .map(|c| rewritten.get_mut(c).unwrap().to_term())
+                    .map(|c| rewritten.get_mut(c).unwrap().as_term())
                     .collect(),
             ))),
         };
         rewritten.insert(t, entry);
     }
-    rewritten.get_mut(&term_).unwrap().to_term()
+    rewritten.get_mut(&term_).unwrap().as_term()
 }
 
 #[cfg(test)]

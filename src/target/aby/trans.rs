@@ -6,13 +6,12 @@
 
 use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
-use crate::target::aby::assignment::some_arith_sharing;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
-use crate::target::graph::trans::{combine, partition};
-
+// use crate::target::graph::trans::{combine, partition};
 use std::fmt;
-use std::path::PathBuf;
+
+use std::path::Path;
 
 const NO_ROLE: u8 = u8::MAX;
 const SERVER: u8 = 0;
@@ -42,20 +41,15 @@ struct ToABY {
 }
 
 impl ToABY {
-    fn new(
-        metadata: ComputationMetadata,
-        s_map: SharingMap,
-        path_buf: &PathBuf,
-        lang: &String,
-    ) -> Self {
+    fn new(metadata: ComputationMetadata, s_map: SharingMap, path: &Path, lang: &str) -> Self {
         Self {
             md: metadata,
             inputs: TermMap::new(),
             cache: TermMap::new(),
-            s_map: s_map,
+            s_map,
             share_cnt: 0,
-            setup_fname: get_path(path_buf, lang, &String::from("setup")),
-            circuit_fname: get_path(path_buf, lang, &String::from("circuit")),
+            setup_fname: get_path(path, lang, &String::from("setup")),
+            circuit_fname: get_path(path, lang, &String::from("circuit")),
         }
     }
 
@@ -63,7 +57,7 @@ impl ToABY {
         match &t.op {
             Op::Var(name, _) => {
                 if b {
-                    name.to_string().clone().replace(".", "_")
+                    name.to_string().replace(".", "_")
                 } else {
                     name.to_string()
                 }
@@ -82,14 +76,14 @@ impl ToABY {
 
     /// Parse variable name from IR representation of a variable
     fn parse_var_name(&self, full_name: String) -> String {
-        let parsed: Vec<String> = full_name.split("_").map(str::to_string).collect();
+        let parsed: Vec<String> = full_name.split('_').map(str::to_string).collect();
         if parsed.len() < 2 {
             panic!("Invalid variable name: {}", full_name);
         }
         let mut name = parsed[parsed.len() - 2].to_string();
-        if full_name.contains(".") {
-            let index: Vec<String> = full_name.split(".").map(str::to_string).collect();
-            if index.len() < 1 {
+        if full_name.contains('.') {
+            let index: Vec<String> = full_name.split('.').map(str::to_string).collect();
+            if index.is_empty() {
                 panic!("Invalid variable name: {}", full_name);
             }
             name += &("_".to_owned() + &index[index.len() - 1].to_string());
@@ -132,28 +126,26 @@ impl ToABY {
 
     fn add_cons_gate(&self, t: Term) -> String {
         let name = ToABY::get_var_name(t.clone(), true);
-        let s_circ = self.get_sharetype_circ(t.clone());
+        let s_circ = self.get_sharetype_circ(t);
         format!(
             "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);\n",
             name, s_circ, name
         )
-        .to_string()
     }
 
     fn add_in_gate(&self, t: Term, role: String) -> String {
         let name = ToABY::get_var_name(t.clone(), true);
-        let s_circ = self.get_sharetype_circ(t.clone());
+        let s_circ = self.get_sharetype_circ(t);
         format!(
             "\ts_{} = {}->PutINGate({}, bitlen, {});\n",
             name, s_circ, name, role
         )
-        .to_string()
     }
 
     fn add_dummy_gate(&self, t: Term) -> String {
         let name = ToABY::get_var_name(t.clone(), true);
-        let s_circ = self.get_sharetype_circ(t.clone());
-        format!("\ts_{} = {}->PutDummyINGate(bitlen);\n", name, s_circ).to_string()
+        let s_circ = self.get_sharetype_circ(t);
+        format!("\ts_{} = {}->PutDummyINGate(bitlen);\n", name, s_circ)
     }
 
     /// Initialize private and public inputs from each party
@@ -232,12 +224,12 @@ impl ToABY {
     // TODO: const should not be hardcoded to acirc
     #[allow(dead_code)]
     fn zero() -> String {
-        format!("acirc->PutCONSGate((uint64_t)0, (uint32_t)1)")
+        "acirc->PutCONSGate((uint64_t)0, (uint32_t)1)".to_string()
     }
 
     /// Return constant gate evaluating to 1
     // TODO: const should not be hardcoded to acirc
-    fn one(s_type: &String) -> String {
+    fn one(s_type: &str) -> String {
         format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
     }
 
@@ -245,8 +237,8 @@ impl ToABY {
         let s_circ = self.get_sharetype_circ(t.clone());
         match check(&a) {
             Sort::Bool => {
-                let a_circ = self.get_bool(&a).clone();
-                let b_circ = self.get_bool(&b).clone();
+                let a_circ = self.get_bool(&a);
+                let b_circ = self.get_bool(&b);
 
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
@@ -264,11 +256,11 @@ impl ToABY {
                 );
                 write_line_to_file(&self.circuit_fname, &s);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                self.cache.insert(t, EmbeddedTerm::Bool(share));
             }
             Sort::BitVector(_) => {
-                let a_circ = self.get_bv(&a).clone();
-                let b_circ = self.get_bv(&b).clone();
+                let a_circ = self.get_bv(&a);
+                let b_circ = self.get_bv(&b);
 
                 let a_conv = self.add_conv_gate(t.clone(), a, a_circ);
                 let b_conv = self.add_conv_gate(t.clone(), b, b_circ);
@@ -280,7 +272,7 @@ impl ToABY {
                     share, s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one(&s_circ)
                 );
                 write_line_to_file(&self.circuit_fname, &s);
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                self.cache.insert(t, EmbeddedTerm::Bool(share));
             }
             e => panic!("Unimplemented sort for Eq: {:?}", e),
         }
@@ -305,7 +297,7 @@ impl ToABY {
             Op::Var(name, Sort::Bool) => {
                 if !self.inputs.contains_key(&t) {
                     self.inputs
-                        .insert(t.clone(), *self.md.inputs.get(name).unwrap());
+                        .insert(t.clone(), *self.md.input_vis.get(name).unwrap());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
@@ -329,9 +321,9 @@ impl ToABY {
                 self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
             }
             Op::Ite => {
-                let sel_circ = self.get_bool(&t.cs[0]).clone();
-                let a_circ = self.get_bool(&t.cs[1]).clone();
-                let b_circ = self.get_bool(&t.cs[2]).clone();
+                let sel_circ = self.get_bool(&t.cs[0]);
+                let a_circ = self.get_bool(&t.cs[1]);
+                let b_circ = self.get_bool(&t.cs[2]);
 
                 let sel_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), sel_circ);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
@@ -365,12 +357,11 @@ impl ToABY {
                     // If t.cs len is 1, just output that term
                     // This is to bypass adding an AND gate with a single conditional term
                     // Refer to pub fn condition() in src/circify/mod.rs
-                    let a = self.get_bool(&t.cs[0]).clone();
-                    self.cache
-                        .insert(t.clone(), EmbeddedTerm::Bool(format!("{}", a)));
+                    let a = self.get_bool(&t.cs[0]);
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bool(a));
                 } else {
-                    let a_circ = self.get_bool(&t.cs[0]).clone();
-                    let b_circ = self.get_bool(&t.cs[1]).clone();
+                    let a_circ = self.get_bool(&t.cs[0]);
+                    let b_circ = self.get_bool(&t.cs[1]);
 
                     let a_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), a_circ);
                     let b_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), b_circ);
@@ -460,7 +451,7 @@ impl ToABY {
             Op::Var(name, Sort::BitVector(_)) => {
                 if !self.inputs.contains_key(&t) {
                     self.inputs
-                        .insert(t.clone(), *self.md.inputs.get(name).unwrap());
+                        .insert(t.clone(), *self.md.input_vis.get(name).unwrap());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
@@ -484,9 +475,9 @@ impl ToABY {
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
             }
             Op::Ite => {
-                let sel_circ = self.get_bool(&t.cs[0]).clone();
-                let a_circ = self.get_bv(&t.cs[1]).clone();
-                let b_circ = self.get_bv(&t.cs[2]).clone();
+                let sel_circ = self.get_bool(&t.cs[0]);
+                let a_circ = self.get_bv(&t.cs[1]);
+                let b_circ = self.get_bv(&t.cs[2]);
 
                 let sel_conv = self.add_conv_gate(t.clone(), t.cs[0].clone(), sel_circ);
                 let a_conv = self.add_conv_gate(t.clone(), t.cs[1].clone(), a_circ);
@@ -612,31 +603,31 @@ impl ToABY {
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self, t: Term) {
-        let s = self.embed(t.clone());
+        let s = self.embed(t);
         write_line_to_file(&self.circuit_fname, &s);
     }
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
     let Computation {
         outputs: terms,
         metadata: md,
         values: _,
     } = ir.clone();
 
-    let (partitions, term_to_part, rewritten) = partition(&ir, &path_buf, &lang);
+    // let (partitions, term_to_part, rewritten) = partition(&ir, &path, &lang);
+    // let mut local_share_maps: Vec<SharingMap> = Vec::new();
+    // for p in partitions {
+    //     let s_map = assign(&p, cm);
+    //     local_share_maps.push(s_map.clone());
+    //     println!("s_map made!");
+    // }
 
-    let mut local_share_maps: Vec<SharingMap> = Vec::new();
-    for p in partitions {
-        let s_map = assign(&p, cm);
-        local_share_maps.push(s_map.clone());
-        println!("s_map made!");
-    }
+    // let global_share_map: SharingMap = combine(&ir, &local_share_maps, &term_to_part, &rewritten);
+    // println!("");
+    // println!("Global share map!");
 
-    let global_share_map: SharingMap = combine(&ir, &local_share_maps, &term_to_part, &rewritten);
-    println!("");
-    println!("Global share map!");
     // for (key, value) in &*global_share_map {
     //     println!("{} : {:#?}", key, value);
     // }
@@ -644,9 +635,10 @@ pub fn to_aby(ir: Computation, path_buf: &PathBuf, lang: &String, cm: &String) {
     // for now, use local assignments for global assignment
     // combine sharing map to a single map, pass to converter.
 
-    // let s_map: SharingMap = assign(&ir, cm);
+    let s_map: SharingMap = assign(&ir, cm);
     // let s_map = some_arith_sharing(&ir);
-    let mut converter = ToABY::new(md, global_share_map, path_buf, lang);
+    // let mut converter = ToABY::new(md, global_share_map, path, lang);
+    let mut converter = ToABY::new(md, s_map, path, lang);
 
     for t in terms {
         // println!("terms: {}", t);

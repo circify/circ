@@ -1,50 +1,25 @@
 //! The stack-allocation memory manager
 
 use crate::ir::term::*;
-
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 /// Identifier for an Allocation block in memory
 pub type AllocId = usize;
 
 struct Alloc {
-    _id: AllocId,
     addr_width: usize,
     val_width: usize,
-    _cur_ver: usize,
     size: usize,
     cur_term: Term,
 }
 
 impl Alloc {
-    /// Get the variable for the next version, and advance the next version.
-    // fn next_var(&mut self) {
-    //     self.cur_ver += 1;
-    //     let t = leaf_term(Op::Var(
-    //         format!("mem_{}_v{}", self.id, self.cur_ver),
-    //         self.sort(),
-    //     ));
-    //     self.cur_term = t;
-    // }
-
-    // fn sort(&self) -> Sort {
-    //     Sort::Array(
-    //         Box::new(Sort::BitVector(self.addr_width)),
-    //         Box::new(Sort::BitVector(self.val_width)),
-    //         self.size,
-    //     )
-    // }
-
-    fn new(id: AllocId, addr_width: usize, val_width: usize, size: usize, cur_term: Term) -> Self {
+    fn new(addr_width: usize, val_width: usize, size: usize, cur_term: Term) -> Self {
         Self {
-            _id: id,
             addr_width,
             val_width,
             size,
-            _cur_ver: 0,
-            cur_term: cur_term,
+            cur_term,
         }
     }
 
@@ -58,19 +33,19 @@ pub struct MemManager {
     // TODO make this public or accessible?
     allocs: HashMap<AllocId, Alloc>,
     next_id: usize,
-    _cs: Rc<RefCell<Computation>>,
 }
 
-impl MemManager {
+impl Default for MemManager {
     /// Create a new manager, with an empty stack.
-    pub fn new(cs: Rc<RefCell<Computation>>) -> Self {
+    fn default() -> Self {
         Self {
             allocs: HashMap::default(),
             next_id: 0,
-            _cs: cs,
         }
     }
+}
 
+impl MemManager {
     /// Returns the next allocation identifier, and advances it.
     fn take_next_id(&mut self) -> usize {
         let i = self.next_id;
@@ -78,35 +53,22 @@ impl MemManager {
         i
     }
 
-    // fn assert(&mut self, t: Term) {
-    //     debug_assert!(check(&t) == Sort::Bool);
-    //     self.cs.borrow_mut().assert(t);
-    // }
-
     /// Allocate a new stack array, equal to `array`.
     pub fn allocate(&mut self, array: Term) -> AllocId {
         let s = check(&array);
-        if let Sort::Array(box Sort::BitVector(addr_width), box Sort::BitVector(val_width), size) =
-            s
-        {
-            let id = self.take_next_id();
-            let alloc = Alloc::new(id, addr_width, val_width, size, array);
-
-            // let v = alloc.var().clone();
-            // TODO: add computations to ctx without assert
-            // if let Op::Var(n, _) = &v.op {
-            //     self.cs.borrow_mut().eval_and_save(&n, &array);
-            // } else {
-            //     unreachable!()
-            // }
-            // self.assert(term![Op::Eq; v, array]);
-            // self.cs.borrow_mut().outputs.push(term![Op::Eq; v, array]);
-
-            // output some term
-            // store term with name somewhere in context?
-
-            self.allocs.insert(id, alloc);
-            id
+        if let Sort::Array(box_addr_width, box_val_width, size) = s {
+            if let Sort::BitVector(addr_width) = *box_addr_width {
+                if let Sort::BitVector(val_width) = *box_val_width {
+                    let id = self.take_next_id();
+                    let alloc = Alloc::new(addr_width, val_width, size, array);
+                    self.allocs.insert(id, alloc);
+                    id
+                } else {
+                    panic!("Cannot access val_width")
+                }
+            } else {
+                panic!("Cannot access addr_width")
+            }
         } else {
             panic!("Cannot allocate array of sort: {}", s)
         }
@@ -124,7 +86,11 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        self.allocate(term![Op::ConstArray(Sort::BitVector(addr_width), size); leaf_term(Op::Const(Value::BitVector(BitVector::zeros(val_width))))])
+        self.allocate(term![Op::Const(Value::Array(Array::default(
+            Sort::BitVector(addr_width),
+            &Sort::BitVector(val_width),
+            size
+        )))])
     }
 
     /// Load the value of index `offset` from the allocation `id`.
@@ -140,20 +106,9 @@ impl MemManager {
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         assert_eq!(alloc.val_width, check(&val).as_bv());
         let old = alloc.cur_term.clone();
-        let new = term![Op::Store; alloc.var().clone(), offset.clone(), val];
+        let new = term![Op::Store; alloc.var().clone(), offset, val];
         let ite_store = term![Op::Ite; cond, new, old];
         alloc.cur_term = ite_store;
-        // alloc.next_var();
-        // let v = alloc.var().clone();
-
-        // TODO: add computations to ctx without assert
-        // if let Op::Var(n, _) = &v.op {
-        //     self.cs.borrow_mut().eval_and_save(&n, &new);
-        // } else {
-        //     unreachable!()
-        // }
-        // self.assert(term![Op::Eq; v, new]);
-        // self.cs.borrow_mut().outputs.push(new)
     }
 
     /// Is `offset` in bounds for the allocation `id`?
@@ -174,15 +129,16 @@ impl MemManager {
 mod test {
     use super::*;
     use crate::target::smt::check_sat;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn bv_var(s: &str, w: usize) -> Term {
         leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
     }
-
     #[test]
     fn sat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));
-        let mut mem = MemManager::new(cs.clone());
+        let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
         mem.store(
@@ -205,7 +161,7 @@ mod test {
     #[test]
     fn unsat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));
-        let mut mem = MemManager::new(cs.clone());
+        let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
         mem.store(

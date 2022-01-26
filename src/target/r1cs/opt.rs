@@ -112,12 +112,11 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
                 );
                 self.clear_constraint(con_id);
                 for use_id in self.uses[&var].clone() {
-                    if self.sub_in(var, &lc, use_id) {
-                        if self.r1cs.constraints[use_id].0.is_zero()
-                            || self.r1cs.constraints[use_id].1.is_zero()
-                        {
-                            self.queue.push(use_id);
-                        }
+                    if self.sub_in(var, &lc, use_id)
+                        && (self.r1cs.constraints[use_id].0.is_zero()
+                            || self.r1cs.constraints[use_id].1.is_zero())
+                    {
+                        self.queue.push(use_id);
                     }
                 }
                 debug_assert_eq!(0, self.uses[&var].len());
