@@ -11,6 +11,7 @@ lazy_static! {
 /// Type-check this term, at a surface level.
 /// That is, determine its type without a full validity check.
 pub fn check(t: &Term) -> Sort {
+    debug!("check");
     check_raw(t).unwrap()
 }
 
@@ -24,8 +25,31 @@ pub fn check_rec(t: &Term) -> Sort {
 /// Type-check this term, *non-recursively*.
 /// All results are stored in the global type table.
 pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
+    debug!("check_raw");
     if let Some(s) = TERM_TYPES.read().unwrap().get(&t.to_weak()) {
         return Ok(s.clone());
+    }
+    // RSW: the below loop is a band-aid to keep from blowing the stack
+    // XXX(q) is there a better way to write this function?
+    let mut t = t;
+    loop {
+        let t_new = match &t.op {
+            Op::Ite => &t.cs[1],
+            Op::BvBinOp(_) => &t.cs[0],
+            Op::BvNaryOp(_) => &t.cs[0],
+            Op::BvUnOp(_) => &t.cs[0],
+            Op::FpBinOp(_) => &t.cs[0],
+            Op::FpUnOp(_) => &t.cs[0],
+            Op::PfUnOp(_) => &t.cs[0],
+            Op::PfNaryOp(_) => &t.cs[0],
+            Op::Store => &t.cs[0],
+            Op::Update(_i) => &t.cs[0],
+            _ => break,
+        };
+        if std::ptr::eq(t, t_new) {
+            panic!("infinite loop detected in check_raw");
+        }
+        t = t_new;
     }
     let ty = match &t.op {
         Op::Ite => Ok(check_raw(&t.cs[1])?),
