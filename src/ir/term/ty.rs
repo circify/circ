@@ -11,7 +11,6 @@ lazy_static! {
 /// Type-check this term, at a surface level.
 /// That is, determine its type without a full validity check.
 pub fn check(t: &Term) -> Sort {
-    debug!("check");
     check_raw(t).unwrap()
 }
 
@@ -25,7 +24,6 @@ pub fn check_rec(t: &Term) -> Sort {
 /// Type-check this term, *non-recursively*.
 /// All results are stored in the global type table.
 pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
-    debug!("check_raw");
     if let Some(s) = TERM_TYPES.read().unwrap().get(&t.to_weak()) {
         return Ok(s.clone());
     }

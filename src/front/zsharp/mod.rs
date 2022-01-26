@@ -7,7 +7,6 @@ pub mod zvisit;
 use super::{FrontEnd, Mode};
 use crate::circify::{CircError, Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
-use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use log::{debug, warn};
 use rug::Integer;
@@ -172,7 +171,7 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn builtin_call(f_name: &str, mut args: Vec<T>, mut generics: Vec<T>) -> Result<T, String> {
-        debug!("Builtin Call: {} {:?} {:?}", f_name, args, generics);
+        debug!("Builtin Call: {}", f_name);
         match f_name {
             "u8_to_bits" | "u16_to_bits" | "u32_to_bits" | "u64_to_bits" => {
                 if args.len() != 1 {
@@ -289,7 +288,7 @@ impl<'ast> ZGen<'ast> {
                 .unwrap_term()
         };
         let new = loc_store(old, &zaccs[..], val)?;
-        debug!("Assign: {} = {}", name, Letified(new.term.clone()));
+        debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
         } else {
@@ -437,9 +436,9 @@ impl<'ast> ZGen<'ast> {
         f_name: String,
     ) -> Result<T, String> {
         if IS_CNST {
-            debug!("Const function call: {} {:?} {:?}", f_name, f_path, args);
+            debug!("Const function call: {} {:?}", f_name, f_path);
         } else {
-            debug!("Function call: {} {:?} {:?}", f_name, f_path, args);
+            debug!("Function call: {} {:?}", f_name, f_path);
         }
         let f = self
             .functions

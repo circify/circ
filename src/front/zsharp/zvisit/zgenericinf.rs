@@ -74,12 +74,14 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         rty: Option<Ty>,
         arg_tys: ATIter,
     ) -> Result<HashMap<String, T>, String> {
+        debug!("ZGenericInf::unify_generic");
         use ast::ConstantGenericValue as CGV;
         self.constr = None;
         self.gens = &self.fdef.generics[..];
 
         // early returns: monomorphized or not generic
         if self.gens.is_empty() {
+            debug!("done (no generics)");
             return Ok(HashMap::new());
         }
         if egv.len() == self.gens.len() && !egv.iter().any(|cgv| matches!(cgv, CGV::Underscore(_)))
@@ -89,6 +91,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 .egvs_impl_::<IS_CNST>(egv, self.fdef.generics.clone())
             {
                 Ok(gens) if gens.len() == self.gens.len() => {
+                    debug!("done (explicit generics)");
                     return Ok(gens);
                 }
                 _ => (),
@@ -145,7 +148,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         {
             assert!(self.gens.len() == res.len());
             assert!(self.gens.iter().all(|g| res.contains_key(&g.value)));
-            debug!("Returning cached solver result for {}", &self.sfx);
+            debug!("done (cached result for {})", &self.sfx);
             return Ok(res);
         }
         let g_names = self
@@ -184,6 +187,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 .unwrap()
                 .insert(self.constr.take().unwrap(), res.clone());
         }
+        debug!("done (finished inference)");
         Ok(res)
     }
 
