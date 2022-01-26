@@ -29,7 +29,7 @@ use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "circ", about = "CirC: the circuit compiler")]
+#[structopt(name = "zxc", about = "CirC: the circuit compiler")]
 struct Options {
     /// Input file
     #[structopt(parse(from_os_str), name = "PATH")]
@@ -51,6 +51,9 @@ struct Options {
     #[structopt(long, default_value = "x", parse(from_os_str))]
     instance: PathBuf,
     */
+
+    #[structopt(short = "L")]
+    skip_linred: bool,
 
     #[structopt(long, default_value = "count")]
     action: ProofAction,
@@ -97,6 +100,7 @@ fn main() {
         ZSharpFE::gen(inputs)
     };
 
+    print!("Optimizing IR... ");
     let cs = opt(
         cs,
         vec![
@@ -120,7 +124,7 @@ fn main() {
             Opt::Inline,
         ],
     );
-    println!("Done with IR optimization");
+    println!("done.");
 
     let action = options.action;
     /*
@@ -131,8 +135,13 @@ fn main() {
     */
     println!("Converting to r1cs");
     let r1cs = to_r1cs(cs, circ::front::zsharp::ZSHARP_MODULUS.clone());
-    println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-    let r1cs = reduce_linearities(r1cs);
+    let r1cs = if options.skip_linred {
+        println!("Skipping linearity reduction, as requested.");
+        r1cs
+    } else {
+        println!("R1cs size before linearity reduction: {}", r1cs.constraints().len());
+        reduce_linearities(r1cs)
+    };
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
         ProofAction::Count => {
