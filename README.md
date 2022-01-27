@@ -67,18 +67,3 @@ and [cvc5](https://cvc5.github.io/) by setting the
 [RSMT2_CVC4_CMD](https://docs.rs/rsmt2/latest/rsmt2/conf/constant.CVC4_ENV_VAR.html)
 environmental variable to the SMT solver's invocation command (`cvc4` or
 `cvc5`).
-
-## Todo List
-
-- [ ] Intern variable names
-- [ ] Tweak log system to expect exact target match
-- [ ] C front-end
-- [ ] Tune R1CS optimizer
-   - [ ] Less hash maps
-   - [ ] Consider using ff/ark-ff instead of gmp
-   - [ ] Consider a lazy merging strategy
-- [ ] remove synchronization from term representation (or explore parallelism!)
-- [ ] More SMT solver support
-   - [ ] Parse cvc4 models
-- [ ] A more configurable term distribution (for fuzzing)
-- [ ] Add user-defined (aka opaque) operator to IR
