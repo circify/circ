@@ -15,15 +15,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-#[derive(Clone, Hash, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct Node {
     idx: usize,
-}
-
-impl PartialEq for Node {
-    fn eq(&self, other: &Self) -> bool {
-        self.idx == other.idx
-    }
 }
 
 #[derive(Clone)]
@@ -133,11 +127,11 @@ impl ParitionGraph {
 
     // Insert edge into PartitionGraph
     fn insert_edge(&mut self, from: &Term, to: &Term) {
-        self.insert_node(&from);
-        self.insert_node(&to);
+        self.insert_node(from);
+        self.insert_node(to);
 
-        let from_node = self.term_to_node.get(&from).unwrap().clone();
-        let to_node = self.term_to_node.get(&to).unwrap().clone();
+        let from_node = self.term_to_node.get(from).unwrap().clone();
+        let to_node = self.term_to_node.get(to).unwrap().clone();
 
         if !self.edges.contains_key(&from_node) {
             self.edges
@@ -192,7 +186,7 @@ impl ParitionGraph {
     }
 
     // Convert each node to Chaco graph representation
-    fn to_chaco_(&mut self, t: &Term) {
+    fn chaco_(&mut self, t: &Term) {
         for c in PostOrderIter::new(t.clone()) {
             match &c.op {
                 Op::Var(_, _) | Op::Const(_) => {
@@ -206,10 +200,10 @@ impl ParitionGraph {
                 | Op::BvBinPred(_)
                 | Op::BoolNaryOp(_) => {
                     for cs in c.cs.iter() {
-                        self.insert_edge(&cs, &c);
+                        self.insert_edge(cs, &c);
                     }
                     for cs in c.cs.iter().rev() {
-                        self.insert_edge(&c, &cs);
+                        self.insert_edge(&c, cs);
                     }
                 }
                 _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
@@ -218,11 +212,11 @@ impl ParitionGraph {
     }
 
     // Convert IR to Chaco graph format
-    fn to_chaco(&mut self) {
+    fn chaco(&mut self) {
         println!("Writing IR to Chaco format");
         let Computation { outputs, .. } = self.cs.clone();
         for t in &outputs {
-            self.to_chaco_(t);
+            self.chaco_(t);
         }
         self.write_graph();
         self.get_num_partitions();
@@ -287,7 +281,7 @@ impl ParitionGraph {
                     let term = self.node_to_term.get(&node);
                     let part_num = part.parse::<usize>().unwrap();
                     if let Some(t) = term {
-                        partitions.get_mut(&part_num).unwrap().insert_node(&t);
+                        partitions.get_mut(&part_num).unwrap().insert_node(t);
                         self.term_to_part.insert(t.clone(), part_num);
                     } else {
                         panic!("Node: {} - was not mapped in node_to_term map", i + 1);
@@ -318,7 +312,7 @@ impl ParitionGraph {
     ) -> HashMap<usize, SharingMap> {
         let mut local_smaps: HashMap<usize, SharingMap> = HashMap::new();
         for (i, c) in cs.iter() {
-            local_smaps.insert(*i, assign(&c, &self.cm));
+            local_smaps.insert(*i, assign(c, &self.cm));
         }
         local_smaps
     }
@@ -333,7 +327,7 @@ impl ParitionGraph {
                 let part = self.term_to_part.get(&t).unwrap();
 
                 // get local assignment
-                let local_share = local_smaps.get(&part).unwrap().get(&t).unwrap();
+                let local_share = local_smaps.get(part).unwrap().get(&t).unwrap();
 
                 // TODO: mutate local assignments
 
@@ -354,7 +348,7 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> Sha
     let mut pg = ParitionGraph::new(partition_size, cs, cm, path, lang);
 
     // Convert IR to Chaco  format
-    pg.to_chaco();
+    pg.chaco();
 
     // Call graph partitioner on Chaco
     pg.get_partitions();
@@ -389,7 +383,7 @@ mod test {
             values: None,
         };
         let mut pg = ParitionGraph::new(2, &cs, "opa", &Path::new("test"), "c");
-        pg.to_chaco();
+        pg.chaco();
         assert_eq!(pg.num_nodes, 4);
         assert_eq!(pg.num_edges / 2, 5);
     }

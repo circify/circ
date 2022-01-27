@@ -619,7 +619,7 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
     // let s_map: SharingMap = assign(&ir, cm);
     // let mut converter = ToABY::new(md, s_map, path, lang);
 
-    let s_map = get_share_map(&ir, &cm, &path, &lang);
+    let s_map = get_share_map(&ir, cm, path, lang);
     let mut converter = ToABY::new(md, s_map, path, lang);
 
     for t in terms {

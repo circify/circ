@@ -1399,18 +1399,21 @@ pub struct ComputationSubgraph {
     pub edges: TermMap<TermSet>,
 }
 
+impl Default for ComputationSubgraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComputationSubgraph {
     /// default constructor
     pub fn new() -> Self {
-        Self {
-            nodes: TermSet::new(),
-            edges: TermMap::new(),
-        }
+        Self::default()
     }
 
     /// Insert nodes into ComputationSubgraph
     pub fn insert_node(&mut self, node: &Term) {
-        if !self.nodes.contains(&node) {
+        if !self.nodes.contains(node) {
             self.nodes.insert(node.clone());
         }
     }
@@ -1421,7 +1424,7 @@ impl ComputationSubgraph {
             self.edges.insert(t.clone(), TermSet::new());
             for c in t.cs.iter() {
                 if self.nodes.contains(c) {
-                    self.edges.get_mut(&t).unwrap().insert(c.clone());
+                    self.edges.get_mut(t).unwrap().insert(c.clone());
                 }
             }
         }
