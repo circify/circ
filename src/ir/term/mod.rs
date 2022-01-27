@@ -1390,6 +1390,44 @@ impl std::iter::Iterator for PostOrderIter {
     }
 }
 
+/// A graph representation of a Computation
+#[derive(Clone)]
+pub struct ComputationSubgraph {
+    /// List of terms in subgraph
+    pub nodes: TermSet,
+    /// Adjacency list of edges in subgraph
+    pub edges: TermMap<TermSet>,
+}
+
+impl ComputationSubgraph {
+    /// default constructor
+    pub fn new() -> Self {
+        Self {
+            nodes: TermSet::new(),
+            edges: TermMap::new(),
+        }
+    }
+
+    /// Insert nodes into ComputationSubgraph
+    pub fn insert_node(&mut self, node: &Term) {
+        if !self.nodes.contains(&node) {
+            self.nodes.insert(node.clone());
+        }
+    }
+
+    /// Insert edges based on nodes in the subgraph
+    pub fn insert_edges(&mut self) {
+        for t in self.nodes.iter() {
+            self.edges.insert(t.clone(), TermSet::new());
+            for c in t.cs.iter() {
+                if self.nodes.contains(c) {
+                    self.edges.get_mut(&t).unwrap().insert(c.clone());
+                }
+            }
+        }
+    }
+}
+
 /// A party identifier
 pub type PartyId = u8;
 
@@ -1646,6 +1684,18 @@ impl Computation {
         // drop the top-level tuple term.
         terms.pop();
         terms.into_iter()
+    }
+
+    /// Convert Computation to ComputationSubgraph
+    pub fn to_subgraph(&self) -> ComputationSubgraph {
+        let mut cg = ComputationSubgraph::new();
+        for a in &self.outputs {
+            for t in PostOrderIter::new(a.clone()) {
+                cg.insert_node(&t);
+            }
+        }
+        cg.insert_edges();
+        cg
     }
 }
 

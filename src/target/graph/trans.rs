@@ -4,6 +4,7 @@
 //!
 
 use crate::ir::term::*;
+use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use std::collections::HashMap;
 use std::fs;
@@ -11,6 +12,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 #[derive(Clone, Hash, Eq)]
@@ -39,33 +41,86 @@ impl<T: PartialEq> Edges<T> {
     }
 }
 
-struct ToChaco {
+struct ParitionGraph {
     num_nodes: usize,
     num_edges: usize,
     next_idx: usize,
+    partition_size: usize,
     num_parts: usize,
     term_to_node: HashMap<Term, Node>,
     node_to_term: HashMap<Node, Term>,
     term_to_part: HashMap<Term, usize>,
     edges: HashMap<Node, Edges<Node>>,
-    rewritten: HashMap<usize, TermMap<Term>>,
+    cs: Computation,
+    cm: String,
+    path: PathBuf,
+    lang: String,
+    graph_path: String,
+    part_path: String,
 }
 
-impl ToChaco {
-    fn new(num_parts: usize) -> Self {
-        Self {
+impl ParitionGraph {
+    fn new(partition_size: usize, cs: &Computation, cm: &str, path: &Path, lang: &str) -> Self {
+        let mut graph = Self {
             num_nodes: 0,
             num_edges: 0,
             next_idx: 0,
-            num_parts,
+            partition_size,
+            num_parts: 0,
             term_to_node: HashMap::new(),
             node_to_term: HashMap::new(),
             term_to_part: HashMap::new(),
             edges: HashMap::new(),
-            rewritten: HashMap::new(),
-        }
+            cs: cs.clone(),
+            cm: cm.to_string(),
+            path: PathBuf::from(path),
+            lang: lang.to_string(),
+            graph_path: "".to_string(),
+            part_path: "".to_string(),
+        };
+        graph.init_paths();
+        graph
     }
 
+    // Get file path to write Chaco graph to
+    fn get_graph_path(&self) -> String {
+        let filename = Path::new(&self.path.iter().last().unwrap().to_os_string())
+            .file_stem()
+            .unwrap()
+            .to_os_string()
+            .into_string()
+            .unwrap();
+        let name = format!("{}_{}", filename, self.lang);
+        let path = format!("third_party/ABY/src/examples/{}.graph", name);
+        if Path::new(&path).exists() {
+            fs::remove_file(&path).expect("Failed to remove old graph file");
+        }
+        path
+    }
+
+    // Get file path to write graph partitioning output to
+    fn get_part_path(&self) -> String {
+        let filename = Path::new(&self.path.iter().last().unwrap().to_os_string())
+            .file_stem()
+            .unwrap()
+            .to_os_string()
+            .into_string()
+            .unwrap();
+        let name = format!("{}_{}", filename, &self.lang);
+        let path = format!("third_party/ABY/src/examples/{}.part", name);
+        if Path::new(&path).exists() {
+            fs::remove_file(&path).expect("Failed to remove old partition file");
+        }
+        path
+    }
+
+    // Initialize paths to write Chaco graph and partition files
+    fn init_paths(&mut self) {
+        self.graph_path = self.get_graph_path();
+        self.part_path = self.get_part_path();
+    }
+
+    // Insert node into PartitionGraph
     fn insert_node(&mut self, t: &Term) {
         if !self.term_to_node.contains_key(t) {
             self.next_idx += 1;
@@ -76,6 +131,7 @@ impl ToChaco {
         }
     }
 
+    // Insert edge into PartitionGraph
     fn insert_edge(&mut self, from: &Term, to: &Term) {
         self.insert_node(&from);
         self.insert_node(&to);
@@ -93,69 +149,15 @@ impl ToChaco {
         }
     }
 
-    fn convert(&mut self, t: &Term) {
-        for c in PostOrderIter::new(t.clone()) {
-            match &c.op {
-                Op::Var(_, _) | Op::Const(_) => {
-                    self.insert_node(&c);
-                }
-                Op::Ite
-                | Op::Not
-                | Op::Eq
-                | Op::BvBinOp(_)
-                | Op::BvNaryOp(_)
-                | Op::BvBinPred(_)
-                | Op::BoolNaryOp(_) => {
-                    for cs in c.cs.iter() {
-                        self.insert_edge(&cs, &c);
-                    }
-                    for cs in c.cs.iter().rev() {
-                        self.insert_edge(&c, &cs);
-                    }
-                }
-                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
-            }
-        }
-    }
-
-    fn get_graph_path(&self, path: &Path, lang: &str) -> String {
-        let filename = Path::new(&path.iter().last().unwrap().to_os_string())
-            .file_stem()
-            .unwrap()
-            .to_os_string()
-            .into_string()
-            .unwrap();
-        let name = format!("{}_{}", filename, lang);
-        let path = format!("third_party/ABY/src/examples/{}.graph", name);
-        if Path::new(&path).exists() {
-            fs::remove_file(&path).expect("Failed to remove old graph file");
-        }
-        path
-    }
-
-    fn get_part_path(&self, path: &Path, lang: &str) -> String {
-        let filename = Path::new(&path.iter().last().unwrap().to_os_string())
-            .file_stem()
-            .unwrap()
-            .to_os_string()
-            .into_string()
-            .unwrap();
-        let name = format!("{}_{}", filename, lang);
-        let path = format!("third_party/ABY/src/examples/{}.part", name);
-        if Path::new(&path).exists() {
-            fs::remove_file(&path).expect("Failed to remove old partition file");
-        }
-        path
-    }
-
-    fn write_graph(&self, path: &String) {
-        if !Path::new(&path).exists() {
-            fs::File::create(&path).expect("Failed to create graph file");
+    // Write Chaco graph to file
+    fn write_graph(&mut self) {
+        if !Path::new(&self.graph_path).exists() {
+            fs::File::create(&self.graph_path).expect("Failed to create graph file");
         }
         let mut file = fs::OpenOptions::new()
             .write(true)
             .append(true)
-            .open(path)
+            .open(&self.graph_path)
             .expect("Failed to open graph file");
 
         // write number of nodes and edges
@@ -189,10 +191,53 @@ impl ToChaco {
         }
     }
 
-    fn check_graph(&self, graph_path: &String) {
+    // Convert each node to Chaco graph representation
+    fn to_chaco_(&mut self, t: &Term) {
+        for c in PostOrderIter::new(t.clone()) {
+            match &c.op {
+                Op::Var(_, _) | Op::Const(_) => {
+                    self.insert_node(&c);
+                }
+                Op::Ite
+                | Op::Not
+                | Op::Eq
+                | Op::BvBinOp(_)
+                | Op::BvNaryOp(_)
+                | Op::BvBinPred(_)
+                | Op::BoolNaryOp(_) => {
+                    for cs in c.cs.iter() {
+                        self.insert_edge(&cs, &c);
+                    }
+                    for cs in c.cs.iter().rev() {
+                        self.insert_edge(&c, &cs);
+                    }
+                }
+                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", c, c.op),
+            }
+        }
+    }
+
+    // Convert IR to Chaco graph format
+    fn to_chaco(&mut self) {
+        println!("Writing IR to Chaco format");
+        let Computation { outputs, .. } = self.cs.clone();
+        for t in &outputs {
+            self.to_chaco_(t);
+        }
+        self.write_graph();
+        self.get_num_partitions();
+    }
+
+    // Determine number of partitions based on the number of terms in the Computation
+    fn get_num_partitions(&mut self) {
+        self.num_parts = self.num_nodes / self.partition_size + 1;
+    }
+
+    // Check if input graph is formatted correctly
+    fn check_graph(&self) {
         //TODO: fix path
         let output = Command::new("../KaHIP/deploy/graphchecker")
-            .arg(graph_path)
+            .arg(&self.graph_path)
             .stdout(Stdio::piped())
             .output()
             .unwrap();
@@ -200,22 +245,24 @@ impl ToChaco {
         assert!(stdout.contains("The graph format seems correct."));
     }
 
-    fn partition_graph(&self, graph_path: &String, part_path: &String) {
+    // Call graph partitioning algorithm on input graph
+    fn call_graph_partitioner(&self) {
         //TODO: fix path
         let output = Command::new("../KaHIP/deploy/kaffpa")
-            .arg(graph_path)
+            .arg(&self.graph_path)
             .arg("--k")
             .arg(self.num_parts.to_string()) //TODO: make this a function on the number of terms
             .arg("--preconfiguration=fast")
-            .arg(format!("--output_filename={}", part_path))
+            .arg(format!("--output_filename={}", &self.part_path))
             .stdout(Stdio::piped())
             .output()
             .unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
         println!("stdout: {}", stdout);
-        assert!(stdout.contains(&format!("writing partition to {}", part_path)));
+        assert!(stdout.contains(&format!("writing partition to {}", &self.part_path)));
     }
 
+    // Read a file line by line
     fn read_lines<P>(&self, filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
     where
         P: AsRef<Path>,
@@ -224,17 +271,23 @@ impl ToChaco {
         Ok(io::BufReader::new(file).lines())
     }
 
-    /// Partitioning functions
-    fn make_ir_paritition_map(&mut self, path: &String) {
-        if let Ok(lines) = self.read_lines(path) {
-            // Consumes the iterator, returns an (Optional) String
+    // Partition IR graph into HashMap<usize (part), ComputationSubgraph>
+    fn partition_ir(&mut self) -> HashMap<usize, ComputationSubgraph> {
+        let mut partitions: HashMap<usize, ComputationSubgraph> = HashMap::new();
+
+        // Initialize partitions
+        for part in 0..self.num_parts {
+            partitions.insert(part, ComputationSubgraph::new());
+        }
+
+        if let Ok(lines) = self.read_lines(&self.part_path) {
             for line in lines.into_iter().enumerate() {
                 if let (i, Ok(part)) = line {
                     let node = Node { idx: i + 1 };
                     let term = self.node_to_term.get(&node);
                     let part_num = part.parse::<usize>().unwrap();
                     if let Some(t) = term {
-                        // println!("Parts: {}, {}", part_num, t.clone());
+                        partitions.get_mut(&part_num).unwrap().insert_node(&t);
                         self.term_to_part.insert(t.clone(), part_num);
                     } else {
                         panic!("Node: {} - was not mapped in node_to_term map", i + 1);
@@ -242,151 +295,80 @@ impl ToChaco {
                 }
             }
         }
+
+        // Find edges for each subgraph
+        let mut new_partitions: HashMap<usize, ComputationSubgraph> = HashMap::new();
+        for (i, mut subgraph) in partitions.into_iter() {
+            subgraph.insert_edges();
+            new_partitions.insert(i, subgraph.clone());
+        }
+        new_partitions
     }
 
-    fn partition_ir(&mut self, cs: &Computation) -> Vec<Computation> {
-        let Computation { outputs, .. } = cs.clone();
-        let mut res: HashMap<usize, Term> = HashMap::new();
+    // Partition IR and get mapping
+    fn get_partitions(&mut self) {
+        self.check_graph();
+        self.call_graph_partitioner();
+    }
 
-        // initialize all TermMaps
-        for i in 0..self.num_parts {
-            self.rewritten.insert(i, TermMap::new());
+    // Get Local Assignments for a ComputationSubgraph
+    fn get_local_assignments(
+        &self,
+        cs: &HashMap<usize, ComputationSubgraph>,
+    ) -> HashMap<usize, SharingMap> {
+        let mut local_smaps: HashMap<usize, SharingMap> = HashMap::new();
+        for (i, c) in cs.iter() {
+            local_smaps.insert(*i, assign(&c, &self.cm));
         }
+        local_smaps
+    }
 
-        for _term in &outputs {
-            for t in PostOrderIter::new(_term.clone()) {
-                // println!("Term: {}, {}", t, self.term_to_part.get(&t).unwrap());
+    fn get_global_assignments(&self, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
+        let mut global_smap: SharingMap = SharingMap::new();
+
+        let Computation { outputs, .. } = self.cs.clone();
+        for term_ in &outputs {
+            for t in PostOrderIter::new(term_.clone()) {
+                // get term partition assignment
                 let part = self.term_to_part.get(&t).unwrap();
 
-                // only add children of the same partition
-                let mut children: Vec<Term> = Vec::new();
-                for c in t.cs.iter() {
-                    let child_part = self.term_to_part.get(&c).unwrap();
-                    // println!("Child: {}, {}", c, self.term_to_part.get(&c).unwrap());
-                    if part == child_part && self.rewritten.get_mut(part).unwrap().contains_key(c) {
-                        children.push(
-                            self.rewritten
-                                .get_mut(part)
-                                .unwrap()
-                                .get(c)
-                                .unwrap()
-                                .clone(),
-                        );
-                    }
-                }
-                let rewrite = term(t.op.clone(), children);
-                // println!("Rewrite: {}, {}", rewrite, part);
-                self.rewritten
-                    .get_mut(part)
-                    .unwrap()
-                    .insert(t, rewrite.clone());
-                res.insert(*part, rewrite);
-                // println!("");
+                // get local assignment
+                let local_share = local_smaps.get(&part).unwrap().get(&t).unwrap();
+
+                // TODO: mutate local assignments
+
+                // assign to global share
+                global_smap.insert(t.clone(), *local_share);
             }
         }
-        let mut partitions: Vec<Computation> = Vec::new();
-        for part in 0..self.num_parts {
-            if res.contains_key(&part) {
-                // println!("partition {}, {}", part, res.get(&part).unwrap().clone());
-                partitions.push(Computation {
-                    outputs: vec![res.get(&part).unwrap().clone()],
-                    values: cs.values.clone(),
-                    metadata: cs.metadata.clone(),
-                })
-            } else {
-                partitions.push(Computation {
-                    outputs: vec![],
-                    values: cs.values.clone(),
-                    metadata: cs.metadata.clone(),
-                })
-            }
-        }
-        partitions
-    }
-
-    fn get_term_to_part(&self) -> HashMap<Term, usize> {
-        self.term_to_part.clone()
-    }
-
-    fn get_rewritten(&self) -> HashMap<usize, TermMap<Term>> {
-        self.rewritten.clone()
+        global_smap
     }
 }
 
-/// TODO: update
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
-pub fn partition(
-    cs: &Computation,
-    path: &Path,
-    lang: &str,
-) -> (
-    Vec<Computation>,
-    HashMap<Term, usize>,
-    HashMap<usize, TermMap<Term>>,
-) {
-    println!("Writing IR to Chaco format");
-    let Computation { outputs, .. } = cs.clone();
-    let mut converter = ToChaco::new(4);
-    for t in &outputs {
-        converter.convert(t);
-    }
-    let graph_path = converter.get_graph_path(path, lang);
-    converter.write_graph(&graph_path);
+pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> SharingMap {
+    //TODO: pass in partition size
+    let partition_size: usize = 10000;
+    let mut pg = ParitionGraph::new(partition_size, cs, cm, path, lang);
 
-    let part_path = converter.get_part_path(path, lang);
+    // Convert IR to Chaco  format
+    pg.to_chaco();
 
-    // call partitioner
-    converter.check_graph(&graph_path);
-    converter.partition_graph(&graph_path, &part_path);
+    // Call graph partitioner on Chaco
+    pg.get_partitions();
 
-    // read partition
-    converter.make_ir_paritition_map(&part_path);
-    (
-        converter.partition_ir(cs),
-        converter.get_term_to_part(),
-        converter.get_rewritten(),
-    )
-}
+    // Partition IR
+    let partitions = pg.partition_ir();
 
-/// TODO: write descriptive comment
-pub fn combine(
-    ir: &Computation,
-    local_share_maps: &Vec<SharingMap>,
-    term_to_part: &HashMap<Term, usize>,
-    rewritten: &HashMap<usize, TermMap<Term>>,
-) -> SharingMap {
-    // for s_map in local_share_maps.iter() {
-    //     println!("share map ====================");
-    //     for (key, value) in &*s_map {
-    //         println!("{} : {:#?}", key, value);
-    //     }
-    // }
+    // get local assignments
+    let local_smaps = pg.get_local_assignments(&partitions);
 
-    let Computation { outputs, .. } = ir.clone();
-    let mut global_share_map: SharingMap = SharingMap::new();
-    for term_ in &outputs {
-        for t in PostOrderIter::new(term_.clone()) {
-            // println!("term: {}", t);
-            // println!("term_to_part: {}", term_to_part.get(&t).unwrap());
-            let part = term_to_part.get(&t).unwrap();
-            // get rewrite for part
-            let term_map = rewritten.get(part).unwrap();
-            let s_map = local_share_maps.get(*part).unwrap();
-            // assign original term part
+    // TODO: mutate local assignments
 
-            let rewrite = term_map.get(&t).unwrap();
-            // println!("why: {}", s_map.get(&rewrite).unwrap());
-            // println!("s map ====================");
-            // for (key, _) in &*s_map {
-            //     println!("{} : {:#?}", key, *key == *rewrite);
-            // }
-            let share_type = s_map.get(rewrite).unwrap();
-            global_share_map.insert(t.clone(), *share_type);
-        }
-    }
-    global_share_map
+    // get global assignments
+    pg.get_global_assignments(&local_smaps)
 }
 
 #[cfg(test)]
@@ -394,7 +376,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn convert_millionaires_graph() {
+    fn test_to_chaco() {
         // Millionaire's example
         let cs = Computation {
             outputs: vec![term![ITE;
@@ -406,12 +388,9 @@ mod test {
             metadata: ComputationMetadata::default(),
             values: None,
         };
-        let Computation { outputs, .. } = cs.clone();
-        let mut converter = ToChaco::new(2);
-        for t in &outputs {
-            converter.convert(t);
-        }
-        assert_eq!(converter.num_nodes, 4);
-        assert_eq!(converter.num_edges / 2, 5);
+        let mut pg = ParitionGraph::new(2, &cs, "opa", &Path::new("test"), "c");
+        pg.to_chaco();
+        assert_eq!(pg.num_nodes, 4);
+        assert_eq!(pg.num_edges / 2, 5);
     }
 }

@@ -137,7 +137,7 @@ impl CostModel {
 }
 
 /// Uses an ILP to assign...
-pub fn assign(c: &Computation, cm: &str) -> SharingMap {
+pub fn assign(c: &ComputationSubgraph, cm: &str) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
@@ -152,15 +152,13 @@ pub fn assign(c: &Computation, cm: &str) -> SharingMap {
     build_ilp(c, &costs)
 }
 
-fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
+fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
     let mut terms: TermSet = TermSet::new();
     let mut def_uses: FxHashSet<(Term, Term)> = FxHashSet::default();
-    for o in &c.outputs {
-        for t in PostOrderIter::new(o.clone()) {
-            terms.insert(t.clone());
-            for c in &t.cs {
-                def_uses.insert((c.clone(), t.clone()));
-            }
+    for (node, edges) in c.edges.clone() {
+        terms.insert(node.clone());
+        for c in edges.iter() {
+            def_uses.insert((c.clone(), node.clone()));
         }
     }
     let terms: FxHashMap<Term, usize> =
@@ -319,7 +317,8 @@ mod tests {
             metadata: ComputationMetadata::default(),
             values: None,
         };
-        let _assignment = build_ilp(&cs, &costs);
+        let cg = cs.to_subgraph();
+        let _assignment = build_ilp(&cg, &costs);
     }
 
     #[test]
@@ -358,7 +357,8 @@ mod tests {
             metadata: ComputationMetadata::default(),
             values: None,
         };
-        let assignment = build_ilp(&cs, &costs);
+        let cg = cs.to_subgraph();
+        let assignment = build_ilp(&cg, &costs);
         // Big enough to do the math with arith
         assert_eq!(
             &ShareType::Arithmetic,
@@ -395,7 +395,8 @@ mod tests {
             metadata: ComputationMetadata::default(),
             values: None,
         };
-        let assignment = build_ilp(&cs, &costs);
+        let cg = cs.to_subgraph();
+        let assignment = build_ilp(&cg, &costs);
         // All yao
         assert_eq!(
             &ShareType::Yao,

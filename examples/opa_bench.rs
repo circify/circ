@@ -30,6 +30,8 @@ fn main() {
         metadata: ComputationMetadata::default(),
         values: None,
     };
-    let _assignment = ilp::assign(&cs, &format!("opa"));
+
+    let cg = cs.to_subgraph();
+    let _assignment = ilp::assign(&cg, "opa");
     //dbg!(&assignment);
 }
