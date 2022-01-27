@@ -14,7 +14,9 @@ use circ::ir::{
     term::extras::Letified,
 };
 use circ::target::aby::output::write_aby_exec;
+use circ::target::fhe::output::write_fhe_exec;
 use circ::target::aby::trans::to_aby;
+use circ::target::fhe::trans::to_fhe;
 use circ::target::ilp::trans::to_ilp;
 use circ::target::r1cs::bellman::parse_instance;
 use circ::target::r1cs::opt::reduce_linearities;
@@ -180,11 +182,12 @@ fn main() {
     };
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
-        Mode::Mpc(_) | Mode::Fhe => opt(
+        Mode::Mpc(_) => opt(
             cs,
             vec![Opt::ScalarizeVars],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
+        Mode::Fhe => opt(cs, vec![Opt::ConstantFold]),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![

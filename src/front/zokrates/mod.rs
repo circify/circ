@@ -534,7 +534,7 @@ impl<'ast> ZGen<'ast> {
                     if private.number.is_some() {
                         self.err(
                             format!(
-                                "Party number found, but we're generating a {} circuit",
+                                ", but we're generating a {} circuit",
                                 self.mode
                             ),
                             &private.span,

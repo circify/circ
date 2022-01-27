@@ -1,0 +1,22 @@
+#include "examples.h"
+
+using namespace std;
+using namespace seal;
+
+Ciphertext server({header_inputs}){
+    {server}
+}
+
+int main() {
+    {setup}
+
+    Ciphertext output_encrypted = server({call_inputs});
+
+    Plaintext output_plain;
+    decryptor.decrypt(output, output_plain);
+
+    {post_computation}
+    
+    
+    return 0;
+}

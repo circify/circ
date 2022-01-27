@@ -1,16 +1,35 @@
 //! FHE
 pub mod trans;
+pub mod output;
 
 #[derive(Clone, Debug)]
-/// ABY Circuit
-/// The ABY Circuit consists of three Vec<String>: setup, circ, and closer
-/// *setup* holds code for initializing the ABY party, sharing scheme, and input values
-/// *circs* holds the lowered code from the IR to ABY Circuits
-/// *output* holds the code for printing the output value
+/// FHE program
+/// The FHE program consists of two functions: main, and server_call
+/// 
+/// int main(): Acts as the client. 
+///     - Sets up the seal parameters
+///     - Encrypts the private inputs
+///     - Calls the server({params}) with the ctext and ptext parameters
+///     - Decrypts the output from the server call
+///     - Runs post computations
+/// 
+/// Ciphertext server(): Acts as the server
+///     - Runs computations on homomorphically encrypted inputs
+/// 
+/// The FHE program consists of 5 Vec<String>: 
+///     header_inputs, server, setup, call_inputs, and post_computation
+/// 
+/// *header_inputs* holds the code of the input list for the header of server()
+/// *server* holds the lowered code from the IR to FHE, which is the body of server()
+/// *setup* holds the code for setting up SEAL params and encrypted data in main()
+/// *call_inputs* holds the code of the input list for the call to server() in main()
+/// *post_computation* holds the code that runs after the server() output has been decrypted
 pub struct FHE {
+    header_inputs: Vec<String>,
+    server: Vec<String>,
     setup: Vec<String>,
-    circs: Vec<String>,
-    output: Vec<String>,
+    call_inputs: Vec<String>,
+    post_computation: Vec<String>,
 }
 
 impl Default for FHE {
@@ -23,9 +42,11 @@ impl FHE {
     /// Initialize FHE circuit
     pub fn new() -> Self {
         FHE {
+            header_inputs: Vec::new(),
+            server: Vec::new(),
             setup: Vec::new(),
-            circs: Vec::new(),
-            output: Vec::new(),
+            call_inputs: Vec::new(),
+            post_computation: Vec::new(),
         }
     }
 }

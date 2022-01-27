@@ -1393,6 +1393,9 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
+/// Ciphertext/Plaintext identifier
+pub type EncStatus = bool;
+
 #[derive(Clone, Debug, Default)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
