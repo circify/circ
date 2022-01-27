@@ -1408,7 +1408,10 @@ impl Default for ComputationSubgraph {
 impl ComputationSubgraph {
     /// default constructor
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            nodes: TermSet::new(),
+            edges: TermMap::new(),
+        }
     }
 
     /// Insert nodes into ComputationSubgraph

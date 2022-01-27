@@ -281,8 +281,12 @@ impl ParitionGraph {
                     let term = self.node_to_term.get(&node);
                     let part_num = part.parse::<usize>().unwrap();
                     if let Some(t) = term {
-                        partitions.get_mut(&part_num).unwrap().insert_node(t);
-                        self.term_to_part.insert(t.clone(), part_num);
+                        if let Some(subgraph) = partitions.get_mut(&part_num) {
+                            subgraph.insert_node(t);
+                            self.term_to_part.insert(t.clone(), part_num);
+                        } else {
+                            panic!("Subgraph not found for index: {}", part_num);
+                        }
                     } else {
                         panic!("Node: {} - was not mapped in node_to_term map", i + 1);
                     }
