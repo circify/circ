@@ -30,7 +30,6 @@ impl Alloc {
 
 /// Manages a circuit-embedded stack.
 pub struct MemManager {
-    // TODO make this public or accessible?
     allocs: HashMap<AllocId, Alloc>,
     next_id: usize,
 }

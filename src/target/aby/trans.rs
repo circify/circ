@@ -5,11 +5,9 @@
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
-// use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
 use crate::target::graph::trans::get_share_map;
-// use crate::target::graph::trans::{combine, partition};
 use std::fmt;
 
 use std::path::Path;
@@ -617,33 +615,12 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
         values: _,
     } = ir.clone();
 
-    let s_map = get_share_map(&ir, &cm, &path, &lang);
-    // let mut local_share_maps: Vec<SharingMap> = Vec::new();
-    // for p in partitions {
-    //     let s_map = assign(&p, cm);
-    //     local_share_maps.push(s_map.clone());
-    //     println!("s_map made!");
-    // }
-
-    // let global_share_map: SharingMap = combine(&ir, &local_share_maps, &term_to_part, &rewritten);
-    // println!("");
-    // println!("Global share map!");
-
-    // for (key, value) in &*global_share_map {
-    //     println!("{} : {:#?}", key, value);
-    // }
-
-    // for now, use local assignments for global assignment
-    // combine sharing map to a single map, pass to converter.
-
-    // just get back assignment mapping from graphing library
-
-    // let s_map = some_arith_sharing(&ir);
-    let mut converter = ToABY::new(md, s_map, path, lang);
-
     // // naive assignment
     // let s_map: SharingMap = assign(&ir, cm);
     // let mut converter = ToABY::new(md, s_map, path, lang);
+
+    let s_map = get_share_map(&ir, &cm, &path, &lang);
+    let mut converter = ToABY::new(md, s_map, path, lang);
 
     for t in terms {
         // println!("terms: {}", t);

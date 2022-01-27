@@ -585,8 +585,6 @@ impl<'ast> ZGen<'ast> {
         for (p, f) in &t {
             self.file_stack.push(p.to_owned());
             for func in &f.functions {
-                println!("fn {} in {}", func.id.value, self.cur_path().display());
-
                 debug!("fn {} in {}", func.id.value, self.cur_path().display());
                 self.functions.insert(
                     (self.cur_path().to_owned(), func.id.value.clone()),
