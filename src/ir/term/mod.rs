@@ -1421,8 +1421,13 @@ macro_rules! term {
 
 /// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
+/// LRU cache of terms (like TermMap, but limited size)
+pub type TermCache<T> = hashconsing::coll::HConLru<Term, T>;
 /// Set of terms
 pub type TermSet = hashconsing::coll::HConSet<Term>;
+
+// default LRU cache size
+pub(super) const TERM_CACHE_LIMIT: usize = 8192; // first guess
 
 /// Iterator over descendents in child-first order.
 pub struct PostOrderIter {

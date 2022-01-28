@@ -8,7 +8,7 @@ use std::sync::RwLock;
 
 lazy_static! {
     // TODO: use weak pointers to allow GC
-    static ref FOLDS: RwLock<TermMap<Term>> = RwLock::new(TermMap::new());
+    static ref FOLDS: RwLock<TermCache<Term>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
 }
 
 /// Create a constant boolean
@@ -28,13 +28,13 @@ pub fn fold(node: &Term) -> Term {
 }
 
 /// Do constant-folding backed by a cache.
-pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
+pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
 
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if cache.contains_key(&t) {
+        if cache.contains(&t) {
             continue;
         }
         if !children_pushed {
@@ -42,8 +42,8 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
             continue;
         }
-        let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
-        let get = |i: usize| c_get(&t.cs[i]);
+        let mut c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+        let mut get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
             Op::Implies => match get(0).as_bool_opt() {
@@ -241,10 +241,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             }),
             _ => None,
         };
-        let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
-        let new_t = new_t_opt
-            .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| c_get(c)).collect()));
-        cache.insert(t, new_t);
+        let new_t = {
+            let mut cc_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+            new_t_opt
+                .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| cc_get(c)).collect()))
+        };
+        cache.put(t, new_t);
     }
     cache.get(node).expect("postorder cache").clone()
 }
