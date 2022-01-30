@@ -1,5 +1,5 @@
-use circ::front::zsharp::{Inputs, Mode, ZSharpFE};
-use env_logger;
+use circ::front::zsharp::{Inputs, ZSharpFE};
+use circ::front::Mode;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -41,7 +41,7 @@ fn main() {
     let inputs = Inputs {
         file: options.zsharp_path,
         inputs: options.inputs,
-        mode: mode.clone(),
+        mode,
     };
     let cs = ZSharpFE::interpret(inputs);
     cs.pretty(&mut std::io::stdout().lock())

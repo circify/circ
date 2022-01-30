@@ -7,8 +7,8 @@ use bellman::groth16::{
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
-use circ::front::zsharp::{self, Mode, ZSharpFE};
-use circ::front::FrontEnd;
+use circ::front::zsharp::{self, ZSharpFE};
+use circ::front::{Mode, FrontEnd};
 use circ::ir::{
     opt::{opt, Opt},
     /*term::extras::Letified,*/
@@ -18,7 +18,6 @@ use circ::target::r1cs::bellman::parse_instance;
 */
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
-use env_logger;
 /*
 use std::fs::File;
 use std::io::Read;
