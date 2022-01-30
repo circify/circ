@@ -23,8 +23,17 @@ fn cbv(b: BitVector) -> Option<Term> {
 
 /// Fold away operators over constants.
 pub fn fold(node: &Term) -> Term {
-    let mut cache = FOLDS.write().unwrap();
-    fold_cache(node, cache.deref_mut())
+    let mut cache_handle = FOLDS.write().unwrap();
+    let cache = cache_handle.deref_mut();
+
+    // make the cache unbounded during the fold_cache call
+    let old_capacity = cache.cap();
+    cache.resize(std::usize::MAX);
+
+    let ret = fold_cache(node, cache);
+    // shrink cache to its max size
+    cache.resize(old_capacity);
+    ret
 }
 
 /// Do constant-folding backed by a cache.
