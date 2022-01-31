@@ -1427,7 +1427,8 @@ pub type TermCache<T> = hashconsing::coll::HConLru<Term, T>;
 pub type TermSet = hashconsing::coll::HConSet<Term>;
 
 // default LRU cache size
-pub(super) const TERM_CACHE_LIMIT: usize = 8192; // first guess
+// this size avoids quadratic behavior for Falcon verification
+pub(super) const TERM_CACHE_LIMIT: usize = 65536;
 
 /// Iterator over descendents in child-first order.
 pub struct PostOrderIter {
