@@ -10,7 +10,6 @@ use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
-use circ::front::FrontEnd;
 use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
@@ -22,12 +21,11 @@ use circ::target::r1cs::bellman::parse_instance;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use circ::target::smt::find_model;
-use env_logger;
 use good_lp::default_solver;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
@@ -135,22 +133,18 @@ arg_enum! {
     }
 }
 
-fn determine_language(l: &Language, input_path: &PathBuf) -> DeterminedLanguage {
-    match l {
-        &Language::Datalog => DeterminedLanguage::Datalog,
-        &Language::Zsharp => DeterminedLanguage::Zsharp,
-        &Language::C => DeterminedLanguage::C,
-        &Language::Auto => {
+fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
+    match *l {
+        Language::Datalog => DeterminedLanguage::Datalog,
+        Language::Zsharp => DeterminedLanguage::Zsharp,
+        Language::C => DeterminedLanguage::C,
+        Language::Auto => {
             let p = input_path.to_str().unwrap();
             if p.ends_with(".zok") {
                 DeterminedLanguage::Zsharp
             } else if p.ends_with(".pl") {
                 DeterminedLanguage::Datalog
-            } else if p.ends_with(".c") {
-                DeterminedLanguage::C
-            } else if p.ends_with(".cpp") {
-                DeterminedLanguage::C
-            } else if p.ends_with(".cc") {
+            } else if p.ends_with(".c") || p.ends_with(".cpp") || p.ends_with(".cc") {
                 DeterminedLanguage::C
             } else {
                 println!("Could not deduce the input language from path '{}', please set the language manually", p);
@@ -183,7 +177,7 @@ fn main() {
             let inputs = zsharp::Inputs {
                 file: options.path,
                 inputs: options.frontend.inputs,
-                mode: mode.clone(),
+                mode,
             };
             ZSharpFE::gen(inputs)
         }
@@ -199,7 +193,7 @@ fn main() {
             let inputs = c::Inputs {
                 file: options.path,
                 inputs: options.frontend.inputs,
-                mode: mode.clone(),
+                mode,
             };
             C::gen(inputs)
         }
@@ -324,7 +318,7 @@ fn main() {
                 if var.contains("f0") {
                     let i = var.find("f0").unwrap();
                     let s = &var[i + 8..];
-                    let e = s.find("_").unwrap();
+                    let e = s.find('_').unwrap();
                     writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
                 }
             }
