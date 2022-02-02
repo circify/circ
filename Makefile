@@ -5,15 +5,18 @@ all: test
 install_deps: 
 	./scripts/install_deps.sh --install-aby --install-ezpc --default-env-flags
 
+build_deps: install_deps
+	./scripts/build_aby.zsh
+
 build:
 	cargo build --release --example circ
 	cargo build --example circ
 
-build_aby_zokrates: build install_deps
+build_aby_zokrates: build build_deps
 	./scripts/build_mpc_zokrates_test.zsh
 	./scripts/build_aby.zsh
 
-build_aby_c: build install_deps
+build_aby_c: build build_deps
 	./scripts/build_mpc_c_test.zsh
 	./scripts/build_aby.zsh
 

@@ -24,8 +24,6 @@ jobs:
       with:
         toolchain: stable
     - uses: Swatinem/rust-cache@v1
-    - name: Initialize env variables
-      run: source ./scripts/env.sh
     - name: Initialize third_party libraries
       run: make install_deps
     - name: Cache third_party build
@@ -34,7 +32,7 @@ jobs:
         path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
     - name: Build third_party libraries
-      run: ./scripts/build_aby.zsh
+      run: make build_deps
     - name: Typecheck
       run: cargo check
     - name: Check format
