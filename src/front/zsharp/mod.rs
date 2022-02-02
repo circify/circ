@@ -27,6 +27,9 @@ pub use term::ZSHARP_MODULUS;
 /// The modulus for the ZSharp language (ARC)
 pub use term::ZSHARP_MODULUS_ARC;
 
+// garbage collection increment for adaptive GC threshold
+const GC_INC: usize = 32;
+
 /// The prover visibility
 pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
 /// Public visibility
@@ -148,7 +151,7 @@ impl<'ast> ZGen<'ast> {
             crets_stack: Default::default(),
             lhs_ty: Default::default(),
             ret_ty_stack: Default::default(),
-            gc_depth_estimate: Cell::new(64),
+            gc_depth_estimate: Cell::new(2 * GC_INC),
         };
         this.circ
             .borrow()
@@ -554,20 +557,19 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn maybe_garbage_collect(&self) {
-        const MGC_INC: usize = 32;
         let est = self.gc_depth_estimate.get();
         let cur = self.file_stack_depth();
-        if MGC_INC * cur < est {
+        if GC_INC * cur < est {
             if maybe_garbage_collect() {
                 // we ran the GC and it did something; increase depth at which we run gc by 1 call
-                self.gc_depth_estimate.set(est + MGC_INC);
-            } else if est > MGC_INC / 2 {
+                self.gc_depth_estimate.set(est + GC_INC);
+            } else if est > GC_INC / 2 {
                 // otherwise, decrease depth at which we run gc by one call
-                self.gc_depth_estimate.set(est - MGC_INC);
+                self.gc_depth_estimate.set(est - GC_INC);
             }
         } else {
             // we didn't try to run the GC; just gradually increase the depth at which we'll run the gc
-            let est_inc = (MGC_INC * cur - est) / MGC_INC;
+            let est_inc = (GC_INC * cur - est) / GC_INC;
             self.gc_depth_estimate.set(est + 1 + est_inc);
         }
     }
