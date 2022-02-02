@@ -31,8 +31,10 @@ jobs:
     - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: ./../ABY/build
+        path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
+    - name: Build third_party libraries
+      run: ./scripts/build_aby.zsh
     - name: Typecheck
       run: cargo check
     - name: Check format
