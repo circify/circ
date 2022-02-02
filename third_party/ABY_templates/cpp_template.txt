@@ -2,7 +2,7 @@
 #include "../../../abycore/circuit/booleancircuits.h"
 #include "../../../abycore/circuit/arithmeticcircuits.h"
 #include "../../../abycore/circuit/circuit.h"
-#include "../../../../../../EZPC/ezpc.h"
+#include "../../../../../EZPC/ezpc.h"
 
 #include "../../../abycore/sharing/sharing.h"
 

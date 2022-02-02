@@ -23,12 +23,14 @@ jobs:
       with:
         toolchain: stable
     - uses: Swatinem/rust-cache@v1
-    - name: Initialize submodules
-      run: make fetch_deps
-    - name: Cache submodule build
+    - name: Initialize env variables
+      run: ./scripts/install_deps.sh --default-env-flags
+    - name: Initialize third_party libraries
+      run: make install_deps
+    - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: third_party/ABY/build
+        path: ${{ ABY_SOURCE }}/build
         key: ${{ runner.os }}
     - name: Build submodules
       run: make build_deps

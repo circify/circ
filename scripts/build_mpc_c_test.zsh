@@ -82,8 +82,6 @@ mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 
-
-
 # # benchmarks
 # # mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c
 # # mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c

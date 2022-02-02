@@ -1,22 +1,21 @@
+SHELL := /bin/bash # Use bash syntax
+
 all: test
 
-fetch_deps:
-	git submodule update --init
-
-build_deps: fetch_deps
-	./scripts/build_aby.zsh
-
-build_aby_zokrates: build_deps build
-	./scripts/build_mpc_zokrates_test.zsh
-	./scripts/build_aby.zsh
-
-build_aby_c: build_deps build
-	./scripts/build_mpc_c_test.zsh
-	./scripts/build_aby.zsh
+install_deps: 
+	./scripts/install_deps.sh --install-aby --install-ezpc --default-env-flags
 
 build:
 	cargo build --release --example circ
 	cargo build --example circ
+
+build_aby_zokrates: build install_deps
+	./scripts/build_mpc_zokrates_test.zsh
+	./scripts/build_aby.zsh
+
+build_aby_c: build install_deps
+	./scripts/build_mpc_c_test.zsh
+	./scripts/build_aby.zsh
 
 test: build build_aby_zokrates build_aby_c
 	cargo test
@@ -35,10 +34,7 @@ z_aby: build_aby_zokrates
 
 clean:
 	# remove all generated files
-	touch ./third_party/ABY/build && rm -r -- ./third_party/ABY/build 
-	touch ./third_party/ABY/src/examples/2pc_* && rm -r -- ./third_party/ABY/src/examples/2pc_* 
-	sed '/add_subdirectory.*2pc.*/d' -i ./third_party/ABY/src/examples/CMakeLists.txt 
-	rm -rf ./third_party/ABY/src/examples/2pc_*.txt
+	./scripts/clean_aby.zsh
 	rm -rf scripts/aby_tests/__pycache__
 	rm -rf P V pi perf.data perf.data.old flamegraph.svg
 
