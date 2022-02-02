@@ -32,8 +32,6 @@ jobs:
       with:
         path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
-    - name: Build submodules
-      run: make build_deps
     - name: Typecheck
       run: cargo check
     - name: Check format
