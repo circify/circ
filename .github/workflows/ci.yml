@@ -30,7 +30,7 @@ jobs:
     - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: ${{ ABY_SOURCE }}/build
+        path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
     - name: Build submodules
       run: make build_deps
