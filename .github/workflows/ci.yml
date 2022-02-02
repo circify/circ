@@ -31,7 +31,7 @@ jobs:
     - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: ${ABY_SOURCE}/build
+        path: ./../ABY/build
         key: ${{ runner.os }}
     - name: Typecheck
       run: cargo check
