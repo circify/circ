@@ -8,13 +8,6 @@ do
           cd ..
           if [[ ! -d "ABY" ]]; then 
             git clone https://github.com/edwjchen/ABY.git
-            pushd ABY
-            mkdir -p build
-            pushd build
-            cmake .. -DABY_BUILD_EXE=On
-            make
-            popd
-            popd
           fi
           cd circ 
           ;;
@@ -34,14 +27,6 @@ do
           cd ..
           if [[ ! -d "SEAL" ]]; then 
             git clone https://github.com/microsoft/SEAL.git
-            pushd SEAL
-            mkdir -p build
-            pushd build
-            cmake -S . -B build
-            cmake --build build
-            sudo cmake --install build
-            popd
-            popd
           fi
           cd circ 
           ;;
