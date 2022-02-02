@@ -10,7 +10,7 @@ use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
 use log::{debug, warn};
 use rug::Integer;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -102,6 +102,7 @@ struct ZGen<'ast> {
     crets_stack: RefCell<Vec<T>>,
     lhs_ty: RefCell<Option<Ty>>,
     ret_ty_stack: RefCell<Vec<Ty>>,
+    gc_depth_estimate: Cell<usize>,
 }
 
 enum ZAccess {
@@ -147,6 +148,7 @@ impl<'ast> ZGen<'ast> {
             crets_stack: Default::default(),
             lhs_ty: Default::default(),
             ret_ty_stack: Default::default(),
+            gc_depth_estimate: Cell::new(64),
         };
         this.circ
             .borrow()
@@ -399,6 +401,10 @@ impl<'ast> ZGen<'ast> {
         self.file_stack.borrow_mut().pop()
     }
 
+    fn file_stack_depth(&self) -> usize {
+        self.file_stack.borrow().len()
+    }
+
     fn generics_stack_push(&self, generics: HashMap<String, T>) {
         self.generics_stack.borrow_mut().push(generics)
     }
@@ -542,7 +548,27 @@ impl<'ast> ZGen<'ast> {
                 }
             }
 
+            self.maybe_garbage_collect();
             Ok(ret)
+        }
+    }
+
+    fn maybe_garbage_collect(&self) {
+        const MGC_INC: usize = 32;
+        let est = self.gc_depth_estimate.get();
+        let cur = self.file_stack_depth();
+        if MGC_INC * cur < est {
+            if maybe_garbage_collect() {
+                // we ran the GC and it did something; increase depth at which we run gc by 1 call
+                self.gc_depth_estimate.set(est + MGC_INC);
+            } else if est > MGC_INC / 2 {
+                // otherwise, decrease depth at which we run gc by one call
+                self.gc_depth_estimate.set(est - MGC_INC);
+            }
+        } else {
+            // we didn't try to run the GC; just gradually increase the depth at which we'll run the gc
+            let est_inc = (MGC_INC * cur - est) / MGC_INC;
+            self.gc_depth_estimate.set(est + 1 + est_inc);
         }
     }
 

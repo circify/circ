@@ -4,7 +4,10 @@ use super::*;
 
 lazy_static! {
     /// Cache of all types
-    pub static ref TERM_TYPES: RwLock<FxHashMap<TTerm, Sort>> = RwLock::new(FxHashMap::default());
+    pub(super) static ref TERM_TYPES: RwLock<TypeTable> = RwLock::new(TypeTable {
+        map: FxHashMap::default(),
+        last_len: 0,
+    });
 }
 
 #[track_caller]
