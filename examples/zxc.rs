@@ -8,11 +8,8 @@ use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
 use circ::front::zsharp::{self, ZSharpFE};
-use circ::front::{Mode, FrontEnd};
-use circ::ir::{
-    opt::{opt, Opt},
-    /*term::extras::Letified,*/
-};
+use circ::front::{FrontEnd, Mode};
+use circ::ir::opt::{opt, Opt};
 /*
 use circ::target::r1cs::bellman::parse_instance;
 */
@@ -50,7 +47,6 @@ struct Options {
     #[structopt(long, default_value = "x", parse(from_os_str))]
     instance: PathBuf,
     */
-
     #[structopt(short = "L")]
     skip_linred: bool,
 
@@ -138,7 +134,10 @@ fn main() {
         println!("Skipping linearity reduction, as requested.");
         r1cs
     } else {
-        println!("R1cs size before linearity reduction: {}", r1cs.constraints().len());
+        println!(
+            "R1cs size before linearity reduction: {}",
+            r1cs.constraints().len()
+        );
         reduce_linearities(r1cs)
     };
     println!("Final R1cs size: {}", r1cs.constraints().len());
