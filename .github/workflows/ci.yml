@@ -9,7 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   ABY_SOURCE: "./../ABY"
-  KAHIP_SOURCE: "./../ABY"
+  KAHIP_SOURCE: "./../KaHIP"
 
 jobs:
   build:
