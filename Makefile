@@ -2,16 +2,16 @@ SHELL := /bin/bash # Use bash syntax
 
 all: test
 
+build:
+	cargo build --release --example circ
+	cargo build --example circ
+
 install_deps: 
 	./scripts/install_deps.sh --install-aby --install-ezpc --install-kahip
 
 build_deps: install_deps
 	./scripts/build_aby.zsh
 	./scripts/build_kahip.zsh
-
-build:
-	cargo build --release --example circ
-	cargo build --example circ
 
 build_aby_zokrates: build build_deps
 	./scripts/build_mpc_zokrates_test.zsh
