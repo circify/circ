@@ -563,9 +563,9 @@ impl<'ast> ZGen<'ast> {
             if maybe_garbage_collect() {
                 // we ran the GC and it did something; increase depth at which we run gc by 1 call
                 self.gc_depth_estimate.set(est + GC_INC);
-            } else if est > GC_INC / 2 {
+            } else {
                 // otherwise, decrease depth at which we run gc by one call
-                self.gc_depth_estimate.set(est - GC_INC);
+                self.gc_depth_estimate.set(est.saturating_sub(GC_INC));
             }
         } else {
             // we didn't try to run the GC; just gradually increase the depth at which we'll run the gc
