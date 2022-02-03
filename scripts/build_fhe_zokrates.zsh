@@ -19,8 +19,9 @@ esac
 
 function fhe_test {
     zpath=$1
-    RUST_BACKTRACE=1 measure_time $BIN $zpath fhe
+    ipath=$2
+    RUST_BACKTRACE=1 measure_time $BIN $zpath --inputs $ipath fhe
 }
 
 # build fhe boolean tests
-fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/fhe_and.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/fhe_and.zok ./examples/ZoKrates/fhe/inputs/fhe_and.txt

@@ -3,27 +3,32 @@
 //use crate::front::datalog::Inputs;
 use crate::ir::term::*;
 use crate::target::fhe::*;
+use fxhash::FxHashMap;
 
 #[derive(Clone)]
 enum EmbeddedTerm {
-    Bool(String),
-    Bv(String),
+    Bool(String, bool),
+    Bv(String, bool),
 }
 
 struct ToFHE {
     fhe: FHE,
     md: ComputationMetadata,
     inputs: TermMap<EncStatus>, 
+    input_map: Option<FxHashMap<String, Value>>,
     cache: TermMap<EmbeddedTerm>,
+    term_cnt: i32,
 }
 
 impl ToFHE {
-    fn new(metadata: ComputationMetadata) -> Self {
+    fn new(metadata: ComputationMetadata, values:Option<FxHashMap<String, Value>>) -> Self {
         Self {
             fhe: FHE::new(),
             md: metadata,
             inputs: TermMap::new(),
+            input_map: values,
             cache: TermMap::new(),
+            term_cnt: 0,
         }
     }
 
@@ -33,16 +38,69 @@ impl ToFHE {
             _ => panic!("Term {} is not of type Var", t),
         }
     }
-
-    /// Parse variable name from IR representation of a variable
-    fn parse_var_name(&self, full_name: String) -> String {
-        let parsed: Vec<String> = full_name.split('_').map(str::to_string).collect();
-        if parsed.len() < 2 {
-            panic!("Invalid variable name: {}", full_name);
-        }
-        parsed[parsed.len() - 2].to_string()
+    
+    fn get_term_name(&mut self) -> String{
+        format!("term_{}", self.term_cnt)
     }
 
+    fn inc_term(&mut self) {
+        self.term_cnt += 1;
+    }
+
+    fn value_to_hex_poly(&self, val: &Value) -> String {
+        match *val {
+            Value::Bool(true) => "1".to_string(),
+            Value::Bool(false) => "0".to_string(),
+            _ => panic!("TODO: Unimplemented"),
+        }
+    }
+
+    /// Handles the inputs to the main function.
+    /// If an input's value is provided in the input file, it is initialized
+    /// accordingly within the main function
+    /// Otherwise, it is listed as an input to the main function
+    fn handle_main_inputs(&mut self) {
+        match &self.input_map {
+            Some (map) => {
+                for (t, _) in self.inputs.iter() {
+                    let name = ToFHE::get_var_name(t.clone());
+                    match map.get(&name) {
+                        Some(val) => { //TODO: change val to hex polynomial format
+                            self.fhe.setup.push(format!(
+                                "Plaintext {}_plain(\"{}\");",
+                                name, self.value_to_hex_poly(val)
+                            ));
+                        }
+                        None => {
+                            self.fhe.main_inputs.push(format!(
+                                "Plaintext {}, ",
+                                name
+                            ));
+                        }
+                    }
+                }
+            },
+            None => {
+                for (t, _) in self.inputs.iter() {
+                    let name = ToFHE::get_var_name(t.clone());
+                    self.fhe.main_inputs.push(format!(
+                        "Plaintext {}, ",
+                        name
+                    ));
+                }
+            }
+        }
+
+        match self.fhe.main_inputs.pop() {
+            Some(mut input) => {
+                input.pop();
+                input.pop();
+                self.fhe.main_inputs.push(input);
+            },
+            None => (),
+        }
+
+    }
 
     //Writes code for setting up SEAL on the client side.
     fn setup_seal(&mut self) {
@@ -74,32 +132,14 @@ impl ToFHE {
     fn add_server_call(&mut self, ptext_in: TermSet, ctext_in: TermSet){
         for t in ptext_in.iter() {
             let name = ToFHE::get_var_name(t.clone());
-            self.fhe.header_inputs.push(format!("Plaintext {}_plain, ", name));
-            self.fhe.call_inputs.push(format!("{}_plain, ", name));
+            self.fhe.header_inputs.push(format!(", Plaintext {}_plain", name));
+            self.fhe.call_inputs.push(format!(", {}_plain", name));
         }
 
         for t in ctext_in.iter() {
             let name = ToFHE::get_var_name(t.clone());
-            self.fhe.header_inputs.push(format!("Ciphertext_encrypted {}, ", name));
-            self.fhe.call_inputs.push(format!("{}_encrypted, ", name));
-        }
-
-        match self.fhe.header_inputs.pop() {
-            Some(mut input) => {
-                input.pop();
-                input.pop();
-                self.fhe.header_inputs.push(input);
-            },
-            None => panic!("Vector should not be empty."),
-        }
-
-        match self.fhe.call_inputs.pop() {
-            Some(mut input) => {
-                input.pop();
-                input.pop();
-                self.fhe.call_inputs.push(input);
-            },
-            None => panic!("Vector should not be empty."),
+            self.fhe.header_inputs.push(format!(", Ciphertext {}_encrypted", name));
+            self.fhe.call_inputs.push(format!(", {}_encrypted", name));
         }
     }
 
@@ -107,7 +147,7 @@ impl ToFHE {
     //ie. Decryption
     fn add_post_computation(&mut self) {
         self.fhe.post_computation.push(
-            "cout << output_decrypted.to_string() << endl;".to_string());
+            "cout << \"Output Value: \" << output_plain.to_string() << endl;".to_string());
     }
 
     ///Initialize ciphertext and plaintext inputs
@@ -117,15 +157,11 @@ impl ToFHE {
         
         self.setup_seal();
 
-        // Parse input parameters from command line as uint32_t variables
-        // Initialize _____
+        self.handle_main_inputs();
+
+        // Encrypt necessary terms
         for (t, encrypted) in self.inputs.iter() {
             let name = ToFHE::get_var_name(t.clone());
-            self.fhe.setup.push(format!(
-                "Plaintext {}_plain(uint64_to_hex_string(std::atoi(params[\"{}\"].c_str())));",
-                name, 
-                self.parse_var_name(name.to_string())
-            ));
             if *encrypted {
                 self.fhe.setup.push(format!(
                     "Ciphertext {}_encrypted;\n\tencryptor.encrypt({}_plain, {}_encrypted);",
@@ -147,11 +183,80 @@ impl ToFHE {
         match self
             .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+            .unwrap_or_else(|| panic!("Missing expression for {:?}", t))
         {
-            EmbeddedTerm::Bool(b) => b.clone(),
+            EmbeddedTerm::Bool(b, _) => b.clone(),
             _ => panic!("Non-bool for {:?}", t),
         }
+    }
+
+    fn get_enc_status(&self, t: &Term) -> bool {
+        match self
+            .cache
+            .get(t)
+            .unwrap_or_else(|| panic!("Missing expression for {:?}", t))
+        {
+            EmbeddedTerm::Bool(_, e) => e.clone(),
+            EmbeddedTerm::Bv(_, e) => e.clone()
+        }
+    }
+
+    fn embed_bool_and(&mut self, a: String, a_enc: bool, b: String, b_enc: bool, term: String) {
+        self.fhe.server.push(format!("Ciphertext {};", term));
+        self.fhe.server.push(
+            match (a_enc, b_enc) {
+                (true, true) => 
+                    format!("evaluator.multiply({}, {}, {});", a, b, term),
+                (true, false) => 
+                    format!("evaluator.multiply_plain({}, {}, {});", a, b, term),
+                (false, true) =>
+                    format!("evaluator.multiply_plain({}, {}, {});", b, a, term),
+                (false, false) =>
+                    format!("encryptor.encrypt({}, {})\n\tevaluator.multiply_plain_inplace({}, {});", 
+                            a, term, term, b)
+            }
+        );
+    }
+
+    fn embed_bool_or(&mut self, a: String, a_enc: bool, b: String, b_enc: bool, term: String) {
+        self.fhe.server.push("Ciphertext prod;".to_string());
+
+        self.fhe.server.push(
+            match (a_enc, b_enc) {
+                (true, true) => 
+                    format!("evaluator.multiply({}, {}, prod);", a, b),
+                (true, false) => 
+                    format!("evaluator.multiply_plain({}, {}, prod);", a, b),
+                (false, true) =>
+                    format!("evaluator.multiply_plain({}, {}, prod);", b, a),
+                (false, false) =>
+                    format!("encryptor.encrypt({}, prod)\n\tevaluator.multiply_plain_inplace(prod, {});", 
+                            a, b)
+            }
+        );
+
+        self.fhe.server.push(format!("Ciphertext {};", term));
+
+        self.fhe.server.push(
+            match (a_enc, b_enc) {
+                (true, true) => 
+                    format!("evaluator.add({}, {}, {});", a, b, term),
+                (true, false) => 
+                    format!("evaluator.add_plain({}, {}, {});", a, b, term),
+                (false, true) =>
+                    format!("evaluator.add_plain({}, {}, {});", b, a, term),
+                (false, false) =>
+                    format!("encryptor.encrypt({}, {})\n\tevaluator.add_plain_inplace({}, {});", 
+                        a, term, term, b)
+            }
+        );
+
+        self.fhe.server.push(format!("evaluator.sub_inplace({}, prod);", term));
+    }
+
+    fn embed_bool_xor(&mut self, a: String, a_enc: bool, b: String, b_enc: bool, term: String) {
+        self.embed_bool_or(a, a_enc, b, b_enc, term.clone());
+        self.fhe.server.push(format!("evaluator.sub_inplace({}, prod);", term));
     }
 
     fn embed_bool(&mut self, t: Term) -> String {
@@ -164,17 +269,45 @@ impl ToFHE {
                     };
                 }
                 if !self.cache.contains_key(&t) {
-                    self.cache
-                    .insert(t.clone(), EmbeddedTerm::Bool(format!("s_{}", name)));
+                    match *self.md.input_vis.get(name).unwrap(){
+                        None => self.cache
+                                .insert(t.clone(),
+                                     EmbeddedTerm::Bool(format!("{}_plain", name), false)),
+                        Some (_) => self.cache
+                                        .insert(t.clone(),
+                                        EmbeddedTerm::Bool(format!("{}_encrypted", name), true))
+                    };
                 }
             }
             Op::Const(Value::Bool(b)) => {
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "{}", *b
-                    ))
+                    EmbeddedTerm::Bool(format!("{}", *b), false)
                 );
+            }
+            Op::BoolNaryOp(o) => {
+                let a_circ = self.get_bool(&t.cs[0]);
+                let b_circ = self.get_bool(&t.cs[1]);
+
+                let term = self.get_term_name();
+                self.inc_term();
+
+                match o {
+                    BoolNaryOp::And => {
+                        self.embed_bool_and(a_circ, self.get_enc_status(&t.cs[0]),
+                            b_circ, self.get_enc_status(&t.cs[1]), term.clone());
+                    }
+                    BoolNaryOp::Or => {
+                        self.embed_bool_or(a_circ, self.get_enc_status(&t.cs[0]),
+                            b_circ, self.get_enc_status(&t.cs[1]), term.clone());
+                    }
+                    BoolNaryOp::Xor => {
+                        self.embed_bool_xor(a_circ, self.get_enc_status(&t.cs[0]),
+                            b_circ, self.get_enc_status(&t.cs[1]), term.clone());
+                    }
+                }
+                self.cache.insert(t.clone(),
+                                    EmbeddedTerm::Bool(term, true));
             }
             _ => panic!("Non-field in embed_bool: {:?}", t)
         }
@@ -189,7 +322,7 @@ impl ToFHE {
             .get(t)
             .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
         {
-            EmbeddedTerm::Bv(b) => b.clone(),
+            EmbeddedTerm::Bv(b, _) => b.clone(),
             _ => panic!("Non-bv for {:?}", t),
         }
     }
@@ -204,16 +337,20 @@ impl ToFHE {
                     };
                 }
                 if !self.cache.contains_key(&t) {
-                    self.cache
-                    .insert(t.clone(), EmbeddedTerm::Bv(format!("s_{}", name)));
+                    match *self.md.input_vis.get(name).unwrap(){
+                        None => self.cache
+                                .insert(t.clone(),
+                                     EmbeddedTerm::Bv(format!("{}_plain", name), false)),
+                        Some (_) => self.cache
+                                        .insert(t.clone(),
+                                        EmbeddedTerm::Bv(format!("{}_encrypted", name), true))
+                    };
                 }
             }
             Op::Const(Value::BitVector(b)) => {
                 self.cache.insert(
                     t.clone(),
-                    EmbeddedTerm::Bool(format!(
-                        "{}", *b
-                    ))
+                    EmbeddedTerm::Bool(format!("{}", *b), false)
                 );
             }
             _ => {panic!("Non-field in embed_bv: {:?}", t);}
@@ -222,9 +359,9 @@ impl ToFHE {
         self.get_bv(&t)
     }
 
-    fn format_output_circuit(&self, circ: String) -> String {
+    fn format_output_circuit(&self, circ: String) -> String { //TODO
         format!(
-            "TODO: {} \n",
+            "{}",
             circ
         )
     }
@@ -246,10 +383,13 @@ impl ToFHE {
         self.format_output_circuit(circ)
     }
 
-    /// Given a term `t`, lower `t` to FHE Circuits
+    /// Given a term `t`, lower `t` to FHE program
     fn lower(&mut self, t: Term) {
         let circ = self.embed(t);
-        self.fhe.server.push(circ);
+        self.fhe.server.push(format!(
+            "return {};",
+            circ
+        ));
     }
 }
 
@@ -258,10 +398,10 @@ pub fn to_fhe(ir: Computation) -> FHE {
     let Computation {
         outputs: terms,
         metadata: md,
-        values: _,
+        values, 
     } = ir.clone();
 
-    let mut converter = ToFHE::new(md);
+    let mut converter = ToFHE::new(md, values);
 
     for t in terms {
         println!("Terms: {}", t);

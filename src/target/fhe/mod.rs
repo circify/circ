@@ -30,6 +30,7 @@ pub struct FHE {
     setup: Vec<String>,
     call_inputs: Vec<String>,
     post_computation: Vec<String>,
+    main_inputs: Vec<String>,
 }
 
 impl Default for FHE {
@@ -47,6 +48,7 @@ impl FHE {
             setup: Vec::new(),
             call_inputs: Vec::new(),
             post_computation: Vec::new(),
+            main_inputs: Vec::new(),
         }
     }
 }
