@@ -6,6 +6,7 @@
 use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
+use crate::target::aby::utils::get_aby_source;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -85,7 +86,7 @@ impl ParitionGraph {
             .into_string()
             .unwrap();
         let name = format!("{}_{}", filename, self.lang);
-        let path = format!("third_party/ABY/src/examples/{}.graph", name);
+        let path = format!("{}/src/examples/{}.graph", get_aby_source(), name);
         if Path::new(&path).exists() {
             fs::remove_file(&path).expect("Failed to remove old graph file");
         }
@@ -101,7 +102,7 @@ impl ParitionGraph {
             .into_string()
             .unwrap();
         let name = format!("{}_{}", filename, &self.lang);
-        let path = format!("third_party/ABY/src/examples/{}.part", name);
+        let path = format!("{}/src/examples/{}.part", get_aby_source(), name);
         if Path::new(&path).exists() {
             fs::remove_file(&path).expect("Failed to remove old partition file");
         }

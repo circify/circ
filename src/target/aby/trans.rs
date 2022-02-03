@@ -8,6 +8,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
 use crate::target::graph::trans::get_share_map;
+use log::debug;
 use std::fmt;
 
 use std::path::Path;
@@ -624,6 +625,7 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
 
     for t in terms {
         // println!("terms: {}", t);
+        debug!("terms: {}", t);
         converter.lower(t.clone());
     }
 

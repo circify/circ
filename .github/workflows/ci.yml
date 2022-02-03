@@ -8,6 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  ABY_SOURCE: "./../ABY"
+  KAHIP_SOURCE: "./../ABY"
 
 jobs:
   build:
@@ -23,14 +25,17 @@ jobs:
       with:
         toolchain: stable
     - uses: Swatinem/rust-cache@v1
-    - name: Initialize submodules
-      run: make fetch_deps
-    - name: Cache submodule build
+    - name: Initialize third_party libraries
+      run: make install_deps
+    - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: third_party/ABY/build
+        path: |
+          ${ABY_SOURCE}/build
+          ${KAHIP_SOURCE}/build
+          ${KAHIP_SOURCE}/deploy
         key: ${{ runner.os }}
-    - name: Build submodules
+    - name: Build third_party libraries
       run: make build_deps
     - name: Typecheck
       run: cargo check
