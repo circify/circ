@@ -1369,7 +1369,12 @@ impl<'ast> ZGen<'ast> {
             ast::Type::Struct(s) => {
                 let sdef = self
                     .get_struct(&s.id.value)
-                    .ok_or_else(|| format!("No such struct {} (did you bring it into scope?)", &s.id.value))?
+                    .ok_or_else(|| {
+                        format!(
+                            "No such struct {} (did you bring it into scope?)",
+                            &s.id.value
+                        )
+                    })?
                     .clone();
                 let g_len = sdef.generics.len();
                 let egv = s
