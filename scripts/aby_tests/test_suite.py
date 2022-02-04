@@ -1,3 +1,20 @@
+add_tests = [
+     [
+        "Add two numbers - 1",
+        3,
+        "./third_party/ABY/build/bin/2pc_add",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Add two numbers - 2",
+        2,
+        "./third_party/ABY/build/bin/2pc_add",
+        {"a": 0, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+]
+
 arithmetic_tests = [
     [
         "Add two numbers - 1",

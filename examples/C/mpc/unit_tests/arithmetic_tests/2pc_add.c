@@ -1,3 +1,7 @@
-int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
+int add(int a, int b) {
    return a + b;
+}
+
+int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
+   return add(a, b);
 }
