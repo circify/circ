@@ -66,6 +66,7 @@ impl NonOblivComputer {
             false
         }
     }
+
     fn new() -> Self {
         Self {
             not_obliv: TermSet::new(),
@@ -103,7 +104,8 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 if let Op::Const(_) = i.op {
                     false
                 } else {
-                    self.mark(a)
+                    let progress = self.mark(a);
+                    self.mark(term) || progress
                 }
             }
             Op::Ite => {
