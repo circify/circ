@@ -294,7 +294,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
+              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
         ];
@@ -316,7 +316,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), v_bv("a", 4), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
+              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
         ];

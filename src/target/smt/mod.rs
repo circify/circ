@@ -458,7 +458,7 @@ mod test {
     #[quickcheck]
     fn eval_random_bool(ArbitraryBoolEnv(t, vs): ArbitraryBoolEnv) {
         assert!(smt_eval_test(t.clone(), &vs));
-        assert!(!smt_eval_alternate_solution(t.clone(), &vs));
+        assert!(!smt_eval_alternate_solution(t, &vs));
     }
 
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.

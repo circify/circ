@@ -999,14 +999,12 @@ pub mod test {
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
             let vs = self.1.clone();
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
 
-            Box::new(
-                ts.into_iter()
-                    .rev()
-                    .skip(1)
-                    .map(move |t| PureBool(t, vs.clone())),
-            )
+            Box::new(ts.skip(1).map(move |t| PureBool(t, vs.clone())))
         }
     }
 

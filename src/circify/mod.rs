@@ -913,7 +913,7 @@ mod test {
                             &**a,
                             format!("{}.0", raw_name),
                             user_name.as_ref().map(|u| format!("{}.0", u)),
-                            visibility.clone(),
+                            visibility,
                         )),
                         Box::new(self.declare(
                             ctx,
@@ -946,13 +946,7 @@ mod test {
                 match t {
                     T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, visibility)),
                     T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(
-                            ctx,
-                            _ty,
-                            format!("{}.0", name),
-                            *a,
-                            visibility.clone(),
-                        )),
+                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, visibility)),
                         Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, visibility)),
                     ),
                 }
