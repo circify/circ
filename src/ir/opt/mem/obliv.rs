@@ -217,7 +217,7 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Select => {
-                if self.should_replace(&orig.cs[0]) {
+                if self.should_replace(orig) && self.should_replace(&orig.cs[0]) {
                     let mut cs = get_cs();
                     debug_assert_eq!(cs.len(), 2);
                     let k_const = get_const(&cs.pop().unwrap());
@@ -227,7 +227,7 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Store => {
-                if self.should_replace(orig) {
+                if self.should_replace(orig) && self.should_replace(&orig.cs[0]) {
                     let mut cs = get_cs();
                     debug_assert_eq!(cs.len(), 3);
                     let k_const = get_const(&cs.remove(1));
