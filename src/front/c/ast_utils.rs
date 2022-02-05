@@ -4,6 +4,7 @@ use lang_c::ast::*;
 use lang_c::span::Node;
 use std::fmt::{self, Display, Formatter};
 
+#[derive(Clone)]
 pub struct FnInfo {
     pub name: String,
     pub ret_ty: Option<Ty>,

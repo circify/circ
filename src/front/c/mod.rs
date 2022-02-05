@@ -87,7 +87,7 @@ impl CGen {
             circ: Circify::new(Ct::new(inputs.map(parser::parse_inputs))),
             mode,
             tu,
-            functions: HashMap::new(),
+            functions: HashMap::default(),
         };
         this.circ
             .cir_ctx()
@@ -109,7 +109,7 @@ impl CGen {
         r.unwrap_or_else(|e| self.err(e))
     }
 
-    fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
+    fn array_select(&mut self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
         match (array.clone().term, idx.term) {
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
@@ -251,7 +251,7 @@ impl CGen {
         panic!("Bad visibility declaration.");
     }
 
-    fn const_(&self, c: Constant) -> CTerm {
+    fn const_(&mut self, c: Constant) -> CTerm {
         match c {
             // TODO: move const integer function out to separate function
             Constant::Integer(i) => cterm(CTermData::CInt(
@@ -263,7 +263,7 @@ impl CGen {
         }
     }
 
-    fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
+    fn get_bin_op(&mut self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             BinaryOperator::Plus => add,
             BinaryOperator::AssignPlus => add,
@@ -288,7 +288,7 @@ impl CGen {
         }
     }
 
-    fn get_u_op(&self, op: UnaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
+    fn get_u_op(&mut self, op: UnaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             UnaryOperator::PostIncrement => add,
             _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", op),
@@ -369,6 +369,10 @@ impl CGen {
                 let to_ty = s_type_(type_name.node.specifiers);
                 let expr = self.gen_expr(expression.node);
                 Ok(cast(to_ty, expr))
+            }
+            Expression::Call(node) => {
+                println!("{:#?}", node);
+                unimplemented!();
             }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
@@ -568,72 +572,19 @@ impl CGen {
         }
     }
 
-    fn gen(&mut self) {
-        let TranslationUnit(nodes) = self.tu.clone();
-        for n in nodes.iter() {
-            match n.node {
-                ExternalDeclaration::Declaration(ref decl) => {
-                    debug!("{:#?}", decl);
-                }
-                ExternalDeclaration::FunctionDefinition(ref fn_def) => {
-                    debug!("{:#?}", fn_def.node.clone());
-                    let fn_info = ast_utils::get_fn_info(&fn_def.node);
-                    self.circ
-                        .enter_fn(fn_info.name.to_owned(), fn_info.ret_ty.clone());
-                    for arg in fn_info.args.iter() {
-                        // TODO: self.gen_decl(arg);
-                        let p = &arg.specifiers[0];
-                        let vis = self.interpret_visibility(&p.node);
-                        let base_ty = d_type_(arg.specifiers[1..].to_vec());
-                        let d = &arg.declarator.as_ref().unwrap().node;
-                        let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
-                        let name = name_from_decl(d);
-                        let res = self.circ.declare(name.clone(), &derived_ty, true, vis);
-                        self.unwrap(res);
-                    }
-                    self.gen_stmt(fn_info.body.clone());
-                    if let Some(r) = self.circ.exit_fn() {
-                        match self.mode {
-                            Mode::Mpc(_) => {
-                                let ret_term = r.unwrap_term();
-                                let ret_terms = ret_term.term.terms();
-                                self.circ
-                                    .cir_ctx()
-                                    .cs
-                                    .borrow_mut()
-                                    .outputs
-                                    .extend(ret_terms);
-                            }
-                            Mode::Proof => {
-                                let ty = fn_info.ret_ty.as_ref().unwrap();
-                                let name = "return".to_owned();
-                                let term = r.unwrap_term();
-                                let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
-                                self.circ.assign_with_assertions(name, term, ty, PUBLIC_VIS);
-                                unimplemented!();
-                            }
-                            _ => unimplemented!("Mode: {}", self.mode),
-                        }
-                    }
-                }
-                _ => unimplemented!("Haven't implemented node: {:?}", n.node),
-            }
-        }
-    }
-
     fn entry_fn(&mut self, n: &str) {
         debug!("Entry: {}", n);
         // find the entry function
-        let fn_info = self
+        let f = self
             .functions
             .get(n)
             .unwrap_or_else(|| panic!("No function '{}'", n))
             .clone();
 
-        self.circ
-            .enter_fn(fn_info.name.to_owned(), fn_info.ret_ty.clone());
+        // setup stack frame for entry function
+        self.circ.enter_fn(f.name.to_owned(), f.ret_ty.clone());
 
-        for arg in fn_info.args.iter() {
+        for arg in f.args.iter() {
             // TODO: self.gen_decl(arg);
             let p = &arg.specifiers[0];
             let vis = self.interpret_visibility(&p.node);
@@ -641,11 +592,11 @@ impl CGen {
             let d = &arg.declarator.as_ref().unwrap().node;
             let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
             let name = name_from_decl(d);
-            let res = self.circ.declare(name.clone(), &derived_ty, true, vis);
-            self.unwrap(res);
+            let r = self.circ.declare(name.clone(), &derived_ty, true, vis);
+            self.unwrap(r);
         }
 
-        self.gen_stmt(fn_info.body.clone());
+        self.gen_stmt(f.body.clone());
         if let Some(r) = self.circ.exit_fn() {
             match self.mode {
                 Mode::Mpc(_) => {
@@ -659,7 +610,7 @@ impl CGen {
                         .extend(ret_terms);
                 }
                 Mode::Proof => {
-                    let ty = fn_info.ret_ty.as_ref().unwrap();
+                    let ty = f.ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
                     let term = r.unwrap_term();
                     let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
@@ -669,13 +620,9 @@ impl CGen {
                 _ => unimplemented!("Mode: {}", self.mode),
             }
         }
-
-        unimplemented!();
     }
 
     fn visit_files(&mut self) {
-        // TODO: Add support for multiple files
-
         let TranslationUnit(nodes) = self.tu.clone();
         for n in nodes.iter() {
             match n.node {
@@ -690,8 +637,6 @@ impl CGen {
                 _ => unimplemented!("Haven't implemented node: {:?}", n.node),
             };
         }
-
-        // TODO: imports
         // TODO: structs
     }
 }
