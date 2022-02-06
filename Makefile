@@ -16,7 +16,7 @@ build_aby_c: build_deps build
 
 build:
 	cargo build --release --examples
-	cargo build --exampleσ
+	cargo build --examples
 
 test: build build_aby_zokrates build_aby_c
 	cargo test
