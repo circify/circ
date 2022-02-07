@@ -516,7 +516,7 @@ dependencies = [
 [[package]]
 name = "hashconsing"
 version = "1.3.0"
-source = "git+https://github.com/kwantam/hashconsing.git?branch=phash#415a46199eccb15d34f1336e0f2543fe6357cec7"
+source = "git+https://github.com/alex-ozdemir/hashconsing.git?branch=phash#a74c1d01742580a16243b6805b647349abbdfe59"
 dependencies = [
  "lazy_static",
  "lru",
