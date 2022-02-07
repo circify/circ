@@ -1,0 +1,4 @@
+from "EMBED" import u32_to_bits
+
+def main(u32 a) -> bool[32]:
+    return u32_to_bits(a)

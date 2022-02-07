@@ -129,7 +129,7 @@ mod test {
         let solution = vars
             .maximise(a + b + c)
             .using(default_solver)
-            .with(a + b << 30.0)
+            .with((a + b) << 30.0)
             .solve()
             .unwrap();
         assert_eq!(solution.value(a), 1.0);
@@ -145,7 +145,7 @@ mod test {
         let solution = vars
             .maximise(a + b + c)
             .using(good_lp::solvers::lp_solvers::LpSolver(s))
-            .with(a + b << 30.0)
+            .with((a + b) << 30.0)
             .solve()
             .unwrap();
         assert_eq!(solution.value(a), 1.0);

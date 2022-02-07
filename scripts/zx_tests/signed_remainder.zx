@@ -1,0 +1,21 @@
+from "field" import s_divisible, s_remainder
+
+def main() -> bool:
+    field q = 4
+
+    field a = -2048
+    assert((a % q) != 0)
+    assert(s_divisible(a, q))
+    assert(s_remainder(a, q) == 0)
+
+    field b = 2048
+    assert((b % q) == 0)
+    assert(s_divisible(b, q))
+    assert(s_remainder(b, q) == 0)
+
+    field c = -2049
+    assert((c % 2) == 0)
+    assert(!s_divisible(c, q))
+    assert(s_remainder(c, q) == 3)
+
+    return true

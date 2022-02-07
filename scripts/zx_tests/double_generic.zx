@@ -1,0 +1,10 @@
+const u32[5] asdf = [1,2,3,4,5]
+
+def last<N>(u32[N] a) -> u32:
+    return a[N-1]
+
+def foo<N>(u32[N] a) -> u32:
+    return last([...a, ...a])
+
+def main() -> u32:
+    return foo([1,2,3])

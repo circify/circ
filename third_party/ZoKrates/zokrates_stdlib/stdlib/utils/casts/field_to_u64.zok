@@ -1,0 +1,5 @@
+from "EMBED" import unpack, u64_from_bits
+
+def main(field i) -> u64:
+    bool[64] bits = unpack(i)
+    return u64_from_bits(bits)

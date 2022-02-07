@@ -1,0 +1,41 @@
+overloading: 
+    Functions are imported by name. If many functions have the same name
+    but different signatures, all of them get imported, and which one to
+    use in a particular call is inferred. (ZoK manual section 3.8)
+  ==> we disallow explicitly
+
+inferred types for decimal literals (ZoK manual section 3.2)
+    inside expressions
+    in assignments if LHS
+    add "untypedInteger" and unify as we go?
+  ==> handled
+
+multi-assignment
+  ==> not implemented (WONTFIX?)
+
+generics
+  ==> handled, but with edge cases
+
+add array-membership operator
+add arithmetic-progression literal (to use with array-membership op)
+should we make range checks explicit in IR?
+    we have power-of-2 right now
+    add non-power-of-2 range check?
+
+===
+// Following is totally broken right now (may work in ref compiler because
+// they seem to monomorphize on-the-fly --- consider doing this?)
+
+def last<N>(u32[N] a) -> u32:
+    return a[N-1]
+
+def foo<N>(u32[N] a) -> u32:
+    // can't compute 2*N and pass to last because it has to be a const value!
+    // (and cannot declare const values inside functions)
+    return last([...a, ...a])
+
+def main() -> u32:
+    return foo([1,2,3])
+
+// XXX do we want to add const decls *inside* functions?
+//     not possible right now, but could help for cases like this

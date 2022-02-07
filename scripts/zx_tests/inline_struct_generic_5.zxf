@@ -1,0 +1,9 @@
+struct InlineTest<N> {
+    u32[N] x
+    field y
+}
+
+const InlineTest<4> foo = MisspelledInlineTest { x: [1, 2, 3, 4], y: 1 }
+
+def main() -> InlineTest<4>:
+    return foo

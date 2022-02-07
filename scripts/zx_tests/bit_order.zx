@@ -1,0 +1,103 @@
+import "utils/casts/u8_to_bits"
+import "utils/casts/u8_from_bits"
+import "utils/casts/u8_to_field"
+import "utils/casts/field_to_u8"
+
+import "utils/casts/u16_to_bits"
+import "utils/casts/u16_from_bits"
+import "utils/casts/u16_to_field"
+import "utils/casts/field_to_u16"
+
+import "utils/casts/u32_to_bits"
+import "utils/casts/u32_from_bits"
+import "utils/casts/u32_to_field"
+import "utils/casts/field_to_u32"
+
+import "utils/casts/u64_to_bits"
+import "utils/casts/u64_from_bits"
+import "utils/casts/u64_to_field"
+import "utils/casts/field_to_u64"
+
+import "utils/pack/bool/unpack"
+import "utils/pack/bool/pack"
+
+def main() -> bool:
+    // check for msb0 bit order
+    u8 i1 = 128
+    bool[8] o1 = u8_to_bits(i1)
+    assert(o1[0])
+    assert(!o1[7])
+
+    u16 i2 = 32768
+    bool[16] o2 = u16_to_bits(i2)
+    assert(o2[0])
+    assert(!o2[15])
+
+    u32 i3 = 2147483648
+    bool[32] o3 = u32_to_bits(i3)
+    assert(o3[0])
+    assert(!o3[31])
+
+    u64 i4 = 9223372036854775808
+    bool[64] o4 = u64_to_bits(i4)
+    assert(o4[0])
+    assert(!o4[63])
+
+    // u8 -> field -> bits -> u8
+    u8 t1_0 = 42
+    field t1_1 = u8_to_field(t1_0)
+    bool[8] t1_2 = unpack(t1_1)
+    u8 t1_3 = u8_from_bits(t1_2)
+    assert(t1_0 == t1_3)
+
+    // XXX(TODO) pack builtin
+    // u8 -> bits -> field -> u8
+    u8 t2_0 = 77
+    bool[8] t2_1 = u8_to_bits(t2_0)
+    field t2_2 = pack(t2_1)
+    u8 t2_3 = field_to_u8(t2_2)
+    assert(t2_0 == t2_3)
+
+    // u16 -> field -> bits -> u16
+    u16 t3_0 = 46971
+    field t3_1 = u16_to_field(t3_0)
+    bool[16] t3_2 = unpack(t3_1)
+    u16 t3_3 = u16_from_bits(t3_2)
+    assert(t3_0 == t3_3)
+
+    // u16 -> bits -> field -> u16
+    u16 t4_0 = 63336
+    bool[16] t4_1 = u16_to_bits(t4_0)
+    field t4_2 = pack(t4_1)
+    u16 t4_3 = field_to_u16(t4_2)
+    assert(t4_0 == t4_3)
+
+    // u32 -> field -> bits -> u32
+    u32 t5_0 = 2652390681
+    field t5_1 = u32_to_field(t5_0)
+    bool[32] t5_2 = unpack(t5_1)
+    u32 t5_3 = u32_from_bits(t5_2)
+    assert(t5_0 == t5_3)
+
+    // u32 -> bits -> field -> u32
+    u32 t6_0 = 1173684415
+    bool[32] t6_1 = u32_to_bits(t6_0)
+    field t6_2 = pack(t6_1)
+    u32 t6_3 = field_to_u32(t6_2)
+    assert(t6_0 == t6_3)
+
+    // u64 -> field -> bits -> u64
+    u64 t7_0 = 18312416462297086083
+    field t7_1 = u64_to_field(t7_0)
+    bool[64] t7_2 = unpack(t7_1)
+    u64 t7_3 = u64_from_bits(t7_2)
+    assert(t7_0 == t7_3)
+
+    // u64 -> bits -> field -> u64
+    u64 t8_0 = 4047977501435466453
+    bool[64] t8_1 = u64_to_bits(t8_0)
+    field t8_2 = pack(t8_1)
+    u64 t8_3 = field_to_u64(t8_2)
+    assert(t8_0 == t8_3)
+
+    return true

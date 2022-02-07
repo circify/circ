@@ -47,9 +47,13 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 scalarize_vars::scalarize_inputs(&mut cs);
             }
             Opt::ConstantFold => {
-                let mut cache = TermMap::new();
+                let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                 for a in &mut cs.outputs {
+                    // allow unbounded size during a single fold_cache call
+                    cache.resize(std::usize::MAX);
                     *a = cfold::fold_cache(a, &mut cache);
+                    // then shrink back down to size between calls
+                    cache.resize(TERM_CACHE_LIMIT);
                 }
             }
             Opt::Sha => {

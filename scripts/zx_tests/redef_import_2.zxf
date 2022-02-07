@@ -1,0 +1,5 @@
+import "EMBED"
+import "EMBED"
+
+def main() -> bool:
+    return false

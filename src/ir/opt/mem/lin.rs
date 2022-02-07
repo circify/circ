@@ -11,7 +11,7 @@ fn arr_val_to_tup(v: &Value) -> Value {
         Value::Array(Array {
             default, map, size, ..
         }) => Value::Tuple({
-            let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
+            let mut vec = vec![arr_val_to_tup(default); *size].into_boxed_slice();
             for (i, v) in map {
                 vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
             }
@@ -23,7 +23,9 @@ fn arr_val_to_tup(v: &Value) -> Value {
 
 fn arr_sort_to_tup(v: &Sort) -> Sort {
     match v {
-        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        Sort::Array(_key, value, size) => {
+            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice())
+        }
         v => v.clone(),
     }
 }
@@ -110,7 +112,7 @@ mod test {
 
     fn count_ites(t: &Term) -> usize {
         PostOrderIter::new(t.clone())
-            .filter(|t| &t.op == &Op::Ite)
+            .filter(|t| t.op == Op::Ite)
             .count()
     }
 
@@ -133,7 +135,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
+              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
         ];
@@ -156,7 +158,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), field_lit(3), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), field_lit(2), bv_lit(1, 4)]
+              term![Op::Store; z, field_lit(2), bv_lit(1, 4)]
             ],
             field_lit(3)
         ];
