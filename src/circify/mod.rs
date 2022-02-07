@@ -598,7 +598,12 @@ impl<E: Embeddable> Circify<E> {
                 // get condition under which assignment happens
                 let guard = self.condition.clone();
                 // build condition-aware new value
-                let ite_val = Val::Term(self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()));
+                let ite = match guard.as_bool_opt() {
+                    Some(true) => new,
+                    Some(false) => old.clone(),
+                    None => self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()),
+                };
+                let ite_val = Val::Term(ite);
                 // TODO: add language-specific coersion here if needed
                 assert!(self.vals.insert(new_name, ite_val.clone()).is_none());
                 Ok(ite_val)
@@ -908,7 +913,7 @@ mod test {
                             &**a,
                             format!("{}.0", raw_name),
                             user_name.as_ref().map(|u| format!("{}.0", u)),
-                            visibility.clone(),
+                            visibility,
                         )),
                         Box::new(self.declare(
                             ctx,
@@ -941,13 +946,7 @@ mod test {
                 match t {
                     T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, visibility)),
                     T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(
-                            ctx,
-                            _ty,
-                            format!("{}.0", name),
-                            *a,
-                            visibility.clone(),
-                        )),
+                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, visibility)),
                         Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, visibility)),
                     ),
                 }

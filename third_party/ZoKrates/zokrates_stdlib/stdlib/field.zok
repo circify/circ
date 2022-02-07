@@ -1,0 +1,32 @@
+from "EMBED" import FIELD_SIZE_IN_BITS
+
+const field FIELD_MIN = 0
+const field FIELD_MAX = -1
+
+// A dummy `main` function
+def main() -> bool:
+    return false
+
+// Tests if `a` is divisible by `q`.
+// `a` is interpreted as a signed integer in [-(Q+1)/2, (Q+1)/2).
+// Q the field modulus. `q` is interpreted as an unsigned integer
+// in [0, Q).
+def s_divisible(field a, field q) -> bool:
+    field neg_a = -a
+    bool is_neg = a > neg_a
+    field to_rem = if is_neg then neg_a else a fi
+    field rem = to_rem % q
+    return rem == 0
+
+// Computes `a mod q`.
+// `a` is interpreted as a signed integer in [-(Q+1)/2, (Q+1)/2).
+// Q the field modulus. `q` is interpreted as an unsigned integer
+// in [0, Q). The return value is in [0, q).
+def s_remainder(field a, field q) -> field:
+    field neg_a = -a
+    bool is_neg = a > neg_a
+    field to_rem = if is_neg then neg_a else a fi
+    field rem = to_rem % q
+    field neg_rem = if rem == 0 then 0 else q - rem fi
+    field res = if is_neg then neg_rem else rem fi
+    return res

@@ -1,0 +1,5 @@
+from "EMBED" import unpack, u16_from_bits
+
+def main(field i) -> u16:
+    bool[16] bits = unpack(i)
+    return u16_from_bits(bits)

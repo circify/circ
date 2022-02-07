@@ -1,0 +1,18 @@
+def main() -> bool:
+    field a = 0
+    field b = -1
+    field c = 2
+    field d = 2
+    assert(b > a)
+    assert(b >= a)
+    assert(a < b)
+    assert(a <= b)
+    assert(c > a)
+    assert(c >= a)
+    assert(c < b)
+    assert(c <= b)
+    assert(d >= c)
+    assert(c <= d)
+    assert(c != b)
+    assert(c == d)
+    return true

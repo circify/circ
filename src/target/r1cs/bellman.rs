@@ -188,7 +188,7 @@ mod test {
             )
             .unwrap(),
         );
-        convert(modulus.clone() - 1);
+        convert(modulus - 1);
     }
 
     #[test]

@@ -1,0 +1,4 @@
+def main() -> bool:
+    bool a = [4u32; 4u32] == [5u32; 4u32]
+    bool b = [4u32; 4u32] != [5u32; 4u32]
+    return a || b
