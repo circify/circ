@@ -127,7 +127,7 @@ impl ToABY {
         let name = ToABY::get_var_name(t.clone(), true);
         let s_circ = self.get_sharetype_circ(t);
         format!(
-            "s_{} = {}->PutCONSGate((uint64_t){}, bitlen);\n",
+            "s_{} = {}->PutCONSGate((uint32_t){}, bitlen);\n",
             name, s_circ, name
         )
     }

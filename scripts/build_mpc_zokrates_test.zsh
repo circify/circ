@@ -68,7 +68,7 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_int.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
 
 # build mpc function tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_add.zok
 
 # build mpc shift tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok

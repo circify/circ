@@ -109,7 +109,7 @@ impl CGen {
         r.unwrap_or_else(|e| self.err(e))
     }
 
-    fn array_select(&mut self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
+    fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
         match (array.clone().term, idx.term) {
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
@@ -160,14 +160,14 @@ impl CGen {
     fn lval(&mut self, expr: Node<Expression>) -> CLoc {
         match expr.node {
             Expression::Identifier(_) => {
-                let base_name = name_from_ident(&expr.node);
+                let base_name = name_from_expr(expr);
                 CLoc::Var(Loc::local(base_name))
             }
             Expression::BinaryOperator(node) => {
                 let bin_op = node.node;
                 match bin_op.operator.node {
                     BinaryOperator::Index => {
-                        let base_name = name_from_ident(&bin_op.lhs.node);
+                        let base_name = name_from_expr(*bin_op.lhs);
                         let idx = self.gen_expr(bin_op.rhs.node);
                         CLoc::Idx(Box::new(CLoc::Var(Loc::local(base_name))), idx)
                     }
@@ -251,7 +251,7 @@ impl CGen {
         panic!("Bad visibility declaration.");
     }
 
-    fn const_(&mut self, c: Constant) -> CTerm {
+    fn const_(&self, c: Constant) -> CTerm {
         match c {
             // TODO: move const integer function out to separate function
             Constant::Integer(i) => cterm(CTermData::CInt(
@@ -263,7 +263,7 @@ impl CGen {
         }
     }
 
-    fn get_bin_op(&mut self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
+    fn get_bin_op(&self, op: BinaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             BinaryOperator::Plus => add,
             BinaryOperator::AssignPlus => add,
@@ -288,7 +288,7 @@ impl CGen {
         }
     }
 
-    fn get_u_op(&mut self, op: UnaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
+    fn get_u_op(&self, op: UnaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             UnaryOperator::PostIncrement => add,
             _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", op),
@@ -371,8 +371,49 @@ impl CGen {
                 Ok(cast(to_ty, expr))
             }
             Expression::Call(node) => {
-                println!("{:#?}", node);
-                unimplemented!();
+                let CallExpression { callee, arguments } = node.node;
+                let fname = name_from_expr(*callee);
+
+                let f = self
+                    .functions
+                    .get(&fname)
+                    .unwrap_or_else(|| panic!("No function '{}'", fname))
+                    .clone();
+
+                let FnInfo {
+                    name,
+                    ret_ty,
+                    args: parameters,
+                    body,
+                } = f;
+
+                // Add parameters
+                let args = arguments
+                    .iter()
+                    .map(|e| self.gen_expr(e.node.clone()))
+                    .collect::<Vec<_>>();
+
+                // setup stack frame for entry function
+                self.circ.enter_fn(name, ret_ty.clone());
+                assert_eq!(parameters.len(), args.len());
+
+                for (p, a) in parameters.iter().zip(args) {
+                    let base_ty = d_type_(p.specifiers.to_vec());
+                    let d = &p.declarator.as_ref().unwrap().node;
+                    let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
+                    let name = name_from_decl(d);
+                    let d_res = self.circ.declare_init(name, derived_ty, Val::Term(a));
+                    self.unwrap(d_res);
+                }
+
+                self.gen_stmt(body);
+
+                let ret = self
+                    .circ
+                    .exit_fn()
+                    .map(|a| a.unwrap_term())
+                    .unwrap_or_else(|| cterm(CTermData::CBool(bool_lit(false))));
+                Ok(cast(ret_ty, ret))
             }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };

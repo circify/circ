@@ -31,18 +31,18 @@ impl Display for FnInfo {
     }
 }
 
+pub fn name_from_expr(node: Node<Expression>) -> String {
+    if let Identifier(i) = node.node {
+        i.node.name.clone()
+    } else {
+        panic!("Expression is not an identifier '{:#?}'", node.node);
+    }
+}
+
 pub fn name_from_decl(decl: &Declarator) -> String {
     match decl.kind.node {
         DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
         _ => panic!("Identifier not found: {:?}", decl),
-    }
-}
-
-pub fn name_from_ident(ident: &Expression) -> String {
-    match ident {
-        Identifier(i) => i.node.name.clone(),
-        //TODO: make this Option
-        _ => "".to_string(),
     }
 }
 
