@@ -8,7 +8,7 @@ use std::sync::RwLock;
 
 lazy_static! {
     // TODO: use weak pointers to allow GC
-    static ref FOLDS: RwLock<TermMap<Term>> = RwLock::new(TermMap::new());
+    static ref FOLDS: RwLock<TermCache<Term>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
 }
 
 /// Create a constant boolean
@@ -23,18 +23,27 @@ fn cbv(b: BitVector) -> Option<Term> {
 
 /// Fold away operators over constants.
 pub fn fold(node: &Term) -> Term {
-    let mut cache = FOLDS.write().unwrap();
-    fold_cache(node, cache.deref_mut())
+    let mut cache_handle = FOLDS.write().unwrap();
+    let cache = cache_handle.deref_mut();
+
+    // make the cache unbounded during the fold_cache call
+    let old_capacity = cache.cap();
+    cache.resize(std::usize::MAX);
+
+    let ret = fold_cache(node, cache);
+    // shrink cache to its max size
+    cache.resize(old_capacity);
+    ret
 }
 
 /// Do constant-folding backed by a cache.
-pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
+pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
 
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if cache.contains_key(&t) {
+        if cache.contains(&t) {
             continue;
         }
         if !children_pushed {
@@ -42,11 +51,11 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
             continue;
         }
-        let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
-        let get = |i: usize| c_get(&t.cs[i]);
+        let mut c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+        let mut get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
-            &NOT => get(0).as_bool_opt().and_then(|c| cbool(!c)),
-            &IMPLIES => match get(0).as_bool_opt() {
+            Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
+            Op::Implies => match get(0).as_bool_opt() {
                 Some(true) => Some(get(1).clone()),
                 Some(false) => cbool(true),
                 None => match get(1).as_bool_opt() {
@@ -63,12 +72,17 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
             Op::Eq => {
                 let c0 = get(0);
                 let c1 = get(1);
-                match (&c0.op, &c1.op) {
-                    (Op::Const(Value::Bool(b0)), Op::Const(Value::Bool(b1))) => cbool(*b0 == *b1),
-                    (Op::Const(Value::BitVector(b0)), Op::Const(Value::BitVector(b1))) => {
-                        cbool(*b0 == *b1)
+                match (c0.as_value_opt(), c1.as_value_opt()) {
+                    (Some(Value::BitVector(b0)), Some(Value::BitVector(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::F32(b0)), Some(Value::F32(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::F64(b0)), Some(Value::F64(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Int(b0)), Some(Value::Int(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Field(b0)), Some(Value::Field(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Bool(b0)), Some(Value::Bool(b1))) => cbool(*b0 == *b1),
+                    (Some(Value::Tuple(t0)), Some(Value::Tuple(t1))) => cbool(*t0 == *t1),
+                    (Some(Value::Array(a0)), Some(Value::Array(a1))) => {
+                        cbool(a0.size == a1.size && a0.map == a1.map)
                     }
-                    (Op::Const(Value::Field(b0)), Op::Const(Value::Field(b1))) => cbool(*b0 == *b1),
                     _ => None,
                 }
             }
@@ -179,12 +193,69 @@ pub fn fold_cache(node: &Term, cache: &mut TermMap<Term>) -> Term {
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
+            Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv| {
+                leaf_term(Op::Const(Value::Field(FieldElem::new(
+                    bv.uint().clone(),
+                    m.clone(),
+                ))))
+            }),
+            Op::Store => {
+                match (
+                    get(0).as_array_opt(),
+                    get(1).as_value_opt(),
+                    get(2).as_value_opt(),
+                ) {
+                    (Some(arr), Some(idx), Some(val)) => {
+                        let new_arr = arr.clone().store(idx.clone(), val.clone());
+                        Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                    }
+                    _ => None,
+                }
+            }
+            Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
+                (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
+                _ => None,
+            },
+            Op::Tuple => {
+                t.cs.iter()
+                    .map(|c| c_get(c).as_value_opt().cloned())
+                    .collect::<Option<_>>()
+                    .map(|v| leaf_term(Op::Const(Value::Tuple(v))))
+            }
+            Op::Field(n) => get(0)
+                .as_tuple_opt()
+                .map(|t| leaf_term(Op::Const(t[*n].clone()))),
+            Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
+                (Some(t), Some(v)) => {
+                    let mut new_vec = Vec::from(t).into_boxed_slice();
+                    assert_eq!(new_vec[*n].sort(), v.sort());
+                    new_vec[*n] = v.clone();
+                    Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
+                }
+                _ => None,
+            },
+            Op::BvConcat => {
+                t.cs.iter()
+                    .map(|c| c_get(c).as_bv_opt().cloned())
+                    .collect::<Option<Vec<_>>>()
+                    .map(|v| v.into_iter().reduce(BitVector::concat))
+                    .flatten()
+                    .map(|bv| leaf_term(Op::Const(Value::BitVector(bv))))
+            }
+            Op::BoolToBv => get(0).as_bool_opt().map(|b| {
+                leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                    Integer::from(b),
+                    1,
+                ))))
+            }),
             _ => None,
         };
-        let c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
-        let new_t = new_t_opt
-            .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| c_get(c)).collect()));
-        cache.insert(t, new_t);
+        let new_t = {
+            let mut cc_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+            new_t_opt
+                .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| cc_get(c)).collect()))
+        };
+        cache.put(t, new_t);
     }
     cache.get(node).expect("postorder cache").clone()
 }

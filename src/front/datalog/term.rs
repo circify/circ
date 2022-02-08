@@ -9,7 +9,7 @@ use super::error::ErrorKind;
 use super::ty::Ty;
 
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::zokrates::{ZOKRATES_MODULUS_ARC, ZOK_FIELD_SORT};
+use crate::front::zsharp::{ZSHARP_FIELD_SORT, ZSHARP_MODULUS_ARC};
 use crate::ir::term::*;
 
 /// A term
@@ -66,7 +66,7 @@ where
 {
     leaf_term(Op::Const(Value::Field(FieldElem::new(
         Integer::from(i),
-        ZOKRATES_MODULUS_ARC.clone(),
+        ZSHARP_MODULUS_ARC.clone(),
     ))))
 }
 
@@ -85,9 +85,9 @@ impl Ty {
         match self {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w as usize),
-            Self::Field => ZOK_FIELD_SORT.clone(),
+            Self::Field => ZSHARP_FIELD_SORT.clone(),
             Self::Array(n, b) => {
-                Sort::Array(Box::new(ZOK_FIELD_SORT.clone()), Box::new(b.sort()), *n)
+                Sort::Array(Box::new(ZSHARP_FIELD_SORT.clone()), Box::new(b.sort()), *n)
             }
         }
     }
@@ -320,7 +320,7 @@ pub fn or(s: &T, t: &T) -> Result<T> {
 pub fn uint_to_field(s: &T) -> Result<T> {
     match &s.ty {
         Ty::Uint(_) => Ok(T::new(
-            term![Op::UbvToPf(ZOKRATES_MODULUS_ARC.clone()); s.ir.clone()],
+            term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); s.ir.clone()],
             Ty::Field,
         )),
         _ => Err(ErrorKind::InvalidUnOp("to_field".into(), s.clone())),
@@ -451,7 +451,7 @@ impl Datalog {
     /// Initialize the Datalog lang def
     pub fn new() -> Self {
         Self {
-            modulus: ZOKRATES_MODULUS_ARC.clone(),
+            modulus: ZSHARP_MODULUS_ARC.clone(),
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::{ShareType, SharingMap};
 use crate::target::aby::utils::*;
-use log::debug;
+// use log::debug;
 use std::fmt;
 
 use std::path::Path;
@@ -519,6 +519,7 @@ impl ToABY {
                     a_conv,
                     b_conv
                 );
+
                 write_line_to_file(&self.circuit_fname, &s);
 
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
@@ -623,7 +624,7 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
     let mut converter = ToABY::new(md, s_map, path, lang);
 
     for t in terms {
-        debug!("terms: {}", t);
+        println!("terms: {}", t);
         converter.lower(t.clone());
     }
 

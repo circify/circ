@@ -1,9 +1,9 @@
 //! Input language front-ends
 
+#[cfg(feature = "c_front")]
 pub mod c;
 pub mod datalog;
-#[allow(clippy::all)]
-pub mod zokrates;
+pub mod zsharp;
 
 use super::ir::term::Computation;
 use std::fmt::{self, Display, Formatter};

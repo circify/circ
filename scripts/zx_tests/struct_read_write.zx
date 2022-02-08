@@ -1,0 +1,12 @@
+struct Foo {
+    u32 a
+    u8 b
+}
+
+def main() -> u8:
+    Foo bar = Foo { a: 1, b: 2 }
+    assert(bar.a == 1)
+    assert(bar.b == 2)
+    bar.a = 2
+    assert(bar.a == 2)
+    return bar.b

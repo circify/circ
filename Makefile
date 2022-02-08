@@ -9,8 +9,8 @@ build_deps: install_deps
 	./scripts/build_aby.zsh
 
 build:
-	cargo build --release --example circ
-	cargo build --example circ
+	cargo build --release --examples
+	cargo build --examples
 
 build_aby_zokrates: build build_deps
 	./scripts/build_mpc_zokrates_test.zsh

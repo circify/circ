@@ -727,13 +727,13 @@ mod test {
             match val {
                 Value::Bool(true) => {
                     if let Some(var) = ilp.var_names.get(v) {
-                        let e = Expression::from(var.clone());
+                        let e = Expression::from(*var);
                         ilp.new_constraint(e.eq(1.0));
                     }
                 }
                 Value::Bool(false) => {
                     if let Some(var) = ilp.var_names.get(v) {
-                        let e = Expression::from(var.clone());
+                        let e = Expression::from(*var);
                         ilp.new_constraint(e.eq(0.0));
                     }
                 }
