@@ -1,0 +1,47 @@
+// this file contains dummy definitions of builtins
+// that are used for typechecking
+
+def get_field_size() -> u32:
+    return 0u32
+
+const u32 FIELD_SIZE_IN_BITS = get_field_size()
+
+// XXX(unimpl)
+//sha256round
+
+// XXX(unimpl)
+//snark_verify_bls12_377 as verify
+
+// dummy fn
+def main() -> bool:
+    return false
+
+def u64_from_bits(bool[64] a) -> u64:
+    return 0u64
+
+def u32_from_bits(bool[32] a) -> u32:
+    return 0u32
+
+def u16_from_bits(bool[16] a) -> u16:
+    return 0u16
+
+def u8_from_bits(bool[8] a) -> u8:
+    return 0u8
+
+def u64_to_bits(u64 a) -> bool[64]:
+    return [false; 64]
+
+def u32_to_bits(u32 a) -> bool[32]:
+    return [false; 32]
+
+def u16_to_bits(u16 a) -> bool[16]:
+    return [false; 16]
+
+def u8_to_bits(u8 a) -> bool[8]:
+    return [false; 8]
+
+def unpack<N>(field i) -> bool[N]:
+    return [false; N]
+
+def bit_array_le<N>(bool[N] a, bool[N] b) -> bool:
+    return false

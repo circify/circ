@@ -1,0 +1,7 @@
+def main() -> bool:
+    u32 total = 0
+    for u32 j in 0..7 do
+        total = total + j
+    endfor
+    assert(total == 21)
+    return true

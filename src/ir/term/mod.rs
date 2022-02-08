@@ -22,7 +22,7 @@
 //!    * [Value]: a variable-free (and evaluated) term
 //!
 use crate::util::once::OnceQueue;
-use ahash::{AHashMap, AHashSet};
+use fxhash::{FxHashMap, FxHashSet};
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
@@ -114,16 +114,10 @@ pub enum Op {
     PfUnOp(PfUnOp),
     /// Prime-field n-ary operator
     PfNaryOp(PfNaryOp),
-
-    // key sort, size
-    /// A unary operator.
+    /// Unsigned bit-vector to prime-field
     ///
-    /// Make an array from keys of the given sort, which is equal to the provided argument at all
-    /// places.
-    ///
-    /// Has space for the provided number of elements. Note that this assumes an order and starting
-    /// point for keys.
-    ConstArray(Sort, usize),
+    /// Takes the modulus.
+    UbvToPf(Arc<Integer>),
 
     /// Binary operator, with arguments (array, index).
     ///
@@ -138,6 +132,8 @@ pub enum Op {
     Tuple,
     /// Get the n'th element of a tuple
     Field(usize),
+    /// Update (tuple, element)
+    Update(usize),
 }
 
 /// Boolean AND
@@ -242,11 +238,12 @@ impl Op {
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
-            Op::ConstArray(_, _) => Some(1),
+            Op::UbvToPf(_) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
             Op::Tuple => None,
             Op::Field(_) => Some(1),
+            Op::Update(_) => Some(2),
         }
     }
 }
@@ -283,11 +280,12 @@ impl Display for Op {
             Op::FpToFp(a) => write!(f, "fp2fp {}", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::ConstArray(_, s) => write!(f, "const-array {}", s),
+            Op::UbvToPf(a) => write!(f, "bv2pf {}", a),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "field{}", i),
+            Op::Update(i) => write!(f, "update{}", i),
         }
     }
 }
@@ -623,9 +621,100 @@ pub enum Value {
     /// Boolean
     Bool(bool),
     /// Array
-    Array(Sort, Box<Value>, BTreeMap<Value, Value>, usize),
+    Array(Array),
     /// Tuple
-    Tuple(Vec<Value>),
+    Tuple(Box<[Value]>),
+}
+
+#[derive(Clone, PartialEq, Debug, PartialOrd, Hash)]
+/// An IR array value.
+///
+/// A sized, space array.
+pub struct Array {
+    /// Key sort
+    pub key_sort: Sort,
+    /// Default (fill) value. What is stored when a key is missing from the next member
+    pub default: Box<Value>,
+    /// Key-> Value map
+    pub map: BTreeMap<Value, Value>,
+    /// Size of array. There are this many valid keys.
+    pub size: usize,
+}
+
+impl Array {
+    /// Create a new [Array] from components
+    pub fn new(
+        key_sort: Sort,
+        default: Box<Value>,
+        map: BTreeMap<Value, Value>,
+        size: usize,
+    ) -> Self {
+        if key_sort.default_value().as_usize().is_none() {
+            panic!(
+                "IR Arrays cannot have {} index (Int, BitVector, Bool, or Field only)",
+                key_sort
+            );
+        }
+        Self {
+            key_sort,
+            default,
+            map,
+            size,
+        }
+    }
+    /// Create a new, default-initialized [Array]
+    pub fn default(key_sort: Sort, val_sort: &Sort, size: usize) -> Self {
+        Self::new(
+            key_sort,
+            Box::new(val_sort.default_value()),
+            Default::default(),
+            size,
+        )
+    }
+
+    // consistency check for index
+    fn check_idx(&self, idx: &Value) {
+        if idx.sort() != self.key_sort {
+            panic!(
+                "Tried to index array with key {}, but {} was expected",
+                idx.sort(),
+                self.key_sort
+            );
+        }
+        match idx.as_usize() {
+            Some(idx_u) if idx_u < self.size => (),
+            Some(idx_u) => panic!(
+                "IR Array out of range: accessed {}, size is {}",
+                idx_u, self.size
+            ),
+            _ => panic!("IR Array index {} not convertible to usize", idx),
+        }
+    }
+
+    // consistency check for value
+    fn check_val(&self, vsrt: Sort) {
+        if vsrt != self.default.sort() {
+            panic!(
+                "Attempted to store {} to an array of {}",
+                vsrt,
+                self.default.sort()
+            );
+        }
+    }
+
+    /// Store
+    pub fn store(mut self, idx: Value, val: Value) -> Self {
+        self.check_idx(&idx);
+        self.check_val(val.sort());
+        self.map.insert(idx, val);
+        self
+    }
+
+    /// Select
+    pub fn select(&self, idx: &Value) -> Value {
+        self.check_idx(idx);
+        self.map.get(idx).unwrap_or(&*self.default).clone()
+    }
 }
 
 impl Display for Value {
@@ -639,24 +728,38 @@ impl Display for Value {
             Value::BitVector(b) => write!(f, "{}", b),
             Value::Tuple(fields) => {
                 write!(f, "(tuple")?;
-                for field in fields {
+                for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
                 write!(f, ")")
             }
-            Value::Array(_s, d, map, size) => {
-                write!(f, "(map default:{} size:{} {:?})", d, size, map)
-            }
+            Value::Array(a) => write!(f, "{}", a),
         }
     }
 }
 
+impl Display for Array {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "(array default:{} size:{} {:?})",
+            self.default, self.size, self.map
+        )
+    }
+}
+
 impl std::cmp::Eq for Value {}
+// We walk in danger here, intentionally. One day we may fix it.
+// FP is the heart of the problem.
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl std::cmp::Ord for Value {
     fn cmp(&self, o: &Self) -> std::cmp::Ordering {
         self.partial_cmp(o).expect("broken Value cmp")
     }
 }
+// We walk in danger here, intentionally. One day we may fix it.
+// FP is the heart of the problem.
+#[allow(clippy::derive_hash_xor_eq)]
 impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
@@ -666,12 +769,7 @@ impl std::hash::Hash for Value {
             Value::Int(bv) => bv.hash(state),
             Value::Field(bv) => bv.hash(state),
             Value::Bool(bv) => bv.hash(state),
-            Value::Array(s, d, a, size) => {
-                s.hash(state);
-                d.hash(state);
-                a.hash(state);
-                size.hash(state);
-            }
+            Value::Array(a) => a.hash(state),
             Value::Tuple(s) => {
                 s.hash(state);
             }
@@ -699,7 +797,7 @@ pub enum Sort {
     /// size presumes an order, and a zero, for the key sort.
     Array(Box<Sort>, Box<Sort>, usize),
     /// A tuple
-    Tuple(Vec<Sort>),
+    Tuple(Box<[Sort]>),
 }
 
 impl Sort {
@@ -725,9 +823,9 @@ impl Sort {
 
     #[track_caller]
     /// Unwrap the constituent sorts of this tuple, panicking otherwise.
-    pub fn as_tuple(&self) -> &Vec<Sort> {
+    pub fn as_tuple(&self) -> &[Sort] {
         if let Sort::Tuple(w) = self {
-            &w
+            w
         } else {
             panic!("{} is not a tuple", self)
         }
@@ -764,7 +862,7 @@ impl Sort {
                 Box::new(
                     std::iter::successors(Some(Integer::from(0)), move |p| {
                         let q = p.clone() + 1;
-                        if &q < &*m {
+                        if q < *m {
                             Some(q)
                         } else {
                             None
@@ -776,6 +874,37 @@ impl Sort {
                 )
             }
             _ => panic!("Cannot iterate over {}", self),
+        }
+    }
+
+    /// Compute the default term for this sort.
+    ///
+    /// * booleans: false
+    /// * bit-vectors: zero
+    /// * field elements: zero
+    /// * floats: zero
+    /// * tuples/arrays: recursively default
+    pub fn default_term(&self) -> Term {
+        leaf_term(Op::Const(self.default_value()))
+    }
+
+    /// Compute the default value for this sort.
+    ///
+    /// * booleans: false
+    /// * bit-vectors: zero
+    /// * field elements: zero
+    /// * floats: zero
+    /// * tuples/arrays: recursively default
+    pub fn default_value(&self) -> Value {
+        match self {
+            Sort::Bool => Value::Bool(false),
+            Sort::BitVector(w) => Value::BitVector(BitVector::new(0.into(), *w)),
+            Sort::Field(m) => Value::Field(FieldElem::new(Integer::from(0), m.clone())),
+            Sort::Int => Value::Int(0.into()),
+            Sort::F32 => Value::F32(0.0f32),
+            Sort::F64 => Value::F64(0.0),
+            Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
+            Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
         }
     }
 }
@@ -792,7 +921,7 @@ impl Display for Sort {
             Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
-                for field in fields {
+                for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
                 write!(f, ")")
@@ -808,8 +937,9 @@ pub type Term = HConsed<TermData>;
 pub type TTerm = WHConsed<TermData>;
 
 struct TermTable {
-    map: AHashMap<TermData, TTerm>,
+    map: FxHashMap<TermData, TTerm>,
     count: u64,
+    last_len: usize,
 }
 
 impl TermTable {
@@ -838,6 +968,14 @@ impl TermTable {
         // ...and return consed version.
         hconsed
     }
+    fn should_collect(&mut self) -> bool {
+        let ret = LEN_THRESH_DEN * self.map.len() > LEN_THRESH_NUM * self.last_len;
+        if self.last_len > TERM_CACHE_LIMIT {
+            // when last_len is big, force a garbage collect every once in a while
+            self.last_len = (self.last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN;
+        }
+        ret
+    }
     fn collect(&mut self) {
         let old_size = self.map.len();
         let mut to_check: OnceQueue<Term> = OnceQueue::new();
@@ -845,21 +983,18 @@ impl TermTable {
             if val.elm.upgrade().is_some() {
                 true
             } else {
-                to_check.extend(key.cs.iter().map(|i| i.clone()));
+                to_check.extend(key.cs.iter().cloned());
                 false
             }
         });
         while let Some(t) = to_check.pop() {
             let data: TermData = (*t).clone();
             std::mem::drop(t);
-            match self.map.entry(data) {
-                std::collections::hash_map::Entry::Occupied(e) => {
-                    if e.get().elm.upgrade().is_none() {
-                        let (key, _val) = e.remove_entry();
-                        to_check.extend(key.cs.iter().map(|i| i.clone()));
-                    }
+            if let std::collections::hash_map::Entry::Occupied(e) = self.map.entry(data) {
+                if e.get().elm.upgrade().is_none() {
+                    let (key, _val) = e.remove_entry();
+                    to_check.extend(key.cs.iter().cloned());
                 }
-                _ => {}
             }
         }
         let new_size = self.map.len();
@@ -867,13 +1002,47 @@ impl TermTable {
             assert!(v.elm.upgrade().is_some(), "Can not upgrade: {:?}", k)
         }
         debug!(target: "ir::term::gc", "{} of {} terms collected", old_size - new_size, old_size);
+        self.last_len = new_size;
+    }
+}
+struct TypeTable {
+    map: FxHashMap<TTerm, Sort>,
+    last_len: usize,
+}
+impl std::ops::Deref for TypeTable {
+    type Target = FxHashMap<TTerm, Sort>;
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+impl std::ops::DerefMut for TypeTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.map
+    }
+}
+impl TypeTable {
+    fn should_collect(&mut self) -> bool {
+        let ret = LEN_THRESH_DEN * self.map.len() > LEN_THRESH_NUM * self.last_len;
+        if self.last_len > TERM_CACHE_LIMIT {
+            // when last_len is big, force a garbage collect every once in a while
+            self.last_len = (self.last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN;
+        }
+        ret
+    }
+    fn collect(&mut self) {
+        let old_size = self.map.len();
+        self.map.retain(|term, _| term.to_hconsed().is_some());
+        let new_size = self.map.len();
+        debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
+        self.last_len = new_size;
     }
 }
 
 lazy_static! {
     static ref TERMS: RwLock<TermTable> = RwLock::new(TermTable {
-        map: AHashMap::new(),
+        map: FxHashMap::default(),
         count: 0,
+        last_len: 0,
     });
 }
 
@@ -888,16 +1057,37 @@ pub fn garbage_collect() {
     collect_types();
 }
 
+const LEN_THRESH_NUM: usize = 8;
+const LEN_THRESH_DEN: usize = 1;
+const LEN_DECAY_NUM: usize = 15;
+const LEN_DECAY_DEN: usize = 16;
+/// Scan term and type databases only if they've grown in size since last scan
+pub fn maybe_garbage_collect() -> bool {
+    let mut ran = {
+        let mut term_table = TERMS.write().unwrap();
+        if term_table.should_collect() {
+            term_table.collect();
+            true
+        } else {
+            false
+        }
+    };
+    {
+        let mut type_table = ty::TERM_TYPES.write().unwrap();
+        if type_table.should_collect() {
+            type_table.collect();
+            ran = true;
+        }
+    }
+    ran
+}
+
 fn collect_terms() {
     TERMS.write().unwrap().collect();
 }
 
 fn collect_types() {
-    let mut ty_map = ty::TERM_TYPES.write().unwrap();
-    let old_size = ty_map.len();
-    ty_map.retain(|term, _| term.to_hconsed().is_some());
-    let new_size = ty_map.len();
-    debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
+    ty::TERM_TYPES.write().unwrap().collect();
 }
 
 impl TermData {
@@ -925,13 +1115,42 @@ impl TermData {
             None
         }
     }
+
+    /// Get the underlying tuple constant, if possible.
+    pub fn as_tuple_opt(&self) -> Option<&[Value]> {
+        if let Op::Const(Value::Tuple(t)) = &self.op {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying array constant, if possible.
+    pub fn as_array_opt(&self) -> Option<&Array> {
+        if let Op::Const(Value::Array(a)) = &self.op {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying constant value, if possible.
+    pub fn as_value_opt(&self) -> Option<&Value> {
+        if let Op::Const(v) = &self.op {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
     /// Is this a variable?
     pub fn is_var(&self) -> bool {
-        if let Op::Var(..) = &self.op {
-            true
-        } else {
-            false
-        }
+        matches!(&self.op, Op::Var(..))
+    }
+
+    /// Is this a value
+    pub fn is_const(&self) -> bool {
+        matches!(&self.op, Op::Const(..))
     }
 }
 
@@ -945,7 +1164,12 @@ impl Value {
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
             Value::BitVector(b) => Sort::BitVector(b.width()),
-            Value::Array(s, _, _, _) => s.clone(),
+            Value::Array(Array {
+                key_sort,
+                default,
+                size,
+                ..
+            }) => Sort::Array(Box::new(key_sort.clone()), Box::new(default.sort()), *size),
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -978,11 +1202,21 @@ impl Value {
     }
     #[track_caller]
     /// Get the underlying tuple's constituent values, if possible.
-    pub fn as_tuple(&self) -> &Vec<Value> {
+    pub fn as_tuple(&self) -> &[Value] {
         if let Value::Tuple(b) = self {
             b
         } else {
             panic!("Not a tuple: {}", self)
+        }
+    }
+
+    #[track_caller]
+    /// Unwrap the constituent value of this array, panicking otherwise.
+    pub fn as_array(&self) -> &Array {
+        if let Value::Array(w) = self {
+            w
+        } else {
+            panic!("{} is not an aray", self)
         }
     }
 
@@ -1002,10 +1236,21 @@ impl Value {
             None
         }
     }
+
+    /// Convert this value into a usize if possible
+    pub fn as_usize(&self) -> Option<usize> {
+        match &self {
+            Value::Bool(b) => Some(*b as usize),
+            Value::Field(f) => f.i().to_usize(),
+            Value::Int(i) => i.to_usize(),
+            Value::BitVector(b) => b.uint().to_usize(),
+            _ => None,
+        }
+    }
 }
 
 /// Evaluate the term `t`, using variable values in `h`.
-pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
+pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
     let mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
         let v = match &c.op {
@@ -1138,11 +1383,36 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
                     },
                 )
             }),
+            Op::UbvToPf(m) => Value::Field({
+                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+                field::FieldElem::new(a.uint().clone(), m.clone())
+            }),
+            // tuple
             Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
             Op::Field(i) => {
                 let t = vs.get(&c.cs[0]).unwrap().as_tuple();
                 assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
                 t[*i].clone()
+            }
+            Op::Update(i) => {
+                let mut t = Vec::from(vs.get(&c.cs[0]).unwrap().as_tuple()).into_boxed_slice();
+                assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
+                let e = vs.get(&c.cs[1]).unwrap().clone();
+                assert_eq!(t[*i].sort(), e.sort());
+                t[*i] = e;
+                Value::Tuple(t)
+            }
+            // array
+            Op::Store => {
+                let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+                let i = vs.get(&c.cs[1]).unwrap().clone();
+                let v = vs.get(&c.cs[2]).unwrap().clone();
+                Value::Array(a.clone().store(i, v))
+            }
+            Op::Select => {
+                let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+                let i = vs.get(&c.cs[1]).unwrap();
+                a.clone().select(i)
             }
             o => unimplemented!("eval: {:?}", o),
         };
@@ -1152,14 +1422,32 @@ pub fn eval(t: &Term, h: &AHashMap<String, Value>) -> Value {
     vs.get(t).unwrap().clone()
 }
 
+/// Make an array from a sequence of terms.
+///
+/// Requires
+///
+/// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
+/// * a value sort, for the array's default
+pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
+    let d = Sort::Array(Box::new(key_sort.clone()), Box::new(value_sort), i.len()).default_term();
+    i.into_iter()
+        .zip(key_sort.elems_iter())
+        .fold(d, |arr, (val, idx)| term(Op::Store, vec![arr, idx, val]))
+}
+
 /// Make a term with no arguments, just an operator.
 pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
 /// Make a term with arguments.
+#[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
-    mk(TermData { op, cs })
+    #[cfg_attr(not(debug_assertions), allow(clippy::let_and_return))]
+    let t = mk(TermData { op, cs });
+    #[cfg(debug_assertions)]
+    check_rec(&t);
+    t
 }
 
 /// Make a bit-vector constant term.
@@ -1171,6 +1459,11 @@ where
         uint.into(),
         width,
     ))))
+}
+
+/// Make a bit-vector constant term.
+pub fn bool_lit(b: bool) -> Term {
+    leaf_term(Op::Const(Value::Bool(b)))
 }
 
 #[macro_export]
@@ -1192,8 +1485,14 @@ macro_rules! term {
 
 /// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
+/// LRU cache of terms (like TermMap, but limited size)
+pub type TermCache<T> = hashconsing::coll::HConLru<Term, T>;
 /// Set of terms
 pub type TermSet = hashconsing::coll::HConSet<Term>;
+
+// default LRU cache size
+// this size avoids quadratic behavior for Falcon verification
+pub(super) const TERM_CACHE_LIMIT: usize = 65536;
 
 /// Iterator over descendents in child-first order.
 pub struct PostOrderIter {
@@ -1216,7 +1515,7 @@ impl std::iter::Iterator for PostOrderIter {
     type Item = Term;
     fn next(&mut self) -> Option<Term> {
         while let Some((children_pushed, t)) = self.stack.last() {
-            if self.visited.contains(&t) {
+            if self.visited.contains(t) {
                 self.stack.pop();
             } else if !children_pushed {
                 self.stack.last_mut().unwrap().0 = true;
@@ -1241,11 +1540,13 @@ pub type PartyId = u8;
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
-    pub party_ids: AHashMap<String, PartyId>,
+    pub party_ids: FxHashMap<String, PartyId>,
     /// The next free id.
     pub next_party_id: PartyId,
+    /// The order of the inputs
+    pub inputs: Vec<Term>,
     /// All inputs, including who knows them. If no visibility is set, the input is public.
-    pub inputs: AHashMap<String, Option<PartyId>>,
+    pub input_vis: FxHashMap<String, Option<PartyId>>,
 }
 
 impl ComputationMetadata {
@@ -1256,30 +1557,76 @@ impl ComputationMetadata {
         self.next_party_id - 1
     }
     /// Add a new input to the computation, visible to `party`, or public if `party` is [None].
-    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>) {
+    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>, sort: Sort) {
+        let term = leaf_term(Op::Var(input_name.clone(), sort));
         debug_assert!(
-            !self.inputs.contains_key(&input_name),
+            !self.input_vis.contains_key(&input_name),
             "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
             input_name,
             party,
-            self.inputs.get(&input_name).unwrap()
+            self.input_vis.get(&input_name).unwrap()
         );
-        self.inputs.insert(input_name, party);
+        self.input_vis.insert(input_name, party);
+        self.inputs.push(term);
+    }
+    /// Replace the `original` computation input with `new`, in the order given.
+    ///
+    /// If the old input order was
+    ///
+    ///    w x y z x1 x2 x3
+    ///
+    /// and `x` was replaced with `x1`, `x2`, `x3`, then the new input order is
+    ///
+    ///    w x1 x2 x3 y z
+    ///
+    /// and other metadata associated with `x` is removed.
+    ///
+    /// This is probably called after making the new inputs with `new_input`.
+    pub fn replace_input(
+        &mut self,
+        original: Term,
+        new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
+    ) {
+        let mut i = self.inputs.iter().position(|t| t == &original).unwrap();
+        self.inputs.remove(i);
+        let name = if let Op::Var(n, _) = &original.op {
+            n.to_string()
+        } else {
+            unreachable!()
+        };
+        self.input_vis.remove(&name).unwrap();
+        for (input_name, sort, _, party) in new {
+            let term = leaf_term(Op::Var(input_name.clone(), sort));
+            debug_assert!(
+                !self.input_vis.contains_key(&input_name),
+                "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
+                input_name,
+                party,
+                self.input_vis.get(&input_name).unwrap()
+            );
+            self.input_vis.insert(input_name.clone(), party);
+            self.inputs.insert(i, term);
+            i += 1;
+        }
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        self.inputs
+        *self
+            .input_vis
             .get(input_name)
             .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs))
-            .clone()
+    }
+    /// Is this input public?
+    pub fn is_input(&self, input_name: &str) -> bool {
+        self.input_vis.contains_key(input_name)
     }
     /// Is this input public?
     pub fn is_input_public(&self, input_name: &str) -> bool {
         self.get_input_visibility(input_name).is_none()
     }
     /// Get all public inputs.
-    pub fn public_inputs(&self) -> impl Iterator<Item = &str> {
-        self.inputs.iter().filter_map(|(name, party)| {
+    pub fn public_input_names(&self) -> impl Iterator<Item = &str> {
+        self.input_vis.iter().filter_map(|(name, party)| {
             if party.is_none() {
                 Some(name.as_str())
             } else {
@@ -1287,9 +1634,27 @@ impl ComputationMetadata {
             }
         })
     }
+    /// Get all public inputs.
+    // I think the lint is just broken here.
+    // TODO: submit a patch
+    #[allow(clippy::needless_lifetimes)]
+    pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a {
+        self.inputs.iter().filter_map(move |input| {
+            if let Op::Var(name, _) = &input.op {
+                let party = self.get_input_visibility(name);
+                if party.is_none() {
+                    Some(input.clone())
+                } else {
+                    None
+                }
+            } else {
+                unreachable!()
+            }
+        })
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
@@ -1297,19 +1662,9 @@ pub struct Computation {
     /// The values of variables in the system.
     ///
     /// These are tracked when doing witness extension for proof systems.
-    pub values: Option<AHashMap<String, Value>>,
+    pub values: Option<FxHashMap<String, Value>>,
     /// Metadata about the computation. I.e. who knows what inputs
     pub metadata: ComputationMetadata,
-}
-
-impl std::default::Default for Computation {
-    fn default() -> Self {
-        Self {
-            outputs: Vec::new(),
-            metadata: ComputationMetadata::default(),
-            values: None,
-        }
-    }
 }
 
 impl Computation {
@@ -1323,7 +1678,7 @@ impl Computation {
         party: Option<PartyId>,
     ) -> Term {
         debug!("Var: {} (visibility: {:?})", name, party);
-        self.metadata.new_input(name.to_owned(), party);
+        self.metadata.new_input(name.to_owned(), party, s.clone());
         if let Some(vs) = self.values.as_mut() {
             let val = val_fn();
             debug!("  val = {}", val);
@@ -1331,8 +1686,46 @@ impl Computation {
                 panic!("{} already had a value: {}", name, v);
             }
         }
-        leaf_term(Op::Var(name.to_string(), s))
+        leaf_term(Op::Var(name.to_owned(), s))
     }
+    /// Replace the `original` computation input with `new`, in the order given.
+    ///
+    /// If the old input order was
+    ///
+    ///    w x y z
+    ///
+    /// and `x` was replaced with `x1`, `x2`, `x3`, then the new input order is
+    ///
+    ///    w x1 x2 x3 y z
+    ///
+    /// and other metadata associated with `x` is removed.
+    ///
+    /// This is called in place of `new_var` during transformations.
+    pub fn replace_input(
+        &mut self,
+        original: Term,
+        mut new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
+    ) {
+        if let Some(vs) = self.values.as_mut() {
+            if let Op::Var(name, _) = &original.op {
+                vs.remove(name);
+                for (name, _, val_opt, _) in &mut new {
+                    vs.insert(name.clone(), std::mem::take(val_opt).unwrap());
+                }
+            }
+        }
+        self.metadata.replace_input(original, new);
+    }
+
+    /// Change the value associated with an input
+    pub fn map_value(&mut self, name: &str, f: impl FnOnce(Value) -> Value) {
+        if let Some(vs) = self.values.as_mut() {
+            let loc = vs.get_mut(name).unwrap();
+            let v = std::mem::replace(loc, Value::Bool(false));
+            *loc = f(v);
+        }
+    }
+
     /// Create a new variable, `name` in the constraint system, and set it equal to `term`.
     /// `public` indicates whether this variable is public in the constraint system.
     pub fn assign(&mut self, name: &str, term: Term, party: Option<PartyId>) -> Term {
@@ -1345,7 +1738,7 @@ impl Computation {
     /// Assert `s` in the system.
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
-        debug!("Assert: {}", s);
+        debug!("Assert: {}", &s.op);
         self.outputs.push(s);
     }
     /// If tracking values, evaluate `term`, and set the result to `name`.
@@ -1364,50 +1757,38 @@ impl Computation {
         Self {
             outputs: Vec::new(),
             metadata: ComputationMetadata::default(),
-            values: if values { Some(AHashMap::new()) } else { None },
+            values: if values {
+                Some(FxHashMap::default())
+            } else {
+                None
+            },
         }
     }
-    // TODO: rm
-    //    /// Make `s` a public input.
-    //    pub fn publicize(&mut self, s: String) {
-    //        self.public_inputs.insert(s);
-    //    }
+
     /// Get the outputs of the computation.
     ///
     /// For proof systems, these are the assertions that must hold.
     pub fn outputs(&self) -> &Vec<Term> {
         &self.outputs
     }
-    // TODO: rm
-    //    /// Consume this system, yielding its parts: (assertions, public inputs, values)
-    //    pub fn consume(self) -> (Vec<Term>, ComputationMetadata, Option<AHashMap<String, Value>>) {
-    //        (self.assertions, self.metadata, self.values)
-    //    }
-    //    /// Build a system from its parts: (assertions, public inputs, values)
-    //    pub fn from_parts(
-    //        assertions: Vec<Term>,
-    //        public_inputs: AHashSet<String>,
-    //        values: Option<AHashMap<String, Value>>,
-    //    ) -> Self {
-    //        Self {
-    //            assertions,
-    //            public_inputs,
-    //            values,
-    //        }
-    //    }
-    //    /// Get the term, (AND all assertions)
-    //    pub fn assertions_as_term(&self) -> Term {
-    //        term(Op::BoolNaryOp(BoolNaryOp::And), self.assertions.clone())
-    //    }
+
     /// How many total (unique) terms are there?
     pub fn terms(&self) -> usize {
-        let mut terms = AHashSet::<Term>::new();
+        let mut terms = FxHashSet::<Term>::default();
         for a in &self.outputs {
             for s in PostOrderIter::new(a.clone()) {
                 terms.insert(s);
             }
         }
         terms.len()
+    }
+
+    /// An iterator that visits each term in the computation, once.
+    pub fn terms_postorder(&self) -> impl Iterator<Item = Term> {
+        let mut terms: Vec<_> = PostOrderIter::new(term(Op::Tuple, self.outputs.clone())).collect();
+        // drop the top-level tuple term.
+        terms.pop();
+        terms.into_iter()
     }
 }
 

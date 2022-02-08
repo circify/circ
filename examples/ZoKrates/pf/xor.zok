@@ -1,0 +1,2 @@
+def main(private u16 a, public u16 b, private u16 c, public u16 d) -> u16:
+    return a ^ b ^ c ^ d

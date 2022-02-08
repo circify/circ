@@ -1,0 +1,70 @@
+literal = { hex_literal | decimal_literal | boolean_literal }
+decimal_literal = @{ "0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+boolean_literal = @{ "true" | "false" }
+hex_literal = @{ "0x" ~ ASCII_HEX_DIGIT+ }
+bin_literal = @{ "0b" ~ ("0" | "1")+ }
+
+bin_op = _{ add | sub | mul | div | shl | shr | bitand | bitor | bitxor | or | and | urem | eq }
+    add      = { "+" }
+    sub      = { "-" }
+    mul      = { "*" }
+    div      = { "/" }
+    eq       = { "=" }
+    urem     = { "%" }
+    shl      = { "<<" }
+    lt       = { "<" }
+    gt       = { ">" }
+    lte      = { "<=" }
+    gte      = { ">=" }
+    shr      = { ">>" }
+    bitxor   = { "^" }
+    bitand   = { "&" }
+    bitor    = { "|" }
+    or       = { "||" }
+    and      = { "&&" }
+
+un_op = { neg | bitnot | not }
+    neg = { "-" }
+    bitnot = { "~" }
+    not = { "!" }
+
+call_expr = { identifier ~ "(" ~ expr_list ~ ")" }
+expr = { term ~ (bin_op ~ term)* }
+paren_expr = { "(" ~ expr ~ ")" }
+term = { call_expr | literal | access_expr | identifier | paren_expr | unary_expression }
+unary_expression = { un_op ~ term }
+expr_list = _{ expr ~ ("," ~ expr)* }
+access = _{ "[" ~ expr ~ "]" }
+access_expr = { identifier ~ access+ }
+
+identifier = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+decl_list = _{ decl ~ ("," ~ decl)* }
+decl = { identifier ~ ":" ~ qual_ty }
+fn_arg_decl = { dec? ~ identifier ~ ":" ~ qual_ty }
+fn_arg_decl_list = _{ fn_arg_decl ~ ("," ~ fn_arg_decl)* }
+exist_prefix = { "exists" ~ decl_list ~ "." }
+condition = { exist_prefix? ~ expr_list }
+rule_cases = _{ condition ~ (";" ~ condition)* ~ "." }
+rule = { identifier ~ "(" ~ fn_arg_decl_list ~ ")" ~ ":-" ~ rule_cases }
+
+program = { SOI ~ rule* ~ EOI }
+
+WHITESPACE = _{ " " | "\t" | "\n" }
+
+// basic types (ZoKrates/Z#)
+ty_field = {"field"}
+ty_uint = @{"u" ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+ty_bool = {"bool"}
+base_ty = { ty_field | ty_uint | ty_bool }
+array_size = _{ "[" ~ decimal_literal ~ "]" }
+array_sizes = _{ array_size* }
+ty = { base_ty ~ array_sizes }
+
+vis_private = {"private"}
+vis_public = {"public"}
+vis = { vis_private | vis_public }
+
+dec = { "decreasing" }
+
+qual_ty = { vis? ~ ty }

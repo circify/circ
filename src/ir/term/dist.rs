@@ -122,8 +122,8 @@ impl FixedSizeDist {
                 Op::Var(self.sample_ident(&format!("bv{}", w), rng), sort.clone()),
                 Op::BvUnOp(BvUnOp::Neg),
                 Op::BvUnOp(BvUnOp::Not),
-                Op::BvUext(rng.gen_range(0..w.clone())),
-                Op::BvSext(rng.gen_range(0..w.clone())),
+                Op::BvUext(rng.gen_range(0..*w)),
+                Op::BvSext(rng.gen_range(0..*w)),
                 Op::BvBinOp(BvBinOp::Sub),
                 Op::BvBinOp(BvBinOp::Udiv),
                 Op::BvBinOp(BvBinOp::Urem),
@@ -179,7 +179,7 @@ impl FixedSizeDist {
             }],
             Op::Tuple => {
                 if let Sort::Tuple(sorts) = sort {
-                    sorts.clone()
+                    sorts.to_vec()
                 } else {
                     unreachable!("Bad sort for tuple cons: {}", sort)
                 }
@@ -292,7 +292,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Term {
         let op = self.sample_op(&self.sort, rng);
         let sorts = self.sample_child_sorts(&self.sort, &op, rng);
-        if sorts.len() == 0 {
+        if sorts.is_empty() {
             leaf_term(op)
         } else {
             let mut dists: Vec<FixedSizeDist> = sorts
@@ -314,7 +314,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 pub mod test {
     use super::*;
 
-    use ahash::AHashMap as HashMap;
+    use fxhash::FxHashMap as HashMap;
     use quickcheck::{Arbitrary, Gen};
     use rand::distributions::Distribution;
     use rand::SeedableRng;
@@ -343,9 +343,12 @@ pub mod test {
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
 
-            Box::new(ts.into_iter().rev().skip(1).map(ArbitraryTerm))
+            Box::new(ts.skip(1).map(ArbitraryTerm))
         }
     }
 
@@ -368,15 +371,13 @@ pub mod test {
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
             let vs = self.1.clone();
 
-            Box::new(
-                ts.into_iter()
-                    .rev()
-                    .skip(1)
-                    .map(move |t| ArbitraryBoolEnv(t, vs.clone())),
-            )
+            Box::new(ts.skip(1).map(move |t| ArbitraryBoolEnv(t, vs.clone())))
         }
     }
 
@@ -411,15 +412,13 @@ pub mod test {
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
             let vs = self.1.clone();
 
-            Box::new(
-                ts.into_iter()
-                    .rev()
-                    .skip(1)
-                    .map(move |t| ArbitraryTermEnv(t, vs.clone())),
-            )
+            Box::new(ts.skip(1).map(move |t| ArbitraryTermEnv(t, vs.clone())))
         }
     }
 

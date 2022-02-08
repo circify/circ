@@ -1,7 +1,5 @@
 # CirC: The Circuit Compiler
 
-This repository holds an in-progress rewrite of CirC.
-
 CirC is a *compiler infrastructure* which supports compilation from
 high-level (stateful, uniform) languages to (state-free, non-uniform,
 existentially quantified) circuits.
@@ -19,9 +17,7 @@ binary must be on your path. On Arch Linux and Ubuntu you can install the
 You'll also need the COIN-OR CBC solver. On Arch linux, this is `coin-or-cbc`.
 On Ubuntu `coinor-cbc` and `coinor-libcbc-dev`.
 
-You'll also need a Rust nightly compiler. You can set the nightly channel as
-Rust's default for the circ directory by running `rustup override set nightly`
-in it.
+You'll also need a stable Rust compiler.
 
 ## Architecture
 
@@ -62,17 +58,12 @@ in it.
   * `examples/circ.rs`
     * This is the entry point to the zokrates copiler
 
-## Todo List
+## Backends
 
-- [ ] Intern variable names
-- [ ] Tweak log system to expect exact target match
-- [ ] C front-end
-- [ ] Tune R1CS optimizer
-   - [ ] Less hash maps
-   - [ ] Consider using ff/ark-ff instead of gmp
-   - [ ] Consider a lazy merging strategy
-- [ ] remove synchronization from term representation (or explore parallelism!)
-- [ ] More SMT solver support
-   - [ ] Parse cvc4 models
-- [ ] A more configurable term distribution (for fuzzing)
-- [ ] Add user-defined (aka opaque) operator to IR
+### SMT
+
+The SMT backend can be changed between [CVC4](https://cvc4.github.io/)
+and [cvc5](https://cvc5.github.io/) by setting the
+[RSMT2_CVC4_CMD](https://docs.rs/rsmt2/latest/rsmt2/conf/constant.CVC4_ENV_VAR.html)
+environmental variable to the SMT solver's invocation command (`cvc4` or
+`cvc5`).

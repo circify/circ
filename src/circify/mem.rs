@@ -1,61 +1,30 @@
 //! The stack-allocation memory manager
 
 use crate::ir::term::*;
+use std::collections::HashMap;
 
-use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
-use std::rc::Rc;
-
-type AllocId = usize;
+/// Identifier for an Allocation block in memory
+pub type AllocId = usize;
 
 struct Alloc {
-    id: AllocId,
     addr_width: usize,
     val_width: usize,
-    cur_ver: usize,
     size: usize,
-    cur_var: Term,
+    cur_term: Term,
 }
 
 impl Alloc {
-    /// Get the variable for the next version, and advance the next version.
-    fn next_var(&mut self) {
-        self.cur_ver += 1;
-        let t = leaf_term(Op::Var(
-            format!("mem_{}_v{}", self.id, self.cur_ver),
-            self.sort(),
-        ));
-        self.cur_var = t;
-    }
-
-    fn sort(&self) -> Sort {
-        Sort::Array(
-            Box::new(Sort::BitVector(self.addr_width)),
-            Box::new(Sort::BitVector(self.val_width)),
-            self.size,
-        )
-    }
-
-    fn new(id: AllocId, addr_width: usize, val_width: usize, size: usize) -> Self {
+    fn new(addr_width: usize, val_width: usize, size: usize, cur_term: Term) -> Self {
         Self {
-            id,
             addr_width,
             val_width,
             size,
-            cur_ver: 0,
-            cur_var: leaf_term(Op::Var(
-                format!("mem_{}_v{}", id, 0),
-                Sort::Array(
-                    Box::new(Sort::BitVector(addr_width)),
-                    Box::new(Sort::BitVector(val_width)),
-                    size,
-                ),
-            )),
+            cur_term,
         }
     }
 
     fn var(&self) -> &Term {
-        &self.cur_var
+        &self.cur_term
     }
 }
 
@@ -63,19 +32,19 @@ impl Alloc {
 pub struct MemManager {
     allocs: HashMap<AllocId, Alloc>,
     next_id: usize,
-    cs: Rc<RefCell<Computation>>,
+}
+
+impl Default for MemManager {
+    /// Create a new manager, with an empty stack.
+    fn default() -> Self {
+        Self {
+            allocs: HashMap::default(),
+            next_id: 0,
+        }
+    }
 }
 
 impl MemManager {
-    /// Create a new manager, with an empty stack.
-    pub fn new(cs: Rc<RefCell<Computation>>) -> Self {
-        Self {
-            allocs: HashMap::new(),
-            next_id: 0,
-            cs,
-        }
-    }
-
     /// Returns the next allocation identifier, and advances it.
     fn take_next_id(&mut self) -> usize {
         let i = self.next_id;
@@ -83,28 +52,22 @@ impl MemManager {
         i
     }
 
-    fn assert(&mut self, t: Term) {
-        debug_assert!(check(&t) == Sort::Bool);
-        self.cs.borrow_mut().assert(t);
-    }
-
     /// Allocate a new stack array, equal to `array`.
     pub fn allocate(&mut self, array: Term) -> AllocId {
         let s = check(&array);
-        if let Sort::Array(box Sort::BitVector(addr_width), box Sort::BitVector(val_width), size) =
-            s
-        {
-            let id = self.take_next_id();
-            let alloc = Alloc::new(id, addr_width, val_width, size);
-            let v = alloc.var().clone();
-            if let Op::Var(n, _) = &v.op {
-                self.cs.borrow_mut().eval_and_save(&n, &array);
+        if let Sort::Array(box_addr_width, box_val_width, size) = s {
+            if let Sort::BitVector(addr_width) = *box_addr_width {
+                if let Sort::BitVector(val_width) = *box_val_width {
+                    let id = self.take_next_id();
+                    let alloc = Alloc::new(addr_width, val_width, size, array);
+                    self.allocs.insert(id, alloc);
+                    id
+                } else {
+                    panic!("Cannot access val_width")
+                }
             } else {
-                unreachable!()
+                panic!("Cannot access addr_width")
             }
-            self.assert(term![Op::Eq; v, array]);
-            self.allocs.insert(id, alloc);
-            id
         } else {
             panic!("Cannot allocate array of sort: {}", s)
         }
@@ -122,18 +85,11 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        let sort = Sort::Array(
-            Box::new(Sort::BitVector(addr_width)),
-            Box::new(Sort::BitVector(val_width)),
-            size,
-        );
-        let array = Value::Array(
-            sort,
-            Box::new(Value::BitVector(BitVector::zeros(val_width))),
-            BTreeMap::new(),
-            size,
-        );
-        self.allocate(leaf_term(Op::Const(array)))
+        self.allocate(term![Op::Const(Value::Array(Array::default(
+            Sort::BitVector(addr_width),
+            &Sort::BitVector(val_width),
+            size
+        )))])
     }
 
     /// Load the value of index `offset` from the allocation `id`.
@@ -144,19 +100,14 @@ impl MemManager {
     }
 
     /// Write the value `val` to index `offset` in the allocation `id`.
-    pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
+    pub fn store(&mut self, id: AllocId, offset: Term, val: Term, cond: Term) {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         assert_eq!(alloc.val_width, check(&val).as_bv());
+        let old = alloc.cur_term.clone();
         let new = term![Op::Store; alloc.var().clone(), offset, val];
-        alloc.next_var();
-        let v = alloc.var().clone();
-        if let Op::Var(n, _) = &v.op {
-            self.cs.borrow_mut().eval_and_save(&n, &new);
-        } else {
-            unreachable!()
-        }
-        self.assert(term![Op::Eq; v, new]);
+        let ite_store = term![Op::Ite; cond, new, old];
+        alloc.cur_term = ite_store;
     }
 
     /// Is `offset` in bounds for the allocation `id`?
@@ -165,24 +116,36 @@ impl MemManager {
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         term![Op::BvBinPred(BvBinPred::Ult); offset, bv_lit(alloc.size, alloc.addr_width)]
     }
+
+    /// Get size of the array at the allocation `id`
+    pub fn get_size(&self, id: AllocId) -> usize {
+        let alloc = self.allocs.get(&id).expect("Missing allocation");
+        alloc.size
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::target::smt::check_sat;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn bv_var(s: &str, w: usize) -> Term {
         leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
     }
-
     #[test]
     fn sat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));
-        let mut mem = MemManager::new(cs.clone());
+        let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(id0, bv_lit(3, 4), bv_lit(2, 8));
+        mem.store(
+            id0,
+            bv_lit(3, 4),
+            bv_lit(2, 8),
+            leaf_term(Op::Const(Value::Bool(true))),
+        );
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
@@ -197,10 +160,15 @@ mod test {
     #[test]
     fn unsat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));
-        let mut mem = MemManager::new(cs.clone());
+        let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(id0, bv_lit(3, 4), bv_var("a", 8));
+        mem.store(
+            id0,
+            bv_lit(3, 4),
+            bv_var("a", 8),
+            leaf_term(Op::Const(Value::Bool(true))),
+        );
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(3, 4));
         let t = term![Op::Not; term![Op::Eq; a, b]];

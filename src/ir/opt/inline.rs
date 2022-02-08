@@ -3,7 +3,7 @@
 use super::cfold;
 use crate::ir::term::extras::*;
 use crate::ir::term::*;
-use ahash::AHashSet;
+use fxhash::FxHashSet;
 
 /// This is a tool for sweeping a list of equations, some of which define new variables as
 /// functions of previous ones, and eliminating these new variables, by substituting them
@@ -25,11 +25,11 @@ pub struct Inliner<'a> {
     stale_vars: TermSet,
 
     /// Variables that are "protected": they should not be eliminated.
-    protected: &'a AHashSet<String>,
+    protected: &'a FxHashSet<String>,
 }
 
 impl<'a> Inliner<'a> {
-    fn new(protected: &'a AHashSet<String>) -> Self {
+    fn new(protected: &'a FxHashSet<String>) -> Self {
         Self {
             substs: TermMap::new(),
             subst_cache: TermMap::new(),
@@ -42,7 +42,7 @@ impl<'a> Inliner<'a> {
     /// Also checks that no key variable is in any `subst_cache` value.
     #[allow(dead_code)]
     fn check_substs(&self) {
-        let keys: AHashSet<&Term> = self.substs.keys().collect();
+        let keys: FxHashSet<&Term> = self.substs.keys().collect();
         for (key, value) in &self.substs {
             for child in PostOrderIter::new(value.clone()) {
                 assert!(
@@ -63,7 +63,7 @@ impl<'a> Inliner<'a> {
                 }
             }
             assert!(
-                self.stale_vars.contains(&key),
+                self.stale_vars.contains(key),
                 "Variable {}, which is being susbstituted",
                 key
             );
@@ -107,7 +107,7 @@ impl<'a> Inliner<'a> {
     ///
     /// Will not return `v` which are protected.
     fn as_fresh_def(&self, t: &Term) -> Option<(Term, Term)> {
-        if &EQ == &t.op {
+        if EQ == t.op {
             if let Op::Var(name, _) = &t.cs[0].op {
                 if !self.stale_vars.contains(&t.cs[0])
                     && !self.protected.contains(name)
@@ -133,7 +133,7 @@ impl<'a> Inliner<'a> {
     ///
     /// If `t` is not a substitution, then its (substituted variant) is returned.
     fn ingest_term(&mut self, t: &Term) -> Option<Term> {
-        if let Some((var, val)) = self.as_fresh_def(&t) {
+        if let Some((var, val)) = self.as_fresh_def(t) {
             //debug!(target: "circ::ir::opt::inline", "Inline: {} -> {}", var, val.clone());
             // Rewrite the substitution
             let subst_val = self.apply(&val);
@@ -175,7 +175,7 @@ impl<'a> Inliner<'a> {
 ///
 /// First, maintains a set of variables being substituted.
 /// Second, maintain a
-pub fn inline(assertions: &mut Vec<Term>, public_inputs: &AHashSet<String>) {
+pub fn inline(assertions: &mut Vec<Term>, public_inputs: &FxHashSet<String>) {
     let mut new_assertions = Vec::new();
     let mut inliner = Inliner::new(public_inputs);
     for assertion in assertions.drain(..) {
@@ -192,12 +192,12 @@ mod test {
     use crate::target::smt::{check_sat, find_model};
 
     fn b_var(b: &str) -> Term {
-        leaf_term(Op::Var(format!("{}", b), Sort::Bool))
+        leaf_term(Op::Var(b.to_string(), Sort::Bool))
     }
 
     fn sub_test(xs: Vec<Term>, n: usize) {
         let mut ys = xs.clone();
-        let p = AHashSet::new();
+        let p = FxHashSet::default();
         inline(&mut ys, &p);
         assert_eq!(n, ys.len());
         let x = term(AND, xs.clone());
@@ -236,8 +236,8 @@ mod test {
             }
             panic!("Invalid inline");
         }
-        assert_eq!(check_sat(&not_imp), false);
-        assert_eq!(check_sat(&not_imp_not), false);
+        assert!(!check_sat(&not_imp));
+        assert!(!check_sat(&not_imp_not));
     }
 
     #[test]

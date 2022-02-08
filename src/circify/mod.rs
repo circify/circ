@@ -1,5 +1,5 @@
 //! A library for building front-ends
-
+use crate::circify::mem::AllocId;
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -154,7 +154,7 @@ impl<Ty: Display> LexScope<Ty> {
     fn with_prefix(prefix: String) -> Self {
         Self {
             prefix,
-            entries: HashMap::new(),
+            entries: HashMap::default(),
         }
     }
     fn declare(&mut self, name: VarName, ty: Ty) -> Result<&SsaName> {
@@ -196,7 +196,7 @@ impl<Ty: Display> LexScope<Ty> {
 /// Circuit construction context. Useful for addition assertions, using memory, etc.
 pub struct CirCtx {
     /// Memory manager
-    pub mem: mem::MemManager,
+    pub mem: Rc<RefCell<mem::MemManager>>,
     /// Underlying constraint system
     pub cs: Rc<RefCell<Computation>>,
 }
@@ -267,7 +267,8 @@ impl<Ty: Display> FnFrame<Ty> {
     }
     fn enter_condition(&mut self, condition: Term) -> Result<()> {
         if check(&condition) == Sort::Bool {
-            Ok(self.stack.push(StateEntry::Cond(condition)))
+            self.stack.push(StateEntry::Cond(condition));
+            Ok(())
         } else {
             Err(CircError::NotBool(condition))
         }
@@ -313,7 +314,7 @@ impl<Ty: Display> FnFrame<Ty> {
                 StateEntry::Cond(c) => break_if.push(c.clone()),
                 StateEntry::Break(name_, ref mut break_conds) => {
                     if name_ == name {
-                        break_conds.push(if break_if.len() == 0 {
+                        break_conds.push(if break_if.is_empty() {
                             leaf_term(Op::Const(Value::Bool(true)))
                         } else {
                             term(Op::BoolNaryOp(BoolNaryOp::And), break_if)
@@ -394,6 +395,8 @@ pub trait Embeddable {
 
     /// Create a new term for the default return value of a function returning type `ty`.
     /// The name `ssa_name` is globally unique, and can be used if needed.
+    // Because the type alias may change.
+    #[allow(clippy::ptr_arg)]
     fn initialize_return(&self, ty: &Self::Ty, ssa_name: &SsaName) -> Self::T;
 }
 
@@ -429,16 +432,16 @@ impl<E: Embeddable> Circify<E> {
         let cs = Rc::new(RefCell::new(Computation::new(e.values())));
         Self {
             e,
-            vals: HashMap::new(),
+            vals: HashMap::default(),
             fn_stack: Vec::new(),
             fn_ctr: 0,
             globals: LexScope::with_prefix("global".to_string()),
             cir_ctx: CirCtx {
-                mem: mem::MemManager::new(cs.clone()),
+                mem: Rc::new(RefCell::new(mem::MemManager::default())),
                 cs,
             },
             condition: leaf_term(Op::Const(Value::Bool(true))),
-            typedefs: HashMap::new(),
+            typedefs: HashMap::default(),
         }
     }
 
@@ -450,9 +453,9 @@ impl<E: Embeddable> Circify<E> {
     /// Initialize environment entry binding `name` to `ty`.
     fn declare_env_name(&mut self, name: VarName, ty: &E::Ty) -> Result<&SsaName> {
         if let Some(back) = self.fn_stack.last_mut() {
-            back.declare(name.clone(), ty.clone())
+            back.declare(name, ty.clone())
         } else {
-            self.globals.declare(name.clone(), ty.clone())
+            self.globals.declare(name, ty.clone())
         }
     }
 
@@ -484,19 +487,18 @@ impl<E: Embeddable> Circify<E> {
     /// Returns `None` if it's in the global scope.
     /// Returns `Some` if it's in a local scope.
     /// Errors if the name cannot be found.
+    // Because the type alias may change.
+    #[allow(clippy::ptr_arg)]
     fn mk_abs(&self, name: &VarName) -> Result<Option<ScopeIdx>> {
         if let Some(fn_) = self.fn_stack.last() {
             for (lex_i, e) in fn_.stack.iter().enumerate().rev() {
-                match e {
-                    StateEntry::Lex(l) => {
-                        if l.has_name(name) {
-                            return Ok(Some(ScopeIdx {
-                                lex: lex_i,
-                                fn_: self.fn_stack.len() - 1,
-                            }));
-                        }
+                if let StateEntry::Lex(l) = e {
+                    if l.has_name(name) {
+                        return Ok(Some(ScopeIdx {
+                            lex: lex_i,
+                            fn_: self.fn_stack.len() - 1,
+                        }));
                     }
-                    _ => {}
                 }
             }
         }
@@ -551,7 +553,7 @@ impl<E: Embeddable> Circify<E> {
     ///
     /// If `public`, then make it a public (fixed) rather than private (existential) circuit input.
     pub fn declare_init(&mut self, name: VarName, ty: E::Ty, val: Val<E::T>) -> Result<Val<E::T>> {
-        let ssa_name = self.declare_env_name(name.clone(), &ty)?.clone();
+        let ssa_name = self.declare_env_name(name, &ty)?.clone();
         // TODO: add language-specific coersion here if needed
         assert!(self.vals.insert(ssa_name, val.clone()).is_none());
         Ok(val)
@@ -566,7 +568,7 @@ impl<E: Embeddable> Circify<E> {
         ty: &E::Ty,
         visiblity: Option<PartyId>,
     ) {
-        self.e.assign(&mut self.cir_ctx, &ty, name, term, visiblity);
+        self.e.assign(&mut self.cir_ctx, ty, name, term, visiblity);
     }
 
     /// Assign `loc` in the current scope to `val`.
@@ -596,7 +598,12 @@ impl<E: Embeddable> Circify<E> {
                 // get condition under which assignment happens
                 let guard = self.condition.clone();
                 // build condition-aware new value
-                let ite_val = Val::Term(self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()));
+                let ite = match guard.as_bool_opt() {
+                    Some(true) => new,
+                    Some(false) => old.clone(),
+                    None => self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()),
+                };
+                let ite_val = Val::Term(ite);
                 // TODO: add language-specific coersion here if needed
                 assert!(self.vals.insert(new_name, ite_val.clone()).is_none());
                 Ok(ite_val)
@@ -660,7 +667,7 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Exit a conditional block
-    pub fn exit_codition(&mut self) {
+    pub fn exit_condition(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_condition();
         self.condition = self.condition();
     }
@@ -669,7 +676,7 @@ impl<E: Embeddable> Circify<E> {
     pub fn condition(&self) -> Term {
         // TODO:  more precise conditions, depending on lex scopes.
         let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions()).collect();
-        if cs.len() == 0 {
+        if cs.is_empty() {
             leaf_term(Op::Const(Value::Bool(true)))
         } else {
             term(Op::BoolNaryOp(BoolNaryOp::And), cs)
@@ -748,7 +755,7 @@ impl<E: Embeddable> Circify<E> {
         self.vals
             .get(l.get_name(&loc.name)?)
             .cloned()
-            .ok_or_else(|| CircError::InvalidLoc(loc))
+            .ok_or(CircError::InvalidLoc(loc))
     }
 
     /// Dereference a reference into a location.
@@ -762,6 +769,8 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Create a reference to a variable.
+    // Because the type alias may change.
+    #[allow(clippy::ptr_arg)]
     pub fn ref_(&self, name: &VarName) -> Result<Val<E::T>> {
         let idx = self.mk_abs(name)?;
         Ok(Val::Ref(Loc {
@@ -787,6 +796,25 @@ impl<E: Embeddable> Circify<E> {
     /// Get the constraints from this manager
     pub fn consume(self) -> Rc<RefCell<Computation>> {
         self.cir_ctx.cs
+    }
+
+    /// Load from an AllocId
+    pub fn load(&self, id: AllocId, offset: Term) -> Term {
+        self.cir_ctx.mem.borrow_mut().load(id, offset)
+    }
+
+    /// Conditional store to an AllocId based on current path condition
+    pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
+        let cond = self.condition();
+        self.cir_ctx.mem.borrow_mut().store(id, offset, val, cond);
+    }
+
+    /// Zero allocate an array
+    pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
+        self.cir_ctx
+            .mem
+            .borrow_mut()
+            .zero_allocate(size, addr_width, val_width)
     }
 }
 
@@ -885,7 +913,7 @@ mod test {
                             &**a,
                             format!("{}.0", raw_name),
                             user_name.as_ref().map(|u| format!("{}.0", u)),
-                            visibility.clone(),
+                            visibility,
                         )),
                         Box::new(self.declare(
                             ctx,
@@ -918,13 +946,7 @@ mod test {
                 match t {
                     T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, visibility)),
                     T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(
-                            ctx,
-                            _ty,
-                            format!("{}.0", name),
-                            *a,
-                            visibility.clone(),
-                        )),
+                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, visibility)),
                         Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, visibility)),
                     ),
                 }

@@ -1,7 +1,7 @@
 //! Optimizations over R1CS
 use super::*;
 use crate::util::once::OnceQueue;
-use ahash::{AHashMap as HashMap, AHashSet as HashSet};
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::debug;
 
 struct LinReducer<S: Eq + Hash> {
@@ -23,7 +23,7 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
             .cloned()
             .collect();
         let mut uses: HashMap<usize, HashSet<usize>> =
-            sigs.into_iter().map(|i| (i, HashSet::new())).collect();
+            sigs.into_iter().map(|i| (i, HashSet::default())).collect();
         for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
             let mut add = |y: &Lc| {
                 for x in y.monomials.keys() {
@@ -112,12 +112,11 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
                 );
                 self.clear_constraint(con_id);
                 for use_id in self.uses[&var].clone() {
-                    if self.sub_in(var, &lc, use_id) {
-                        if self.r1cs.constraints[use_id].0.is_zero()
-                            || self.r1cs.constraints[use_id].1.is_zero()
-                        {
-                            self.queue.push(use_id);
-                        }
+                    if self.sub_in(var, &lc, use_id)
+                        && (self.r1cs.constraints[use_id].0.is_zero()
+                            || self.r1cs.constraints[use_id].1.is_zero())
+                    {
+                        self.queue.push(use_id);
                     }
                 }
                 debug_assert_eq!(0, self.uses[&var].len());

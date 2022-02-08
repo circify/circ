@@ -2,7 +2,7 @@
 
 pub mod trans;
 
-use ahash::AHashMap as HashMap;
+use fxhash::FxHashMap as HashMap;
 pub(crate) use good_lp::{
     variable, Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver,
     SolverModel, Variable, VariableDefinition,
@@ -32,11 +32,17 @@ impl Debug for Ilp {
     }
 }
 
+impl Default for Ilp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ilp {
     /// Create an empty ILP
     pub fn new() -> Self {
         Self {
-            var_names: HashMap::new(),
+            var_names: HashMap::default(),
             variables: ProblemVariables::new(),
             constraints: Vec::new(),
             maximize: Expression::from(0),
@@ -123,7 +129,7 @@ mod test {
         let solution = vars
             .maximise(a + b + c)
             .using(default_solver)
-            .with(a + b << 30.0)
+            .with((a + b) << 30.0)
             .solve()
             .unwrap();
         assert_eq!(solution.value(a), 1.0);
@@ -139,7 +145,7 @@ mod test {
         let solution = vars
             .maximise(a + b + c)
             .using(good_lp::solvers::lp_solvers::LpSolver(s))
-            .with(a + b << 30.0)
+            .with((a + b) << 30.0)
             .solve()
             .unwrap();
         assert_eq!(solution.value(a), 1.0);
