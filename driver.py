@@ -165,7 +165,7 @@ def set_features(features):
 
 if __name__ == '__main__':
     acts = "hicbtflCLAa:r:"
-    actions = ["help", "install","check","build","test","format","clean","all_features","list_features","add_feature=","remove_feature="]
+    actions = ["help", "install","check","build","test","format","lint","clean","all_features","list_features","add_feature=","remove_feature="]
     try:
         opts, args = getopt.getopt(sys.argv[1:],acts,actions)
     except getopt.GetoptError:
