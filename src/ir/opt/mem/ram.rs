@@ -108,7 +108,7 @@ struct ConditionalStore {
 
 /// Graph of the *arrays* in the computation.
 ///
-/// Nodes are *most* of the array-sorted term (see "subsumed store" for the exception).
+/// Nodes are *most* of the array-sorted terms (see "subsumed store" for the exception).
 ///
 /// Edges go from dependent arrays to their dependencies and represent stores,
 /// ITEs, and conditional stores.
@@ -306,7 +306,7 @@ impl RewritePass for Extactor {
 /// Limitations:
 /// * This pass doesn't handle shared stuff very well. If there are two
 ///   different RAMs with the same init sequence of instructions, this pass will
-///   not recognize them...
+///   not extract **either**.
 #[allow(dead_code)]
 pub fn extract(c: &mut Computation) -> Vec<Ram> {
     let mut extractor = Extactor::new(c);
@@ -470,5 +470,27 @@ mod test {
         assert_eq!(cs.outputs[2], cs2.outputs[2]);
         assert_eq!(3, rams[0].accesses.len());
         assert_eq!(3, rams[1].accesses.len());
+    }
+
+    #[test]
+    fn nested() {
+        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::Array(Box::new(Sort::BitVector(4)), Box::new(Sort::BitVector(4)), 16),
+            4,
+        ))));
+        let c_in_array = leaf_term(Op::Const(Value::Array(Array::default(
+            Sort::BitVector(4),
+            &Sort::BitVector(4),
+            16,
+        ))));
+        let store_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), c_in_array];
+        let select = term![Op::Select; term![Op::Select; store_1, bv_lit(0, 4)], bv_lit(0, 4)];
+        let mut cs = Computation::default();
+        cs.outputs.push(select);
+        let mut cs2 = cs.clone();
+        let rams = extract(&mut cs2);
+        assert_eq!(0, rams.len());
+        assert_eq!(cs, cs2);
     }
 }
