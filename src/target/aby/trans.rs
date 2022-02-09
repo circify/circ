@@ -163,7 +163,7 @@ impl ToABY {
             write_line_to_file(
                 &self.setup_fname,
                 &format!(
-                    "uint32_t {} = std::atoi(params[\"{}\"].c_str());\n",
+                    "uint32_t {} = params[\"{}\"];\n",
                     name_,
                     self.parse_var_name(name.to_string())
                 ),
@@ -613,16 +613,13 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
         metadata: md,
         values: _,
     } = ir.clone();
-    for t in terms.clone() {
-        println!("terms: {}", t);
-    }
 
     let s_map: SharingMap = assign(&ir, cm);
     // let s_map: SharingMap = some_arith_sharing(&ir);
     let mut converter = ToABY::new(md, s_map, path, lang);
 
     for t in terms {
-        println!("terms: {}", t);
+        // println!("terms: {}", t);
         converter.lower(t.clone());
     }
 

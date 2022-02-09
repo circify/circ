@@ -1,7 +1,6 @@
 from subprocess import Popen, PIPE
 import sys
 from typing import List
-import time 
 
 def init_progress_bar(toolbar_width=40):
     ''' Initialize progress bar '''
@@ -34,11 +33,11 @@ def update_path(path: str, lang: str) -> str:
     '''Append path with language type'''
     return f'{path}_{lang}_test'
 
-def build_server_cmd(exec: str, args: dict) -> List[str]:
-    return [exec, "-r", "0", "-i"] + flatten_args(args)
+def build_server_cmd(exec: str, test_file: str) -> List[str]:
+    return [exec, "-m", "mpc", "-r", "0", "-t", test_file] 
 
-def build_client_cmd(exec: str, args: dict) -> List[str]:
-    return [exec, "-r", "1", "-i"] + flatten_args(args)
+def build_client_cmd(exec: str, test_file: str) -> List[str]:
+    return [exec, "-m", "mpc", "-r", "1", "-t", test_file] 
 
 def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
     assert len(server_cmd) > 3, "server cmd does not have enough arguments"
@@ -72,8 +71,7 @@ def run_tests(lang: str, tests: List[dict]):
     1. description of test case: string
     2. expected output: string
     3. executable path: string
-    4. server arguments: dict[name] = value
-    5. client arguments: dict[name] = value
+    4. test file path: string 
     '''
     print("Running tests for frontend", lang)
     failed_test_descs = []
@@ -81,12 +79,12 @@ def run_tests(lang: str, tests: List[dict]):
     progress_inc = 5
     init_progress_bar(len(tests) // progress_inc + 1)
     for t, test in enumerate(tests):
-        assert len(test) == 5, "test configurations are wrong for test: "+test[0]
+        assert len(test) == 4, "test configurations are wrong for test: "+test[0]
         desc = test[0]
         expected = str(test[1])
         path = update_path(test[2], lang)
         server_cmd = build_server_cmd(path, test[3])
-        client_cmd = build_client_cmd(path, test[4])
+        client_cmd = build_client_cmd(path, test[3])
 
         test_results = []
         for i in range(num_retries):

@@ -1,3 +1,12 @@
+add_tests = [
+    [
+        "Add two numbers - 1",
+        3,
+        "./third_party/ABY/build/bin/2pc_add",
+        "./examples/C/mpc/test_inputs/add_1.txt",
+    ], 
+]
+
 arithmetic_tests = [
     [
         "Add two numbers - 1",
