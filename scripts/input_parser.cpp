@@ -7,7 +7,8 @@
 #include <bits/stdc++.h>
 
 enum mode {
-    mpc
+    mpc,
+    fhe,
 };
 
 mode hash(std::string m) {
