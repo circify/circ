@@ -8,12 +8,15 @@ cargo_features = {"c_front"}
 
 # Environment variables
 ABY_SOURCE="./../ABY"
+EZPC_SOURCE="./../EZPC"
 
 def set_env(features):
     for f in features:
         if f == 'aby':
             if not os.getenv("ABY_SOURCE"):
                 os.environ["ABY_SOURCE"] = ABY_SOURCE
+            if not os.getenv("EZPC_SOURCE"):
+                os.environ["EZPC_SOURCE"] = EZPC_SOURCE
 
 def save_features(features):
     """ Save features to file """

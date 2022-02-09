@@ -24,6 +24,11 @@ def install(features):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
 
+            # Get EZPC header file
+            subprocess.run(["mkdir", "-p", EZPC_SOURCE])
+            subprocess.run(["wget", "-O", EZPC_SOURCE+"/ezpc.h", "https://raw.githubusercontent.com/circify/circ/master/third_party/EZPC/ezpc.h"])
+
+
 def check(features):
     """
     Run cargo check
