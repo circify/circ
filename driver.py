@@ -124,6 +124,11 @@ def set_features(features):
             return True
         return False
     features = set(sorted([f for f in features if verify_feature(f)]))
+    
+    # reset features
+    if 'none' in features:
+        features = set()
+
     print("Feature set:", features)
     save_features(features)
     return features 
@@ -139,7 +144,7 @@ if __name__ == '__main__':
     parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
-    parser.add_argument("-F", "--features", nargs="+", help="set features on")
+    parser.add_argument("-F", "--features", nargs="+", help="set features on, reset features with -F none")
     args = parser.parse_args()
 
     def verify_single_action(args: argparse.Namespace):

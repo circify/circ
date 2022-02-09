@@ -3,7 +3,7 @@ from os import path
 
 # Gloable variables
 feature_path = ".features.txt"
-valid_features = {"aby", "c_front"}
+valid_features = {"aby", "c_front", "none"}
 cargo_features = {"c_front"}
 
 # Environment variables
