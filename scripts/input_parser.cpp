@@ -8,8 +8,7 @@
 
 enum mode {
     mpc,
-    fhe,
-};
+ };
 
 mode hash(std::string m) {
     if (m == "mpc") return mpc;
