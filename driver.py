@@ -1,51 +1,9 @@
-import getopt
+#!/usr/bin/env python3
+
+import argparse
 import subprocess
-import sys
 
 from util import *
-
-def help():
-    """ Print help string """
-
-    help_str = """
-python3 driver.py 
-
-Description
------------
-    -i, --install 
-        install all dependencies from the feature set
-    
-    -c, --check
-        run `cargo check` 
-
-    -b, --build
-        run `cargo build` and build all dependencies from the feature set 
-
-    -t, --test 
-        run `cargo test` and test all dependencies from the feature set
-    
-    -f, --format
-        run `cargo fmt --all`
-        
-    -l, --lint 
-        run `cargo clippy`
-        
-    -C, --clean 
-        remove all generated files
-    
-    -A, --all_features
-        set all features on 
-
-    -L, --list_features
-        print active feaures
-
-    -a, --add_feature=<aby,c_front>
-        add a feature to the feature set
-        
-    -r, --remove_feature=<aby,c_front>"
-        remove a feature from the feature set
-"""
-    print(help_str)
 
 def install(features):
     """
@@ -57,11 +15,13 @@ def install(features):
             set of features required
     """
 
+    def verify_path_empty(path) -> bool:
+        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path)) 
+
     for f in features:
-        if f in ('aby'):
-            subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
-        else:
-            raise Exception("Unknown feature: "+f)
+        if f == 'aby':
+            if verify_path_empty(ABY_SOURCE):
+                subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
 
 def check(features):
     """
@@ -103,7 +63,7 @@ def build(features):
     subprocess.run(cmd)
 
     for f in features: 
-        if f in ('aby'):
+        if f == 'aby':
             if 'c_front' in features:
                 subprocess.run(["./scripts/build_mpc_c_test.zsh"])
             subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"])
@@ -119,17 +79,17 @@ def test(features):
             set of features required
     """
 
-    subprocess.run(["cargo", "test"])
-    subprocess.run(["./scripts/zokrates_test.zsh"])
-    subprocess.run(["./scripts/test_zok_to_ilp.zsh"])
-    subprocess.run(["./scripts/test_zok_to_ilp_pf.zsh"])
-    subprocess.run(["./scripts/test_datalog.zsh"])
-    subprocess.run(["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
+    subprocess.run(["cargo", "test"], check=True)
+    subprocess.run(["./scripts/zokrates_test.zsh"], check=True)
+    subprocess.run(["./scripts/test_zok_to_ilp.zsh"], check=True)
+    subprocess.run(["./scripts/test_zok_to_ilp_pf.zsh"], check=True)
+    subprocess.run(["./scripts/test_datalog.zsh"], check=True)
+    subprocess.run(["python3", "./scripts/aby_tests/zokrates_test_aby.py"], check=True)
 
     for f in features: 
-        if f in ('aby'):
+        if f == 'aby':
             if 'c_front' in features:
-                subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"])
+                subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
 
 def format():
     print("formatting!")
@@ -164,82 +124,58 @@ def set_features(features):
     return features 
 
 if __name__ == '__main__':
-    acts = "hicbtflCLAa:r:"
-    actions = ["help", "install","check","build","test","format","lint","clean","all_features","list_features","add_feature=","remove_feature="]
-    try:
-        opts, args = getopt.getopt(sys.argv[1:],acts,actions)
-    except getopt.GetoptError:
-        print("python3 driver.py --help")
-        sys.exit(2)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--install", action="store_true", help="install all dependencies from the feature set")
+    parser.add_argument("-c", "--check", action="store_true", help="run `cargo check`")
+    parser.add_argument("-b", "--build", action="store_true", help="run `cargo build` and build all dependencies from the feature set")
+    parser.add_argument("-t", "--test", action="store_true", help="build and test all dependencies from the feature set")
+    parser.add_argument("-f", "--format", action="store_true", help="run `cargo fmt --all`")
+    parser.add_argument("-l", "--lint", action="store_true", help="run `cargo clippy`")
+    parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
+    parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
+    parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
+    parser.add_argument("-F", "--features", nargs="+", help="set features on")
+    args = parser.parse_args()
+
+    def verify_single_action(args: argparse.Namespace):
+        if [bool(v) for v in vars(args).values()].count(True) != 1:
+            parser.error("parser error: only one action can be specified")
+    verify_single_action(args)
 
     features = load_features()
     set_env(features)
-    all_flag = False
-    install_flag = False
-    check_flag = False
-    build_flag = False
-    test_flag = False
-    format_flag = False
-    lint_flag = False
-    clean_flag = False
-    list_features_flag = False
-    features_flag = False
-    for opt, arg in opts:
-        if opt in ('-A', '--all_features'):
-            all_flag = True
-        if opt in ('-h', '--help'):
-            help()
-        if opt in ('-i', '--install'):
-            install_flag = True
-        if opt in ('-c', '--check'):
-            check_flag = True
-        if opt in ('-b', '--build'):
-            build_flag = True
-        if opt in ('-t', '--test'):
-            test_flag = True
-        if opt in ('-f', '--format'):
-            format_flag = True
-        if opt in ('-l', '--lint'):
-            lint_flag = True
-        if opt in ('-C', '--clean'):
-            clean_flag = True
-        if opt in ('-L', '--list_features'):
-            list_features_flag = True
-        if opt in ('-a', '--add_feature'):
-            features_flag = True
-            features.add(arg)
-        if opt in ('-r', '--remove_feature'):
-            features_flag = True
-            if arg in features:
-                features.remove(arg)
-    
-    if all_flag:
-        features = set_all_features()
-        print("Feature set:", features)
-    else:
-        if features_flag:
-            features = set_features(features)
 
-        if list_features_flag and not features_flag:
-            print("Feature set:", features)
-    
-    if install_flag:
+    if args.install:
         install(features)
-    
-    if check_flag:
+
+    if args.check:
         check(features)
-    
-    if build_flag:
+
+    if args.build:
+        install(features)
+        check(features)
         build(features)
 
-    if test_flag:
+    if args.test:
+        install(features)
+        check(features)
+        build(features)
         test(features)
 
-    if format_flag:
+    if args.format:
         format()
 
-    if lint_flag:
+    if args.lint:
         lint()
 
-    if clean_flag:
+    if args.clean:
         clean()
+    
+    if args.all_features:
+        features = set_features(valid_features)
+    
+    if args.list_features:
+        print(features)
+
+    if args.features:
+        features = set_features(args.features)

@@ -1,9 +1,8 @@
 import os
 from os import path
-import pickle
 
 # Gloable variables
-feature_path = ".features.pkl"
+feature_path = ".features.txt"
 valid_features = {"aby", "c_front"}
 cargo_features = {"c_front"}
 
@@ -18,21 +17,18 @@ def set_env(features):
 
 def save_features(features):
     """ Save features to file """
-    with open(feature_path, 'wb') as f:
-        pickle.dump(features, f)
+    with open(feature_path, 'w') as f:
+        feature_str = "\n".join(sorted(features))
+        f.write(feature_str)
 
 def load_features():
     """ Load features from file """
     if path.exists(feature_path):
-        with open(feature_path, 'rb') as f:
-            return set(sorted(pickle.load(f)))
+        with open(feature_path, 'r') as f:
+            features = f.read().splitlines()
+            return set(sorted(features))
     else:
         return set()
-
-def set_all_features():
-    features = valid_features
-    save_features(features)
-    return features
 
 def filter_cargo_features(features):
     """ Filter feature list to cargo-specific features """
