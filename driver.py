@@ -22,6 +22,7 @@ def install(features):
         if f == 'aby':
             if verify_path_empty(ABY_SOURCE):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
+                subprocess.run(["./scripts/build_aby.zsh"])
 
 def check(features):
     """
@@ -128,10 +129,8 @@ def set_features(features):
             return True
         return False
     features = set(sorted([f for f in features if verify_feature(f)]))
-
-
-    print("Feature set:", features)
     save_features(features)
+    print("Feature set:", sorted(list(features)))
     return features 
 
 if __name__ == '__main__':
@@ -181,7 +180,7 @@ if __name__ == '__main__':
         features = set_features(valid_features)
     
     if args.list_features:
-        print(features)
+        print("Feature set: ", sorted(list(features)))
 
     if args.features:
         features = set_features(args.features)

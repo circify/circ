@@ -11,14 +11,14 @@ ABY_SOURCE="./../ABY"
 
 def set_env(features):
     for f in features:
-        if f in ('aby'):
+        if f == 'aby':
             if not os.getenv("ABY_SOURCE"):
                 os.environ["ABY_SOURCE"] = ABY_SOURCE
 
 def save_features(features):
     """ Save features to file """
     with open(feature_path, 'w') as f:
-        feature_str = "\n".join(sorted(features))
+        feature_str = "\n".join(features)
         f.write(feature_str)
 
 def load_features():
@@ -26,7 +26,7 @@ def load_features():
     if path.exists(feature_path):
         with open(feature_path, 'r') as f:
             features = f.read().splitlines()
-            return set(sorted(features))
+            return set(features)
     else:
         return set()
 
