@@ -24,17 +24,17 @@ jobs:
       with:
         toolchain: stable
     - uses: Swatinem/rust-cache@v1
+    - name: Set all features on 
+      run: python3 driver.py --all_features
     - name: Initialize third_party libraries
-      run: make install_deps
+      run: python3 driver.py --install
     - name: Cache third_party build
       uses: actions/cache@v2
       with:
         path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
     - name: Build third_party libraries
-      run: |
-        python3 driver.py --all_features
-        python3 driver.py --build
+      run: python3 driver.py --build
     - name: Typecheck
       run: python3 driver.py --check
     - name: Check format

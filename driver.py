@@ -50,6 +50,9 @@ def build(features):
         features : set of str
             set of features required
     """
+    
+    check(features)
+    install(features)
 
     release_cmd = ["cargo", "build", "--release", "--examples"]
     cmd = ["cargo", "build", "--examples"]
@@ -79,6 +82,8 @@ def test(features):
             set of features required
     """
 
+    build(features)
+
     subprocess.run(["cargo", "test"], check=True)
     subprocess.run(["./scripts/zokrates_test.zsh"], check=True)
     subprocess.run(["./scripts/test_zok_to_ilp.zsh"], check=True)
@@ -93,11 +98,11 @@ def test(features):
 
 def format():
     print("formatting!")
-    subprocess.run(["cargo", "fmt", "--all"])
+    subprocess.run(["cargo", "fmt", "--all"], check=True)
 
 def lint():
     print("linting!")
-    subprocess.run(["cargo", "clippy"])
+    subprocess.run(["cargo", "clippy"], check=True)
 
 def clean():
     print("cleaning!")
@@ -152,14 +157,9 @@ if __name__ == '__main__':
         check(features)
 
     if args.build:
-        install(features)
-        check(features)
         build(features)
 
     if args.test:
-        install(features)
-        check(features)
-        build(features)
         test(features)
 
     if args.format:
