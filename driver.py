@@ -119,15 +119,16 @@ def set_features(features):
         features : set of str
             set of features required
     """
+    # reset features
+    if 'none' in features:
+        features = set()
+
     def verify_feature(f):
         if f in valid_features:
             return True
         return False
     features = set(sorted([f for f in features if verify_feature(f)]))
-    
-    # reset features
-    if 'none' in features:
-        features = set()
+
 
     print("Feature set:", features)
     save_features(features)
