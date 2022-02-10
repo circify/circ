@@ -1,0 +1,10 @@
+// server
+a 1 2 3 4 5
+b 0
+
+// client 
+a 0
+b 1 2 3 4 5
+
+// result
+30

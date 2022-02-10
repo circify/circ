@@ -1,0 +1,12 @@
+// server
+a 0
+b 0
+sel 1
+
+// client 
+a 0 
+b 1
+sel 1
+
+// result 
+0

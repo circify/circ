@@ -46,6 +46,9 @@ std::unordered_map<std::string, int> parse_mpc_inputs(std::string test_file_path
     while (std::getline(file, str)) {
         std::vector<std::string> line = split(str, ' ');
         if (line.size() == 0) continue;
+        if (line[0].rfind("//", 0) == 0) {
+            role_flag = false;
+        }
         if (line[0].rfind("//", 0) == 0 && line[1] == "server") {
             if (role == 0) role_flag = true;
             if (role == 1) role_flag = false;
@@ -63,7 +66,7 @@ std::unordered_map<std::string, int> parse_mpc_inputs(std::string test_file_path
                 // Vector input, key_idx: value
                 for (int i = 1; i < line.size(); i++) {
                     std::string key = line[0] + "_" + std::to_string(i-1);
-                    input_map[line[0]] = std::stoi(line[i]);
+                    input_map[key] = std::stoi(line[i]);
                 }
             }
         }

@@ -1,3 +1,4 @@
+import os 
 from subprocess import Popen, PIPE
 import sys
 from typing import List
@@ -39,6 +40,26 @@ def build_server_cmd(exec: str, test_file: str) -> List[str]:
 def build_client_cmd(exec: str, test_file: str) -> List[str]:
     return [exec, "-m", "mpc", "-r", "1", "-t", test_file] 
 
+def get_result(file_path):
+    if os.path.exists(file_path):
+        with open(file_path) as f:
+            lines = f.read().splitlines()
+            res_flag = False
+            res = []
+            for l in lines:
+                l = l.strip()
+                if not l: continue
+                if res_flag:
+                    res.append(l)
+                if l.startswith("//") and "result" in l:
+                    res_flag = True
+                elif l.startswith("//"):
+                    res_flag = False
+            return "\n".join(res)
+    else:
+        raise RuntimeError("Unable to open file: "+file_path)
+
+
 def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
     assert len(server_cmd) > 3, "server cmd does not have enough arguments"
     assert len(client_cmd) > 3, "client cmd does not have enough arguments"
@@ -79,12 +100,13 @@ def run_tests(lang: str, tests: List[dict]):
     progress_inc = 5
     init_progress_bar(len(tests) // progress_inc + 1)
     for t, test in enumerate(tests):
-        assert len(test) == 4, "test configurations are wrong for test: "+test[0]
+        assert len(test) == 3, "test configurations are wrong for test: "+test[0]
         desc = test[0]
-        expected = str(test[1])
-        path = update_path(test[2], lang)
-        server_cmd = build_server_cmd(path, test[3])
-        client_cmd = build_client_cmd(path, test[3])
+        path = update_path(test[1], lang)
+        server_cmd = build_server_cmd(path, test[2])
+        client_cmd = build_client_cmd(path, test[2])
+
+        expected = get_result(test[2])
 
         test_results = []
         for i in range(num_retries):
