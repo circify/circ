@@ -1,9 +1,7 @@
 // server
 a 2147483648
-b 0
 
-// client 
-a 0 
+// client  
 b 2
 
 // result

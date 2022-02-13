@@ -1,9 +1,7 @@
 // server
 a 2 
-b 0
 
-// client 
-a 0 
+// client  
 b 3
 
 // result 

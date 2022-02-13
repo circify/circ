@@ -1,22 +1,14 @@
 all: test
 
-fetch_deps:
-	git submodule update --init
-
-build_deps: fetch_deps
-	./scripts/build_aby.zsh
-
-build_aby_zokrates: build_deps build
-	./scripts/build_mpc_zokrates_test.zsh
-	./scripts/build_aby.zsh
-
-build_aby_c: build_deps build
-	./scripts/build_mpc_c_test.zsh
-	./scripts/build_aby.zsh
-
 build:
 	cargo build --release --examples
 	cargo build --examples
+
+build_aby_zokrates: build
+	./scripts/build_mpc_zokrates_test.zsh
+
+build_aby_c: build
+	./scripts/build_mpc_c_test.zsh
 
 test: build build_aby_zokrates build_aby_c
 	cargo test

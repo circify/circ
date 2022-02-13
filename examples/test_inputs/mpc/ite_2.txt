@@ -1,10 +1,7 @@
 // server
 a 0
-b 0
-sel 0
 
-// client 
-a 0 
+// client
 b 1
 sel 0
 

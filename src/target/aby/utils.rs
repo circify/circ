@@ -16,7 +16,7 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
     let name = format!("{}_{}", filename, lang);
 
     // TODO: clean
-    let path = format!("third_party/ABY/src/examples/{}_{}_tmp.txt", name, t);
+    let path = format!("third_party/ABY_outputs/{}_{}.txt", name, t);
 
     if Path::new(&path).exists() {
         fs::remove_file(&path).expect("Failed to remove old circuit_tmp file");
@@ -27,7 +27,7 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
 /// Write circuit output to temporary file
 pub fn write_line_to_file(path: &str, line: &str) {
     if !Path::new(&path).exists() {
-        fs::File::create(&path).expect("Failed to create tmp file");
+        fs::File::create(&path).expect(&*format!("Failed to create: {}", path));
     }
 
     let mut file = fs::OpenOptions::new()
