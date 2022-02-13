@@ -49,14 +49,14 @@ impl ToABY {
     }
 
     fn map_terms_to_shares(&mut self, term_: Term) {
-        for t in PostOrderIter::new(term_.clone()) {
+        for t in PostOrderIter::new(term_) {
             self.term_to_share_cnt.insert(t, self.share_cnt);
             self.share_cnt += 1;
         }
     }
 
     fn write_mapping_file(&self, term_: Term) {
-        for t in PostOrderIter::new(term_.clone()) {
+        for t in PostOrderIter::new(term_) {
             let share_type = self.s_map.get(&t).unwrap();
             let share_str = share_type.char();
             let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
@@ -71,10 +71,10 @@ impl ToABY {
         match &t.op {
             Op::Var(name, _) => {
                 let new_name = name.to_string().replace(".", "_");
-                let n = new_name.split("_").collect::<Vec<&str>>();
+                let n = new_name.split('_').collect::<Vec<&str>>();
 
                 if n.len() == 5 {
-                    format!("{}", n[3])
+                    n[3].to_string()
                 } else if n.len() == 6 {
                     format!("{}_{}", n[3], n[5])
                 } else {
@@ -366,7 +366,7 @@ impl ToABY {
     }
 
     fn embed(&mut self, t: Term) {
-        for c in PostOrderIter::new(t.clone()) {
+        for c in PostOrderIter::new(t) {
             match check(&c) {
                 Sort::Bool => {
                     self.embed_bool(c);
