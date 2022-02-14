@@ -11,7 +11,7 @@ pub enum Token {
     Close,
 
     // Literals
-    #[regex(br"-?[1-9][0-9]+")]
+    #[regex(br"-?[1-9][0-9]*", priority = 2)]
     Int,
     #[regex(br"#x[0-9a-fA-F]+")]
     Hex,
@@ -22,7 +22,7 @@ pub enum Token {
     // TODO: Float
 
     // Identifiers
-    #[regex(br"[a-zA-Z_][a-zA-Z0-9_]*")]
+    #[regex(br"[^()0-9#; \t\n\f][^(); \t\n\f#]*")]
     Ident,
 
     // Logos requires one token variant to handle errors,
