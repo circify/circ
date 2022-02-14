@@ -20,15 +20,39 @@
         * ASSOC_LIST =
       * sorts
       * higher-order operators
-* IR Grammar
-  * Lexical structure
-    * Lexemes are:
-      * structural symbols: `'('`, `')'`
-      * keywords: `let`
-      * literals: `regex'#x[0-9a-fA-F]+'`, `regex'#b[01]+'`, `regex'-?[1-9][0-9]*'`
-        * Note: not all IR values have their own literal
-      * identifiers: `regex'[a-zA-Z_][a-zA-Z0-9_]'`
-      * whitespace is ignored
-  * Syntactic structure
-    * Terminals: ID, HEX, BIN, NAT, (, ), LET
-    *
+* IR Textual format
+  * It's s-expressions.
+  * `N`: natural number
+  * `I`: integer (arbitrary-precision)
+  * `X`: identifier
+    * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
+  * Sort `S`:
+    * `bool`
+    * `f32`
+    * `f64`
+    * `(bv N)`
+    * `(mod I)`
+    * `(tuple S1 ... Sn)`
+    * `(array Sk Sv N)`
+  * Value `V`:
+    * boolean: `true`, `false`
+    * integer: `I`
+    * bit-vector: `#xFFFF...`, `#bBBBB...`
+    * field literal: `#fDD` or `#fDDmDD`.
+      * In the former case, an ambient modulus must be set.
+    * tuple: `(#t V1 ... Vn)`
+    * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
+  * Term `T`:
+    * value: `V`
+    * let: `(let ((X1 T1) ... (Xn Tn)) T)`
+    * declare: `(declare ((X1 S1) ... (Xn Sn)) T)`
+    * set_default_modulus: `(set_default_modulus I T)`
+    * set_default_modulus: `(O T1 ... TN)`
+  * Operator `O`:
+    * Plain operators (TODO)
+    * `(field N)`
+    * `(update N)`
+    * `(sext N)`
+    * `(uext N)`
+    * `(bit N)`
+    * TODO: more

@@ -687,7 +687,7 @@ impl Display for Value {
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
             Value::Tuple(fields) => {
-                write!(f, "(tuple")?;
+                write!(f, "(tuple_value ")?;
                 for field in fields {
                     write!(f, " {}", field)?;
                 }

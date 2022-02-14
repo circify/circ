@@ -237,7 +237,7 @@ impl<'src> IrInterp<'src> {
             List(ls) => {
                 assert!(ls.len() > 0);
                 match &ls[..] {
-                    [Leaf(Ident, b"field"), m] => Sort::Field(Arc::new(self.int(m))),
+                    [Leaf(Ident, b"mod"), m] => Sort::Field(Arc::new(self.int(m))),
                     [Leaf(Ident, b"bv"), w] => Sort::BitVector(self.usize(w)),
                     [Leaf(Ident, b"array"), k, v, s] => Sort::Array(
                         Box::new(self.sort(k)),
