@@ -9,6 +9,7 @@ use bls12_381::{Bls12, Scalar};
 #[cfg(feature = "c_front")]
 use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
+#[cfg(feature = "zok_front")]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
@@ -59,6 +60,7 @@ struct FrontendOptions {
     value_threshold: Option<u64>,
 
     /// File with input witness
+    #[allow(dead_code)]
     #[structopt(long, name = "FILE", parse(from_os_str))]
     inputs: Option<PathBuf>,
 
@@ -174,6 +176,7 @@ fn main() {
     };
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
+        #[cfg(feature = "zok_front")]
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
@@ -181,6 +184,10 @@ fn main() {
                 mode,
             };
             ZSharpFE::gen(inputs)
+        }
+        #[cfg(not(feature = "zok_front"))]
+        DeterminedLanguage::Zsharp => {
+            panic!("Missing feature zok_front");
         }
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs {
@@ -201,7 +208,7 @@ fn main() {
         }
         #[cfg(not(feature = "c_front"))]
         DeterminedLanguage::C => {
-            panic!("Unable to build language: {:#?}", language);
+            panic!("Missing feature c_front");
         }
     };
     let cs = match mode {
@@ -261,7 +268,7 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, circ::front::zsharp::ZSHARP_MODULUS.clone());
+            let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
             println!("Final R1cs size: {}", r1cs.constraints().len());

@@ -9,7 +9,6 @@ use crate::circify::{CircError, Circify, Loc, Val};
 use crate::ir::proof::{self, ConstraintMetadata};
 use crate::ir::term::*;
 use log::{debug, warn};
-use rug::Integer;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -29,11 +28,6 @@ pub use term::ZSHARP_MODULUS_ARC;
 
 // garbage collection increment for adaptive GC threshold
 const GC_INC: usize = 32;
-
-/// The prover visibility
-pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
-/// Public visibility
-pub const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the Z# compiler
 pub struct Inputs {

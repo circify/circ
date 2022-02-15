@@ -7,23 +7,30 @@ use bellman::groth16::{
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
+#[cfg(feature = "zok_front")]
 use circ::front::zsharp::{self, ZSharpFE};
+#[cfg(feature = "zok_front")]
 use circ::front::{FrontEnd, Mode};
+#[cfg(feature = "zok_front")]
 use circ::ir::opt::{opt, Opt};
 /*
 use circ::target::r1cs::bellman::parse_instance;
 */
+#[cfg(feature = "zok_front")]
 use circ::target::r1cs::opt::reduce_linearities;
+#[cfg(feature = "zok_front")]
 use circ::target::r1cs::trans::to_r1cs;
 /*
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 */
+#[cfg(feature = "zok_front")]
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
+#[cfg(feature = "zok_front")]
 use structopt::StructOpt;
-
+#[cfg(feature = "zok_front")]
 #[derive(Debug, StructOpt)]
 #[structopt(name = "zxc", about = "CirC: the circuit compiler")]
 struct Options {
@@ -54,6 +61,7 @@ struct Options {
     action: ProofAction,
 }
 
+#[cfg(feature = "zok_front")]
 #[derive(Debug, StructOpt)]
 struct FrontendOptions {
     /// File with input witness
@@ -80,108 +88,117 @@ arg_enum! {
 }
 
 fn main() {
-    env_logger::Builder::from_default_env()
-        .format_level(false)
-        .format_timestamp(None)
-        .init();
-    let options = Options::from_args();
-    println!("{:?}", options);
-    let cs = {
-        let inputs = zsharp::Inputs {
-            file: options.path,
-            inputs: options.frontend.inputs,
-            mode: Mode::Proof,
+    #[cfg(not(feature = "zok_front"))]
+    {
+        println!("Requires feature: zok_front");
+    }
+    #[cfg(feature = "zok_front")]
+    {
+        env_logger::Builder::from_default_env()
+            .format_level(false)
+            .format_timestamp(None)
+            .init();
+        let options = Options::from_args();
+        println!("{:?}", options);
+
+        let cs = {
+            let inputs = zsharp::Inputs {
+                file: options.path,
+                inputs: options.frontend.inputs,
+                mode: Mode::Proof,
+            };
+            ZSharpFE::gen(inputs)
         };
-        ZSharpFE::gen(inputs)
-    };
 
-    print!("Optimizing IR... ");
-    let cs = opt(
-        cs,
-        vec![
-            Opt::ScalarizeVars,
-            Opt::Flatten,
-            Opt::Sha,
-            Opt::ConstantFold,
-            Opt::Flatten,
-            Opt::Inline,
-            // Tuples must be eliminated before oblivious array elim
-            Opt::Tuple,
-            Opt::ConstantFold,
-            Opt::Obliv,
-            // The obliv elim pass produces more tuples, that must be eliminated
-            Opt::Tuple,
-            Opt::LinearScan,
-            // The linear scan pass produces more tuples, that must be eliminated
-            Opt::Tuple,
-            Opt::Flatten,
-            Opt::ConstantFold,
-            Opt::Inline,
-        ],
-    );
-    println!("done.");
-
-    let action = options.action;
-    /*
-    let proof = options.proof;
-    let prover_key = options.prover_key;
-    let verifier_key = options.verifier_key;
-    let instance = options.instance;
-    */
-    println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, circ::front::zsharp::ZSHARP_MODULUS.clone());
-    let r1cs = if options.skip_linred {
-        println!("Skipping linearity reduction, as requested.");
-        r1cs
-    } else {
-        println!(
-            "R1cs size before linearity reduction: {}",
-            r1cs.constraints().len()
+        print!("Optimizing IR... ");
+        let cs = opt(
+            cs,
+            vec![
+                Opt::ScalarizeVars,
+                Opt::Flatten,
+                Opt::Sha,
+                Opt::ConstantFold,
+                Opt::Flatten,
+                Opt::Inline,
+                // Tuples must be eliminated before oblivious array elim
+                Opt::Tuple,
+                Opt::ConstantFold,
+                Opt::Obliv,
+                // The obliv elim pass produces more tuples, that must be eliminated
+                Opt::Tuple,
+                Opt::LinearScan,
+                // The linear scan pass produces more tuples, that must be eliminated
+                Opt::Tuple,
+                Opt::Flatten,
+                Opt::ConstantFold,
+                Opt::Inline,
+            ],
         );
-        reduce_linearities(r1cs)
-    };
-    println!("Final R1cs size: {}", r1cs.constraints().len());
-    match action {
-        ProofAction::Count => {
-            println!("{:#?}", r1cs.constraints());
-        }
-        ProofAction::Prove => {
-            unimplemented!()
-            /*
-            println!("Proving");
-            r1cs.check_all();
-            let rng = &mut rand::thread_rng();
-            let mut pk_file = File::open(prover_key).unwrap();
-            let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
-            let pf = create_random_proof(&r1cs, &pk, rng).unwrap();
-            let mut pf_file = File::create(proof).unwrap();
-            pf.write(&mut pf_file).unwrap();
-            */
-        }
-        ProofAction::Setup => {
-            unimplemented!()
-            /*
-            let rng = &mut rand::thread_rng();
-            let p =
-                generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
-            let mut pk_file = File::create(prover_key).unwrap();
-            p.write(&mut pk_file).unwrap();
-            let mut vk_file = File::create(verifier_key).unwrap();
-            p.vk.write(&mut vk_file).unwrap();
-            */
-        }
-        ProofAction::Verify => {
-            unimplemented!()
-            /*
-            println!("Verifying");
-            let mut vk_file = File::open(verifier_key).unwrap();
-            let vk = VerifyingKey::<Bls12>::read(&mut vk_file).unwrap();
-            let pvk = prepare_verifying_key(&vk);
-            let mut pf_file = File::open(proof).unwrap();
-            let pf = Proof::read(&mut pf_file).unwrap();
-            let instance_vec = parse_instance(&instance);
-            verify_proof(&pvk, &pf, &instance_vec).unwrap();
-            */
-        }
-    };
+        println!("done.");
+
+        let action = options.action;
+        /*
+        let proof = options.proof;
+        let prover_key = options.prover_key;
+        let verifier_key = options.verifier_key;
+        let instance = options.instance;
+        */
+
+        println!("Converting to r1cs");
+        let r1cs = to_r1cs(cs, circ::front::zsharp::ZSHARP_MODULUS.clone());
+        let r1cs = if options.skip_linred {
+            println!("Skipping linearity reduction, as requested.");
+            r1cs
+        } else {
+            println!(
+                "R1cs size before linearity reduction: {}",
+                r1cs.constraints().len()
+            );
+            reduce_linearities(r1cs)
+        };
+        println!("Final R1cs size: {}", r1cs.constraints().len());
+        match action {
+            ProofAction::Count => {
+                println!("{:#?}", r1cs.constraints());
+            }
+            ProofAction::Prove => {
+                unimplemented!()
+                /*
+                println!("Proving");
+                r1cs.check_all();
+                let rng = &mut rand::thread_rng();
+                let mut pk_file = File::open(prover_key).unwrap();
+                let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
+                let pf = create_random_proof(&r1cs, &pk, rng).unwrap();
+                let mut pf_file = File::create(proof).unwrap();
+                pf.write(&mut pf_file).unwrap();
+                */
+            }
+            ProofAction::Setup => {
+                unimplemented!()
+                /*
+                let rng = &mut rand::thread_rng();
+                let p =
+                    generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
+                let mut pk_file = File::create(prover_key).unwrap();
+                p.write(&mut pk_file).unwrap();
+                let mut vk_file = File::create(verifier_key).unwrap();
+                p.vk.write(&mut vk_file).unwrap();
+                */
+            }
+            ProofAction::Verify => {
+                unimplemented!()
+                /*
+                println!("Verifying");
+                let mut vk_file = File::open(verifier_key).unwrap();
+                let vk = VerifyingKey::<Bls12>::read(&mut vk_file).unwrap();
+                let pvk = prepare_verifying_key(&vk);
+                let mut pf_file = File::open(proof).unwrap();
+                let pf = Proof::read(&mut pf_file).unwrap();
+                let instance_vec = parse_instance(&instance);
+                verify_proof(&pvk, &pf, &instance_vec).unwrap();
+                */
+            }
+        };
+    }
 }

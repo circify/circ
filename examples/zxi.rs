@@ -1,8 +1,13 @@
+#[cfg(feature = "zok_front")]
 use circ::front::zsharp::{Inputs, ZSharpFE};
+#[cfg(feature = "zok_front")]
 use circ::front::Mode;
+#[cfg(feature = "zok_front")]
 use std::path::PathBuf;
+#[cfg(feature = "zok_front")]
 use structopt::StructOpt;
 
+#[cfg(feature = "zok_front")]
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
@@ -24,27 +29,34 @@ struct Options {
 }
 
 fn main() {
-    env_logger::Builder::from_default_env()
-        .format_level(false)
-        .format_timestamp(None)
-        .init();
-    let options = Options::from_args();
-    //println!("{:?}", options);
-    let mode = if options.maximize {
-        Mode::Opt
-    } else {
-        match options.parties {
-            Some(p) => Mode::Mpc(p),
-            None => Mode::Proof,
-        }
-    };
-    let inputs = Inputs {
-        file: options.zsharp_path,
-        inputs: options.inputs,
-        mode,
-    };
-    let cs = ZSharpFE::interpret(inputs);
-    cs.pretty(&mut std::io::stdout().lock())
-        .expect("error pretty-printing value");
-    println!();
+    #[cfg(not(feature = "zok_front"))]
+    {
+        println!("Requires feature: zok_front");
+    }
+    #[cfg(feature = "zok_front")]
+    {
+        env_logger::Builder::from_default_env()
+            .format_level(false)
+            .format_timestamp(None)
+            .init();
+        let options = Options::from_args();
+        //println!("{:?}", options);
+        let mode = if options.maximize {
+            Mode::Opt
+        } else {
+            match options.parties {
+                Some(p) => Mode::Mpc(p),
+                None => Mode::Proof,
+            }
+        };
+        let inputs = Inputs {
+            file: options.zsharp_path,
+            inputs: options.inputs,
+            mode,
+        };
+        let cs = ZSharpFE::interpret(inputs);
+        cs.pretty(&mut std::io::stdout().lock())
+            .expect("error pretty-printing value");
+        println!();
+    }
 }
