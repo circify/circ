@@ -1,8 +1,8 @@
 //! Defines a textual serialization format for [Term]s.
-//! 
+//!
 //! Includes both a parser ([parse_term]) and serializer ([serialize_term]).
-//! 
-//! 
+//!
+//!
 //! * IR Textual format
 //!   * It's s-expressions.
 //!   * `N`: natural number
