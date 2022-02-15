@@ -57,10 +57,10 @@ impl<'src> Debug for TokTree<'src> {
 /// Parse a token tree.
 fn parse_tok_tree(bytes: &[u8]) -> TokTree {
     let mut stack: Vec<Vec<TokTree>> = vec![vec![]];
-    let mut lex = Token::lexer(bytes).spanned();
-    while let Some((t, s)) = lex.next() {
+    let lex = Token::lexer(bytes).spanned();
+    for (t, s) in lex {
         match t {
-            Token::TokenErr => {
+            Token::Error => {
                 panic!("Could not tokenize: {}", from_utf8(&bytes[s]).unwrap())
             }
             Token::Open => {
@@ -82,7 +82,7 @@ fn parse_tok_tree(bytes: &[u8]) -> TokTree {
         "There are {} unclosed parens",
         stack.len() - 1
     );
-    assert!(stack[0].len() > 0, "Empty parse");
+    assert!(!stack[0].is_empty(), "Empty parse");
     assert!(stack[0].len() < 2, "Multiple top-level expressions");
     stack.pop().unwrap().pop().unwrap()
 }
@@ -236,7 +236,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"f32") => Sort::F32,
             Leaf(Ident, b"f64") => Sort::F64,
             List(ls) => {
-                assert!(ls.len() > 0);
+                assert!(!ls.is_empty());
                 match &ls[..] {
                     [Leaf(Ident, b"mod"), m] => Sort::Field(Arc::new(self.int(m))),
                     [Leaf(Ident, b"bv"), w] => Sort::BitVector(self.usize(w)),
@@ -262,7 +262,7 @@ impl<'src> IrInterp<'src> {
     }
     fn usize(&self, tt: &TokTree) -> usize {
         match tt {
-            Leaf(Token::Int, s) => usize::from_str(from_utf8(s).unwrap()).unwrap().into(),
+            Leaf(Token::Int, s) => usize::from_str(from_utf8(s).unwrap()).unwrap(),
             _ => panic!("Expected integer, got {}", tt),
         }
     }
@@ -355,7 +355,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"true") => bool_lit(true),
             Leaf(Ident, n) => self.get_binding(n).clone(),
             List(tts) => {
-                assert!(tts.len() > 0, "Expected term, got empty list");
+                assert!(!tts.is_empty(), "Expected term, got empty list");
                 match self.op(&tts[0]) {
                     Err(CtrlOp::Let) => {
                         assert_eq!(
@@ -396,8 +396,7 @@ impl<'src> IrInterp<'src> {
                         tts[1..]
                             .iter()
                             .map(|tti| self.value(tti))
-                            .collect::<Vec<_>>()
-                            .into(),
+                            .collect::<Vec<_>>(),
                     ))),
                     Err(CtrlOp::SetDefaultModulus) => {
                         assert_eq!(
@@ -414,7 +413,7 @@ impl<'src> IrInterp<'src> {
                     Ok(o) => term(o, tts[1..].iter().map(|tti| self.term(tti)).collect()),
                 }
             }
-            Leaf(Open | Close | TokenErr, _) => unreachable!("should be caught in tree building"),
+            Leaf(Open | Close | Error, _) => unreachable!("should be caught in tree building"),
         }
     }
 }
@@ -462,7 +461,7 @@ pub fn serialize_term(t: &Term) -> String {
         }
     }
     writeln!(&mut output, "  )").unwrap();
-    writeln!(&mut output, "  {}", substitute_cache(&t, &mut bindings)).unwrap();
+    writeln!(&mut output, "  {}", substitute_cache(t, &mut bindings)).unwrap();
     writeln!(&mut output, " )").unwrap();
     writeln!(&mut output, ")").unwrap();
     output

@@ -34,7 +34,7 @@ pub enum Token {
     #[regex(br"[ \t\n\f]+", logos::skip)]
     // Skip comments
     #[regex(br";[^\n]*\n", logos::skip)]
-    TokenErr,
+    Error,
 }
 
 #[cfg(test)]
