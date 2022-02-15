@@ -1,4 +1,39 @@
-//! A parser for [Term]s.
+//! Defines a textual serialization format for [Term]s.
+//! 
+//! Includes both a parser ([parse_term]) and serializer ([serialize_term]).
+//! 
+//! 
+//! * IR Textual format
+//!   * It's s-expressions.
+//!   * `N`: natural number
+//!   * `I`: integer (arbitrary-precision)
+//!   * `X`: identifier
+//!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
+//!   * Sort `S`:
+//!     * `bool`
+//!     * `f32`
+//!     * `f64`
+//!     * `(bv N)`
+//!     * `(mod I)`
+//!     * `(tuple S1 ... Sn)`
+//!     * `(array Sk Sv N)`
+//!   * Value `V`:
+//!     * boolean: `true`, `false`
+//!     * integer: `I`
+//!     * bit-vector: `#xFFFF...`, `#bBBBB...`
+//!     * field literal: `#fDD` or `#fDDmDD`.
+//!       * In the former case, an ambient modulus must be set.
+//!     * tuple: `(#t V1 ... Vn)`
+//!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
+//!   * Term `T`:
+//!     * value: `V`
+//!     * let: `(let ((X1 T1) ... (Xn Tn)) T)`
+//!     * declare: `(declare ((X1 S1) ... (Xn Sn)) T)`
+//!     * set_default_modulus: `(set_default_modulus I T)`
+//!     * set_default_modulus: `(O T1 ... TN)`
+//!   * Operator `O`:
+//!     * Plain operators: (`bvmul`, `and`, ...)
+//!     * Composite operators: `(field N)`, `(update N)`, `(sext N)`, `(uext N)`, `(bit N)`, ...
 
 use logos::Logos;
 

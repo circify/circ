@@ -35,7 +35,7 @@ pub mod bv;
 pub mod dist;
 pub mod extras;
 pub mod field;
-pub mod parse;
+pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
