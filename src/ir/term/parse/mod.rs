@@ -7,10 +7,11 @@ use fxhash::FxHashMap as HashMap;
 mod lex;
 
 use lex::Token;
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::str::{from_utf8, FromStr};
 use std::sync::Arc;
 
+use super::extras::substitute_cache;
 use super::*;
 
 /// A token tree, LISP-style.
@@ -138,8 +139,8 @@ impl<'src> IrInterp<'src> {
         match tt {
             Leaf(Ident, b"let") => Err(CtrlOp::Let),
             Leaf(Ident, b"declare") => Err(CtrlOp::Declare),
-            Leaf(Ident, b"tuple_value") => Err(CtrlOp::TupleValue),
-            Leaf(Ident, b"array_value") => Err(CtrlOp::ArrayValue),
+            Leaf(Ident, b"#t") => Err(CtrlOp::TupleValue),
+            Leaf(Ident, b"#a") => Err(CtrlOp::ArrayValue),
             Leaf(Ident, b"set_default_modulus") => Err(CtrlOp::SetDefaultModulus),
             Leaf(Ident, b"ite") => Ok(Op::Ite),
             Leaf(Ident, b"=") => Ok(Op::Eq),
@@ -350,6 +351,8 @@ impl<'src> IrInterp<'src> {
                 };
                 leaf_term(Op::Const(Value::Field(FieldElem::new(v, m))))
             }
+            Leaf(Ident, b"false") => bool_lit(false),
+            Leaf(Ident, b"true") => bool_lit(true),
             Leaf(Ident, n) => self.get_binding(n).clone(),
             List(tts) => {
                 assert!(tts.len() > 0, "Expected term, got empty list");
@@ -423,9 +426,54 @@ pub fn parse_term(src: &[u8]) -> Term {
     i.term(&tree)
 }
 
+/// Serialize a term as a parseable string
+pub fn serialize_term(t: &Term) -> String {
+    let mut let_ct = 0;
+    let mut bindings = TermMap::new();
+    let mut output = String::new();
+
+    let mut parent_counts = TermMap::<usize>::new();
+    writeln!(&mut output, "(declare").unwrap();
+    writeln!(&mut output, " (").unwrap();
+    for t in PostOrderIter::new(t.clone()) {
+        for c in t.cs.iter().cloned() {
+            *parent_counts.entry(c).or_insert(0) += 1;
+        }
+        if let Op::Var(name, sort) = &t.op {
+            writeln!(&mut output, "  ({} {})", name, sort).unwrap();
+        }
+    }
+    writeln!(&mut output, " )").unwrap();
+    writeln!(&mut output, " (let").unwrap();
+    writeln!(&mut output, "  (").unwrap();
+    for t in PostOrderIter::new(t.clone()) {
+        if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
+            let name = format!("let_{}", let_ct);
+            let_ct += 1;
+            let var = leaf_term(Op::Var(name.clone(), check(&t)));
+            writeln!(
+                &mut output,
+                "   ({} {})",
+                name,
+                substitute_cache(&t, &mut bindings)
+            )
+            .unwrap();
+            bindings.insert(t, var);
+        }
+    }
+    writeln!(&mut output, "  )").unwrap();
+    writeln!(&mut output, "  {}", substitute_cache(&t, &mut bindings)).unwrap();
+    writeln!(&mut output, " )").unwrap();
+    writeln!(&mut output, ")").unwrap();
+    output
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::ir::term::dist::test::*;
+    use quickcheck_macros::quickcheck;
 
     #[test]
     fn bool() {
@@ -437,5 +485,62 @@ mod test {
     fn bv() {
         let t = parse_term(b"(declare ((a (bv 5)) (b (bv 3))) (let ((c (bvand a a))) (bvxor (bvor (bvnot a) a) a ((sext 2) b))))");
         assert_eq!(check(&t), Sort::BitVector(5));
+    }
+
+    #[test]
+    fn bool_roundtrip() {
+        let t = parse_term(b"(declare ((a bool) (b bool)) (let ((c (and a b))) (xor (or (not c) b) c a (=> a b))))");
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[quickcheck]
+    fn roundtrip_random_bool(ArbitraryBoolEnv(t, _): ArbitraryBoolEnv) {
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[quickcheck]
+    fn roundtrip_random(ArbitraryTermEnv(t, _): ArbitraryTermEnv) {
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn arr_roundtrip() {
+        let t = parse_term(b"
+        (declare (
+         (a bool)
+         (b bool)
+         (A (array bool bool 1))
+         )
+         (let (
+                 (B (store A a b))
+         ) (xor (select B a)
+                (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))");
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn tup_roundtrip() {
+        let t = parse_term(b"
+        (declare (
+         (a bool)
+         (b bool)
+         (A (tuple bool bool))
+         )
+         (let (
+                 (B ((update 1) A b))
+         ) (xor ((field 1) B)
+                ((field 0) (#t false false #b0000 true)))))");
+        let s = serialize_term(&t);
+        println!("{}", s);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
     }
 }

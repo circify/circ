@@ -150,7 +150,13 @@ impl FixedSizeDist {
                     self.sample_value(sort, rng),
                     // No variables!
                     Op::Var(
-                        self.sample_ident(&format!("tp_{}", sort), rng),
+                        self.sample_ident(
+                            &format!("tp_{}", sort)
+                                .replace('(', "[")
+                                .replace(')', "]")
+                                .replace(' ', "_"),
+                            rng,
+                        ),
                         sort.clone(),
                     ),
                 ]

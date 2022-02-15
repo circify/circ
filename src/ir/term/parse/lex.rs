@@ -11,18 +11,18 @@ pub enum Token {
     Close,
 
     // Literals
-    #[regex(br"-?[1-9][0-9]*", priority = 2)]
+    #[regex(br"-?[0-9]+", priority = 2)]
     Int,
     #[regex(br"#x[0-9a-fA-F]+")]
     Hex,
     #[regex(br"#b[01]+")]
     Bin,
-    #[regex(br"#f[0-9]+(m[0-9]+)?")]
+    #[regex(br"#f-?[0-9]+(m[0-9]+)?")]
     Field,
     // TODO: Float
 
     // Identifiers
-    #[regex(br"[^()0-9#; \t\n\f][^(); \t\n\f#]*")]
+    #[regex(br"#t|#a|[^()0-9#; \t\n\f][^(); \t\n\f#]*")]
     Ident,
 
     // Logos requires one token variant to handle errors,

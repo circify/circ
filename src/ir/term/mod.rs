@@ -35,8 +35,8 @@ pub mod bv;
 pub mod dist;
 pub mod extras;
 pub mod field;
-pub mod ty;
 pub mod parse;
+pub mod ty;
 
 pub use bv::BitVector;
 pub use field::FieldElem;
@@ -687,7 +687,7 @@ impl Display for Value {
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
             Value::Tuple(fields) => {
-                write!(f, "(tuple_value ")?;
+                write!(f, "(#t ")?;
                 for field in fields {
                     write!(f, " {}", field)?;
                 }
@@ -700,11 +700,11 @@ impl Display for Value {
 
 impl Display for Array {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "(map default:{} size:{} {:?})",
-            self.default, self.size, self.map
-        )
+        write!(f, "(#a {} {} {} (", self.key_sort, self.default, self.size,)?;
+        for (k, v) in &self.map {
+            write!(f, " ({} {})", k, v)?;
+        }
+        write!(f, " ))",)
     }
 }
 
