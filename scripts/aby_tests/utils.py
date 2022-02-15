@@ -24,9 +24,9 @@ def rename_test(name: str, lang: str) -> str:
     return f"{name}_{lang}"
 
 def build_cmd(name:str, test_file: str, role: int) -> List[str]:
-    bytecode = f"./third_party/ABY_outputs/{name}_bytecode.txt"
-    share_map = f"./third_party/ABY_outputs/{name}_share_map.txt"
-    param_map= f"./third_party/ABY_outputs/{name}_param_map.txt"
+    bytecode = f"./scripts/aby_tests/tests/{name}_bytecode.txt"
+    share_map = f"./scripts/aby_tests/tests/{name}_share_map.txt"
+    param_map= f"./scripts/aby_tests/tests/{name}_param_map.txt"
     return ["./scripts/aby_tests/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map, "-p", param_map] 
 
 def get_result(file_path):
@@ -86,7 +86,7 @@ def run_tests(lang: str, tests: List[dict]):
     """
     print("Running tests for frontend", lang)
     failed_test_descs = []
-    num_retries = 3
+    num_retries = 5
     progress_inc = 5
     init_progress_bar(len(tests) // progress_inc + 1)
     for t, test in enumerate(tests):

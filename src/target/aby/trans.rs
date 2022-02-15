@@ -107,16 +107,6 @@ impl ToABY {
                 self.check_bool(&a_term);
                 self.check_bool(&b_term);
 
-                // let _s = format!(
-                //     "share* {} = {}->PutXORGate({}->PutXORGate({}, {}), {});\n",
-                //     share,
-                //     s_circ,
-                //     s_circ,
-                //     a_conv,
-                //     b_conv,
-                //     ToABY::one(&s_circ)
-                // );
-
                 let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
                 write_line_to_file(&self.bytecode_path, &line);
 
@@ -127,11 +117,6 @@ impl ToABY {
 
                 self.check_bv(&a_term);
                 self.check_bv(&b_term);
-
-                // let _s = format!(
-                //     "share* {} = {}->PutXORGate({}->PutXORGate({}->PutGTGate({}, {}), {}->PutGTGate({}, {})), {});\n",
-                //     share, s_circ, s_circ, s_circ, a_conv, b_conv, s_circ, b_conv, a_conv, ToABY::one(&s_circ)
-                // );
 
                 let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
                 write_line_to_file(&self.bytecode_path, &line);
@@ -160,22 +145,18 @@ impl ToABY {
                         EmbeddedTerm::Bool(format!("s_{}", ToABY::get_var_name(&t))),
                     );
                     let line = format!(
-                        "{}, {}",
+                        "{} {}\n",
                         ToABY::get_var_name(&t),
                         self.term_to_share_cnt.get(&t).unwrap()
                     );
                     write_line_to_file(&self.param_map_path, &line);
                 }
             }
-            Op::Const(Value::Bool(_b)) => {
-                //TODO:
-                unimplemented!();
-                // let share = self.get_share_name(&t);
-                // let _s = format!(
-                //     "share* {} = {}->PutCONSGate((uint64_t){}, (uint32_t){});\n",
-                //     share, s_circ, *b as isize, BOOLEAN_BITLEN
-                // );
-                // self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+            Op::Const(Value::Bool(b)) => {
+                let op = "CONS_bool";
+                let line = format!("1 1 {} {} {}\n", *b as i32, s, op);
+                write_line_to_file(&self.bytecode_path, &line);
+                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
             }
             Op::Eq => {
                 self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
@@ -281,26 +262,11 @@ impl ToABY {
                     write_line_to_file(&self.param_map_path, &line);
                 }
             }
-            Op::Const(Value::BitVector(_b)) => {
-                //TODO:
-                // let share = self.get_share_name(&t);
-
-                // let _s = format!(
-                //     "share* {} = {}->PutCONSGate((uint64_t){}, (uint32_t){});\n",
-                //     share,
-                //     s_circ,
-                //     format!("{}", b).replace("#", "0"),
-                //     b.width()
-                // );
-
-                // let op = "CON";
-                // let s = self.term_to_share_cnt.get(&t).unwrap();
-                // let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                // let line = format!("1 1 {} {} {} {}\n", a, b, s, op);
-                // write_line_to_file(&self.bytecode_path, &line);
-
-                // self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
-                unimplemented!();
+            Op::Const(Value::BitVector(b)) => {
+                let op = "CONS_bv";
+                let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                write_line_to_file(&self.bytecode_path, &line);
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
             }
             Op::Ite => {
                 let op = "MUX";
@@ -381,7 +347,12 @@ impl ToABY {
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self, t: Term) {
-        self.embed(t);
+        self.embed(t.clone());
+
+        let op = "OUT";
+        let s = self.term_to_share_cnt.get(&t).unwrap();
+        let line = format!("1 0 {} {}\n", s, op);
+        write_line_to_file(&self.bytecode_path, &line);
     }
 }
 

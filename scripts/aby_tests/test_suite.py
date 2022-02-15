@@ -2,12 +2,12 @@ add_tests = [
     [
         "Add two numbers",
         "2pc_add",
-        "./examples/test_inputs/mpc/add.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
     [
         "Subtract two numbers",
         "2pc_sub",
-        "./examples/test_inputs/mpc/sub_1.txt",
+        "./scripts/aby_tests/test_inputs/sub_1.txt",
     ], 
 ]
 
@@ -15,44 +15,44 @@ arithmetic_tests = [
     [
         "Add two numbers",
         "2pc_add",
-        "./examples/test_inputs/mpc/add.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
     [
         "Subtract two numbers",
         "2pc_sub",
-        "./examples/test_inputs/mpc/sub_1.txt",
+        "./scripts/aby_tests/test_inputs/sub_1.txt",
     ], 
     [
         "Subtract two numbers, negative -1 == 4294967295 because u32",
         "2pc_sub",
-        "./examples/test_inputs/mpc/sub_2.txt",
+        "./scripts/aby_tests/test_inputs/sub_2.txt",
     ],
     [
         "Multiply two numbers - 1",
         "2pc_mult",
-        "./examples/test_inputs/mpc/mult_1.txt",
+        "./scripts/aby_tests/test_inputs/mult_1.txt",
     ], 
     [
         "Multiply two numbers - 2",
         "2pc_mult",
-        "./examples/test_inputs/mpc/mult_2.txt",
+        "./scripts/aby_tests/test_inputs/mult_2.txt",
     ], 
     [
         "Multiply two numbers - 3",
         "2pc_mult",
-        "./examples/test_inputs/mpc/mult_3.txt",
+        "./scripts/aby_tests/test_inputs/mult_3.txt",
     ], 
     [
         # only server side public value works 
         "Multiply two numbers together and add with public value",
         "2pc_mult_add_pub",
-        "./examples/test_inputs/mpc/mult_add_pub_1.txt",
+        "./scripts/aby_tests/test_inputs/mult_add_pub_1.txt",
     ], 
     [
         # only server side public value works 
         "Multiply two numbers together and add with public value, check only server side public value is added",
         "2pc_mult_add_pub",
-        "./examples/test_inputs/mpc/mult_add_pub_2.txt",
+        "./scripts/aby_tests/test_inputs/mult_add_pub_2.txt",
     ], 
 ]
 
@@ -60,17 +60,17 @@ mod_tests = [
     [
         "Mod two numbers - 1",
         "2pc_mod",
-        "./examples/test_inputs/mpc/mod_1.txt",
+        "./scripts/aby_tests/test_inputs/mod_1.txt",
     ], 
     [
         "Mod two numbers - 2",
         "2pc_mod",
-        "./examples/test_inputs/mpc/mod_2.txt",
+        "./scripts/aby_tests/test_inputs/mod_2.txt",
     ], 
     [
         "Mod two numbers - 3",
         "2pc_mod",
-        "./examples/test_inputs/mpc/mod_3.txt",
+        "./scripts/aby_tests/test_inputs/mod_3.txt",
     ], 
 ]
 
@@ -78,7 +78,7 @@ unsigned_arithmetic_tests = [
      [
         "Add two unsigned numbers",
         "2pc_add_unsigned",
-        "./examples/test_inputs/mpc/add.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
 ]
 
@@ -86,72 +86,72 @@ arithmetic_boolean_tests = [
     [
         "Test two numbers are equal - 1",
         "2pc_int_equals",
-        "./examples/test_inputs/mpc/eq_1.txt",
+        "./scripts/aby_tests/test_inputs/eq_1.txt",
     ],
     [
         "Test two numbers are equal - 2",
         "2pc_int_equals",
-        "./examples/test_inputs/mpc/eq_2.txt",
+        "./scripts/aby_tests/test_inputs/eq_2.txt",
     ], 
     [
         "Test int > int - 1",
         "2pc_int_greater_than",
-         "./examples/test_inputs/mpc/gt_1.txt",
+         "./scripts/aby_tests/test_inputs/gt_1.txt",
     ], 
     [
         "Test int > int - 2",
         "2pc_int_greater_than",
-         "./examples/test_inputs/mpc/gt_2.txt",
+         "./scripts/aby_tests/test_inputs/gt_2.txt",
     ], 
     [
         "Test int > int - 3",
         "2pc_int_greater_than",
-        "./examples/test_inputs/mpc/gt_3.txt",
+        "./scripts/aby_tests/test_inputs/gt_3.txt",
     ], 
     [
         "Test int >= int - 1",
         "2pc_int_greater_equals",
-        "./examples/test_inputs/mpc/ge_1.txt",
+        "./scripts/aby_tests/test_inputs/ge_1.txt",
     ], 
     [
         "Test int >= int - 2",
         "2pc_int_greater_equals",
-        "./examples/test_inputs/mpc/ge_2.txt",
+        "./scripts/aby_tests/test_inputs/ge_2.txt",
     ], 
     [
         "Test int >= int - 3",
         "2pc_int_greater_equals",
-        "./examples/test_inputs/mpc/ge_3.txt",
+        "./scripts/aby_tests/test_inputs/ge_3.txt",
     ],
     [
         "Test int < int - 1",
         "2pc_int_less_than",
-        "./examples/test_inputs/mpc/lt_1.txt",
+        "./scripts/aby_tests/test_inputs/lt_1.txt",
     ], 
     [
         "Test int < int - 2",
         "2pc_int_less_than",
-        "./examples/test_inputs/mpc/lt_2.txt",
+        "./scripts/aby_tests/test_inputs/lt_2.txt",
     ], 
     [
         "Test int < int - 3",
         "2pc_int_less_than",
-        "./examples/test_inputs/mpc/lt_3.txt",
+        "./scripts/aby_tests/test_inputs/lt_3.txt",
     ], 
     [
         "Test int <= int - 1",
         "2pc_int_less_equals",
-        "./examples/test_inputs/mpc/le_1.txt",
+        "./scripts/aby_tests/test_inputs/le_1.txt",
     ], 
     [
         "Test int <= int - 2",
         "2pc_int_less_equals",
-        "./examples/test_inputs/mpc/le_2.txt",
+        "./scripts/aby_tests/test_inputs/le_2.txt",
     ], 
     [
         "Test int <= int - 3",
         "2pc_int_less_equals",
-        "./examples/test_inputs/mpc/le_3.txt",
+        "./scripts/aby_tests/test_inputs/le_3.txt",
     ],
 ]
 
@@ -159,7 +159,7 @@ nary_arithmetic_tests = [
     [
         "Test a + b + c",
         "2pc_nary_arithmetic_add",
-        "./examples/test_inputs/mpc/nary_add.txt",
+        "./scripts/aby_tests/test_inputs/nary_add.txt",
     ],
 ]
 
@@ -167,63 +167,63 @@ bitwise_tests = [
     [
         "Bitwise & - 1",
         "2pc_bitwise_and",
-        "./examples/test_inputs/mpc/and_1.txt",
+        "./scripts/aby_tests/test_inputs/and_1.txt",
     ],
     [
         "Bitwise & - 2",
         "2pc_bitwise_and",
-        "./examples/test_inputs/mpc/and_2.txt",
+        "./scripts/aby_tests/test_inputs/and_2.txt",
     ],
     [
         "Bitwise & - 3",
         "2pc_bitwise_and",
-        "./examples/test_inputs/mpc/and_3.txt",
+        "./scripts/aby_tests/test_inputs/and_3.txt",
     ],
     [
         "Bitwise & - 4",
         "2pc_bitwise_and",
-        "./examples/test_inputs/mpc/and_4.txt",
+        "./scripts/aby_tests/test_inputs/and_4.txt",
     ],
     [
         "Bitwise | - 1",
         "2pc_bitwise_or",
-        "./examples/test_inputs/mpc/or_1.txt",
+        "./scripts/aby_tests/test_inputs/or_1.txt",
     ],
     [
         "Bitwise | - 2",
         "2pc_bitwise_or",
-        "./examples/test_inputs/mpc/or_2.txt",
+        "./scripts/aby_tests/test_inputs/or_2.txt",
     ],
     [
         "Bitwise | - 3",
         "2pc_bitwise_or",
-        "./examples/test_inputs/mpc/or_3.txt",
+        "./scripts/aby_tests/test_inputs/or_3.txt",
     ],
     [
         "Bitwise | - 4",
         "2pc_bitwise_or",
-        "./examples/test_inputs/mpc/or_4.txt",
+        "./scripts/aby_tests/test_inputs/or_4.txt",
     ],
         [
         "Bitwise ^ - 1",
         "2pc_bitwise_xor",
-        "./examples/test_inputs/mpc/xor_1.txt",
+        "./scripts/aby_tests/test_inputs/xor_1.txt",
 
     ],
     [
         "Bitwise ^ - 2",
         "2pc_bitwise_xor",
-        "./examples/test_inputs/mpc/xor_2.txt",
+        "./scripts/aby_tests/test_inputs/xor_2.txt",
     ],
     [
         "Bitwise ^ - 3",
         "2pc_bitwise_xor",
-        "./examples/test_inputs/mpc/xor_3.txt",
+        "./scripts/aby_tests/test_inputs/xor_3.txt",
     ],
     [
         "Bitwise ^ - 4",
         "2pc_bitwise_xor",
-        "./examples/test_inputs/mpc/xor_4.txt",
+        "./scripts/aby_tests/test_inputs/xor_4.txt",
     ],
 ]
 
@@ -231,54 +231,54 @@ boolean_tests = [
     [
         "Boolean && - 1",
         "2pc_boolean_and",
-        "./examples/test_inputs/mpc/and_1.txt",
+        "./scripts/aby_tests/test_inputs/and_1.txt",
     ],
     [
         "Boolean && - 2",
         "2pc_boolean_and",
-        "./examples/test_inputs/mpc/and_2.txt",
+        "./scripts/aby_tests/test_inputs/and_2.txt",
     ],
     [
         "Boolean && - 3",
         "2pc_boolean_and",
-        "./examples/test_inputs/mpc/and_3.txt",
+        "./scripts/aby_tests/test_inputs/and_3.txt",
     ],
     [
         "Boolean && - 4",
         "2pc_boolean_and",
-        "./examples/test_inputs/mpc/and_4.txt",
+        "./scripts/aby_tests/test_inputs/and_4.txt",
     ],
     [
         "Boolean || - 1",
         "2pc_boolean_or",
-        "./examples/test_inputs/mpc/or_1.txt",
+        "./scripts/aby_tests/test_inputs/or_1.txt",
     ],
     [
         "Boolean || - 2",
         "2pc_boolean_or",
-        "./examples/test_inputs/mpc/or_2.txt",
+        "./scripts/aby_tests/test_inputs/or_2.txt",
 
     ],
     [
         "Boolean || - 3",
         "2pc_boolean_or",
-        "./examples/test_inputs/mpc/or_3.txt",
+        "./scripts/aby_tests/test_inputs/or_3.txt",
 
     ],
     [
         "Boolean || - 4",
         "2pc_boolean_or",
-        "./examples/test_inputs/mpc/or_4.txt",
+        "./scripts/aby_tests/test_inputs/or_4.txt",
     ],
     [
         "Boolean == - 1",
         "2pc_boolean_equals",
-        "./examples/test_inputs/mpc/eq_1.txt",
+        "./scripts/aby_tests/test_inputs/eq_1.txt",
     ],
     [
         "Boolean == - 2",
         "2pc_boolean_equals",
-        "./examples/test_inputs/mpc/eq_2.txt",
+        "./scripts/aby_tests/test_inputs/eq_2.txt",
     ],
 ]
 
@@ -286,7 +286,7 @@ nary_boolean_tests = [
     [
         "Test a & b & c",
         "2pc_nary_boolean_and",
-        "./examples/test_inputs/mpc/nary_and.txt",
+        "./scripts/aby_tests/test_inputs/nary_and.txt",
     ],
 ]
 
@@ -295,7 +295,7 @@ const_arith_tests = [
     [
         "Test add client int + server int to const value",
         "2pc_const_arith",
-        "./examples/test_inputs/mpc/const_add.txt",
+        "./scripts/aby_tests/test_inputs/const_add.txt",
     ], 
 ]
 
@@ -303,12 +303,12 @@ const_bool_tests = [
     [
         "Test server value == const value - 1",
         "2pc_const_bool",
-        "./examples/test_inputs/mpc/const_eq_1.txt",
+        "./scripts/aby_tests/test_inputs/const_eq_1.txt",
     ], 
     [
         "Test server value == const value - 2",
         "2pc_const_bool",
-        "./examples/test_inputs/mpc/const_eq_2.txt",
+        "./scripts/aby_tests/test_inputs/const_eq_2.txt",
     ], 
 ]
 
@@ -316,32 +316,32 @@ ite_tests = [
     [
         "Test ite ret bool - 1",
         "2pc_ite_ret_bool",
-        "./examples/test_inputs/mpc/ite_1.txt",
+        "./scripts/aby_tests/test_inputs/ite_1.txt",
     ],
     [
         "Test ite ret bool - 2",
         "2pc_ite_ret_bool",
-        "./examples/test_inputs/mpc/ite_2.txt",
+        "./scripts/aby_tests/test_inputs/ite_2.txt",
     ],
     [
         "Test ite ret int - 1",
         "2pc_ite_ret_int",
-        "./examples/test_inputs/mpc/ite_1.txt",
+        "./scripts/aby_tests/test_inputs/ite_1.txt",
     ],
     [
         "Test ite ret int - 2",
         "2pc_ite_ret_int",
-        "./examples/test_inputs/mpc/ite_2.txt",
+        "./scripts/aby_tests/test_inputs/ite_2.txt",
     ],
     [
         "Test ite only if - 1",
         "2pc_ite_only_if",
-        "./examples/test_inputs/mpc/ite_1.txt",
+        "./scripts/aby_tests/test_inputs/ite_1.txt",
     ],
     [
         "Test ite only if - 2",
         "2pc_ite_only_if",
-        "./examples/test_inputs/mpc/ite_2.txt",
+        "./scripts/aby_tests/test_inputs/ite_2.txt",
     ],
 ]
 
@@ -349,17 +349,12 @@ array_tests = [
     [
         "Array sum test",
         "2pc_array_sum",
-        "./examples/test_inputs/mpc/add.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
     [
         "Array index test",
         "2pc_array_index",
-        "./examples/test_inputs/mpc/add.txt",
-    ], 
-    [
-        "Array index test 2",
-        "2pc_array_index_2",
-        "./examples/test_inputs/mpc/index.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
 ]
 
@@ -367,27 +362,27 @@ c_array_tests = [
     [
         "C array test",
         "2pc_array",
-        "./examples/test_inputs/mpc/array.txt",
+        "./scripts/aby_tests/test_inputs/array.txt",
     ], 
     [
         "C array test 1",
         "2pc_array_1",
-        "./examples/test_inputs/mpc/array_1.txt",
+        "./scripts/aby_tests/test_inputs/array_1.txt",
     ], 
     [
         "C array test 2",
         "2pc_array_2",
-        "./examples/test_inputs/mpc/array_2.txt",
+        "./scripts/aby_tests/test_inputs/array_2.txt",
     ], 
     [
         "C array test 3",
         "2pc_array_3",
-        "./examples/test_inputs/mpc/array_3.txt",
+        "./scripts/aby_tests/test_inputs/array_3.txt",
     ], 
     [
         "C array test 4",
         "2pc_array_sum_c",
-        "./examples/test_inputs/mpc/array_4.txt",
+        "./scripts/aby_tests/test_inputs/array_4.txt",
     ], 
 ]
 
@@ -395,12 +390,12 @@ loop_tests = [
     [
         "Loop sum const - 1",
         "2pc_loop_sum",
-        "./examples/test_inputs/mpc/loop_1.txt",
+        "./scripts/aby_tests/test_inputs/loop_1.txt",
     ], 
     [
         "Loop sum const - 2",
         "2pc_loop_sum",
-        "./examples/test_inputs/mpc/loop_2.txt",
+        "./scripts/aby_tests/test_inputs/loop_2.txt",
     ],
 ]
 
@@ -408,7 +403,7 @@ function_tests = [
     [
         "Sum() two numbers - 1",
         "2pc_function_sum",
-        "./examples/test_inputs/mpc/add.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
 ]
 
@@ -416,27 +411,27 @@ shift_tests = [
      [
         "Left Shift a by 1 - 1",
         "2pc_lhs",
-        "./examples/test_inputs/mpc/lsh_1.txt",
+        "./scripts/aby_tests/test_inputs/lsh_1.txt",
     ], 
     [
         "Left Shift a by 1 - 2",
         "2pc_lhs",
-        "./examples/test_inputs/mpc/lsh_2.txt",
+        "./scripts/aby_tests/test_inputs/lsh_2.txt",
     ], 
     [
         "Left Shift a by 1 - 3",
         "2pc_lhs",
-        "./examples/test_inputs/mpc/lsh_3.txt",
+        "./scripts/aby_tests/test_inputs/lsh_3.txt",
     ], 
     [
         "Right Shift a by 1 - 1",
         "2pc_rhs",
-        "./examples/test_inputs/mpc/rsh_1.txt",
+        "./scripts/aby_tests/test_inputs/rsh_1.txt",
     ], 
     [
         "Right Shift a by 1 - 2",
         "2pc_rhs",
-        "./examples/test_inputs/mpc/rsh_2.txt",
+        "./scripts/aby_tests/test_inputs/rsh_2.txt",
     ], 
 ]
 
@@ -445,22 +440,22 @@ div_tests = [
     [
         "Divide a by 1",
         "2pc_div",
-        "./examples/test_inputs/mpc/div_1.txt",
+        "./scripts/aby_tests/test_inputs/div_1.txt",
     ], 
     [
         "Divide a by b - 1",
         "2pc_div",
-        "./examples/test_inputs/mpc/div_2.txt",
+        "./scripts/aby_tests/test_inputs/div_2.txt",
     ], 
     [
         "Divide a by b - 2",
         "2pc_div",
-        "./examples/test_inputs/mpc/div_3.txt",
+        "./scripts/aby_tests/test_inputs/div_3.txt",
     ], 
     [
         "Divide a by b - 3",
         "2pc_div",
-        "./examples/test_inputs/mpc/div_4.txt",
+        "./scripts/aby_tests/test_inputs/div_4.txt",
     ], 
 ]
 
@@ -468,17 +463,17 @@ misc_tests = [
     [
         "Millionaire's problem: server has more money than client",
         "2pc_millionaires",
-        "./examples/test_inputs/mpc/lt_1.txt",
+        "./scripts/aby_tests/test_inputs/lt_1.txt",
     ], 
     [
         "Millionaire's problem: server has equal money to client",
         "2pc_millionaires",
-        "./examples/test_inputs/mpc/lt_2.txt",
+        "./scripts/aby_tests/test_inputs/lt_2.txt",
     ], 
     [
         "Millionaire's problem: server has less money than client",
         "2pc_millionaires",
-        "./examples/test_inputs/mpc/lt_3.txt",
+        "./scripts/aby_tests/test_inputs/lt_3.txt",
     ], 
 ]
 
@@ -486,7 +481,7 @@ kmeans_tests = [
     [
         "kmeans",
         "2pc_kmeans",
-        "./examples/test_inputs/mpc/kmeans.txt",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
     ],     
 ]
 
@@ -494,12 +489,12 @@ biomatch_tests = [
     [
         "biomatch - 1",
         "2pc_biomatch",
-        "./examples/test_inputs/mpc/biomatch_1.txt",
+        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
     ],   
     [
         "biomatch - 2",
         "2pc_biomatch",
-        "./examples/test_inputs/mpc/biomatch_2.txt",
+        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
     ],   
 ]
 

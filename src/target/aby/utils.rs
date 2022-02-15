@@ -14,13 +14,11 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
         .unwrap();
 
     let name = format!("{}_{}", filename, lang);
-
-    // TODO: clean
-    let path = format!("third_party/ABY_outputs/{}_{}.txt", name, t);
-
-    if Path::new(&path).exists() {
-        fs::remove_file(&path).expect("Failed to remove old circuit_tmp file");
-    }
+    let path = format!("scripts/aby_tests/tests/{}_{}.txt", name, t);
+    match fs::File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}", path, why),
+        Ok(file) => file,
+    };
     path
 }
 
