@@ -15,8 +15,8 @@ build_aby_c: build_deps build
 	./scripts/build_aby.zsh
 
 build:
-	cargo build --release --example circ
-	cargo build --example circ
+	cargo build --release --examples
+	cargo build --examples
 
 test: build build_aby_zokrates build_aby_c
 	cargo test

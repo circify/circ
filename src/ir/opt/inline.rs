@@ -192,7 +192,7 @@ mod test {
     use crate::target::smt::{check_sat, find_model};
 
     fn b_var(b: &str) -> Term {
-        leaf_term(Op::Var(format!("{}", b), Sort::Bool))
+        leaf_term(Op::Var(b.to_string(), Sort::Bool))
     }
 
     fn sub_test(xs: Vec<Term>, n: usize) {
@@ -236,8 +236,8 @@ mod test {
             }
             panic!("Invalid inline");
         }
-        assert_eq!(check_sat(&not_imp), false);
-        assert_eq!(check_sat(&not_imp_not), false);
+        assert!(!check_sat(&not_imp));
+        assert!(!check_sat(&not_imp_not));
     }
 
     #[test]

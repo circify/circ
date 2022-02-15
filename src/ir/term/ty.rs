@@ -4,7 +4,10 @@ use super::*;
 
 lazy_static! {
     /// Cache of all types
-    pub static ref TERM_TYPES: RwLock<FxHashMap<TTerm, Sort>> = RwLock::new(FxHashMap::default());
+    pub(super) static ref TERM_TYPES: RwLock<TypeTable> = RwLock::new(TypeTable {
+        map: FxHashMap::default(),
+        last_len: 0,
+    });
 }
 
 #[track_caller]
@@ -26,6 +29,28 @@ pub fn check_rec(t: &Term) -> Sort {
 pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
     if let Some(s) = TERM_TYPES.read().unwrap().get(&t.to_weak()) {
         return Ok(s.clone());
+    }
+    // RSW: the below loop is a band-aid to keep from blowing the stack
+    // XXX(q) is there a better way to write this function?
+    let mut t = t;
+    loop {
+        let t_new = match &t.op {
+            Op::Ite => &t.cs[1],
+            Op::BvBinOp(_) => &t.cs[0],
+            Op::BvNaryOp(_) => &t.cs[0],
+            Op::BvUnOp(_) => &t.cs[0],
+            Op::FpBinOp(_) => &t.cs[0],
+            Op::FpUnOp(_) => &t.cs[0],
+            Op::PfUnOp(_) => &t.cs[0],
+            Op::PfNaryOp(_) => &t.cs[0],
+            Op::Store => &t.cs[0],
+            Op::Update(_i) => &t.cs[0],
+            _ => break,
+        };
+        if std::ptr::eq(t, t_new) {
+            panic!("infinite loop detected in check_raw");
+        }
+        t = t_new;
     }
     let ty = match &t.op {
         Op::Ite => Ok(check_raw(&t.cs[1])?),
@@ -88,7 +113,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         Op::Select => array_or(&check_raw(&t.cs[0])?, "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(check_raw(&t.cs[0])?),
         Op::Tuple => Ok(Sort::Tuple(
-            t.cs.iter().map(check_raw).collect::<Result<Vec<_>, _>>()?,
+            t.cs.iter().map(check_raw).collect::<Result<_, _>>()?,
         )),
         Op::Field(i) => {
             let sort = check_raw(&t.cs[0])?;
@@ -371,7 +396,7 @@ fn pf_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason
     }
 }
 
-fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Vec<Sort>, TypeErrorReason> {
+fn tuple_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a [Sort], TypeErrorReason> {
     match a {
         Sort::Tuple(a) => Ok(a),
         _ => Err(TypeErrorReason::ExpectedTuple(ctx)),

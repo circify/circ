@@ -1,0 +1,17 @@
+struct Foo<N> {
+    u32[N] a
+    u64 b
+}
+
+struct Bar<N> {
+    Foo<N> a
+    u64 b
+}
+
+const Bar<4> baz = Bar {
+    a: Foo { a: [1, 2, 3, 4], b: 0 },
+    b: 0
+}
+
+def main() -> Bar<4>:
+    return baz

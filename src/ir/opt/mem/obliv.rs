@@ -11,10 +11,11 @@
 //!
 //! ## Pass 1: Identifying oblivious arrays
 //!
-//! We maintain a set of non-oblivious arrays, initially empty. We traverse the whole SMT
-//! constraint system, performing the following inferences:
+//! We maintain a set of non-oblivious arrays, initially empty. We traverse the whole computation
+//! system, performing the following inferences:
 //!
-//!    * If `a[i]` for non-constant `i`, then `a` is not oblivious
+//!    * If `a[i]` for non-constant `i`, then `a` and `a[i]` are not oblivious;
+//!    * If `a[i]`, `a` and `a[i]`  are equi-oblivious
 //!    * If `a[i\v]` for non-constant `i`, then neither `a[i\v]` nor `a` are oblivious
 //!    * If `a[i\v]`, then `a[i\v]` and `a` are equi-oblivious
 //!    * If `ite(c,a,b)`, then `ite(c,a,b)`, `a`, and `b` are equi-oblivious
@@ -22,12 +23,51 @@
 //!
 //! This procedure is iterated to fixpoint.
 //!
+//! Notice that we flag some *array* terms as non-oblivious, and we also flag their derived select
+//! terms as non-oblivious. This makes it easy to see which selects should be replaced later.
+//!
+//! ### Sharing & Constant Arrays
+//!
+//! This pass is effective given the somewhat naive assumption that array terms in the term graph
+//! can be separated into different "threads", which are not connected. Sometimes they are,
+//! especially by constant arrays.
+//!
+//! For example, consider code like this:
+//!
+//! ```ignore
+//! x = [0, 0, 0, 0]
+//! y = [0, 0, 0, 0]
+//! // oblivious modifications to x
+//! // non-oblivious modifications to y
+//! ```
+//!
+//! In this situation, we would hope that x and its derived arrays will be identified as
+//! "oblivious" while y will not.
+//!
+//! However, because of term sharing, the constant array [0,0,0,0] happens to be the root of both
+//! x's and y's store chains. If the constant array is `c`, then the first store to x might be
+//! `c[0\v1]` while the first store to y might be `c[i2\v2]`. The "store" rule for non-oblivious
+//! analysis would say that `c` is non-oblivious (b/c of the second store) and therefore the whole
+//! x store chain would b too...
+//!
+//! The problem isn't just with constants. If any non-oblivious stores branch off an otherwise
+//! oblivious store chain, the same thing happens.
+//!
+//! Since constants are a pervasive problem, we special-case them, omitting them from the analysis.
+//!
+//! We probably want a better idea of what this pass does (and how to handle arrays) at some
+//! point...
+//!
 //! ## Pass 2: Replacing oblivious arrays with term lists.
 //!
 //! In this pass, the goal is to
 //!
 //!    * map array terms to tuple terms
 //!    * map array selections to tuple field gets
+//!
+//! In both cases we look at the non-oblivious array/select set to see whether to do the
+//! replacement.
+//!
 
 use super::super::visit::*;
 use crate::ir::term::extras::as_uint_constant;
@@ -66,6 +106,7 @@ impl NonOblivComputer {
             false
         }
     }
+
     fn new() -> Self {
         Self {
             not_obliv: TermSet::new(),
@@ -98,13 +139,19 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 progress
             }
             Op::Select => {
+                // Even though the selected value may not have array sort, we still flag it as
+                // non-oblivious so we know whether to replace it or not.
                 let a = &term.cs[0];
                 let i = &term.cs[1];
+                let mut progress = false;
                 if let Op::Const(_) = i.op {
-                    false
+                    // pass
                 } else {
-                    self.mark(a)
+                    progress = self.mark(a) || progress;
+                    progress = self.mark(term) || progress;
                 }
+                progress = self.bi_implicate(term, a) || progress;
+                progress
             }
             Op::Ite => {
                 let t = &term.cs[1];
@@ -150,7 +197,7 @@ fn arr_val_to_tup(v: &Value) -> Value {
         Value::Array(Array {
             default, map, size, ..
         }) => Value::Tuple({
-            let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
+            let mut vec = vec![arr_val_to_tup(default); *size].into_boxed_slice();
             for (i, v) in map {
                 vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
             }
@@ -169,7 +216,9 @@ fn term_arr_val_to_tup(a: Term) -> Term {
 
 fn arr_sort_to_tup(v: &Sort) -> Sort {
     match v {
-        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
+        Sort::Array(_key, value, size) => {
+            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice())
+        }
         v => v.clone(),
     }
 }
@@ -213,7 +262,8 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Select => {
-                if self.should_replace(&orig.cs[0]) {
+                // we mark the selected term as non-obliv...
+                if self.should_replace(orig) {
                     let mut cs = get_cs();
                     debug_assert_eq!(cs.len(), 2);
                     let k_const = get_const(&cs.pop().unwrap());
@@ -290,7 +340,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
+              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
         ];
@@ -312,7 +362,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), v_bv("a", 4), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
+              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
         ];
@@ -320,5 +370,59 @@ mod test {
         c.outputs.push(t);
         elim_obliv(&mut c);
         assert!(!array_free(&c.outputs[0]));
+    }
+
+    #[test]
+    fn mix_diff_constant() {
+        let z0 = term![Op::Const(Value::Array(Array::new(
+            Sort::BitVector(4),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            6
+        )))];
+        let z1 = term![Op::Const(Value::Array(Array::new(
+            Sort::BitVector(4),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            5
+        )))];
+        let t0 = term![Op::Select;
+            term![Op::Store; z0.clone(), v_bv("a", 4), bv_lit(1, 4)],
+            bv_lit(3, 4)
+        ];
+        let t1 = term![Op::Select;
+            term![Op::Store; z1.clone(), bv_lit(3, 4), bv_lit(1, 4)],
+            bv_lit(3, 4)
+        ];
+        let mut c = Computation::default();
+        c.outputs.push(t0);
+        c.outputs.push(t1);
+        elim_obliv(&mut c);
+        assert!(!array_free(&c.outputs[0]));
+        assert!(array_free(&c.outputs[1]));
+    }
+
+    #[test]
+    fn mix_same_constant() {
+        let z = term![Op::Const(Value::Array(Array::new(
+            Sort::BitVector(4),
+            Box::new(Sort::BitVector(4).default_value()),
+            Default::default(),
+            6
+        )))];
+        let t0 = term![Op::Select;
+            term![Op::Store; z.clone(), v_bv("a", 4), bv_lit(1, 4)],
+            bv_lit(3, 4)
+        ];
+        let t1 = term![Op::Select;
+            term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
+            bv_lit(3, 4)
+        ];
+        let mut c = Computation::default();
+        c.outputs.push(t0);
+        c.outputs.push(t1);
+        elim_obliv(&mut c);
+        assert!(!array_free(&c.outputs[0]));
+        assert!(array_free(&c.outputs[1]));
     }
 }

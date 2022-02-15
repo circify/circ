@@ -52,7 +52,7 @@ program = { SOI ~ rule* ~ EOI }
 
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-// basic types (ZoKrates)
+// basic types (ZoKrates/Z#)
 ty_field = {"field"}
 ty_uint = @{"u" ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
 ty_bool = {"bool"}

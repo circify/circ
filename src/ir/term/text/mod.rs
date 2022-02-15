@@ -431,7 +431,8 @@ impl<'src> IrInterp<'src> {
                         tts[1..]
                             .iter()
                             .map(|tti| self.value(tti))
-                            .collect::<Vec<_>>(),
+                            .collect::<Vec<_>>()
+                            .into(),
                     ))),
                     Err(CtrlOp::SetDefaultModulus) => {
                         assert_eq!(

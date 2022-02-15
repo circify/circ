@@ -1,0 +1,5 @@
+def main() -> u32:
+    u32[4] a = [1, 2, 3, 4]
+    a[2] = 5
+    assert(a[2] == 5)
+    return a[2]
