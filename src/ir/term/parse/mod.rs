@@ -511,7 +511,8 @@ mod test {
 
     #[test]
     fn arr_roundtrip() {
-        let t = parse_term(b"
+        let t = parse_term(
+            b"
         (declare (
          (a bool)
          (b bool)
@@ -520,7 +521,8 @@ mod test {
          (let (
                  (B (store A a b))
          ) (xor (select B a)
-                (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))");
+                (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))",
+        );
         let s = serialize_term(&t);
         let t2 = parse_term(s.as_bytes());
         assert_eq!(t, t2);
@@ -528,7 +530,8 @@ mod test {
 
     #[test]
     fn tup_roundtrip() {
-        let t = parse_term(b"
+        let t = parse_term(
+            b"
         (declare (
          (a bool)
          (b bool)
@@ -537,7 +540,8 @@ mod test {
          (let (
                  (B ((update 1) A b))
          ) (xor ((field 1) B)
-                ((field 0) (#t false false #b0000 true)))))");
+                ((field 0) (#t false false #b0000 true)))))",
+        );
         let s = serialize_term(&t);
         println!("{}", s);
         let t2 = parse_term(s.as_bytes());

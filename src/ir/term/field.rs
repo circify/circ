@@ -21,7 +21,12 @@ impl Display for FieldElem {
         if self.i.significant_bits() + 1 < self.modulus.significant_bits() {
             write!(f, "#f{}m{}", self.i, self.modulus)
         } else {
-            write!(f, "#f-{}m{}", (*self.modulus).clone() - &self.i, self.modulus)
+            write!(
+                f,
+                "#f-{}m{}",
+                (*self.modulus).clone() - &self.i,
+                self.modulus
+            )
         }
     }
 }

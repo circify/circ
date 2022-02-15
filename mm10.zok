@@ -1,0 +1,13 @@
+def main(public field[5][5] A, public field[5][5] B) -> field[5][5]:
+   field[5][5] C = [[0; 5]; 5]
+   for field i in 0..5 do
+   for field j in 0..5 do
+       //field a = 0
+   for field k in 0..5 do
+       C[i][j] = C[i][j] + A[i][k] * B[k][j]
+       //a = a + A[i][k] * B[k][j]
+   endfor
+   //C[i][j] = a
+   endfor
+   endfor
+   return C
