@@ -35,6 +35,7 @@ pub mod bv;
 pub mod dist;
 pub mod extras;
 pub mod field;
+pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
@@ -94,7 +95,7 @@ pub enum Op {
     /// floating-point binary predicate
     FpBinPred(FpBinPred),
     /// floating-point unary predicate
-    FpUnPred(FpBinPred),
+    FpUnPred(FpUnPred),
     /// floating-point unary operator
     FpUnOp(FpUnOp),
     //FpFma,
@@ -260,32 +261,32 @@ impl Display for Op {
             Op::BvNaryOp(a) => write!(f, "{}", a),
             Op::BvUnOp(a) => write!(f, "{}", a),
             Op::BoolToBv => write!(f, "bool2bv"),
-            Op::BvExtract(a, b) => write!(f, "extract {} {}", a, b),
+            Op::BvExtract(a, b) => write!(f, "(extract {} {})", a, b),
             Op::BvConcat => write!(f, "concat"),
-            Op::BvUext(a) => write!(f, "uext {}", a),
-            Op::BvSext(a) => write!(f, "sext {}", a),
-            Op::PfToBv(a) => write!(f, "pf2bv {}", a),
+            Op::BvUext(a) => write!(f, "(uext {})", a),
+            Op::BvSext(a) => write!(f, "(sext {})", a),
+            Op::PfToBv(a) => write!(f, "(pf2bv {})", a),
             Op::Implies => write!(f, "=>"),
             Op::BoolNaryOp(a) => write!(f, "{}", a),
             Op::Not => write!(f, "not"),
-            Op::BvBit(a) => write!(f, "bit {}", a),
+            Op::BvBit(a) => write!(f, "(bit {})", a),
             Op::BoolMaj => write!(f, "maj"),
             Op::FpBinOp(a) => write!(f, "{}", a),
             Op::FpBinPred(a) => write!(f, "{}", a),
             Op::FpUnPred(a) => write!(f, "{}", a),
             Op::FpUnOp(a) => write!(f, "{}", a),
             Op::BvToFp => write!(f, "bv2fp"),
-            Op::UbvToFp(a) => write!(f, "ubv2fp {}", a),
-            Op::SbvToFp(a) => write!(f, "sbv2fp {}", a),
-            Op::FpToFp(a) => write!(f, "fp2fp {}", a),
+            Op::UbvToFp(a) => write!(f, "(ubv2fp {})", a),
+            Op::SbvToFp(a) => write!(f, "(sbv2fp {})", a),
+            Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::UbvToPf(a) => write!(f, "bv2pf {}", a),
+            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
-            Op::Field(i) => write!(f, "field{}", i),
-            Op::Update(i) => write!(f, "update{}", i),
+            Op::Field(i) => write!(f, "(field {})", i),
+            Op::Update(i) => write!(f, "(update {})", i),
         }
     }
 }
@@ -727,7 +728,7 @@ impl Display for Value {
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
             Value::Tuple(fields) => {
-                write!(f, "(tuple")?;
+                write!(f, "(#t ")?;
                 for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
@@ -740,11 +741,11 @@ impl Display for Value {
 
 impl Display for Array {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "(array default:{} size:{} {:?})",
-            self.default, self.size, self.map
-        )
+        write!(f, "(#a {} {} {} (", self.key_sort, self.default, self.size,)?;
+        for (k, v) in &self.map {
+            write!(f, " ({} {})", k, v)?;
+        }
+        write!(f, " ))")
     }
 }
 
