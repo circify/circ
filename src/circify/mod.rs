@@ -1,5 +1,5 @@
 //! A library for building front-ends
-
+use crate::circify::mem::AllocId;
 use crate::ir::term::*;
 
 use std::cell::RefCell;
@@ -196,7 +196,7 @@ impl<Ty: Display> LexScope<Ty> {
 /// Circuit construction context. Useful for addition assertions, using memory, etc.
 pub struct CirCtx {
     /// Memory manager
-    pub mem: mem::MemManager,
+    pub mem: Rc<RefCell<mem::MemManager>>,
     /// Underlying constraint system
     pub cs: Rc<RefCell<Computation>>,
 }
@@ -437,7 +437,7 @@ impl<E: Embeddable> Circify<E> {
             fn_ctr: 0,
             globals: LexScope::with_prefix("global".to_string()),
             cir_ctx: CirCtx {
-                mem: mem::MemManager::new(cs.clone()),
+                mem: Rc::new(RefCell::new(mem::MemManager::default())),
                 cs,
             },
             condition: leaf_term(Op::Const(Value::Bool(true))),
@@ -662,7 +662,7 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Exit a conditional block
-    pub fn exit_codition(&mut self) {
+    pub fn exit_condition(&mut self) {
         self.fn_stack.last_mut().expect("No fn").exit_condition();
         self.condition = self.condition();
     }
@@ -791,6 +791,25 @@ impl<E: Embeddable> Circify<E> {
     /// Get the constraints from this manager
     pub fn consume(self) -> Rc<RefCell<Computation>> {
         self.cir_ctx.cs
+    }
+
+    /// Load from an AllocId
+    pub fn load(&self, id: AllocId, offset: Term) -> Term {
+        self.cir_ctx.mem.borrow_mut().load(id, offset)
+    }
+
+    /// Conditional store to an AllocId based on current path condition
+    pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
+        let cond = self.condition();
+        self.cir_ctx.mem.borrow_mut().store(id, offset, val, cond);
+    }
+
+    /// Zero allocate an array
+    pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
+        self.cir_ctx
+            .mem
+            .borrow_mut()
+            .zero_allocate(size, addr_width, val_width)
     }
 }
 

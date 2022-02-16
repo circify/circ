@@ -26,8 +26,15 @@ fn create_dir_in_seal(filename: &str) {
 }
 
 /// Using the cpp_template.txt, write the .cpp file for the new test case
-fn write_circ_file(filename: &str, header_inputs: &str, server: &str, 
-            setup: &str, call_inputs: &str, post_computation: &str, main_inputs: &str) {
+fn write_circ_file(
+    filename: &str,
+    header_inputs: &str,
+    server: &str,
+    setup: &str,
+    call_inputs: &str,
+    post_computation: &str,
+    main_inputs: &str,
+) {
     let template = fs::read_to_string("third_party/SEAL_templates/cpp_template.txt")
         .expect("Unable to read file");
     let path = format!(
@@ -56,11 +63,13 @@ pub fn write_fhe_exec(fhe: FHE, path_buf: PathBuf) {
     //write_test_cmake_file(&filename);
     //write_test_file(&filename);
     //write_h_file(&filename);
-    write_circ_file(&filename, 
+    write_circ_file(
+        &filename,
         &fhe.header_inputs.join(""),
         &fhe.server.join("\n\t"),
         &fhe.setup.join("\n\t"),
         &fhe.call_inputs.join(""),
         &fhe.post_computation.join("\n\t"),
-        &fhe.main_inputs.join(""));
+        &fhe.main_inputs.join(""),
+    );
 }
