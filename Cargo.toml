@@ -13,7 +13,7 @@ rug = "1.11"
 gmp-mpfr-sys = "1.4"
 lazy_static = "1.4"
 rand = "0.8"
-rsmt2 = "0.14"
+rsmt2 = { version = "0.14", optional = true }
 #rsmt2 = { git = "https://github.com/alex-ozdemir/rsmt2.git" }
 ieee754 = "0.2"
 zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser", optional = true }
@@ -21,7 +21,7 @@ zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional 
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
-bellman = "0.11"
+bellman = { version = "0.11", optional = true } 
 ff = "0.11"
 #funty = "=1.1"
 fxhash = "0.2"
@@ -45,18 +45,16 @@ structopt = "0.3"
 approx = "0.5.0"
 
 [features]
-default = ["lp", "bls12381"]
-lp = ["good_lp", "lp-solvers"]
+default = ["bls12381"]
 bls12381 = []
 c_front = ["lang-c"]
+lp = ["good_lp", "lp-solvers"]
+r1cs = ["bellman"]
+smt = ["rsmt2"]
 zok_front = ["zokrates_parser", "zokrates_pest_ast", ]
-# TODO: 
-# snarks = ["bellman"]
-# smt = ["rsmt2"]
 
 [[example]]
 name = "circ"
-required-features = ["lp"]
 
 [[example]]
 name = "opa_bench"

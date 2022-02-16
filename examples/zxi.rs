@@ -1,13 +1,12 @@
-#[cfg(feature = "zok_front")]
+#[cfg(all(feature = "smt", feature = "zok_front"))]
 use circ::front::zsharp::{Inputs, ZSharpFE};
-#[cfg(feature = "zok_front")]
+
+#[allow(unused_imports)]
 use circ::front::Mode;
-#[cfg(feature = "zok_front")]
 use std::path::PathBuf;
-#[cfg(feature = "zok_front")]
 use structopt::StructOpt;
 
-#[cfg(feature = "zok_front")]
+#[allow(dead_code)]
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
@@ -29,11 +28,11 @@ struct Options {
 }
 
 fn main() {
-    #[cfg(not(feature = "zok_front"))]
+    #[cfg(not(all(feature = "smt", feature = "zok_front")))]
     {
         println!("Requires feature: zok_front");
     }
-    #[cfg(feature = "zok_front")]
+    #[cfg(all(feature = "smt", feature = "zok_front"))]
     {
         env_logger::Builder::from_default_env()
             .format_level(false)

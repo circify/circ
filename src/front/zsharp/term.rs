@@ -3,13 +3,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
+use crate::front::ZSHARP_FIELD_SORT;
+use crate::front::ZSHARP_MODULUS;
+use crate::front::ZSHARP_MODULUS_ARC;
+
 use log::warn;
 use rug::Integer;
 
 use crate::circify::{CirCtx, Embeddable};
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
-
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Ty {

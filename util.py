@@ -3,8 +3,8 @@ from os import path
 
 # Gloable variables
 feature_path = ".features.txt"
-valid_features = {"aby", "c_front", "zok_front"}
-cargo_features = {"c_front", "zok_front"}
+valid_features = {"aby", "c_front", "lp", "r1cs", "smt", "zok_front"}
+cargo_features = {"c_front", "lp", "r1cs", "smt", "zok_front"}
 
 # Environment variables
 ABY_SOURCE="./../ABY"
@@ -35,4 +35,4 @@ def load_features():
 
 def filter_cargo_features(features):
     """ Filter feature list to cargo-specific features """
-    return [f for f in features if f in cargo_features]
+    return [" ".join([f for f in features if f in cargo_features])]

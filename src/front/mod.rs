@@ -3,7 +3,7 @@
 #[cfg(feature = "c_front")]
 pub mod c;
 pub mod datalog;
-#[cfg(feature = "zok_front")]
+#[cfg(all(feature = "smt", feature = "zok_front"))]
 pub mod zsharp;
 
 use crate::ir::{

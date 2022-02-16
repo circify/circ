@@ -7,8 +7,8 @@
 
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
+use crate::target::bitsize;
 use crate::target::ilp::Ilp;
-use crate::target::r1cs::trans::bitsize;
 
 use good_lp::{variable, Expression};
 use log::debug;
