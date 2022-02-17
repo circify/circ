@@ -567,15 +567,15 @@ loop_tests = [
 function_tests = [
     [
         "Sum() two numbers - 1",
-        3,
-        ABY_SOURCE+"/build/bin/2pc_function_sum",
+        6,
+        ABY_SOURCE+"/build/bin/2pc_function_add",
         {"a": 1, "b": 0},
         {"a": 0, "b": 2},
     ], 
     [
         "Sum() two numbers - 2",
-        2,
-        ABY_SOURCE+"/build/bin/2pc_function_sum",
+        4,
+        ABY_SOURCE+"/build/bin/2pc_function_add",
         {"a": 0, "b": 0},
         {"a": 0, "b": 2},
     ], 
