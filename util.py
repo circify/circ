@@ -3,6 +3,7 @@ from os import path
 
 # Gloable variables
 feature_path = ".features.txt"
+mode_path = ".mode.txt"
 valid_features = {"aby", "c", "lp", "r1cs", "smt", "zok"}
 cargo_features = {"c", "lp", "r1cs", "smt", "zok"}
 
@@ -17,6 +18,19 @@ def set_env(features):
                 os.environ["ABY_SOURCE"] = ABY_SOURCE
             if not os.getenv("EZPC_SOURCE"):
                 os.environ["EZPC_SOURCE"] = EZPC_SOURCE
+
+def save_mode(mode):
+    """ Save mode to file """
+    with open(mode_path, 'w') as f:
+        f.write(mode)
+
+def load_mode():
+    """ Load mode from file """
+    if path.exists(mode_path):
+        with open(mode_path, 'r') as f:
+            return f.read().strip()
+    else:
+        return ""
 
 def save_features(features):
     """ Save features to file """

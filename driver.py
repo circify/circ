@@ -45,7 +45,7 @@ def check(features):
        cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd)
 
-def build(features, build_flag):
+def build(features):
     """
     Run cargo build and any test cases in the feature list
 
@@ -54,16 +54,19 @@ def build(features, build_flag):
         features : set of str
             set of features required
     """
-
-    def verify_build_flags(build_flag):
-        if build_flag and build_flag not in ("debug", "release"):
-            raise RuntimeError(f"Unknown build flag: {build_flag}, --build <debug, release>")
-    verify_build_flags(build_flag)
+    mode = load_mode()
 
     check(features)
     install(features)
 
-    cmd = ["cargo", "build"] + ["--"+build_flag] + ["--examples"]
+    cmd = ["cargo", "build"] 
+    if mode:
+        cmd += ["--"+mode] 
+    else:
+        # default to release mode
+        cmd += ["--release"] 
+    cmd += ["--examples"]
+    
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
@@ -125,6 +128,13 @@ def clean():
     subprocess.run(["rm", "-rf", "scripts/aby_tests/__pycache__"])
     subprocess.run(["rm", "-rf", "P", "V", "pi", "perf.data perf.data.old flamegraph.svg"])
 
+def set_mode(mode):
+    def verify_mode(mode):
+        if mode not in ("debug", "release"):
+            raise RuntimeError(f"Unknown mode: {mode}, --mode <debug, release>")
+    verify_mode(mode)
+    save_mode(mode)
+
 def set_features(features):
     """
     Filter invalid features and save features to a file.
@@ -151,11 +161,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--install", action="store_true", help="install all dependencies from the feature set")
     parser.add_argument("-c", "--check", action="store_true", help="run `cargo check`")
-    parser.add_argument("-b", "--build", nargs="+", help="--build <debug, release>, run `cargo build` and build all dependencies from the feature set")
+    parser.add_argument("-b", "--build", action="store_true", help="run `cargo build` and build all dependencies from the feature set")
     parser.add_argument("-t", "--test", action="store_true", help="build and test all dependencies from the feature set")
     parser.add_argument("-f", "--format", action="store_true", help="run `cargo fmt --all`")
     parser.add_argument("-l", "--lint", action="store_true", help="run `cargo clippy`")
     parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
+    parser.add_argument("-m", "--mode", type=str, help="set `debug` or `release` mode")
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
     parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
@@ -176,7 +187,7 @@ if __name__ == "__main__":
         check(features)
 
     if args.build:
-        build(features, "".join(args.build))
+        build(features)
 
     if args.test:
         test(features)
@@ -190,6 +201,9 @@ if __name__ == "__main__":
     if args.clean:
         clean()
     
+    if args.mode:
+        set_mode(args.mode)
+
     if args.all_features:
         features = set_features(valid_features)
     
