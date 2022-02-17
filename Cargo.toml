@@ -23,12 +23,12 @@ log = "0.4"
 thiserror = "1.0"
 bellman = { version = "0.11", optional = true } 
 ff = "0.11"
-#funty = "=1.1"
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
 lang-c = { version = "0.10.1", optional = true}
+logos = "0.12"
 pest = "2.1"
 pest_derive = "2.1"
 pest-ast = "0.3"
