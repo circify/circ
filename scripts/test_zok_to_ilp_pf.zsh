@@ -4,7 +4,7 @@ set -ex
 
 disable -r time
 
-cargo build --release --features lp,r1cs,smt,zok_front --example circ
+# cargo build --release --features lp,r1cs,smt,zok --example circ
 
 BIN=./target/release/examples/circ
 

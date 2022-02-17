@@ -3,8 +3,8 @@ from os import path
 
 # Gloable variables
 feature_path = ".features.txt"
-valid_features = {"aby", "c_front", "lp", "r1cs", "smt", "zok_front"}
-cargo_features = {"c_front", "lp", "r1cs", "smt", "zok_front"}
+valid_features = {"aby", "c", "lp", "r1cs", "smt", "zok"}
+cargo_features = {"c", "lp", "r1cs", "smt", "zok"}
 
 # Environment variables
 ABY_SOURCE="./../ABY"

@@ -1,4 +1,4 @@
-#[cfg(all(feature = "smt", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{Inputs, ZSharpFE};
 
 #[allow(unused_imports)]
@@ -28,11 +28,11 @@ struct Options {
 }
 
 fn main() {
-    #[cfg(not(all(feature = "smt", feature = "zok_front")))]
+    #[cfg(not(all(feature = "smt", feature = "zok")))]
     {
-        println!("Requires feature: zok_front");
+        println!("Requires feature: zok");
     }
-    #[cfg(all(feature = "smt", feature = "zok_front"))]
+    #[cfg(all(feature = "smt", feature = "zok"))]
     {
         env_logger::Builder::from_default_env()
             .format_level(false)

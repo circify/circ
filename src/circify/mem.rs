@@ -123,7 +123,7 @@ impl MemManager {
         alloc.size
     }
 }
-#[cfg(all(feature = "smt", feature = "test", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "test", feature = "zok"))]
 mod test {
     use super::*;
     use crate::target::smt::check_sat;

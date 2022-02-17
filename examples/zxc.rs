@@ -7,7 +7,7 @@ use bellman::groth16::{
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
-#[cfg(all(feature = "smt", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 
 #[allow(unused_imports)]
@@ -17,9 +17,9 @@ use circ::ir::opt::{opt, Opt};
 /*
 use circ::target::r1cs::bellman::parse_instance;
 */
-#[cfg(all(feature = "smt", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::target::r1cs::opt::reduce_linearities;
-#[cfg(all(feature = "smt", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::target::r1cs::trans::to_r1cs;
 /*
 use std::fs::File;
@@ -88,11 +88,11 @@ arg_enum! {
 }
 
 fn main() {
-    #[cfg(not(all(feature = "smt", feature = "zok_front")))]
+    #[cfg(not(all(feature = "smt", feature = "zok")))]
     {
-        println!("Requires feature: zok_front");
+        println!("Requires feature: zok");
     }
-    #[cfg(all(feature = "smt", feature = "zok_front"))]
+    #[cfg(all(feature = "smt", feature = "zok"))]
     {
         env_logger::Builder::from_default_env()
             .format_level(false)

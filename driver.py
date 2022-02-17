@@ -45,7 +45,7 @@ def check(features):
        cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd)
 
-def build(features):
+def build(features, build_flag):
     """
     Run cargo build and any test cases in the feature list
 
@@ -54,23 +54,25 @@ def build(features):
         features : set of str
             set of features required
     """
-    
+
+    def verify_build_flags(build_flag):
+        if build_flag and build_flag not in ("debug", "release"):
+            raise RuntimeError(f"Unknown build flag: {build_flag}, --build <debug, release>")
+    verify_build_flags(build_flag)
+
     check(features)
     install(features)
 
-    release_cmd = ["cargo", "build", "--release", "--examples"]
-    cmd = ["cargo", "build", "--examples"]
+    cmd = ["cargo", "build"] + ["--"+build_flag] + ["--examples"]
     cargo_features = filter_cargo_features(features)
     if cargo_features:
-        release_cmd = release_cmd + ["--features"] + cargo_features
         cmd = cmd + ["--features"] + cargo_features
-    subprocess.run(release_cmd)
     subprocess.run(cmd)
 
     if "aby" in features:
-        if "c_front" in features:
+        if "c" in features:
             subprocess.run(["./scripts/build_mpc_c_test.zsh"])
-        if "smt" in features and "zok_front" in features:
+        if "smt" in features and "zok" in features:
             subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"])
         subprocess.run(["./scripts/build_aby.zsh"])
 
@@ -92,14 +94,14 @@ def test(features):
         test_cmd = test_cmd + ["--features"] + cargo_features
     subprocess.run(test_cmd, check=True)
 
-    if "c_front" in features:
+    if "c" in features:
         if "a" in features:
             subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
 
     if "r1cs" in features and "smt" in features:
         subprocess.run(["./scripts/test_datalog.zsh"], check=True)
 
-    if "zok_front" in features and "smt" in features:
+    if "zok" in features and "smt" in features:
         if "aby" in features:
             subprocess.run(["python3", "./scripts/aby_tests/zokrates_test_aby.py"], check=True)
         if "lp" in features:
@@ -149,14 +151,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--install", action="store_true", help="install all dependencies from the feature set")
     parser.add_argument("-c", "--check", action="store_true", help="run `cargo check`")
-    parser.add_argument("-b", "--build", action="store_true", help="run `cargo build` and build all dependencies from the feature set")
+    parser.add_argument("-b", "--build", nargs="+", help="--build <debug, release>, run `cargo build` and build all dependencies from the feature set")
     parser.add_argument("-t", "--test", action="store_true", help="build and test all dependencies from the feature set")
     parser.add_argument("-f", "--format", action="store_true", help="run `cargo fmt --all`")
     parser.add_argument("-l", "--lint", action="store_true", help="run `cargo clippy`")
     parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
-    parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c_front, lp, r1cs, smt, zok_front>, reset features with -F none")
+    parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
     args = parser.parse_args()
 
     def verify_single_action(args: argparse.Namespace):
@@ -174,7 +176,7 @@ if __name__ == "__main__":
         check(features)
 
     if args.build:
-        build(features)
+        build(features, "".join(args.build))
 
     if args.test:
         test(features)

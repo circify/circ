@@ -1,9 +1,9 @@
 //! Input language front-ends
 
-#[cfg(feature = "c_front")]
+#[cfg(feature = "c")]
 pub mod c;
 pub mod datalog;
-#[cfg(all(feature = "smt", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "zok"))]
 pub mod zsharp;
 
 use crate::ir::{

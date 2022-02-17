@@ -9,10 +9,10 @@ use bellman::groth16::{
 #[cfg(feature = "r1cs")]
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
-#[cfg(feature = "c_front")]
+#[cfg(feature = "c")]
 use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
-#[cfg(all(feature = "smt", feature = "zok_front"))]
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
@@ -82,20 +82,16 @@ struct FrontendOptions {
 
 #[derive(Debug, StructOpt)]
 enum Backend {
+    #[allow(dead_code)]
     R1cs {
-        #[allow(dead_code)]
         #[structopt(long, default_value = "P", parse(from_os_str))]
         prover_key: PathBuf,
-        #[allow(dead_code)]
         #[structopt(long, default_value = "V", parse(from_os_str))]
         verifier_key: PathBuf,
-        #[allow(dead_code)]
         #[structopt(long, default_value = "pi", parse(from_os_str))]
         proof: PathBuf,
-        #[allow(dead_code)]
         #[structopt(long, default_value = "x", parse(from_os_str))]
         instance: PathBuf,
-        #[allow(dead_code)]
         #[structopt(long, default_value = "count")]
         action: ProofAction,
     },
@@ -188,7 +184,7 @@ fn main() {
     };
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
-        #[cfg(all(feature = "smt", feature = "zok_front"))]
+        #[cfg(all(feature = "smt", feature = "zok"))]
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
@@ -197,9 +193,9 @@ fn main() {
             };
             ZSharpFE::gen(inputs)
         }
-        #[cfg(not(all(feature = "smt", feature = "zok_front")))]
+        #[cfg(not(all(feature = "smt", feature = "zok")))]
         DeterminedLanguage::Zsharp => {
-            panic!("Missing feature: smt,zok_front");
+            panic!("Missing feature: smt,zok");
         }
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs {
@@ -209,7 +205,7 @@ fn main() {
             };
             Datalog::gen(inputs)
         }
-        #[cfg(feature = "c_front")]
+        #[cfg(feature = "c")]
         DeterminedLanguage::C => {
             let inputs = c::Inputs {
                 file: options.path,
@@ -218,9 +214,9 @@ fn main() {
             };
             C::gen(inputs)
         }
-        #[cfg(not(feature = "c_front"))]
+        #[cfg(not(feature = "c"))]
         DeterminedLanguage::C => {
-            panic!("Missing feature: c_front");
+            panic!("Missing feature: c");
         }
     };
     let cs = match mode {

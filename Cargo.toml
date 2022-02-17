@@ -47,11 +47,11 @@ approx = "0.5.0"
 [features]
 default = ["bls12381"]
 bls12381 = []
-c_front = ["lang-c"]
+c = ["lang-c"]
 lp = ["good_lp", "lp-solvers"]
 r1cs = ["bellman"]
 smt = ["rsmt2"]
-zok_front = ["zokrates_parser", "zokrates_pest_ast", ]
+zok = ["zokrates_parser", "zokrates_pest_ast", ]
 
 [[example]]
 name = "circ"
