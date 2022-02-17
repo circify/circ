@@ -50,9 +50,6 @@ def get_result(file_path):
 
 
 def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
-    assert len(server_cmd) > 3, "server cmd does not have enough arguments"
-    assert len(client_cmd) > 3, "client cmd does not have enough arguments"
-
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
     
     try:
@@ -86,7 +83,7 @@ def run_tests(lang: str, tests: List[dict]):
     """
     print("Running tests for frontend", lang)
     failed_test_descs = []
-    num_retries = 5
+    num_retries = 1
     progress_inc = 5
     init_progress_bar(len(tests) // progress_inc + 1)
     for t, test in enumerate(tests):

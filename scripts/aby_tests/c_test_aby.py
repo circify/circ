@@ -19,7 +19,6 @@ if __name__ == "__main__":
         c_array_tests + \
         misc_tests
         # shift_tests
-
        
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
