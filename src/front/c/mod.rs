@@ -17,7 +17,7 @@ use lang_c::ast::*;
 use lang_c::span::Node;
 use log::debug;
 
-// use std::collections::HashMap;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
 
@@ -54,15 +54,10 @@ impl FrontEnd for C {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
         let mut g = CGen::new(i.inputs, i.mode, p.unit);
-        g.gen();
+        g.visit_files();
+        g.entry_fn("main");
         g.circ.consume().borrow().clone()
     }
-}
-
-struct CGen {
-    circ: Circify<Ct>,
-    mode: Mode,
-    tu: TranslationUnit,
 }
 
 enum CLoc {
@@ -79,12 +74,20 @@ impl CLoc {
     }
 }
 
+struct CGen {
+    circ: Circify<Ct>,
+    mode: Mode,
+    tu: TranslationUnit,
+    functions: HashMap<String, FnInfo>,
+}
+
 impl CGen {
     fn new(inputs: Option<PathBuf>, mode: Mode, tu: TranslationUnit) -> Self {
         let this = Self {
             circ: Circify::new(Ct::new(inputs.map(parser::parse_inputs))),
             mode,
             tu,
+            functions: HashMap::default(),
         };
         this.circ
             .cir_ctx()
@@ -157,14 +160,14 @@ impl CGen {
     fn lval(&mut self, expr: Node<Expression>) -> CLoc {
         match expr.node {
             Expression::Identifier(_) => {
-                let base_name = name_from_ident(&expr.node);
+                let base_name = name_from_expr(expr);
                 CLoc::Var(Loc::local(base_name))
             }
             Expression::BinaryOperator(node) => {
                 let bin_op = node.node;
                 match bin_op.operator.node {
                     BinaryOperator::Index => {
-                        let base_name = name_from_ident(&bin_op.lhs.node);
+                        let base_name = name_from_expr(*bin_op.lhs);
                         let idx = self.gen_expr(bin_op.rhs.node);
                         CLoc::Idx(Box::new(CLoc::Var(Loc::local(base_name))), idx)
                     }
@@ -367,6 +370,51 @@ impl CGen {
                 let expr = self.gen_expr(expression.node);
                 Ok(cast(to_ty, expr))
             }
+            Expression::Call(node) => {
+                let CallExpression { callee, arguments } = node.node;
+                let fname = name_from_expr(*callee);
+
+                let f = self
+                    .functions
+                    .get(&fname)
+                    .unwrap_or_else(|| panic!("No function '{}'", fname))
+                    .clone();
+
+                let FnInfo {
+                    name,
+                    ret_ty,
+                    args: parameters,
+                    body,
+                } = f;
+
+                // Add parameters
+                let args = arguments
+                    .iter()
+                    .map(|e| self.gen_expr(e.node.clone()))
+                    .collect::<Vec<_>>();
+
+                // setup stack frame for entry function
+                self.circ.enter_fn(name, ret_ty.clone());
+                assert_eq!(parameters.len(), args.len());
+
+                for (p, a) in parameters.iter().zip(args) {
+                    let base_ty = d_type_(p.specifiers.to_vec());
+                    let d = &p.declarator.as_ref().unwrap().node;
+                    let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
+                    let name = name_from_decl(d);
+                    let d_res = self.circ.declare_init(name, derived_ty, Val::Term(a));
+                    self.unwrap(d_res);
+                }
+
+                self.gen_stmt(body);
+
+                let ret = self
+                    .circ
+                    .exit_fn()
+                    .map(|a| a.unwrap_term())
+                    .unwrap_or_else(|| cterm(CTermData::CBool(bool_lit(false))));
+                Ok(cast(ret_ty, ret))
+            }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
         self.unwrap(res)
@@ -565,7 +613,57 @@ impl CGen {
         }
     }
 
-    fn gen(&mut self) {
+    fn entry_fn(&mut self, n: &str) {
+        debug!("Entry: {}", n);
+        // find the entry function
+        let f = self
+            .functions
+            .get(n)
+            .unwrap_or_else(|| panic!("No function '{}'", n))
+            .clone();
+
+        // setup stack frame for entry function
+        self.circ.enter_fn(f.name.to_owned(), f.ret_ty.clone());
+
+        for arg in f.args.iter() {
+            // TODO: self.gen_decl(arg);
+            let p = &arg.specifiers[0];
+            let vis = self.interpret_visibility(&p.node);
+            let base_ty = d_type_(arg.specifiers[1..].to_vec());
+            let d = &arg.declarator.as_ref().unwrap().node;
+            let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
+            let name = name_from_decl(d);
+            let r = self.circ.declare(name.clone(), &derived_ty, true, vis);
+            self.unwrap(r);
+        }
+
+        self.gen_stmt(f.body.clone());
+        if let Some(r) = self.circ.exit_fn() {
+            match self.mode {
+                Mode::Mpc(_) => {
+                    let ret_term = r.unwrap_term();
+                    let ret_terms = ret_term.term.terms();
+                    self.circ
+                        .cir_ctx()
+                        .cs
+                        .borrow_mut()
+                        .outputs
+                        .extend(ret_terms);
+                }
+                Mode::Proof => {
+                    let ty = f.ret_ty.as_ref().unwrap();
+                    let name = "return".to_owned();
+                    let term = r.unwrap_term();
+                    let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
+                    self.circ.assign_with_assertions(name, term, ty, PUBLIC_VIS);
+                    unimplemented!();
+                }
+                _ => unimplemented!("Mode: {}", self.mode),
+            }
+        }
+    }
+
+    fn visit_files(&mut self) {
         let TranslationUnit(nodes) = self.tu.clone();
         for n in nodes.iter() {
             match n.node {
@@ -573,48 +671,13 @@ impl CGen {
                     debug!("{:#?}", decl);
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
-                    debug!("{:#?}", fn_def.node.clone());
                     let fn_info = ast_utils::get_fn_info(&fn_def.node);
-                    self.circ
-                        .enter_fn(fn_info.name.to_owned(), fn_info.ret_ty.clone());
-                    for arg in fn_info.args.iter() {
-                        // TODO: self.gen_decl(arg);
-                        let p = &arg.specifiers[0];
-                        let vis = self.interpret_visibility(&p.node);
-                        let base_ty = d_type_(arg.specifiers[1..].to_vec());
-                        let d = &arg.declarator.as_ref().unwrap().node;
-                        let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
-                        let name = name_from_decl(d);
-                        let res = self.circ.declare(name.clone(), &derived_ty, true, vis);
-                        self.unwrap(res);
-                    }
-                    self.gen_stmt(fn_info.body.clone());
-                    if let Some(r) = self.circ.exit_fn() {
-                        match self.mode {
-                            Mode::Mpc(_) => {
-                                let ret_term = r.unwrap_term();
-                                let ret_terms = ret_term.term.terms();
-                                self.circ
-                                    .cir_ctx()
-                                    .cs
-                                    .borrow_mut()
-                                    .outputs
-                                    .extend(ret_terms);
-                            }
-                            Mode::Proof => {
-                                let ty = fn_info.ret_ty.as_ref().unwrap();
-                                let name = "return".to_owned();
-                                let term = r.unwrap_term();
-                                let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
-                                self.circ.assign_with_assertions(name, term, ty, PUBLIC_VIS);
-                                unimplemented!();
-                            }
-                            _ => unimplemented!("Mode: {}", self.mode),
-                        }
-                    }
+                    let fname = fn_info.name.clone();
+                    self.functions.insert(fname, fn_info);
                 }
                 _ => unimplemented!("Haven't implemented node: {:?}", n.node),
-            }
+            };
         }
+        // TODO: structs
     }
 }

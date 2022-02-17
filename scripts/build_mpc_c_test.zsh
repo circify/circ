@@ -78,6 +78,9 @@ mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_2.c
 mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_3.c
 mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 
+# build function tests
+mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/2pc_function_add.c
+
 # # # build shift tests
 # # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
 # # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
