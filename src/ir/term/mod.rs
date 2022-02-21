@@ -1122,35 +1122,17 @@ impl Value {
 
 /// Evaluate the term `t`, using variable values in `h`.
 pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
-    let mut vs = TermMap::<Value>::new();
+    let ref mut vs = TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
-        let v = eval_helper(vs.clone(), h, c.clone());
-        vs.insert(c, v); //TODO: Should the insert happen here
+        eval_value(vs, h, c.clone());
     }
     vs.get(t).unwrap().clone()
 }
 
-#[macro_export]
-/// Make a term.
-///
-/// Syntax:
-///
-///    * without children: `term![OP]`
-///    * with children: `term![OP; ARG0, ARG1, ... ]`
-///       * Note the semi-colon
-macro_rules! term {
-    ($x:expr) => {
-        leaf_term($x)
-    };
-    ($x:expr; $($y:expr),+) => {
-        term($x, vec![$($y),+])
-    };
-}
-
 /// Helper function for eval function. Handles a single term
-fn eval_helper(vs: HConMap<HConsed<TermData>, Value>, 
-                h: &FxHashMap<String, Value>, c: HConsed<TermData>) -> Value {
-    match &c.op {
+fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>, 
+                h: &FxHashMap<String, Value>, c: HConsed<TermData>) -> Value{
+    let v = match &c.op {
         Op::Var(n, _) => h
             .get(n)
             .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h))
@@ -1311,46 +1293,53 @@ fn eval_helper(vs: HConMap<HConsed<TermData>, Value>,
             a.clone().select(i)
         }
         Op::Map(op) => {
-            let mut term_vecs = Vec::new();
-            match op.arity() {
-                None => unimplemented!("Unexpected # of inputs for map {:?}", op),
-                Some(x) => {
-                    for i in 0..x {
-                        let arr = vs.get(&c.cs[i]).unwrap().as_array().clone();
-                        let mut arr_terms = Vec::new();
-                        for j in 0..(arr.size) {
-                            let jval = &Value::Int(Integer::from(j));
-                            let term = leaf_term(Op::Const(arr.clone().select(jval)));
-                            arr_terms.push(term);
-                        }
-                        term_vecs.push(arr_terms);
-                    }
+            let arg_cnt = c.cs.len();
+            let arr_size = vs.get(&c.cs[0]).unwrap().as_array().size;
+            let mut term_vecs = vec![Vec::new(); arr_size];
+            //2D vector: term_vecs[i] will store a vector of all the i-th index 
+            //  entries of the array arguments
+
+            //Value::BitVector(BitVector::new(uint.into(),width,))
+            for i in 0..arg_cnt {
+                let arr = vs.get(&c.cs[i]).unwrap().as_array().clone();
+                for j in 0..arr_size {
+                    let jval = &Value::BitVector(BitVector::new(Integer::from(j), 32));
+                    let term = leaf_term(Op::Const(arr.clone().select(jval)));
+                    term_vecs[j].push(term);
                 }
             }
-
+            //Cloning the first arg just for formatting
             let mut res = vs.get(&c.cs[0]).unwrap().as_array().clone();
-
-            for i in 0..(term_vecs[0].len()) {
-                let t = match op.arity() {
-                    Some(1) => {
-                        term![(**op).clone(); term_vecs[0][i].clone()]
-                    },
-                    Some(2) => {
-                        term![(**op).clone(); term_vecs[0][i].clone(), term_vecs[1][i].clone()]
-                    },
-                    Some(3) => {
-                        term![(**op).clone(); term_vecs[0][i].clone(), term_vecs[1][i].clone(), term_vecs[2][i].clone()]
-                    },
-                    _ => unimplemented!("Unexpected # of inputs for map {:?}", op),
-                };
-                let val = eval_helper(vs.clone(), h, t);
-                res.map.insert(Value::Int(Integer::from(i)), val);
+            for i in 0..arr_size {
+                let t = term((**op).clone(), term_vecs[i].clone());
+                let val = eval_value(vs, h, t);
+                res.map.insert(Value::BitVector(BitVector::new(Integer::from(i), 32)), val);
             }
             Value::Array(res)
         }
         o => unimplemented!("eval: {:?}", o),
-    }
+    };
+    vs.insert(c, v.clone());
+
+    v
     //println!("Eval {}\nAs   {}", c, v);
+}
+
+#[macro_export]
+/// Make a term.
+///
+/// Syntax:
+///
+///    * without children: `term![OP]`
+///    * with children: `term![OP; ARG0, ARG1, ... ]`
+///       * Note the semi-colon
+macro_rules! term {
+    ($x:expr) => {
+        leaf_term($x)
+    };
+    ($x:expr; $($y:expr),+) => {
+        term($x, vec![$($y),+])
+    };
 }
 
 /// Make an array from a sequence of terms.

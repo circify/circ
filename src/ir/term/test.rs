@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::target::r1cs::trans::test::bv;
+use fxhash::FxHashMap;
 
 #[test]
 fn eq() {
@@ -12,6 +13,27 @@ fn eq() {
     assert_eq!(v, u);
     assert!(v != w);
     assert!(u != w);
+}
+
+#[test]
+fn map_eq_test() {
+    let a1 = 
+        make_array(Sort::BitVector(32), Sort::Bool,
+            vec![bool(true), bool(false), bool(true), bool(false)]);
+    let a2 = 
+        make_array(Sort::BitVector(32), Sort::Bool,
+            vec![bool(true), bool(false), bool(true), bool(false)]);
+    let t = term![Op::Map(Box::new(Op::Eq)); a1, a2];
+
+    eval(&t, &FxHashMap::default());
+    assert!(true);
+
+    //println!("Value is : {}", val);
+
+    //let res = get_value(t)
+    //let ans = true
+    //assert true
+
 }
 
 mod type_ {
