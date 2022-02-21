@@ -122,9 +122,10 @@ def lint():
     print("linting!")
     subprocess.run(["cargo", "clippy"], check=True)
 
-def clean():
+def clean(features):
     print("cleaning!")
-    subprocess.run(["./scripts/clean_aby.zsh"])
+    if "aby" in features:
+        subprocess.run(["./scripts/clean_aby.zsh"])
     subprocess.run(["rm", "-rf", "scripts/aby_tests/__pycache__"])
     subprocess.run(["rm", "-rf", "P", "V", "pi", "perf.data perf.data.old flamegraph.svg"])
 
@@ -199,7 +200,7 @@ if __name__ == "__main__":
         lint()
 
     if args.clean:
-        clean()
+        clean(features)
     
     if args.mode:
         set_mode(args.mode)
