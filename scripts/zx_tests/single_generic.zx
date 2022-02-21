@@ -1,0 +1,5 @@
+def last<N>(u32[N] a) -> u32:
+    return a[N-1]
+
+def main() -> u32:
+    return last([1u32,2,3])

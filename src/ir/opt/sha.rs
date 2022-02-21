@@ -174,7 +174,8 @@ mod test {
         let b = bool_lit(false);
         let c = bool_lit(false);
         let t = term![Op::BoolMaj; a.clone(), b.clone(),c.clone()];
-        let tt = term![OR; term![AND; a.clone(), b.clone()], term![AND; b.clone(), c.clone()], term![AND; c.clone(), a.clone()]];
+        let tt =
+            term![OR; term![AND; a.clone(), b.clone()], term![AND; b, c.clone()], term![AND; c, a]];
         assert_eq!(tt, sha_maj_elim(&t));
     }
 

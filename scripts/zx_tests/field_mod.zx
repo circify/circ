@@ -1,0 +1,5 @@
+def main() -> bool:
+    field a = 12824923210
+    field b = 18423229
+    assert(a % b == 2355826)
+    return false

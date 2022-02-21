@@ -562,21 +562,20 @@ loop_tests = [
 ]
 
 function_tests = [
-    [
-        "Sum() two numbers - 1",
-        3,
-        "./third_party/ABY/build/bin/2pc_function_sum",
+     [
+        "Function add two numbers - 1",
+        6,
+        "./third_party/ABY/build/bin/2pc_function_add",
         {"a": 1, "b": 0},
         {"a": 0, "b": 2},
     ], 
     [
-        "Sum() two numbers - 2",
-        2,
-        "./third_party/ABY/build/bin/2pc_function_sum",
+        "Function add two numbers - 2",
+        4,
+        "./third_party/ABY/build/bin/2pc_function_add",
         {"a": 0, "b": 0},
         {"a": 0, "b": 2},
     ], 
-
 ]
 
 shift_tests = [

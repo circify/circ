@@ -36,6 +36,7 @@ pub mod bv;
 pub mod dist;
 pub mod extras;
 pub mod field;
+pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
@@ -95,7 +96,7 @@ pub enum Op {
     /// floating-point binary predicate
     FpBinPred(FpBinPred),
     /// floating-point unary predicate
-    FpUnPred(FpBinPred),
+    FpUnPred(FpUnPred),
     /// floating-point unary operator
     FpUnOp(FpUnOp),
     //FpFma,
@@ -265,33 +266,33 @@ impl Display for Op {
             Op::BvNaryOp(a) => write!(f, "{}", a),
             Op::BvUnOp(a) => write!(f, "{}", a),
             Op::BoolToBv => write!(f, "bool2bv"),
-            Op::BvExtract(a, b) => write!(f, "extract {} {}", a, b),
+            Op::BvExtract(a, b) => write!(f, "(extract {} {})", a, b),
             Op::BvConcat => write!(f, "concat"),
-            Op::BvUext(a) => write!(f, "uext {}", a),
-            Op::BvSext(a) => write!(f, "sext {}", a),
-            Op::PfToBv(a) => write!(f, "pf2bv {}", a),
+            Op::BvUext(a) => write!(f, "(uext {})", a),
+            Op::BvSext(a) => write!(f, "(sext {})", a),
+            Op::PfToBv(a) => write!(f, "(pf2bv {})", a),
             Op::Implies => write!(f, "=>"),
             Op::BoolNaryOp(a) => write!(f, "{}", a),
             Op::Not => write!(f, "not"),
-            Op::BvBit(a) => write!(f, "bit {}", a),
+            Op::BvBit(a) => write!(f, "(bit {})", a),
             Op::BoolMaj => write!(f, "maj"),
             Op::FpBinOp(a) => write!(f, "{}", a),
             Op::FpBinPred(a) => write!(f, "{}", a),
             Op::FpUnPred(a) => write!(f, "{}", a),
             Op::FpUnOp(a) => write!(f, "{}", a),
             Op::BvToFp => write!(f, "bv2fp"),
-            Op::UbvToFp(a) => write!(f, "ubv2fp {}", a),
-            Op::SbvToFp(a) => write!(f, "sbv2fp {}", a),
-            Op::FpToFp(a) => write!(f, "fp2fp {}", a),
+            Op::UbvToFp(a) => write!(f, "(ubv2fp {})", a),
+            Op::SbvToFp(a) => write!(f, "(sbv2fp {})", a),
+            Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::UbvToPf(a) => write!(f, "bv2pf {}", a),
+            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
-            Op::Field(i) => write!(f, "field{}", i),
-            Op::Update(i) => write!(f, "update{}", i),
-            Op::Map(op) => write!(f, "map({})", op),
+            Op::Field(i) => write!(f, "(field {})", i),
+            Op::Update(i) => write!(f, "(update {})", i),
+            Op::Map(op) => write!(f, "(map({}))", op),
         }
     }
 }
@@ -629,7 +630,7 @@ pub enum Value {
     /// Array
     Array(Array),
     /// Tuple
-    Tuple(Vec<Value>),
+    Tuple(Box<[Value]>),
 }
 
 #[derive(Clone, PartialEq, Debug, PartialOrd, Hash)]
@@ -655,6 +656,12 @@ impl Array {
         map: BTreeMap<Value, Value>,
         size: usize,
     ) -> Self {
+        if key_sort.default_value().as_usize().is_none() {
+            panic!(
+                "IR Arrays cannot have {} index (Int, BitVector, Bool, or Field only)",
+                key_sort
+            );
+        }
         Self {
             key_sort,
             default,
@@ -671,13 +678,48 @@ impl Array {
             size,
         )
     }
+
+    // consistency check for index
+    fn check_idx(&self, idx: &Value) {
+        if idx.sort() != self.key_sort {
+            panic!(
+                "Tried to index array with key {}, but {} was expected",
+                idx.sort(),
+                self.key_sort
+            );
+        }
+        match idx.as_usize() {
+            Some(idx_u) if idx_u < self.size => (),
+            Some(idx_u) => panic!(
+                "IR Array out of range: accessed {}, size is {}",
+                idx_u, self.size
+            ),
+            _ => panic!("IR Array index {} not convertible to usize", idx),
+        }
+    }
+
+    // consistency check for value
+    fn check_val(&self, vsrt: Sort) {
+        if vsrt != self.default.sort() {
+            panic!(
+                "Attempted to store {} to an array of {}",
+                vsrt,
+                self.default.sort()
+            );
+        }
+    }
+
     /// Store
     pub fn store(mut self, idx: Value, val: Value) -> Self {
+        self.check_idx(&idx);
+        self.check_val(val.sort());
         self.map.insert(idx, val);
         self
     }
+
     /// Select
     pub fn select(&self, idx: &Value) -> Value {
+        self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
     }
 }
@@ -692,8 +734,8 @@ impl Display for Value {
             Value::Field(b) => write!(f, "{}", b),
             Value::BitVector(b) => write!(f, "{}", b),
             Value::Tuple(fields) => {
-                write!(f, "(tuple")?;
-                for field in fields {
+                write!(f, "(#t ")?;
+                for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
                 write!(f, ")")
@@ -705,11 +747,11 @@ impl Display for Value {
 
 impl Display for Array {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "(map default:{} size:{} {:?})",
-            self.default, self.size, self.map
-        )
+        write!(f, "(#a {} {} {} (", self.key_sort, self.default, self.size,)?;
+        for (k, v) in &self.map {
+            write!(f, " ({} {})", k, v)?;
+        }
+        write!(f, " ))")
     }
 }
 
@@ -762,7 +804,7 @@ pub enum Sort {
     /// size presumes an order, and a zero, for the key sort.
     Array(Box<Sort>, Box<Sort>, usize),
     /// A tuple
-    Tuple(Vec<Sort>),
+    Tuple(Box<[Sort]>),
 }
 
 impl Sort {
@@ -788,7 +830,7 @@ impl Sort {
 
     #[track_caller]
     /// Unwrap the constituent sorts of this tuple, panicking otherwise.
-    pub fn as_tuple(&self) -> &Vec<Sort> {
+    pub fn as_tuple(&self) -> &[Sort] {
         if let Sort::Tuple(w) = self {
             w
         } else {
@@ -886,7 +928,7 @@ impl Display for Sort {
             Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
-                for field in fields {
+                for field in fields.iter() {
                     write!(f, " {}", field)?;
                 }
                 write!(f, ")")
@@ -904,6 +946,7 @@ pub type TTerm = WHConsed<TermData>;
 struct TermTable {
     map: FxHashMap<TermData, TTerm>,
     count: u64,
+    last_len: usize,
 }
 
 impl TermTable {
@@ -932,6 +975,14 @@ impl TermTable {
         // ...and return consed version.
         hconsed
     }
+    fn should_collect(&mut self) -> bool {
+        let ret = LEN_THRESH_DEN * self.map.len() > LEN_THRESH_NUM * self.last_len;
+        if self.last_len > TERM_CACHE_LIMIT {
+            // when last_len is big, force a garbage collect every once in a while
+            self.last_len = (self.last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN;
+        }
+        ret
+    }
     fn collect(&mut self) {
         let old_size = self.map.len();
         let mut to_check: OnceQueue<Term> = OnceQueue::new();
@@ -958,6 +1009,39 @@ impl TermTable {
             assert!(v.elm.upgrade().is_some(), "Can not upgrade: {:?}", k)
         }
         debug!(target: "ir::term::gc", "{} of {} terms collected", old_size - new_size, old_size);
+        self.last_len = new_size;
+    }
+}
+struct TypeTable {
+    map: FxHashMap<TTerm, Sort>,
+    last_len: usize,
+}
+impl std::ops::Deref for TypeTable {
+    type Target = FxHashMap<TTerm, Sort>;
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+impl std::ops::DerefMut for TypeTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.map
+    }
+}
+impl TypeTable {
+    fn should_collect(&mut self) -> bool {
+        let ret = LEN_THRESH_DEN * self.map.len() > LEN_THRESH_NUM * self.last_len;
+        if self.last_len > TERM_CACHE_LIMIT {
+            // when last_len is big, force a garbage collect every once in a while
+            self.last_len = (self.last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN;
+        }
+        ret
+    }
+    fn collect(&mut self) {
+        let old_size = self.map.len();
+        self.map.retain(|term, _| term.to_hconsed().is_some());
+        let new_size = self.map.len();
+        debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
+        self.last_len = new_size;
     }
 }
 
@@ -965,6 +1049,7 @@ lazy_static! {
     static ref TERMS: RwLock<TermTable> = RwLock::new(TermTable {
         map: FxHashMap::default(),
         count: 0,
+        last_len: 0,
     });
 }
 
@@ -979,16 +1064,37 @@ pub fn garbage_collect() {
     collect_types();
 }
 
+const LEN_THRESH_NUM: usize = 8;
+const LEN_THRESH_DEN: usize = 1;
+const LEN_DECAY_NUM: usize = 15;
+const LEN_DECAY_DEN: usize = 16;
+/// Scan term and type databases only if they've grown in size since last scan
+pub fn maybe_garbage_collect() -> bool {
+    let mut ran = {
+        let mut term_table = TERMS.write().unwrap();
+        if term_table.should_collect() {
+            term_table.collect();
+            true
+        } else {
+            false
+        }
+    };
+    {
+        let mut type_table = ty::TERM_TYPES.write().unwrap();
+        if type_table.should_collect() {
+            type_table.collect();
+            ran = true;
+        }
+    }
+    ran
+}
+
 fn collect_terms() {
     TERMS.write().unwrap().collect();
 }
 
 fn collect_types() {
-    let mut ty_map = ty::TERM_TYPES.write().unwrap();
-    let old_size = ty_map.len();
-    ty_map.retain(|term, _| term.to_hconsed().is_some());
-    let new_size = ty_map.len();
-    debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
+    ty::TERM_TYPES.write().unwrap().collect();
 }
 
 impl TermData {
@@ -1016,10 +1122,39 @@ impl TermData {
             None
         }
     }
+
+    /// Get the underlying tuple constant, if possible.
+    pub fn as_tuple_opt(&self) -> Option<&[Value]> {
+        if let Op::Const(Value::Tuple(t)) = &self.op {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying array constant, if possible.
+    pub fn as_array_opt(&self) -> Option<&Array> {
+        if let Op::Const(Value::Array(a)) = &self.op {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying constant value, if possible.
+    pub fn as_value_opt(&self) -> Option<&Value> {
+        if let Op::Const(v) = &self.op {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
     /// Is this a variable?
     pub fn is_var(&self) -> bool {
         matches!(&self.op, Op::Var(..))
     }
+
     /// Is this a value
     pub fn is_const(&self) -> bool {
         matches!(&self.op, Op::Const(..))
@@ -1074,7 +1209,7 @@ impl Value {
     }
     #[track_caller]
     /// Get the underlying tuple's constituent values, if possible.
-    pub fn as_tuple(&self) -> &Vec<Value> {
+    pub fn as_tuple(&self) -> &[Value] {
         if let Value::Tuple(b) = self {
             b
         } else {
@@ -1108,7 +1243,8 @@ impl Value {
             None
         }
     }
-    /// Compute the sort of this value
+
+    /// Convert this value into a usize if possible
     pub fn as_usize(&self) -> Option<usize> {
         match &self {
             Value::Bool(b) => Some(*b as usize),
@@ -1274,9 +1410,10 @@ fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>,
             t[*i].clone()
         }
         Op::Update(i) => {
-            let mut t = vs.get(&c.cs[0]).unwrap().as_tuple().clone();
+            let mut t = Vec::from(vs.get(&c.cs[0]).unwrap().as_tuple()).into_boxed_slice();
             assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
             let e = vs.get(&c.cs[1]).unwrap().clone();
+            assert_eq!(t[*i].sort(), e.sort());
             t[*i] = e;
             Value::Tuple(t)
         }
@@ -1291,7 +1428,7 @@ fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>,
             let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
             let i = vs.get(&c.cs[1]).unwrap();
             a.clone().select(i)
-        }
+        },
         Op::Map(op) => {
             let arg_cnt = c.cs.len();
             let arr_size = vs.get(&c.cs[0]).unwrap().as_array().size;
@@ -1363,6 +1500,7 @@ pub fn leaf_term(op: Op) -> Term {
 /// Make a term with arguments.
 #[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
+    #[cfg_attr(not(debug_assertions), allow(clippy::let_and_return))]
     let t = mk(TermData { op, cs });
     #[cfg(debug_assertions)]
     check_rec(&t);
@@ -1389,8 +1527,14 @@ pub fn bool_lit(b: bool) -> Term {
 
 /// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
+/// LRU cache of terms (like TermMap, but limited size)
+pub type TermCache<T> = hashconsing::coll::HConLru<Term, T>;
 /// Set of terms
 pub type TermSet = hashconsing::coll::HConSet<Term>;
+
+// default LRU cache size
+// this size avoids quadratic behavior for Falcon verification
+pub(super) const TERM_CACHE_LIMIT: usize = 65536;
 
 /// Iterator over descendents in child-first order.
 pub struct PostOrderIter {
@@ -1639,7 +1783,7 @@ impl Computation {
     /// Assert `s` in the system.
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
-        debug!("Assert: {}", extras::Letified(s.clone()));
+        debug!("Assert: {}", &s.op);
         self.outputs.push(s);
     }
     /// If tracking values, evaluate `term`, and set the result to `name`.

@@ -150,7 +150,13 @@ impl FixedSizeDist {
                     self.sample_value(sort, rng),
                     // No variables!
                     Op::Var(
-                        self.sample_ident(&format!("tp_{}", sort), rng),
+                        self.sample_ident(
+                            &format!("tp_{}", sort)
+                                .replace('(', "[")
+                                .replace(')', "]")
+                                .replace(' ', "_"),
+                            rng,
+                        ),
                         sort.clone(),
                     ),
                 ]
@@ -179,7 +185,7 @@ impl FixedSizeDist {
             }],
             Op::Tuple => {
                 if let Sort::Tuple(sorts) = sort {
-                    sorts.clone()
+                    sorts.to_vec()
                 } else {
                     unreachable!("Bad sort for tuple cons: {}", sort)
                 }
@@ -343,9 +349,12 @@ pub mod test {
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
 
-            Box::new(ts.into_iter().rev().skip(1).map(ArbitraryTerm))
+            Box::new(ts.skip(1).map(ArbitraryTerm))
         }
     }
 
@@ -368,15 +377,13 @@ pub mod test {
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
             let vs = self.1.clone();
 
-            Box::new(
-                ts.into_iter()
-                    .rev()
-                    .skip(1)
-                    .map(move |t| ArbitraryBoolEnv(t, vs.clone())),
-            )
+            Box::new(ts.skip(1).map(move |t| ArbitraryBoolEnv(t, vs.clone())))
         }
     }
 
@@ -411,15 +418,13 @@ pub mod test {
         }
 
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let ts = PostOrderIter::new(self.0.clone()).collect::<Vec<_>>();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
             let vs = self.1.clone();
 
-            Box::new(
-                ts.into_iter()
-                    .rev()
-                    .skip(1)
-                    .map(move |t| ArbitraryTermEnv(t, vs.clone())),
-            )
+            Box::new(ts.skip(1).map(move |t| ArbitraryTermEnv(t, vs.clone())))
         }
     }
 

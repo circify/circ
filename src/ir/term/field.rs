@@ -19,9 +19,14 @@ pub struct FieldElem {
 impl Display for FieldElem {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if self.i.significant_bits() + 1 < self.modulus.significant_bits() {
-            write!(f, "{}", self.i)
+            write!(f, "#f{}m{}", self.i, self.modulus)
         } else {
-            write!(f, "-{}", (*self.modulus).clone() - &self.i)
+            write!(
+                f,
+                "#f-{}m{}",
+                (*self.modulus).clone() - &self.i,
+                self.modulus
+            )
         }
     }
 }
@@ -38,7 +43,7 @@ impl FieldElem {
         );
         debug_assert!(
             self.i <= *self.modulus,
-            "Too small field elem: {}\n at {}",
+            "Too large field elem: {}\n at {}",
             self,
             location
         );
@@ -62,7 +67,10 @@ impl FieldElem {
     }
     #[track_caller]
     /// Make a new prime-field element
-    pub fn new(i: Integer, modulus: Arc<Integer>) -> FieldElem {
+    pub fn new(mut i: Integer, modulus: Arc<Integer>) -> FieldElem {
+        if i < 0 {
+            i += &*modulus;
+        }
         let r = FieldElem { i, modulus };
         r.check("new");
         r

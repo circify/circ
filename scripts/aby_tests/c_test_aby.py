@@ -16,6 +16,7 @@ if __name__ == "__main__":
         ite_tests + \
         c_array_tests + \
         div_tests + \
+        function_tests + \
         array_tests 
         # shift_tests
    
