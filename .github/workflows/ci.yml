@@ -41,5 +41,5 @@ jobs:
       run: python3 driver.py --lint
     - name: Build
       run: python3 driver.py --build
-    - name: Run tests
+    - name: Test
       run: python3 driver.py --test
