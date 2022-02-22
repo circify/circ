@@ -74,13 +74,15 @@ impl ToABY {
                 let new_name = name.to_string().replace(".", "_");
                 let n = new_name.split('_').collect::<Vec<&str>>();
 
-                if n.len() == 5 {
-                    n[3].to_string()
-                } else if n.len() > 5 {
-                    let l = n.len() - 1;
-                    format!("{}_{}", n[l - 2], n[l])
-                } else {
-                    panic!("Invalid variable name: {}", name);
+                match n.len() {
+                    5 => n[3].to_string(),
+                    6.. => {
+                        let l = n.len() - 1;
+                        format!("{}_{}", n[l - 2], n[l])
+                    }
+                    _ => {
+                        panic!("Invalid variable name: {}", name);
+                    }
                 }
             }
             _ => panic!("Term {} is not of type Var", t),
