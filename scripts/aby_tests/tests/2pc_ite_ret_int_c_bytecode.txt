@@ -1,6 +1,0 @@
-1 1 0 0 CONS_bv
-3 1 2 1 0 3 MUX
-1 1 2 5 NOT
-2 1 5 5 6 AND
-3 1 6 4 3 7 MUX
-1 0 7 OUT

@@ -4,8 +4,9 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
+use super::assignment::some_arith_sharing;
 use crate::ir::term::*;
-use crate::target::aby::assignment::ilp::assign;
+// use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 use std::fmt;
@@ -75,8 +76,9 @@ impl ToABY {
 
                 if n.len() == 5 {
                     n[3].to_string()
-                } else if n.len() == 6 {
-                    format!("{}_{}", n[3], n[5])
+                } else if n.len() > 5 {
+                    let l = n.len() - 1;
+                    format!("{}_{}", n[l - 2], n[l])
                 } else {
                     panic!("Invalid variable name: {}", name);
                 }
@@ -100,27 +102,18 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
         let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+        let op = "EQ";
+        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+        write_line_to_file(&self.bytecode_path, &line);
         match check(&a_term) {
             Sort::Bool => {
-                let op = "EQ_bool";
-
                 self.check_bool(&a_term);
                 self.check_bool(&b_term);
-
-                let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                write_line_to_file(&self.bytecode_path, &line);
-
                 self.cache.insert(t, EmbeddedTerm::Bool(share));
             }
             Sort::BitVector(_) => {
-                let op = "EQ_bv";
-
                 self.check_bv(&a_term);
                 self.check_bv(&b_term);
-
-                let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                write_line_to_file(&self.bytecode_path, &line);
-
                 self.cache.insert(t, EmbeddedTerm::Bool(share));
             }
             e => panic!("Unimplemented sort for Eq: {:?}", e),
@@ -357,10 +350,11 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, _cm: &str) {
     let Computation { outputs: terms, .. } = ir.clone();
 
-    let s_map: SharingMap = assign(&ir, cm);
+    // let s_map: SharingMap = assign(&ir, cm);
+    let s_map: SharingMap = some_arith_sharing(&ir);
     let mut converter = ToABY::new(s_map, path, lang);
 
     for t in terms {

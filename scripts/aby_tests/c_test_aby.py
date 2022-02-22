@@ -17,7 +17,9 @@ if __name__ == "__main__":
         div_tests + \
         array_tests + \
         c_array_tests + \
-        misc_tests
+        misc_tests + \
+        biomatch_tests + \
+        kmeans_tests
         # shift_tests
        
     # TODO: add support for return value - int promotion

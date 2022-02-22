@@ -1,8 +1,0 @@
-2 1 1 0 2 ADD
-1 1 1 3 CONS_bv
-2 1 3 2 4 ADD
-2 1 4 2 5 ADD
-1 1 2 6 CONS_bv
-2 1 6 2 7 ADD
-2 1 7 5 8 ADD
-1 0 8 OUT

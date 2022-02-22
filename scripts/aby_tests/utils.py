@@ -5,7 +5,6 @@ from typing import List
 
 def init_progress_bar(toolbar_width=40):
     """ Initialize progress bar """
-    print("Running ABY unit tests")
     sys.stdout.write("[%s]" % ("." * toolbar_width))
     sys.stdout.flush()
     sys.stdout.write("\b" * (toolbar_width+1)) 
@@ -27,7 +26,7 @@ def build_cmd(name:str, test_file: str, role: int) -> List[str]:
     bytecode = f"./scripts/aby_tests/tests/{name}_bytecode.txt"
     share_map = f"./scripts/aby_tests/tests/{name}_share_map.txt"
     param_map= f"./scripts/aby_tests/tests/{name}_param_map.txt"
-    return ["./scripts/aby_tests/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map, "-p", param_map] 
+    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map, "-p", param_map] 
 
 def get_result(file_path):
     if os.path.exists(file_path):
@@ -53,11 +52,11 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
     
     try:
-        server_proc = Popen(server_cmd, stdout=PIPE, stderr=PIPE)
-        client_proc = Popen(client_cmd, stdout=PIPE, stderr=PIPE)
+        server_proc = Popen(" ".join(server_cmd), shell=True, stdout=PIPE, stderr=PIPE)
+        client_proc = Popen(" ".join(client_cmd), shell=True, stdout=PIPE, stderr=PIPE)
 
-        server_out, server_err = server_proc.communicate(timeout=5)
-        client_out, client_err = client_proc.communicate(timeout=5)
+        server_out, server_err = server_proc.communicate(timeout=30)
+        client_out, client_err = client_proc.communicate(timeout=30)
 
         if server_err:
             raise RuntimeError("Server error: "+server_err.decode("utf-8").strip())
@@ -81,9 +80,9 @@ def run_tests(lang: str, tests: List[dict]):
     2. test name: str
     4. test file path: str 
     """
-    print("Running tests for frontend", lang)
+    print(f"Running ABY tests for {lang} frontend")
     failed_test_descs = []
-    num_retries = 1
+    num_retries = 2
     progress_inc = 5
     init_progress_bar(len(tests) // progress_inc + 1)
     for t, test in enumerate(tests):
@@ -102,7 +101,7 @@ def run_tests(lang: str, tests: List[dict]):
             test_results.append(run_test(expected, server_cmd, client_cmd))
         
         if all([not r[0] for r in test_results]):
-            failed_test_descs += [(desc, e[1]) for e in test_results]
+            failed_test_descs += [(desc, e[1], " ".join(server_cmd)) for e in test_results]
 
         if t % progress_inc == 0:
             update_progress_bar()
@@ -111,5 +110,5 @@ def run_tests(lang: str, tests: List[dict]):
     if len(failed_test_descs) == 0:
         print("All tests passed ✅")
 
-    failed_test_descs = [f"{r}:\n{e}" for r, e in failed_test_descs]
+    failed_test_descs = [f"{r}:\n{e}\n{cmd}" for r, e, cmd in failed_test_descs]
     assert len(failed_test_descs) == 0, "there were failed test cases:\n======\n" + "\n\n".join(failed_test_descs)
