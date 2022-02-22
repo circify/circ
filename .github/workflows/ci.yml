@@ -33,9 +33,7 @@ jobs:
       with:
         path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
-    - name: Build third_party libraries
-      run: python3 driver.py --build
-    - name: Typecheck
+    - name: Type check
       run: python3 driver.py --check
     - name: Check format
       run: cargo fmt -- --check

@@ -3,10 +3,12 @@ use circ::front::zsharp::{Inputs, ZSharpFE};
 
 #[allow(unused_imports)]
 use circ::front::Mode;
+#[allow(unused_imports)]
 use std::path::PathBuf;
+#[allow(unused_imports)]
 use structopt::StructOpt;
 
-#[allow(dead_code)]
+#[cfg(all(feature = "smt", feature = "zok"))]
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
