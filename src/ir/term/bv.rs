@@ -221,6 +221,26 @@ impl BitVector {
             width: n,
         }
     }
+    /// Parse the `#bBBBBB` SMT bit-vector constant format
+    pub fn from_bin_lit(lit: &[u8]) -> Option<BitVector> {
+        if lit.len() < 3 || &lit[..2] != b"#b" {
+            return None;
+        }
+        Some(BitVector {
+            uint: Integer::parse_radix(&lit[2..], 2).ok()?.into(),
+            width: lit.len() - 2,
+        })
+    }
+    /// Parse the `#xFF` SMT bit-vector constant format
+    pub fn from_hex_lit(lit: &[u8]) -> Option<BitVector> {
+        if lit.len() < 3 || &lit[..2] != b"#x" {
+            return None;
+        }
+        Some(BitVector {
+            uint: Integer::parse_radix(&lit[2..], 16).ok()?.into(),
+            width: 4 * (lit.len() - 2),
+        })
+    }
 }
 
 impl Display for BitVector {

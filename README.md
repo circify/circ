@@ -4,9 +4,13 @@ CirC is a *compiler infrastructure* which supports compilation from
 high-level (stateful, uniform) languages to (state-free, non-uniform,
 existentially quantified) circuits.
 
-It's been used to compile {C, ZoKrates, Circom} to {SMT, R1CS}, but it
-probably also applies to any statically type high-level language and
-MPC/constant-time/ILP/FHE.
+It's been used to compile {C, ZoKrates, Circom} to {SMT, ILP, R1CS,
+MPC}, but it probably also applies to any statically type high-level
+language and constant-time/FHE.
+
+If you want to learn more about CirC, see our
+[paper](https://circ.zk.fyi) or
+[slides](https://cs.stanford.edu/~aozdemir/docs/circ.pdf).
 
 ## Requirements
 
