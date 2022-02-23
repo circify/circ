@@ -152,6 +152,29 @@ pub fn assign(c: &ComputationSubgraph, cm: &str) -> SharingMap {
     build_ilp(c, &costs)
 }
 
+/// Uses an ILP to assign and abandon the outer assignments
+pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -> SharingMap {
+    let base_dir = match cm {
+        "opa" => "opa",
+        "hycc" => "hycc",
+        _ => panic!("Unknown cost model type: {}", cm),
+    };
+    let p = format!(
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        base_dir
+    );
+    let costs = CostModel::from_opa_cost_file(&p);
+    let mut smap = build_ilp(c, &costs);
+    let mut trunc_smap = TermMap::new();
+    for node in co.nodes.clone(){
+        let share = smap.get_mut(&node).unwrap();
+        trunc_smap.insert(node, *share);
+    }
+    println!("#### Assignment cost of partition: {}", calculate_node_cost(&trunc_smap, &costs));
+    trunc_smap
+}
+
 fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
     let mut terms: TermSet = TermSet::new();
     let mut def_uses: FxHashSet<(Term, Term)> = FxHashSet::default();
@@ -267,6 +290,77 @@ fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
     }
     assignment
 }
+
+// fn assign_global(cs: &HashMap<usize, HashMap<usize, SharingMap>>, cm: &str) -> SharingMap{
+//     let base_dir = match cm {
+//         "opa" => "opa",
+//         "hycc" => "hycc",
+//         _ => panic!("Unknown cost model type: {}", cm),
+//     };
+//     let p = format!(
+//         "{}/third_party/{}/adapted_costs.json",
+//         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+//         base_dir
+//     );
+//     let costs = CostModel::from_opa_cost_file(&p);
+//     build_ilp_global(cs, &costs)
+// }
+
+/// Calculate the cost of a global assignment
+pub fn calculate_node_cost(smap: &SharingMap, costs: &CostModel) -> f64{
+    // remove the double counting for cost
+    let mut cost:f64 = 0.0;
+    for (t, from_ty) in smap{
+        match &t.op {
+            Op::Var(..) | Op::Const(_) => {
+                cost = cost + 0.0;
+            }
+            _ => {
+                cost = cost + costs.ops.get(&t.op).unwrap().get(from_ty).unwrap();
+            }
+        }
+    }
+    cost
+}
+
+/// Calculate the cost of a global assignment
+pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64{
+
+    let mut cost:f64 = 0.0;
+    for (t, from_ty) in smap{
+        match &t.op {
+            Op::Var(..) | Op::Const(_) => {
+                cost = cost + 0.0;
+            }
+            _ => {
+                cost = cost + costs.ops.get(&t.op).unwrap().get(from_ty).unwrap();
+            }
+        }
+        for arg_t in &t.cs{
+            let to_ty = smap.get(&arg_t).unwrap();
+            if from_ty != to_ty{
+                cost = cost + costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
+            }
+        }
+    }
+    cost
+}
+
+// fn brute_force(cs: &HashMap<usize, HashMap<usize, SharingMap>>, costs: &CostModel) -> SharingMap{
+//     let mut best_smap:SharingMap = SharingMap::new();
+//     // get all combinations
+//     let combs = gen_all_seq(cs.keys().len(), 4);
+//     for comb in combs{
+
+//     }
+//     best_smap
+// }
+
+// fn build_ilp_global(cs: &HashMap<usize, HashMap<usize, SharingMap>>, costs: &CostModel) -> SharingMap{
+    
+// }
+
+
 
 #[cfg(test)]
 mod tests {

@@ -1397,6 +1397,10 @@ pub struct ComputationSubgraph {
     pub nodes: TermSet,
     /// Adjacency list of edges in subgraph
     pub edges: TermMap<TermSet>,
+    /// Output leaf nodes
+    pub outs: TermSet,
+    /// Input leaf nodes
+    pub ins: TermSet,
 }
 
 impl Default for ComputationSubgraph {
@@ -1411,6 +1415,8 @@ impl ComputationSubgraph {
         Self {
             nodes: TermSet::new(),
             edges: TermMap::new(),
+            outs: TermSet::new(),
+            ins: TermSet::new(),
         }
     }
 
@@ -1423,14 +1429,31 @@ impl ComputationSubgraph {
 
     /// Insert edges based on nodes in the subgraph
     pub fn insert_edges(&mut self) {
+        let mut defs : FxHashSet<Term> = FxHashSet::default();
         for t in self.nodes.iter() {
             self.edges.insert(t.clone(), TermSet::new());
+            let mut flag = true;
             for c in t.cs.iter() {
                 if self.nodes.contains(c) {
                     self.edges.get_mut(t).unwrap().insert(c.clone());
+                    defs.insert(c.clone());
+                    flag = false;
                 }
             }
+            if flag{
+                self.ins.insert(t.clone());
+            }
         }
+
+        // Find the leaf node in each subgraph
+        // TODO: defs.difference(&_uses) ?
+        for t in self.nodes.iter(){
+            if !defs.contains(t){
+                self.outs.insert(t.clone());
+            }
+        }
+        println!("Input nodes of partition: {}", self.ins.len());
+        println!("Output nodes of partition: {}", self.outs.len());
     }
 }
 

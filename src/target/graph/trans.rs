@@ -5,9 +5,14 @@
 
 use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
+use crate::target::aby::assignment::ilp::assign_mut;
+use crate::target::aby::assignment::ilp::calculate_cost;
+use crate::target::aby::assignment::ilp::calculate_node_cost;
+use crate::target::aby::assignment::ilp::CostModel;
 use crate::target::aby::assignment::SharingMap;
 use std::collections::HashMap;
 use std::fs;
+use std::env::var;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufRead};
@@ -230,7 +235,7 @@ impl ParitionGraph {
     // Check if input graph is formatted correctly
     fn check_graph(&self) {
         //TODO: fix path
-        let output = Command::new("../KaHIP/deploy/graphchecker")
+        let output = Command::new("../../../KaHIP/deploy/graphchecker")
             .arg(&self.graph_path)
             .stdout(Stdio::piped())
             .output()
@@ -242,7 +247,7 @@ impl ParitionGraph {
     // Call graph partitioning algorithm on input graph
     fn call_graph_partitioner(&self) {
         //TODO: fix path
-        let output = Command::new("../KaHIP/deploy/kaffpa")
+        let output = Command::new("../../../KaHIP/deploy/kaffpa")
             .arg(&self.graph_path)
             .arg("--k")
             .arg(self.num_parts.to_string()) //TODO: make this a function on the number of terms
@@ -303,6 +308,42 @@ impl ParitionGraph {
         new_partitions
     }
 
+    fn get_outer(&self, cs: &ComputationSubgraph) -> ComputationSubgraph{
+        let mut mut_cs:ComputationSubgraph = ComputationSubgraph::new();
+        for node in cs.nodes.clone() {
+            mut_cs.insert_node(&node);
+        }
+        for node in cs.ins.clone(){
+            for outer_node in node.cs.iter(){
+                mut_cs.insert_node(&outer_node)
+            }
+        }
+        mut_cs.insert_edges();
+        mut_cs
+    }
+
+    fn mutate_partitions(
+        &self,
+        cs: &HashMap<usize, ComputationSubgraph>,
+    )-> HashMap<usize, HashMap<usize, SharingMap>>{
+        let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
+        for (i,c) in cs.iter() {
+            mut_smaps.insert(*i, HashMap::new());
+            println!("#### Assignment of partition: {}, {}", i, 0);
+            mut_smaps.get_mut(i).unwrap().insert(0, assign(c, &self.cm));
+            let outer_cs_1 = self.get_outer(c);
+            println!("#### Assignment of partition: {}, {}", i, 1);
+            mut_smaps.get_mut(i).unwrap().insert(1, assign_mut(&outer_cs_1, &self.cm, c));
+            let outer_cs_2 = self.get_outer(&outer_cs_1);
+            println!("#### Assignment of partition: {}, {}", i, 2);
+            mut_smaps.get_mut(i).unwrap().insert(2, assign_mut(&outer_cs_2, &self.cm, c));
+            let outer_cs_3 = self.get_outer(&outer_cs_2);
+            println!("#### Assignment of partition: {}, {}", i, 3);
+            mut_smaps.get_mut(i).unwrap().insert(3, assign_mut(&outer_cs_3, &self.cm, c));
+        }
+        mut_smaps
+    }
+
     // Partition IR and get mapping
     fn get_partitions(&mut self) {
         self.check_graph();
@@ -321,6 +362,17 @@ impl ParitionGraph {
         local_smaps
     }
 
+    // fn get_mutate_local_assignments(
+    //     &self,
+    //     cs: &HashMap<usize, ComputationSubgraph>,
+    // ) -> HashMap<usize, SharingMap> {
+    //     let mut local_smaps: HashMap<usize, SharingMap> = HashMap::new();
+    //     for (i, c) in cs.iter() {
+    //         local_smaps.insert(*i, assign(c, &self.cm));
+    //     }
+    //     local_smaps
+    // }
+
     fn get_global_assignments(&self, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
         let mut global_smap: SharingMap = SharingMap::new();
 
@@ -333,7 +385,7 @@ impl ParitionGraph {
                 // get local assignment
                 let local_share = local_smaps.get(part).unwrap().get(&t).unwrap();
 
-                // TODO: mutate local assignments
+                // TODO: mutate local assignments ilp
 
                 // assign to global share
                 global_smap.insert(t.clone(), *local_share);
@@ -341,14 +393,90 @@ impl ParitionGraph {
         }
         global_smap
     }
+
+
+    fn gen_all_seq(&self,ps: usize, ms: usize) -> Vec<Vec<usize>> {
+        println!("gen_all_seq({}, {})", ps, ms);
+        let mut result = Vec::new();
+        if ps == 1{
+            let mut i = 0;
+            while i < ms{
+                let mut vec = Vec::new();
+                vec.push(i);
+                result.push(vec);
+                i = i + 1;
+            }
+        } else{
+            let prev_result = self.gen_all_seq(ps - 1, ms);
+            let mut i = 0;
+            while i < ms{
+                for prev in &prev_result{
+                    let mut vec = Vec::new();
+                    vec.push(i);
+                    // println!("prev: {:?}", prev);
+                    for j in prev{
+                        vec.push(*j);
+                    }
+                    result.push(vec);
+                }
+                i = i + 1;
+            }
+        }
+        println!("gen_all_seq result: {}", result.len());
+        result
+    }
+
+    fn brute_force(&self, cs: &HashMap<usize, HashMap<usize, SharingMap>>) -> SharingMap{
+        println!("Start brute forcing...");
+        let mut best_smap:SharingMap = SharingMap::new();
+        let mut cost:f64 = 0.0;
+        // get cost model
+        // let base_dir = match self.cm {
+        //     "opa" => "opa",
+        //     "hycc" => "hycc",
+        //     _ => panic!("Unknown cost model type: {}", &self.cm),
+        // };
+        let p = format!(
+            "{}/third_party/{}/adapted_costs.json",
+            var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+            "hycc"
+        );
+        let cm = CostModel::from_opa_cost_file(&p);
+        // get all combinations
+        let combs = self.gen_all_seq(self.num_parts, 4);
+        for comb in combs{
+            let mut smaps: HashMap<usize, SharingMap> = HashMap::new();
+            for part in 0..self.num_parts {
+                let mut_id = comb.get(part).unwrap();
+                let smap = cs.get(&part).unwrap().get(&mut_id).unwrap().clone();
+                smaps.insert(part, smap);
+            }
+            let global_map = self.get_global_assignments(&smaps);
+            let cur_cost = calculate_cost(&global_map, &cm);
+            // println!("Cur cost for muts: {}", cur_cost);
+            if cost == 0.0{
+                cost = cur_cost;
+                best_smap = global_map;
+            } else{
+                if cur_cost < cost{
+                    cost = cur_cost;
+                    best_smap = global_map;
+                }
+            }
+        }
+        println!("Best cost for muts: {}", cost);
+        best_smap
+    }
 }
+
+
 
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
 pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> SharingMap {
     //TODO: pass in partition size
-    let partition_size: usize = 10000;
+    let partition_size: usize = 30000;
     let mut pg = ParitionGraph::new(partition_size, cs, cm, path, lang);
 
     // Convert IR to Chaco  format
@@ -364,9 +492,33 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> Sha
     let local_smaps = pg.get_local_assignments(&partitions);
 
     // TODO: mutate local assignments
+    // Generating assignments for outer-n map
+    // n = 1 & 2 & 3
 
+    let p = format!(
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        "hycc"
+    );
+    let cm = CostModel::from_opa_cost_file(&p);
+    
+    let mutation_smaps = pg.mutate_partitions(&partitions);
+
+    for (i, maps) in mutation_smaps.clone(){
+        for (j, map) in maps{
+            println!("--------------- Assignment of partition {}, {}: {}", i, j, calculate_node_cost(&map, &cm));
+        }
+    }
+
+    pg.brute_force(&mutation_smaps); 
+    let global_assign = pg.get_global_assignments(&local_smaps);
+    let origin_cost = calculate_cost(&global_assign, &cm);
+    
+    println!("Original cost: {}", origin_cost);
     // get global assignments
-    pg.get_global_assignments(&local_smaps)
+    // solve the global assignments
+    
+    global_assign
 }
 
 #[cfg(test)]
@@ -390,5 +542,23 @@ mod test {
         pg.chaco();
         assert_eq!(pg.num_nodes, 4);
         assert_eq!(pg.num_edges / 2, 5);
+    }
+    #[test]
+    fn test_gen_seq(){
+        let cs = Computation {
+            outputs: vec![term![ITE;
+                term![BV_ULT;
+                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
+                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))],
+                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
+                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))]],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let pg = ParitionGraph::new(2, &cs, "opa", &Path::new("test"), "c");
+        let combs = pg.gen_all_seq(5, 4);
+        for comb in combs{
+            println!("{:?}", comb);
+        }
     }
 }
