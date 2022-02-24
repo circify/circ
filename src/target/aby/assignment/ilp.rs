@@ -38,6 +38,7 @@ use crate::ir::term::*;
 use crate::target::ilp::{variable, Expression, Ilp, Variable};
 
 use std::{env::var, fs::File, path::Path};
+use std::collections::HashMap;
 
 /// A cost model for ABY operations and share conversions
 #[derive(Debug)]
@@ -291,20 +292,252 @@ fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
     assignment
 }
 
-// fn assign_global(cs: &HashMap<usize, HashMap<usize, SharingMap>>, cm: &str) -> SharingMap{
-//     let base_dir = match cm {
-//         "opa" => "opa",
-//         "hycc" => "hycc",
-//         _ => panic!("Unknown cost model type: {}", cm),
-//     };
-//     let p = format!(
-//         "{}/third_party/{}/adapted_costs.json",
-//         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
-//         base_dir
-//     );
-//     let costs = CostModel::from_opa_cost_file(&p);
-//     build_ilp_global(cs, &costs)
-// }
+/// Use a ILP to find a optimal combination of mutation assignments
+pub fn comb_selection(mut_maps: &HashMap<usize, HashMap<usize, SharingMap>>, cs_map: &HashMap<usize, ComputationSubgraph>, cm: &str)-> HashMap<usize, SharingMap>{
+    let base_dir = match cm {
+        "opa" => "opa",
+        "hycc" => "hycc",
+        _ => panic!("Unknown cost model type: {}", cm),
+    };
+    let p = format!(
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        base_dir
+    );
+    let costs = CostModel::from_opa_cost_file(&p);
+    build_comb_ilp(mut_maps, cs_map, &costs)
+}
+
+/**
+ * Combination algo:
+ * 
+ * Notations:
+ *  - P ^ i: partitions
+ *  - l^i_j: assignment j for P^i
+ *  - C^i_j: inner cost (node and inner edges) of P^i with l^i_j
+ *  - X^i_j: Assign l^i_j to P^i
+ *  - K_{p, p'}: conversion cost from p to p'
+ *  - v^i_{k,p}: (edge) vertex k in partition P^i with assignment p
+ *  - B^i_{k, p}: Set of indices j such that l^i_j assign p to k
+ *  - E_{u, w, p, p'}: cross partition edges that assign u, w with p, p' repsectively
+ * 
+ * Constraints:
+ *  - [ for any i, \sum_j X^i_j >= 1 ]: Each partition must have a assignment
+ *  - [ for any i,k,  \sum_p v^i_{k, p} >= 1 ]: Each node must have a assignment
+ *  - [ E_{u, w, p, p'} >= v{u, p} + v{w, p'} - 1 ]: Edge is added if u and v is assigned with p and p' resp.
+ *  
+ * Object:
+ *  - min[\sum_{i, j} C^i_j X^i_j + \sum E{u,w,p,p'}K_{p, p'}]
+ * 
+ */
+
+
+fn build_comb_ilp(mut_maps: &HashMap<usize, HashMap<usize, SharingMap>>, cs_map: &HashMap<usize, ComputationSubgraph>, costs: &CostModel) -> HashMap<usize, SharingMap>{
+
+    // global vars
+    let mut ilp = Ilp::new();
+    
+    let mut x_vars: FxHashMap<(usize, usize), (Variable, f64, String)> = FxHashMap::default();
+    let mut v_vars: FxHashMap<(Term, ShareType), (Variable, f64, String)> = FxHashMap::default();
+    let mut e_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> = FxHashMap::default();
+
+    let mut b_set: FxHashMap<(usize, Term, ShareType), Vec<Variable>> = FxHashMap::default(); 
+    
+
+    // build variables for selection in each partition X^i_j
+    for (pid, smaps) in mut_maps.iter(){
+        let mut vars = vec![];
+        for (mid, maps) in smaps.iter(){
+            let name = format!("X_{}_{}", pid, mid);
+            let v = ilp.new_variable(variable().binary(), name.clone());
+            // TODO: update this buggy function
+            let map_cost = calculate_node_cost(&maps, costs);
+            x_vars.insert(
+                (*pid, *mid),
+                (v, map_cost, name)
+            );
+            vars.push(v);
+        }
+        // Sum of assignment selection is at least 1
+        ilp.new_constraint(
+            vars.into_iter()
+                .fold((0.0).into(), |acc: Expression, v| acc + v)
+                >> 1.0,
+        );
+    }
+
+    // 
+    // build b set
+    // build variables for each edge node v^i_{k,p}
+    let mut edge_terms: FxHashSet<(usize, usize, Term)> = FxHashSet::default();
+    let mut def_uses: FxHashSet<(Term, Term, usize, usize)> = FxHashSet::default();
+    for (pid, cs) in cs_map.iter(){
+        let mut index: usize = 1;
+        for t in cs.ins.clone(){
+            edge_terms.insert((*pid, index, t.clone()));
+            index = index + 1;
+            // get all cross partition egdes:
+            for outer_node in t.cs.iter(){
+                def_uses.insert((outer_node.clone(), t.clone(), *pid, index));
+            }
+        }
+        for t in cs.outs.clone(){
+            edge_terms.insert((*pid, index, t.clone()));
+            index = index + 1;
+        }
+    }
+
+    for (pid, i, t) in edge_terms.iter(){
+        let mut vars = vec![];
+        match &t.op {
+            Op::Var(..) | Op::Const(_) => {
+                for ty in &SHARE_TYPES {
+                    let name = format!("t_{}_{}_{}", pid, i, ty.char());
+                    let v = ilp.new_variable(variable().binary(), name.clone());
+                    v_vars.insert((t.clone(), *ty), (v, 0.0, name));
+                    vars.push(v);
+                    // TODO: add constraints for B here
+                    let mut x_vec = vec![];
+                    for (mid, maps) in mut_maps.get(pid).unwrap().iter(){
+                        // buggy?
+                        let a_ty = maps.get(t).unwrap();
+                        if ty == a_ty{
+                            if !b_set.contains_key(&(*pid, t.clone(), *ty)) {
+                                b_set.insert((*pid, t.clone(), *ty), Vec::new());
+                            }
+                            b_set.get_mut(&(*pid, t.clone(), *ty)).unwrap().push(
+                                x_vars.get(&(*pid, *mid)).unwrap().0
+                            );
+                            x_vec.push(
+                                x_vars.get(&(*pid, *mid)).unwrap().0
+                            );
+                        }
+                    }
+
+                    ilp.new_constraint(
+                        x_vec.into_iter()
+                            .fold((0.0).into(), |acc: Expression, v| acc + v)
+                            >>  v,
+                    );
+                }
+            }
+            _ => {
+                if let Some(costs) = costs.ops.get(&t.op) {
+                    for (ty, cost) in costs {
+                        let name = format!("t_{}_{}_{}", pid, i, ty.char());
+                        let v = ilp.new_variable(variable().binary(), name.clone());
+                        v_vars.insert((t.clone(), *ty), (v, *cost, name));
+                        vars.push(v);
+                        // TODO: add constraints for B here
+                        let mut x_vec = vec![];
+                        for (mid, maps) in mut_maps.get(pid).unwrap().iter(){
+                            // buggy?
+                            let a_ty = maps.get(t).unwrap();
+                            if ty == a_ty{
+                                if !b_set.contains_key(&(*pid, t.clone(), *ty)) {
+                                    b_set.insert((*pid, t.clone(), *ty), Vec::new());
+                                }
+                                b_set.get_mut(&(*pid, t.clone(), *ty)).unwrap().push(
+                                    x_vars.get(&(*pid, *mid)).unwrap().0
+                                );
+                                x_vec.push(
+                                    x_vars.get(&(*pid, *mid)).unwrap().0
+                                );
+                            }
+                        }
+                        ilp.new_constraint(
+                            x_vec.into_iter()
+                                .fold((0.0).into(), |acc: Expression, v| acc + v)
+                                >>  v,
+                        );
+                    }
+                } else {
+                    panic!("No cost for op {}", &t.op)
+                }
+            }
+        }
+        // Sum of assignments is at least 1.
+        ilp.new_constraint(
+            vars.into_iter()
+                .fold((0.0).into(), |acc: Expression, v| acc + v)
+                >> 1.0,
+        );
+    }
+
+
+    // build variables for conversion
+    for (def, use_, pid, idx) in &def_uses {
+        for from_ty in &SHARE_TYPES {
+            for to_ty in &SHARE_TYPES {
+                // if def can be from_ty, and use can be to_ty
+                if v_vars.contains_key(&(def.clone(), *from_ty))
+                    && v_vars.contains_key(&(use_.clone(), *to_ty))
+                    && from_ty != to_ty
+                {
+                    let v = ilp.new_variable(
+                        variable().binary(),
+                        format!("c_{}_{}_{}2{}", pid, idx, from_ty.char(), to_ty.char()),
+                    );
+                    e_vars.insert(
+                        (def.clone(), *from_ty, *to_ty),
+                        (v, *costs.conversions.get(&(*from_ty, *to_ty)).unwrap()),
+                    );
+                }
+            }
+        }
+    }
+
+    let def_uses: FxHashMap<Term, Vec<Term>> = {
+        let mut t = FxHashMap::default();
+        for (d, u, _, _) in def_uses {
+            t.entry(d).or_insert_with(Vec::new).push(u);
+        }
+        t
+    };
+
+    for (def, uses) in def_uses {
+        for use_ in uses {
+            for from_ty in &SHARE_TYPES {
+                for to_ty in &SHARE_TYPES {
+                    e_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
+                        v_vars.get(&(def.clone(), *from_ty)).map(|t_from| {
+                            // c[term i from pi to pi'] >= t[term j with pi'] + t[term i with pi] - 1
+                            v_vars
+                                .get(&(use_.clone(), *to_ty))
+                                .map(|t_to| ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0)))
+                        })
+                    });
+                }
+            }
+        }
+    }
+
+    ilp.maximize(
+        -e_vars
+            .values()
+            .map(|(a, b)| (a, b))
+            .chain(x_vars.values().map(|(a, b, _)| (a, b)))
+            .fold(0.0.into(), |acc: Expression, (v, cost)| acc + *v * *cost),
+    );
+
+    let (_opt, solution) = ilp.default_solve().unwrap();
+
+    let mut local_assignments: HashMap<usize, SharingMap> = HashMap::new();
+
+    for (pid, smaps) in mut_maps.iter(){
+        for (mid, _maps) in smaps.iter(){
+            let name = format!("X_{}_{}", pid, mid);
+            if solution.get(&name).unwrap() == &1.0{
+                let map = mut_maps.get(pid).unwrap().get(mid).unwrap().clone();
+                local_assignments.insert(*pid, map);
+            }
+        }
+    }
+
+    local_assignments
+}
+
+
 
 /// Calculate the cost of a global assignment
 pub fn calculate_node_cost(smap: &SharingMap, costs: &CostModel) -> f64{
@@ -345,22 +578,6 @@ pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64{
     }
     cost
 }
-
-// fn brute_force(cs: &HashMap<usize, HashMap<usize, SharingMap>>, costs: &CostModel) -> SharingMap{
-//     let mut best_smap:SharingMap = SharingMap::new();
-//     // get all combinations
-//     let combs = gen_all_seq(cs.keys().len(), 4);
-//     for comb in combs{
-
-//     }
-//     best_smap
-// }
-
-// fn build_ilp_global(cs: &HashMap<usize, HashMap<usize, SharingMap>>, costs: &CostModel) -> SharingMap{
-    
-// }
-
-
 
 #[cfg(test)]
 mod tests {
