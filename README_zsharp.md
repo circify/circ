@@ -15,6 +15,10 @@ tell me about them :)
 
 3. To build the Z# interpreter cli,
    `cargo build --release --example zxi --no-default-features`
+   
+   Alternatively, you can try our new driver script:
+   `python3 driver.py -F smt zok` -- to set the required features for zxi and zxc 
+   `python3 driver.py -b` -- to build 
 
 ## running
 

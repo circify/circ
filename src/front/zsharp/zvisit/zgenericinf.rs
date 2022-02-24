@@ -157,7 +157,6 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             .iter()
             .map(|gid| make_varname_str(&gid.value, &self.sfx))
             .collect::<Vec<_>>();
-
         let mut solved = self
             .constr
             .as_ref()

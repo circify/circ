@@ -57,6 +57,14 @@ zok = ["zokrates_parser", "zokrates_pest_ast", ]
 name = "circ"
 
 [[example]]
+name = "zxi"
+required-features = ["smt", "zok"]
+
+[[example]]
+name = "zxc"
+required-features = ["smt", "zok"]
+
+[[example]]
 name = "opa_bench"
 required-features = ["lp"]
 

@@ -8,7 +8,6 @@ use std::path::PathBuf;
 #[allow(unused_imports)]
 use structopt::StructOpt;
 
-#[cfg(all(feature = "smt", feature = "zok"))]
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
@@ -30,34 +29,27 @@ struct Options {
 }
 
 fn main() {
-    #[cfg(not(all(feature = "smt", feature = "zok")))]
-    {
-        println!("Requires feature: zok");
-    }
-    #[cfg(all(feature = "smt", feature = "zok"))]
-    {
-        env_logger::Builder::from_default_env()
-            .format_level(false)
-            .format_timestamp(None)
-            .init();
-        let options = Options::from_args();
-        //println!("{:?}", options);
-        let mode = if options.maximize {
-            Mode::Opt
-        } else {
-            match options.parties {
-                Some(p) => Mode::Mpc(p),
-                None => Mode::Proof,
-            }
-        };
-        let inputs = Inputs {
-            file: options.zsharp_path,
-            inputs: options.inputs,
-            mode,
-        };
-        let cs = ZSharpFE::interpret(inputs);
-        cs.pretty(&mut std::io::stdout().lock())
-            .expect("error pretty-printing value");
-        println!();
-    }
+    env_logger::Builder::from_default_env()
+        .format_level(false)
+        .format_timestamp(None)
+        .init();
+    let options = Options::from_args();
+    //println!("{:?}", options);
+    let mode = if options.maximize {
+        Mode::Opt
+    } else {
+        match options.parties {
+            Some(p) => Mode::Mpc(p),
+            None => Mode::Proof,
+        }
+    };
+    let inputs = Inputs {
+        file: options.zsharp_path,
+        inputs: options.inputs,
+        mode,
+    };
+    let cs = ZSharpFE::interpret(inputs);
+    cs.pretty(&mut std::io::stdout().lock())
+        .expect("error pretty-printing value");
+    println!();
 }
