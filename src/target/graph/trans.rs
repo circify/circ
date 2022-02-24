@@ -20,6 +20,7 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::Instant;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Node {
@@ -428,7 +429,7 @@ impl ParitionGraph {
     }
 
     fn _brute_force(&self, cs: &HashMap<usize, HashMap<usize, SharingMap>>) -> SharingMap{
-        println!("Start brute forcing...");
+        // println!("Start brute forcing...");
         let mut best_smap:SharingMap = SharingMap::new();
         let mut cost:f64 = 0.0;
         // get cost model
@@ -465,7 +466,7 @@ impl ParitionGraph {
                 }
             }
         }
-        println!("Best cost for muts: {}", cost);
+        // println!("Best cost for muts: {}", cost);
         best_smap
     }
 }
@@ -489,8 +490,7 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> Sha
     // Partition IR
     let partitions = pg.partition_ir();
 
-    // get local assignments
-    let local_smaps = pg.get_local_assignments(&partitions);
+   
 
     // TODO: mutate local assignments
     // Generating assignments for outer-n map
@@ -511,21 +511,37 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> Sha
         }
     }
 
-    // pg.brute_force(&mutation_smaps); 
+    // let bt_now = Instant::now();
+    // let bt_assign = pg._brute_force(&mutation_smaps); 
+    // let bt_elapsed = bt_now.elapsed();
 
+    // let bt_cost = calculate_cost(&bt_assign, &cm_);
+
+    let global_now = Instant::now();
+     // get local assignments
+    let local_smaps = pg.get_local_assignments(&partitions);
     let global_assign = pg.get_global_assignments(&local_smaps);
+    let _global_elapsed = global_now.elapsed();
+
     let origin_cost = calculate_cost(&global_assign, &cm_);
 
+    let mut_now = Instant::now();
     let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
     let global_assign_mut = pg.get_global_assignments(&selected_mut_maps);
+    let _mut_elapsed = mut_now.elapsed();
+    
     let mut_cost = calculate_cost(&global_assign_mut, &cm_);
     
     println!("Original cost: {}", origin_cost);
     println!("Mutation cost: {}", mut_cost);
+    // println!("BT cost: {}", bt_cost);
+
+    // println!("Bt: {}, Global: {}, Mutation: {}", bt_elapsed.as_secs(), global_elapsed.as_secs(), mut_elapsed.as_secs());
     // get global assignments
     // solve the global assignments
     
-    global_assign
+    // global_assign
+    global_assign_mut
 }
 
 #[cfg(test)]
