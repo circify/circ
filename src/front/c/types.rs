@@ -70,27 +70,28 @@ impl Ty {
     pub fn default(&self) -> CTerm {
         match self {
             Self::Bool => CTerm {
-                term: CTermData::CBool(self.sort().default_term()),
+                term: CTermData::CBool(self.default_ir_term()),
                 udef: false,
             },
             Self::Int(s, w) => CTerm {
-                term: CTermData::CInt(*s, *w, self.sort().default_term()),
+                term: CTermData::CInt(*s, *w, self.default_ir_term()),
                 udef: false,
             },
             Self::Array(_s, ty) => CTerm {
                 term: CTermData::CArray(*ty.clone(), None),
                 udef: false,
             },
-            Self::Struct(_name, _fs) => CTerm {
-                term: CTermData::CStruct(self.clone(), self.default_ir_term()),
-                udef: false,
-            },
+            Self::Struct(_name, fs) => {
+                let fields: Vec<(String, CTerm)> = fs
+                    .fields()
+                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default()))
+                    .collect();
+                CTerm {
+                    term: CTermData::CStruct(self.clone(), FieldList::new(fields)),
+                    udef: false,
+                }
+            }
         }
-    }
-
-    /// Creates a new structure type, sorting the keys.
-    pub fn _new_struct<I: IntoIterator<Item = (String, Ty)>>(name: String, fields: I) -> Self {
-        Self::Struct(name, FieldList::new(fields.into_iter().collect()))
     }
 
     pub fn is_arith_type(&self) -> bool {

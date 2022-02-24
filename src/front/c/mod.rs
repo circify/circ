@@ -114,53 +114,97 @@ impl CGen {
     }
 
     pub fn field_select(&self, struct_: &CTerm, field: &str) -> Result<CTerm, String> {
-        match struct_.term.type_() {
-            Ty::Struct(_, map) => {
-                if let Some((idx, ty)) = map.search(field) {
-                    let term_ = term![Op::Field(idx); struct_.term.term(self.circ.cir_ctx())];
-                    match ty {
-                        Ty::Bool => Ok(cterm(CTermData::CBool(term_))),
-                        Ty::Int(b, s) => Ok(cterm(CTermData::CInt(*b, *s, term_))),
-                        Ty::Array(_s, _t) => {
-                            unimplemented!("array in structs not implemented yet")
-                            // Ty::Array(s, t) => {
-                            //     let expr =
-                            //     Ok(cterm(CTermData::CArray(*t, term_)))
-                            // },
-                        }
-                        Ty::Struct(_name, _fs) => Ok(cterm(CTermData::CStruct(ty.clone(), term_))),
+        if let CTermData::CStruct(_, fs) = &struct_.term {
+            if let Some((idx, term_)) = fs.search(field) {
+                let struct_terms = struct_.term.terms(self.circ.cir_ctx());
+                let field_term = term(Op::Field(idx), struct_terms);
+                let res = match term_.term.type_() {
+                    Ty::Bool => Ok(cterm(CTermData::CBool(field_term))),
+                    Ty::Int(b, s) => Ok(cterm(CTermData::CInt(b, s, field_term))),
+                    Ty::Array(_s, _t) => {
+                        unimplemented!("array in structs not implemented yet")
+                        // Ty::Array(s, t) => {
+                        //     let expr =
+                        //     Ok(cterm(CTermData::CArray(*t, term_)))
+                        // },
                     }
-                } else {
-                    Err(format!("No field '{}'", field))
-                }
+                    Ty::Struct(_, _) => Ok(fs.search(field).unwrap().1.clone()),
+                };
+                return res;
+            } else {
+                return Err(format!("No field '{}'", field));
             }
-            a => Err(format!("{} is not a struct", a)),
+        } else {
+            return Err(format!("{} is not a struct", struct_));
         }
     }
 
     pub fn field_store(&self, struct_: CTerm, field: &str, val: CTerm) -> Result<CTerm, String> {
-        match struct_.term.type_() {
-            Ty::Struct(_, map) => {
-                if let Some((idx, ty)) = map.search(field) {
-                    if ty == &val.term.type_() {
-                        Ok(cterm(CTermData::CStruct(
-                            struct_.term.type_().clone(),
-                            term![Op::Update(idx); struct_.term.term(self.circ.cir_ctx()), val.term.term(self.circ.cir_ctx())],
-                        )))
-                    } else {
-                        Err(format!(
-                            "term {} assigned to field {} of type {}",
-                            val,
-                            field,
-                            map.get(idx).1
-                        ))
+        if let CTermData::CStruct(struct_ty, fs) = &struct_.term {
+            if let Some((idx, term_)) = fs.search(field) {
+                //get term
+                let struct_terms = term_.term.terms(self.circ.cir_ctx());
+                let field_term = term(Op::Field(idx), struct_terms);
+
+                //get val term
+                let val_term = val.term.term(self.circ.cir_ctx());
+
+                // term![Op::Update(idx); struct_.term.clone(), val.term],
+
+                //update term
+                let updated_term = term![Op::Update(idx); field_term, val_term];
+
+                let updated_cterm = match &term_.term {
+                    CTermData::CBool(_) => cterm(CTermData::CBool(updated_term)),
+                    CTermData::CInt(b, s, _) => cterm(CTermData::CInt(*b, *s, updated_term)),
+                    CTermData::CArray(_inner_ty, _alloc_id) => {
+                        unimplemented!("array in structs not implemented yet")
                     }
-                } else {
-                    Err(format!("No field '{}'", field))
-                }
+                    CTermData::CStruct(inner_ty, inner_fs) => {
+                        let mut inner_fs_clone = inner_fs.clone();
+                        let updated_fs = inner_fs_clone.replace(field, val);
+                        cterm(CTermData::CStruct(inner_ty.clone(), updated_fs.clone()))
+                    }
+                };
+                println!("UPDATED CTERM: {:?}", updated_cterm);
+                let mut fs_clone = fs.clone();
+                let updated_fs = fs_clone.replace(field, updated_cterm);
+                return Ok(cterm(CTermData::CStruct(
+                    struct_ty.clone(),
+                    updated_fs.clone(),
+                )));
+            } else {
+                return Err(format!("No field '{}'", field));
             }
-            a => Err(format!("{} is not a struct", a)),
+        } else {
+            return Err(format!("{} is not a struct", struct_));
         }
+
+        // match struct_.term.type_() {
+        //     Ty::Struct(_, map) => {
+        //         if let Some((idx, ty)) = map.search(field) {
+        //             if ty == &val.term.type_() {
+
+        //                 // term![Op::Update(idx); struct_.term.term(self.circ.cir_ctx()), val.term.term(self.circ.cir_ctx())],
+
+        //                 // Ok(cterm(CTermData::CStruct(
+        //                 //     struct_.term.type_().clone(),
+        //                 //     fs
+        //                 // )))
+        //             } else {
+        //                 Err(format!(
+        //                     "term {} assigned to field {} of type {}",
+        //                     val,
+        //                     field,
+        //                     map.get(idx).1
+        //                 ))
+        //             }
+        //         } else {
+        //             Err(format!("No field '{}'", field))
+        //         }
+        //     }
+        //     a => Err(format!("{} is not a struct", a)),
+        // }
     }
 
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
@@ -265,6 +309,7 @@ impl CGen {
     fn fold_(&mut self, expr: CTerm) -> i32 {
         let term_ = fold(&expr.term.term(&self.circ.cir_ctx()));
         let cterm_ = cterm(CTermData::CInt(true, 32, term_));
+        println!("cterm: {:#?}", cterm_);
         let val = const_int(cterm_).ok().unwrap();
         val.to_i32().unwrap()
     }
@@ -274,6 +319,7 @@ impl CGen {
             DerivedDeclarator::Array(arr) => {
                 if let ArraySize::VariableExpression(expr) = &arr.node.size {
                     let expr_ = self.gen_expr(expr.node.clone());
+                    println!("INNER DERIVE TYPE: {:#?}", expr_);
                     let size = self.fold_(expr_) as usize;
                     return Ty::Array(size, Box::new(base_ty));
                 }
@@ -380,6 +426,7 @@ impl CGen {
     }
 
     fn gen_expr(&mut self, expr: Expression) -> CTerm {
+        println!("gen_expr: {:#?}", expr);
         let res = match expr.clone() {
             Expression::Identifier(node) => Ok(self
                 .unwrap(self.circ.get_value(Loc::local(node.node.name.clone())))
@@ -641,6 +688,7 @@ impl CGen {
             Expression::BinaryOperator(bin_op) => match bin_op.node.operator.node {
                 BinaryOperator::AssignPlus => {
                     let expr = self.gen_expr(bin_op.node.rhs.node);
+                    println!("BEFORE FOLD {:#?}", expr);
                     let val = self.fold_(expr);
                     Some(ConstIteration { val })
                 }
@@ -682,15 +730,16 @@ impl CGen {
             }
             Statement::If(node) => {
                 let cond = self.gen_expr(node.node.condition.node);
-                let t_term = cond.term.term(&self.circ.cir_ctx());
-                let t_res = self.circ.enter_condition(t_term);
+                let t_res = self
+                    .circ
+                    .enter_condition(cond.term.term(&self.circ.cir_ctx()));
                 self.unwrap(t_res);
                 self.gen_stmt(node.node.then_statement.node);
                 self.circ.exit_condition();
-
                 if let Some(f_cond) = node.node.else_statement {
-                    let f_term = term!(Op::Not; cond.term.term(&self.circ.cir_ctx()));
-                    let f_res = self.circ.enter_condition(f_term);
+                    let f_res = self
+                        .circ
+                        .enter_condition(term!(Op::Not; cond.term.term(&self.circ.cir_ctx())));
                     self.unwrap(f_res);
                     self.gen_stmt(f_cond.node);
                     self.circ.exit_condition();
@@ -762,7 +811,7 @@ impl CGen {
             match self.mode {
                 Mode::Mpc(_) => {
                     let ret_term = r.unwrap_term();
-                    let ret_terms = ret_term.term.terms();
+                    let ret_terms = ret_term.term.terms(&self.circ.cir_ctx());
                     self.circ
                         .cir_ctx()
                         .cs

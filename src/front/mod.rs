@@ -78,5 +78,14 @@ mod field_list {
         pub fn len(self) -> usize {
             self.list.len()
         }
+        pub fn replace(&mut self, key: &str, val: T) -> &mut FieldList<T> {
+            let idx = self
+                .list
+                .binary_search_by_key(&key, |p| p.0.as_str())
+                .ok()
+                .unwrap();
+            self.list[idx] = (key.to_string(), val);
+            self
+        }
     }
 }

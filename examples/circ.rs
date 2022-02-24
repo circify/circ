@@ -203,10 +203,11 @@ fn main() {
         Mode::Mpc(_) => opt(
             cs,
             vec![
+                Opt::ScalarizeVars,
+                Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold,
-                Opt::ScalarizeVars,
-                Opt::ConstantFold,
+                Opt::Flatten,
                 // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Obliv,
                 Opt::Tuple,

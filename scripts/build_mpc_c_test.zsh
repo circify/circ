@@ -24,7 +24,7 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc"
 }
 
-mpc_test 2 ./examples/C/mpc/unit_tests/2pc_structs.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/2pc_structs.c
 
 # build mpc arithmetic tests
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
