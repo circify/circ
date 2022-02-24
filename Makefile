@@ -32,6 +32,7 @@ clean:
 	# remove all generated files
 	rm -rf scripts/aby_tests/tests/*.txt
 	rm -rf scripts/aby_tests/__pycache__
+	rm -rf ./third_party/ABY/src/examples/*.graph
 	rm -rf P V pi perf.data perf.data.old flamegraph.svg
 
 format:
