@@ -17,8 +17,10 @@ tell me about them :)
    `cargo build --release --example zxi --no-default-features`
    
    Alternatively, you can try our new driver script:
-   `python3 driver.py -F smt zok` -- to set the required features for zxi and zxc 
-   `python3 driver.py -b` -- to build 
+   To set the required features for zxi and zxc 
+   `python3 driver.py -F smt zok`
+   To build
+   `python3 driver.py -b` 
 
 ## running
 
