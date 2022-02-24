@@ -17,9 +17,10 @@ if __name__ == "__main__":
         c_array_tests + \
         div_tests + \
         function_tests + \
-        array_tests 
+        array_tests + \
+        c_misc_tests
         # shift_tests
-   
+
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
 

@@ -613,9 +613,6 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
         metadata: md,
         values: _,
     } = ir.clone();
-    for t in terms.clone() {
-        println!("terms: {}", t);
-    }
 
     let s_map: SharingMap = assign(&ir, cm);
     // let s_map: SharingMap = some_arith_sharing(&ir);

@@ -2,10 +2,9 @@
 use crate::circify::mem::AllocId;
 use crate::circify::{CirCtx, Embeddable};
 use crate::front::c::types::*;
-use crate::front::c::Circify;
 use crate::ir::term::*;
 use rug::Integer;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone)]
@@ -13,6 +12,7 @@ pub enum CTermData {
     CBool(Term),
     CInt(bool, usize, Term),
     CArray(Ty, Option<AllocId>),
+    CStruct(Ty, Term),
 }
 
 impl CTermData {
@@ -20,7 +20,8 @@ impl CTermData {
         match self {
             Self::CBool(_) => Ty::Bool,
             Self::CInt(s, w, _) => Ty::Int(*s, *w),
-            Self::CArray(b, _) => Ty::Array(None, Box::new(b.clone())),
+            Self::CArray(b, _) => Ty::Array(0, Box::new(b.clone())),
+            Self::CStruct(ty, _) => ty.clone(),
         }
     }
     /// Get all IR terms inside this value, as a list.
@@ -28,23 +29,25 @@ impl CTermData {
         let mut output: Vec<Term> = Vec::new();
         fn terms_tail(term: &CTermData, output: &mut Vec<Term>) {
             match term {
-                CTermData::CBool(b) => output.push(b.clone()),
-                CTermData::CInt(_, _, b) => output.push(b.clone()),
+                CTermData::CBool(t) => output.push(t.clone()),
+                CTermData::CInt(_, _, t) => output.push(t.clone()),
+                CTermData::CStruct(_, t) => output.push(t.clone()),
                 _ => unimplemented!("Term: {} not implemented yet", term),
             }
         }
         terms_tail(self, &mut output);
         output
     }
-    pub fn term(&self, circ: &Circify<Ct>) -> Term {
+    pub fn term(&self, ctx: &CirCtx) -> Term {
         match self {
-            CTermData::CBool(b) => b.clone(),
-            CTermData::CInt(_, _, b) => b.clone(),
-            CTermData::CArray(_, b) => {
+            CTermData::CBool(t) => t.clone(),
+            CTermData::CInt(_, _, t) => t.clone(),
+            CTermData::CArray(_, s) => {
                 // TODO: load all of the array
-                let i = b.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", self));
-                circ.load(i, bv_lit(0, 32))
+                let i = s.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", self));
+                ctx.mem.borrow_mut().load(i, bv_lit(0, 32))
             }
+            CTermData::CStruct(_, t) => t.clone(),
         }
     }
 }
@@ -55,6 +58,7 @@ impl Display for CTermData {
             CTermData::CBool(x) => write!(f, "Bool({})", x),
             CTermData::CInt(_, _, x) => write!(f, "Int({})", x),
             CTermData::CArray(_, v) => write!(f, "Array({:#?})", v),
+            CTermData::CStruct(_, v) => write!(f, "Struct({})", v),
         }
     }
 }
@@ -75,6 +79,10 @@ impl Display for CTerm {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "Term: {:#?},\nudef: {}", self.term, self.udef)
     }
+}
+
+fn field_name(struct_name: &str, field_name: &str) -> String {
+    format!("{}.{}", struct_name, field_name)
 }
 
 pub fn cterm(data: CTermData) -> CTerm {
@@ -109,6 +117,10 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
         },
         CTermData::CArray(_, ref ty) => match to_ty {
             Some(Ty::Array(_, _)) => t.clone(),
+            _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
+        },
+        CTermData::CStruct(ref ty, ref _term) => match to_ty {
+            Some(Ty::Struct(_, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
     }
@@ -197,6 +209,7 @@ fn wrap_bin_arith(
             term: CTermData::CBool(fb(x, y)),
             udef: false,
         }),
+
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
 }
@@ -490,7 +503,7 @@ impl Embeddable for Ct {
                 udef: false,
             },
             Ty::Array(n, ty) => {
-                let v: Vec<Self::T> = (0..n.unwrap())
+                let v: Vec<Self::T> = (0..*n)
                     .map(|i| {
                         self.declare(
                             ctx,
@@ -502,7 +515,7 @@ impl Embeddable for Ct {
                     })
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
-                let id = mem.zero_allocate(n.unwrap(), 32, ty.num_bits());
+                let id = mem.zero_allocate(*n, 32, ty.num_bits());
                 let arr = Self::T {
                     term: CTermData::CArray(*ty.clone(), Some(id)),
                     udef: false,
@@ -513,6 +526,45 @@ impl Embeddable for Ct {
                     mem.store(id, bv_lit(i, 32), val, t_term);
                 }
                 arr
+            }
+            Ty::Struct(n, fs) => {
+                let fields: Vec<(String, CTerm)> = fs
+                    .fields()
+                    .map(|(f_name, f_ty)| {
+                        (
+                            f_name.clone(),
+                            self.declare(
+                                ctx,
+                                f_ty,
+                                field_name(&raw_name, f_name),
+                                user_name.as_ref().map(|u| field_name(u, f_name)),
+                                visibility,
+                            ),
+                        )
+                    })
+                    .collect();
+
+                let ir_terms: Vec<(String, CTermData)> =
+                    fields.into_iter().map(|(name, t)| (name, t.term)).collect();
+
+                let ir_term = term(Op::Tuple, {
+                    let with_indices: BTreeMap<usize, Term> = ir_terms
+                        .into_iter()
+                        .map(|(name, t)| (fs.search(&name).unwrap().0, t.term(ctx)))
+                        .collect();
+                    with_indices.into_iter().map(|(_i, t)| t).collect()
+                });
+
+                for f in fs.clone().fields().into_iter() {
+                    println!("WHAT IS GOING ON {:#?}", f);
+                }
+
+                println!("length of fields: {}", fs.clone().len());
+
+                cterm(CTermData::CStruct(
+                    Ty::Struct(n.to_string(), fs.clone()),
+                    ir_term,
+                ))
             }
         }
     }

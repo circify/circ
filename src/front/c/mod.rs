@@ -62,6 +62,7 @@ impl FrontEnd for C {
 
 enum CLoc {
     Var(Loc),
+    Member(Box<CLoc>, String),
     Idx(Box<CLoc>, CTerm),
 }
 
@@ -69,6 +70,7 @@ impl CLoc {
     fn loc(&self) -> &Loc {
         match self {
             CLoc::Var(l) => l,
+            CLoc::Member(i, _) => i.loc(),
             CLoc::Idx(i, _) => i.loc(),
         }
     }
@@ -78,6 +80,7 @@ struct CGen {
     circ: Circify<Ct>,
     mode: Mode,
     tu: TranslationUnit,
+    structs: HashMap<String, Ty>,
     functions: HashMap<String, FnInfo>,
 }
 
@@ -87,6 +90,7 @@ impl CGen {
             circ: Circify::new(Ct::new(inputs.map(parser::parse_inputs))),
             mode,
             tu,
+            structs: HashMap::default(),
             functions: HashMap::default(),
         };
         this.circ
@@ -107,6 +111,56 @@ impl CGen {
     /// Unwrap result of a computation
     fn unwrap<CTerm, E: Display>(&self, r: Result<CTerm, E>) -> CTerm {
         r.unwrap_or_else(|e| self.err(e))
+    }
+
+    pub fn field_select(&self, struct_: &CTerm, field: &str) -> Result<CTerm, String> {
+        match struct_.term.type_() {
+            Ty::Struct(_, map) => {
+                if let Some((idx, ty)) = map.search(field) {
+                    let term_ = term![Op::Field(idx); struct_.term.term(self.circ.cir_ctx())];
+                    match ty {
+                        Ty::Bool => Ok(cterm(CTermData::CBool(term_))),
+                        Ty::Int(b, s) => Ok(cterm(CTermData::CInt(*b, *s, term_))),
+                        Ty::Array(_s, _t) => {
+                            unimplemented!("array in structs not implemented yet")
+                            // Ty::Array(s, t) => {
+                            //     let expr =
+                            //     Ok(cterm(CTermData::CArray(*t, term_)))
+                            // },
+                        }
+                        Ty::Struct(_name, _fs) => Ok(cterm(CTermData::CStruct(ty.clone(), term_))),
+                    }
+                } else {
+                    Err(format!("No field '{}'", field))
+                }
+            }
+            a => Err(format!("{} is not a struct", a)),
+        }
+    }
+
+    pub fn field_store(&self, struct_: CTerm, field: &str, val: CTerm) -> Result<CTerm, String> {
+        match struct_.term.type_() {
+            Ty::Struct(_, map) => {
+                if let Some((idx, ty)) = map.search(field) {
+                    if ty == &val.term.type_() {
+                        Ok(cterm(CTermData::CStruct(
+                            struct_.term.type_().clone(),
+                            term![Op::Update(idx); struct_.term.term(self.circ.cir_ctx()), val.term.term(self.circ.cir_ctx())],
+                        )))
+                    } else {
+                        Err(format!(
+                            "term {} assigned to field {} of type {}",
+                            val,
+                            field,
+                            map.get(idx).1
+                        ))
+                    }
+                } else {
+                    Err(format!("No field '{}'", field))
+                }
+            }
+            a => Err(format!("{} is not a struct", a)),
+        }
     }
 
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
@@ -131,11 +185,28 @@ impl CGen {
         match (array.clone().term, idx.term) {
             (CTermData::CArray(_, id), CTermData::CInt(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
-                let new_val = val.term.term(&self.circ);
+                let new_val = val.term.term(&self.circ.cir_ctx());
                 self.circ.store(i, idx_term, new_val);
                 Ok(val)
             }
             (a, b) => Err(format!("[Array Store] cannot index {} by {}", b, a)),
+        }
+    }
+
+    /// Computes base[val / loc]    
+    fn rebuild_lval(&mut self, base: CTerm, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
+        match loc {
+            CLoc::Var(_) => Ok(val),
+            CLoc::Member(inner_loc, field) => {
+                let old_inner = self.field_select(&base, &field)?;
+                let new_inner = self.rebuild_lval(old_inner, *inner_loc, val)?;
+                self.field_store(base, &field, new_inner)
+            }
+            CLoc::Idx(inner_loc, idx) => {
+                let old_inner = self.array_select(base.clone(), idx.clone())?;
+                let new_inner = self.rebuild_lval(old_inner, *inner_loc, val)?;
+                self.array_store(base, idx, new_inner)
+            }
         }
     }
 
@@ -148,12 +219,15 @@ impl CGen {
             .unwrap_term();
 
         match l {
-            CLoc::Var(_) => self
-                .circ
-                .assign(var, Val::Term(t.clone()))
-                .map_err(|e| format!("{}", e))
-                .map(|_| t),
             CLoc::Idx(_, offset) => self.array_store(old, offset, t),
+            _ => {
+                let res = self.rebuild_lval(old, l, t)?;
+                Ok(self
+                    .circ
+                    .assign(var, Val::Term(res.clone()))
+                    .map_err(|e| format!("{}", e))?
+                    .unwrap_term())
+            }
         }
     }
 
@@ -174,12 +248,22 @@ impl CGen {
                     _ => unimplemented!("Invalid left hand value"),
                 }
             }
+            Expression::Member(node) => {
+                let MemberExpression {
+                    operator: _operator,
+                    expression,
+                    identifier,
+                } = node.node;
+                let base_name = name_from_expr(*expression);
+                let field_name = identifier.node.name;
+                CLoc::Member(Box::new(CLoc::Var(Loc::local(base_name))), field_name)
+            }
             _ => unimplemented!("Invalid left hand value"),
         }
     }
 
     fn fold_(&mut self, expr: CTerm) -> i32 {
-        let term_ = fold(&expr.term.term(&self.circ));
+        let term_ = fold(&expr.term.term(&self.circ.cir_ctx()));
         let cterm_ = cterm(CTermData::CInt(true, 32, term_));
         let val = const_int(cterm_).ok().unwrap();
         val.to_i32().unwrap()
@@ -191,9 +275,9 @@ impl CGen {
                 if let ArraySize::VariableExpression(expr) = &arr.node.size {
                     let expr_ = self.gen_expr(expr.node.clone());
                     let size = self.fold_(expr_) as usize;
-                    return Ty::Array(Some(size), Box::new(base_ty));
+                    return Ty::Array(size, Box::new(base_ty));
                 }
-                Ty::Array(None, Box::new(base_ty))
+                Ty::Array(0, Box::new(base_ty))
             }
             DerivedDeclarator::Pointer(_ptr) => {
                 unimplemented!("pointers not implemented yet");
@@ -335,10 +419,10 @@ impl CGen {
                         if bin_op.operator.node == BinaryOperator::ShiftLeft
                             || bin_op.operator.node == BinaryOperator::ShiftRight
                         {
-                            let a_t = fold(&a.term.term(&self.circ));
+                            let a_t = fold(&a.term.term(&self.circ.cir_ctx()));
                             a = cterm(CTermData::CInt(true, 32, a_t));
 
-                            let b_t = fold(&b.term.term(&self.circ));
+                            let b_t = fold(&b.term.term(&self.circ.cir_ctx()));
                             b = cterm(CTermData::CInt(true, 32, b_t));
                         }
                         f(a, b)
@@ -366,7 +450,7 @@ impl CGen {
                     type_name,
                     expression,
                 } = node.node;
-                let to_ty = s_type_(type_name.node.specifiers);
+                let to_ty = s_type_(type_name.node.specifiers, &self.structs);
                 let expr = self.gen_expr(expression.node);
                 Ok(cast(to_ty, expr))
             }
@@ -398,7 +482,7 @@ impl CGen {
                 assert_eq!(parameters.len(), args.len());
 
                 for (p, a) in parameters.iter().zip(args) {
-                    let base_ty = d_type_(p.specifiers.to_vec());
+                    let base_ty = d_type_(p.specifiers.to_vec(), &self.structs);
                     let d = &p.declarator.as_ref().unwrap().node;
                     let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
                     let name = name_from_decl(d);
@@ -415,6 +499,16 @@ impl CGen {
                     .unwrap_or_else(|| cterm(CTermData::CBool(bool_lit(false))));
                 Ok(cast(ret_ty, ret))
             }
+            Expression::Member(member) => {
+                let MemberExpression {
+                    operator: _operator,
+                    expression,
+                    identifier,
+                } = member.node;
+                let base = self.gen_expr(expression.node);
+                let field = identifier.node.name;
+                self.field_select(&base, &field)
+            }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
         self.unwrap(res)
@@ -424,62 +518,87 @@ impl CGen {
         match init {
             Initializer::Expression(e) => self.gen_expr(e.node),
             Initializer::List(l) => {
-                // TODO: check length of values to initialized number
-                let mut values: Vec<CTerm> = Vec::new();
-                let inner_type = derived_ty.inner_ty();
-                for li in l {
-                    let expr = self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
-                    values.push(expr)
-                }
-                let id = self
-                    .circ
-                    .zero_allocate(values.len(), 32, inner_type.num_bits());
+                match derived_ty.clone() {
+                    Ty::Array(n, _) => {
+                        let mut values: Vec<CTerm> = Vec::new();
+                        let inner_type = derived_ty.inner_ty();
+                        for li in l {
+                            let expr =
+                                self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
+                            values.push(expr)
+                        }
+                        assert!(n == values.len());
+                        let id = self
+                            .circ
+                            .zero_allocate(values.len(), 32, inner_type.num_bits());
 
-                for (i, v) in values.iter().enumerate() {
-                    let offset = bv_lit(i, 32);
-                    let v_ = v.term.term(&self.circ);
-                    self.circ.store(id, offset, v_);
-                }
+                        for (i, v) in values.iter().enumerate() {
+                            let offset = bv_lit(i, 32);
+                            let v_ = v.term.term(&self.circ.cir_ctx());
+                            self.circ.store(id, offset, v_);
+                        }
+                        cterm(CTermData::CArray(inner_type, Some(id)))
+                    }
+                    Ty::Struct(_base, fs) => {
+                        assert!(fs.clone().len() == l.len());
 
-                cterm(CTermData::CArray(inner_type, Some(id)))
+                        // initialize struct
+                        let mut s = derived_ty.default();
+
+                        // store fields in struct
+                        for ((field, ty), li) in fs.fields().zip(l.iter()) {
+                            let val = self.gen_init(ty.clone(), li.node.initializer.node.clone());
+                            let res = self.field_store(s, &field, val);
+                            s = res.unwrap();
+                        }
+
+                        // return struct
+                        s
+                    }
+                    _ => unreachable!("Initializer list for non-list type: {:#?}", l),
+                }
             }
         }
     }
 
-    fn gen_decl(&mut self, decl: Declaration) -> CTerm {
-        let decl_info = get_decl_info(decl.clone());
-        let d = decl.declarators.first().unwrap().node.clone();
-        let base_ty: Ty = decl_info.ty;
-        let derived = &d.declarator.node.derived;
-        let derived_ty = self.derived_type_(base_ty, derived.to_vec());
-        let expr: CTerm;
-        if let Some(init) = d.initializer {
-            expr = self.gen_init(derived_ty.clone(), init.node);
-        } else {
-            expr = match derived_ty {
-                Ty::Array(size, ref ty) => {
-                    let id = self.circ.zero_allocate(size.unwrap(), 32, ty.num_bits());
-                    cterm(CTermData::CArray(*ty.clone(), Some(id)))
+    fn gen_decl(&mut self, decl: Declaration) -> Vec<CTerm> {
+        let decl_infos = get_decl_info(decl.clone(), &mut self.structs);
+        let mut exprs: Vec<CTerm> = Vec::new();
+        for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
+            let base_ty: Ty = info.ty.clone();
+            let derived = &d.node.declarator.node.derived;
+            let derived_ty = self.derived_type_(base_ty, derived.to_vec());
+            let expr: CTerm;
+            if let Some(init) = d.node.initializer.clone() {
+                expr = self.gen_init(derived_ty.clone(), init.node);
+            } else {
+                expr = match derived_ty {
+                    Ty::Array(size, ref ty) => {
+                        let id = self.circ.zero_allocate(size, 32, ty.num_bits());
+                        cterm(CTermData::CArray(*ty.clone(), Some(id)))
+                    }
+                    _ => derived_ty.default(),
                 }
-                _ => derived_ty.default(),
             }
+            let res = self.circ.declare_init(
+                info.name.clone(),
+                derived_ty.clone(),
+                Val::Term(cast(Some(derived_ty), expr.clone())),
+            );
+            self.unwrap(res);
+            exprs.push(expr);
         }
-
-        let res = self.circ.declare_init(
-            decl_info.name,
-            derived_ty.clone(),
-            Val::Term(cast(Some(derived_ty), expr.clone())),
-        );
-        self.unwrap(res);
-        expr
+        exprs
     }
 
     //TODO: This function is not quite right because the loop body could modify the iteration variable.
     fn get_const_iters(&mut self, for_stmt: ForStatement) -> ConstIteration {
         let init: Option<ConstIteration> = match for_stmt.initializer.node {
             ForInitializer::Declaration(d) => {
-                let expr = self.gen_decl(d.node);
-                let val = self.fold_(expr);
+                // TODO: need to identify which is the looping variable
+                let exprs = self.gen_decl(d.node);
+                assert!(exprs.len() == 1);
+                let val = self.fold_(exprs[0].clone());
                 Some(ConstIteration { val })
             }
             ForInitializer::Expression(e) => {
@@ -563,14 +682,14 @@ impl CGen {
             }
             Statement::If(node) => {
                 let cond = self.gen_expr(node.node.condition.node);
-                let t_term = cond.term.term(&self.circ);
+                let t_term = cond.term.term(&self.circ.cir_ctx());
                 let t_res = self.circ.enter_condition(t_term);
                 self.unwrap(t_res);
                 self.gen_stmt(node.node.then_statement.node);
                 self.circ.exit_condition();
 
                 if let Some(f_cond) = node.node.else_statement {
-                    let f_term = term!(Op::Not; cond.term.term(&self.circ));
+                    let f_term = term!(Op::Not; cond.term.term(&self.circ.cir_ctx()));
                     let f_res = self.circ.enter_condition(f_term);
                     self.unwrap(f_res);
                     self.gen_stmt(f_cond.node);
@@ -590,6 +709,7 @@ impl CGen {
                     }
                 };
             }
+
             Statement::Expression(expr) => {
                 let e = expr.unwrap().node;
                 self.gen_expr(e);
@@ -629,7 +749,7 @@ impl CGen {
             // TODO: self.gen_decl(arg);
             let p = &arg.specifiers[0];
             let vis = self.interpret_visibility(&p.node);
-            let base_ty = d_type_(arg.specifiers[1..].to_vec());
+            let base_ty = d_type_(arg.specifiers[1..].to_vec(), &self.structs);
             let d = &arg.declarator.as_ref().unwrap().node;
             let derived_ty = self.derived_type_(base_ty.unwrap(), d.derived.to_vec());
             let name = name_from_decl(d);
@@ -671,13 +791,12 @@ impl CGen {
                     debug!("{:#?}", decl);
                 }
                 ExternalDeclaration::FunctionDefinition(ref fn_def) => {
-                    let fn_info = ast_utils::get_fn_info(&fn_def.node);
+                    let fn_info = ast_utils::get_fn_info(&fn_def.node, &self.structs);
                     let fname = fn_info.name.clone();
                     self.functions.insert(fname, fn_info);
                 }
                 _ => unimplemented!("Haven't implemented node: {:?}", n.node),
             };
         }
-        // TODO: structs
     }
 }

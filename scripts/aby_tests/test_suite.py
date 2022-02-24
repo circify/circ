@@ -1,3 +1,13 @@
+new_tests = [
+    [
+        "Add two numbers - 1",
+        3,
+        "./third_party/ABY/build/bin/2pc_structs",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+]
+
 arithmetic_tests = [
     [
         "Add two numbers - 1",
@@ -648,25 +658,56 @@ div_tests = [
     ], 
 ]
 
-misc_tests = [
+c_misc_tests = [
     [
         "Millionaire's problem: server has more money than client",
         0,
-        "./third_party/ABY/build/bin/2pc_millionaire",
+        "./third_party/ABY/build/bin/2pc_millionaires",
         {"a": 2, "b": 0},
         {"a": 0, "b": 1},
     ], 
     [
         "Millionaire's problem: server has equal money to client",
         0,
-        "./third_party/ABY/build/bin/2pc_millionaire",
+        "./third_party/ABY/build/bin/2pc_millionaires",
         {"a": 1, "b": 0},
         {"a": 0, "b": 1},
     ], 
     [
         "Millionaire's problem: server has less money than client",
         1,
-        "./third_party/ABY/build/bin/2pc_millionaire",
+        "./third_party/ABY/build/bin/2pc_millionaires",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ], 
+    [
+        "Multivariables",
+        5,
+        "./third_party/ABY/build/bin/2pc_multi_var",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 2},
+    ]
+]
+
+zok_misc_tests = [
+    [
+        "Millionaire's problem: server has more money than client",
+        0,
+        "./third_party/ABY/build/bin/2pc_millionaires",
+        {"a": 2, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+    [
+        "Millionaire's problem: server has equal money to client",
+        0,
+        "./third_party/ABY/build/bin/2pc_millionaires",
+        {"a": 1, "b": 0},
+        {"a": 0, "b": 1},
+    ], 
+    [
+        "Millionaire's problem: server has less money than client",
+        1,
+        "./third_party/ABY/build/bin/2pc_millionaires",
         {"a": 1, "b": 0},
         {"a": 0, "b": 2},
     ], 

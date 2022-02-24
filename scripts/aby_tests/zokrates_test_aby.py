@@ -15,7 +15,7 @@ if __name__ == "__main__":
         loop_tests + \
         ite_tests + \
         function_tests + \
-        misc_tests
+        zok_misc_tests
         # shift_tests + \
         # arr_tests + \
     

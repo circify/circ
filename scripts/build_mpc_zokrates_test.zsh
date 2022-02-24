@@ -75,7 +75,7 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_add.zo
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_rhs.zok
 
 # build mpc misc tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaire.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaires.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_conv.zok
 
 # mpc_test 2 ./examples/ZoKrates/mpc/hycc_benchmarks/biomatch.zok
