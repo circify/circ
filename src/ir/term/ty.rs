@@ -128,6 +128,53 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
             }
         }
         Op::Update(_i) => Ok(check_raw(&t.cs[0])?),
+        Op::Map(op) => {
+            let arg_cnt = t.cs.len();
+            let mut dterm_cs = Vec::new();
+
+            let mut key_sort = Sort::Bool;
+            let mut size = 0;
+            let mut error = None;
+
+            match arrmap_or(&check_raw(&t.cs[0])?, "map")
+                {
+                    Ok((k,_,s,)) => {
+                        key_sort = k.clone();
+                        size = s.clone();
+                    },
+                    Err(e) => {
+                        error = Some(e);
+                    }
+                }
+
+            for i in 0..arg_cnt {
+                match array_or(&check_raw(&t.cs[i])?, "map inputs") {
+                    Ok((_,v)) => {
+                        dterm_cs.push(v.default_term());
+                    }
+                    Err(e) => {
+                        error = Some(e);
+                    }
+                }
+            }
+
+            match error {
+                Some(e) => {
+                    Err(e)
+                }
+                None => {
+                    let dummy_term = term((**op).clone(), dterm_cs);
+                    let res_sort = check_raw(&dummy_term)
+                        .map(|val_sort|
+                            Sort::Array(Box::new(key_sort), Box::new(val_sort), size));
+
+                    match res_sort {
+                        Ok(s) => Ok(s),
+                        _ => Err(TypeErrorReason::Custom("map failed".to_string()))
+                    }
+                }
+            }
+        }
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     };
     let mut term_tys = TERM_TYPES.write().unwrap();
@@ -140,6 +187,187 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
     Ok(ty)
 }
 
+
+/// Helper functio for rec_check_raw
+/// Type-check given term which is expressed as
+/// An operation and the sorts of its children
+pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorReason> {
+    match (oper, a) {
+        (Op::Eq, &[a, b]) => eq_or(a, b, "=").map(|_| Sort::Bool),
+        (Op::Ite, &[&Sort::Bool, b, c]) => eq_or(b, c, "ITE").map(|_| b.clone()),
+        (Op::Var(_, s), &[]) => Ok(s.clone()),
+        (Op::Const(c), &[]) => Ok(c.sort()),
+        (Op::BvBinOp(_), &[a, b]) => {
+            let ctx = "bv binary op";
+            bv_or(a, ctx)
+                .and_then(|_| eq_or(a, b, ctx))
+                .map(|_| a.clone())
+        }
+        (Op::BvBinPred(_), &[a, b]) => {
+            let ctx = "bv binary predicate";
+            bv_or(a, ctx)
+                .and_then(|_| eq_or(a, b, ctx))
+                .map(|_| Sort::Bool)
+        }
+        (Op::BvNaryOp(_), a) => {
+            let ctx = "bv nary op";
+            all_eq_or(a.iter().cloned(), ctx)
+                .and_then(|t| bv_or(t, ctx))
+                .map(|a| a.clone())
+        }
+        (Op::BvUnOp(_), &[a]) => bv_or(a, "bv unary op").map(|a| a.clone()),
+        (Op::BoolToBv, &[Sort::Bool]) => Ok(Sort::BitVector(1)),
+        (Op::BvExtract(high, low), &[Sort::BitVector(w)]) => {
+            if low <= high && high < w {
+                Ok(Sort::BitVector(high - low + 1))
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "Cannot slice from {} to {} in a bit-vector of width {}",
+                    high, low, w
+                )))
+            }
+        }
+        (Op::BvConcat, a) => a
+            .iter()
+            .try_fold(0, |w, x| match x {
+                Sort::BitVector(ww) => Ok(w + ww),
+                s => Err(TypeErrorReason::ExpectedBv((*s).clone(), "concat")),
+            })
+            .map(Sort::BitVector),
+        (Op::BvSext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
+        (Op::PfToBv(a), &[Sort::Field(_)]) => Ok(Sort::BitVector(*a)),
+        (Op::BvUext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
+        (Op::Implies, &[a, b]) => {
+            let ctx = "bool binary op";
+            bool_or(a, ctx)
+                .and_then(|_| eq_or(a, b, ctx))
+                .map(|_| a.clone())
+        }
+        (Op::BoolNaryOp(_), a) => {
+            let ctx = "bool nary op";
+            all_eq_or(a.iter().cloned(), ctx)
+                .and_then(|t| bool_or(t, ctx))
+                .map(|a| a.clone())
+        }
+        (Op::Not, &[a]) => bool_or(a, "bool unary op").map(|a| a.clone()),
+        (Op::BvBit(i), &[Sort::BitVector(w)]) => {
+            if i < w {
+                Ok(Sort::Bool)
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "Cannot get bit {} of a {}-bit bit-vector",
+                    i, w
+                )))
+            }
+        }
+        (Op::BoolMaj, &[a, b, c]) => {
+            let ctx = "bool majority";
+            bool_or(a, ctx)
+                .and_then(|_| bool_or(b, ctx).and_then(|_| bool_or(c, ctx)))
+                .map(|c| c.clone())
+        }
+        (Op::FpBinOp(_), &[a, b]) => {
+            let ctx = "fp binary op";
+            fp_or(a, ctx)
+                .and_then(|_| eq_or(a, b, ctx))
+                .map(|_| a.clone())
+        }
+        (Op::FpBinPred(_), &[a, b]) => {
+            let ctx = "fp binary predicate";
+            fp_or(a, ctx)
+                .and_then(|_| eq_or(a, b, ctx))
+                .map(|_| Sort::Bool)
+        }
+        (Op::FpUnOp(_), &[a]) => fp_or(a, "fp unary op").map(|a| a.clone()),
+        (Op::FpUnPred(_), &[a]) => fp_or(a, "fp unary predicate").map(|_| Sort::Bool),
+        (Op::BvToFp, &[Sort::BitVector(64)]) => Ok(Sort::F64),
+        (Op::BvToFp, &[Sort::BitVector(32)]) => Ok(Sort::F64),
+        (Op::UbvToFp(64), &[a]) => bv_or(a, "ubv-to-fp").map(|_| Sort::F64),
+        (Op::UbvToFp(32), &[a]) => bv_or(a, "ubv-to-fp").map(|_| Sort::F32),
+        (Op::SbvToFp(64), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::F64),
+        (Op::SbvToFp(32), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::F32),
+        (Op::FpToFp(64), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F64),
+        (Op::FpToFp(32), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F32),
+        (Op::PfNaryOp(_), a) => {
+            let ctx = "pf nary op";
+            all_eq_or(a.iter().cloned(), ctx)
+                .and_then(|t| pf_or(t, ctx))
+                .map(|a| a.clone())
+        }
+        (Op::UbvToPf(m), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone())),
+        (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
+        (Op::Select, &[Sort::Array(k, v, _), a]) => {
+            eq_or(k, a, "select").map(|_| (**v).clone())
+        }
+        (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
+            .and_then(|_| eq_or(v, b, "store"))
+            .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
+        (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
+        (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
+            if i < &t.len() {
+                Ok(t[*i].clone())
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "index {} in tuple of sort {}",
+                    i, a
+                )))
+            }
+        }),
+        (Op::Update(i), &[a, b]) => tuple_or(a, "tuple field update").and_then(|t| {
+            if i < &t.len() {
+                eq_or(&t[*i], b, "tuple update")?;
+                Ok(a.clone())
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "index {} in tuple of sort {}",
+                    i, a
+                )))
+            }
+        }),
+        (Op::Map(op), a) => { 
+            //TODO:
+            // Check that key sorts are the same across all arrays
+            // Get the value sorts of the argument arrays
+            // recursively call helper to get value type of mapped array
+            // then return Ok(...)
+            let arg_cnt = a.len();
+
+            let key_sort = match a[0].clone() {
+                Sort::Array(k,_,_) => {
+                    *k.clone()
+                },
+                s => 
+                    return Err(TypeErrorReason::ExpectedArray(s.clone(), "map"))
+            };
+
+            let mut val_sorts = Vec::new();
+            for i in 0..arg_cnt {
+                match a[i].clone() {
+                    Sort::Array(k, v, _) => {
+                        if *k != key_sort {
+                            return Err(TypeErrorReason::NotEqual(
+                                *k.clone(),
+                                key_sort.clone(),
+                                "map",
+                            ));
+                        }
+                        val_sorts.push((*v).clone());
+                    },
+                    s => 
+                        return Err(TypeErrorReason::ExpectedArray(s.clone(), "map"))
+                };
+            }
+
+            let mut new_a = Vec::new();
+            for i in 0..arg_cnt{
+                new_a.push(&val_sorts[i]);
+            }
+
+            rec_check_raw_helper(&(*op.clone()), &new_a[..])
+        }
+        (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
+    }
+}
 /// Type-check this term, recursively as needed.
 /// All results are stored in the global type table.
 pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
@@ -174,140 +402,8 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     .iter()
                     .map(|c| term_tys.get(&c.to_weak()).unwrap())
                     .collect::<Vec<_>>();
-                let ty = (match (&back.0.op, &tys[..]) {
-                    (Op::Eq, &[a, b]) => eq_or(a, b, "=").map(|_| Sort::Bool),
-                    (Op::Ite, &[&Sort::Bool, b, c]) => eq_or(b, c, "ITE").map(|_| b.clone()),
-                    (Op::Var(_, s), &[]) => Ok(s.clone()),
-                    (Op::Const(c), &[]) => Ok(c.sort()),
-                    (Op::BvBinOp(_), &[a, b]) => {
-                        let ctx = "bv binary op";
-                        bv_or(a, ctx)
-                            .and_then(|_| eq_or(a, b, ctx))
-                            .map(|_| a.clone())
-                    }
-                    (Op::BvBinPred(_), &[a, b]) => {
-                        let ctx = "bv binary predicate";
-                        bv_or(a, ctx)
-                            .and_then(|_| eq_or(a, b, ctx))
-                            .map(|_| Sort::Bool)
-                    }
-                    (Op::BvNaryOp(_), a) => {
-                        let ctx = "bv nary op";
-                        all_eq_or(a.iter().cloned(), ctx)
-                            .and_then(|t| bv_or(t, ctx))
-                            .map(|a| a.clone())
-                    }
-                    (Op::BvUnOp(_), &[a]) => bv_or(a, "bv unary op").map(|a| a.clone()),
-                    (Op::BoolToBv, &[Sort::Bool]) => Ok(Sort::BitVector(1)),
-                    (Op::BvExtract(high, low), &[Sort::BitVector(w)]) => {
-                        if low <= high && high < w {
-                            Ok(Sort::BitVector(high - low + 1))
-                        } else {
-                            Err(TypeErrorReason::OutOfBounds(format!(
-                                "Cannot slice from {} to {} in a bit-vector of width {}",
-                                high, low, w
-                            )))
-                        }
-                    }
-                    (Op::BvConcat, a) => a
-                        .iter()
-                        .try_fold(0, |w, x| match x {
-                            Sort::BitVector(ww) => Ok(w + ww),
-                            s => Err(TypeErrorReason::ExpectedBv((*s).clone(), "concat")),
-                        })
-                        .map(Sort::BitVector),
-                    (Op::BvSext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
-                    (Op::PfToBv(a), &[Sort::Field(_)]) => Ok(Sort::BitVector(*a)),
-                    (Op::BvUext(a), &[Sort::BitVector(b)]) => Ok(Sort::BitVector(a + b)),
-                    (Op::Implies, &[a, b]) => {
-                        let ctx = "bool binary op";
-                        bool_or(a, ctx)
-                            .and_then(|_| eq_or(a, b, ctx))
-                            .map(|_| a.clone())
-                    }
-                    (Op::BoolNaryOp(_), a) => {
-                        let ctx = "bool nary op";
-                        all_eq_or(a.iter().cloned(), ctx)
-                            .and_then(|t| bool_or(t, ctx))
-                            .map(|a| a.clone())
-                    }
-                    (Op::Not, &[a]) => bool_or(a, "bool unary op").map(|a| a.clone()),
-                    (Op::BvBit(i), &[Sort::BitVector(w)]) => {
-                        if i < w {
-                            Ok(Sort::Bool)
-                        } else {
-                            Err(TypeErrorReason::OutOfBounds(format!(
-                                "Cannot get bit {} of a {}-bit bit-vector",
-                                i, w
-                            )))
-                        }
-                    }
-                    (Op::BoolMaj, &[a, b, c]) => {
-                        let ctx = "bool majority";
-                        bool_or(a, ctx)
-                            .and_then(|_| bool_or(b, ctx).and_then(|_| bool_or(c, ctx)))
-                            .map(|c| c.clone())
-                    }
-                    (Op::FpBinOp(_), &[a, b]) => {
-                        let ctx = "fp binary op";
-                        fp_or(a, ctx)
-                            .and_then(|_| eq_or(a, b, ctx))
-                            .map(|_| a.clone())
-                    }
-                    (Op::FpBinPred(_), &[a, b]) => {
-                        let ctx = "fp binary predicate";
-                        fp_or(a, ctx)
-                            .and_then(|_| eq_or(a, b, ctx))
-                            .map(|_| Sort::Bool)
-                    }
-                    (Op::FpUnOp(_), &[a]) => fp_or(a, "fp unary op").map(|a| a.clone()),
-                    (Op::FpUnPred(_), &[a]) => fp_or(a, "fp unary predicate").map(|_| Sort::Bool),
-                    (Op::BvToFp, &[Sort::BitVector(64)]) => Ok(Sort::F64),
-                    (Op::BvToFp, &[Sort::BitVector(32)]) => Ok(Sort::F64),
-                    (Op::UbvToFp(64), &[a]) => bv_or(a, "ubv-to-fp").map(|_| Sort::F64),
-                    (Op::UbvToFp(32), &[a]) => bv_or(a, "ubv-to-fp").map(|_| Sort::F32),
-                    (Op::SbvToFp(64), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::F64),
-                    (Op::SbvToFp(32), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::F32),
-                    (Op::FpToFp(64), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F64),
-                    (Op::FpToFp(32), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F32),
-                    (Op::PfNaryOp(_), a) => {
-                        let ctx = "pf nary op";
-                        all_eq_or(a.iter().cloned(), ctx)
-                            .and_then(|t| pf_or(t, ctx))
-                            .map(|a| a.clone())
-                    }
-                    (Op::UbvToPf(m), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone())),
-                    (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
-                    (Op::Select, &[Sort::Array(k, v, _), a]) => {
-                        eq_or(k, a, "select").map(|_| (**v).clone())
-                    }
-                    (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
-                        .and_then(|_| eq_or(v, b, "store"))
-                        .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
-                    (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
-                    (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
-                        if i < &t.len() {
-                            Ok(t[*i].clone())
-                        } else {
-                            Err(TypeErrorReason::OutOfBounds(format!(
-                                "index {} in tuple of sort {}",
-                                i, a
-                            )))
-                        }
-                    }),
-                    (Op::Update(i), &[a, b]) => tuple_or(a, "tuple field update").and_then(|t| {
-                        if i < &t.len() {
-                            eq_or(&t[*i], b, "tuple update")?;
-                            Ok(a.clone())
-                        } else {
-                            Err(TypeErrorReason::OutOfBounds(format!(
-                                "index {} in tuple of sort {}",
-                                i, a
-                            )))
-                        }
-                    }),
-                    (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
-                })
+
+                let ty = rec_check_raw_helper(&back.0.op, &tys[..])
                 .map_err(|reason| TypeError {
                     op: back.0.op.clone(),
                     args: tys.into_iter().cloned().collect(),
@@ -374,6 +470,14 @@ fn array_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<(&'a Sort, &'a Sort), 
     }
 }
 
+fn arrmap_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<(&'a Sort, &'a Sort, &'a usize), TypeErrorReason> {
+    if let Sort::Array(k, v, s) = a {
+        Ok((&*k, &*v, &*s))
+    } else {
+        Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
+    }
+}
+
 fn bool_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason> {
     if let Sort::Bool = a {
         Ok(a)
@@ -429,3 +533,4 @@ fn all_eq_or<'a, I: Iterator<Item = &'a Sort>>(
     }
     Ok(first)
 }
+
