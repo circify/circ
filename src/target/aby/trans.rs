@@ -4,13 +4,15 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
-use super::assignment::some_arith_sharing;
 use crate::ir::term::*;
-use crate::target::aby::assignment::{ShareType, SharingMap};
+use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 use crate::target::graph::trans::get_share_map;
 use std::fmt;
 use std::path::Path;
+
+// use super::assignment::all_boolean_sharing;
+// use super::assignment::some_arith_sharing;
 
 // const BOOLEAN_BITLEN: i32 = 1;
 
@@ -31,33 +33,21 @@ struct ToABY {
     term_to_share_cnt: TermMap<i32>,
     s_map: SharingMap,
     share_cnt: i32,
-<<<<<<< HEAD
     bytecode_path: String,
     share_map_path: String,
     param_map_path: String,
-=======
-    setup_fname: String,
-    circuit_fname: String,
->>>>>>> origin/mut_graphing
 }
 
 impl ToABY {
     fn new(s_map: SharingMap, path: &Path, lang: &str) -> Self {
         Self {
             cache: TermMap::new(),
-<<<<<<< HEAD
             term_to_share_cnt: TermMap::new(),
             s_map,
             share_cnt: 0,
             bytecode_path: get_path(path, lang, "bytecode"),
             share_map_path: get_path(path, lang, "share_map"),
             param_map_path: get_path(path, lang, "param_map"),
-=======
-            s_map,
-            share_cnt: 0,
-            setup_fname: get_path(path, lang, &String::from("setup")),
-            circuit_fname: get_path(path, lang, &String::from("circuit")),
->>>>>>> origin/mut_graphing
         }
     }
 
@@ -107,7 +97,6 @@ impl ToABY {
     }
 
     /// Return constant gate evaluating to 1
-<<<<<<< HEAD
     // fn one(s_type: &str) -> String {
     //     format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
     // }
@@ -121,16 +110,6 @@ impl ToABY {
         let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
         write_line_to_file(&self.bytecode_path, &line);
         match check(&a_term) {
-=======
-    // TODO: const should not be hardcoded to acirc
-    fn one(s_type: &str) -> String {
-        format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
-    }
-
-    fn embed_eq(&mut self, t: Term, a: Term, b: Term) {
-        let s_circ = self.get_sharetype_circ(t.clone());
-        match check(&a) {
->>>>>>> origin/mut_graphing
             Sort::Bool => {
                 self.check_bool(&a_term);
                 self.check_bool(&b_term);
@@ -375,36 +354,19 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-<<<<<<< HEAD
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, _cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
     let Computation { outputs: terms, .. } = ir.clone();
 
+    // naive assignment
+    // let s_map: SharingMap = all_boolean_sharing(&ir);
+    // let s_map: SharingMap = some_arith_sharing(&ir);
     // let s_map: SharingMap = assign(&ir, cm);
-    let s_map: SharingMap = some_arith_sharing(&ir);
+    let s_map = get_share_map(&ir, cm, path, lang);
     let mut converter = ToABY::new(s_map, path, lang);
-
     for t in terms {
         // println!("terms: {}", t);
         converter.map_terms_to_shares(t.clone());
         converter.write_mapping_file(t.clone());
-=======
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
-    let Computation {
-        outputs: terms,
-        metadata: md,
-        values: _,
-    } = ir.clone();
-
-    // // naive assignment
-    // let s_map: SharingMap = assign(&ir, cm);
-    // let mut converter = ToABY::new(md, s_map, path, lang);
-
-    let s_map = get_share_map(&ir, cm, path, lang);
-    let mut converter = ToABY::new(md, s_map, path, lang);
-
-    for t in terms {
-        // println!("terms: {}", t);
->>>>>>> origin/mut_graphing
         converter.lower(t.clone());
     }
 }

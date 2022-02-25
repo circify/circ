@@ -26,7 +26,7 @@ def build_cmd(name:str, test_file: str, role: int) -> List[str]:
     bytecode = f"./scripts/aby_tests/tests/{name}_bytecode.txt"
     share_map = f"./scripts/aby_tests/tests/{name}_share_map.txt"
     param_map= f"./scripts/aby_tests/tests/{name}_param_map.txt"
-    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map, "-p", param_map] 
+    return [os.getenv("ABY_SOURCE", "../ABY") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map, "-p", param_map] 
 
 def get_result(file_path):
     if os.path.exists(file_path):
