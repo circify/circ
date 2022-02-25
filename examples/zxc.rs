@@ -7,7 +7,6 @@ use bellman::groth16::{
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
-#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 
 use circ::front::{FrontEnd, Mode};

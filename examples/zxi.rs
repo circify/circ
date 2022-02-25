@@ -1,11 +1,7 @@
-#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{Inputs, ZSharpFE};
 
-#[allow(unused_imports)]
 use circ::front::Mode;
-#[allow(unused_imports)]
 use std::path::PathBuf;
-#[allow(unused_imports)]
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
