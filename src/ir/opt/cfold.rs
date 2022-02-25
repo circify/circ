@@ -238,8 +238,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 t.cs.iter()
                     .map(|c| c_get(c).as_bv_opt().cloned())
                     .collect::<Option<Vec<_>>>()
-                    .map(|v| v.into_iter().reduce(BitVector::concat))
-                    .flatten()
+                    .and_then(|v| v.into_iter().reduce(BitVector::concat))
                     .map(|bv| leaf_term(Op::Const(Value::BitVector(bv))))
             }
             Op::BoolToBv => get(0).as_bool_opt().map(|b| {

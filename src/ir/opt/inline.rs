@@ -186,7 +186,7 @@ pub fn inline(assertions: &mut Vec<Term>, public_inputs: &FxHashSet<String>) {
     *assertions = new_assertions;
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "smt", feature = "test"))]
 mod test {
     use super::*;
     use crate::target::smt::{check_sat, find_model};

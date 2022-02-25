@@ -4,7 +4,7 @@ set -ex
 
 disable -r time
 
-cargo build --release --example circ
+# cargo build --release --features smt,zok --example circ
 
 BIN=./target/release/examples/circ
 export CARGO_MANIFEST_DIR=$(pwd)
@@ -60,15 +60,15 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_int.zok
 
-# build mpc array tests
-# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
-# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_ret.zok
-
 # build mps loop tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
 
 # build mpc function tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_add.zok
+
+# build mpc array tests
+# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
+# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_ret.zok
 
 # build mpc shift tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
