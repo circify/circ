@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// Given Path `path`, return the filename of the path
 fn get_filename(path: &Path) -> String {
-    Path::new(&path.iter().last().unwrap().to_os_string())
+    Path::new(&path.iter().last().unwrap())
         .file_stem()
         .unwrap()
         .to_os_string()

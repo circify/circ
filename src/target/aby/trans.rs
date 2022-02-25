@@ -60,7 +60,7 @@ impl ToABY {
         match &t.op {
             Op::Var(name, _) => {
                 if b {
-                    name.to_string().replace(".", "_")
+                    name.to_string().replace('.', "_")
                 } else {
                     name.to_string()
                 }
@@ -304,7 +304,7 @@ impl ToABY {
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
-                        EmbeddedTerm::Bool(format!("s_{}", name.replace(".", "_"))),
+                        EmbeddedTerm::Bool(format!("s_{}", name.replace('.', "_"))),
                     );
                 }
             }
@@ -458,7 +458,7 @@ impl ToABY {
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
-                        EmbeddedTerm::Bv(format!("s_{}", name.replace(".", "_"))),
+                        EmbeddedTerm::Bv(format!("s_{}", name.replace('.', "_"))),
                     );
                 }
             }
@@ -469,7 +469,7 @@ impl ToABY {
                     "share* {} = {}->PutCONSGate((uint64_t){}, (uint32_t){});\n",
                     share,
                     s_circ,
-                    format!("{}", b).replace("#", "0"),
+                    format!("{}", b).replace('#', "0"),
                     b.width()
                 );
                 write_line_to_file(&self.circuit_fname, &s);
