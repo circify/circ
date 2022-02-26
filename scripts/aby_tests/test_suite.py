@@ -787,13 +787,3 @@ millionaires_test = [
         {"a": 0, "b": 1},
     ], 
 ]
-
-# ree_tests = [
-#     [
-#         "Array sum test 2",
-#         6,
-#         ABY_SOURCE+"/build/bin/2pc_array_sum_2",
-#         {"a": 2, "b": 0},
-#         {"a": 0, "b": 1},
-#     ], 
-# ]
