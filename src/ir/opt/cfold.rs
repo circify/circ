@@ -235,11 +235,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 _ => None,
             },
             Op::BvConcat => {
-                t.cs.iter()
-                    .map(|c| c_get(c).as_bv_opt().cloned())
-                    .collect::<Option<Vec<_>>>()
-                    .and_then(|v| v.into_iter().reduce(BitVector::concat))
-                    .map(|bv| leaf_term(Op::Const(Value::BitVector(bv))))
+                unimplemented!("TEST")
             }
             Op::BoolToBv => get(0).as_bool_opt().map(|b| {
                 leaf_term(Op::Const(Value::BitVector(BitVector::new(
