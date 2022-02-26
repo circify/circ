@@ -1,7 +1,6 @@
 from subprocess import Popen, PIPE
 import sys
 from typing import List
-import time 
 
 def init_progress_bar(toolbar_width=40):
     ''' Initialize progress bar '''
@@ -40,7 +39,7 @@ def build_server_cmd(exec: str, args: dict) -> List[str]:
 def build_client_cmd(exec: str, args: dict) -> List[str]:
     return [exec, "-r", "1", "-i"] + flatten_args(args)
 
-def run_test(desc: str, expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
+def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
     assert len(server_cmd) > 3, "server cmd does not have enough arguments"
     assert len(client_cmd) > 3, "client cmd does not have enough arguments"
 
@@ -90,7 +89,7 @@ def run_tests(lang: str, tests: List[dict]):
 
         test_results = []
         for i in range(num_retries):
-            test_results.append(run_test(desc, expected, server_cmd, client_cmd))
+            test_results.append(run_test(expected, server_cmd, client_cmd))
         
         if all([not r[0] for r in test_results]):
             failed_test_descs += [(desc, e[1]) for e in test_results]
