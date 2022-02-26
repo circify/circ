@@ -389,3 +389,5 @@ share *read_share(Circuit *circ, e_role role, uint32_t bitlen,
   share *rand_sh = role == SERVER ? circ->PutINGate(rand_val, bitlen, SERVER) : circ->PutDummyINGate(bitlen);
   return circ->PutSUBGate(add_sh, rand_sh);
 }
+
+#endif

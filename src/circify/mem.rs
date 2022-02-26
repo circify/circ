@@ -123,7 +123,8 @@ impl MemManager {
         alloc.size
     }
 }
-#[cfg(all(feature = "smt", feature = "test", feature = "zok"))]
+
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::target::smt::check_sat;
@@ -133,7 +134,7 @@ mod test {
     fn bv_var(s: &str, w: usize) -> Term {
         leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
     }
-
+    #[test]
     fn sat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));
         let mut mem = MemManager::default();
@@ -156,6 +157,7 @@ mod test {
         assert!(check_sat(&sys))
     }
 
+    #[test]
     fn unsat_test() {
         let cs = Rc::new(RefCell::new(Computation::new(false)));
         let mut mem = MemManager::default();

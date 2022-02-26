@@ -13,21 +13,20 @@ rug = "1.11"
 gmp-mpfr-sys = "1.4"
 lazy_static = "1.4"
 rand = "0.8"
-rsmt2 = { version = "0.14", optional = true }
-#rsmt2 = { git = "https://github.com/alex-ozdemir/rsmt2.git" }
+rsmt2 = "0.14"
 ieee754 = "0.2"
-zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser", optional = true }
-zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional = true }
+zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser" }
+zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast" }
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
-bellman = { version = "0.11", optional = true } 
+bellman = "0.11"
 ff = "0.11"
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
-lang-c = { version = "0.10.1", optional = true}
+lang-c = "0.10.1"
 logos = "0.12"
 pest = "2.1"
 pest_derive = "2.1"
@@ -45,24 +44,13 @@ structopt = "0.3"
 approx = "0.5.0"
 
 [features]
-default = ["bls12381"]
-bls12381 = []
-c = ["lang-c"]
+default = ["lp", "bls12381"]
 lp = ["good_lp", "lp-solvers"]
-r1cs = ["bellman"]
-smt = ["rsmt2"]
-zok = ["zokrates_parser", "zokrates_pest_ast", ]
+bls12381 = []
 
 [[example]]
 name = "circ"
-
-[[example]]
-name = "zxi"
-required-features = ["smt", "zok"]
-
-[[example]]
-name = "zxc"
-required-features = ["smt", "zok"]
+required-features = ["lp"]
 
 [[example]]
 name = "opa_bench"

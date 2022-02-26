@@ -4,6 +4,8 @@ set -ex
 
 disable -r time
 
+cargo build --example circ
+
 BIN=./target/debug/examples/circ
 
 $BIN --language datalog ./examples/datalog/parse_test/one_rule.pl r1cs --action count || true

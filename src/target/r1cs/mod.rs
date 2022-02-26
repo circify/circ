@@ -9,7 +9,6 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
 
-#[cfg(feature = "r1cs")]
 pub mod bellman;
 pub mod opt;
 pub mod trans;

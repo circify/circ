@@ -2,7 +2,6 @@
 
 use crate::ir::term::{BvNaryOp, Computation, Op, PostOrderIter, TermMap};
 
-#[cfg(feature = "lp")]
 pub mod ilp;
 
 /// The sharing scheme used for an operation
@@ -19,7 +18,6 @@ pub enum ShareType {
 /// List of share types.
 pub const SHARE_TYPES: [ShareType; 3] = [ShareType::Arithmetic, ShareType::Boolean, ShareType::Yao];
 
-#[cfg(feature = "lp")]
 impl ShareType {
     fn char(&self) -> char {
         match self {
@@ -44,7 +42,7 @@ pub fn all_boolean_sharing(c: &Computation) -> SharingMap {
 }
 
 /// Assigns arithmetic sharing to addition and multiplication
-pub fn some_arith_sharing(c: &Computation, _cm: &str) -> SharingMap {
+pub fn some_arith_sharing(c: &Computation) -> SharingMap {
     c.outputs
         .iter()
         .flat_map(|output| {
