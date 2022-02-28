@@ -74,7 +74,7 @@ impl ToABY {
     fn get_var_name(t: &Term) -> String {
         match &t.op {
             Op::Var(name, _) => {
-                let new_name = name.to_string().replace(".", "_");
+                let new_name = name.to_string().replace('.', "_");
                 let n = new_name.split('_').collect::<Vec<&str>>();
 
                 match n.len() {
