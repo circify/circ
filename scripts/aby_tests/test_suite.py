@@ -1,16 +1,3 @@
-add_tests = [
-    [
-        "Add two numbers",
-        "2pc_add",
-        "./scripts/aby_tests/test_inputs/add.txt",
-    ], 
-    [
-        "Subtract two numbers",
-        "2pc_sub",
-        "./scripts/aby_tests/test_inputs/sub_1.txt",
-    ], 
-]
-
 arithmetic_tests = [
     [
         "Add two numbers",
