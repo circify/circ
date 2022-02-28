@@ -38,7 +38,7 @@ def check(features):
     cargo_features = filter_cargo_features(features)
     if cargo_features:        
        cmd = cmd + ["--features"] + cargo_features
-    subprocess.run(cmd)
+    subprocess.run(cmd, check=True)
 
 def build(features):
     """
@@ -65,14 +65,14 @@ def build(features):
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
-    subprocess.run(cmd)
+    subprocess.run(cmd, check=True)
 
     if "aby" in features:
         if "c" in features:
-            subprocess.run(["./scripts/build_mpc_c_test.zsh"])
+            subprocess.run(["./scripts/build_mpc_c_test.zsh"], check=True)
         if "smt" in features and "zok" in features:
-            subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"])
-        subprocess.run(["./scripts/build_aby.zsh"])
+            subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"], check=True)
+        subprocess.run(["./scripts/build_aby.zsh"], check=True)
 
 def test(features):
     """

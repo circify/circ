@@ -23,6 +23,11 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
         .into_string()
         .unwrap();
 
+    match fs::create_dir_all("scripts/aby_tests/tests") {
+        Err(why) => panic!("couldn't create {}: {}", "scripts/aby_tests/tests", why),
+        Ok(file) => file,
+    };
+
     let name = format!("{}_{}", filename, lang);
     let path = format!("scripts/aby_tests/tests/{}_{}.txt", name, t);
     match fs::File::create(&path) {
