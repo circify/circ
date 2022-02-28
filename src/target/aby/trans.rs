@@ -4,13 +4,16 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
-use super::assignment::some_arith_sharing;
 use crate::ir::term::*;
-// use crate::target::aby::assignment::ilp::assign;
+#[cfg(feature = "lp")]
+use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 use std::fmt;
 use std::path::Path;
+
+#[cfg(not(feature = "lp"))]
+use super::assignment::some_arith_sharing;
 
 // const BOOLEAN_BITLEN: i32 = 1;
 
@@ -352,7 +355,7 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, _cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
     let Computation { outputs: terms, .. } = ir.clone();
 
     #[cfg(feature = "lp")]

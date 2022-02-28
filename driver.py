@@ -24,11 +24,6 @@ def install(features):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
 
-            # Get EZPC header file
-            subprocess.run(["mkdir", "-p", EZPC_SOURCE])
-            subprocess.run(["wget", "-O", EZPC_SOURCE+"/ezpc.h", "https://raw.githubusercontent.com/circify/circ/master/third_party/EZPC/ezpc.h"])
-
-
 def check(features):
     """
     Run cargo check
@@ -97,10 +92,6 @@ def test(features):
         test_cmd = test_cmd + ["--features"] + cargo_features
     subprocess.run(test_cmd, check=True)
 
-    if "c" in features:
-        if "a" in features:
-            subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
-
     if "r1cs" in features and "smt" in features:
         subprocess.run(["./scripts/test_datalog.zsh"], check=True)
 
@@ -113,6 +104,10 @@ def test(features):
             subprocess.run(["./scripts/zokrates_test.zsh"], check=True)
         if "lp" in features and "r1cs" in features:
             subprocess.run(["./scripts/test_zok_to_ilp_pf.zsh"], check=True)
+
+    if "c" in features:
+        if "aby" in features:
+            subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
 
 def format():
     print("formatting!")

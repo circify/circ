@@ -69,7 +69,7 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_ret.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
 
 # build function tests
-mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_add.zok
 
 # build misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaires.zok
@@ -77,9 +77,6 @@ mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaires.zok
 # build shift tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_rhs.zok
-
-# # build function tests
-# mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_sum.zok
 
 # build hycc benchmarks
 # mpc_test 2 ./examples/ZoKrates/mpc/hycc_benchmarks/biomatch.zok

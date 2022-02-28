@@ -402,8 +402,8 @@ loop_tests = [
 function_tests = [
     [
         "Sum() two numbers - 1",
-        "2pc_function_sum",
-        "./scripts/aby_tests/test_inputs/add.txt",
+        "2pc_function_add",
+        "./scripts/aby_tests/test_inputs/add_2.txt",
     ], 
 ]
 
