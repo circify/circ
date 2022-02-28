@@ -3,42 +3,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 
-use lazy_static::lazy_static;
+use crate::front::ZSHARP_FIELD_SORT;
+use crate::front::ZSHARP_MODULUS;
+use crate::front::ZSHARP_MODULUS_ARC;
+
 use log::warn;
 use rug::Integer;
 
 use crate::circify::{CirCtx, Embeddable};
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
-
-// The modulus for Z#.
-// TODO: handle this better!
-#[cfg(feature = "bls12381")]
-lazy_static! {
-    /// The modulus for Z#
-    pub static ref ZSHARP_MODULUS: Integer = Integer::from_str_radix(
-        "52435875175126190479447740508185965837690552500527637822603658699938581184513", // BLS12-381 group order
-        10
-    )
-    .unwrap();
-}
-
-#[cfg(not(feature = "bls12381"))]
-lazy_static! {
-    /// The modulus for Z#
-    pub static ref ZSHARP_MODULUS: Integer = Integer::from_str_radix(
-        "21888242871839275222246405745257275088548364400416034343698204186575808495617", // BN-254 group order
-        10
-    )
-    .unwrap();
-}
-
-lazy_static! {
-    /// The modulus for Z#, as an ARC
-    pub static ref ZSHARP_MODULUS_ARC: Arc<Integer> = Arc::new(ZSHARP_MODULUS.clone());
-    /// The modulus for Z#, as an IR sort
-    pub static ref ZSHARP_FIELD_SORT: Sort = Sort::Field(ZSHARP_MODULUS_ARC.clone());
-}
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Ty {

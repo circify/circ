@@ -355,8 +355,11 @@ impl ToABY {
 pub fn to_aby(ir: Computation, path: &Path, lang: &str, _cm: &str) {
     let Computation { outputs: terms, .. } = ir.clone();
 
-    // let s_map: SharingMap = assign(&ir, cm);
-    let s_map: SharingMap = some_arith_sharing(&ir);
+    #[cfg(feature = "lp")]
+    let s_map: SharingMap = assign(&ir, cm);
+    #[cfg(not(feature = "lp"))]
+    let s_map: SharingMap = some_arith_sharing(&ir, cm);
+
     let mut converter = ToABY::new(s_map, path, lang);
 
     for t in terms {

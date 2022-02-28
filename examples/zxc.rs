@@ -8,6 +8,7 @@ use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
 use circ::front::zsharp::{self, ZSharpFE};
+
 use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
 /*
@@ -86,6 +87,7 @@ fn main() {
         .init();
     let options = Options::from_args();
     println!("{:?}", options);
+
     let cs = {
         let inputs = zsharp::Inputs {
             file: options.path,
@@ -128,8 +130,9 @@ fn main() {
     let verifier_key = options.verifier_key;
     let instance = options.instance;
     */
+
     println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, circ::front::zsharp::ZSHARP_MODULUS.clone());
+    let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs

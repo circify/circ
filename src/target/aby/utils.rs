@@ -1,12 +1,22 @@
 //! Utility functions to write compiler output to ABY
 
+use std::env;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
 
+/// Get ABY source directory
+pub fn get_aby_source() -> String {
+    let key = "ABY_SOURCE";
+    match env::var(key) {
+        Ok(val) => val,
+        Err(e) => panic!("Missing env variable: ABY_SOURCE, {}", e),
+    }
+}
+
 /// Given Path `path` and String denominator `lang`, return the filename of the path
 pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
-    let filename = Path::new(&path.iter().last().unwrap().to_os_string())
+    let filename = Path::new(&path.iter().last().unwrap())
         .file_stem()
         .unwrap()
         .to_os_string()

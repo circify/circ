@@ -4,7 +4,7 @@ set -ex
 
 disable -r time
 
-cargo build --release --example circ
+# cargo build --release --features smt,zok --example circ
 
 BIN=./target/release/examples/circ
 export CARGO_MANIFEST_DIR=$(pwd)
@@ -60,7 +60,6 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_int.zok
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_only_if.zok
-
 
 # build array tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
