@@ -17,24 +17,32 @@ fn eq() {
 
 #[test]
 fn map_eq_test() {
-    let a1 = 
-        make_array(Sort::BitVector(32), Sort::Bool,
-            vec![bool(true), bool(true), bool(false), bool(false)]);
-    let a2 = 
-        make_array(Sort::BitVector(32), Sort::Bool,
-            vec![bool(true), bool(false), bool(true), bool(false)]);
+    let a1 = make_array(
+        Sort::BitVector(32),
+        Sort::Bool,
+        vec![bool(true), bool(true), bool(false), bool(false)],
+    );
+    let a2 = make_array(
+        Sort::BitVector(32),
+        Sort::Bool,
+        vec![bool(true), bool(false), bool(true), bool(false)],
+    );
     let t = term![Op::Map(Box::new(Op::Eq)); a1, a2];
 
     let val = eval(&t, &FxHashMap::default());
     println!("Value is: {}", val);
 
-    let a1 = 
-        make_array(Sort::BitVector(32), Sort::BitVector(4),
-        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)]);
+    let a1 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+    );
 
-    let a2 = 
-        make_array(Sort::BitVector(32), Sort::BitVector(4),
-        vec![bv(0b0001, 4), bv(0b0100, 4), bv(0b1001, 4), bv(0b0000, 4)]);
+    let a2 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0100, 4), bv(0b1001, 4), bv(0b0000, 4)],
+    );
 
     let t_eq = term![Op::Map(Box::new(Op::Eq)); a1.clone(), a2.clone()];
     let t_add = term![Op::Map(Box::new(BV_ADD)); a1.clone(), a2.clone()];
