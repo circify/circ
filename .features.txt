@@ -1,6 +1,0 @@
-r1cs
-zok
-c
-lp
-smt
-aby
