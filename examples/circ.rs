@@ -19,7 +19,6 @@ use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
 };
-use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::trans::to_ilp;
@@ -327,7 +326,6 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             to_aby(cs, &path_buf, &lang_str, &cost_model);
-            write_aby_exec(&path_buf, &lang_str);
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {

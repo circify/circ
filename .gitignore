@@ -10,3 +10,4 @@ __pycache__
 /perf.data*
 /.gdb_history
 .features.txt
+scripts/aby_tests/tests

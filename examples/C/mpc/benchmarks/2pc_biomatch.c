@@ -1,4 +1,4 @@
-int mpc_main(
+int main(
     __attribute__((private(0))) int db[1024],
     __attribute__((private(1))) int sample[4])
 {
