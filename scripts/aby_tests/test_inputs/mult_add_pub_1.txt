@@ -1,0 +1,9 @@
+// server
+a 5 
+v 7
+
+// client 
+b 7
+
+// result
+42

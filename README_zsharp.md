@@ -14,7 +14,13 @@ tell me about them :)
 2. circ uses some experimental APIs, so you'll need rust nightly!
 
 3. To build the Z# interpreter cli,
-   `cargo build --release --example zxi --no-default-features`
+   `cargo build --release --example zxi --no-default-features --features smt,zok`
+   
+   Alternatively, you can try our new driver script.
+   To set the required features for zxi and zxc,
+   `python3 driver.py -F smt zok`
+   To build,
+   `python3 driver.py -b` 
 
 ## running
 
