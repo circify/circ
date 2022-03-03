@@ -116,6 +116,10 @@ mod field_list {
         pub fn get(&self, idx: usize) -> (&str, &T) {
             (&self.list[idx].0, &self.list[idx].1)
         }
+        pub fn set(&mut self, idx: usize, val: T) {
+            let key = &self.list[idx].0;
+            self.list[idx] = (key.clone(), val);
+        }
         pub fn fields(&self) -> impl Iterator<Item = &(String, T)> {
             self.list.iter()
         }
@@ -124,15 +128,6 @@ mod field_list {
         }
         pub fn len(self) -> usize {
             self.list.len()
-        }
-        pub fn replace(&mut self, key: &str, val: T) -> &mut FieldList<T> {
-            let idx = self
-                .list
-                .binary_search_by_key(&key, |p| p.0.as_str())
-                .ok()
-                .unwrap();
-            self.list[idx] = (key.to_string(), val);
-            self
         }
     }
 }

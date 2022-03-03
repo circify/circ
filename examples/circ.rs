@@ -228,11 +228,11 @@ fn main() {
                 Opt::Sha,
                 Opt::ConstantFold,
                 Opt::Flatten,
-                // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Obliv,
+                // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Tuple,
-                // The linear scan pass produces more tuples, that must be eliminated
                 Opt::LinearScan,
+                // The linear scan pass produces more tuples, that must be eliminated
                 Opt::Tuple,
                 Opt::ConstantFold,
                 // Binarize nary terms

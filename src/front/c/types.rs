@@ -1,12 +1,13 @@
 //! C Types
 use crate::front::c::term::CTerm;
 use crate::front::c::term::CTermData;
+use crate::front::c::Circify;
+use crate::front::c::Ct;
 use crate::front::field_list::FieldList;
 use crate::ir::term::*;
 
 use std::fmt::{self, Display, Formatter};
 
-#[allow(dead_code)]
 #[derive(Clone, PartialEq, Eq)]
 pub enum Ty {
     Bool,
@@ -67,7 +68,7 @@ impl Ty {
     fn default_ir_term(&self) -> Term {
         self.sort().default_term()
     }
-    pub fn default(&self) -> CTerm {
+    pub fn default(&self, circ: &mut Circify<Ct>) -> CTerm {
         match self {
             Self::Bool => CTerm {
                 term: CTermData::CBool(self.default_ir_term()),
@@ -77,14 +78,17 @@ impl Ty {
                 term: CTermData::CInt(*s, *w, self.default_ir_term()),
                 udef: false,
             },
-            Self::Array(_s, ty) => CTerm {
-                term: CTermData::CArray(*ty.clone(), None),
-                udef: false,
-            },
+            Self::Array(s, ty) => {
+                let id = circ.zero_allocate(*s, 32, ty.num_bits());
+                CTerm {
+                    term: CTermData::CArray(*ty.clone(), Some(id)),
+                    udef: false,
+                }
+            }
             Self::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
                     .fields()
-                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default()))
+                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(circ)))
                     .collect();
                 CTerm {
                     term: CTermData::CStruct(self.clone(), FieldList::new(fields)),

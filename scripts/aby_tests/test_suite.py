@@ -1,7 +1,7 @@
 new_tests = [
     [
         "Structs",
-        "./third_party/ABY/build/bin/2pc_structs",
+        "2pc_structs",
         "./scripts/aby_tests/test_inputs/add.txt",
     ], 
 ]
@@ -457,31 +457,23 @@ div_tests = [
 c_misc_tests = [
     [
         "Millionaire's problem: server has more money than client",
-        0,
-        "./third_party/ABY/build/bin/2pc_millionaires",
-        {"a": 2, "b": 0},
-        {"a": 0, "b": 1},
+        "2pc_millionaires",
+        "./scripts/aby_tests/test_inputs/lt_1.txt",
     ], 
     [
         "Millionaire's problem: server has equal money to client",
-        0,
-        "./third_party/ABY/build/bin/2pc_millionaires",
-        {"a": 1, "b": 0},
-        {"a": 0, "b": 1},
+        "2pc_millionaires",
+        "./scripts/aby_tests/test_inputs/lt_2.txt",
     ], 
     [
         "Millionaire's problem: server has less money than client",
-        1,
-        "./third_party/ABY/build/bin/2pc_millionaires",
-        {"a": 1, "b": 0},
-        {"a": 0, "b": 2},
+        "2pc_millionaires",
+        "./scripts/aby_tests/test_inputs/lt_3.txt",
     ], 
     [
         "Multivariables",
-        5,
-        "./third_party/ABY/build/bin/2pc_multi_var",
-        {"a": 1, "b": 0},
-        {"a": 0, "b": 2},
+        "2pc_multi_var",
+        "./scripts/aby_tests/test_inputs/multi.txt",
     ]
 ]
 

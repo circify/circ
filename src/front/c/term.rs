@@ -28,8 +28,8 @@ impl CTermData {
     /// Get all IR terms inside this value, as a list.
     pub fn terms(&self, ctx: &CirCtx) -> Vec<Term> {
         let mut output: Vec<Term> = Vec::new();
-        fn terms_tail(term: &CTermData, output: &mut Vec<Term>, inner_ctx: &CirCtx) {
-            match term {
+        fn terms_tail(term_: &CTermData, output: &mut Vec<Term>, inner_ctx: &CirCtx) {
+            match term_ {
                 CTermData::CBool(t) => output.push(t.clone()),
                 CTermData::CInt(_, _, t) => output.push(t.clone()),
                 CTermData::CArray(t, s) => {
@@ -42,9 +42,11 @@ impl CTermData {
                         }
                     }
                 }
-                CTermData::CStruct(_, t) => {
-                    for f in t.fields() {
-                        terms_tail(&f.1.term, output, inner_ctx);
+                CTermData::CStruct(_, fs) => {
+                    for (i, (_name, ct)) in fs.fields().enumerate() {
+                        let ts = ct.term.terms(inner_ctx);
+                        let t = term(Op::Field(i), ts);
+                        output.push(t);
                     }
                 }
             }
@@ -384,7 +386,6 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 }
 
 pub fn const_int(a: CTerm) -> Result<Integer, String> {
-    println!("const int: {:?}", a);
     let s = match &a.term {
         CTermData::CInt(s, _, i) => match &i.op {
             Op::Const(Value::BitVector(f)) => {
@@ -627,6 +628,29 @@ impl Embeddable for Ct {
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
-        ty.default()
+        match ty {
+            Ty::Bool => CTerm {
+                term: CTermData::CBool(Sort::Bool.default_term()),
+                udef: false,
+            },
+            Ty::Int(s, w) => CTerm {
+                term: CTermData::CInt(*s, *w, Sort::BitVector(*w).default_term()),
+                udef: false,
+            },
+            Ty::Array(_s, ty) => CTerm {
+                term: CTermData::CArray(*ty.clone(), None),
+                udef: false,
+            },
+            Ty::Struct(_name, fs) => {
+                let fields: Vec<(String, CTerm)> = fs
+                    .fields()
+                    .map(|(f_name, f_ty)| (f_name.clone(), self.initialize_return(f_ty, &f_name)))
+                    .collect();
+                CTerm {
+                    term: CTermData::CStruct(ty.clone(), FieldList::new(fields)),
+                    udef: false,
+                }
+            }
+        }
     }
 }
