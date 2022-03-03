@@ -14,6 +14,7 @@ pub enum CTermData {
     CInt(bool, usize, Term),
     CArray(Ty, Option<AllocId>),
     CStruct(Ty, FieldList<CTerm>),
+    CStackPtr(Ty, Term, Option<AllocId>),
 }
 
 impl CTermData {
@@ -651,6 +652,14 @@ impl Embeddable for Ct {
                     udef: false,
                 }
             }
+            Ty::Ptr(size, ty) => CTerm {
+                term: CTermData::CStackPtr(
+                    *ty.clone(),
+                    Sort::BitVector(*size).default_term(),
+                    None,
+                ),
+                udef: false,
+            },
         }
     }
 }

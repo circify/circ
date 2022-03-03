@@ -1,8 +1,16 @@
+# new_tests = [
+#     [
+#         "Structs",
+#         "2pc_structs",
+#         "./scripts/aby_tests/test_inputs/add.txt",
+#     ], 
+# ]
+
 new_tests = [
     [
         "Structs",
         "2pc_structs",
-        "./scripts/aby_tests/test_inputs/add.txt",
+        "./scripts/aby_tests/test_inputs/loop.txt",
     ], 
 ]
 
@@ -499,6 +507,15 @@ kmeans_tests = [
     [
         "kmeans",
         "2pc_kmeans",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],     
+]
+
+
+kmeans_tests_2 = [
+    [
+        "kmeans",
+        "2pc_kmeans_og",
         "./scripts/aby_tests/test_inputs/kmeans.txt",
     ],     
 ]

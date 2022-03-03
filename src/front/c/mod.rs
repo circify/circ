@@ -186,7 +186,7 @@ impl CGen {
     }
 
     fn get_inner_derived_type(&mut self, base_ty: Ty, d: DerivedDeclarator) -> Ty {
-        match d {
+        match d.clone() {
             DerivedDeclarator::Array(arr) => {
                 if let ArraySize::VariableExpression(expr) = &arr.node.size {
                     let expr_ = self.gen_expr(expr.node.clone());
@@ -195,7 +195,9 @@ impl CGen {
                 }
                 panic!("Derived type not array");
             }
-            DerivedDeclarator::Pointer(_ptr) => {
+            DerivedDeclarator::Pointer(ptr) => {
+                println!("d: {:#?}", d);
+                println!("ptr: {:#?}", ptr.clone());
                 unimplemented!("pointers not implemented yet");
             }
             _ => panic!("Not implemented: {:#?}", d),
@@ -220,6 +222,7 @@ impl CGen {
     pub fn get_decl_info(&mut self, decl: Declaration) -> Vec<DeclInfo> {
         let mut ty: Ty = self.d_type_(decl.specifiers).unwrap();
         for d in decl.declarators.iter() {
+            println!("decl: {:#?}", d);
             let derived = &d.node.declarator.node.derived;
             let derived_ty = self.get_derived_type(ty, derived.to_vec());
             ty = derived_ty;

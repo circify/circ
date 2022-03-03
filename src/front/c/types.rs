@@ -14,6 +14,7 @@ pub enum Ty {
     Int(bool, usize),
     Struct(String, FieldList<Ty>),
     Array(usize, Box<Ty>),
+    Ptr(usize, Box<Ty>),
 }
 
 impl Display for Ty {
@@ -44,6 +45,9 @@ impl Display for Ty {
                 write!(f, "{}", bb)?;
                 dims.iter().try_for_each(|d| write!(f, "[{}]", d))
             }
+            Ty::Ptr(s, t) => {
+                write!(f, "ptr{}({})", s, t)
+            }
         }
     }
 }
@@ -60,6 +64,7 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
             Self::Array(n, b) => Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n),
+            Self::Ptr(n, b) => Sort::
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
@@ -82,6 +87,13 @@ impl Ty {
                 let id = circ.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
                     term: CTermData::CArray(*ty.clone(), Some(id)),
+                    udef: false,
+                }
+            }
+            Self::Ptr(s, ty) => {
+                let id = circ.zero_allocate(*s, 32, ty.num_bits());
+                CTerm {
+                    term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
                     udef: false,
                 }
             }
@@ -139,6 +151,7 @@ impl Ty {
             Ty::Int(_, w) => w,
             Ty::Bool => 1,
             Ty::Array(s, t) => s * t.num_bits(),
+            Ty::Ptr(s, t) => s * t.num_bits(),
             Ty::Struct(_, fs) => fs.fields().fold(0, |sum, (_, ty)| sum + ty.num_bits()),
         }
     }
@@ -148,6 +161,7 @@ impl Ty {
             Ty::Int(_, w) => *w,
             Ty::Bool => 1,
             Ty::Array(_, _) => 32,
+            Ty::Ptr(s, _) => *s,
             Ty::Struct(_, fs) => fs.fields().fold(0, |sum, (_, ty)| sum + ty.num_bits()),
         }
     }
@@ -157,6 +171,7 @@ impl Ty {
             Ty::Int(_, _) => self,
             Ty::Bool => self,
             Ty::Array(_, t) => *t,
+            Ty::Ptr(_, t) => *t,
             Ty::Struct(_, _) => unimplemented!("Struct does not have an inner type"),
         }
     }
