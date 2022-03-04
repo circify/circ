@@ -13,6 +13,7 @@ use std::rc::Rc;
 pub mod bellman;
 pub mod opt;
 pub mod trans;
+pub mod spartan;
 
 #[derive(Clone, Debug)]
 /// A Rank 1 Constraint System.

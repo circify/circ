@@ -2,16 +2,15 @@
 use libspartan::*;
 use crate::target::r1cs::*;
 use curve25519_dalek::scalar::Scalar;
-use rug::{Assign, Integer};
+use rug::{Integer};
 use core::clone::Clone;
-use core::ops::Shr;
 
-use log::debug;
 use std::collections::HashMap;
 use gmp_mpfr_sys::gmp::limb_t;
 use lazy_static::lazy_static;
 
 lazy_static! {
+    /// Spartan modulus
     pub static ref SPARTAN_MODULUS: Integer = Integer::from_str_radix(
         "7237005577332262213973186563042994240857116359379907606001950938285454250989",
          10
@@ -19,7 +18,7 @@ lazy_static! {
 
 }
 
-
+/// Hold Spartan variables
 #[derive(Debug)]
 pub struct Variable {
     sid: usize,
@@ -27,7 +26,7 @@ pub struct Variable {
 }
 
 
-// circ R1cs -> spartan R1CSInstance
+/// circ R1cs -> spartan R1CSInstance
 pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instance, Assignment, Assignment, usize, usize, usize)
 {
 
@@ -45,7 +44,7 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
         Some(_) =>
             for (k,v) in r1cs.values.as_ref().unwrap() { // CirC id, Integer
 
-                let mut name = r1cs.idxs_signals.get(k).unwrap().to_string();
+                let name = r1cs.idxs_signals.get(k).unwrap().to_string();
                 let scalar = int_to_scalar(&v);
 
 
@@ -86,9 +85,6 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
     let num_inputs = inp.len();
     let assn_inputs = InputsAssignment::new(&inp).unwrap();
 
-    //drop inp and wit vecs
-    inp = Vec::new();
-    wit = Vec::new();
 
     for (cid,sid) in itrans{
 //        println!("input translation cid, sid = {}, {}", cid, sid);
@@ -99,9 +95,9 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
 //    println!("const id {}", const_id);
 
     // circuit
-    let mut A: Vec<(usize, usize, [u8; 32])> = Vec::new();
-    let mut B: Vec<(usize, usize, [u8; 32])> = Vec::new();
-    let mut C: Vec<(usize, usize, [u8; 32])> = Vec::new();
+    let mut m_a: Vec<(usize, usize, [u8; 32])> = Vec::new();
+    let mut m_b: Vec<(usize, usize, [u8; 32])> = Vec::new();
+    let mut m_c: Vec<(usize, usize, [u8; 32])> = Vec::new();
 
     let mut i = 0; // constraint #
     for (lc_a, lc_b, lc_c) in r1cs.constraints.iter() {
@@ -113,13 +109,13 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
 
         // constraint # x identifier (vars, 1, inp)
         for Variable { sid, value } in a {
-            A.push((i, sid, value));
+            m_a.push((i, sid, value));
         }
         for Variable { sid, value } in b {
-            B.push((i, sid, value));
+            m_b.push((i, sid, value));
         }
         for Variable { sid, value } in c {
-            C.push((i, sid, value));
+            m_c.push((i, sid, value));
         }
 
         i += 1;
@@ -128,7 +124,7 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
 
 
     let num_cons = i;
-    let inst = Instance::new(num_cons, num_vars, num_inputs, &A, &B, &C).unwrap();
+    let inst = Instance::new(num_cons, num_vars, num_inputs, &m_a, &m_b, &m_c).unwrap();
 
     // check if the instance we created is satisfiable
     let res = inst.is_sat(&assn_witness, &assn_inputs);

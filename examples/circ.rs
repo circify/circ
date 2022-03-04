@@ -37,6 +37,15 @@ use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
+use libspartan::{Instance, NIZKGens, NIZK};
+use merlin::Transcript;
+use circ::target::r1cs::spartan::r1cs_to_spartan;
+//timing + proof sizes
+use std::time::{Duration, Instant};
+use serde::ser::Serialize;
+use serde_json::Result;
+use bincode;
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
@@ -132,6 +141,7 @@ arg_enum! {
         Prove,
         Setup,
         Verify,
+	Spartan,
     }
 }
 
@@ -276,11 +286,21 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
-            println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-            let r1cs = reduce_linearities(r1cs);
+            let r1cs;
+	    match action {
+		ProofAction::Spartan => {
+		    r1cs = to_r1cs(cs, circ::target::r1cs::spartan::SPARTAN_MODULUS.clone());
+		}
+		_ => {
+		    r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+		}
+	    }
+            //println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
+            //let r1cs = reduce_linearities(r1cs);
             println!("Final R1cs size: {}", r1cs.constraints().len());
-            match action {
+            let num_r1cs = r1cs.constraints().len().clone();
+
+	    match action {
                 ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
@@ -311,6 +331,46 @@ fn main() {
                     let instance_vec = parse_instance(&instance);
                     verify_proof(&pvk, &pf, &instance_vec).unwrap();
                 }
+		ProofAction::Spartan => {
+		    println!("Converting R1CS to Spartan");
+ 
+		    let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs);
+
+		    println!("Proving with Spartan");
+		    let prover = Instant::now();
+
+		    // produce public parameters
+		    let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
+		    // produce proof
+		    let mut prover_transcript = Transcript::new(b"nizk_example");
+		    let pf = NIZK::prove(&inst, vars, &inps, &gens, &mut prover_transcript);		    
+	
+                     let prover_ms = prover.elapsed().as_millis();
+   		     let innerproof = &pf.r1cs_sat_proof;
+        	     let proof_len = bincode::serialize(innerproof).unwrap().len();
+      		     //let comm_len = bincode::serialize(&innerproof.comm_vars).unwrap().len();
+                     let comm_len = -1;
+
+   	            // write proof file
+		    //let mut pf_file = File::create(proof).unwrap();
+                    //pf.write(&mut pf_file).unwrap();
+
+                    println!("Verifying with Spartan");
+		    let verifier = Instant::now();                    
+
+		    // verify proof
+		    let mut verifier_transcript = Transcript::new(b"nizk_example");
+		    assert!(pf
+			.verify(&inst, &inps, &mut verifier_transcript, &gens)
+			.is_ok());
+
+		    let verifier_ms = verifier.elapsed().as_millis();
+		    println!("proof verification successful!");
+                    
+		    println!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}, comm len: {}, proof len: {}", path_buf, num_r1cs, prover_ms, verifier_ms, comm_len, proof_len);
+		    eprintln!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}, comm len: {}, proof len: {}", path_buf, num_r1cs, prover_ms, verifier_ms, comm_len, proof_len);
+
+		}
             }
         }
         #[cfg(not(feature = "r1cs"))]
