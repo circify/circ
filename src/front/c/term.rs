@@ -13,8 +13,8 @@ pub enum CTermData {
     CBool(Term),
     CInt(bool, usize, Term),
     CArray(Ty, Option<AllocId>),
-    CStruct(Ty, FieldList<CTerm>),
     CStackPtr(Ty, Term, Option<AllocId>),
+    CStruct(Ty, FieldList<CTerm>),
 }
 
 impl CTermData {
@@ -23,6 +23,7 @@ impl CTermData {
             Self::CBool(_) => Ty::Bool,
             Self::CInt(s, w, _) => Ty::Int(*s, *w),
             Self::CArray(b, _) => Ty::Array(0, Box::new(b.clone())),
+            Self::CStackPtr(t, _o, _) => t.clone(),
             Self::CStruct(ty, _) => ty.clone(),
         }
     }
@@ -33,14 +34,26 @@ impl CTermData {
             match term_ {
                 CTermData::CBool(t) => output.push(t.clone()),
                 CTermData::CInt(_, _, t) => output.push(t.clone()),
-                CTermData::CArray(t, s) => {
-                    let alloc_id = s.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", s));
+                CTermData::CArray(t, a) => {
+                    let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
                     if let Ty::Array(l, _ty) = t {
                         for i in 0..*l {
                             let offset = bv_lit(i, 32);
                             let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
                             output.push(idx_term);
                         }
+                    }
+                }
+                CTermData::CStackPtr(t, _o, a) => {
+                    let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
+                    if let Ty::Array(l, _ty) = t {
+                        for i in 0..*l {
+                            let offset = bv_lit(i, 32);
+                            let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
+                            output.push(idx_term);
+                        }
+                    } else {
+                        panic!("Unsupported type for stack pointer: {:#?}", t);
                     }
                 }
                 CTermData::CStruct(_, fs) => {
@@ -68,7 +81,8 @@ impl Display for CTermData {
         match self {
             CTermData::CBool(x) => write!(f, "Bool({})", x),
             CTermData::CInt(_, _, x) => write!(f, "Int({})", x),
-            CTermData::CArray(_, v) => write!(f, "Array({:#?})", v),
+            CTermData::CArray(t, _) => write!(f, "Array({:#?})", t),
+            CTermData::CStackPtr(t, s, _) => write!(f, "Ptr{:#?}({:#?})", s, t),
             CTermData::CStruct(t, _) => write!(f, "Struct({})", t),
         }
     }
@@ -103,7 +117,33 @@ pub fn cterm(data: CTermData) -> CTerm {
     }
 }
 
+// pub fn int_resize(from_s: bool, from_w: usize, to_s: bool, to_w: usize, t: Term) -> Term {
+//     if from_w < to_w {
+//         if from_s {
+//             println!("int resize 1");
+//             return term![Op::BvShl, vec![to_w, from_w, t]];
+//         } else {
+//             println!("int resize 2");
+//             CTermData::CInt(false, to_w, t)
+//         }
+//     } else if from_w == to_w {
+//         println!("int resize 3");
+//         CTermData::CInt(from_s, from_w, t)
+//     } else {
+//         println!("int resize 4");
+//         CTermData::CInt(from_s, from_w, term![Op::BvExtract(0, to_w); t])
+//     }
+
+//     // let from_w = if from_s { 1 } else { 0 };
+//     // let from_w = bv_lit(from_w, 1);
+//     // let to_w = bv_lit(to_w, 1);
+//     // let to_w = term(Op::BvShl, vec![to_w, from_w, t]);
+//     // term(Op::BvSrl, vec![to_w, from_w, t])
+// }
+
 pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
+    println!("cast: {:#?}", to_ty);
+    println!("term: {:#?}", t);
     let ty = t.term.type_();
     match t.term {
         CTermData::CBool(ref term) => match to_ty {
@@ -118,20 +158,36 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
             Some(Ty::Bool) => t.clone(),
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
         },
-        CTermData::CInt(_, w, ref term) => match to_ty {
+        CTermData::CInt(_s, w, ref term) => match to_ty {
             Some(Ty::Bool) => CTerm {
                 term: CTermData::CBool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
                 udef: t.udef,
             },
-            Some(Ty::Int(_, _)) => t.clone(),
+            Some(Ty::Int(to_s, to_w)) => {
+                // TODO: add udef check
+                // TODO: add int resize
+                // let term_ = int_resize(s, w, to_s, to_w, term.clone());
+                CTerm {
+                    term: CTermData::CInt(to_s, to_w, term.clone()),
+                    udef: t.udef,
+                }
+            }
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
         },
-        CTermData::CArray(_, ref ty) => match to_ty {
+        CTermData::CArray(ref ty, _) => match to_ty {
             Some(Ty::Array(_, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
         CTermData::CStruct(ref ty, ref _term) => match to_ty {
             Some(Ty::Struct(_, _)) => t.clone(),
+            _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
+        },
+        CTermData::CStackPtr(ref ty, _, id) => match to_ty {
+            Some(Ty::Ptr(_, _)) => t.clone(),
+            Some(Ty::Array(_size, a_ty)) => CTerm {
+                term: CTermData::CArray(*a_ty, id),
+                udef: t.udef,
+            },
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
     }
@@ -165,8 +221,6 @@ fn int_promotion(t: &CTerm) -> CTerm {
 }
 
 fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
-    let _a_ty = a.term.type_();
-    let _b_ty = b.term.type_();
     let a_prom = int_promotion(a);
     let b_prom = int_promotion(b);
     let a_prom_ty = a_prom.term.type_();
@@ -181,13 +235,40 @@ fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
             (a_prom, cast(Some(a_prom_ty), b_prom))
         }
     } else {
-        unimplemented!("Not implemented case in iUAC");
+        let signed_first = a_prom_ty.is_signed_int();
+        let (s, u) = if signed_first {
+            (a_prom, b_prom)
+        } else {
+            (b_prom, a_prom)
+        };
+        let (s_ty, u_ty) = (s.term.type_(), u.term.type_());
+        let (s_r, u_r) = (s_ty.int_conversion_rank(), u_ty.int_conversion_rank());
+        let (s_, u_) = if u_r >= s_r {
+            (cast(Some(u_ty), s.clone()), u)
+        } else if s_ty.num_bits() > u_ty.num_bits() {
+            (s, cast(Some(s_ty), u.clone()))
+        } else {
+            let ty = Ty::Int(false, s_ty.num_bits());
+            (
+                cast(Some(ty.clone()), s.clone()),
+                cast(Some(ty.clone()), u.clone()),
+            )
+        };
+        if signed_first {
+            (s_, u_)
+        } else {
+            (u_, s_)
+        }
     }
 }
 
 fn usual_arith_conversions(a: CTerm, b: CTerm) -> (CTerm, CTerm) {
     if a.term.type_().is_arith_type() && b.term.type_().is_arith_type() {
         let (a_, b_) = inner_usual_arith_conversions(&a, &b);
+
+        println!("a_ty: {:#?}", a_.term.type_());
+        println!("b_ty: {:#?}", b_.term.type_());
+
         if a_.term.type_() == b_.term.type_() {
             (a_, b_)
         } else {
@@ -537,6 +618,31 @@ impl Embeddable for Ct {
                     mem.store(id, bv_lit(i, 32), val, t_term);
                 }
                 arr
+            }
+            Ty::Ptr(n, ty) => {
+                let v: Vec<Self::T> = (0..*n)
+                    .map(|i| {
+                        self.declare(
+                            ctx,
+                            &*ty,
+                            idx_name(&raw_name, i),
+                            user_name.as_ref().map(|u| idx_name(u, i)),
+                            visibility,
+                        )
+                    })
+                    .collect();
+                let mut mem = ctx.mem.borrow_mut();
+                let id = mem.zero_allocate(*n, 32, ty.num_bits());
+                let ptr = Self::T {
+                    term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *n), Some(id)),
+                    udef: false,
+                };
+                for (i, t) in v.iter().enumerate() {
+                    let val = t.term.term(ctx);
+                    let t_term = leaf_term(Op::Const(Value::Bool(true)));
+                    mem.store(id, bv_lit(i, 32), val, t_term);
+                }
+                ptr
             }
             Ty::Struct(n, fs) => {
                 let fields: Vec<(String, CTerm)> = fs

@@ -64,10 +64,10 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
             Self::Array(n, b) => Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n),
-            Self::Ptr(n, b) => Sort::
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
+            Self::Ptr(_, _) => panic!("Ptrs don't have a CirC sort"),
         }
     }
     fn default_ir_term(&self) -> Term {

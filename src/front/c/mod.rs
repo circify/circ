@@ -195,10 +195,10 @@ impl CGen {
                 }
                 panic!("Derived type not array");
             }
-            DerivedDeclarator::Pointer(ptr) => {
-                println!("d: {:#?}", d);
-                println!("ptr: {:#?}", ptr.clone());
-                unimplemented!("pointers not implemented yet");
+            DerivedDeclarator::Pointer(_) => {
+                // let num_bits = base_ty.num_bits();
+                // TODO: assume 32 bit ptrs for now.
+                return Ty::Ptr(32, Box::new(base_ty));
             }
             _ => panic!("Not implemented: {:#?}", d),
         }
@@ -210,11 +210,11 @@ impl CGen {
         }
         let mut derived_ty = base_ty.clone();
         for d in derived {
-            let next_ty = self.get_inner_derived_type(base_ty.clone(), d.node.clone());
-            match derived_ty {
-                Ty::Array(s, _) => derived_ty = Ty::Array(s, Box::new(next_ty)),
-                _ => derived_ty = next_ty,
-            }
+            derived_ty = self.get_inner_derived_type(base_ty.clone(), d.node.clone());
+            // match derived_ty {
+            //     Ty::Array(s, _) => derived_ty = Ty::Array(s, Box::new(next_ty)),
+            //     _ => derived_ty = next_ty,
+            // }
         }
         derived_ty
     }
