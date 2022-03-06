@@ -10,7 +10,7 @@ use log::debug;
 use rug::Integer;
 
 use crate::circify::{Circify, Loc, Val};
-use crate::front::zsharp::{PROVER_VIS, PUBLIC_VIS};
+use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::opt::cfold::fold;
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;

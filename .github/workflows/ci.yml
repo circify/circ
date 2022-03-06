@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  ABY_SOURCE: "./../ABY"
 
 jobs:
   build:
@@ -23,22 +24,20 @@ jobs:
       with:
         toolchain: stable
     - uses: Swatinem/rust-cache@v1
-    - name: Initialize submodules
-      run: make fetch_deps
-    - name: Cache submodule build
+    - name: Set all features on 
+      run: python3 driver.py --all_features
+    - name: Install third_party libraries
+      run: python3 driver.py --install
+    - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: third_party/ABY/build
+        path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}
-    - name: Build submodules
-      run: make build_deps
-    - name: Typecheck
-      run: cargo check
-    - name: Check format
+    - name: Check
+      run: python3 driver.py --check
+    - name: Format
       run: cargo fmt -- --check
     - name: Lint
-      run: cargo clippy
-    - name: Build
-      run: make build
-    - name: Run tests
-      run: make test
+      run: python3 driver.py --lint
+    - name: Build, then Test
+      run: python3 driver.py --test

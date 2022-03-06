@@ -1,26 +1,34 @@
 #![allow(unused_imports)]
+#[cfg(feature = "r1cs")]
 use bellman::gadgets::test::TestConstraintSystem;
+#[cfg(feature = "r1cs")]
 use bellman::groth16::{
     create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
     verify_proof, Parameters, Proof, VerifyingKey,
 };
+#[cfg(feature = "r1cs")]
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
+#[cfg(feature = "c")]
 use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
 };
-use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
+#[cfg(feature = "lp")]
 use circ::target::ilp::trans::to_ilp;
+#[cfg(feature = "r1cs")]
 use circ::target::r1cs::bellman::parse_instance;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+#[cfg(feature = "smt")]
 use circ::target::smt::find_model;
+#[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
 use std::io::Read;
@@ -58,6 +66,7 @@ struct FrontendOptions {
     value_threshold: Option<u64>,
 
     /// File with input witness
+    #[allow(dead_code)]
     #[structopt(long, name = "FILE", parse(from_os_str))]
     inputs: Option<PathBuf>,
 
@@ -72,6 +81,7 @@ struct FrontendOptions {
 
 #[derive(Debug, StructOpt)]
 enum Backend {
+    #[allow(dead_code)]
     R1cs {
         #[structopt(long, default_value = "P", parse(from_os_str))]
         prover_key: PathBuf,
@@ -173,6 +183,7 @@ fn main() {
     };
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
+        #[cfg(all(feature = "smt", feature = "zok"))]
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
@@ -180,6 +191,10 @@ fn main() {
                 mode,
             };
             ZSharpFE::gen(inputs)
+        }
+        #[cfg(not(all(feature = "smt", feature = "zok")))]
+        DeterminedLanguage::Zsharp => {
+            panic!("Missing feature: smt,zok");
         }
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs {
@@ -189,6 +204,7 @@ fn main() {
             };
             Datalog::gen(inputs)
         }
+        #[cfg(feature = "c")]
         DeterminedLanguage::C => {
             let inputs = c::Inputs {
                 file: options.path,
@@ -196,6 +212,10 @@ fn main() {
                 mode,
             };
             C::gen(inputs)
+        }
+        #[cfg(not(feature = "c"))]
+        DeterminedLanguage::C => {
+            panic!("Missing feature: c");
         }
     };
     let cs = match mode {
@@ -246,6 +266,7 @@ fn main() {
     println!("Done with IR optimization");
 
     match options.backend {
+        #[cfg(feature = "r1cs")]
         Backend::R1cs {
             action,
             proof,
@@ -255,7 +276,7 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, circ::front::zsharp::ZSHARP_MODULUS.clone());
+            let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
             println!("Final R1cs size: {}", r1cs.constraints().len());
@@ -292,6 +313,10 @@ fn main() {
                 }
             }
         }
+        #[cfg(not(feature = "r1cs"))]
+        Backend::R1cs { .. } => {
+            panic!("Missing feature: r1cs");
+        }
         Backend::Mpc { cost_model } => {
             println!("Converting to aby");
             let lang_str = match language {
@@ -301,8 +326,8 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             to_aby(cs, &path_buf, &lang_str, &cost_model);
-            write_aby_exec(&path_buf, &lang_str);
         }
+        #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
             let ilp = to_ilp(cs);
@@ -323,6 +348,11 @@ fn main() {
                 }
             }
         }
+        #[cfg(not(feature = "lp"))]
+        Backend::Ilp { .. } => {
+            panic!("Missing feature: lp");
+        }
+        #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
             if options.frontend.lint_prim_rec {
                 assert_eq!(cs.outputs.len(), 1);
@@ -341,6 +371,10 @@ fn main() {
             } else {
                 todo!()
             }
+        }
+        #[cfg(not(feature = "smt"))]
+        Backend::Smt { .. } => {
+            panic!("Missing feature: smt");
         }
     }
 }
