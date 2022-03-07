@@ -901,12 +901,6 @@ impl<'ast> ZGen<'ast> {
                 assert!(!p.accesses.is_empty());
                 let (val, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
                     let (f_path, f_name) = self.deref_import(&p.id.value);
-                    let args = c
-                        .arguments
-                        .expressions
-                        .iter()
-                        .map(|e| self.expr_impl_::<IS_CNST>(e))
-                        .collect::<Result<Vec<_>, _>>()?;
                     let exp_ty = self.lhs_ty_take().and_then(|ty| {
                         if p.accesses.len() > 1 {
                             None
@@ -914,6 +908,12 @@ impl<'ast> ZGen<'ast> {
                             Some(ty)
                         }
                     });
+                    let args = c
+                        .arguments
+                        .expressions
+                        .iter()
+                        .map(|e| self.expr_impl_::<IS_CNST>(e))
+                        .collect::<Result<Vec<_>, _>>()?;
                     let egv = c
                         .explicit_generics
                         .as_ref()
@@ -1001,15 +1001,14 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))
             }
             ast::Statement::Assertion(e) => {
-                match self
-                    .expr_impl_::<true>(&e.expression)
-                    .ok()
-                    .and_then(const_bool)
-                {
-                    Some(true) => Ok(()),
-                    Some(false) => Err("Const assert failed".to_string()),
-                    None if IS_CNST => Err(format!(
-                        "Const assert expression eval failed: {}",
+                match self.expr_impl_::<true>(&e.expression).and_then(|v| {
+                    const_bool(v).ok_or("interpreting expr as const bool failed".to_string())
+                }) {
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err("Const assert failed".to_string()),
+                    Err(err) if IS_CNST => Err(format!(
+                        "Const assert expression eval failed at {}: {}",
+                        err,
                         span_to_string(e.expression.span()),
                     )),
                     _ => {
