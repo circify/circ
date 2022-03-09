@@ -1029,7 +1029,7 @@ pub mod test {
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 
@@ -1042,7 +1042,7 @@ pub mod test {
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 
@@ -1077,7 +1077,7 @@ pub mod test {
         let cs = Computation::from_constraint_system_parts(vec![t], vec![], Some(values));
         let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
         r1cs.check_all();
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 
