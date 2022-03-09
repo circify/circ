@@ -8,10 +8,15 @@ struct LinReducer<S: Eq + Hash> {
     r1cs: R1cs<S>,
     uses: HashMap<usize, HashSet<usize>>,
     queue: OnceQueue<usize>,
+    /// The maximum size LC (number of non-constant monomials)
+    /// that will be used for propagation
+    lc_size_thresh: usize,
 }
 
+const DEFAULT_LC_SIZE_THRESH: usize = 100;
+
 impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
-    fn new(mut r1cs: R1cs<S>) -> Self {
+    fn new(mut r1cs: R1cs<S>, lc_size_thresh: usize) -> Self {
         let sigs: HashSet<usize> = r1cs
             .constraints
             .iter()
@@ -38,7 +43,12 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
         for c in &mut r1cs.constraints {
             normalize(c);
         }
-        Self { r1cs, uses, queue }
+        Self {
+            r1cs,
+            uses,
+            queue,
+            lc_size_thresh,
+        }
     }
 
     /// Substitute `val` for `var` in constraint with id `con_id`.
@@ -105,21 +115,23 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
             if let Some((var, lc)) =
                 as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs.public_idxs)
             {
-                debug!(
-                    "Elim: {} -> {}",
-                    self.r1cs.idxs_signals.get(&var).unwrap(),
-                    self.r1cs.format_lc(&lc)
-                );
-                self.clear_constraint(con_id);
-                for use_id in self.uses[&var].clone() {
-                    if self.sub_in(var, &lc, use_id)
-                        && (self.r1cs.constraints[use_id].0.is_zero()
-                            || self.r1cs.constraints[use_id].1.is_zero())
-                    {
-                        self.queue.push(use_id);
+                if lc.monomials.len() < self.lc_size_thresh {
+                    debug!(
+                        "Elim: {} -> {}",
+                        self.r1cs.idxs_signals.get(&var).unwrap(),
+                        self.r1cs.format_lc(&lc)
+                    );
+                    self.clear_constraint(con_id);
+                    for use_id in self.uses[&var].clone() {
+                        if self.sub_in(var, &lc, use_id)
+                            && (self.r1cs.constraints[use_id].0.is_zero()
+                                || self.r1cs.constraints[use_id].1.is_zero())
+                        {
+                            self.queue.push(use_id);
+                        }
                     }
+                    debug_assert_eq!(0, self.uses[&var].len());
                 }
-                debug_assert_eq!(0, self.uses[&var].len());
             }
         }
         self.r1cs.constraints.retain(|c| !constantly_true(c));
@@ -165,8 +177,16 @@ fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
 }
 
 /// Attempt to shrink this system by reducing linearities.
-pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> R1cs<S> {
-    LinReducer::new(r1cs).run()
+///
+/// ## Parameters
+///
+///   * `lc_size_thresh`: the maximum size LC (number of non-constant monomials) that will be used
+///   for propagation
+pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(
+    r1cs: R1cs<S>,
+    lc_size_thresh: Option<usize>,
+) -> R1cs<S> {
+    LinReducer::new(r1cs, lc_size_thresh.unwrap_or(DEFAULT_LC_SIZE_THRESH)).run()
 }
 
 #[cfg(test)]
@@ -233,7 +253,7 @@ mod test {
 
     #[quickcheck]
     fn random(SatR1cs(r1cs): SatR1cs) {
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 }

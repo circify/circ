@@ -51,6 +51,10 @@ struct Options {
     #[structopt(short = "L")]
     skip_linred: bool,
 
+    #[structopt(long, default_value = "100")]
+    /// linear combination constraints up to this size will be eliminated (if the pass is enabled)
+    lc_elimination_thresh: usize,
+
     #[structopt(long, default_value = "count")]
     action: ProofAction,
 }
@@ -141,7 +145,7 @@ fn main() {
             "R1cs size before linearity reduction: {}",
             r1cs.constraints().len()
         );
-        reduce_linearities(r1cs)
+        reduce_linearities(r1cs, Some(options.lc_elimination_thresh))
     };
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {

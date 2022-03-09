@@ -34,7 +34,7 @@ def check(features):
             set of features required
     """
 
-    cmd = ["cargo", "check"]
+    cmd = ["cargo", "check", "--all", "--examples"]
     cargo_features = filter_cargo_features(features)
     if cargo_features:        
        cmd = cmd + ["--features"] + cargo_features

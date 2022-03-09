@@ -91,6 +91,9 @@ enum Backend {
         proof: PathBuf,
         #[structopt(long, default_value = "x", parse(from_os_str))]
         instance: PathBuf,
+        #[structopt(long, default_value = "100")]
+        /// linear combination constraints up to this size will be eliminated
+        lc_elimination_thresh: usize,
         #[structopt(long, default_value = "count")]
         action: ProofAction,
     },
@@ -273,12 +276,13 @@ fn main() {
             prover_key,
             verifier_key,
             instance,
+            lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
             let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-            let r1cs = reduce_linearities(r1cs);
+            let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
                 ProofAction::Count => (),
