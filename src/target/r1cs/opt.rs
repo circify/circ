@@ -12,22 +12,17 @@ struct LinReducer<S: Eq + Hash> {
 
 impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
     fn new(mut r1cs: R1cs<S>) -> Self {
-        let sigs: HashSet<usize> = r1cs
-            .constraints
-            .iter()
-            .flat_map(|(a, b, c)| {
-                a.monomials
-                    .keys()
-                    .chain(b.monomials.keys().chain(c.monomials.keys()))
-            })
-            .cloned()
-            .collect();
         let mut uses: HashMap<usize, HashSet<usize>> =
-            sigs.into_iter().map(|i| (i, HashSet::default())).collect();
+            HashMap::with_capacity_and_hasher(r1cs.next_idx, Default::default());
         for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
             let mut add = |y: &Lc| {
                 for x in y.monomials.keys() {
-                    uses.get_mut(x).unwrap().insert(i);
+                    uses.get_mut(x).map(|m| m.insert(i)).or_else(|| {
+                        let mut m: HashSet<usize> = Default::default();
+                        m.insert(i);
+                        uses.insert(*x, m);
+                        None
+                    });
                 }
             };
             add(a);
