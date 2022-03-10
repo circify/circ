@@ -187,7 +187,7 @@ if __name__ == "__main__":
 
     def verify_extra_implies_flamegraph(args: argparse.Namespace):
         if not args.flamegraph and len(args.extra) > 0:
-            parser.error("parser error: no --cargo action, and extra arguments")
+            parser.error("parser error: no --flamegraph action, and extra arguments")
     verify_extra_implies_flamegraph(args)
 
     features = load_features()
