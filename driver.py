@@ -117,6 +117,15 @@ def lint():
     print("linting!")
     subprocess.run(["cargo", "clippy"], check=True)
 
+def flamegraph(features, extra):
+    cmd = ["cargo", "flamegraph"]
+    cargo_features = filter_cargo_features(features)
+    if cargo_features:
+        cmd = cmd + ["--features"] + cargo_features
+    cmd += extra
+    print("running:", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
 def clean(features):
     print("cleaning!")
     if "aby" in features:
@@ -161,20 +170,33 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--test", action="store_true", help="build and test all dependencies from the feature set")
     parser.add_argument("-f", "--format", action="store_true", help="run `cargo fmt --all`")
     parser.add_argument("-l", "--lint", action="store_true", help="run `cargo clippy`")
+    parser.add_argument("--flamegraph", action="store_true", help="run `cargo flamegraph`")
     parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
     parser.add_argument("-m", "--mode", type=str, help="set `debug` or `release` mode")
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
     parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
+    parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
     args = parser.parse_args()
 
     def verify_single_action(args: argparse.Namespace):
-        if [bool(v) for v in vars(args).values()].count(True) != 1:
-            parser.error("parser error: only one action can be specified")
+        actions = [k for k, v in vars(args).items() if (type(v) is bool or k in ["features"]) and bool(v)]
+        if len(actions) != 1:
+            parser.error("parser error: only one action can be specified. got: " + " ".join(actions))
     verify_single_action(args)
+
+    def verify_extra_implies_flamegraph(args: argparse.Namespace):
+        if not args.flamegraph and len(args.extra) > 0:
+            parser.error("parser error: no --flamegraph action, and extra arguments")
+    verify_extra_implies_flamegraph(args)
 
     features = load_features()
     set_env(features)
+
+    if args.flamegraph:
+        if len(args.extra) > 0 and args.extra[0] == "--":
+            del args.extra[0]
+        flamegraph(features, args.extra)
 
     if args.install:
         install(features)
