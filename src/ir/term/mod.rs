@@ -23,7 +23,6 @@
 //!
 use crate::util::once::OnceQueue;
 use fxhash::{FxHashMap, FxHashSet};
-use hashconsing::coll::HConMap;
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
@@ -838,7 +837,7 @@ impl Sort {
         }
     }
 
-    /// An iterator over the elements of this sort.
+    /// An iterator over the elements of this sort (as IR Terms).
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]
     pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
@@ -878,6 +877,46 @@ impl Sort {
                     .map(move |i| {
                         leaf_term(Op::Const(Value::Field(FieldElem::new(i, m2.clone()))))
                     }),
+                )
+            }
+            _ => panic!("Cannot iterate over {}", self),
+        }
+    }
+
+    /// An iterator over the elements of this sort (as IR values).
+    /// Only defined for booleans, bit-vectors, and field elements.
+    #[track_caller]
+    pub fn elems_iter_values(&self) -> Box<dyn Iterator<Item = Value>> {
+        match self {
+            Sort::Bool => Box::new(vec![false, true].into_iter().map(|b| Value::Bool(b))),
+            Sort::BitVector(w) => {
+                let w = *w;
+                let lim = Integer::from(1) << w as u32;
+                Box::new(
+                    std::iter::successors(Some(Integer::from(0)), move |p| {
+                        let q = p.clone() + 1;
+                        if q < lim {
+                            Some(q)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(move |i| Value::BitVector(BitVector::new(i.into(), w))),
+                )
+            }
+            Sort::Field(m) => {
+                let m = m.clone();
+                let m2 = m.clone();
+                Box::new(
+                    std::iter::successors(Some(Integer::from(0)), move |p| {
+                        let q = p.clone() + 1;
+                        if q < *m {
+                            Some(q)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(move |i| Value::Field(FieldElem::new(i, m2.clone()))),
                 )
             }
             _ => panic!("Cannot iterate over {}", self),
@@ -1258,7 +1297,7 @@ impl Value {
 
 /// Evaluate the term `t`, using variable values in `h`.
 pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
-    let ref mut vs = TermMap::<Value>::new();
+    let vs = &mut TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
         eval_value(vs, h, c.clone());
     }
@@ -1266,11 +1305,7 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
 }
 
 /// Helper function for eval function. Handles a single term
-fn eval_value(
-    vs: &mut HConMap<HConsed<TermData>, Value>,
-    h: &FxHashMap<String, Value>,
-    c: HConsed<TermData>,
-) -> Value {
+fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) -> Value {
     let v = match &c.op {
         Op::Var(n, _) => h
             .get(n)
@@ -1423,62 +1458,51 @@ fn eval_value(
             let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
             let i = vs.get(&c.cs[1]).unwrap().clone();
             let v = vs.get(&c.cs[2]).unwrap().clone();
-            Value::Array(a.clone().store(i, v))
+            Value::Array(a.store(i, v))
         }
         Op::Select => {
             let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
             let i = vs.get(&c.cs[1]).unwrap();
-            a.clone().select(i)
+            a.select(i)
         }
         Op::Map(op) => {
             let arg_cnt = c.cs.len();
-            let arr_size = vs.get(&c.cs[0]).unwrap().as_array().size;
-            let mut term_vecs = vec![Vec::new(); arr_size];
-            //2D vector: term_vecs[i] will store a vector of all the i-th index
-            //  entries of the array arguments
 
-            //Value::BitVector(BitVector::new(uint.into(),width,))
+            //  term_vecs[i] will store a vector of all the i-th index entries of the array arguments
+            let mut term_vecs = vec![Vec::new(); vs.get(&c.cs[0]).unwrap().as_array().size];
+
             for i in 0..arg_cnt {
                 let arr = vs.get(&c.cs[i]).unwrap().as_array().clone();
-                for j in 0..arr_size {
-                    let jval = &Value::BitVector(BitVector::new(Integer::from(j), 32));
-                    let term = leaf_term(Op::Const(arr.clone().select(jval)));
-                    term_vecs[j].push(term);
+                let iter = match check(&c.cs[i]) {
+                    Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                    _ => panic!("Input type should be Array"),
+                };
+                for (j, jval) in iter {
+                    term_vecs[j].push(leaf_term(Op::Const(arr.clone().select(&jval))))
                 }
             }
-            //Cloning the first arg just for formatting
-            let mut res = vs.get(&c.cs[0]).unwrap().as_array().clone();
-            for i in 0..arr_size {
+
+            let mut res = match check(&c) {
+                Sort::Array(k, v, n) => Array::default((*k).clone(), &v, n),
+                _ => panic!("Output type of map should be array"),
+            };
+
+            let iter = match check(&c) {
+                Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                _ => panic!("Input type should be Array"),
+            };
+            for (i, idxval) in iter {
                 let t = term((**op).clone(), term_vecs[i].clone());
                 let val = eval_value(vs, h, t);
-                res.map
-                    .insert(Value::BitVector(BitVector::new(Integer::from(i), 32)), val);
+                res.map.insert(idxval, val);
             }
             Value::Array(res)
         }
         o => unimplemented!("eval: {:?}", o),
     };
-    vs.insert(c, v.clone());
-
+    vs.insert(c.clone(), v.clone());
+    debug!("Eval {}\nAs   {}", c, v);
     v
-    //println!("Eval {}\nAs   {}", c, v);
-}
-
-#[macro_export]
-/// Make a term.
-///
-/// Syntax:
-///
-///    * without children: `term![OP]`
-///    * with children: `term![OP; ARG0, ARG1, ... ]`
-///       * Note the semi-colon
-macro_rules! term {
-    ($x:expr) => {
-        leaf_term($x)
-    };
-    ($x:expr; $($y:expr),+) => {
-        term($x, vec![$($y),+])
-    };
 }
 
 /// Make an array from a sequence of terms.
@@ -1523,6 +1547,23 @@ where
 /// Make a bit-vector constant term.
 pub fn bool_lit(b: bool) -> Term {
     leaf_term(Op::Const(Value::Bool(b)))
+}
+
+#[macro_export]
+/// Make a term.
+///
+/// Syntax:
+///
+///    * without children: `term![OP]`
+///    * with children: `term![OP; ARG0, ARG1, ... ]`
+///       * Note the semi-colon
+macro_rules! term {
+    ($x:expr) => {
+        leaf_term($x)
+    };
+    ($x:expr; $($y:expr),+) => {
+        term($x, vec![$($y),+])
+    };
 }
 
 /// Map from terms
