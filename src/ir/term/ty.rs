@@ -331,8 +331,8 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             };
 
             let mut val_sorts = Vec::new();
-            
-            for a_i in a.iter().take(arg_cnt) {
+
+            for a_i in a {
                 match (*a_i).clone() {
                     Sort::Array(k, v, s) => {
                         if *k != key_sort {
