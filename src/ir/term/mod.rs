@@ -888,7 +888,7 @@ impl Sort {
     #[track_caller]
     pub fn elems_iter_values(&self) -> Box<dyn Iterator<Item = Value>> {
         match self {
-            Sort::Bool => Box::new(vec![false, true].into_iter().map(|b| Value::Bool(b))),
+            Sort::Bool => Box::new(vec![false, true].into_iter().map(Value::Bool)),
             Sort::BitVector(w) => {
                 let w = *w;
                 let lim = Integer::from(1) << w as u32;
@@ -901,7 +901,7 @@ impl Sort {
                             None
                         }
                     })
-                    .map(move |i| Value::BitVector(BitVector::new(i.into(), w))),
+                    .map(move |i| Value::BitVector(BitVector::new(i, w))),
                 )
             }
             Sort::Field(m) => {

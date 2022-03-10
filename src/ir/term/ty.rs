@@ -323,7 +323,6 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             // Get the value sorts of the argument arrays
             // recursively call helper to get value type of mapped array
             // then return Ok(...)
-            let arg_cnt = a.len();
 
             let (key_sort, size) = match a[0].clone() {
                 Sort::Array(k, _, s) => (*k, s),
@@ -345,13 +344,13 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                         }
                         val_sorts.push((*v).clone());
                     }
-                    s => return Err(TypeErrorReason::ExpectedArray(s.clone(), "map")),
+                    s => return Err(TypeErrorReason::ExpectedArray(s, "map")),
                 };
             }
 
             let mut new_a = Vec::new();
-            for i in 0..arg_cnt {
-                new_a.push(&val_sorts[i]);
+            for ptr in &val_sorts {
+                new_a.push(ptr);
             }
             rec_check_raw_helper(&(*op.clone()), &new_a[..])
                 .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size))
