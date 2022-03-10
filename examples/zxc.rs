@@ -8,14 +8,15 @@ use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
 use circ::front::zsharp::{self, ZSharpFE};
-
 use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
+use circ_fields::FieldT;
 /*
 use circ::target::r1cs::bellman::parse_instance;
 */
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+use circ::util::field::DFL_T;
 /*
 use std::fs::File;
 use std::io::Read;
@@ -132,7 +133,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+    let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs

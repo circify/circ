@@ -387,11 +387,11 @@ mod test {
             5
         )))];
         let t0 = term![Op::Select;
-            term![Op::Store; z0.clone(), v_bv("a", 4), bv_lit(1, 4)],
+            term![Op::Store; z0, v_bv("a", 4), bv_lit(1, 4)],
             bv_lit(3, 4)
         ];
         let t1 = term![Op::Select;
-            term![Op::Store; z1.clone(), bv_lit(3, 4), bv_lit(1, 4)],
+            term![Op::Store; z1, bv_lit(3, 4), bv_lit(1, 4)],
             bv_lit(3, 4)
         ];
         let mut c = Computation::default();
@@ -415,7 +415,7 @@ mod test {
             bv_lit(3, 4)
         ];
         let t1 = term![Op::Select;
-            term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
+            term![Op::Store; z, bv_lit(3, 4), bv_lit(1, 4)],
             bv_lit(3, 4)
         ];
         let mut c = Computation::default();

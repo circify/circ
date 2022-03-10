@@ -44,22 +44,19 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
         let uses = &mut self.uses;
         let mut do_in = |a: &mut Lc| {
             if let Some(sc) = a.monomials.remove(&var) {
-                a.constant += val.constant.clone() * &sc;
-                a.constant.rem_floor_assign(&*val.modulus);
+                a.constant += sc.clone() * &val.constant;
                 for (i, v) in &val.monomials {
                     match a.monomials.entry(*i) {
                         Entry::Occupied(mut e) => {
                             let m = e.get_mut();
-                            *m += v.clone() * &sc;
-                            m.rem_floor_assign(&*val.modulus);
-                            if e.get() == &Integer::from(0) {
+                            *m += sc.clone() * v;
+                            if e.get().is_zero() {
                                 uses.get_mut(i).unwrap().remove(&con_id);
                                 e.remove_entry();
                             }
                         }
                         Entry::Vacant(e) => {
-                            let m = e.insert(v.clone() * &sc);
-                            m.rem_floor_assign(&*val.modulus);
+                            e.insert(sc.clone() * v);
                             uses.get_mut(i).unwrap().insert(con_id);
                         }
                     }
@@ -128,8 +125,8 @@ fn as_linear_sub((a, b, c): &(Lc, Lc, Lc), public: &HashSet<usize>) -> Option<(u
             if !public.contains(i) {
                 let mut lc = c.clone();
                 let v = lc.monomials.remove(i).unwrap();
-                lc *= &(-v.invert(&*lc.modulus).unwrap());
-                return Some((*i, lc));
+                lc *= v.recip();
+                return Some((*i, -lc));
             }
         }
         None
@@ -154,7 +151,7 @@ fn normalize((a, b, c): &mut (Lc, Lc, Lc)) {
 
 fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
     match (a.as_const(), b.as_const(), c.as_const()) {
-        (Some(x), Some(y), Some(z)) => (x.clone() * y - z).rem_floor(&*a.modulus) == 0,
+        (Some(x), Some(y), Some(z)) => (x.clone() * y - z).is_zero(),
         _ => false,
     }
 }
@@ -171,6 +168,7 @@ mod test {
 
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
+    use rand::SeedableRng;
 
     #[derive(Clone, Debug)]
     pub struct SatR1cs(R1cs<String>);
@@ -178,33 +176,28 @@ mod test {
     impl Arbitrary for SatR1cs {
         fn arbitrary(g: &mut Gen) -> Self {
             let m = 101;
-            let modulus = Integer::from(m);
+            let modulus = FieldT::from(Integer::from(m));
             let n_vars = g.size() + 1;
             let vars: Vec<_> = (0..n_vars).map(|i| format!("v{}", i)).collect();
             let mut r1cs = R1cs::new(modulus.clone(), true);
-            let mut rug_rng = rug::rand::RandState::new_mersenne_twister();
-            let s: u32 = Arbitrary::arbitrary(g);
-            rug_rng.seed(&Integer::from(s));
+            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             for v in &vars {
-                r1cs.add_signal(v.clone(), Some(modulus.clone().random_below(&mut rug_rng)));
+                r1cs.add_signal(v.clone(), Some(modulus.random_v(&mut rng)));
             }
             for _ in 0..(2 * g.size()) {
-                let mut ac: isize = Arbitrary::arbitrary(g);
-                ac.rem_floor_assign(m);
+                let ac: isize = <isize as Arbitrary>::arbitrary(g) % m;
                 let a = if Arbitrary::arbitrary(g) {
                     r1cs.signal_lc(g.choose(&vars[..]).unwrap())
                 } else {
                     r1cs.zero()
                 } + ac;
-                let mut bc: isize = Arbitrary::arbitrary(g);
-                bc.rem_floor_assign(m);
+                let bc: isize = <isize as Arbitrary>::arbitrary(g) % m;
                 let b = if Arbitrary::arbitrary(g) {
                     r1cs.signal_lc(g.choose(&vars[..]).unwrap())
                 } else {
                     r1cs.zero()
                 } + bc;
-                let mut cc: isize = Arbitrary::arbitrary(g);
-                cc.rem_floor_assign(m);
+                let cc: isize = <isize as Arbitrary>::arbitrary(g) % m;
                 let mut c = if Arbitrary::arbitrary(g) {
                     r1cs.signal_lc(g.choose(&vars[..]).unwrap())
                 } else {

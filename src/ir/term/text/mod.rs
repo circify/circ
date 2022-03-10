@@ -35,6 +35,8 @@
 //!     * Plain operators: (`bvmul`, `and`, ...)
 //!     * Composite operators: `(field N)`, `(update N)`, `(sext N)`, `(uext N)`, `(bit N)`, ...
 
+use circ_fields::{FieldT, FieldV};
+
 use logos::Logos;
 
 use fxhash::FxHashMap as HashMap;
@@ -126,8 +128,10 @@ struct IrInterp<'src> {
     /// A map from an identifier to a stack of bindings.
     /// The stack is there for scoping.
     bindings: HashMap<&'src [u8], Vec<Term>>,
-    /// The stack of default field moduli
+    /// The stack of field moduli used in this IR
     moduli: Vec<Arc<Integer>>,
+    /// The current default field modulus, if any
+    default_modulus: Option<Arc<Integer>>,
 }
 
 enum CtrlOp {
@@ -141,8 +145,9 @@ enum CtrlOp {
 impl<'src> IrInterp<'src> {
     fn new() -> Self {
         Self {
-            moduli: Vec::new(),
             bindings: HashMap::default(),
+            moduli: Vec::new(),
+            default_modulus: None,
         }
     }
 
@@ -248,7 +253,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
-                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(Arc::new(self.int(a)))),
+                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
                 _ => todo!("Unparsed op: {}", tt),
@@ -273,7 +278,7 @@ impl<'src> IrInterp<'src> {
             List(ls) => {
                 assert!(!ls.is_empty());
                 match &ls[..] {
-                    [Leaf(Ident, b"mod"), m] => Sort::Field(Arc::new(self.int(m))),
+                    [Leaf(Ident, b"mod"), m] => Sort::Field(FieldT::from(self.int(m))),
                     [Leaf(Ident, b"bv"), w] => Sort::BitVector(self.usize(w)),
                     [Leaf(Ident, b"array"), k, v, s] => Sort::Array(
                         Box::new(self.sort(k)),
@@ -289,9 +294,19 @@ impl<'src> IrInterp<'src> {
             _ => panic!("Expected sort, found {}", tt),
         }
     }
-    fn int(&self, tt: &TokTree) -> Integer {
+    fn int(&mut self, tt: &TokTree) -> Arc<Integer> {
         match tt {
-            Leaf(Token::Int, s) => Integer::parse(s).unwrap().into(),
+            Leaf(Token::Int, s) => {
+                let i: Integer = Integer::parse(s).unwrap().into();
+                match self.moduli.binary_search_by(|v| v.as_ref().cmp(&i)) {
+                    Ok(idx) => self.moduli[idx].clone(),
+                    Err(idx) => {
+                        let i = Arc::new(i);
+                        self.moduli.insert(idx, i.clone());
+                        i
+                    }
+                }
+            }
             _ => panic!("Expected integer, got {}", tt),
         }
     }
@@ -375,16 +390,12 @@ impl<'src> IrInterp<'src> {
                         Arc::new(Integer::parse(&s[i + 1..]).unwrap().into()),
                     )
                 } else {
-                    let m = self
-                        .moduli
-                        .last()
-                        .unwrap_or_else(|| {
-                            panic!("Field value without a modulus, and no default modulus set")
-                        })
-                        .clone();
+                    let m = self.default_modulus.clone().unwrap_or_else(|| {
+                        panic!("Field value without a modulus, and no default modulus set")
+                    });
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
-                leaf_term(Op::Const(Value::Field(FieldElem::new(v, m))))
+                leaf_term(Op::Const(Value::Field(FieldV::new::<Integer>(v, m))))
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),
@@ -440,11 +451,9 @@ impl<'src> IrInterp<'src> {
                             3,
                             "A set_default_modulus should have 2 arguments: modulus and term"
                         );
-                        let m = Arc::new(self.int(&tts[1]));
-                        self.moduli.push(m);
-                        let t = self.term(&tts[2]);
-                        self.moduli.pop().unwrap();
-                        t
+                        let m = self.int(&tts[1]);
+                        self.default_modulus = Some(m);
+                        self.term(&tts[2])
                     }
                     Ok(o) => term(o, tts[1..].iter().map(|tti| self.term(tti)).collect()),
                 }

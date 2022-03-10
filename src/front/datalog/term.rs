@@ -1,7 +1,6 @@
 //! Terms in our datalog variant
 
 use std::fmt::{self, Display, Formatter};
-use std::sync::Arc;
 
 use rug::Integer;
 
@@ -9,8 +8,8 @@ use super::error::ErrorKind;
 use super::ty::Ty;
 
 use crate::circify::{CirCtx, Embeddable};
-use crate::front::{ZSHARP_FIELD_SORT, ZSHARP_MODULUS_ARC};
 use crate::ir::term::*;
+use crate::util::field::DFL_T;
 
 /// A term
 #[derive(Debug, Clone)]
@@ -64,10 +63,7 @@ pub fn pf_ir_lit<I>(i: I) -> Term
 where
     Integer: From<I>,
 {
-    leaf_term(Op::Const(Value::Field(FieldElem::new(
-        Integer::from(i),
-        ZSHARP_MODULUS_ARC.clone(),
-    ))))
+    leaf_term(Op::Const(Value::Field(DFL_T.new_v(i))))
 }
 
 /// Initialize a boolean literal
@@ -85,9 +81,9 @@ impl Ty {
         match self {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w as usize),
-            Self::Field => ZSHARP_FIELD_SORT.clone(),
+            Self::Field => Sort::Field(DFL_T.clone()),
             Self::Array(n, b) => {
-                Sort::Array(Box::new(ZSHARP_FIELD_SORT.clone()), Box::new(b.sort()), *n)
+                Sort::Array(Box::new(Sort::Field(DFL_T.clone())), Box::new(b.sort()), *n)
             }
         }
     }
@@ -320,7 +316,7 @@ pub fn or(s: &T, t: &T) -> Result<T> {
 pub fn uint_to_field(s: &T) -> Result<T> {
     match &s.ty {
         Ty::Uint(_) => Ok(T::new(
-            term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); s.ir.clone()],
+            term![Op::UbvToPf(DFL_T.clone()); s.ir.clone()],
             Ty::Field,
         )),
         _ => Err(ErrorKind::InvalidUnOp("to_field".into(), s.clone())),
@@ -343,9 +339,7 @@ pub fn array_idx(a: &T, i: &T) -> Result<T> {
 }
 
 /// Datalog lang def
-pub struct Datalog {
-    modulus: Arc<Integer>,
-}
+pub struct Datalog;
 
 impl Embeddable for Datalog {
     type T = T;
@@ -372,8 +366,8 @@ impl Embeddable for Datalog {
             Ty::Field => T::new(
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
-                    Sort::Field(self.modulus.clone()),
-                    || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
+                    Sort::Field(DFL_T.clone()),
+                    || Value::Field(DFL_T.new_v(get_int_val())),
                     visibility,
                 ),
                 Ty::Field,
@@ -450,9 +444,7 @@ impl Default for Datalog {
 impl Datalog {
     /// Initialize the Datalog lang def
     pub fn new() -> Self {
-        Self {
-            modulus: ZSHARP_MODULUS_ARC.clone(),
-        }
+        Self
     }
 }
 

@@ -28,6 +28,8 @@ use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
+use circ::util::field::DFL_T;
+use circ_fields::FieldT;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
@@ -276,7 +278,7 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+            let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs);
             println!("Final R1cs size: {}", r1cs.constraints().len());

@@ -8,6 +8,7 @@ use rug::Integer;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone)]
 pub enum CTermData {
     CBool(Term),
