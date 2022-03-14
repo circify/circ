@@ -142,8 +142,6 @@ pub fn cterm(data: CTermData) -> CTerm {
 // }
 
 pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
-    println!("cast: {:#?}", to_ty);
-    println!("term: {:#?}", t);
     let ty = t.term.type_();
     match t.term {
         CTermData::CBool(ref term) => match to_ty {
@@ -265,10 +263,6 @@ fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
 fn usual_arith_conversions(a: CTerm, b: CTerm) -> (CTerm, CTerm) {
     if a.term.type_().is_arith_type() && b.term.type_().is_arith_type() {
         let (a_, b_) = inner_usual_arith_conversions(&a, &b);
-
-        println!("a_ty: {:#?}", a_.term.type_());
-        println!("b_ty: {:#?}", b_.term.type_());
-
         if a_.term.type_() == b_.term.type_() {
             (a_, b_)
         } else {

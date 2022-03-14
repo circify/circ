@@ -204,11 +204,13 @@ impl CGen {
         }
     }
 
-    pub fn get_derived_type(&mut self, base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Ty {
+    // TODO: change this to vector!
+    pub fn get_derived_type(&mut self, base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Vec<Ty> {
         if derived.is_empty() {
             return base_ty;
         }
         let mut derived_ty = base_ty.clone();
+        
         for d in derived {
             derived_ty = self.get_inner_derived_type(base_ty.clone(), d.node.clone());
             // match derived_ty {
@@ -222,7 +224,6 @@ impl CGen {
     pub fn get_decl_info(&mut self, decl: Declaration) -> Vec<DeclInfo> {
         let mut ty: Ty = self.d_type_(decl.specifiers).unwrap();
         for d in decl.declarators.iter() {
-            println!("decl: {:#?}", d);
             let derived = &d.node.declarator.node.derived;
             let derived_ty = self.get_derived_type(ty, derived.to_vec());
             ty = derived_ty;
@@ -657,6 +658,8 @@ impl CGen {
                     self.unwrap(r);
                 }
 
+                // println!("body: {:#?}", body.clone());
+
                 self.gen_stmt(body);
 
                 let ret = self
@@ -664,7 +667,11 @@ impl CGen {
                     .exit_fn()
                     .map(|a| a.unwrap_term())
                     .unwrap_or_else(|| cterm(CTermData::CBool(bool_lit(false))));
-                Ok(cast(ret_ty, ret))
+
+                match ret_ty {
+                    None => Ok(ret),
+                    _ => Ok(cast(ret_ty, ret)),
+                }
             }
             Expression::Member(member) => {
                 let MemberExpression {
@@ -682,6 +689,8 @@ impl CGen {
     }
 
     fn gen_init(&mut self, derived_ty: Ty, init: Initializer) -> CTerm {
+        println!("init: {:#?}", init);
+        println!("derived ty: {}", derived_ty);
         match init {
             Initializer::Expression(e) => self.gen_expr(e.node),
             Initializer::List(l) => match derived_ty.clone() {
@@ -720,6 +729,7 @@ impl CGen {
         for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
             let expr: CTerm;
             if let Some(init) = d.node.initializer.clone() {
+                println!("HERE! {:#?}", decl);
                 expr = self.gen_init(info.ty.clone(), init.node);
             } else {
                 expr = info.ty.default(&mut self.circ)
@@ -746,8 +756,8 @@ impl CGen {
                 Some(ConstIteration { val })
             }
             ForInitializer::Expression(e) => {
-                if let Expression::BinaryOperator(bin_op) = e.node {
-                    let expr = self.gen_expr(bin_op.node.rhs.node);
+                if let Expression::BinaryOperator(_) = e.node {
+                    let expr = self.gen_expr(e.node);
                     let val = self.fold_(expr);
                     Some(ConstIteration { val })
                 } else {
