@@ -1334,7 +1334,7 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
             }),
             Op::PfToBv(w) => Value::BitVector({
                 let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
-                assert!(a.i() < &(Integer::from(1) << 1));
+                assert!(a.i() < &(Integer::from(1) << *w as u32));
                 BitVector::new(a.i().clone(), *w)
             }),
             Op::BvUext(w) => Value::BitVector({
