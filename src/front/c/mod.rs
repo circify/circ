@@ -168,7 +168,8 @@ impl CGen {
                                             base_field_type.clone(),
                                             decl.derived,
                                         );
-                                        fs.push((name, derived_ty));
+                                        // fs.push((name, derived_ty));
+                                        unimplemented!();
                                     }
                                 }
                                 StructDeclaration::StaticAssert(_a) => {
@@ -204,19 +205,14 @@ impl CGen {
         }
     }
 
-    // TODO: change this to vector!
-    pub fn get_derived_type(&mut self, base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Vec<Ty> {
+    pub fn get_derived_type(&mut self, base_ty: Ty, derived: Vec<Node<DerivedDeclarator>>) -> Ty {
         if derived.is_empty() {
             return base_ty;
         }
-        let mut derived_ty = base_ty.clone();
-        
-        for d in derived {
-            derived_ty = self.get_inner_derived_type(base_ty.clone(), d.node.clone());
-            // match derived_ty {
-            //     Ty::Array(s, _) => derived_ty = Ty::Array(s, Box::new(next_ty)),
-            //     _ => derived_ty = next_ty,
-            // }
+        let mut derived_ty: Ty = base_ty;
+        for d in derived.iter().rev() {
+            let inner_derived_ty = self.get_inner_derived_type(derived_ty.clone(), d.node.clone());
+            derived_ty = inner_derived_ty;
         }
         derived_ty
     }
@@ -697,19 +693,26 @@ impl CGen {
                 Ty::Array(n, _) => {
                     let mut values: Vec<CTerm> = Vec::new();
                     let inner_type = derived_ty.inner_ty();
+                    println!("inner type: {}", inner_type);
                     for li in l {
                         let expr =
                             self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
+                        println!("expr: {:#?}", expr);
                         values.push(expr)
                     }
+                    println!("values len: {:#?}", values.len());
+                    println!("values: {:#?}", values[0]);
                     assert!(n == values.len());
                     let id = self
                         .circ
                         .zero_allocate(values.len(), 32, inner_type.num_bits());
 
                     for (i, v) in values.iter().enumerate() {
+                        println!("i: {}, v: {:#?}", i, v);
                         let offset = bv_lit(i, 32);
+                        println!("offset: {:#?}", offset);
                         let v_ = v.term.term(&self.circ.cir_ctx());
+                        println!("v_: {:#?}", v_);
                         self.circ.store(id, offset, v_);
                     }
                     cterm(CTermData::CArray(inner_type, Some(id)))

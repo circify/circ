@@ -35,8 +35,12 @@ impl CTermData {
                 CTermData::CBool(t) => output.push(t.clone()),
                 CTermData::CInt(_, _, t) => output.push(t.clone()),
                 CTermData::CArray(t, a) => {
+                    println!("HEREHJHJKHFDKJH");
+                    println!("type: {:?}", t);
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
                     if let Ty::Array(l, _ty) = t {
+                        println!("here?");
+                        println!("l: {}", l);
                         for i in 0..*l {
                             let offset = bv_lit(i, 32);
                             let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
@@ -71,6 +75,7 @@ impl CTermData {
 
     pub fn term(&self, ctx: &CirCtx) -> Term {
         let ts = self.terms(ctx);
+        println!("TS: {:#?}", ts);
         assert!(ts.len() == 1);
         ts.get(0).unwrap().clone()
     }
