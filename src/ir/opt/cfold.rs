@@ -238,6 +238,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     1,
                 ))))
             }),
+            Op::BvUext(w) => get(0).as_bv_opt().map(|b| {
+                leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                    b.uint().clone(),
+                    b.width() + w,
+                ))))
+            }),
             _ => None,
         };
         let new_t = {
