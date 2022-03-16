@@ -9,6 +9,8 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::rc::Rc;
 
+use crate::ir::term::*;
+
 #[cfg(feature = "r1cs")]
 pub mod bellman;
 pub mod opt;
@@ -405,5 +407,177 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     /// Access the raw constraints.
     pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
         &self.constraints
+    }
+}
+
+#[derive(Clone, Debug)]
+/// A linear combination with an attached prime-field term that computes its variable
+pub struct TermLc(pub Term, pub Lc);
+
+impl TermLc {
+    /// Is this the zero combination?
+    pub fn is_zero(&self) -> bool {
+        self.1.is_zero()
+    }
+    /// Make this the zero combination.
+    pub fn clear(&mut self) {
+        self.1.clear();
+        self.0 = leaf_term(Op::Const(Value::Field(FieldElem::new(
+            0u8.into(),
+            check(&self.0).as_pf(),
+        ))));
+    }
+    /// Take this linear combination, leaving zero in its place.
+    pub fn take(&mut self) -> Self {
+        let lc = self.1.take();
+        let zero_t = leaf_term(Op::Const(Value::Field(FieldElem::new(
+            0u8.into(),
+            check(&self.0).as_pf(),
+        ))));
+        let t = std::mem::replace(&mut self.0, zero_t);
+        TermLc(t, lc)
+    }
+    /// Is this a constant? If so, return that constant.
+    pub fn as_const(&self) -> Option<&Integer> {
+        self.1.as_const()
+    }
+}
+
+impl std::ops::Add<&TermLc> for TermLc {
+    type Output = TermLc;
+    fn add(mut self, other: &TermLc) -> TermLc {
+        self += other;
+        self
+    }
+}
+
+impl std::ops::AddAssign<&TermLc> for TermLc {
+    fn add_assign(&mut self, other: &TermLc) {
+        self.1 += &other.1;
+        self.0 = term![PF_ADD; self.0.clone(), other.0.clone()];
+    }
+}
+
+impl std::ops::Add<&Integer> for TermLc {
+    type Output = TermLc;
+    fn add(mut self, other: &Integer) -> TermLc {
+        let m = check(&self.0).as_pf();
+        self.0 = term![PF_ADD; self.0.clone(), pf_lit(other.clone(), m)];
+        self.1 += other;
+        self
+    }
+}
+
+impl std::ops::AddAssign<&Integer> for TermLc {
+    fn add_assign(&mut self, other: &Integer) {
+        let m = check(&self.0).as_pf();
+        self.0 = term![PF_ADD; self.0.clone(), pf_lit(other.clone(), m)];
+        self.1 += other;
+    }
+}
+
+impl std::ops::Add<isize> for TermLc {
+    type Output = TermLc;
+    fn add(mut self, other: isize) -> TermLc {
+        self += other;
+        self
+    }
+}
+
+impl std::ops::AddAssign<isize> for TermLc {
+    fn add_assign(&mut self, other: isize) {
+        let m = check(&self.0).as_pf();
+        self.1 += other;
+        self.0 = term![PF_ADD; self.0.clone(), pf_lit(other, m)];
+    }
+}
+
+impl std::ops::Sub<&TermLc> for TermLc {
+    type Output = TermLc;
+    fn sub(mut self, other: &TermLc) -> TermLc {
+        self -= other;
+        self
+    }
+}
+
+impl std::ops::SubAssign<&TermLc> for TermLc {
+    fn sub_assign(&mut self, other: &TermLc) {
+        self.1 -= &other.1;
+        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; other.0.clone()]];
+    }
+}
+
+impl std::ops::Sub<&Integer> for TermLc {
+    type Output = TermLc;
+    fn sub(mut self, other: &Integer) -> TermLc {
+        let m = check(&self.0).as_pf();
+        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; pf_lit(other, m)]];
+        self.1 -= other;
+        self
+    }
+}
+
+impl std::ops::SubAssign<&Integer> for TermLc {
+    fn sub_assign(&mut self, other: &Integer) {
+        let m = check(&self.0).as_pf();
+        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; pf_lit(other, m)]];
+        self.1 -= other;
+    }
+}
+
+impl std::ops::Sub<isize> for TermLc {
+    type Output = TermLc;
+    fn sub(mut self, other: isize) -> TermLc {
+        self -= other;
+        self
+    }
+}
+
+impl std::ops::SubAssign<isize> for TermLc {
+    fn sub_assign(&mut self, other: isize) {
+        let m = check(&self.0).as_pf();
+        self.1 -= other;
+        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; pf_lit(other, m)]];
+    }
+}
+
+impl std::ops::Neg for TermLc {
+    type Output = TermLc;
+    fn neg(mut self) -> TermLc {
+        self.1 = -self.1;
+        self.0 = term![PF_NEG; self.0];
+        self
+    }
+}
+
+impl std::ops::Mul<&Integer> for TermLc {
+    type Output = TermLc;
+    fn mul(mut self, other: &Integer) -> TermLc {
+        self *= other;
+        self
+    }
+}
+
+impl std::ops::MulAssign<&Integer> for TermLc {
+    fn mul_assign(&mut self, other: &Integer) {
+        let m = check(&self.0).as_pf();
+        self.1 *= other;
+        self.0 = term![PF_MUL; self.0.clone(), pf_lit(other.clone(), m)];
+    }
+}
+
+impl std::ops::Mul<isize> for TermLc {
+    type Output = TermLc;
+    fn mul(mut self, other: isize) -> TermLc {
+        self *= other;
+        self
+    }
+}
+
+impl std::ops::MulAssign<isize> for TermLc {
+    fn mul_assign(&mut self, other: isize) {
+        let m = check(&self.0).as_pf();
+        self.1 *= other;
+        self.0 = term![PF_MUL; self.0.clone(), pf_lit(other.clone(), m)];
     }
 }

@@ -58,8 +58,13 @@ impl FieldElem {
     }
     /// Take the reciprocal.
     pub fn recip(self) -> Self {
+        let i = if self.i == 0 {
+            0.into()
+        } else {
+            self.i.invert(&*self.modulus).expect("no inverse!")
+        };
         let r = FieldElem {
-            i: self.i.invert(&*self.modulus).expect("no inverse!"),
+            i,
             modulus: self.modulus,
         };
         r.check("recip");

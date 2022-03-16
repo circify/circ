@@ -55,7 +55,7 @@ def build(features):
     install(features)
 
     cmd = ["cargo", "build"] 
-    if mode:
+    if mode == "release":
         cmd += ["--"+mode] 
     else:
         # default to release mode
@@ -74,7 +74,7 @@ def build(features):
             subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"], check=True)
         subprocess.run(["./scripts/build_aby.zsh"], check=True)
 
-def test(features):
+def test(features, extra_args):
     """
     Run cargo tests and any test cases in the feature list
 
@@ -82,6 +82,9 @@ def test(features):
     ----------
         features : set of str
             set of features required
+
+        extra_args: list of str
+            extra arguments to pass to cargo
     """
 
     build(features)
@@ -89,7 +92,7 @@ def test(features):
     test_cmd = ["cargo", "test"]
     cargo_features = filter_cargo_features(features)
     if cargo_features:
-        test_cmd = test_cmd + ["--features"] + cargo_features
+        test_cmd = test_cmd + ["--features"] + cargo_features + ["--"] + extra_args
     subprocess.run(test_cmd, check=True)
 
     if "r1cs" in features and "smt" in features:
@@ -180,15 +183,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     def verify_single_action(args: argparse.Namespace):
-        actions = [k for k, v in vars(args).items() if (type(v) is bool or k in ["features"]) and bool(v)]
+        actions = [k for k, v in vars(args).items() if (type(v) is bool or k in ["features", "mode"]) and bool(v)]
         if len(actions) != 1:
             parser.error("parser error: only one action can be specified. got: " + " ".join(actions))
     verify_single_action(args)
 
-    def verify_extra_implies_flamegraph(args: argparse.Namespace):
-        if not args.flamegraph and len(args.extra) > 0:
-            parser.error("parser error: no --flamegraph action, and extra arguments")
-    verify_extra_implies_flamegraph(args)
+    def verify_extra_implies_flamegraph_or_test(args: argparse.Namespace):
+        if (not args.flamegraph and not args.test) and len(args.extra) > 0:
+            parser.error("parser error: no --flamegraph or --test action, and extra arguments")
+    verify_extra_implies_flamegraph_or_test(args)
 
     features = load_features()
     set_env(features)
@@ -208,7 +211,7 @@ if __name__ == "__main__":
         build(features)
 
     if args.test:
-        test(features)
+        test(features, args.extra)
 
     if args.format:
         format()

@@ -236,11 +236,10 @@ impl<Ty: Display> FnFrame<Ty> {
             .stack
             .iter_mut()
             .rev()
-            .filter_map(|f| match f {
+            .find_map(|f| match f {
                 StateEntry::Lex(l) => Some(l),
                 _ => None,
             })
-            .next()
         {
             Ok(n)
         } else {

@@ -14,6 +14,32 @@ fn eq() {
     assert!(u != w);
 }
 
+#[test]
+fn bv2pf() {
+    assert_eq!(
+        leaf_term(Op::Const(eval(
+            &text::parse_term(
+                b"(bvshl #b0001 #b0010)"
+            ),
+            &FxHashMap::default()
+        ))),
+        text::parse_term(
+            b" #b0100 "
+        )
+    );
+    assert_eq!(
+        leaf_term(Op::Const(eval(
+            &text::parse_term(
+                b" (set_default_modulus 17 ((pf2bv 4) #f1)) "
+            ),
+            &FxHashMap::default()
+        ))),
+        text::parse_term(
+            b" #b0001 "
+        )
+    );
+}
+
 mod type_ {
     use super::*;
 
