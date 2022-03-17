@@ -88,6 +88,10 @@ enum Backend {
     Mpc {
         #[structopt(long, default_value = "hycc", name = "cost_model")]
         cost_model: String,
+        #[structopt(long, default_value = "ilp", name = "assign_mode")]
+        assign_mode: String,
+        #[structopt(long, default_value = "3000", name = "part_size")]
+        part_size: usize,
     },
 }
 
@@ -291,7 +295,7 @@ fn main() {
                 }
             }
         }
-        Backend::Mpc { cost_model } => {
+        Backend::Mpc { cost_model, assign_mode, part_size } => {
             println!("Converting to aby");
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
@@ -299,7 +303,7 @@ fn main() {
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
             println!("Cost model: {}", cost_model);
-            to_aby(cs, &path_buf, &lang_str, &cost_model);
+            to_aby(cs, &path_buf, &lang_str, &cost_model, &assign_mode, &part_size);
         }
         Backend::Ilp { .. } => {
             println!("Converting to ilp");

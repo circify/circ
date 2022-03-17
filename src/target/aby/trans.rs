@@ -11,8 +11,10 @@ use crate::target::graph::trans::get_share_map;
 use std::fmt;
 use std::path::Path;
 
-// use super::assignment::all_boolean_sharing;
-// use super::assignment::some_arith_sharing;
+use super::assignment::all_boolean_sharing;
+use super::assignment::some_arith_sharing;
+use super::assignment::some_arith_sharing_ay;
+use super::assignment::all_yao_sharing;
 
 // const BOOLEAN_BITLEN: i32 = 1;
 
@@ -354,14 +356,20 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, am: &str, ps: &usize) {
     let Computation { outputs: terms, .. } = ir.clone();
 
-    // naive assignment
-    // let s_map: SharingMap = all_boolean_sharing(&ir);
-    // let s_map: SharingMap = some_arith_sharing(&ir);
-    // let s_map: SharingMap = assign(&ir, cm);
-    let s_map = get_share_map(&ir, cm, path, lang);
+    let s_map = match am {
+        "all_boolean" => all_boolean_sharing(&ir),
+        "all_yao" => all_yao_sharing(&ir),
+        "boolean_arith" => some_arith_sharing(&ir),
+        "yao_arith" => some_arith_sharing_ay(&ir),
+        "ilp" => get_share_map(&ir, cm, path, lang, false, ps),
+        "ilp_mut" => get_share_map(&ir, cm, path, lang, true, ps),
+        e => {
+            panic!("Unsupported assignment mode: {:?}", e);
+        },
+    };
     let mut converter = ToABY::new(s_map, path, lang);
     for t in terms {
         // println!("terms: {}", t);

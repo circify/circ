@@ -42,6 +42,16 @@ pub fn all_boolean_sharing(c: &Computation) -> SharingMap {
         .collect()
 }
 
+/// Assigns boolean sharing to all yap terms
+pub fn all_yao_sharing(c: &Computation) -> SharingMap {
+    c.outputs
+        .iter()
+        .flat_map(|output| {
+            PostOrderIter::new(output.clone()).map(|term| (term, ShareType::Yao))
+        })
+        .collect()
+}
+
 /// Assigns arithmetic sharing to addition and multiplication
 pub fn some_arith_sharing(c: &Computation) -> SharingMap {
     c.outputs
@@ -54,6 +64,23 @@ pub fn some_arith_sharing(c: &Computation) -> SharingMap {
                     _ => (term.clone(), ShareType::Boolean),
                 },
                 _ => (term.clone(), ShareType::Boolean),
+            })
+        })
+        .collect()
+}
+
+/// Assigns arithmetic sharing to addition and multiplication
+pub fn some_arith_sharing_ay(c: &Computation) -> SharingMap {
+    c.outputs
+        .iter()
+        .flat_map(|output| {
+            PostOrderIter::new(output.clone()).map(|term| match &term.op {
+                Op::BvNaryOp(o) => match o {
+                    BvNaryOp::Add => (term.clone(), ShareType::Arithmetic),
+                    BvNaryOp::Mul => (term.clone(), ShareType::Arithmetic),
+                    _ => (term.clone(), ShareType::Yao),
+                },
+                _ => (term.clone(), ShareType::Yao),
             })
         })
         .collect()

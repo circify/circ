@@ -7,7 +7,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::assign_mut;
 use crate::target::aby::assignment::ilp::calculate_cost;
-use crate::target::aby::assignment::ilp::calculate_node_cost;
+// use crate::target::aby::assignment::ilp::calculate_node_cost;
 use crate::target::aby::assignment::ilp::comb_selection;
 use crate::target::aby::assignment::ilp::CostModel;
 use crate::target::aby::assignment::SharingMap;
@@ -236,7 +236,7 @@ impl ParitionGraph {
     // Check if input graph is formatted correctly
     fn check_graph(&self) {
         //TODO: fix path
-        let output = Command::new("../KaHIP/deploy/graphchecker")
+        let output = Command::new("../../../KaHIP/deploy/graphchecker")
             .arg(&self.graph_path)
             .stdout(Stdio::piped())
             .output()
@@ -248,7 +248,7 @@ impl ParitionGraph {
     // Call graph partitioning algorithm on input graph
     fn call_graph_partitioner(&self) {
         //TODO: fix path
-        let output = Command::new("../KaHIP/deploy/kaffpa")
+        let output = Command::new("../../../KaHIP/deploy/kaffpa")
             .arg(&self.graph_path)
             .arg("--k")
             .arg(self.num_parts.to_string()) //TODO: make this a function on the number of terms
@@ -309,7 +309,7 @@ impl ParitionGraph {
         new_partitions
     }
 
-    fn get_outer(&self, cs: &ComputationSubgraph) -> ComputationSubgraph {
+    fn _get_outer(&self, cs: &ComputationSubgraph) -> ComputationSubgraph {
         let mut mut_cs: ComputationSubgraph = ComputationSubgraph::new();
         for node in cs.nodes.clone() {
             mut_cs.insert_node(&node);
@@ -323,28 +323,29 @@ impl ParitionGraph {
         mut_cs
     }
 
-    fn mutate_partitions(
+    fn _mutate_partitions(
         &self,
         cs: &HashMap<usize, ComputationSubgraph>,
     ) -> HashMap<usize, HashMap<usize, SharingMap>> {
+        // TODO: merge and stop
         let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
         for (i, c) in cs.iter() {
             mut_smaps.insert(*i, HashMap::new());
             println!("#### Assignment of partition: {}, {}", i, 0);
             mut_smaps.get_mut(i).unwrap().insert(0, assign(c, &self.cm));
-            let outer_cs_1 = self.get_outer(c);
+            let outer_cs_1 = self._get_outer(c);
             println!("#### Assignment of partition: {}, {}", i, 1);
             mut_smaps
                 .get_mut(i)
                 .unwrap()
                 .insert(1, assign_mut(&outer_cs_1, &self.cm, c));
-            let outer_cs_2 = self.get_outer(&outer_cs_1);
+            let outer_cs_2 = self._get_outer(&outer_cs_1);
             println!("#### Assignment of partition: {}, {}", i, 2);
             mut_smaps
                 .get_mut(i)
                 .unwrap()
                 .insert(2, assign_mut(&outer_cs_2, &self.cm, c));
-            let outer_cs_3 = self.get_outer(&outer_cs_2);
+            let outer_cs_3 = self._get_outer(&outer_cs_2);
             println!("#### Assignment of partition: {}, {}", i, 3);
             mut_smaps
                 .get_mut(i)
@@ -481,10 +482,9 @@ impl ParitionGraph {
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
-pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> SharingMap {
-    //TODO: pass in partition size
-    let partition_size: usize = 3000;
-    let mut pg = ParitionGraph::new(partition_size, cs, cm, path, lang);
+pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: bool, partition_size: &usize) -> SharingMap {
+
+    let mut pg = ParitionGraph::new(*partition_size, cs, cm, path, lang);
 
     // Convert IR to Chaco  format
     pg.chaco();
@@ -496,12 +496,9 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> Sha
     let partitions = pg.partition_ir();
 
     // get local assignments
-    let local_smaps = pg.get_local_assignments(&partitions);
+    // let local_smaps = pg.get_local_assignments(&partitions);
 
-    // TODO: mutate local assignments
-    // Generating assignments for outer-n map
-    // n = 1 & 2 & 3
-
+    // TODO: remove this 
     let p = format!(
         "{}/third_party/{}/adapted_costs.json",
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
@@ -509,32 +506,22 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str) -> Sha
     );
     let cm_ = CostModel::from_opa_cost_file(&p);
 
-    let mutation_smaps = pg.mutate_partitions(&partitions);
-
-    for (i, maps) in mutation_smaps.clone() {
-        for (j, map) in maps {
-            println!(
-                "--------------- Assignment of partition {}, {}: {}",
-                i,
-                j,
-                calculate_node_cost(&map, &cm_)
-            );
+    let global_assign = match _mut {
+        true => {
+            // With mutation
+            let mutation_smaps = pg._mutate_partitions(&partitions);
+            let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
+            pg.get_global_assignments(&selected_mut_maps)
         }
-    }
+        false => {
+            // Without mutation
+            let local_smaps = pg.get_local_assignments(&partitions);
+            pg.get_global_assignments(&local_smaps)
+        }
+    };
 
-    // pg.brute_force(&mutation_smaps);
-
-    let global_assign = pg.get_global_assignments(&local_smaps);
-    let origin_cost = calculate_cost(&global_assign, &cm_);
-
-    let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
-    let global_assign_mut = pg.get_global_assignments(&selected_mut_maps);
-    let mut_cost = calculate_cost(&global_assign_mut, &cm_);
-
-    println!("Original cost: {}", origin_cost);
-    println!("Mutation cost: {}", mut_cost);
-    // get global assignments
-    // solve the global assignments
+    let cost = calculate_cost(&global_assign, &cm_);
+    println!("Cost of assignment: {}", cost);
 
     global_assign
 }

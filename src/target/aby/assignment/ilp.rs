@@ -351,7 +351,7 @@ fn build_comb_ilp(mut_maps: &HashMap<usize, HashMap<usize, SharingMap>>, cs_map:
             let name = format!("X_{}_{}", pid, mid);
             let v = ilp.new_variable(variable().binary(), name.clone());
             // TODO: update this buggy function
-            let map_cost = calculate_node_cost(&maps, costs);
+            let map_cost = calculate_cost(&maps, costs);
             x_vars.insert(
                 (*pid, *mid),
                 (v, map_cost, name)
@@ -560,22 +560,27 @@ pub fn calculate_node_cost(smap: &SharingMap, costs: &CostModel) -> f64{
 pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64{
 
     let mut cost:f64 = 0.0;
-    for (t, from_ty) in smap{
+    let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
+    for (t, to_ty) in smap{
         match &t.op {
             Op::Var(..) | Op::Const(_) => {
                 cost = cost + 0.0;
             }
             _ => {
-                cost = cost + costs.ops.get(&t.op).unwrap().get(from_ty).unwrap();
+                cost = cost + costs.ops.get(&t.op).unwrap().get(to_ty).unwrap();
             }
         }
         for arg_t in &t.cs{
-            let to_ty = smap.get(&arg_t).unwrap();
-            if from_ty != to_ty{
-                cost = cost + costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
+            if smap.contains_key(&arg_t){
+                let from_ty = smap.get(&arg_t).unwrap();
+                if from_ty != to_ty{
+                    let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
+                    conv_cost.insert((arg_t.clone(), *to_ty), *c);
+                }
             }
-        }
+        }      
     }
+    cost = cost + conv_cost.values().fold(0.0, |acc, &x| acc + x);  
     cost
 }
 
