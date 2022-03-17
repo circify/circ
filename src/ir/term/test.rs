@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::target::r1cs::trans::test::bv;
+use fxhash::FxHashMap;
 
 #[test]
 fn eq() {
@@ -12,6 +13,73 @@ fn eq() {
     assert_eq!(v, u);
     assert!(v != w);
     assert!(u != w);
+}
+
+#[test]
+fn map_test_bool_key() {
+    let a1 = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(true)]);
+    let a2 = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(false)]);
+    let actual = term![Op::Map(Box::new(Op::Eq)); a1, a2];
+    let expected = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(false)]);
+    assert_eq!(
+        eval(&actual, &FxHashMap::default()),
+        eval(&expected, &FxHashMap::default())
+    );
+}
+#[test]
+fn map_test_bv_key() {
+    let a1 = make_array(
+        Sort::BitVector(32),
+        Sort::Bool,
+        vec![bool(true), bool(true), bool(false), bool(false)],
+    );
+    let a2 = make_array(
+        Sort::BitVector(32),
+        Sort::Bool,
+        vec![bool(true), bool(false), bool(true), bool(false)],
+    );
+    let actual = term![Op::Map(Box::new(Op::Eq)); a1, a2];
+    let expected = make_array(
+        Sort::BitVector(32),
+        Sort::Bool,
+        vec![bool(true), bool(false), bool(false), bool(true)],
+    );
+    assert_eq!(
+        eval(&actual, &FxHashMap::default()),
+        eval(&expected, &FxHashMap::default())
+    );
+
+    let a1 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+    );
+    let a2 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0100, 4), bv(0b1001, 4), bv(0b0000, 4)],
+    );
+    let actual_eq = term![Op::Map(Box::new(Op::Eq)); a1.clone(), a2.clone()];
+    let actual_add = term![Op::Map(Box::new(BV_ADD)); a1.clone(), a2.clone()];
+    let expected_eq = make_array(
+        Sort::BitVector(32),
+        Sort::Bool,
+        vec![bool(true), bool(false), bool(false), bool(false)],
+    );
+    let expected_add = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0010, 4), bv(0b0110, 4), bv(0b1100, 4), bv(0b0100, 4)],
+    );
+
+    assert_eq!(
+        eval(&actual_eq, &FxHashMap::default()),
+        eval(&expected_eq, &FxHashMap::default())
+    );
+    assert_eq!(
+        eval(&actual_add, &FxHashMap::default()),
+        eval(&expected_add, &FxHashMap::default())
+    );
 }
 
 mod type_ {
