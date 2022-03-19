@@ -111,6 +111,20 @@ pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
 }
 
+pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {
+    let mut inits: Vec<Initializer> = Vec::new();
+    match init {
+        Initializer::List(l) => {
+            for li in l {
+                let inner_inits = flatten_inits(li.node.initializer.node);
+                inits.extend(inner_inits.iter().cloned());
+            }
+        }
+        _ => inits.push(init),
+    }
+    inits
+}
+
 /// Interpret the party association of input parameters
 pub fn interpret_visibility(ext: &DeclarationSpecifier, mode: Mode) -> Option<PartyId> {
     if let DeclarationSpecifier::Extension(nodes) = ext {

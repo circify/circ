@@ -319,7 +319,7 @@ fn main() {
             panic!("Missing feature: r1cs");
         }
         Backend::Mpc { cost_model } => {
-            println!("Converting to aby");
+            println!("Converting to ABY");
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
                 DeterminedLanguage::Zsharp => "zok".to_string(),

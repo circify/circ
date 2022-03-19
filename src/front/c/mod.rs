@@ -60,6 +60,12 @@ impl FrontEnd for C {
 }
 
 #[derive(Clone)]
+pub struct IndexTerm {
+    pub base: CTerm,
+    pub indices: Vec<CTerm>,
+}
+
+#[derive(Clone)]
 enum CLoc {
     Var(Loc),
     Member(Box<CLoc>, String),
@@ -140,7 +146,7 @@ impl CGen {
     fn type_(&mut self, t: TypeSpecifier) -> Option<Ty> {
         return match t {
             TypeSpecifier::Int => Some(Ty::Int(true, 32)),
-            TypeSpecifier::Unsigned => Some(Ty::Int(false, 32)), // Some(Ty::Int(false, 32)),
+            TypeSpecifier::Unsigned => Some(Ty::Int(false, 32)),
             TypeSpecifier::Bool => Some(Ty::Bool),
             TypeSpecifier::Void => None,
             TypeSpecifier::Struct(s) => {
@@ -168,8 +174,7 @@ impl CGen {
                                             base_field_type.clone(),
                                             decl.derived,
                                         );
-                                        // fs.push((name, derived_ty));
-                                        unimplemented!();
+                                        fs.push((name, derived_ty));
                                     }
                                 }
                                 StructDeclaration::StaticAssert(_a) => {
@@ -192,7 +197,21 @@ impl CGen {
                 if let ArraySize::VariableExpression(expr) = &arr.node.size {
                     let expr_ = self.gen_expr(expr.node.clone());
                     let size = self.fold_(expr_) as usize;
-                    return Ty::Array(size, Box::new(base_ty));
+
+                    // flatten array here
+                    return match base_ty {
+                        Ty::Array(s, sizes, t) => {
+                            let new_size = size * s;
+                            let mut new_sizes = sizes.clone();
+                            new_sizes.push(size);
+                            Ty::Array(new_size, new_sizes, Box::new(*t))
+                        }
+                        _ => {
+                            let mut sizes: Vec<usize> = Vec::new();
+                            sizes.push(size);
+                            Ty::Array(size, sizes, Box::new(base_ty))
+                        }
+                    };
                 }
                 panic!("Derived type not array");
             }
@@ -262,6 +281,7 @@ impl CGen {
         let d = &decl.declarator.as_ref().unwrap().node;
         let derived_ty = self.get_derived_type(base_ty.unwrap(), d.derived.to_vec());
         let name = name_from_decl(d);
+        println!("PARAM_INFO: {}, {}", name, derived_ty);
         ParamInfo {
             name,
             ty: derived_ty,
@@ -352,32 +372,50 @@ impl CGen {
     }
 
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
+        println!("array_select: {:?}, idx: {:?}", array, idx);
         match (array.clone().term, idx.term) {
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
-                Ok(cterm(match ty {
+                let inner_ty = ty.inner_ty();
+                Ok(cterm(match inner_ty {
                     Ty::Bool => CTermData::CBool(self.circ.load(i, idx)),
                     Ty::Int(s, w) => CTermData::CInt(s, w, self.circ.load(i, idx)),
-                    // TODO: Flatten array so this case doesn't occur
-                    // Ty::Array(_,t) => {
-                    //     CTermData::CArray(*t, id)
-                    // }
                     _ => unimplemented!(),
                 }))
             }
-            (a, b) => Err(format!("[Array Select] cannot index {} by {}", b, a)),
+            (CTermData::CStackPtr(ty, offset, id), CTermData::CInt(_, _, idx)) => {
+                let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
+                let inner_ty = ty.inner_ty();
+                let new_offset = term![BV_ADD; offset, idx];
+                println!("new_offset: {:?}", new_offset);
+                Ok(cterm(match inner_ty {
+                    Ty::Bool => CTermData::CBool(self.circ.load(i, new_offset)),
+                    Ty::Int(s, w) => CTermData::CInt(s, w, self.circ.load(i, new_offset)),
+                    _ => unimplemented!(),
+                }))
+            }
+            (a, b) => Err(format!("[Array Select] cannot index {} by {}", a, b)),
         }
     }
 
     pub fn array_store(&mut self, array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
-        match (array.clone().term, idx.term) {
-            (CTermData::CArray(_, id), CTermData::CInt(_, _, idx_term)) => {
+        match (array.clone().term, idx.term.clone()) {
+            (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
-                let new_val = val.term.term(&self.circ.cir_ctx());
-                self.circ.store(i, idx_term, new_val);
-                Ok(val)
+                let vals = val.term.terms(self.circ.cir_ctx());
+                let index = self.fold_(idx);
+                for (offset, v) in vals.iter().enumerate() {
+                    let updated_idx = bv_lit(index + (offset as i32), 32);
+                    self.circ.store(i, updated_idx, v.clone());
+                }
+
+                if vals.len() > 1 {
+                    Ok(cterm(CTermData::CArray(ty, id)))
+                } else {
+                    Ok(val.clone())
+                }
             }
-            (a, b) => Err(format!("[Array Store] cannot index {} by {}", b, a)),
+            (a, b) => Err(format!("[Array Store] cannot index {} by {}", a, b)),
         }
     }
 
@@ -398,19 +436,34 @@ impl CGen {
         }
     }
 
+    fn base_loc(&self, loc: CLoc) -> CLoc {
+        match loc {
+            CLoc::Var(_) => loc,
+            CLoc::Idx(inner_loc, _) => self.base_loc(*inner_loc),
+            CLoc::Member(inner_loc, _) => self.base_loc(*inner_loc),
+        }
+    }
+
     fn gen_lval(&mut self, expr: Node<Expression>) -> CLoc {
         match expr.node {
             Expression::Identifier(_) => {
                 let base_name = name_from_expr(expr);
                 CLoc::Var(Loc::local(base_name))
             }
-            Expression::BinaryOperator(node) => {
-                let bin_op = node.node;
+            Expression::BinaryOperator(ref node) => {
+                let bin_op = &node.node;
                 match bin_op.operator.node {
                     BinaryOperator::Index => {
-                        let base = self.gen_lval(*bin_op.lhs);
-                        let idx = self.gen_expr(bin_op.rhs.node);
-                        CLoc::Idx(Box::new(base), idx)
+                        // get location
+                        let loc = self.gen_lval(*bin_op.lhs.clone());
+                        let base_loc = self.base_loc(loc);
+
+                        // get offset
+                        let index = self.gen_index(expr.node);
+                        let offset = self.index_offset(&index);
+                        let idx = cterm(CTermData::CInt(true, 32, bv_lit(offset, 32)));
+
+                        CLoc::Idx(Box::new(base_loc), idx)
                     }
                     _ => unimplemented!("Invalid left hand value"),
                 }
@@ -501,7 +554,7 @@ impl CGen {
     fn fold_(&mut self, expr: CTerm) -> i32 {
         let term_ = fold(&expr.term.term(&self.circ.cir_ctx()));
         let cterm_ = cterm(CTermData::CInt(true, 32, term_));
-        let val = const_int(cterm_).ok().unwrap();
+        let val = const_int(cterm_);
         val.to_i32().unwrap()
     }
 
@@ -549,6 +602,153 @@ impl CGen {
         }
     }
 
+    fn gen_index(&mut self, expr: Expression) -> IndexTerm {
+        match expr.clone() {
+            Expression::BinaryOperator(node) => {
+                let bin_op = node.node;
+                match bin_op.operator.node {
+                    BinaryOperator::Index => {
+                        let mut a = self.gen_index(bin_op.lhs.node);
+                        let mut b = self.gen_index(bin_op.rhs.node);
+                        a.indices.push(b.base);
+                        return a;
+                    }
+                    _ => IndexTerm {
+                        base: self.gen_expr(expr),
+                        indices: Vec::new(),
+                    },
+                }
+            }
+            _ => IndexTerm {
+                base: self.gen_expr(expr),
+                indices: Vec::new(),
+            },
+        }
+    }
+
+    fn index_offset(&mut self, index: &IndexTerm) -> i32 {
+        let base_ty = index.base.term.type_();
+        let mut offset = 0;
+
+        // match index.base.term.clone() {
+        //     CTermData::CArray(ty, id) => {
+        //         if let Ty::Array(size, sizes, t) = ty {
+        //             let mut total = 1;
+        //             if index.indices.len() < sizes.len() {
+        //                 for i in 0..index.indices.len() {
+        //                     offset += self.fold_(index.indices[i].clone()) * sizes[i] as i32;
+        //                 }
+        //             } else {
+        //                 for (i, ind) in index.indices.iter().rev().enumerate() {
+        //                     let ind_ = self.fold_(ind.clone());
+        //                     let size = sizes[i] as i32;
+        //                     if i == 0 {
+        //                         offset += ind_;
+        //                     } else {
+        //                         offset += ind_ * total;
+        //                     }
+        //                     total *= size;
+        //                 }
+        //             }
+        //         } else {
+        //             assert!(index.indices.len() == 1);
+        //             offset = self.fold_(index.indices[0].clone());
+        //         }
+        //     }
+        //     CTermData::CStackPtr(ty, ptr_offset, id) => {
+        //         println!("PTR type: {:#?}", ty);
+        //         if let Ty::Array(size, sizes, t) = ty {
+        //             println!("lens: {}, {}", index.indices.len(), sizes.len());
+        //             let mut total = 1;
+        //             if index.indices.len() < sizes.len() {
+        //                 for i in 0..index.indices.len() {
+        //                     offset += self.fold_(index.indices[i].clone()) * sizes[i] as i32;
+        //                 }
+        //             } else {
+        //                 for (i, ind) in index.indices.iter().rev().enumerate() {
+        //                     let ind_ = self.fold_(ind.clone());
+        //                     let size = sizes[i] as i32;
+        //                     if i == 0 {
+        //                         offset += ind_;
+        //                     } else {
+        //                         offset += ind_ * total;
+        //                     }
+        //                     total *= size;
+        //                 }
+        //             }
+        //             println!("OFFSET:??? {:#?}", offset);
+        //         }
+        //         println!("ptr_offset: {:#?}", ptr_offset);
+        //         let ptr_cterm = cterm(CTermData::CInt(true, 32, ptr_offset));
+        //         offset += self.fold_(ptr_cterm);
+
+        //         println!("base: {}", index.base);
+        //         for i in index.indices.iter() {
+        //             println!("i: {}", i);
+        //         }
+        //     }
+        //     _ => {
+        //         assert!(index.indices.len() == 1);
+        //         offset = self.fold_(index.indices[0].clone());
+        //     }
+        // }
+
+        // match base_ty.clone() {
+        //     Ty::Array(size, sizes, ty) => {
+        //         let mut total = 1;
+        //         if index.indices.len() < sizes.len() {
+        //             for i in 0..index.indices.len() {
+        //                 offset += self.fold_(index.indices[i].clone()) * sizes[i] as i32;
+        //             }
+        //         } else {
+        //             for (i, ind) in index.indices.iter().rev().enumerate() {
+        //                 let ind_ = self.fold_(ind.clone());
+        //                 let size = sizes[i] as i32;
+        //                 if i == 0 {
+        //                     offset += ind_;
+        //                 } else {
+        //                     offset += ind_ * total;
+        //                 }
+        //                 total *= size;
+        //             }
+        //         }
+        //     }
+        //     Ty::Ptr(size, ty) => {
+        //         println!("ptr ty: {}", ty);
+        //         unimplemented!("ptr type indexing not implemented");
+        //         // offset = self.fold_(index.base.clone());
+        //     }
+        //     _ => {
+        //         assert!(index.indices.len() == 1);
+        //         offset = self.fold_(index.indices[0].clone());
+        //     }
+        // }
+
+        if let Ty::Array(size, sizes, ty) = base_ty {
+            let mut total = 1;
+            if index.indices.len() < sizes.len() {
+                for i in 0..index.indices.len() {
+                    offset += self.fold_(index.indices[i].clone()) * sizes[i] as i32;
+                }
+            } else {
+                for (i, ind) in index.indices.iter().rev().enumerate() {
+                    let ind_ = self.fold_(ind.clone());
+                    let size = sizes[i] as i32;
+                    if i == 0 {
+                        offset += ind_;
+                    } else {
+                        offset += ind_ * total;
+                    }
+                    total *= size;
+                }
+            }
+        } else {
+            assert!(index.indices.len() == 1);
+            offset = self.fold_(index.indices[0].clone());
+        }
+        offset
+    }
+
     fn gen_expr(&mut self, expr: Expression) -> CTerm {
         let res = match expr.clone() {
             Expression::Identifier(node) => Ok(self
@@ -572,9 +772,71 @@ impl CGen {
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::Index => {
-                        let a = self.gen_expr(bin_op.lhs.node);
-                        let b = self.gen_expr(bin_op.rhs.node);
-                        self.array_select(a, b)
+                        println!("bin_op {:#?}", bin_op);
+                        let index = self.gen_index(expr);
+                        let offset = self.index_offset(&index);
+                        let res = match index.base.term {
+                            CTermData::CArray(ref ty, id) => {
+                                if let Ty::Array(size, sizes, t) = ty {
+                                    if index.indices.len() < sizes.len() {
+                                        let diff = sizes.len() - index.indices.len();
+
+                                        let new_sizes: Vec<usize> =
+                                            sizes.clone().into_iter().take(diff).collect();
+
+                                        let new_ty =
+                                            Ty::Array(*size, new_sizes, Box::new(*t.clone()));
+                                        Ok(cterm(CTermData::CStackPtr(
+                                            new_ty,
+                                            bv_lit(offset, 32),
+                                            id,
+                                        )))
+                                    } else {
+                                        self.array_select(
+                                            index.base,
+                                            cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
+                                        )
+                                    }
+                                } else {
+                                    self.array_select(
+                                        index.base,
+                                        cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
+                                    )
+                                }
+                            }
+                            _ => self.array_select(
+                                index.base,
+                                cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
+                            ),
+                        };
+
+                        res
+
+                        // if let Ty::Array(size, sizes, ty) = index.base.term.type_() {
+                        //     // TODO: should be able to return pointer
+                        //     println!("size len: {}", sizes.len());
+                        //     if index.indices.len() < sizes.len() {
+                        //         // RETURN POINTER HERE!
+                        //         println!("offset: {}", offset);
+                        //         alloc_id = index.base.term
+                        //         cterm(CTermData::CStackPtr(
+                        //             index.base.term.type_(),
+                        //             bv_lit(offset, 32),
+
+                        //         ))
+                        //         unimplemented!("return pointer here!");
+                        //     } else {
+                        //         self.array_select(
+                        //             index.base,
+                        //             cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
+                        //         )
+                        //     }
+                        // } else {
+                        //     self.array_select(
+                        //         index.base,
+                        //         cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
+                        //     )
+                        // }
                     }
                     _ => {
                         let f = self.get_bin_op(bin_op.operator.node.clone());
@@ -685,37 +947,28 @@ impl CGen {
     }
 
     fn gen_init(&mut self, derived_ty: Ty, init: Initializer) -> CTerm {
-        println!("init: {:#?}", init);
-        println!("derived ty: {}", derived_ty);
         match init {
             Initializer::Expression(e) => self.gen_expr(e.node),
-            Initializer::List(l) => match derived_ty.clone() {
-                Ty::Array(n, _) => {
+            Initializer::List(ref l) => match derived_ty.clone() {
+                Ty::Array(n, _, _) => {
                     let mut values: Vec<CTerm> = Vec::new();
-                    let inner_type = derived_ty.inner_ty();
-                    println!("inner type: {}", inner_type);
-                    for li in l {
-                        let expr =
-                            self.gen_init(inner_type.clone(), li.node.initializer.node.clone());
-                        println!("expr: {:#?}", expr);
-                        values.push(expr)
+                    let inner_type = derived_ty.clone().inner_ty();
+                    let flattened_inits = flatten_inits(init);
+                    for li in flattened_inits {
+                        let expr = self.gen_init(inner_type.clone(), li.clone());
+                        values.push(expr);
                     }
-                    println!("values len: {:#?}", values.len());
-                    println!("values: {:#?}", values[0]);
                     assert!(n == values.len());
                     let id = self
                         .circ
                         .zero_allocate(values.len(), 32, inner_type.num_bits());
 
                     for (i, v) in values.iter().enumerate() {
-                        println!("i: {}, v: {:#?}", i, v);
                         let offset = bv_lit(i, 32);
-                        println!("offset: {:#?}", offset);
                         let v_ = v.term.term(&self.circ.cir_ctx());
-                        println!("v_: {:#?}", v_);
                         self.circ.store(id, offset, v_);
                     }
-                    cterm(CTermData::CArray(inner_type, Some(id)))
+                    cterm(CTermData::CArray(derived_ty, Some(id)))
                 }
                 Ty::Struct(_base, fs) => {
                     assert!(fs.clone().len() == l.len());
@@ -732,7 +985,6 @@ impl CGen {
         for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
             let expr: CTerm;
             if let Some(init) = d.node.initializer.clone() {
-                println!("HERE! {:#?}", decl);
                 expr = self.gen_init(info.ty.clone(), init.node);
             } else {
                 expr = info.ty.default(&mut self.circ)
@@ -750,6 +1002,7 @@ impl CGen {
 
     //TODO: This function is not quite right because the loop body could modify the iteration variable.
     fn get_const_iters(&mut self, for_stmt: ForStatement) -> ConstIteration {
+        // println!("for stmt: {:#?}", for_stmt);
         let init: Option<ConstIteration> = match for_stmt.initializer.node {
             ForInitializer::Declaration(d) => {
                 // TODO: need to identify which is the looping variable

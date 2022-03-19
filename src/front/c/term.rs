@@ -22,7 +22,7 @@ impl CTermData {
         match self {
             Self::CBool(_) => Ty::Bool,
             Self::CInt(s, w, _) => Ty::Int(*s, *w),
-            Self::CArray(b, _) => Ty::Array(0, Box::new(b.clone())),
+            Self::CArray(t, _) => t.clone(),
             Self::CStackPtr(t, _o, _) => t.clone(),
             Self::CStruct(ty, _) => ty.clone(),
         }
@@ -35,12 +35,8 @@ impl CTermData {
                 CTermData::CBool(t) => output.push(t.clone()),
                 CTermData::CInt(_, _, t) => output.push(t.clone()),
                 CTermData::CArray(t, a) => {
-                    println!("HEREHJHJKHFDKJH");
-                    println!("type: {:?}", t);
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
-                    if let Ty::Array(l, _ty) = t {
-                        println!("here?");
-                        println!("l: {}", l);
+                    if let Ty::Array(l, _, _) = t {
                         for i in 0..*l {
                             let offset = bv_lit(i, 32);
                             let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
@@ -50,7 +46,7 @@ impl CTermData {
                 }
                 CTermData::CStackPtr(t, _o, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
-                    if let Ty::Array(l, _ty) = t {
+                    if let Ty::Array(l, _, _) = t {
                         for i in 0..*l {
                             let offset = bv_lit(i, 32);
                             let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
@@ -75,7 +71,6 @@ impl CTermData {
 
     pub fn term(&self, ctx: &CirCtx) -> Term {
         let ts = self.terms(ctx);
-        println!("TS: {:#?}", ts);
         assert!(ts.len() == 1);
         ts.get(0).unwrap().clone()
     }
@@ -177,8 +172,15 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
             }
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
         },
-        CTermData::CArray(ref ty, _) => match to_ty {
-            Some(Ty::Array(_, _)) => t.clone(),
+        CTermData::CArray(ref ty, id) => match to_ty {
+            Some(Ty::Ptr(_, _)) => {
+                let offset = bv_lit(0, 32);
+                CTerm {
+                    term: CTermData::CStackPtr(ty.clone(), offset, id),
+                    udef: t.udef,
+                }
+            }
+            Some(Ty::Array(_, _, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
         CTermData::CStruct(ref ty, ref _term) => match to_ty {
@@ -187,7 +189,7 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
         },
         CTermData::CStackPtr(ref ty, _, id) => match to_ty {
             Some(Ty::Ptr(_, _)) => t.clone(),
-            Some(Ty::Array(_size, a_ty)) => CTerm {
+            Some(Ty::Array(_, _, a_ty)) => CTerm {
                 term: CTermData::CArray(*a_ty, id),
                 udef: t.udef,
             },
@@ -466,25 +468,27 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_cmp(">=", Some(uge_uint), None, a, b)
 }
 
-pub fn const_int(a: CTerm) -> Result<Integer, String> {
+pub fn const_int(a: CTerm) -> Integer {
     let s = match &a.term {
         CTermData::CInt(s, _, i) => match &i.op {
             Op::Const(Value::BitVector(f)) => {
                 if *s {
-                    Some(f.as_sint())
+                    f.as_sint()
                 } else {
-                    Some(f.uint().clone())
+                    f.uint().clone()
                 }
             }
-            _ => None,
+            _ => {
+                panic!("Expected a constant integer")
+            }
         },
-        _ => None,
+        _ => panic!("Not CInt"),
     };
-    s.ok_or_else(|| format!("{} is not a constant integer", a))
+    s
 }
 
 fn wrap_shift(name: &str, op: BvBinOp, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    let bc = const_int(b)?;
+    let bc = const_int(b);
     match &a.term {
         CTermData::CInt(s, na, a) => Ok(CTerm {
             term: CTermData::CInt(*s, *na, term![Op::BvBinOp(op); a.clone(), bv_lit(bc, *na)]),
@@ -593,7 +597,7 @@ impl Embeddable for Ct {
                 ),
                 udef: false,
             },
-            Ty::Array(n, ty) => {
+            Ty::Array(n, _, ty) => {
                 let v: Vec<Self::T> = (0..*n)
                     .map(|i| {
                         self.declare(
@@ -743,7 +747,7 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(*s, *w, Sort::BitVector(*w).default_term()),
                 udef: false,
             },
-            Ty::Array(_s, ty) => CTerm {
+            Ty::Array(_s, _, ty) => CTerm {
                 term: CTermData::CArray(*ty.clone(), None),
                 udef: false,
             },

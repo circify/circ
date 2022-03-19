@@ -13,7 +13,7 @@ pub enum Ty {
     Bool,
     Int(bool, usize),
     Struct(String, FieldList<Ty>),
-    Array(usize, Box<Ty>),
+    Array(usize, Vec<usize>, Box<Ty>),
     Ptr(usize, Box<Ty>),
 }
 
@@ -35,10 +35,10 @@ impl Display for Ty {
                 }
                 o.finish()
             }
-            Ty::Array(n, b) => {
+            Ty::Array(n, _, b) => {
                 let mut dims = vec![n];
                 let mut bb = b.as_ref();
-                while let Ty::Array(n, b) = bb {
+                while let Ty::Array(n, _, b) = bb {
                     bb = b.as_ref();
                     dims.push(n);
                 }
@@ -63,7 +63,9 @@ impl Ty {
         match self {
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
-            Self::Array(n, b) => Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n),
+            Self::Array(n, _, b) => {
+                Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n)
+            }
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
@@ -83,10 +85,10 @@ impl Ty {
                 term: CTermData::CInt(*s, *w, self.default_ir_term()),
                 udef: false,
             },
-            Self::Array(s, ty) => {
+            Self::Array(s, _, ty) => {
                 let id = circ.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
-                    term: CTermData::CArray(*ty.clone(), Some(id)),
+                    term: CTermData::CArray(self.clone(), Some(id)),
                     udef: false,
                 }
             }
@@ -150,7 +152,7 @@ impl Ty {
         match ty {
             Ty::Int(_, w) => w,
             Ty::Bool => 1,
-            Ty::Array(s, t) => s * t.num_bits(),
+            Ty::Array(s, _, t) => s * t.num_bits(),
             Ty::Ptr(s, t) => s * t.num_bits(),
             Ty::Struct(_, fs) => fs.fields().fold(0, |sum, (_, ty)| sum + ty.num_bits()),
         }
@@ -160,7 +162,7 @@ impl Ty {
         match self {
             Ty::Int(_, w) => *w,
             Ty::Bool => 1,
-            Ty::Array(_, _) => 32,
+            Ty::Array(_, _, _) => 32,
             Ty::Ptr(s, _) => *s,
             Ty::Struct(_, fs) => fs.fields().fold(0, |sum, (_, ty)| sum + ty.num_bits()),
         }
@@ -170,7 +172,7 @@ impl Ty {
         match self {
             Ty::Int(_, _) => self,
             Ty::Bool => self,
-            Ty::Array(_, t) => *t,
+            Ty::Array(_, _, t) => *t,
             Ty::Ptr(_, t) => *t,
             Ty::Struct(_, _) => unimplemented!("Struct does not have an inner type"),
         }

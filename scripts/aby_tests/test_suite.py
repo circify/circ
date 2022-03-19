@@ -7,10 +7,15 @@
 # ]
 
 new_tests = [
+    # [
+    #     "Structs",
+    #     "2pc_structs",
+    #     "./scripts/aby_tests/test_inputs/loop.txt",
+    # ], 
     [
-        "Structs",
-        "2pc_structs",
-        "./scripts/aby_tests/test_inputs/loop.txt",
+        "new",
+        "2pc_test",
+        "./scripts/aby_tests/test_inputs/test.txt",
     ], 
 ]
 
