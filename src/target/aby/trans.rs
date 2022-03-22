@@ -103,7 +103,7 @@ impl ToABY {
         format!("s_{}", share_cnt)
     }
 
-    fn unwrap_vis(&self, name: &String) -> u8 {
+    fn unwrap_vis(&self, name: &str) -> u8 {
         match self.md.input_vis.get(name).unwrap() {
             Some(role) => *role,
             None => PUBLIC,
@@ -153,7 +153,7 @@ impl ToABY {
                 // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
-                    let vis = self.unwrap_vis(&name);
+                    let vis = self.unwrap_vis(name);
                     let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
                     let op = "IN";
 
@@ -278,7 +278,7 @@ impl ToABY {
                 // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
-                    let vis = self.unwrap_vis(&name);
+                    let vis = self.unwrap_vis(name);
                     let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
                     let op = "IN";
 
