@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os
-from utils import run_tests
+from util import run_tests
 from test_suite import *
 
 ABY_SOURCE = os.getenv("ABY_SOURCE")

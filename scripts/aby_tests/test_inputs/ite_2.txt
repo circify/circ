@@ -1,9 +1,4 @@
-// server
 a 0
-
-// client
 b 1
 sel 0
-
-// result 
-1
+res 1
