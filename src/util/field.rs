@@ -3,7 +3,10 @@
 // NOTE: when we eventually break CirC into separate crates,
 //       each crate may want its own field type default
 
-use circ_fields::{moduli::*, FieldT};
+#[cfg(not(feature = "ff_dfl"))]
+use circ_fields::moduli::*;
+use circ_fields::FieldT;
+#[cfg(not(feature = "ff_dfl"))]
 use lazy_static::lazy_static;
 
 #[cfg(all(feature = "bls12381", feature = "ff_dfl"))]
