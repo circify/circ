@@ -24,7 +24,8 @@ if __name__ == "__main__":
         # shift_tests
 
     # tests = new_tests
-    tests = kmeans_tests_2
+    # tests = kmeans_tests_2
+    tests = new_tests
        
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \

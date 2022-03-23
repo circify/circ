@@ -12,11 +12,16 @@ new_tests = [
     #     "2pc_structs",
     #     "./scripts/aby_tests/test_inputs/loop.txt",
     # ], 
+    # [
+    #     "new",
+    #     "2pc_test",
+    #     "./scripts/aby_tests/test_inputs/test.txt",
+    # ], 
     [
-        "new",
-        "2pc_test",
-        "./scripts/aby_tests/test_inputs/test.txt",
-    ], 
+        "biomatch - 1",
+        "2pc_biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+    ],   
 ]
 
 arithmetic_tests = [
