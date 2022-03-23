@@ -400,7 +400,7 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "zokrates_parser"
-version = "0.1.6"
+version = "0.2.4"
 dependencies = [
  "pest",
  "pest_derive",
@@ -408,7 +408,7 @@ dependencies = [
 
 [[package]]
 name = "zokrates_pest_ast"
-version = "0.1.5"
+version = "0.2.3"
 dependencies = [
  "from-pest",
  "glob",
