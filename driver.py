@@ -24,6 +24,9 @@ def install(features):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
 
+    # install python requirements
+    subprocess.run(["pip3", "install", "-r", "requirements.txt"])
+
 def check(features):
     """
     Run cargo check
