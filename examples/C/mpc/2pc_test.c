@@ -61,6 +61,72 @@
 //     return res;
 // }
 
+#define D 2 // Dimension (fix)
+#define NA 10 // Number of data points from Party A
+#define NB 10 // Number of data points from Party B
+#define NC 5 // Number of clusters
+#define PRECISION 1
+#define LEN (NA+NB)
+#define LEN_OUTER 1
+#define LEN_INNER (LEN/LEN_OUTER)
+
+// struct InputA {
+//     int dataA[D*NA];
+// };
+
+// struct InputB {
+//     int dataB[D*NA];
+// };
+
+// struct Output {
+//     int cluster[D*NC];
+// };
+
+// int main(__attribute__((private(0))) int a[10], __attribute__((private(1))) int b[10]) { 
+//     // struct InputA input_a;
+//     // struct InputB input_b;
+//     // struct Output output; 
+
+//     // for(int c = 0; c < NC; c++) {  
+// 	// 	output.cluster[c*D] = a[0];
+// 	// 	output.cluster[c*D+1] = b[0];
+// 	// }
+
+//     // int cc = 1;
+//     // output.cluster[0] += a[cc + 0];
+//     // output.cluster[1] += a[cc + 1];
+//     // output.cluster[2] += a[cc + 2];
+//     // output.cluster[3] += a[cc + 3];
+//     // output.cluster[4] += a[cc + 4];
+//     // output.cluster[5] += a[cc + 5];
+//     // output.cluster[6] += a[cc + 6];
+//     // output.cluster[7] += a[cc + 7];
+//     // output.cluster[8] += a[cc + 8];
+//     // output.cluster[9] += a[cc + 9];
+    
+// 	// return output.cluster[0];
+//     int cluster[D*NC];
+
+//     for(int c = 0; c < NC; c++) {  
+// 		cluster[c*D] = a[0];
+// 		cluster[c*D+1] = b[0];
+// 	}
+
+//     int cc = 1;
+//     cluster[0] += a[cc + 0];
+//     cluster[1] += a[cc + 1];
+//     cluster[2] += a[cc + 2];
+//     cluster[3] += a[cc + 3];
+//     cluster[4] += a[cc + 4];
+//     cluster[5] += a[cc + 5];
+//     cluster[6] += a[cc + 6];
+//     cluster[7] += a[cc + 7];
+//     cluster[8] += a[cc + 8];
+//     cluster[9] += a[cc + 9];
+    
+// 	return cluster[0];
+// }
+
 #define N 256
 #define K 4 // currently fixed, do not change
 
