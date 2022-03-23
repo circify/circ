@@ -150,7 +150,6 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::Bool) => {
-                // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
@@ -168,9 +167,9 @@ impl ToABY {
                         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
                         self.bytecode_output.insert(0, line);
                     }
+                    self.inputs.insert(t.clone());
                 }
 
-                // write to input parameter file
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
@@ -275,7 +274,6 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
-                // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
@@ -296,7 +294,6 @@ impl ToABY {
                     self.inputs.insert(t.clone());
                 }
 
-                // write to input parameter file
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
