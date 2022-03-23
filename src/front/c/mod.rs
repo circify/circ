@@ -248,7 +248,6 @@ impl CGen {
                 };
             }
         }
-        println!("decl: {:#?}", ext);
         panic!("Bad visibility declaration.");
     }
 
