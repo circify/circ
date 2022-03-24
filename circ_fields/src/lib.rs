@@ -1,8 +1,12 @@
 //! Fields for use in CirC
 
+#![warn(missing_docs)]
+#![deny(warnings)]
+
 mod ff_field;
 mod int_field;
 
+/// Exports for moduli defined in this crate, as ARCs
 pub mod moduli {
     pub use super::ff_field::{F_BLS12381_FMOD_ARC, F_BN254_FMOD_ARC};
 }
@@ -21,10 +25,14 @@ use std::sync::Arc;
 
 // TODO: rework this using macros?
 
+/// Field element type
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 pub enum FieldT {
+    /// BLS12-381 scalar field as `ff`
     FBls12381,
+    /// BN-254 scalar field as `ff`
     FBn254,
+    /// Generic field element based on `rug::Integer`
     IntField(Arc<Integer>),
 }
 
@@ -40,35 +48,33 @@ impl Display for FieldT {
 
 impl From<Arc<Integer>> for FieldT {
     fn from(m: Arc<Integer>) -> Self {
-        match m.as_ref() {
-            m if m == &*F_BLS12381_FMOD => Self::FBls12381,
-            m if m == &*F_BN254_FMOD => Self::FBn254,
-            _ => Self::IntField(m),
-        }
+        Self::as_ff_opt(m.as_ref()).unwrap_or(Self::IntField(m))
     }
 }
 
 impl From<Integer> for FieldT {
     fn from(m: Integer) -> Self {
-        match &m {
-            m if m == &*F_BLS12381_FMOD => Self::FBls12381,
-            m if m == &*F_BN254_FMOD => Self::FBn254,
-            _ => Self::IntField(Arc::new(m)),
-        }
+        Self::as_ff_opt(&m).unwrap_or_else(|| Self::IntField(Arc::new(m)))
     }
 }
 
 impl From<&Integer> for FieldT {
     fn from(m: &Integer) -> Self {
-        match m {
-            m if m == &*F_BLS12381_FMOD => Self::FBls12381,
-            m if m == &*F_BN254_FMOD => Self::FBn254,
-            _ => Self::IntField(Arc::new(m.clone())),
-        }
+        Self::as_ff_opt(m).unwrap_or_else(|| Self::IntField(Arc::new(m.clone())))
     }
 }
 
 impl FieldT {
+    // Returns a FieldT if this modulus can be represented as `ff`, `None` otherwise.
+    fn as_ff_opt(m: &Integer) -> Option<Self> {
+        match m {
+            m if m == &*F_BLS12381_FMOD => Some(Self::FBls12381),
+            m if m == &*F_BN254_FMOD => Some(Self::FBn254),
+            _ => None,
+        }
+    }
+
+    /// Field modulus
     #[inline]
     pub fn modulus(&self) -> &Integer {
         match self {
@@ -78,6 +84,7 @@ impl FieldT {
         }
     }
 
+    /// Field modulus as an ARC
     #[inline]
     pub fn modulus_arc(&self) -> Arc<Integer> {
         match self {
@@ -87,6 +94,7 @@ impl FieldT {
         }
     }
 
+    /// Default value for this type
     #[inline]
     pub fn default_value(&self) -> FieldV {
         match self {
@@ -96,16 +104,19 @@ impl FieldT {
         }
     }
 
+    /// Zero for this type
     #[inline]
     pub fn zero(&self) -> FieldV {
         self.default_value()
     }
 
+    /// Random value of this type
     #[inline]
     pub fn random_v(&self, rng: impl rand::RngCore) -> FieldV {
         FieldV::random(self.clone(), rng)
     }
 
+    /// New value of this type
     #[inline]
     pub fn new_v<I>(&self, i: I) -> FieldV
     where
@@ -115,14 +126,19 @@ impl FieldT {
     }
 }
 
+/// Field element value
 #[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
 pub enum FieldV {
+    /// BLS12-381 scalar field element as `ff`
     FBls12381(FBls12381),
+    /// BN-254 scalar field element as `ff`
     FBn254(FBn254),
+    /// Generic field element based on `rug::Integer`
     IntField(IntField),
 }
 
 impl FieldV {
+    /// Type of this value
     #[inline]
     pub fn ty(&self) -> FieldT {
         match self {
@@ -132,6 +148,11 @@ impl FieldV {
         }
     }
 
+    /// New field element from value and modulus.
+    ///
+    /// This function uses `FieldT::from`, which means that if there is
+    /// an `ff` implementation available it will return that, otherwise
+    /// it will use a `rug::Integer` implementation.
     #[inline]
     pub fn new<I>(i: I, m: Arc<Integer>) -> Self
     where
@@ -140,6 +161,7 @@ impl FieldV {
         Self::new_ty(i, FieldT::from(m))
     }
 
+    /// Check that a value is well formed
     #[track_caller]
     #[inline]
     pub fn check(&self, loc: &str) {
@@ -148,6 +170,7 @@ impl FieldV {
         }
     }
 
+    /// Field modulus as `&rug::Integer`
     #[inline]
     pub fn modulus(&self) -> &Integer {
         match self {
@@ -157,6 +180,7 @@ impl FieldV {
         }
     }
 
+    /// Compute the multiplicative inverse (panics on 0)
     #[track_caller]
     #[inline]
     pub fn recip_ref(&self) -> Self {
@@ -167,6 +191,7 @@ impl FieldV {
         }
     }
 
+    /// Ccompute the multiplicative inverse (panics on 0)
     #[track_caller]
     #[inline]
     pub fn recip(self) -> Self {
@@ -177,11 +202,13 @@ impl FieldV {
         }
     }
 
+    /// Get value as an integer
     #[inline]
     pub fn i(&self) -> Integer {
         self.into()
     }
 
+    /// Test if value is zero
     #[inline]
     pub fn is_zero(&self) -> bool {
         match self {
@@ -191,6 +218,7 @@ impl FieldV {
         }
     }
 
+    /// Test if value is 1
     #[inline]
     pub fn is_one(&self) -> bool {
         use num_traits::One;
