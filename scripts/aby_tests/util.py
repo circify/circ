@@ -62,7 +62,7 @@ def run_tests(lang: str, tests: List[dict]):
     failed_test_descs = []
     num_retries = 2
     
-    for test in tqdm(tests, leave=False):
+    for test in tqdm(tests, leave=False, dynamic_ncols=True):
         assert len(test) == 3, "test configurations are wrong for test: "+test[0]
         desc = test[0]
         name = test[1]
