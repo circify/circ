@@ -110,11 +110,6 @@ impl ToABY {
         }
     }
 
-    /// Return constant gate evaluating to 1
-    // fn one(s_type: &str) -> String {
-    //     format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
-    // }
-
     fn embed_eq(&mut self, t: Term, a_term: Term, b_term: Term) {
         let share = self.get_share_name(&t);
         let s = self.term_to_share_cnt.get(&t).unwrap();
