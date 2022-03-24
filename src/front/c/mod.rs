@@ -310,20 +310,6 @@ impl CGen {
         if let CTermData::CStruct(_, fs) = &struct_.term {
             if let Some((_, term_)) = fs.search(field) {
                 return Ok(term_.clone());
-                // let struct_terms = struct_.term.terms(self.circ.cir_ctx());
-                // let field_term = term(Op::Field(idx), struct_terms);
-                // let res = match term_.term.type_() {
-                //     Ty::Bool => Ok(cterm(CTermData::CBool(field_term))),
-                //     Ty::Int(b, s) => Ok(cterm(CTermData::CInt(b, s, field_term))),
-                //     Ty::Array(_s, _t) => {
-                //         unimplemented!("array in structs not implemented yet")
-                //         // Ty::Array(s, t) => {
-                //         //     let expr =
-                //         //     Ok(cterm(CTermData::CArray(*t, term_)))
-                //         // },
-                //     }
-                //     Ty::Struct(_, _) => Ok(fs.search(field).unwrap().1.clone()),
-                // };
             } else {
                 return Err(format!("No field '{}'", field));
             }
@@ -339,29 +325,6 @@ impl CGen {
                 new_fs.set(idx, val);
                 let res = cterm(CTermData::CStruct(struct_ty.clone(), new_fs.clone()));
                 return Ok(res);
-                //get term
-                // let struct_terms = term_.term.terms(self.circ.cir_ctx());
-                // let field_term = term(Op::Field(idx), struct_terms);
-
-                //get val term
-                // let val_term = val.term.term(self.circ.cir_ctx());
-
-                // term![Op::Update(idx); struct_.term.clone(), val.term],
-
-                //update term
-                // let updated_term = term![Op::Update(idx); val_term];
-                // let updated_cterm = match &term_.term {
-                //     CTermData::CBool(_) => cterm(CTermData::CBool(updated_term)),
-                //     CTermData::CInt(b, s, _) => cterm(CTermData::CInt(*b, *s, updated_term)),
-                //     CTermData::CArray(_inner_ty, _alloc_id) => {
-                //         unimplemented!("array in structs not implemented yet")
-                //     }
-                //     CTermData::CStruct(inner_ty, inner_fs) => {
-                //         let mut new_inner_fs = inner_fs.clone();
-                //         new_inner_fs.set(idx, val);
-                //         cterm(CTermData::CStruct(inner_ty.clone(), new_inner_fs.clone()))
-                //     }
-                // };
             } else {
                 return Err(format!("No field '{}'", field));
             }
@@ -400,12 +363,24 @@ impl CGen {
             (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
                 let vals = val.term.terms(self.circ.cir_ctx());
-
-                for (offset, v) in vals.iter().enumerate() {
-                    let updated_idx = term![BV_ADD; idx.term.term(&self.circ.cir_ctx()), bv_lit(offset as i32,32)];
+                for (o, v) in vals.iter().enumerate() {
+                    let updated_idx = term![BV_ADD; idx_term.clone(), bv_lit(o as i32, 32)];
                     self.circ.store(i, updated_idx, v.clone());
                 }
-
+                if vals.len() > 1 {
+                    Ok(cterm(CTermData::CArray(ty, id)))
+                } else {
+                    Ok(val.clone())
+                }
+            }
+            (CTermData::CStackPtr(ty, offset, id), CTermData::CInt(_, _, idx_term)) => {
+                let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
+                let vals = val.term.terms(self.circ.cir_ctx());
+                for (o, v) in vals.iter().enumerate() {
+                    let updated_idx =
+                        term![BV_ADD; idx_term.clone(), offset.clone(), bv_lit(o as i32, 32)];
+                    self.circ.store(i, updated_idx, v.clone());
+                }
                 if vals.len() > 1 {
                     Ok(cterm(CTermData::CArray(ty, id)))
                 } else {

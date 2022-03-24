@@ -88,6 +88,7 @@ mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_array_add.c
 # build matrix tests
 mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_add.c
 mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_assign_add.c
+mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_ptr_add.c
 
 # build ptr tests
 mpc_test 2 ./examples/C/mpc/unit_tests/ptr_tests/2pc_ptr_add.c

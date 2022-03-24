@@ -449,6 +449,11 @@ matrix_tests = [
         "2pc_matrix_assign_add",
         "./scripts/aby_tests/test_inputs/add.txt",
     ], 
+    [
+        "Matrix ptr add",
+        "2pc_matrix_ptr_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
 ]
 
 ptr_tests = [
