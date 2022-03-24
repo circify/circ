@@ -78,7 +78,7 @@ void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_c
 			pos[c]=c;
 			dist[c] = dist2(cluster[D*c], cluster[D*c+1], dx, dy);
 		}
-		// bestMap_inner[i] = min_with_aux(dist, pos, num_cluster, 1);
+		bestMap_inner[i] = min_with_aux(dist, pos, num_cluster, 1);
 		int cc = bestMap_inner[i];
 		OUTPUT_cluster[cc*D] += data_inner[i*D];
 		OUTPUT_cluster[cc*D+1] += data_inner[i*D+1];

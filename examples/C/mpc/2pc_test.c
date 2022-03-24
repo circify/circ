@@ -1,26 +1,45 @@
-struct s {
-	int c[4];
-};
-
-void f(int* x, int* y) {
-    int c;
-    for (c = 0; c < 4; c++) {
-        y[c] = x[c];
+int f(int a, int b, int len) {
+    int res = 0;
+    for(int i = 0; i < len; i++){
+        if (a < b) {
+            res = res + 1;
+        } else {
+            res = 2;
+        }
     }
+    return res;
 }
 
 int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
-    int x[4] = {a,b,a,b};
-
-    struct s y; 
-    f(x, y.c);
-
-    int sum = 0;
-    for (int i = 0; i < 4; i++) {
-        sum += y.c[i];
-    }
-    return sum;
+    int x[1] = {0};
+    x[0] = f(a, b, 5);
+    int cc = x[0];
+    return cc;
 }
+
+// struct s {
+// 	int c[4];
+// };
+
+// void f(int* x, int* y) {
+//     int c;
+//     for (c = 0; c < 4; c++) {
+//         y[c] = x[c];
+//     }
+// }
+
+// int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
+//     int x[4] = {a,b,a,b};
+
+//     struct s y; 
+//     f(x, y.c);
+
+//     int sum = 0;
+//     for (int i = 0; i < 4; i++) {
+//         sum += y.c[i];
+//     }
+//     return sum;
+// }
 
 // int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
 //     int x[1][4];

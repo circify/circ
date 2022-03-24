@@ -12,21 +12,21 @@ new_tests = [
     #     "2pc_structs",
     #     "./scripts/aby_tests/test_inputs/loop.txt",
     # ], 
+    [
+        "new",
+        "2pc_test",
+        "./scripts/aby_tests/test_inputs/test.txt",
+    ], 
     # [
-    #     "new",
+    #     "biomatch - 1",
     #     "2pc_test",
-    #     "./scripts/aby_tests/test_inputs/test.txt",
-    # ], 
-    [
-        "biomatch - 1",
-        "2pc_test",
-        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
-    ],   
-    [
-        "biomatch - 2",
-        "2pc_test",
-        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
-    ],   
+    #     "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+    # ],   
+    # [
+    #     "biomatch - 2",
+    #     "2pc_test",
+    #     "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    # ],   
 ]
 
 arithmetic_tests = [
@@ -422,6 +422,40 @@ function_tests = [
         "Sum() two numbers - 1",
         "2pc_function_add",
         "./scripts/aby_tests/test_inputs/add_2.txt",
+    ], 
+]
+
+struct_tests = [
+    [
+        "Struct add",
+        "2pc_struct_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Struct array add",
+        "2pc_struct_array_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
+matrix_tests = [
+    [
+        "Matrix add",
+        "2pc_matrix_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Matrix assign add",
+        "2pc_matrix_assign_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
+ptr_tests = [
+    [
+        "Ptr add",
+        "2pc_ptr_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
 ]
 
