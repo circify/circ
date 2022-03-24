@@ -50,6 +50,7 @@ struct Options {
     instance: PathBuf,
     */
     #[structopt(short = "L")]
+    /// skip linearity reduction entirely
     skip_linred: bool,
 
     #[structopt(long, default_value = "100")]
