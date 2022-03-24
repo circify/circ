@@ -93,7 +93,7 @@ enum Backend {
         proof: PathBuf,
         #[structopt(long, default_value = "x", parse(from_os_str))]
         instance: PathBuf,
-        #[structopt(long, default_value = "100")]
+        #[structopt(long, default_value = "50")]
         /// linear combination constraints up to this size will be eliminated
         lc_elimination_thresh: usize,
         #[structopt(long, default_value = "count")]

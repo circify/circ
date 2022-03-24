@@ -15,23 +15,7 @@ struct LinReducer<S: Eq + Hash> {
 
 impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
     fn new(mut r1cs: R1cs<S>, lc_size_thresh: usize) -> Self {
-        let mut uses: HashMap<usize, HashSet<usize>> =
-            HashMap::with_capacity_and_hasher(r1cs.next_idx, Default::default());
-        for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
-            let mut add = |y: &Lc| {
-                for x in y.monomials.keys() {
-                    uses.get_mut(x).map(|m| m.insert(i)).or_else(|| {
-                        let mut m: HashSet<usize> = Default::default();
-                        m.insert(i);
-                        uses.insert(*x, m);
-                        None
-                    });
-                }
-            };
-            add(a);
-            add(b);
-            add(c);
-        }
+        let uses = LinReducer::gen_uses(&r1cs);
         let queue = (0..r1cs.constraints.len()).collect::<OnceQueue<usize>>();
         for c in &mut r1cs.constraints {
             normalize(c);
@@ -44,6 +28,28 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
         }
     }
 
+    // generate a new uses hash
+    fn gen_uses(r1cs: &R1cs<S>) -> HashMap<usize, HashSet<usize>> {
+        let mut uses: HashMap<usize, HashSet<usize>> =
+            HashMap::with_capacity_and_hasher(r1cs.next_idx, Default::default());
+        let mut add = |i: usize, y: &Lc| {
+            for x in y.monomials.keys() {
+                uses.get_mut(x).map(|m| m.insert(i)).or_else(|| {
+                    let mut m: HashSet<usize> = Default::default();
+                    m.insert(i);
+                    uses.insert(*x, m);
+                    None
+                });
+            }
+        };
+        for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
+            add(i, a);
+            add(i, b);
+            add(i, c);
+        }
+        uses
+    }
+
     /// Substitute `val` for `var` in constraint with id `con_id`.
     /// Updates uses conservatively (not precisely)
     /// Returns whether a sub happened.
@@ -52,7 +58,12 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
         let uses = &mut self.uses;
         let mut do_in = |a: &mut Lc| {
             if let Some(sc) = a.monomials.remove(&var) {
+                assert_eq!(&a.modulus, &val.modulus);
                 a.constant += sc.clone() * &val.constant;
+                let tot = a.monomials.len() + val.monomials.len();
+                if tot > a.monomials.capacity() {
+                    a.monomials.reserve(tot - a.monomials.capacity());
+                }
                 for (i, v) in &val.monomials {
                     match a.monomials.entry(*i) {
                         Entry::Occupied(mut e) => {

@@ -75,6 +75,10 @@ macro_rules! arith_impl {
                 fn [<$fn _assign>](&mut self, other: &Self) {
                     assert_eq!(&self.modulus, &other.modulus);
                     self.constant.[<$fn _assign>](&other.constant);
+                    let tot = self.monomials.len() + other.monomials.len();
+                    if tot > self.monomials.capacity() {
+                        self.monomials.reserve(tot - self.monomials.capacity());
+                    }
                     for (i, v) in &other.monomials {
                         match self.monomials.entry(*i) {
                             Entry::Occupied(mut e) => {
