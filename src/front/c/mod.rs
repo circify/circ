@@ -59,9 +59,12 @@ impl FrontEnd for C {
     }
 }
 
+/// Structure for holding n-dimension array indicies.
 #[derive(Clone)]
 pub struct IndexTerm {
+    /// Base array term
     pub base: CTerm,
+    /// Vec of indicies to access into an n-dimension array
     pub indices: Vec<CTerm>,
 }
 
@@ -586,7 +589,7 @@ impl CGen {
                 match bin_op.operator.node {
                     BinaryOperator::Index => {
                         let mut a = self.gen_index(bin_op.lhs.node);
-                        let mut b = self.gen_index(bin_op.rhs.node);
+                        let b = self.gen_index(bin_op.rhs.node);
                         a.indices.push(b.base);
                         return a;
                     }
@@ -606,7 +609,7 @@ impl CGen {
     fn index_offset(&mut self, index: &IndexTerm) -> Term {
         let base_ty = index.base.term.type_();
         let mut offset: Term = bv_lit(0, 32);
-        if let Ty::Array(size, sizes, ty) = base_ty {
+        if let Ty::Array(_, sizes, _) = base_ty {
             let mut total = 1;
             for (i, ind) in index.indices.iter().rev().enumerate() {
                 let index_term = ind.term.term(&self.circ.cir_ctx());
