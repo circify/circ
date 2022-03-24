@@ -7,7 +7,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::assign_mut;
 use crate::target::aby::assignment::ilp::calculate_cost;
-// use crate::target::aby::assignment::ilp::calculate_node_cost;
+use crate::target::aby::assignment::ilp::simple_ilp;
 use crate::target::aby::assignment::ilp::comb_selection;
 use crate::target::aby::assignment::ilp::CostModel;
 use crate::target::aby::assignment::SharingMap;
@@ -20,6 +20,9 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::Instant;
+use std::thread;
+// use std::sync::mpsc::channel;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Node {
@@ -355,6 +358,68 @@ impl ParitionGraph {
         mut_smaps
     }
 
+    /// Mutations with multi threading
+    fn _mutate_partitions_mp(
+        &self,
+        cs: &HashMap<usize, ComputationSubgraph>,
+    ) -> HashMap<usize, HashMap<usize, SharingMap>> {
+        // TODO: merge and stop
+        let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
+        
+        let mut mut_sets: HashMap<(usize, usize), (ComputationSubgraph, ComputationSubgraph)> = HashMap::new();
+
+        for (i, c) in cs.iter() {
+            mut_smaps.insert(*i, HashMap::new());
+            mut_sets.insert((*i, 0), (c.clone(), c.clone()));
+            let outer_cs_1 = self._get_outer(c);
+            mut_sets.insert((*i, 1), (outer_cs_1.clone(), c.clone()));
+            let outer_cs_2 = self._get_outer(&outer_cs_1);
+            mut_sets.insert((*i, 2), (outer_cs_2.clone(), c.clone()));
+            let outer_cs_3 = self._get_outer(&outer_cs_2);
+            mut_sets.insert((*i, 3), (outer_cs_3.clone(), c.clone()));
+        }
+
+        let mut children = vec![];
+        // let (tx, rx) = channel();
+
+        for ((i, j), (c, c_ref)) in mut_sets.iter(){
+            // let tx = tx.clone();
+            let cm = self.cm.clone();
+            let i = i.clone();
+            let j = j.clone();
+            let c = c.clone();
+            let c_ref = c_ref.clone();
+            // thread::spawn(move|| {
+            //     tx.send((i, j, assign_mut(&c, &cm, &c_ref))).unwrap();
+            // });
+            children.push(
+                thread::spawn(move|| {
+                    (i, j, assign_mut(&c, &cm, &c_ref))
+                })
+            );
+        }
+
+        for child in children{
+            let (i, j, smap) = child.join().unwrap();
+            mut_smaps
+                .get_mut(&i)
+                .unwrap()
+                .insert(j, smap);
+        }
+
+        // let n = mut_sets.len();
+        
+        // for _ in 0..n{
+        //     let (i, j, smap) = rx.recv().unwrap();
+        //     mut_smaps
+        //         .get_mut(&i)
+        //         .unwrap()
+        //         .insert(j, smap);
+        // }
+
+        mut_smaps
+    }
+
     // Partition IR and get mapping
     fn get_partitions(&mut self) {
         self.check_graph();
@@ -489,11 +554,13 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: 
     // Convert IR to Chaco  format
     pg.chaco();
 
+    let before_part = Instant::now();
     // Call graph partitioner on Chaco
     pg.get_partitions();
 
     // Partition IR
     let partitions = pg.partition_ir();
+    let after_part = Instant::now();
 
     // get local assignments
     // let local_smaps = pg.get_local_assignments(&partitions);
@@ -509,20 +576,43 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: 
     let global_assign = match _mut {
         true => {
             // With mutation
-            let mutation_smaps = pg._mutate_partitions(&partitions);
+            let before_mut = Instant::now();
+            // let mutation_smaps = pg._mutate_partitions(&partitions);
+            let mutation_smaps = pg._mutate_partitions_mp(&partitions);
+            let after_mut = Instant::now();
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
+            let after_assign = Instant::now();
+            println!("Mutation time: {:?}", after_mut.duration_since(before_mut));
+            println!("ILP time: {:?}", after_assign.duration_since(after_mut));
+            let mut children2 = vec![];
+            for i in 1..200 {
+                children2.push(
+                    thread::spawn(move|| {
+                        simple_ilp(i as f64);
+                    })
+                );
+            }
+            for child in children2{
+                child.join().unwrap();
+            }
             pg.get_global_assignments(&selected_mut_maps)
         }
         false => {
             // Without mutation
+            let before_assign = Instant::now();
             let local_smaps = pg.get_local_assignments(&partitions);
+            let after_assign = Instant::now();
+            println!("ILP time: {:?}", after_assign.duration_since(before_assign));
             pg.get_global_assignments(&local_smaps)
         }
     };
 
+    println!("Part time: {:?}", after_part.duration_since(before_part));
+
     let cost = calculate_cost(&global_assign, &cm_);
     println!("Cost of assignment: {}", cost);
-
+    // simple_ilp(1.0);
+    
     global_assign
 }
 
@@ -565,5 +655,61 @@ mod test {
         for comb in combs {
             println!("{:?}", comb);
         }
+    }
+    #[test]
+    fn test_mp() {
+        // Millionaire's example
+        let t = true;
+
+        let cs = Computation {
+            outputs: vec![term![ITE;
+                term![BV_ULT;
+                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
+                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))],
+                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
+                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))]],
+            metadata: ComputationMetadata::default(),
+            values: None,
+        };
+        let mut pg = ParitionGraph::new(1, &cs, "opa", &Path::new("test"), "c");
+
+        pg.chaco();
+
+        // Call graph partitioner on Chaco
+        pg.get_partitions();
+
+        // Partition IR
+        let partitions = pg.partition_ir();
+
+        let _maps = match t{
+            true =>{
+                let mut children = vec![];
+                for (_, c) in partitions.iter() {
+                    for i in 1..10000 {
+                        let cs = c.clone();
+                        children.push(
+                            thread::spawn(move|| {
+                                // simple_ilp(i as f64);
+                                let cm = "hycc";
+                                (i, assign_mut(&cs, cm, &cs))
+                            })
+                        );
+                    }
+                }
+
+                let mut mut_smaps: HashMap<usize, SharingMap> = HashMap::new();
+
+                for child in children{
+                    let (i, smap) = child.join().unwrap();
+                    mut_smaps.insert(i, smap);
+                }
+                mut_smaps
+            }
+            false =>{
+                println!("HAHA\n");
+                let mut_smaps: HashMap<usize, SharingMap> = HashMap::new();
+                mut_smaps
+            }
+        };
     }
 }

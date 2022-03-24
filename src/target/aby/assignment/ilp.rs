@@ -292,6 +292,25 @@ fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
     assignment
 }
 
+/// A simple ilp for mp testing
+pub fn simple_ilp(i: f64){
+    let base_dir = "hycc";
+    let p = format!(
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        base_dir
+    );
+    let _cost = CostModel::from_opa_cost_file(&p);
+
+    let mut ilp = Ilp::new();
+    let v = ilp.new_variable( variable().binary(), format!("v"));
+    let b = ilp.new_variable( variable().binary(), format!("b"));
+    ilp.maximize(v+ b + i);
+    let (_opt, solution) = ilp.default_solve().unwrap();
+    println!("v: {}, {}", i, solution.get("v").unwrap());
+    println!("b: {}, {}", i, solution.get("b").unwrap());
+}
+
 /// Use a ILP to find a optimal combination of mutation assignments
 pub fn comb_selection(mut_maps: &HashMap<usize, HashMap<usize, SharingMap>>, cs_map: &HashMap<usize, ComputationSubgraph>, cm: &str)-> HashMap<usize, SharingMap>{
     let base_dir = match cm {

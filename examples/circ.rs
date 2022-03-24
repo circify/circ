@@ -27,6 +27,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
+use std::time::Instant;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -158,6 +159,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
+    let before_comp = Instant::now();
     env_logger::Builder::from_default_env()
         .format_level(false)
         .format_timestamp(None)
@@ -248,6 +250,7 @@ fn main() {
     };
     println!("Done with IR optimization");
 
+    let after_comp = Instant::now();
     match options.backend {
         Backend::R1cs {
             action,
@@ -304,6 +307,7 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             to_aby(cs, &path_buf, &lang_str, &cost_model, &assign_mode, &part_size);
+            println!("Compile cost: {:?}", after_comp.duration_since(before_comp));
         }
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
