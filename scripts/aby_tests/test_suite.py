@@ -435,6 +435,45 @@ function_tests = [
     ], 
 ]
 
+struct_tests = [
+    [
+        "Struct add",
+        "2pc_struct_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Struct array add",
+        "2pc_struct_array_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
+matrix_tests = [
+    [
+        "Matrix add",
+        "2pc_matrix_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Matrix assign add",
+        "2pc_matrix_assign_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Matrix ptr add",
+        "2pc_matrix_ptr_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
+ptr_tests = [
+    [
+        "Ptr add",
+        "2pc_ptr_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
 shift_tests = [
      [
         "Left Shift a by 1 - 1",
