@@ -17,16 +17,26 @@ new_tests = [
     #     "2pc_test",
     #     "./scripts/aby_tests/test_inputs/test.txt",
     # ], 
+    # [
+    #     "biomatch - 1",
+    #     "2pc_test",
+    #     "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+    # ],   
+    # [
+    #     "biomatch - 2",
+    #     "2pc_test",
+    #     "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    # ],
     [
-        "biomatch - 1",
+        "biomatch - 3",
         "2pc_test",
-        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+        "./scripts/aby_tests/test_inputs/biomatch_3.txt",
     ],   
     [
-        "biomatch - 2",
+        "biomatch - 4",
         "2pc_test",
-        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
-    ],   
+        "./scripts/aby_tests/test_inputs/biomatch_4.txt",
+    ]    
 ]
 
 arithmetic_tests = [

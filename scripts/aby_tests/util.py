@@ -48,7 +48,7 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
         assert server_out == expected, "server_out: "+server_out+"\nexpected: "+expected
         return True, ""
     except Exception as e:
-        # print("Exception: ", e)
+        print("Exception: ", e)
         return False, e
 
 def run_tests(lang: str, tests: List[dict]):
