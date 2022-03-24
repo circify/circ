@@ -2,21 +2,7 @@ import os
 from subprocess import Popen, PIPE
 import sys
 from typing import List
-
-def init_progress_bar(toolbar_width=40):
-    """ Initialize progress bar """
-    sys.stdout.write("[%s]" % ("." * toolbar_width))
-    sys.stdout.flush()
-    sys.stdout.write("\b" * (toolbar_width+1)) 
-
-def update_progress_bar():
-    """ Increment progress bar """
-    sys.stdout.write("#")
-    sys.stdout.flush()
-
-def end_progress_bar():
-    """ Close progress bar """
-    sys.stdout.write("]\n") # this ends the progress bar
+from tqdm import tqdm
 
 def rename_test(name: str, lang: str) -> str:
     """Append path with language type"""
@@ -25,25 +11,17 @@ def rename_test(name: str, lang: str) -> str:
 def build_cmd(name:str, test_file: str, role: int) -> List[str]:
     bytecode = f"./scripts/aby_tests/tests/{name}_bytecode.txt"
     share_map = f"./scripts/aby_tests/tests/{name}_share_map.txt"
-    param_map= f"./scripts/aby_tests/tests/{name}_param_map.txt"
-    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map, "-p", param_map] 
+    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map] 
 
 def get_result(file_path):
     if os.path.exists(file_path):
         with open(file_path) as f:
             lines = f.read().splitlines()
-            res_flag = False
-            res = []
-            for l in lines:
-                l = l.strip()
-                if not l: continue
-                if res_flag:
-                    res.append(l)
-                if l.startswith("//") and "result" in l:
-                    res_flag = True
-                elif l.startswith("//"):
-                    res_flag = False
-            return "\n".join(res)
+            for line in lines:
+                l = line.split()
+                if l and l[0] == "res":
+                    return l[1]
+            raise RuntimeError("Unable to find result: "+file_path)
     else:
         raise RuntimeError("Unable to open file: "+file_path)
 
@@ -83,9 +61,8 @@ def run_tests(lang: str, tests: List[dict]):
     print(f"Running ABY tests for {lang} frontend")
     failed_test_descs = []
     num_retries = 2
-    progress_inc = 5
-    init_progress_bar(len(tests) // progress_inc + 1)
-    for t, test in enumerate(tests):
+    
+    for test in tqdm(tests, leave=False, dynamic_ncols=True):
         assert len(test) == 3, "test configurations are wrong for test: "+test[0]
         desc = test[0]
         name = test[1]
@@ -102,10 +79,6 @@ def run_tests(lang: str, tests: List[dict]):
         
         if all([not r[0] for r in test_results]):
             failed_test_descs += [(desc, e[1], " ".join(server_cmd)) for e in test_results]
-
-        if t % progress_inc == 0:
-            update_progress_bar()
-    end_progress_bar()
     
     if len(failed_test_descs) == 0:
         print("All tests passed ✅")
