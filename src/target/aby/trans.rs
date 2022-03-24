@@ -5,15 +5,20 @@
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
-#[cfg(feature = "lp")]
-use crate::target::aby::assignment::ilp::assign;
+// #[cfg(feature = "lp")]
+// use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
+use crate::target::graph::trans::get_share_map;
 use std::fmt;
 use std::path::Path;
-
-#[cfg(not(feature = "lp"))]
 use super::assignment::some_arith_sharing;
+use super::assignment::all_boolean_sharing;
+use super::assignment::some_arith_sharing_ay;
+use super::assignment::all_yao_sharing;
+
+// #[cfg(not(feature = "lp"))]
+
 
 // const BOOLEAN_BITLEN: i32 = 1;
 
@@ -403,20 +408,25 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, am: &str, ps: &usize) {
     let Computation {
         outputs: terms,
         metadata: md,
         ..
     } = ir.clone();
 
-    #[cfg(feature = "lp")]
-    let s_map: SharingMap = assign(&ir, cm);
-    #[cfg(not(feature = "lp"))]
-    let s_map: SharingMap = some_arith_sharing(&ir, cm);
-
+    let s_map = match am {
+        "all_boolean" => all_boolean_sharing(&ir),
+        "all_yao" => all_yao_sharing(&ir),
+        "boolean_arith" => some_arith_sharing(&ir),
+        "yao_arith" => some_arith_sharing_ay(&ir),
+        "ilp" => get_share_map(&ir, cm, path, lang, false, ps),
+        "ilp_mut" => get_share_map(&ir, cm, path, lang, true, ps),
+        e => {
+            panic!("Unsupported assignment mode: {:?}", e);
+        },
+    };
     let mut converter = ToABY::new(s_map, md, path, lang);
-
     for t in terms {
         // println!("terms: {}", t);
         converter.map_terms_to_shares(t.clone());

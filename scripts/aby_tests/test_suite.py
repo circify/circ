@@ -6,7 +6,7 @@
 #     ], 
 # ]
 
-new_tests = [
+biomatch_tests = [
     # [
     #     "Structs",
     #     "2pc_structs",
@@ -573,6 +573,11 @@ kmeans_tests = [
         "2pc_kmeans",
         "./scripts/aby_tests/test_inputs/kmeans.txt",
     ],     
+    [
+        "kmeans2",
+        "2pc_kmeans2",
+        "./scripts/aby_tests/test_inputs/kmeans2.txt",
+    ],    
 ]
 
 

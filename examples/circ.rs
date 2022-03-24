@@ -36,6 +36,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
+use std::time::Instant;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -99,6 +100,10 @@ enum Backend {
     Mpc {
         #[structopt(long, default_value = "hycc", name = "cost_model")]
         cost_model: String,
+        #[structopt(long, default_value = "ilp", name = "assign_mode")]
+        assign_mode: String,
+        #[structopt(long, default_value = "3000", name = "part_size")]
+        part_size: usize,
     },
 }
 
@@ -165,6 +170,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
+    let before_comp = Instant::now();
     env_logger::Builder::from_default_env()
         .format_level(false)
         .format_timestamp(None)
@@ -266,6 +272,7 @@ fn main() {
     };
     println!("Done with IR optimization");
 
+    let after_comp = Instant::now();
     match options.backend {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
@@ -318,7 +325,7 @@ fn main() {
         Backend::R1cs { .. } => {
             panic!("Missing feature: r1cs");
         }
-        Backend::Mpc { cost_model } => {
+        Backend::Mpc { cost_model, assign_mode, part_size} => {
             println!("Converting to ABY");
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
@@ -326,7 +333,8 @@ fn main() {
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
             println!("Cost model: {}", cost_model);
-            to_aby(cs, &path_buf, &lang_str, &cost_model);
+            to_aby(cs, &path_buf, &lang_str, &cost_model, &assign_mode, &part_size);
+            println!("Compile cost: {:?}", after_comp.duration_since(before_comp));
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {

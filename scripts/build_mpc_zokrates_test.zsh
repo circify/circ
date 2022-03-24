@@ -47,6 +47,7 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_structs.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/bitwise_tests/2pc_bitwise_or.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/bitwise_tests/2pc_bitwise_xor.zok
 
+<<<<<<< HEAD
 # # build boolean tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/boolean_tests/2pc_boolean_and.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/boolean_tests/2pc_boolean_or.zok
@@ -58,6 +59,11 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_structs.zok
 # # build const tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_arith.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
+=======
+# build const tests
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_arith.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/const_tests/2pc_const_bool.zok
+>>>>>>> origin/aby_benchmark
 
 # # build ite tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.zok
@@ -68,14 +74,28 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_structs.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_ret.zok
 
+<<<<<<< HEAD
 # # build mps loop tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
+=======
+# build array tests
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_sum.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/array_tests/2pc_array_ret.zok
+
+# build mps loop tests
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
+>>>>>>> origin/aby_benchmark
 
 # # build function tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_add.zok
 
+<<<<<<< HEAD
 # # build mpc misc tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaires.zok
+=======
+# build misc tests
+mpc_test 2 ./examples/ZoKrates/mpc/2pc_millionaires.zok
+>>>>>>> origin/aby_benchmark
 
 # build shift tests
 # mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/shift_tests/2pc_lhs.zok
