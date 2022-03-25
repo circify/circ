@@ -1266,8 +1266,11 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
 }
 
 /// Helper function for eval function. Handles a single term
-fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>, 
-                h: &FxHashMap<String, Value>, c: HConsed<TermData>) -> Value{
+fn eval_value(
+    vs: &mut HConMap<HConsed<TermData>, Value>,
+    h: &FxHashMap<String, Value>,
+    c: HConsed<TermData>,
+) -> Value {
     let v = match &c.op {
         Op::Var(n, _) => h
             .get(n)
@@ -1275,9 +1278,9 @@ fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>,
             .clone(),
         Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
         Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
-        Op::Implies => Value::Bool(
-            !vs.get(&c.cs[0]).unwrap().as_bool() || vs.get(&c.cs[1]).unwrap().as_bool(),
-        ),
+        Op::Implies => {
+            Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool() || vs.get(&c.cs[1]).unwrap().as_bool())
+        }
         Op::BoolNaryOp(BoolNaryOp::Or) => {
             Value::Bool(c.cs.iter().any(|c| vs.get(c).unwrap().as_bool()))
         }
@@ -1289,9 +1292,7 @@ fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>,
                 .map(|c| vs.get(c).unwrap().as_bool())
                 .fold(false, std::ops::BitXor::bitxor),
         ),
-        Op::BvBit(i) => {
-            Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32))
-        }
+        Op::BvBit(i) => Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32)),
         Op::BoolMaj => {
             let c0 = vs.get(&c.cs[0]).unwrap().as_bool() as u8;
             let c1 = vs.get(&c.cs[1]).unwrap().as_bool() as u8;
@@ -1428,12 +1429,12 @@ fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>,
             let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
             let i = vs.get(&c.cs[1]).unwrap();
             a.clone().select(i)
-        },
+        }
         Op::Map(op) => {
             let arg_cnt = c.cs.len();
             let arr_size = vs.get(&c.cs[0]).unwrap().as_array().size;
             let mut term_vecs = vec![Vec::new(); arr_size];
-            //2D vector: term_vecs[i] will store a vector of all the i-th index 
+            //2D vector: term_vecs[i] will store a vector of all the i-th index
             //  entries of the array arguments
 
             //Value::BitVector(BitVector::new(uint.into(),width,))
@@ -1450,7 +1451,8 @@ fn eval_value(vs: &mut HConMap<HConsed<TermData>, Value>,
             for i in 0..arr_size {
                 let t = term((**op).clone(), term_vecs[i].clone());
                 let val = eval_value(vs, h, t);
-                res.map.insert(Value::BitVector(BitVector::new(Integer::from(i), 32)), val);
+                res.map
+                    .insert(Value::BitVector(BitVector::new(Integer::from(i), 32)), val);
             }
             Value::Array(res)
         }
@@ -1522,8 +1524,6 @@ where
 pub fn bool_lit(b: bool) -> Term {
     leaf_term(Op::Const(Value::Bool(b)))
 }
-
-
 
 /// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;

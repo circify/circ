@@ -5,6 +5,7 @@
 //! is a good intro to how this process works.
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
+use crate::target::bitsize;
 use crate::target::r1cs::*;
 
 use fxhash::{FxHashMap, FxHashSet};
@@ -925,16 +926,6 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
     }
     debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs,);
     converter.r1cs
-}
-
-/// Returns the number of bits needed to hold `n`.
-pub fn bitsize(mut n: usize) -> usize {
-    let mut acc = 0;
-    while n > 0 {
-        n >>= 1;
-        acc += 1;
-    }
-    acc
 }
 
 #[cfg(test)]

@@ -1,4 +1,0 @@
-def main(private<1> u32 a, private<2> u32 b) -> u32:
-    bool c = true
-    bool d = false
-    return if c || d then a + b else a * b fi 

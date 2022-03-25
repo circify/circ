@@ -136,20 +136,19 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
             let mut size = 0;
             let mut error = None;
 
-            match arrmap_or(&check_raw(&t.cs[0])?, "map")
-                {
-                    Ok((k,_,s,)) => {
-                        key_sort = k.clone();
-                        size = s.clone();
-                    },
-                    Err(e) => {
-                        error = Some(e);
-                    }
+            match arrmap_or(&check_raw(&t.cs[0])?, "map") {
+                Ok((k, _, s)) => {
+                    key_sort = k.clone();
+                    size = s.clone();
                 }
+                Err(e) => {
+                    error = Some(e);
+                }
+            }
 
             for i in 0..arg_cnt {
                 match array_or(&check_raw(&t.cs[i])?, "map inputs") {
-                    Ok((_,v)) => {
+                    Ok((_, v)) => {
                         dterm_cs.push(v.default_term());
                     }
                     Err(e) => {
@@ -159,18 +158,15 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
             }
 
             match error {
-                Some(e) => {
-                    Err(e)
-                }
+                Some(e) => Err(e),
                 None => {
                     let dummy_term = term((**op).clone(), dterm_cs);
                     let res_sort = check_raw(&dummy_term)
-                        .map(|val_sort|
-                            Sort::Array(Box::new(key_sort), Box::new(val_sort), size));
+                        .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size));
 
                     match res_sort {
                         Ok(s) => Ok(s),
-                        _ => Err(TypeErrorReason::Custom("map failed".to_string()))
+                        _ => Err(TypeErrorReason::Custom("map failed".to_string())),
                     }
                 }
             }
@@ -186,7 +182,6 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
     term_tys.insert(t.to_weak(), ty.clone());
     Ok(ty)
 }
-
 
 /// Helper functio for rec_check_raw
 /// Type-check given term which is expressed as
@@ -296,9 +291,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         }
         (Op::UbvToPf(m), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone())),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
-        (Op::Select, &[Sort::Array(k, v, _), a]) => {
-            eq_or(k, a, "select").map(|_| (**v).clone())
-        }
+        (Op::Select, &[Sort::Array(k, v, _), a]) => eq_or(k, a, "select").map(|_| (**v).clone()),
         (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
             .and_then(|_| eq_or(v, b, "store"))
             .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
@@ -324,7 +317,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 )))
             }
         }),
-        (Op::Map(op), a) => { 
+        (Op::Map(op), a) => {
             //TODO:
             // Check that key sorts are the same across all arrays
             // Get the value sorts of the argument arrays
@@ -333,11 +326,8 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             let arg_cnt = a.len();
 
             let key_sort = match a[0].clone() {
-                Sort::Array(k,_,_) => {
-                    *k.clone()
-                },
-                s => 
-                    return Err(TypeErrorReason::ExpectedArray(s.clone(), "map"))
+                Sort::Array(k, _, _) => *k.clone(),
+                s => return Err(TypeErrorReason::ExpectedArray(s.clone(), "map")),
             };
 
             let mut val_sorts = Vec::new();
@@ -352,14 +342,13 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                             ));
                         }
                         val_sorts.push((*v).clone());
-                    },
-                    s => 
-                        return Err(TypeErrorReason::ExpectedArray(s.clone(), "map"))
+                    }
+                    s => return Err(TypeErrorReason::ExpectedArray(s.clone(), "map")),
                 };
             }
 
             let mut new_a = Vec::new();
-            for i in 0..arg_cnt{
+            for i in 0..arg_cnt {
                 new_a.push(&val_sorts[i]);
             }
 
@@ -403,12 +392,12 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     .map(|c| term_tys.get(&c.to_weak()).unwrap())
                     .collect::<Vec<_>>();
 
-                let ty = rec_check_raw_helper(&back.0.op, &tys[..])
-                .map_err(|reason| TypeError {
-                    op: back.0.op.clone(),
-                    args: tys.into_iter().cloned().collect(),
-                    reason,
-                })?;
+                let ty =
+                    rec_check_raw_helper(&back.0.op, &tys[..]).map_err(|reason| TypeError {
+                        op: back.0.op.clone(),
+                        args: tys.into_iter().cloned().collect(),
+                        reason,
+                    })?;
                 term_tys.insert(back.0.to_weak(), ty);
             }
         }
@@ -470,7 +459,10 @@ fn array_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<(&'a Sort, &'a Sort), 
     }
 }
 
-fn arrmap_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<(&'a Sort, &'a Sort, &'a usize), TypeErrorReason> {
+fn arrmap_or<'a>(
+    a: &'a Sort,
+    ctx: &'static str,
+) -> Result<(&'a Sort, &'a Sort, &'a usize), TypeErrorReason> {
     if let Sort::Array(k, v, s) = a {
         Ok((&*k, &*v, &*s))
     } else {
@@ -533,4 +525,3 @@ fn all_eq_or<'a, I: Iterator<Item = &'a Sort>>(
     }
     Ok(first)
 }
-

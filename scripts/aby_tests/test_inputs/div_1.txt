@@ -1,0 +1,8 @@
+// server
+a 10
+
+// client 
+b 1
+
+// result
+10

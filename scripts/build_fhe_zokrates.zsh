@@ -4,8 +4,6 @@ set -ex
 
 disable -r time
 
-cargo build --release --example circ
-
 BIN=./target/release/examples/circ
 
 case "$OSTYPE" in 

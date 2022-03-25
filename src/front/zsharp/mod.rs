@@ -6,7 +6,9 @@ pub mod zvisit;
 
 use super::{FrontEnd, Mode};
 use crate::circify::{CircError, Circify, Loc, Val};
-use crate::ir::proof::{self, ConstraintMetadata};
+use crate::front::ZSHARP_MODULUS;
+use crate::front::{PROVER_VIS, PUBLIC_VIS};
+use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use log::{debug, warn};
 use rug::Integer;
@@ -20,20 +22,8 @@ use zokrates_pest_ast as ast;
 use term::*;
 use zvisit::{ZConstLiteralRewriter, ZGenericInf, ZStatementWalker, ZVisitorMut};
 
-/// The modulus for the Z# language as a Sort
-pub use term::ZSHARP_FIELD_SORT;
-/// The modulus for the ZSharp language
-pub use term::ZSHARP_MODULUS;
-/// The modulus for the ZSharp language (ARC)
-pub use term::ZSHARP_MODULUS_ARC;
-
 // garbage collection increment for adaptive GC threshold
 const GC_INC: usize = 32;
-
-/// The prover visibility
-pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
-/// Public visibility
-pub const PUBLIC_VIS: Option<PartyId> = None;
 
 /// Inputs to the Z# compiler
 pub struct Inputs {
