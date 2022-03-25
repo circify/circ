@@ -78,7 +78,8 @@ impl<'a, F: PrimeField, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S>
         );
         let mut uses = HashMap::with_capacity(self.next_idx);
         for (a, b, c) in self.constraints.iter() {
-            [a, b, c].iter().for_each(|y| y.monomials.keys().for_each(|k| {
+            [a, b, c].iter().for_each(|y| {
+                y.monomials.keys().for_each(|k| {
                     uses.get_mut(k)
                         .map(|i| {
                             *i += 1;
@@ -88,7 +89,7 @@ impl<'a, F: PrimeField, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S>
                             None
                         });
                 })
-            );
+            });
         }
         let mut vars = HashMap::with_capacity(self.next_idx);
         for i in 0..self.next_idx {
