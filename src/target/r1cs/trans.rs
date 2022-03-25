@@ -57,25 +57,6 @@ impl ToR1cs {
         }
     }
 
-    /// convert a FieldV into the FieldT specified in self.r1cs.modulus.
-    /// These values must have compatible moduli!
-    /// This is used because Value::Fields might use a FieldV based on
-    /// rug::Integer while self.r1cs.modulus specifies one based on ff.
-    #[track_caller]
-    fn convert_modulus(&self, v: &FieldV) -> FieldV {
-        if v.ty() == self.r1cs.modulus {
-            v.clone()
-        } else if v.modulus() != self.r1cs.modulus.modulus() {
-            panic!(
-                "Incompatible modulus specified in ToR1cs: {:#?} vs {:#?}",
-                v.ty(),
-                self.r1cs.modulus
-            );
-        } else {
-            self.r1cs.modulus.new_v(v.i())
-        }
-    }
-
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
     fn fresh_var<D: Display + ?Sized>(
@@ -175,7 +156,7 @@ impl ToR1cs {
         self.values
             .as_ref()
             .map(|vs| match vs.get(var).expect("missing value") {
-                Value::Field(b) => self.convert_modulus(b),
+                Value::Field(b) => b.as_ty_ref(&self.r1cs.modulus),
                 v => panic!("{} should be a field element, but is {:?}", var, v),
             })
     }
@@ -899,7 +880,7 @@ impl ToR1cs {
                     let public = self.public_inputs.contains(name);
                     self.fresh_var(name, self.eval_pf(name), public)
                 }
-                Op::Const(Value::Field(r)) => self.r1cs.constant(self.convert_modulus(r)),
+                Op::Const(Value::Field(r)) => self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs[0]).clone();
                     let t = self.get_pf(&c.cs[1]).clone();

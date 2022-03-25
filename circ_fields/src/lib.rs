@@ -254,6 +254,23 @@ impl FieldV {
             }
         }
     }
+
+    /// Convert to a different FieldT --- will fail if moduli are not the same!
+    #[track_caller]
+    #[inline]
+    pub fn as_ty_ref(&self, ty: &FieldT) -> Self {
+        if &self.ty() == ty {
+            self.clone()
+        } else if self.modulus() != ty.modulus() {
+            panic!(
+                "Incompatible modulus specified: {:#?} vs {:#?}",
+                self.ty(),
+                ty,
+            );
+        } else {
+            ty.new_v(self.i())
+        }
+    }
 }
 
 impl Display for FieldV {
