@@ -72,14 +72,13 @@ impl<'a, F: PrimeField, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S>
         assert_eq!(
             self.modulus.modulus(),
             &f_mod,
-            "\nR1CS has modulus \n{},\n but Bellman CS expectes \n{}",
+            "\nR1CS has modulus \n{},\n but Bellman CS expects \n{}",
             self.modulus,
             f_mod
         );
         let mut uses = HashMap::with_capacity(self.next_idx);
         for (a, b, c) in self.constraints.iter() {
-            [a, b, c].iter().for_each(|y| {
-                for k in y.monomials.keys() {
+            [a, b, c].iter().for_each(|y| y.monomials.keys().for_each(|k| {
                     uses.get_mut(k)
                         .map(|i| {
                             *i += 1;
@@ -88,14 +87,14 @@ impl<'a, F: PrimeField, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S>
                             uses.insert(*k, 1);
                             None
                         });
-                }
-            });
+                })
+            );
         }
         let mut vars = HashMap::with_capacity(self.next_idx);
         for i in 0..self.next_idx {
             if let Some(s) = self.idxs_signals.get(&i) {
                 //for (_i, s) in self.idxs_signals.get() {
-                if uses.get(&i).unwrap() > &0 {
+                if uses.get(&i).is_some() {
                     let name_f = || format!("{}", s);
                     let val_f = || {
                         Ok({
