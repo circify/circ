@@ -290,7 +290,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 .and_then(|t| pf_or(t, ctx))
                 .map(|a| a.clone())
         }
-        (Op::UbvToPf(m), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::Field(m.clone())),
+        (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
         (Op::Select, &[Sort::Array(k, v, _), a]) => eq_or(k, a, "select").map(|_| (**v).clone()),
         (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
@@ -392,7 +392,6 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     .iter()
                     .map(|c| term_tys.get(&c.to_weak()).unwrap())
                     .collect::<Vec<_>>();
-
                 let ty =
                     rec_check_raw_helper(&back.0.op, &tys[..]).map_err(|reason| TypeError {
                         op: back.0.op.clone(),

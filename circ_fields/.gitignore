@@ -8,7 +8,6 @@ __pycache__
 /pi
 /x
 /perf.data*
-/heaptrack.*
 /.gdb_history
 .features.txt
 scripts/aby_tests/tests
