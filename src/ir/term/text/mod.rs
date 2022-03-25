@@ -30,7 +30,9 @@
 //!     * let: `(let ((X1 T1) ... (Xn Tn)) T)`
 //!     * declare: `(declare ((X1 S1) ... (Xn Sn)) T)`
 //!     * set_default_modulus: `(set_default_modulus I T)`
-//!     * set_default_modulus: `(O T1 ... TN)`
+//!       * within term T, I will be the default field modulus
+//!       * NB: after the closing paren, I is *no longer* the default modulus
+//!     * operator: `(O T1 ... TN)`
 //!   * Operator `O`:
 //!     * Plain operators: (`bvmul`, `and`, ...)
 //!     * Composite operators: `(field N)`, `(update N)`, `(sext N)`, `(uext N)`, `(bit N)`, ...
@@ -129,9 +131,9 @@ struct IrInterp<'src> {
     /// The stack is there for scoping.
     bindings: HashMap<&'src [u8], Vec<Term>>,
     /// The stack of field moduli used in this IR
-    moduli: Vec<Arc<Integer>>,
+    int_arcs: Vec<Arc<Integer>>,
     /// The current default field modulus, if any
-    default_modulus: Option<Arc<Integer>>,
+    modulus_stack: Vec<Arc<Integer>>,
 }
 
 enum CtrlOp {
@@ -146,8 +148,8 @@ impl<'src> IrInterp<'src> {
     fn new() -> Self {
         Self {
             bindings: HashMap::default(),
-            moduli: Vec::new(),
-            default_modulus: None,
+            int_arcs: Vec::new(),
+            modulus_stack: Vec::new(),
         }
     }
 
@@ -294,19 +296,21 @@ impl<'src> IrInterp<'src> {
             _ => panic!("Expected sort, found {}", tt),
         }
     }
+    /// Parse this text as an integer, but check the ARC cache before creating a new one.
+    fn parse_int(&mut self, s: &[u8]) -> Arc<Integer> {
+        let i: Integer = Integer::parse(s).unwrap().into();
+        match self.int_arcs.binary_search_by(|v| v.as_ref().cmp(&i)) {
+            Ok(idx) => self.int_arcs[idx].clone(),
+            Err(idx) => {
+                let i = Arc::new(i);
+                self.int_arcs.insert(idx, i.clone());
+                i
+            }
+        }
+    }
     fn int(&mut self, tt: &TokTree) -> Arc<Integer> {
         match tt {
-            Leaf(Token::Int, s) => {
-                let i: Integer = Integer::parse(s).unwrap().into();
-                match self.moduli.binary_search_by(|v| v.as_ref().cmp(&i)) {
-                    Ok(idx) => self.moduli[idx].clone(),
-                    Err(idx) => {
-                        let i = Arc::new(i);
-                        self.moduli.insert(idx, i.clone());
-                        i
-                    }
-                }
-            }
+            Leaf(Token::Int, s) => self.parse_int(s),
             _ => panic!("Expected integer, got {}", tt),
         }
     }
@@ -387,12 +391,16 @@ impl<'src> IrInterp<'src> {
                 let (v, m) = if let Some(i) = s.iter().position(|b| *b == b'm') {
                     (
                         Integer::parse(&s[2..i]).unwrap().into(),
-                        Arc::new(Integer::parse(&s[i + 1..]).unwrap().into()),
+                        self.parse_int(&s[i + 1..]),
                     )
                 } else {
-                    let m = self.default_modulus.clone().unwrap_or_else(|| {
-                        panic!("Field value without a modulus, and no default modulus set")
-                    });
+                    let m = self
+                        .modulus_stack
+                        .last()
+                        .unwrap_or_else(|| {
+                            panic!("Field value without a modulus, and no default modulus set")
+                        })
+                        .clone();
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
                 leaf_term(Op::Const(Value::Field(FieldV::new::<Integer>(v, m))))
@@ -452,8 +460,10 @@ impl<'src> IrInterp<'src> {
                             "A set_default_modulus should have 2 arguments: modulus and term"
                         );
                         let m = self.int(&tts[1]);
-                        self.default_modulus = Some(m);
-                        self.term(&tts[2])
+                        self.modulus_stack.push(m);
+                        let t = self.term(&tts[2]);
+                        self.modulus_stack.pop();
+                        t
                     }
                     Ok(o) => term(o, tts[1..].iter().map(|tti| self.term(tti)).collect()),
                 }
@@ -590,5 +600,27 @@ mod test {
         println!("{}", s);
         let t2 = parse_term(s.as_bytes());
         assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn set_default_modulus() {
+        let t = parse_term(
+            b"
+        (set_default_modulus 7
+            (and
+                (=
+                    (set_default_modulus 11
+                        (+ #f1m11 #f5) ; well-type b/c default modulus
+                    )
+                    #f2m11
+                )
+                (=
+                    #f2 ; default modulus is now 7, so still well-typed
+                    #f2m7
+                )
+            )
+        )",
+        );
+        assert_eq!(check_rec(&t), Sort::Bool);
     }
 }
