@@ -233,7 +233,7 @@ pub fn to_fhe(ir: Computation, path: &Path, lang: &str) {
         outputs: terms,
         metadata: md,
         ..
-    } = ir.clone();
+    } = ir;
 
     let mut converter = ToFHE::new(md, path, lang);
 
