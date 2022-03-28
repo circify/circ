@@ -1,7 +1,7 @@
 # Associative-Commutative Common-Subexpression-Elimination
 
 The idea here is to optimize expressions like `x * y * z + y * x` by being
-sure to only compute `y * z` once.
+sure to only compute `y * x` once.
 
 More formally (after flattening) we have a big DAG of computation steps, where
 some steps apply a *commutative*, *associative* operator (e.g. addition,
