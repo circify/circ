@@ -1707,6 +1707,8 @@ pub struct Computation {
     pub values: Option<FxHashMap<String, Value>>,
     /// Metadata about the computation. I.e. who knows what inputs
     pub metadata: ComputationMetadata,
+    /// Pre-computations
+    pub precomputes: precomp::PreComp,
 }
 
 impl Computation {
@@ -1804,6 +1806,7 @@ impl Computation {
             } else {
                 None
             },
+            precomputes: Default::default(),
         }
     }
 

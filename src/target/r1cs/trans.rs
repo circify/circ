@@ -5,6 +5,7 @@
 //! is a good intro to how this process works.
 use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
+use crate::ir::term::precomp::PreComp;
 use crate::target::bitsize;
 use crate::target::r1cs::*;
 
@@ -43,8 +44,7 @@ struct ToR1cs {
     r1cs: R1cs<String>,
     cache: TermMap<EmbeddedTerm>,
     values: Option<Values>,
-    #[allow(dead_code)]
-    wit_ext: precomp::PreComp,
+    wit_ext: PreComp,
     public_inputs: FxHashSet<String>,
     next_idx: usize,
     zero: TermLc,
@@ -87,7 +87,7 @@ impl ToR1cs {
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
         let value = self.eval_term(&comp).map(|v| v.as_pf().i().clone());
-        self.r1cs.add_signal(n.clone(), value);
+        self.r1cs.add_signal(n.clone(), value, comp.clone());
         self.wit_ext.add_output(n.clone(), comp.clone());
         if public {
             self.r1cs.publicize(&n);
@@ -877,6 +877,10 @@ impl ToR1cs {
 }
 
 /// Convert this (IR) constraint system `cs` to R1CS, over a prime field defined by `modulus`.
+///
+/// ## Returns
+///
+/// * The R1CS instance
 pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();

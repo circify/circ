@@ -26,6 +26,7 @@ pub struct R1cs<S: Hash + Eq> {
     public_idxs: HashSet<usize>,
     values: Option<HashMap<usize, Integer>>,
     constraints: Vec<(Lc, Lc, Lc)>,
+    terms: Vec<Term>,
 }
 
 #[derive(Clone, Debug)]
@@ -260,6 +261,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
                 None
             },
             constraints: Vec::new(),
+            terms: Vec::new(),
         }
     }
     /// Get the zero combination for this system.
@@ -282,11 +284,15 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     }
     /// Create a new wire, `s`. If this system is tracking concrete values, you must provide the
     /// value, `v`.
-    pub fn add_signal(&mut self, s: S, v: Option<Integer>) {
+    ///
+    /// You must also provide `term`, that computes the signal value from *some* inputs.
+    pub fn add_signal(&mut self, s: S, v: Option<Integer>, term: Term) {
         let n = self.next_idx;
         self.next_idx += 1;
         self.signal_idxs.insert(s.clone(), n);
         self.idxs_signals.insert(n, s);
+        assert_eq!(n, self.terms.len());
+        self.terms.push(term);
         match (self.values.as_mut(), v) {
             (Some(vs), Some(v)) => {
                 //println!("{} -> {}", &s, &v);

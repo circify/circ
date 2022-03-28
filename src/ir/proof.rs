@@ -1,7 +1,8 @@
 //! Proof-system-specfic extensions to [crate::ir] types.
+use fxhash::{FxHashMap, FxHashSet};
 
 use super::term::*;
-use fxhash::{FxHashMap, FxHashSet};
+
 /// The prover's canonical party name
 pub const PROVER_NAME: &str = "prover";
 /// The verifier's canonical party name
@@ -83,6 +84,7 @@ impl Constraints for Computation {
             outputs: assertions,
             metadata,
             values,
+            precomputes: Default::default(),
         }
     }
 }

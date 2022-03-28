@@ -55,3 +55,19 @@ Bigger research questions:
   * focus on embedding complex datatypes:
     * use lookups
 [ ] Compiling to branching programs
+
+
+Plan for pre-computations:
+[ ] define an IR pre-computation type
+  * It essentially extends a Map[String,Value] to have more strings
+  * It does it on a per-party basis
+[ ] Add Map[Party,Precomp] to Computation
+[ ] Support it in relevant IR passes
+  * scalarize inputs
+[ ] Support it in lowering passes?
+  * R1CS for sure
+[ ] Implement a prover flow
+  * Needs prover pre-compute
+  * builds r1cs extended witness
+[ ] Implement a verifier flow
+  * Needs V pre-compute

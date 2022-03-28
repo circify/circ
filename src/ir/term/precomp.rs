@@ -10,6 +10,7 @@ use crate::ir::term::*;
 /// A "precomputation".
 ///
 /// Expresses a computation to be run in advance by a single party.
+#[derive(Debug, Clone, Default)]
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
     outputs: FxHashMap<String, Term>,
@@ -18,9 +19,7 @@ pub struct PreComp {
 impl PreComp {
     /// Create a new witness extender from a starting computation.
     pub fn new() -> Self {
-        Self {
-            outputs: FxHashMap::default(),
-        }
+        Self::default()
     }
     /// Add a new output variable to the precomputation. `value` is the term that computes its value.
     pub fn add_output(&mut self, name: String, value: Term) {
