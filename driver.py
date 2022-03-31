@@ -23,7 +23,7 @@ def install(features):
             if verify_path_empty(ABY_SOURCE):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
-        if f == "fhe":
+        if f == "seal":
             if verify_path_empty(SEAL_SOURCE):
                 subprocess.run(["git", "clone", "https://github.com/Northrim/SEAL.git", SEAL_SOURCE])
                 subprocess.run(["./scripts/build_seal.zsh"])
