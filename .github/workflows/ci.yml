@@ -34,6 +34,7 @@ jobs:
       with:
         path: ${ABY_SOURCE}/build
         key: ${{ runner.os }}-aby
+      uses: actions/cache@v2
       with:
         path: ${SEAL_SOURCE}/build
         key: ${{ runner.os }}-seal
