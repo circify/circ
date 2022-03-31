@@ -26,7 +26,7 @@ def install(features):
         if f == "fhe":
             if verify_path_empty(SEAL_SOURCE):
                 subprocess.run(["git", "clone", "https://github.com/Northrim/SEAL.git", SEAL_SOURCE])
-                subprocess.run(["./scripts/build_aby.zsh"])
+                subprocess.run(["./scripts/build_seal.zsh"])
 
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
@@ -147,7 +147,7 @@ def clean(features):
     print("cleaning!")
     if "aby" in features:
         subprocess.run(["./scripts/clean_aby.zsh"])
-    if "fhe" in features:
+    if "seal" in features:
         subprocess.run(["./scripts/clean_seal.zsh"])
     subprocess.run(["rm", "-rf", "scripts/aby_tests/__pycache__"])
     subprocess.run(["rm", "-rf", "P", "V", "pi", "perf.data perf.data.old flamegraph.svg"])

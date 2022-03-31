@@ -241,8 +241,7 @@ impl CGen {
                                 ))
                             }
                         }
-                        Mode::Fhe => Some(0),
-                        Mode::Proof => PROVER_VIS,
+                        Mode::Fhe | Mode::Proof => PROVER_VIS,
                         _ => unimplemented!("Mode {} is not supported.", self.mode),
                     },
                     _ => panic!("Unknown visibility: {:#?}", name),
