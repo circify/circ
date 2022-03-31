@@ -1,18 +1,8 @@
 //! Utility functions to write compiler output to FHE
 
-use std::env;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
-
-/// Get FHE source directory
-pub fn get_fhe_source() -> String {
-    let key = "SEAL_SOURCE";
-    match env::var(key) {
-        Ok(val) => val,
-        Err(e) => panic!("Missing env variable: SEAL_SOURCE, {}", e),
-    }
-}
 
 /// Given Path `path` and String denominator `lang`, return the filename of the path
 pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
@@ -23,13 +13,13 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
         .into_string()
         .unwrap();
 
-    match fs::create_dir_all("scripts/fhe_tests/tests") {
-        Err(why) => panic!("couldn't create {}: {}", "scripts/fhe_tests/tests", why),
+    match fs::create_dir_all("scripts/seal_tests/tests") {
+        Err(why) => panic!("couldn't create {}: {}", "scripts/seal_tests/tests", why),
         Ok(file) => file,
     };
 
     let name = format!("{}_{}", filename, lang);
-    let path = format!("scripts/fhe_tests/tests/{}_{}.txt", name, t);
+    let path = format!("scripts/seal_tests/tests/{}_{}.txt", name, t);
     match fs::File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", path, why),
         Ok(file) => file,

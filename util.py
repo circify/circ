@@ -4,20 +4,21 @@ from os import path
 # Gloable variables
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
-valid_features = {"aby", "c", "lp", "r1cs", "smt", "zok"}
+valid_features = {"aby", "c", "lp", "r1cs", "seal", "smt", "zok"}
 cargo_features = {"c", "lp", "r1cs", "smt", "zok"}
 
 # Environment variables
 ABY_SOURCE="./../ABY"
-EZPC_SOURCE="./../EZPC"
+SEAL_SOURCE="./../SEAL"
 
 def set_env(features):
     for f in features:
         if f == 'aby':
             if not os.getenv("ABY_SOURCE"):
                 os.environ["ABY_SOURCE"] = ABY_SOURCE
-            if not os.getenv("EZPC_SOURCE"):
-                os.environ["EZPC_SOURCE"] = EZPC_SOURCE
+        if f == 'seal':
+            if not os.getenv("SEAL_SOURCE"):
+                os.environ["SEAL_SOURCE"] = SEAL_SOURCE
 
 def save_mode(mode):
     """ Save mode to file """

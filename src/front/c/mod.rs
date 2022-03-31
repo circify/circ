@@ -241,6 +241,7 @@ impl CGen {
                                 ))
                             }
                         }
+                        Mode::Fhe => Some(0),
                         Mode::Proof => PROVER_VIS,
                         _ => unimplemented!("Mode {} is not supported.", self.mode),
                     },
@@ -640,7 +641,7 @@ impl CGen {
         self.gen_stmt(f.body.clone());
         if let Some(r) = self.circ.exit_fn() {
             match self.mode {
-                Mode::Mpc(_) => {
+                Mode::Mpc(_) | Mode::Fhe => {
                     let ret_term = r.unwrap_term();
                     let ret_terms = ret_term.term.terms();
                     self.circ
