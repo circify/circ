@@ -1,21 +1,21 @@
-int f(int a, int b, int len) {
-    int res = 0;
-    for(int i = 0; i < len; i++){
-        if (a < b) {
-            res = res + 1;
-        } else {
-            res = 2;
-        }
-    }
-    return res;
+typedef int DT ;
+
+int main(__attribute__((private(0))) DT a, __attribute__((private(1))) DT b) { 
+    return a + b;
 }
 
-int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
-    int x[1] = {0};
-    x[0] = f(a, b, 5);
-    int cc = x[0];
-    return cc;
-}
+
+// int f(int a, int b, int len) {
+//     int res = 0;
+//     for(int i = 0; i < len; i++){
+//         if (a < b) {
+//             res = res + 1;
+//         } else {
+//             res = 2;
+//         }
+//     }
+//     return res;
+// }
 
 // struct s {
 // 	int c[4];

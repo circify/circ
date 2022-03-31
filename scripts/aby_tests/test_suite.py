@@ -15,7 +15,8 @@ new_tests = [
     [
         "new",
         "2pc_test",
-        "./scripts/aby_tests/test_inputs/test.txt",
+        # "./scripts/aby_tests/test_inputs/test.txt",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ], 
     # [
     #     "biomatch - 1",

@@ -91,6 +91,7 @@ struct CGen {
     tu: TranslationUnit,
     structs: HashMap<String, Ty>,
     functions: HashMap<String, FnInfo>,
+    typedefs: HashMap<String, Ty>,
 }
 
 impl CGen {
@@ -101,6 +102,7 @@ impl CGen {
             tu,
             structs: HashMap::default(),
             functions: HashMap::default(),
+            typedefs: HashMap::default(),
         };
         this.circ
             .cir_ctx()
@@ -152,13 +154,22 @@ impl CGen {
             TypeSpecifier::Unsigned => Some(Ty::Int(false, 32)),
             TypeSpecifier::Bool => Some(Ty::Bool),
             TypeSpecifier::Void => None,
+            TypeSpecifier::TypedefName(td) => {
+                let name = td.node.name;
+                if self.typedefs.contains_key(&name) {
+                    Some(self.typedefs[&name].clone())
+                } else {
+                    panic!("Typedef not defined: {}", name);
+                }
+            }
             TypeSpecifier::Struct(s) => {
+                println!("struct: {:#?}", s.node);
+
                 let StructType {
                     kind: _kind,
                     identifier,
                     declarations,
                 } = s.node;
-                let name = identifier.unwrap().node.name;
                 let mut fs: Vec<(String, Ty)> = Vec::new();
                 match declarations {
                     Some(decls) => {
@@ -188,7 +199,11 @@ impl CGen {
                     }
                     None => {}
                 }
-                Some(Ty::Struct(name, FieldList::new(fs)))
+
+                match identifier {
+                    Some(name) => Some(Ty::Struct(name.node.name, FieldList::new(fs))),
+                    None => Some(Ty::Struct("".to_string(), FieldList::new(fs))),
+                }
             }
             _ => unimplemented!("Type {:#?} not implemented yet.", t),
         };
@@ -247,24 +262,30 @@ impl CGen {
             ty = derived_ty;
         }
 
-        // Save struct declarations to the cache
-        let new_ty: Ty = match ty.clone() {
-            Ty::Struct(name, fs) => {
-                if fs.clone().len() > 0 {
-                    self.structs.insert(name.to_string(), ty.clone());
-                    ty
-                } else {
-                    self.structs.get(&name).unwrap().clone()
-                }
-            }
-            _ => ty,
-        };
-
         let mut res: Vec<DeclInfo> = Vec::new();
         for node in decl.declarators.into_iter() {
-            let name = name_from_decl(&node.node.declarator.node);
+            let decl_name = name_from_decl(&node.node.declarator.node);
+
+            // Save struct declarations to the cache
+            let new_ty: Ty = match ty.clone() {
+                Ty::Struct(name, fs) => {
+                    if decl_name != name {
+                        let s_ty: Ty = Ty::Struct(decl_name.clone(), fs);
+                        self.structs
+                            .insert(decl_name.to_string().clone(), s_ty.clone());
+                        s_ty
+                    } else if fs.clone().len() > 0 {
+                        self.structs.insert(name.to_string(), ty.clone());
+                        ty.clone()
+                    } else {
+                        self.structs.get(&name).unwrap().clone()
+                    }
+                }
+                _ => ty.clone(),
+            };
+
             let d = DeclInfo {
-                name,
+                name: decl_name,
                 ty: new_ty.clone(),
             };
             res.push(d);
@@ -853,24 +874,42 @@ impl CGen {
     }
 
     fn gen_decl(&mut self, decl: Declaration) -> Vec<CTerm> {
-        let decl_infos = self.get_decl_info(decl.clone());
-        let mut exprs: Vec<CTerm> = Vec::new();
-        for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
-            let expr: CTerm;
-            if let Some(init) = d.node.initializer.clone() {
-                expr = self.gen_init(info.ty.clone(), init.node);
-            } else {
-                expr = info.ty.default(&mut self.circ)
+        println!("decl: {:#?}", decl);
+        let specs = decl.specifiers.clone();
+        if let DeclarationSpecifier::StorageClass(_store_node) = &specs[0].node {
+            let new_decl = Declaration {
+                specifiers: decl.specifiers[1..].to_vec().clone(),
+                declarators: decl.declarators.clone(),
+            };
+            let decl_infos = self.get_decl_info(new_decl);
+            for info in decl_infos.iter() {
+                if !self.typedefs.contains_key(&info.name) {
+                    self.typedefs.insert(info.name.clone(), info.ty.clone());
+                } else {
+                    panic!("Typedef already defined for: {}", info.name);
+                }
             }
-            let res = self.circ.declare_init(
-                info.name.clone(),
-                info.ty.clone(),
-                Val::Term(cast(Some(info.ty.clone()), expr.clone())),
-            );
-            self.unwrap(res);
-            exprs.push(expr);
+            Vec::new()
+        } else {
+            let decl_infos = self.get_decl_info(decl.clone());
+            let mut exprs: Vec<CTerm> = Vec::new();
+            for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
+                let expr: CTerm;
+                if let Some(init) = d.node.initializer.clone() {
+                    expr = self.gen_init(info.ty.clone(), init.node);
+                } else {
+                    expr = info.ty.default(&mut self.circ)
+                }
+                let res = self.circ.declare_init(
+                    info.name.clone(),
+                    info.ty.clone(),
+                    Val::Term(cast(Some(info.ty.clone()), expr.clone())),
+                );
+                self.unwrap(res);
+                exprs.push(expr);
+            }
+            exprs
         }
-        exprs
     }
 
     //TODO: This function is not quite right because the loop body could modify the iteration variable.
@@ -1034,6 +1073,8 @@ impl CGen {
             self.unwrap(r);
         }
 
+        println!("body: {:#?}", f.body.clone());
+
         self.gen_stmt(f.body.clone());
         if let Some(r) = self.circ.exit_fn() {
             match self.mode {
@@ -1063,6 +1104,7 @@ impl CGen {
     fn visit_files(&mut self) {
         let TranslationUnit(nodes) = self.tu.clone();
         for n in nodes.iter() {
+            println!("{:#?}", n.node);
             match n.node {
                 ExternalDeclaration::Declaration(ref decl) => {
                     self.gen_decl(decl.node.clone());
