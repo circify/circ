@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   ABY_SOURCE: "./../ABY"
+  SEAL_SOURCE: "./../SEAL"
 
 jobs:
   build:
@@ -32,7 +33,10 @@ jobs:
       uses: actions/cache@v2
       with:
         path: ${ABY_SOURCE}/build
-        key: ${{ runner.os }}
+        key: ${{ runner.os }}-aby
+      with:
+        path: ${SEAL_SOURCE}/build
+        key: ${{ runner.os }}-seal
     - name: Check
       run: python3 driver.py --check
     - name: Format
