@@ -29,16 +29,13 @@ jobs:
       run: python3 driver.py --all_features
     - name: Install third_party libraries
       run: python3 driver.py --install
-    - name: Cache aby build
+    - name: Cache third_party build
       uses: actions/cache@v2
       with:
-        path: ${ABY_SOURCE}/build
-        key: ${{ runner.os }}-aby
-    - name: Cache seal build
-      uses: actions/cache@v2
-      with:
-        path: ${SEAL_SOURCE}/build
-        key: ${{ runner.os }}-seal
+        path: |
+          ${ABY_SOURCE}/build
+          ${SEAL_SOURCE}/build
+        key: ${{ runner.os }}
     - name: Check
       run: python3 driver.py --check
     - name: Format
