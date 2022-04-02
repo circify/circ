@@ -772,7 +772,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
 }
 
 fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
-    let mut values = BTreeMap::new();
+    let mut values = HashMap::new();
     let to_insert = elems
         .into_iter()
         .enumerate()
@@ -791,7 +791,7 @@ fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
     let arr = leaf_term(Op::Const(Value::Array(Array::new(
         Sort::Field(DFL_T.clone()),
         Box::new(sort.default_value()),
-        values,
+        values.into_iter().collect::<BTreeMap<_, _>>(),
         len,
     ))));
     to_insert
