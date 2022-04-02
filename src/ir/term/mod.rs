@@ -944,7 +944,7 @@ pub type Term = HConsed<TermData>;
 pub type TTerm = WHConsed<TermData>;
 
 struct TermTable {
-    map: FxHashMap<TermData, TTerm>,
+    map: FxHashMap<Arc<TermData>, TTerm>,
     count: u64,
     last_len: usize,
 }
@@ -964,8 +964,9 @@ impl TermTable {
             return hconsed;
         }
         // Otherwise build hconsed version.
+        let elm = Arc::new(elm);
         let hconsed = HConsed {
-            elm: Arc::new(elm.clone()),
+            elm: elm.clone(),
             uid: self.count,
         };
         // Increment uid count.
@@ -986,8 +987,8 @@ impl TermTable {
     fn collect(&mut self) {
         let old_size = self.map.len();
         let mut to_check: OnceQueue<Term> = OnceQueue::new();
-        self.map.retain(|key, val| {
-            if val.elm.upgrade().is_some() {
+        self.map.retain(|key, _| {
+            if Arc::strong_count(key) > 1 {
                 true
             } else {
                 to_check.extend(key.cs.iter().cloned());
@@ -995,12 +996,13 @@ impl TermTable {
             }
         });
         while let Some(t) = to_check.pop() {
-            let data: TermData = (*t).clone();
+            let okv = self.map.get_key_value(&*t.elm);
             std::mem::drop(t);
-            if let std::collections::hash_map::Entry::Occupied(e) = self.map.entry(data) {
-                if e.get().elm.upgrade().is_none() {
-                    let (key, _val) = e.remove_entry();
+            if let Some((key, _)) = okv {
+                if Arc::strong_count(key) == 1 {
                     to_check.extend(key.cs.iter().cloned());
+                    let key = key.clone();
+                    self.map.remove(&key);
                 }
             }
         }
@@ -1313,7 +1315,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 BvBinOp::Sub => a - b,
                 BvBinOp::Ashr => a.ashr(&b),
                 BvBinOp::Lshr => a.lshr(&b),
-                BvBinOp::Shl => a << b,
+                BvBinOp::Shl => a << &b,
             }
         }),
         Op::BvUnOp(o) => Value::BitVector({

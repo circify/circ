@@ -3,6 +3,7 @@
 use rug::Integer;
 
 use std::fmt::{self, Display, Formatter};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Sub};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 /// A bit-vector constant
@@ -12,13 +13,19 @@ pub struct BitVector {
 }
 
 macro_rules! bv_arith_impl {
-    ($Trait:path, $fn:ident) => {
+    ($Trait:ident, $fn:ident) => {
         impl $Trait for BitVector {
             type Output = Self;
             fn $fn(self, other: Self) -> Self {
+                self.$fn(&other)
+            }
+        }
+        impl $Trait<&Self> for BitVector {
+            type Output = Self;
+            fn $fn(self, other: &Self) -> Self {
                 assert_eq!(self.width, other.width);
                 let r = BitVector {
-                    uint: (self.uint.$fn(other.uint)).keep_bits(self.width as u32),
+                    uint: (self.uint.$fn(&other.uint)).keep_bits(self.width as u32),
                     width: self.width,
                 };
                 r.check(std::stringify!($fn));
@@ -28,12 +35,12 @@ macro_rules! bv_arith_impl {
     };
 }
 
-bv_arith_impl!(std::ops::Add, add);
-bv_arith_impl!(std::ops::Sub, sub);
-bv_arith_impl!(std::ops::Mul, mul);
-bv_arith_impl!(std::ops::BitAnd, bitand);
-bv_arith_impl!(std::ops::BitOr, bitor);
-bv_arith_impl!(std::ops::BitXor, bitxor);
+bv_arith_impl!(Add, add);
+bv_arith_impl!(Sub, sub);
+bv_arith_impl!(Mul, mul);
+bv_arith_impl!(BitAnd, bitand);
+bv_arith_impl!(BitOr, bitor);
+bv_arith_impl!(BitXor, bitxor);
 
 /// SMT-semantics implementation of unsigned division (udiv).
 ///
@@ -80,9 +87,9 @@ impl std::ops::Rem<&BitVector> for BitVector {
     }
 }
 
-impl std::ops::Shl for BitVector {
+impl std::ops::Shl<&Self> for BitVector {
     type Output = Self;
-    fn shl(self, other: Self) -> Self {
+    fn shl(self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
         let r = BitVector {
             uint: (self.uint.shl(other.uint.to_u32().unwrap())).keep_bits(self.width as u32),
