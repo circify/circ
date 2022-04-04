@@ -26,3 +26,4 @@ lazy_static! {
     /// Default field
     pub static ref DFL_T: FieldT = FieldT::IntField(F_BN254_FMOD_ARC.clone());
 }
+

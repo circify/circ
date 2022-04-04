@@ -14,7 +14,7 @@ def install(features):
         features : set of str
             set of features required
     """
-
+     
     def verify_path_empty(path) -> bool:
         return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
 
@@ -236,6 +236,7 @@ if __name__ == "__main__":
         clean(features)
 
     if args.mode:
+        print("SETTING MODE")
         set_mode(args.mode)
 
     if args.all_features:

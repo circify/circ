@@ -15,7 +15,6 @@ lazy_static! {
         "7237005577332262213973186563042994240857116359379907606001950938285454250989",
          10
     ).unwrap();
-
 }
 
 /// Hold Spartan variables
@@ -36,35 +35,23 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
     let mut trans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
     let mut itrans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
 
-    // assume no public inputs for now
-    assert!(r1cs.public_idxs.len() == 0);
-
     // TODO if not input?
     match r1cs.values {
         Some(_) =>
             for (k,v) in r1cs.values.as_ref().unwrap() { // CirC id, Integer
 
                 let name = r1cs.idxs_signals.get(k).unwrap().to_string();
-                let scalar = int_to_scalar(&v);
+                let scalar = int_to_scalar(&v.i());
 
-
-                if name.contains("main_f0_lex0_w"){
-                    // witness
-                    //println!("As witness: {}", name);
-
-                    trans.insert(*k, wit.len());
-                    wit.push(scalar.to_bytes());
-
-                } else if name.contains("main_f0_lex0_"){
+                if r1cs.public_idxs.contains(k) {
                     // input
-                    //println!("As input: {}", name);
+                    println!("As public io: {}", name);
 
                     itrans.insert(*k, inp.len());
                     inp.push(scalar.to_bytes());
-
                 } else {
-                    // witness
-                    //println!("As witness: {}", name);
+                     // witness
+                    println!("As private witness: {}", name);
 
                     trans.insert(*k, wit.len());
                     wit.push(scalar.to_bytes());
@@ -87,12 +74,8 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
 
 
     for (cid,sid) in itrans{
-//        println!("input translation cid, sid = {}, {}", cid, sid);
         trans.insert(cid, sid + const_id + 1);
     }
-
-//    println!("Translation Mapping: {:#?}", trans);
-//    println!("const id {}", const_id);
 
     // circuit
     let mut m_a: Vec<(usize, usize, [u8; 32])> = Vec::new();
@@ -142,11 +125,9 @@ fn int_to_scalar(i: &Integer) -> Scalar {
     let two: u64 = 2;
     let mut m = Scalar::from(two.pow(63) as u64);
     m = m * Scalar::from(2 as u64);
-    //println!("in int2scal i={:#?}", i);
 
     // as_ref yeilds a least-significant-first array.
     for digit in i.as_ref().iter().rev() {
-        //println!("digit: {:#?}", digit);
         accumulator *= m;
         accumulator += Scalar::from(*digit as u64);
     }
@@ -160,18 +141,16 @@ fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize,usize>) -> Vec<Variab
     let mut v: Vec<Variable> = Vec::new();
 
     for (k,m) in &lc.monomials {
-        if *k >= const_id { panic!("Error: variable number off") }
-
-        let scalar = int_to_scalar(&m);
-        //println!("int to scalar test: {:#?} -> {:#?}", m, scalar.to_bytes());
+        let scalar = int_to_scalar(&m.i());
+        
         let var = Variable {
             sid: trans.get(k).unwrap().clone(),
             value: scalar.to_bytes(),
         };
         v.push(var);
     }
-    if lc.constant != Integer::from(0 as u32) {
-        let scalar = int_to_scalar(&lc.constant);
+    if lc.constant.i() != Integer::from(0 as u32) {
+        let scalar = int_to_scalar(&lc.constant.i());
         let var = Variable {
             sid: const_id,
             value: scalar.to_bytes(),
@@ -180,6 +159,4 @@ fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize,usize>) -> Vec<Variab
     }
     v
 }
-
-
 

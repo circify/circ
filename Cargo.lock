@@ -1382,7 +1382,8 @@ dependencies = [
 [[package]]
 name = "spartan"
 version = "0.4.1"
-source = "git+https://github.com/elefthei/Spartan?branch=multicore#4095be79cc9b1692cb3194c044c5d7f1ae358d94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1671fbc7b1b6519750870695d60d24c3e358021c88ba60b396f5d4899cea927"
 dependencies = [
  "bincode",
  "byteorder",
@@ -1394,7 +1395,6 @@ dependencies = [
  "merlin",
  "rand 0.7.3",
  "rand_core 0.5.1",
- "rayon",
  "serde",
  "sha3",
  "subtle",

@@ -295,10 +295,10 @@ fn main() {
             let r1cs;
             match action {
                 ProofAction::Spartan => {
-                    r1cs = to_r1cs(cs, circ::target::r1cs::spartan::SPARTAN_MODULUS.clone());
+                    r1cs = to_r1cs(cs, FieldT::from(circ::target::r1cs::spartan::SPARTAN_MODULUS.clone()));
                 }
                 _ => {
-                    r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+                    r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
                 }
             }
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
@@ -352,14 +352,6 @@ fn main() {
                     let pf = NIZK::prove(&inst, vars, &inps, &gens, &mut prover_transcript);            
     
                     let prover_ms = prover.elapsed().as_millis();
-                    let innerproof = &pf.r1cs_sat_proof;
-                    let proof_len = bincode::serialize(innerproof).unwrap().len();
-                    //let comm_len = bincode::serialize(&innerproof.comm_vars).unwrap().len();
-                    let comm_len = -1;
-
-                    // write proof file
-                    //let mut pf_file = File::create(proof).unwrap();
-                    //pf.write(&mut pf_file).unwrap();
 
                     println!("Verifying with Spartan");
                     let verifier = Instant::now();                    
@@ -373,7 +365,7 @@ fn main() {
                     let verifier_ms = verifier.elapsed().as_millis();
                     println!("proof verification successful!");
                     
-                    println!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}, comm len: {}, proof len: {}", path_buf, num_r1cs, prover_ms, verifier_ms, comm_len, proof_len);
+                    println!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}", path_buf, num_r1cs, prover_ms, verifier_ms);
 
                 }
             }
