@@ -22,6 +22,8 @@
 //!    * [Value]: a variable-free (and evaluated) term
 //!
 use crate::util::once::OnceQueue;
+
+use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap, FxHashSet};
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
@@ -34,12 +36,10 @@ use std::sync::{Arc, RwLock};
 pub mod bv;
 pub mod dist;
 pub mod extras;
-pub mod field;
 pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
-pub use field::FieldElem;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -118,7 +118,7 @@ pub enum Op {
     /// Unsigned bit-vector to prime-field
     ///
     /// Takes the modulus.
-    UbvToPf(Arc<Integer>),
+    UbvToPf(FieldT),
 
     /// Binary operator, with arguments (array, index).
     ///
@@ -135,6 +135,9 @@ pub enum Op {
     Field(usize),
     /// Update (tuple, element)
     Update(usize),
+
+    /// Map (operation)
+    Map(Box<Op>),
 }
 
 /// Boolean AND
@@ -245,6 +248,7 @@ impl Op {
             Op::Tuple => None,
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
+            Op::Map(op) => op.arity(),
         }
     }
 }
@@ -281,12 +285,13 @@ impl Display for Op {
             Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a),
+            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
+            Op::Map(op) => write!(f, "(map({}))", op),
         }
     }
 }
@@ -618,7 +623,7 @@ pub enum Value {
     /// Arbitrary-precision integer
     Int(Integer),
     /// Finite field element
-    Field(FieldElem),
+    Field(FieldV),
     /// Boolean
     Bool(bool),
     /// Array
@@ -789,8 +794,8 @@ pub enum Sort {
     F64,
     /// arbitrary-precision integer
     Int,
-    /// prime field, integers mod this modulus
-    Field(Arc<Integer>),
+    /// prime field, integers mod FieldT.modulus()
+    Field(FieldT),
     /// boolean
     Bool,
     /// Array from one sort to another, of fixed size.
@@ -815,8 +820,8 @@ impl Sort {
     #[track_caller]
     /// Unwrap the modulus of this prime field, panicking otherwise.
     pub fn as_pf(&self) -> Arc<Integer> {
-        if let Sort::Field(w) = self {
-            w.clone()
+        if let Sort::Field(fty) = self {
+            fty.modulus_arc()
         } else {
             panic!("{} is not a field", self)
         }
@@ -832,16 +837,19 @@ impl Sort {
         }
     }
 
-    /// An iterator over the elements of this sort.
+    /// An iterator over the elements of this sort (as IR Terms).
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]
     pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
+        Box::new(self.elems_iter_values().map(|v| leaf_term(Op::Const(v))))
+    }
+
+    /// An iterator over the elements of this sort (as IR values).
+    /// Only defined for booleans, bit-vectors, and field elements.
+    #[track_caller]
+    pub fn elems_iter_values(&self) -> Box<dyn Iterator<Item = Value>> {
         match self {
-            Sort::Bool => Box::new(
-                vec![false, true]
-                    .into_iter()
-                    .map(|b| leaf_term(Op::Const(Value::Bool(b)))),
-            ),
+            Sort::Bool => Box::new([false, true].iter().map(|b| Value::Bool(*b))),
             Sort::BitVector(w) => {
                 let w = *w;
                 let lim = Integer::from(1) << w as u32;
@@ -854,12 +862,12 @@ impl Sort {
                             None
                         }
                     })
-                    .map(move |i| bv_lit(i, w)),
+                    .map(move |i| Value::BitVector(BitVector::new(i, w))),
                 )
             }
-            Sort::Field(m) => {
-                let m = m.clone();
-                let m2 = m.clone();
+            Sort::Field(fty) => {
+                let m = fty.modulus_arc();
+                let fty = fty.clone();
                 Box::new(
                     std::iter::successors(Some(Integer::from(0)), move |p| {
                         let q = p.clone() + 1;
@@ -869,9 +877,7 @@ impl Sort {
                             None
                         }
                     })
-                    .map(move |i| {
-                        leaf_term(Op::Const(Value::Field(FieldElem::new(i, m2.clone()))))
-                    }),
+                    .map(move |i| Value::Field(fty.new_v(i))),
                 )
             }
             _ => panic!("Cannot iterate over {}", self),
@@ -900,7 +906,7 @@ impl Sort {
         match self {
             Sort::Bool => Value::Bool(false),
             Sort::BitVector(w) => Value::BitVector(BitVector::new(0.into(), *w)),
-            Sort::Field(m) => Value::Field(FieldElem::new(Integer::from(0), m.clone())),
+            Sort::Field(fty) => Value::Field(fty.default_value()),
             Sort::Int => Value::Int(0.into()),
             Sort::F32 => Value::F32(0.0f32),
             Sort::F64 => Value::F64(0.0),
@@ -918,7 +924,7 @@ impl Display for Sort {
             Sort::Int => write!(f, "int"),
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
-            Sort::Field(i) => write!(f, "(mod {})", i),
+            Sort::Field(fty) => write!(f, "(mod {})", fty.modulus()),
             Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
@@ -1109,7 +1115,7 @@ impl TermData {
         }
     }
     /// Get the underlying prime field constant, if possible.
-    pub fn as_pf_opt(&self) -> Option<&FieldElem> {
+    pub fn as_pf_opt(&self) -> Option<&FieldV> {
         if let Op::Const(Value::Field(b)) = &self.op {
             Some(b)
         } else {
@@ -1160,7 +1166,7 @@ impl Value {
     pub fn sort(&self) -> Sort {
         match &self {
             Value::Bool(_) => Sort::Bool,
-            Value::Field(f) => Sort::Field(f.modulus().clone()),
+            Value::Field(f) => Sort::Field(f.ty()),
             Value::Int(_) => Sort::Int,
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
@@ -1194,7 +1200,7 @@ impl Value {
     }
     #[track_caller]
     /// Get the underlying prime field constant, if possible.
-    pub fn as_pf(&self) -> &FieldElem {
+    pub fn as_pf(&self) -> &FieldV {
         if let Value::Field(b) = self {
             b
         } else {
@@ -1252,175 +1258,209 @@ impl Value {
 
 /// Evaluate the term `t`, using variable values in `h`.
 pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
-    let mut vs = TermMap::<Value>::new();
+    let vs = &mut TermMap::<Value>::new();
     for c in PostOrderIter::new(t.clone()) {
-        let v = match &c.op {
-            Op::Var(n, _) => h
-                .get(n)
-                .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h))
-                .clone(),
-            Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
-            Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
-            Op::Implies => Value::Bool(
-                !vs.get(&c.cs[0]).unwrap().as_bool() || vs.get(&c.cs[1]).unwrap().as_bool(),
-            ),
-            Op::BoolNaryOp(BoolNaryOp::Or) => {
-                Value::Bool(c.cs.iter().any(|c| vs.get(c).unwrap().as_bool()))
-            }
-            Op::BoolNaryOp(BoolNaryOp::And) => {
-                Value::Bool(c.cs.iter().all(|c| vs.get(c).unwrap().as_bool()))
-            }
-            Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
-                c.cs.iter()
-                    .map(|c| vs.get(c).unwrap().as_bool())
-                    .fold(false, std::ops::BitXor::bitxor),
-            ),
-            Op::BvBit(i) => {
-                Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32))
-            }
-            Op::BoolMaj => {
-                let c0 = vs.get(&c.cs[0]).unwrap().as_bool() as u8;
-                let c1 = vs.get(&c.cs[1]).unwrap().as_bool() as u8;
-                let c2 = vs.get(&c.cs[2]).unwrap().as_bool() as u8;
-                Value::Bool(c0 + c1 + c2 > 1)
-            }
-            Op::BvConcat => Value::BitVector({
-                let mut it = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
-                let f = it.next().unwrap();
-                it.fold(f, BitVector::concat)
-            }),
-            Op::BvExtract(h, l) => {
-                Value::BitVector(vs.get(&c.cs[0]).unwrap().as_bv().clone().extract(*h, *l))
-            }
-            Op::Const(v) => v.clone(),
-            Op::BvBinOp(o) => Value::BitVector({
-                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-                let b = vs.get(&c.cs[1]).unwrap().as_bv().clone();
-                match o {
-                    BvBinOp::Udiv => a / &b,
-                    BvBinOp::Urem => a % &b,
-                    BvBinOp::Sub => a - b,
-                    BvBinOp::Ashr => a.ashr(&b),
-                    BvBinOp::Lshr => a.lshr(&b),
-                    BvBinOp::Shl => a << b,
-                }
-            }),
-            Op::BvUnOp(o) => Value::BitVector({
-                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-                match o {
-                    BvUnOp::Not => !a,
-                    BvUnOp::Neg => -a,
-                }
-            }),
-            Op::BvNaryOp(o) => Value::BitVector({
-                let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
-                let f = xs.next().unwrap();
-                xs.fold(
-                    f,
-                    match o {
-                        BvNaryOp::Add => std::ops::Add::add,
-                        BvNaryOp::Mul => std::ops::Mul::mul,
-                        BvNaryOp::Xor => std::ops::BitXor::bitxor,
-                        BvNaryOp::Or => std::ops::BitOr::bitor,
-                        BvNaryOp::And => std::ops::BitAnd::bitand,
-                    },
-                )
-            }),
-            Op::BvSext(w) => Value::BitVector({
-                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-                let mask = ((Integer::from(1) << *w as u32) - 1)
-                    * Integer::from(a.uint().get_bit(a.width() as u32 - 1));
-                BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
-            }),
-            Op::PfToBv(w) => Value::BitVector({
-                let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
-                assert!(a.i() < &(Integer::from(1) << 1));
-                BitVector::new(a.i().clone(), *w)
-            }),
-            Op::BvUext(w) => Value::BitVector({
-                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-                BitVector::new(a.uint().clone(), a.width() + w)
-            }),
-            Op::Ite => if vs.get(&c.cs[0]).unwrap().as_bool() {
-                vs.get(&c.cs[1])
-            } else {
-                vs.get(&c.cs[2])
-            }
-            .unwrap()
-            .clone(),
-            Op::BvBinPred(o) => Value::Bool({
-                let a = vs.get(&c.cs[0]).unwrap().as_bv();
-                let b = vs.get(&c.cs[1]).unwrap().as_bv();
-                match o {
-                    BvBinPred::Sge => a.as_sint() >= b.as_sint(),
-                    BvBinPred::Sgt => a.as_sint() > b.as_sint(),
-                    BvBinPred::Sle => a.as_sint() <= b.as_sint(),
-                    BvBinPred::Slt => a.as_sint() < b.as_sint(),
-                    BvBinPred::Uge => a.uint() >= b.uint(),
-                    BvBinPred::Ugt => a.uint() > b.uint(),
-                    BvBinPred::Ule => a.uint() <= b.uint(),
-                    BvBinPred::Ult => a.uint() < b.uint(),
-                }
-            }),
-            Op::BoolToBv => Value::BitVector(BitVector::new(
-                Integer::from(vs.get(&c.cs[0]).unwrap().as_bool()),
-                1,
-            )),
-            Op::PfUnOp(o) => Value::Field({
-                let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
-                match o {
-                    PfUnOp::Recip => a.recip(),
-                    PfUnOp::Neg => -a,
-                }
-            }),
-            Op::PfNaryOp(o) => Value::Field({
-                let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_pf().clone());
-                let f = xs.next().unwrap();
-                xs.fold(
-                    f,
-                    match o {
-                        PfNaryOp::Add => std::ops::Add::add,
-                        PfNaryOp::Mul => std::ops::Mul::mul,
-                    },
-                )
-            }),
-            Op::UbvToPf(m) => Value::Field({
-                let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-                field::FieldElem::new(a.uint().clone(), m.clone())
-            }),
-            // tuple
-            Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
-            Op::Field(i) => {
-                let t = vs.get(&c.cs[0]).unwrap().as_tuple();
-                assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
-                t[*i].clone()
-            }
-            Op::Update(i) => {
-                let mut t = Vec::from(vs.get(&c.cs[0]).unwrap().as_tuple()).into_boxed_slice();
-                assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
-                let e = vs.get(&c.cs[1]).unwrap().clone();
-                assert_eq!(t[*i].sort(), e.sort());
-                t[*i] = e;
-                Value::Tuple(t)
-            }
-            // array
-            Op::Store => {
-                let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
-                let i = vs.get(&c.cs[1]).unwrap().clone();
-                let v = vs.get(&c.cs[2]).unwrap().clone();
-                Value::Array(a.clone().store(i, v))
-            }
-            Op::Select => {
-                let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
-                let i = vs.get(&c.cs[1]).unwrap();
-                a.clone().select(i)
-            }
-            o => unimplemented!("eval: {:?}", o),
-        };
-        //println!("Eval {}\nAs   {}", c, v);
-        vs.insert(c.clone(), v);
+        eval_value(vs, h, c.clone());
     }
     vs.get(t).unwrap().clone()
+}
+
+/// Helper function for eval function. Handles a single term
+fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) -> Value {
+    let v = match &c.op {
+        Op::Var(n, _) => h
+            .get(n)
+            .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h))
+            .clone(),
+        Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
+        Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
+        Op::Implies => {
+            Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool() || vs.get(&c.cs[1]).unwrap().as_bool())
+        }
+        Op::BoolNaryOp(BoolNaryOp::Or) => {
+            Value::Bool(c.cs.iter().any(|c| vs.get(c).unwrap().as_bool()))
+        }
+        Op::BoolNaryOp(BoolNaryOp::And) => {
+            Value::Bool(c.cs.iter().all(|c| vs.get(c).unwrap().as_bool()))
+        }
+        Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
+            c.cs.iter()
+                .map(|c| vs.get(c).unwrap().as_bool())
+                .fold(false, std::ops::BitXor::bitxor),
+        ),
+        Op::BvBit(i) => Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32)),
+        Op::BoolMaj => {
+            let c0 = vs.get(&c.cs[0]).unwrap().as_bool() as u8;
+            let c1 = vs.get(&c.cs[1]).unwrap().as_bool() as u8;
+            let c2 = vs.get(&c.cs[2]).unwrap().as_bool() as u8;
+            Value::Bool(c0 + c1 + c2 > 1)
+        }
+        Op::BvConcat => Value::BitVector({
+            let mut it = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
+            let f = it.next().unwrap();
+            it.fold(f, BitVector::concat)
+        }),
+        Op::BvExtract(h, l) => {
+            Value::BitVector(vs.get(&c.cs[0]).unwrap().as_bv().clone().extract(*h, *l))
+        }
+        Op::Const(v) => v.clone(),
+        Op::BvBinOp(o) => Value::BitVector({
+            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            let b = vs.get(&c.cs[1]).unwrap().as_bv().clone();
+            match o {
+                BvBinOp::Udiv => a / &b,
+                BvBinOp::Urem => a % &b,
+                BvBinOp::Sub => a - b,
+                BvBinOp::Ashr => a.ashr(&b),
+                BvBinOp::Lshr => a.lshr(&b),
+                BvBinOp::Shl => a << b,
+            }
+        }),
+        Op::BvUnOp(o) => Value::BitVector({
+            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            match o {
+                BvUnOp::Not => !a,
+                BvUnOp::Neg => -a,
+            }
+        }),
+        Op::BvNaryOp(o) => Value::BitVector({
+            let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
+            let f = xs.next().unwrap();
+            xs.fold(
+                f,
+                match o {
+                    BvNaryOp::Add => std::ops::Add::add,
+                    BvNaryOp::Mul => std::ops::Mul::mul,
+                    BvNaryOp::Xor => std::ops::BitXor::bitxor,
+                    BvNaryOp::Or => std::ops::BitOr::bitor,
+                    BvNaryOp::And => std::ops::BitAnd::bitand,
+                },
+            )
+        }),
+        Op::BvSext(w) => Value::BitVector({
+            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            let mask = ((Integer::from(1) << *w as u32) - 1)
+                * Integer::from(a.uint().get_bit(a.width() as u32 - 1));
+            BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
+        }),
+        Op::PfToBv(w) => Value::BitVector({
+            let i = vs.get(&c.cs[0]).unwrap().as_pf().i();
+            assert!(i < (Integer::from(1) << *w as u32));
+            BitVector::new(i, *w)
+        }),
+        Op::BvUext(w) => Value::BitVector({
+            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            BitVector::new(a.uint().clone(), a.width() + w)
+        }),
+        Op::Ite => if vs.get(&c.cs[0]).unwrap().as_bool() {
+            vs.get(&c.cs[1])
+        } else {
+            vs.get(&c.cs[2])
+        }
+        .unwrap()
+        .clone(),
+        Op::BvBinPred(o) => Value::Bool({
+            let a = vs.get(&c.cs[0]).unwrap().as_bv();
+            let b = vs.get(&c.cs[1]).unwrap().as_bv();
+            match o {
+                BvBinPred::Sge => a.as_sint() >= b.as_sint(),
+                BvBinPred::Sgt => a.as_sint() > b.as_sint(),
+                BvBinPred::Sle => a.as_sint() <= b.as_sint(),
+                BvBinPred::Slt => a.as_sint() < b.as_sint(),
+                BvBinPred::Uge => a.uint() >= b.uint(),
+                BvBinPred::Ugt => a.uint() > b.uint(),
+                BvBinPred::Ule => a.uint() <= b.uint(),
+                BvBinPred::Ult => a.uint() < b.uint(),
+            }
+        }),
+        Op::BoolToBv => Value::BitVector(BitVector::new(
+            Integer::from(vs.get(&c.cs[0]).unwrap().as_bool()),
+            1,
+        )),
+        Op::PfUnOp(o) => Value::Field({
+            let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
+            match o {
+                PfUnOp::Recip => a.recip(),
+                PfUnOp::Neg => -a,
+            }
+        }),
+        Op::PfNaryOp(o) => Value::Field({
+            let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_pf().clone());
+            let f = xs.next().unwrap();
+            xs.fold(
+                f,
+                match o {
+                    PfNaryOp::Add => std::ops::Add::add,
+                    PfNaryOp::Mul => std::ops::Mul::mul,
+                },
+            )
+        }),
+        Op::UbvToPf(fty) => Value::Field(fty.new_v(vs.get(&c.cs[0]).unwrap().as_bv().uint())),
+        // tuple
+        Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
+        Op::Field(i) => {
+            let t = vs.get(&c.cs[0]).unwrap().as_tuple();
+            assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
+            t[*i].clone()
+        }
+        Op::Update(i) => {
+            let mut t = Vec::from(vs.get(&c.cs[0]).unwrap().as_tuple()).into_boxed_slice();
+            assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
+            let e = vs.get(&c.cs[1]).unwrap().clone();
+            assert_eq!(t[*i].sort(), e.sort());
+            t[*i] = e;
+            Value::Tuple(t)
+        }
+        // array
+        Op::Store => {
+            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+            let i = vs.get(&c.cs[1]).unwrap().clone();
+            let v = vs.get(&c.cs[2]).unwrap().clone();
+            Value::Array(a.store(i, v))
+        }
+        Op::Select => {
+            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+            let i = vs.get(&c.cs[1]).unwrap();
+            a.select(i)
+        }
+        Op::Map(op) => {
+            let arg_cnt = c.cs.len();
+
+            //  term_vecs[i] will store a vector of all the i-th index entries of the array arguments
+            let mut term_vecs = vec![Vec::new(); vs.get(&c.cs[0]).unwrap().as_array().size];
+
+            for i in 0..arg_cnt {
+                let arr = vs.get(&c.cs[i]).unwrap().as_array().clone();
+                let iter = match check(&c.cs[i]) {
+                    Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                    _ => panic!("Input type should be Array"),
+                };
+                for (j, jval) in iter {
+                    term_vecs[j].push(leaf_term(Op::Const(arr.clone().select(&jval))))
+                }
+            }
+
+            let mut res = match check(&c) {
+                Sort::Array(k, v, n) => Array::default((*k).clone(), &v, n),
+                _ => panic!("Output type of map should be array"),
+            };
+
+            let iter = match check(&c) {
+                Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                _ => panic!("Input type should be Array"),
+            };
+            for (i, idxval) in iter {
+                let t = term((**op).clone(), term_vecs[i].clone());
+                let val = eval_value(vs, h, t);
+                res.map.insert(idxval, val);
+            }
+            Value::Array(res)
+        }
+        o => unimplemented!("eval: {:?}", o),
+    };
+    vs.insert(c.clone(), v.clone());
+    debug!("Eval {}\nAs   {}", c, v);
+    v
 }
 
 /// Make an array from a sequence of terms.
@@ -1536,6 +1576,9 @@ impl std::iter::Iterator for PostOrderIter {
 
 /// A party identifier
 pub type PartyId = u8;
+
+/// Ciphertext/Plaintext identifier
+pub type EncStatus = bool;
 
 #[derive(Clone, Debug, Default)]
 /// An IR constraint system.

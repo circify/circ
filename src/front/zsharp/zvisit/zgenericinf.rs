@@ -161,7 +161,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             .constr
             .as_ref()
             .and_then(|t| find_unique_model(t, g_names.clone()))
-            .unwrap_or_else(HashMap::new);
+            .unwrap_or_default();
 
         // 5. extract the assignments from the solver result
         let mut res = HashMap::with_capacity(g_names.len());

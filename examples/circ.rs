@@ -28,6 +28,8 @@ use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
+use circ::util::field::DFL_T;
+use circ_fields::FieldT;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
@@ -100,6 +102,9 @@ enum Backend {
         proof: PathBuf,
         #[structopt(long, default_value = "x", parse(from_os_str))]
         instance: PathBuf,
+        #[structopt(long, default_value = "50")]
+        /// linear combination constraints up to this size will be eliminated
+        lc_elimination_thresh: usize,
         #[structopt(long, default_value = "count")]
         action: ProofAction,
     },
@@ -141,7 +146,7 @@ arg_enum! {
         Prove,
         Setup,
         Verify,
-	Spartan,
+    Spartan,
     }
 }
 
@@ -283,24 +288,25 @@ fn main() {
             prover_key,
             verifier_key,
             instance,
+            lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
             let r1cs;
-	    match action {
-		ProofAction::Spartan => {
-		    r1cs = to_r1cs(cs, circ::target::r1cs::spartan::SPARTAN_MODULUS.clone());
-		}
-		_ => {
-		    r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
-		}
-	    }
-            //println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-            //let r1cs = reduce_linearities(r1cs);
+            match action {
+                ProofAction::Spartan => {
+                    r1cs = to_r1cs(cs, circ::target::r1cs::spartan::SPARTAN_MODULUS.clone());
+                }
+                _ => {
+                    r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+                }
+            }
+            println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
+            let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
             let num_r1cs = r1cs.constraints().len().clone();
 
-	    match action {
+            match action {
                 ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
@@ -331,46 +337,45 @@ fn main() {
                     let instance_vec = parse_instance(&instance);
                     verify_proof(&pvk, &pf, &instance_vec).unwrap();
                 }
-		ProofAction::Spartan => {
-		    println!("Converting R1CS to Spartan");
+                ProofAction::Spartan => {
+                    println!("Converting R1CS to Spartan");
  
-		    let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs);
+                    let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs);
 
-		    println!("Proving with Spartan");
-		    let prover = Instant::now();
+                    println!("Proving with Spartan");
+                    let prover = Instant::now();
 
-		    // produce public parameters
-		    let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
-		    // produce proof
-		    let mut prover_transcript = Transcript::new(b"nizk_example");
-		    let pf = NIZK::prove(&inst, vars, &inps, &gens, &mut prover_transcript);		    
-	
-                     let prover_ms = prover.elapsed().as_millis();
-   		     let innerproof = &pf.r1cs_sat_proof;
-        	     let proof_len = bincode::serialize(innerproof).unwrap().len();
-      		     //let comm_len = bincode::serialize(&innerproof.comm_vars).unwrap().len();
-                     let comm_len = -1;
+                    // produce public parameters
+                    let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
+                    // produce proof
+                    let mut prover_transcript = Transcript::new(b"nizk_example");
+                    let pf = NIZK::prove(&inst, vars, &inps, &gens, &mut prover_transcript);            
+    
+                    let prover_ms = prover.elapsed().as_millis();
+                    let innerproof = &pf.r1cs_sat_proof;
+                    let proof_len = bincode::serialize(innerproof).unwrap().len();
+                    //let comm_len = bincode::serialize(&innerproof.comm_vars).unwrap().len();
+                    let comm_len = -1;
 
-   	            // write proof file
-		    //let mut pf_file = File::create(proof).unwrap();
+                    // write proof file
+                    //let mut pf_file = File::create(proof).unwrap();
                     //pf.write(&mut pf_file).unwrap();
 
                     println!("Verifying with Spartan");
-		    let verifier = Instant::now();                    
+                    let verifier = Instant::now();                    
 
-		    // verify proof
-		    let mut verifier_transcript = Transcript::new(b"nizk_example");
-		    assert!(pf
-			.verify(&inst, &inps, &mut verifier_transcript, &gens)
-			.is_ok());
+                    // verify proof
+                    let mut verifier_transcript = Transcript::new(b"nizk_example");
+                    assert!(pf
+                        .verify(&inst, &inps, &mut verifier_transcript, &gens)
+                        .is_ok());
 
-		    let verifier_ms = verifier.elapsed().as_millis();
-		    println!("proof verification successful!");
+                    let verifier_ms = verifier.elapsed().as_millis();
+                    println!("proof verification successful!");
                     
-		    println!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}, comm len: {}, proof len: {}", path_buf, num_r1cs, prover_ms, verifier_ms, comm_len, proof_len);
-		    eprintln!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}, comm len: {}, proof len: {}", path_buf, num_r1cs, prover_ms, verifier_ms, comm_len, proof_len);
+                    println!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}, comm len: {}, proof len: {}", path_buf, num_r1cs, prover_ms, verifier_ms, comm_len, proof_len);
 
-		}
+                }
             }
         }
         #[cfg(not(feature = "r1cs"))]
