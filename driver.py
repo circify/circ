@@ -236,7 +236,6 @@ if __name__ == "__main__":
         clean(features)
 
     if args.mode:
-        print("SETTING MODE")
         set_mode(args.mode)
 
     if args.all_features:

@@ -146,7 +146,7 @@ arg_enum! {
         Prove,
         Setup,
         Verify,
-    Spartan,
+        Spartan,
     }
 }
 

@@ -35,7 +35,6 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
     let mut trans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
     let mut itrans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
 
-    // TODO if not input?
     match r1cs.values {
         Some(_) =>
             for (k,v) in r1cs.values.as_ref().unwrap() { // CirC id, Integer
