@@ -39,7 +39,5 @@ jobs:
       run: cargo fmt -- --check
     - name: Lint
       run: python3 driver.py --lint
-    - name: Build
-      run: python3 driver.py --build
-    - name: Test
+    - name: Build, then Test
       run: python3 driver.py --test

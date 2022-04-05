@@ -19,9 +19,9 @@ pub enum ShareType {
 /// List of share types.
 pub const SHARE_TYPES: [ShareType; 3] = [ShareType::Arithmetic, ShareType::Boolean, ShareType::Yao];
 
-#[cfg(feature = "lp")]
 impl ShareType {
-    fn char(&self) -> char {
+    /// Output associated char for each ShareType
+    pub fn char(&self) -> char {
         match self {
             ShareType::Arithmetic => 'a',
             ShareType::Yao => 'y',

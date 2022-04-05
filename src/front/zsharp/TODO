@@ -29,6 +29,18 @@
 - optimization: for a < b, only expand a to b's bit width;
   a < b is (a_expansion == a) && (a_expansion < b_expansion)
 
+--
+wants
+
+- improve speed (atomics?)
+  - shake is fast in zxi but slow in zxc (linearity reduction)
+
+--> fix field up-front?
+
+- cc-snarks/examples/sha3/keccakf-zxc.zok
+
+--
+
 == done ==
 
 [x] generic inf: monomorphize at call time

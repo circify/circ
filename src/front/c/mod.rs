@@ -452,18 +452,17 @@ impl CGen {
         let base_ty: Ty = decl_info.ty;
         let derived = &d.declarator.node.derived;
         let derived_ty = self.derived_type_(base_ty, derived.to_vec());
-        let expr: CTerm;
-        if let Some(init) = d.initializer {
-            expr = self.gen_init(derived_ty.clone(), init.node);
+        let expr = if let Some(init) = d.initializer {
+            self.gen_init(derived_ty.clone(), init.node)
         } else {
-            expr = match derived_ty {
+            match derived_ty {
                 Ty::Array(size, ref ty) => {
                     let id = self.circ.zero_allocate(size.unwrap(), 32, ty.num_bits());
                     cterm(CTermData::CArray(*ty.clone(), Some(id)))
                 }
                 _ => derived_ty.default(),
             }
-        }
+        };
 
         let res = self.circ.declare_init(
             decl_info.name,

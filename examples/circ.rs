@@ -19,7 +19,6 @@ use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
 };
-use circ::target::aby::output::write_aby_exec;
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::trans::to_ilp;
@@ -29,6 +28,8 @@ use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
+use circ::util::field::DFL_T;
+use circ_fields::FieldT;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
@@ -92,6 +93,9 @@ enum Backend {
         proof: PathBuf,
         #[structopt(long, default_value = "x", parse(from_os_str))]
         instance: PathBuf,
+        #[structopt(long, default_value = "50")]
+        /// linear combination constraints up to this size will be eliminated
+        lc_elimination_thresh: usize,
         #[structopt(long, default_value = "count")]
         action: ProofAction,
     },
@@ -219,6 +223,7 @@ fn main() {
             panic!("Missing feature: c");
         }
     };
+
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
@@ -274,12 +279,13 @@ fn main() {
             prover_key,
             verifier_key,
             instance,
+            lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+            let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-            let r1cs = reduce_linearities(r1cs);
+            let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
             match action {
                 ProofAction::Count => (),
@@ -327,7 +333,6 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             to_aby(cs, &path_buf, &lang_str, &cost_model);
-            write_aby_exec(&path_buf, &lang_str);
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {

@@ -16,7 +16,7 @@ def install(features):
     """
 
     def verify_path_empty(path) -> bool:
-        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path)) 
+        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
 
     for f in features:
         if f == "aby":
@@ -24,10 +24,8 @@ def install(features):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
 
-            # Get EZPC header file
-            subprocess.run(["mkdir", "-p", EZPC_SOURCE])
-            subprocess.run(["wget", "-O", EZPC_SOURCE+"/ezpc.h", "https://raw.githubusercontent.com/circify/circ/master/third_party/EZPC/ezpc.h"])
-
+    # install python requirements
+    subprocess.run(["pip3", "install", "-r", "requirements.txt"])
 
 def check(features):
     """
@@ -39,11 +37,11 @@ def check(features):
             set of features required
     """
 
-    cmd = ["cargo", "check"]
+    cmd = ["cargo", "check", "--tests", "--examples", "--benches", "--bins"]
     cargo_features = filter_cargo_features(features)
-    if cargo_features:        
+    if cargo_features:
        cmd = cmd + ["--features"] + cargo_features
-    subprocess.run(cmd)
+    subprocess.run(cmd, check=True)
 
 def build(features):
     """
@@ -59,25 +57,25 @@ def build(features):
     check(features)
     install(features)
 
-    cmd = ["cargo", "build"] 
+    cmd = ["cargo", "build"]
     if mode:
-        cmd += ["--"+mode] 
+        cmd += ["--"+mode]
     else:
         # default to release mode
-        cmd += ["--release"] 
+        cmd += ["--release"]
     cmd += ["--examples"]
-    
+
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
-    subprocess.run(cmd)
+    subprocess.run(cmd, check=True)
 
     if "aby" in features:
         if "c" in features:
-            subprocess.run(["./scripts/build_mpc_c_test.zsh"])
+            subprocess.run(["./scripts/build_mpc_c_test.zsh"], check=True)
         if "smt" in features and "zok" in features:
-            subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"])
-        subprocess.run(["./scripts/build_aby.zsh"])
+            subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"], check=True)
+        subprocess.run(["./scripts/build_aby.zsh"], check=True)
 
 def test(features):
     """
@@ -97,10 +95,6 @@ def test(features):
         test_cmd = test_cmd + ["--features"] + cargo_features
     subprocess.run(test_cmd, check=True)
 
-    if "c" in features:
-        if "a" in features:
-            subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
-
     if "r1cs" in features and "smt" in features:
         subprocess.run(["./scripts/test_datalog.zsh"], check=True)
 
@@ -114,13 +108,39 @@ def test(features):
         if "lp" in features and "r1cs" in features:
             subprocess.run(["./scripts/test_zok_to_ilp_pf.zsh"], check=True)
 
+    if "c" in features:
+        if "aby" in features:
+            subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
+
 def format():
     print("formatting!")
     subprocess.run(["cargo", "fmt", "--all"], check=True)
 
 def lint():
+    """
+    Run cargo clippy
+
+    Parameters
+    ----------
+        features : set of str
+            set of features required
+    """
     print("linting!")
-    subprocess.run(["cargo", "clippy"], check=True)
+
+    cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
+    cargo_features = filter_cargo_features(features)
+    if cargo_features:
+       cmd = cmd + ["--features"] + cargo_features
+    subprocess.run(cmd, check=True)
+
+def flamegraph(features, extra):
+    cmd = ["cargo", "flamegraph"]
+    cargo_features = filter_cargo_features(features)
+    if cargo_features:
+        cmd = cmd + ["--features"] + cargo_features
+    cmd += extra
+    print("running:", " ".join(cmd))
+    subprocess.run(cmd, check=True)
 
 def clean(features):
     print("cleaning!")
@@ -156,7 +176,7 @@ def set_features(features):
     features = set(sorted([f for f in features if verify_feature(f)]))
     save_features(features)
     print("Feature set:", sorted(list(features)))
-    return features 
+    return features
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -166,20 +186,33 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--test", action="store_true", help="build and test all dependencies from the feature set")
     parser.add_argument("-f", "--format", action="store_true", help="run `cargo fmt --all`")
     parser.add_argument("-l", "--lint", action="store_true", help="run `cargo clippy`")
+    parser.add_argument("--flamegraph", action="store_true", help="run `cargo flamegraph`")
     parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
     parser.add_argument("-m", "--mode", type=str, help="set `debug` or `release` mode")
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
     parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
+    parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
     args = parser.parse_args()
 
     def verify_single_action(args: argparse.Namespace):
-        if [bool(v) for v in vars(args).values()].count(True) != 1:
-            parser.error("parser error: only one action can be specified")
+        actions = [k for k, v in vars(args).items() if (type(v) is bool or k in ["features"]) and bool(v)]
+        if len(actions) != 1:
+            parser.error("parser error: only one action can be specified. got: " + " ".join(actions))
     verify_single_action(args)
+
+    def verify_extra_implies_flamegraph(args: argparse.Namespace):
+        if not args.flamegraph and len(args.extra) > 0:
+            parser.error("parser error: no --flamegraph action, and extra arguments")
+    verify_extra_implies_flamegraph(args)
 
     features = load_features()
     set_env(features)
+
+    if args.flamegraph:
+        if len(args.extra) > 0 and args.extra[0] == "--":
+            del args.extra[0]
+        flamegraph(features, args.extra)
 
     if args.install:
         install(features)
@@ -201,15 +234,15 @@ if __name__ == "__main__":
 
     if args.clean:
         clean(features)
-    
+
     if args.mode:
         set_mode(args.mode)
 
     if args.all_features:
         features = set_features(valid_features)
-    
+
     if args.list_features:
-        print("Feature set: ", sorted(list(features)))
+        print("Feature set:", sorted(list(features)))
 
     if args.features:
         features = set_features(args.features)
