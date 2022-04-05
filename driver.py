@@ -217,7 +217,7 @@ def benchmark(features, extras):
     num_retries = 3
     if extras:
         num_retries = int(extras[0])
-        
+
     for _ in range(num_retries):
         subprocess.run(["python3", "./scripts/aby_tests/c_benchmark_aby.py"])
 
@@ -247,7 +247,7 @@ if __name__ == "__main__":
 
     def verify_extra(args: argparse.Namespace):
         if (not args.flamegraph and not args.benchmark) and len(args.extra) > 0:
-            parser.error("parser error: no [--benchmark, --flamegraph action], and extra arguments")
+            parser.error("parser error: no [--benchmark / --flamegraph action], and extra arguments")
     verify_extra(args)
 
     features = load_features()
