@@ -357,7 +357,6 @@ impl ToABY {
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
     let Computation { outputs: terms, .. } = ir.clone();
-
     #[cfg(feature = "lp")]
     let s_map: SharingMap = assign(&ir, cm);
     #[cfg(not(feature = "lp"))]

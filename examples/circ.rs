@@ -218,6 +218,7 @@ fn main() {
             panic!("Missing feature: c");
         }
     };
+
     let cs = match mode {
         Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
         Mode::Mpc(_) => opt(
