@@ -25,6 +25,11 @@ def get_result(file_path):
     else:
         raise RuntimeError("Unable to open file: "+file_path)
 
+def remove_logs_from_result(output: str) -> str:
+    lines = output.split("\n")
+    cleaned_lines = [line.strip() for line in lines if line and not line.strip().startswith("LOG:")]
+    cleaned_output = "\n".join(cleaned_lines)
+    return cleaned_output
 
 def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
@@ -44,8 +49,11 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
         server_out = server_out.decode("utf-8").strip()
         client_out = client_out.decode("utf-8").strip()
 
-        assert server_out == client_out, "server out != client out\nserver_out: "+server_out+"\nclient_out: "+client_out
-        assert server_out == expected, "server_out: "+server_out+"\nexpected: "+expected
+        cleaned_server_out = remove_logs_from_result(server_out)
+        cleaned_client_out = remove_logs_from_result(client_out)
+
+        assert cleaned_server_out == cleaned_client_out, "server out != client out\nserver_out: "+cleaned_server_out+"\nclient_out: "+cleaned_client_out
+        assert cleaned_server_out == expected, "server_out: "+cleaned_server_out+"\nexpected: "+expected
         return True, ""
     except Exception as e:
         # print("Exception: ", e)

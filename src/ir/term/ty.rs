@@ -163,10 +163,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                     let res_sort = check_raw(&term_)
                         .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size));
                     match res_sort {
-                        Ok(s) => {
-                            println!("afsdfsf {}", s);
-                            Ok(s)
-                        }
+                        Ok(s) => Ok(s),
                         _ => Err(TypeErrorReason::Custom("map failed".to_string())),
                     }
                 }
