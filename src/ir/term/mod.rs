@@ -22,6 +22,8 @@
 //!    * [Value]: a variable-free (and evaluated) term
 //!
 use crate::util::once::OnceQueue;
+
+use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap, FxHashSet};
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
@@ -34,12 +36,10 @@ use std::sync::{Arc, RwLock};
 pub mod bv;
 pub mod dist;
 pub mod extras;
-pub mod field;
 pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
-pub use field::FieldElem;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -118,7 +118,7 @@ pub enum Op {
     /// Unsigned bit-vector to prime-field
     ///
     /// Takes the modulus.
-    UbvToPf(Arc<Integer>),
+    UbvToPf(FieldT),
 
     /// Binary operator, with arguments (array, index).
     ///
@@ -285,7 +285,7 @@ impl Display for Op {
             Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a),
+            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
@@ -623,7 +623,7 @@ pub enum Value {
     /// Arbitrary-precision integer
     Int(Integer),
     /// Finite field element
-    Field(FieldElem),
+    Field(FieldV),
     /// Boolean
     Bool(bool),
     /// Array
@@ -794,8 +794,8 @@ pub enum Sort {
     F64,
     /// arbitrary-precision integer
     Int,
-    /// prime field, integers mod this modulus
-    Field(Arc<Integer>),
+    /// prime field, integers mod FieldT.modulus()
+    Field(FieldT),
     /// boolean
     Bool,
     /// Array from one sort to another, of fixed size.
@@ -820,8 +820,8 @@ impl Sort {
     #[track_caller]
     /// Unwrap the modulus of this prime field, panicking otherwise.
     pub fn as_pf(&self) -> Arc<Integer> {
-        if let Sort::Field(w) = self {
-            w.clone()
+        if let Sort::Field(fty) = self {
+            fty.modulus_arc()
         } else {
             panic!("{} is not a field", self)
         }
@@ -841,46 +841,7 @@ impl Sort {
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]
     pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
-        match self {
-            Sort::Bool => Box::new(
-                vec![false, true]
-                    .into_iter()
-                    .map(|b| leaf_term(Op::Const(Value::Bool(b)))),
-            ),
-            Sort::BitVector(w) => {
-                let w = *w;
-                let lim = Integer::from(1) << w as u32;
-                Box::new(
-                    std::iter::successors(Some(Integer::from(0)), move |p| {
-                        let q = p.clone() + 1;
-                        if q < lim {
-                            Some(q)
-                        } else {
-                            None
-                        }
-                    })
-                    .map(move |i| bv_lit(i, w)),
-                )
-            }
-            Sort::Field(m) => {
-                let m = m.clone();
-                let m2 = m.clone();
-                Box::new(
-                    std::iter::successors(Some(Integer::from(0)), move |p| {
-                        let q = p.clone() + 1;
-                        if q < *m {
-                            Some(q)
-                        } else {
-                            None
-                        }
-                    })
-                    .map(move |i| {
-                        leaf_term(Op::Const(Value::Field(FieldElem::new(i, m2.clone()))))
-                    }),
-                )
-            }
-            _ => panic!("Cannot iterate over {}", self),
-        }
+        Box::new(self.elems_iter_values().map(|v| leaf_term(Op::Const(v))))
     }
 
     /// An iterator over the elements of this sort (as IR values).
@@ -888,7 +849,7 @@ impl Sort {
     #[track_caller]
     pub fn elems_iter_values(&self) -> Box<dyn Iterator<Item = Value>> {
         match self {
-            Sort::Bool => Box::new(vec![false, true].into_iter().map(Value::Bool)),
+            Sort::Bool => Box::new([false, true].iter().map(|b| Value::Bool(*b))),
             Sort::BitVector(w) => {
                 let w = *w;
                 let lim = Integer::from(1) << w as u32;
@@ -904,9 +865,9 @@ impl Sort {
                     .map(move |i| Value::BitVector(BitVector::new(i, w))),
                 )
             }
-            Sort::Field(m) => {
-                let m = m.clone();
-                let m2 = m.clone();
+            Sort::Field(fty) => {
+                let m = fty.modulus_arc();
+                let fty = fty.clone();
                 Box::new(
                     std::iter::successors(Some(Integer::from(0)), move |p| {
                         let q = p.clone() + 1;
@@ -916,7 +877,7 @@ impl Sort {
                             None
                         }
                     })
-                    .map(move |i| Value::Field(FieldElem::new(i, m2.clone()))),
+                    .map(move |i| Value::Field(fty.new_v(i))),
                 )
             }
             _ => panic!("Cannot iterate over {}", self),
@@ -945,7 +906,7 @@ impl Sort {
         match self {
             Sort::Bool => Value::Bool(false),
             Sort::BitVector(w) => Value::BitVector(BitVector::new(0.into(), *w)),
-            Sort::Field(m) => Value::Field(FieldElem::new(Integer::from(0), m.clone())),
+            Sort::Field(fty) => Value::Field(fty.default_value()),
             Sort::Int => Value::Int(0.into()),
             Sort::F32 => Value::F32(0.0f32),
             Sort::F64 => Value::F64(0.0),
@@ -963,7 +924,7 @@ impl Display for Sort {
             Sort::Int => write!(f, "int"),
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
-            Sort::Field(i) => write!(f, "(mod {})", i),
+            Sort::Field(fty) => write!(f, "(mod {})", fty.modulus()),
             Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
@@ -1154,7 +1115,7 @@ impl TermData {
         }
     }
     /// Get the underlying prime field constant, if possible.
-    pub fn as_pf_opt(&self) -> Option<&FieldElem> {
+    pub fn as_pf_opt(&self) -> Option<&FieldV> {
         if let Op::Const(Value::Field(b)) = &self.op {
             Some(b)
         } else {
@@ -1205,7 +1166,7 @@ impl Value {
     pub fn sort(&self) -> Sort {
         match &self {
             Value::Bool(_) => Sort::Bool,
-            Value::Field(f) => Sort::Field(f.modulus().clone()),
+            Value::Field(f) => Sort::Field(f.ty()),
             Value::Int(_) => Sort::Int,
             Value::F64(_) => Sort::F64,
             Value::F32(_) => Sort::F32,
@@ -1239,7 +1200,7 @@ impl Value {
     }
     #[track_caller]
     /// Get the underlying prime field constant, if possible.
-    pub fn as_pf(&self) -> &FieldElem {
+    pub fn as_pf(&self) -> &FieldV {
         if let Value::Field(b) = self {
             b
         } else {
@@ -1383,9 +1344,9 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
         }),
         Op::PfToBv(w) => Value::BitVector({
-            let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
-            assert!(a.i() < &(Integer::from(1) << 1));
-            BitVector::new(a.i().clone(), *w)
+            let i = vs.get(&c.cs[0]).unwrap().as_pf().i();
+            assert!(i < (Integer::from(1) << *w as u32));
+            BitVector::new(i, *w)
         }),
         Op::BvUext(w) => Value::BitVector({
             let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
@@ -1434,10 +1395,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 },
             )
         }),
-        Op::UbvToPf(m) => Value::Field({
-            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-            field::FieldElem::new(a.uint().clone(), m.clone())
-        }),
+        Op::UbvToPf(fty) => Value::Field(fty.new_v(vs.get(&c.cs[0]).unwrap().as_bv().uint())),
         // tuple
         Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
         Op::Field(i) => {

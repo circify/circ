@@ -60,7 +60,7 @@ fn map_test_bv_key() {
         vec![bv(0b0001, 4), bv(0b0100, 4), bv(0b1001, 4), bv(0b0000, 4)],
     );
     let actual_eq = term![Op::Map(Box::new(Op::Eq)); a1.clone(), a2.clone()];
-    let actual_add = term![Op::Map(Box::new(BV_ADD)); a1.clone(), a2.clone()];
+    let actual_add = term![Op::Map(Box::new(BV_ADD)); a1, a2];
     let expected_eq = make_array(
         Sort::BitVector(32),
         Sort::Bool,

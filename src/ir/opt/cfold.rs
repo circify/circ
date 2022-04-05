@@ -1,6 +1,8 @@
 //! Constant folding
 
 use crate::ir::term::*;
+
+use circ_fields::FieldV;
 use lazy_static::lazy_static;
 use rug::Integer;
 use std::ops::DerefMut;
@@ -193,12 +195,9 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
-            Op::UbvToPf(m) => get(0).as_bv_opt().map(|bv| {
-                leaf_term(Op::Const(Value::Field(FieldElem::new(
-                    bv.uint().clone(),
-                    m.clone(),
-                ))))
-            }),
+            Op::UbvToPf(fty) => get(0)
+                .as_bv_opt()
+                .map(|bv| leaf_term(Op::Const(Value::Field(fty.new_v(bv.uint()))))),
             Op::Store => {
                 match (
                     get(0).as_array_opt(),
@@ -459,19 +458,19 @@ impl NaryFlat<BitVector> for BvNaryOp {
     }
 }
 
-impl NaryFlat<FieldElem> for PfNaryOp {
-    fn as_const(t: Term) -> Result<FieldElem, Term> {
+impl NaryFlat<FieldV> for PfNaryOp {
+    fn as_const(t: Term) -> Result<FieldV, Term> {
         match &t.op {
             Op::Const(Value::Field(b)) => Ok(b.clone()),
             _ => Err(t),
         }
     }
-    fn combine(self, mut children: Vec<Term>, mut consts: Vec<FieldElem>) -> Term {
+    fn combine(self, mut children: Vec<Term>, mut consts: Vec<FieldV>) -> Term {
         match self {
             PfNaryOp::Add => {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Add::add);
-                    if c.i() != &Integer::from(0) || children.is_empty() {
+                    if !c.is_zero() || children.is_empty() {
                         children.push(leaf_term(Op::Const(Value::Field(c))));
                     }
                 }
@@ -480,10 +479,10 @@ impl NaryFlat<FieldElem> for PfNaryOp {
             PfNaryOp::Mul => {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Mul::mul);
-                    if c.i() == &Integer::from(0) || children.is_empty() {
+                    if c.is_zero() || children.is_empty() {
                         leaf_term(Op::Const(Value::Field(c)))
                     } else {
-                        if c.i() != &Integer::from(1) {
+                        if !c.is_one() {
                             children.push(leaf_term(Op::Const(Value::Field(c))));
                         }
                         safe_nary(PF_MUL, children)

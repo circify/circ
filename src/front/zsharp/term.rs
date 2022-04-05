@@ -1,11 +1,6 @@
 //! Symbolic Z# terms
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
-use std::sync::Arc;
-
-use crate::front::ZSHARP_FIELD_SORT;
-use crate::front::ZSHARP_MODULUS;
-use crate::front::ZSHARP_MODULUS_ARC;
 
 use log::warn;
 use rug::Integer;
@@ -13,6 +8,7 @@ use rug::Integer;
 use crate::circify::{CirCtx, Embeddable};
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
+use crate::util::field::DFL_T;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Ty {
@@ -99,9 +95,9 @@ impl Ty {
         match self {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w),
-            Self::Field => ZSHARP_FIELD_SORT.clone(),
+            Self::Field => Sort::Field(DFL_T.clone()),
             Self::Array(n, b) => {
-                Sort::Array(Box::new(ZSHARP_FIELD_SORT.clone()), Box::new(b.sort()), *n)
+                Sort::Array(Box::new(Sort::Field(DFL_T.clone())), Box::new(b.sort()), *n)
             }
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
@@ -395,10 +391,10 @@ pub fn div(a: T, b: T) -> Result<T, String> {
 }
 
 fn rem_field(a: Term, b: Term) -> Term {
-    let len = ZSHARP_MODULUS.significant_bits() as usize;
+    let len = DFL_T.modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
-    term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
+    term![Op::UbvToPf(DFL_T.clone()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
 }
 
 fn rem_uint(a: Term, b: Term) -> Term {
@@ -476,7 +472,7 @@ fn ult_uint(a: Term, b: Term) -> Term {
 // XXX(constr_opt) see TODO file - only need to expand to MIN of two bit-lengths if done right
 // XXX(constr_opt) do this using subtraction instead?
 fn field_comp(a: Term, b: Term, op: BvBinPred) -> Term {
-    let len = ZSHARP_MODULUS.significant_bits() as usize;
+    let len = DFL_T.modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
     term![Op::BvBinPred(op); a_bv, b_bv]
@@ -595,7 +591,7 @@ pub fn not(a: T) -> Result<T, String> {
 
 pub fn const_int(a: T) -> Result<Integer, String> {
     match const_value(&a.term) {
-        Some(Value::Field(f)) => Ok(f.i().clone()),
+        Some(Value::Field(f)) => Ok(f.i()),
         Some(Value::BitVector(f)) => Ok(f.uint().clone()),
         _ => Err(format!("{} is not a constant integer", a)),
     }
@@ -669,7 +665,7 @@ fn pf_val<I>(i: I) -> Value
 where
     Integer: From<I>,
 {
-    Value::Field(FieldElem::new(Integer::from(i), ZSHARP_MODULUS_ARC.clone()))
+    Value::Field(DFL_T.new_v(i))
 }
 
 pub fn field_lit<I>(i: I) -> T
@@ -747,7 +743,7 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
             let iterm = if matches!(idx.ty, Ty::Uint(_)) {
                 warn!("warning: indexing array with Uint type");
-                term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); idx.term]
+                term![Op::UbvToPf(DFL_T.clone()); idx.term]
             } else {
                 idx.term
             };
@@ -762,7 +758,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
             warn!("warning: indexing array with Uint type");
-            term![Op::UbvToPf(ZSHARP_MODULUS_ARC.clone()); idx.term]
+            term![Op::UbvToPf(DFL_T.clone()); idx.term]
         } else {
             idx.term
         };
@@ -793,7 +789,7 @@ fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
         .collect::<Vec<(Term, Term)>>();
     let len = values.len() + to_insert.len();
     let arr = leaf_term(Op::Const(Value::Array(Array::new(
-        ZSHARP_FIELD_SORT.clone(),
+        Sort::Field(DFL_T.clone()),
         Box::new(sort.default_value()),
         values,
         len,
@@ -818,6 +814,21 @@ pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
         }
     } else {
         Err("Empty array".to_string())
+    }
+}
+
+pub fn uint_to_field(u: T) -> Result<T, String> {
+    match &u.ty {
+        Ty::Uint(_) => Ok(T::new(Ty::Field, term![Op::UbvToPf(DFL_T.clone()); u.term])),
+        u => Err(format!("Cannot do uint-to-field on {}", u)),
+    }
+}
+
+pub fn uint_to_uint(u: T, w: usize) -> Result<T, String> {
+    match &u.ty {
+        Ty::Uint(n) if *n <= w => Ok(T::new(Ty::Uint(w), term![Op::BvUext(w - n); u.term])),
+        Ty::Uint(n) => Err(format!("Tried narrowing uint{}-to-uint{} attempted", n, w)),
+        u => Err(format!("Cannot do uint-to-uint on {}", u)),
     }
 }
 
@@ -902,7 +913,6 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
 
 pub struct ZSharp {
     values: Option<HashMap<String, Integer>>,
-    modulus: Arc<Integer>,
 }
 
 fn field_name(struct_name: &str, field_name: &str) -> String {
@@ -915,10 +925,7 @@ fn idx_name(struct_name: &str, idx: usize) -> String {
 
 impl ZSharp {
     pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
-        Self {
-            values,
-            modulus: ZSHARP_MODULUS_ARC.clone(),
-        }
+        Self { values }
     }
 }
 
@@ -959,8 +966,8 @@ impl Embeddable for ZSharp {
                 Ty::Field,
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
-                    Sort::Field(self.modulus.clone()),
-                    || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
+                    Sort::Field(DFL_T.clone()),
+                    || Value::Field(DFL_T.new_v(get_int_val())),
                     visibility,
                 ),
             ),

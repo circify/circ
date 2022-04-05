@@ -6,10 +6,11 @@ pub mod zvisit;
 
 use super::{FrontEnd, Mode};
 use crate::circify::{CircError, Circify, Loc, Val};
-use crate::front::ZSHARP_MODULUS;
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
+use crate::util::field::DFL_T;
+
 use log::{debug, warn};
 use rug::Integer;
 use std::cell::{Cell, RefCell};
@@ -202,6 +203,47 @@ impl<'ast> ZGen<'ast> {
                     uint_from_bits(args.pop().unwrap())
                 }
             }
+            "u8_to_field" | "u16_to_field" | "u32_to_field" | "u64_to_field" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 1",
+                        args.len(),
+                        f_name
+                    ))
+                } else if !generics.is_empty() {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 0",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    uint_to_field(args.pop().unwrap())
+                }
+            }
+            "u8_to_u64" | "u16_to_u64" | "u32_to_u64" | "u8_to_u32" | "u16_to_u32"
+            | "u8_to_u16" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 1",
+                        args.len(),
+                        f_name
+                    ))
+                } else if !generics.is_empty() {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 0",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    let len = f_name.len();
+                    match &f_name[len - 2..] {
+                        "64" => uint_to_uint(args.pop().unwrap(), 64),
+                        "32" => uint_to_uint(args.pop().unwrap(), 32),
+                        "16" => uint_to_uint(args.pop().unwrap(), 16),
+                        _ => unreachable!(),
+                    }
+                }
+            }
             "unpack" => {
                 if args.len() != 1 {
                     Err(format!(
@@ -260,7 +302,7 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    Ok(uint_lit(ZSHARP_MODULUS.significant_bits(), 32))
+                    Ok(uint_lit(DFL_T.modulus().significant_bits(), 32))
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),
@@ -901,12 +943,6 @@ impl<'ast> ZGen<'ast> {
                 assert!(!p.accesses.is_empty());
                 let (val, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
                     let (f_path, f_name) = self.deref_import(&p.id.value);
-                    let args = c
-                        .arguments
-                        .expressions
-                        .iter()
-                        .map(|e| self.expr_impl_::<IS_CNST>(e))
-                        .collect::<Result<Vec<_>, _>>()?;
                     let exp_ty = self.lhs_ty_take().and_then(|ty| {
                         if p.accesses.len() > 1 {
                             None
@@ -914,6 +950,12 @@ impl<'ast> ZGen<'ast> {
                             Some(ty)
                         }
                     });
+                    let args = c
+                        .arguments
+                        .expressions
+                        .iter()
+                        .map(|e| self.expr_impl_::<IS_CNST>(e))
+                        .collect::<Result<Vec<_>, _>>()?;
                     let egv = c
                         .explicit_generics
                         .as_ref()
@@ -1001,15 +1043,15 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))
             }
             ast::Statement::Assertion(e) => {
-                match self
-                    .expr_impl_::<true>(&e.expression)
-                    .ok()
-                    .and_then(const_bool)
-                {
-                    Some(true) => Ok(()),
-                    Some(false) => Err("Const assert failed".to_string()),
-                    None if IS_CNST => Err(format!(
-                        "Const assert expression eval failed: {}",
+                match self.expr_impl_::<true>(&e.expression).and_then(|v| {
+                    const_bool(v)
+                        .ok_or_else(|| "interpreting expr as const bool failed".to_string())
+                }) {
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err("Const assert failed".to_string()),
+                    Err(err) if IS_CNST => Err(format!(
+                        "Const assert expression eval failed at {}: {}",
+                        err,
                         span_to_string(e.expression.span()),
                     )),
                     _ => {
