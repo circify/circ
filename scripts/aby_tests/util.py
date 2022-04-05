@@ -78,7 +78,6 @@ def run_tests(lang: str, tests: List[dict]):
 
         server_cmd = build_cmd(rename, test[2], 0)
         client_cmd = build_cmd(rename, test[2], 1)
-
         expected = get_result(test[2])
 
         test_results = []
@@ -93,3 +92,47 @@ def run_tests(lang: str, tests: List[dict]):
 
     failed_test_descs = [f"{r}:\n{e}\n{cmd}" for r, e, cmd in failed_test_descs]
     assert len(failed_test_descs) == 0, "there were failed test cases:\n======\n" + "\n\n".join(failed_test_descs)
+
+def run_benchmark(expected: str, server_cmd: List[str], client_cmd: List[str]):
+    assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
+    
+    try:
+        server_proc = Popen(" ".join(server_cmd), shell=True, stdout=PIPE, stderr=PIPE)
+        client_proc = Popen(" ".join(client_cmd), shell=True, stdout=PIPE, stderr=PIPE)
+
+        server_out, server_err = server_proc.communicate(timeout=30)
+        client_out, client_err = client_proc.communicate(timeout=30)
+
+        if server_err:
+            raise RuntimeError("Server error: "+server_err.decode("utf-8").strip())
+        if client_err:
+            raise RuntimeError("Client error: "+client_err.decode("utf-8").strip())
+
+        server_out = server_out.decode("utf-8").strip()
+        client_out = client_out.decode("utf-8").strip()
+
+        print(server_out)
+        print(client_out)
+
+        cleaned_server_out = remove_logs_from_result(server_out)
+        cleaned_client_out = remove_logs_from_result(client_out)
+
+        assert cleaned_server_out == cleaned_client_out, "server out != client out\nserver_out: "+cleaned_server_out+"\nclient_out: "+cleaned_client_out
+        assert cleaned_server_out == expected, "server_out: "+cleaned_server_out+"\nexpected: "+expected
+        return True, ""
+    except Exception as e:
+        print("Exception: ", e)
+        return False, e
+
+def run_benchmarks(lang: str, tests: List[dict]):
+    print(f"Running ABY benchmarks for {lang} frontend")
+    for test in tests:
+        assert len(test) == 3, "test configurations are wrong for test: "+test[0]
+        name = test[1]
+        rename = rename_test(name, lang)
+
+        server_cmd = build_cmd(rename, test[2], 0)
+        client_cmd = build_cmd(rename, test[2], 1)
+        expected = get_result(test[2])
+
+        run_benchmark(expected, server_cmd, client_cmd)
