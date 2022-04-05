@@ -29,9 +29,7 @@ def remove_logs_from_result(output: str) -> str:
     lines = output.split("\n")
     cleaned_lines = [line.strip() for line in lines if line and not line.strip().startswith("LOG:")]
     cleaned_output = "\n".join(cleaned_lines)
-    print(cleaned_output)
     return cleaned_output
-
 
 def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
