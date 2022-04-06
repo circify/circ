@@ -131,10 +131,6 @@ def benchmark(features):
         cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd, check=True)
 
-    if "c" in features:
-        if "aby" in features:
-            subprocess.run(["python3", "./scripts/aby_tests/c_benchmark_aby.py"], check=True)
-
 def format():
     print("formatting!")
     subprocess.run(["cargo", "fmt", "--all"], check=True)
