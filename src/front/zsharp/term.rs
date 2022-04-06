@@ -2,7 +2,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 
-use log::warn;
 use rug::Integer;
 
 use crate::circify::{CirCtx, Embeddable};
@@ -742,7 +741,6 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match array.ty {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
             let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-                warn!("warning: indexing array with Uint type");
                 term![Op::UbvToPf(DFL_T.clone()); idx.term]
             } else {
                 idx.term
@@ -757,7 +755,6 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-            warn!("warning: indexing array with Uint type");
             term![Op::UbvToPf(DFL_T.clone()); idx.term]
         } else {
             idx.term
