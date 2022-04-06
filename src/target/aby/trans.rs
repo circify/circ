@@ -5,22 +5,18 @@
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
-// #[cfg(feature = "lp")]
-// use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
+#[cfg(feature = "lp")]
 use crate::target::graph::trans::get_share_map;
 use std::fmt;
 use std::path::Path;
-use super::assignment::some_arith_sharing;
-use super::assignment::all_boolean_sharing;
-use super::assignment::some_arith_sharing_ay;
-use super::assignment::all_yao_sharing;
 
-// #[cfg(not(feature = "lp"))]
-
-
-// const BOOLEAN_BITLEN: i32 = 1;
+use super::assignment::assign_all_boolean;
+use super::assignment::assign_all_yao;
+use super::assignment::assign_arithmetic_and_boolean;
+use super::assignment::assign_arithmetic_and_yao;
+use super::assignment::assign_greedy;
 
 const PUBLIC: u8 = 2;
 
@@ -115,11 +111,6 @@ impl ToABY {
         }
     }
 
-    /// Return constant gate evaluating to 1
-    // fn one(s_type: &str) -> String {
-    //     format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
-    // }
-
     fn embed_eq(&mut self, t: Term, a_term: Term, b_term: Term) {
         let share = self.get_share_name(&t);
         let s = self.term_to_share_cnt.get(&t).unwrap();
@@ -155,7 +146,6 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::Bool) => {
-                // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
@@ -173,9 +163,9 @@ impl ToABY {
                         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
                         self.bytecode_output.insert(0, line);
                     }
+                    self.inputs.insert(t.clone());
                 }
 
-                // write to input parameter file
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
@@ -280,7 +270,6 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
-                // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
@@ -301,7 +290,6 @@ impl ToABY {
                     self.inputs.insert(t.clone());
                 }
 
-                // write to input parameter file
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
@@ -408,25 +396,30 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, am: &str, ps: &usize) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str, ps: &usize) {
     let Computation {
         outputs: terms,
         metadata: md,
         ..
     } = ir.clone();
 
-    let s_map = match am {
-        "all_boolean" => all_boolean_sharing(&ir),
-        "all_yao" => all_yao_sharing(&ir),
-        "boolean_arith" => some_arith_sharing(&ir),
-        "yao_arith" => some_arith_sharing_ay(&ir),
-        "ilp" => get_share_map(&ir, cm, path, lang, false, ps),
-        "ilp_mut" => get_share_map(&ir, cm, path, lang, true, ps),
-        e => {
-            panic!("Unsupported assignment mode: {:?}", e);
-        },
+    let s_map: SharingMap = match ss {
+        "b" => assign_all_boolean(&ir, cm),
+        "y" => assign_all_yao(&ir, cm),
+        "a+b" => assign_arithmetic_and_boolean(&ir, cm),
+        "a+y" => assign_arithmetic_and_yao(&ir, cm),
+        "greedy" => assign_greedy(&ir, cm),
+        #[cfg(feature = "lp")]
+        "lp" => get_share_map(&ir, cm, path, lang, true, ps),
+        #[cfg(feature = "lp")]
+        "glp" => get_share_map(&ir, cm, path, lang, false, ps),
+        _ => {
+            panic!("Unsupported sharing scheme: {}", ss);
+        }
     };
+
     let mut converter = ToABY::new(s_map, md, path, lang);
+
     for t in terms {
         // println!("terms: {}", t);
         converter.map_terms_to_shares(t.clone());

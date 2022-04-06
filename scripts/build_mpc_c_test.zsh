@@ -21,7 +21,7 @@ esac
 function mpc_test {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --assign-mode "ilp_mut" --part-size 3000
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "lp" --part-size 3000
 }
 
 # mpc_test 2 ./examples/C/mpc/benchmarks/2pc_kmeans.c

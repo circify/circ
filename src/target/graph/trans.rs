@@ -8,7 +8,7 @@ use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::assign_mut;
 use crate::target::aby::assignment::ilp::calculate_cost;
 use crate::target::aby::assignment::ilp::comb_selection;
-use crate::target::aby::assignment::ilp::CostModel;
+use crate::target::aby::assignment::CostModel;
 use crate::target::aby::assignment::SharingMap;
 use std::collections::HashMap;
 use std::env::var;
@@ -19,8 +19,8 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::Instant;
 use std::thread;
+use std::time::Instant;
 // use std::sync::mpsc::channel;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -239,7 +239,7 @@ impl ParitionGraph {
     // Check if input graph is formatted correctly
     fn check_graph(&self) {
         //TODO: fix path
-        let output = Command::new("../../../../KaHIP/deploy/graphchecker")
+        let output = Command::new("../KaHIP/deploy/graphchecker")
             .arg(&self.graph_path)
             .stdout(Stdio::piped())
             .output()
@@ -251,7 +251,7 @@ impl ParitionGraph {
     // Call graph partitioning algorithm on input graph
     fn call_graph_partitioner(&self) {
         //TODO: fix path
-        let output = Command::new("../../../../KaHIP/deploy/kaffpa")
+        let output = Command::new("../KaHIP/deploy/kaffpa")
             .arg(&self.graph_path)
             .arg("--k")
             .arg(self.num_parts.to_string()) //TODO: make this a function on the number of terms
@@ -326,6 +326,7 @@ impl ParitionGraph {
         mut_cs
     }
 
+    #[cfg(feature = "lp")]
     fn _mutate_partitions(
         &self,
         cs: &HashMap<usize, ComputationSubgraph>,
@@ -334,22 +335,22 @@ impl ParitionGraph {
         let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
         for (i, c) in cs.iter() {
             mut_smaps.insert(*i, HashMap::new());
-            println!("#### Assignment of partition: {}, {}", i, 0);
+            println!("LOG: Assignment of partition: {}, {}", i, 0);
             mut_smaps.get_mut(i).unwrap().insert(0, assign(c, &self.cm));
             let outer_cs_1 = self._get_outer(c);
-            println!("#### Assignment of partition: {}, {}", i, 1);
+            println!("LOG: Assignment of partition: {}, {}", i, 1);
             mut_smaps
                 .get_mut(i)
                 .unwrap()
                 .insert(1, assign_mut(&outer_cs_1, &self.cm, c));
             let outer_cs_2 = self._get_outer(&outer_cs_1);
-            println!("#### Assignment of partition: {}, {}", i, 2);
+            println!("LOG: Assignment of partition: {}, {}", i, 2);
             mut_smaps
                 .get_mut(i)
                 .unwrap()
                 .insert(2, assign_mut(&outer_cs_2, &self.cm, c));
             let outer_cs_3 = self._get_outer(&outer_cs_2);
-            println!("#### Assignment of partition: {}, {}", i, 3);
+            println!("LOG: Assignment of partition: {}, {}", i, 3);
             mut_smaps
                 .get_mut(i)
                 .unwrap()
@@ -358,6 +359,7 @@ impl ParitionGraph {
         mut_smaps
     }
 
+    #[cfg(feature = "lp")]
     /// Mutations with multi threading
     fn _mutate_partitions_mp(
         &self,
@@ -365,8 +367,9 @@ impl ParitionGraph {
     ) -> HashMap<usize, HashMap<usize, SharingMap>> {
         // TODO: merge and stop
         let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
-        
-        let mut mut_sets: HashMap<(usize, usize), (ComputationSubgraph, ComputationSubgraph)> = HashMap::new();
+
+        let mut mut_sets: HashMap<(usize, usize), (ComputationSubgraph, ComputationSubgraph)> =
+            HashMap::new();
 
         for (i, c) in cs.iter() {
             mut_smaps.insert(*i, HashMap::new());
@@ -382,7 +385,7 @@ impl ParitionGraph {
         let mut children = vec![];
         // let (tx, rx) = channel();
 
-        for ((i, j), (c, c_ref)) in mut_sets.iter(){
+        for ((i, j), (c, c_ref)) in mut_sets.iter() {
             // let tx = tx.clone();
             let cm = self.cm.clone();
             let i = i.clone();
@@ -392,23 +395,16 @@ impl ParitionGraph {
             // thread::spawn(move|| {
             //     tx.send((i, j, assign_mut(&c, &cm, &c_ref))).unwrap();
             // });
-            children.push(
-                thread::spawn(move|| {
-                    (i, j, assign_mut(&c, &cm, &c_ref))
-                })
-            );
+            children.push(thread::spawn(move || (i, j, assign_mut(&c, &cm, &c_ref))));
         }
 
-        for child in children{
+        for child in children {
             let (i, j, smap) = child.join().unwrap();
-            mut_smaps
-                .get_mut(&i)
-                .unwrap()
-                .insert(j, smap);
+            mut_smaps.get_mut(&i).unwrap().insert(j, smap);
         }
 
         // let n = mut_sets.len();
-        
+
         // for _ in 0..n{
         //     let (i, j, smap) = rx.recv().unwrap();
         //     mut_smaps
@@ -502,7 +498,7 @@ impl ParitionGraph {
     }
 
     fn _brute_force(&self, cs: &HashMap<usize, HashMap<usize, SharingMap>>) -> SharingMap {
-        println!("Start brute forcing...");
+        println!("LOG: Start brute forcing...");
         let mut best_smap: SharingMap = SharingMap::new();
         let mut cost: f64 = 0.0;
         // get cost model
@@ -539,7 +535,7 @@ impl ParitionGraph {
                 }
             }
         }
-        println!("Best cost for muts: {}", cost);
+        println!("LOG: Best cost for muts: {}", cost);
         best_smap
     }
 }
@@ -547,8 +543,14 @@ impl ParitionGraph {
 /// Convert this (IR) constraint system `cs` to the Chaco file
 /// input format.
 /// Write the result to the input file path.
-pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: bool, partition_size: &usize) -> SharingMap {
-
+pub fn get_share_map(
+    cs: &Computation,
+    cm: &str,
+    path: &Path,
+    lang: &str,
+    _mut: bool,
+    partition_size: &usize,
+) -> SharingMap {
     let mut pg = ParitionGraph::new(*partition_size, cs, cm, path, lang);
 
     // Convert IR to Chaco  format
@@ -565,7 +567,7 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: 
     // get local assignments
     // let local_smaps = pg.get_local_assignments(&partitions);
 
-    // TODO: remove this 
+    // TODO: remove this
     let p = format!(
         "{}/third_party/{}/adapted_costs.json",
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
@@ -577,13 +579,19 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: 
         true => {
             // With mutation
             let before_mut = Instant::now();
-            // let mutation_smaps = pg._mutate_partitions(&partitions);
-            let mutation_smaps = pg._mutate_partitions_mp(&partitions);
+            let mutation_smaps = pg._mutate_partitions(&partitions);
+            // let mutation_smaps = pg._mutate_partitions_mp(&partitions);
             let after_mut = Instant::now();
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
             let after_assign = Instant::now();
-            println!("Mutation time: {:?}", after_mut.duration_since(before_mut));
-            println!("ILP time: {:?}", after_assign.duration_since(after_mut));
+            println!(
+                "LOG: Mutation time: {:?}",
+                after_mut.duration_since(before_mut)
+            );
+            println!(
+                "LOG: ILP time: {:?}",
+                after_assign.duration_since(after_mut)
+            );
             pg.get_global_assignments(&selected_mut_maps)
         }
         false => {
@@ -591,16 +599,22 @@ pub fn get_share_map(cs: &Computation, cm: &str, path: &Path, lang: &str, _mut: 
             let before_assign = Instant::now();
             let local_smaps = pg.get_local_assignments(&partitions);
             let after_assign = Instant::now();
-            println!("ILP time: {:?}", after_assign.duration_since(before_assign));
+            println!(
+                "LOG: ILP time: {:?}",
+                after_assign.duration_since(before_assign)
+            );
             pg.get_global_assignments(&local_smaps)
         }
     };
 
-    println!("Part time: {:?}", after_part.duration_since(before_part));
+    println!(
+        "LOG: Part time: {:?}",
+        after_part.duration_since(before_part)
+    );
 
     let cost = calculate_cost(&global_assign, &cm_);
-    println!("Cost of assignment: {}", cost);
-    
+    println!("LOG: Cost of assignment: {}", cost);
+
     global_assign
 }
 
@@ -669,32 +683,29 @@ mod test {
         // Partition IR
         let partitions = pg.partition_ir();
 
-        let _maps = match t{
-            true =>{
+        let _maps = match t {
+            true => {
                 let mut children = vec![];
                 for (_, c) in partitions.iter() {
                     for i in 1..10000 {
                         let cs = c.clone();
-                        children.push(
-                            thread::spawn(move|| {
-                                // simple_ilp(i as f64);
-                                let cm = "hycc";
-                                (i, assign_mut(&cs, cm, &cs))
-                            })
-                        );
+                        children.push(thread::spawn(move || {
+                            // simple_ilp(i as f64);
+                            let cm = "hycc";
+                            (i, assign_mut(&cs, cm, &cs))
+                        }));
                     }
                 }
 
                 let mut mut_smaps: HashMap<usize, SharingMap> = HashMap::new();
 
-                for child in children{
+                for child in children {
                     let (i, smap) = child.join().unwrap();
                     mut_smaps.insert(i, smap);
                 }
                 mut_smaps
             }
-            false =>{
-                println!("HAHA\n");
+            false => {
                 let mut_smaps: HashMap<usize, SharingMap> = HashMap::new();
                 mut_smaps
             }

@@ -16,7 +16,7 @@ def install(features):
     """
 
     def verify_path_empty(path) -> bool:
-        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path)) 
+        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
 
     for f in features:
         if f == "aby":
@@ -37,9 +37,9 @@ def check(features):
             set of features required
     """
 
-    cmd = ["cargo", "check"]
+    cmd = ["cargo", "check", "--tests", "--examples", "--benches", "--bins"]
     cargo_features = filter_cargo_features(features)
-    if cargo_features:        
+    if cargo_features:
        cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd, check=True)
 
@@ -57,14 +57,14 @@ def build(features):
     check(features)
     install(features)
 
-    cmd = ["cargo", "build"] 
+    cmd = ["cargo", "build"]
     if mode:
-        cmd += ["--"+mode] 
+        cmd += ["--"+mode]
     else:
         # default to release mode
-        cmd += ["--release"] 
+        cmd += ["--release"]
     cmd += ["--examples"]
-    
+
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
@@ -112,13 +112,45 @@ def test(features):
         if "aby" in features:
             subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
 
+def benchmark(features):
+    mode = load_mode()
+
+    check(features)
+    install(features)
+
+    cmd = ["cargo", "build"]
+    if mode:
+        cmd += ["--"+mode]
+    else:
+        # default to release mode
+        cmd += ["--release"]
+    cmd += ["--examples"]
+
+    cargo_features = filter_cargo_features(features)
+    if cargo_features:
+        cmd = cmd + ["--features"] + cargo_features
+    subprocess.run(cmd, check=True)
+
 def format():
     print("formatting!")
     subprocess.run(["cargo", "fmt", "--all"], check=True)
 
 def lint():
+    """
+    Run cargo clippy
+
+    Parameters
+    ----------
+        features : set of str
+            set of features required
+    """
     print("linting!")
-    subprocess.run(["cargo", "clippy"], check=True)
+
+    cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
+    cargo_features = filter_cargo_features(features)
+    if cargo_features:
+       cmd = cmd + ["--features"] + cargo_features
+    subprocess.run(cmd, check=True)
 
 def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
@@ -163,7 +195,7 @@ def set_features(features):
     features = set(sorted([f for f in features if verify_feature(f)]))
     save_features(features)
     print("Feature set:", sorted(list(features)))
-    return features 
+    return features
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -179,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
     parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
+    parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
     parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
     args = parser.parse_args()
 
@@ -213,6 +246,9 @@ if __name__ == "__main__":
     if args.test:
         test(features)
 
+    if args.benchmark:
+        benchmark(features)
+
     if args.format:
         format()
 
@@ -221,15 +257,15 @@ if __name__ == "__main__":
 
     if args.clean:
         clean(features)
-    
+
     if args.mode:
         set_mode(args.mode)
 
     if args.all_features:
         features = set_features(valid_features)
-    
+
     if args.list_features:
-        print("Feature set: ", sorted(list(features)))
+        print("Feature set:", sorted(list(features)))
 
     if args.features:
         features = set_features(args.features)
