@@ -178,53 +178,6 @@ def set_features(features):
     print("Feature set:", sorted(list(features)))
     return features
 
-
-def build_benchmark(features, extras):
-    """
-    Run cargo build and any test cases in the feature list
-
-    Parameters
-    ----------
-        features : set of str
-            set of features required
-    """
-    mode = load_mode()
-
-    check(features)
-    install(features)
-
-    cmd = ["cargo", "build"]
-    if mode:
-        cmd += ["--"+mode]
-    else:
-        # default to release mode
-        cmd += ["--release"]
-    cmd += ["--examples"]
-
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        cmd = cmd + ["--features"] + cargo_features
-    subprocess.run(cmd, check=True)
-
-    if extras[0].isdigit():
-        extras = extras[1:]
-
-    if "aby" in features:
-        if "c" in features:
-            subprocess.run(["./scripts/build_mpc_c_benchmark.zsh"] + extras, check=True)
-        subprocess.run(["./scripts/build_aby.zsh"], check=True)
-
-def benchmark(features, extras):
-    build_benchmark(features, extras)
-
-    num_retries = 3
-    if extras:
-        num_retries = int(extras[0])
-
-    for i in range(num_retries):
-        print("LOG: run {}".format(i))
-        subprocess.run(["python3", "./scripts/aby_tests/c_benchmark_aby.py"])
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--install", action="store_true", help="install all dependencies from the feature set")
@@ -239,7 +192,6 @@ if __name__ == "__main__":
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
     parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
-    parser.add_argument("--benchmark", action="store_true", help="run benchmarks")
     parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
     args = parser.parse_args()
 
@@ -249,10 +201,10 @@ if __name__ == "__main__":
             parser.error("parser error: only one action can be specified. got: " + " ".join(actions))
     verify_single_action(args)
 
-    def verify_extra(args: argparse.Namespace):
-        if (not args.flamegraph and not args.benchmark) and len(args.extra) > 0:
-            parser.error("parser error: no [--benchmark / --flamegraph action], and extra arguments")
-    verify_extra(args)
+    def verify_extra_implies_flamegraph(args: argparse.Namespace):
+        if not args.flamegraph and len(args.extra) > 0:
+            parser.error("parser error: no --flamegraph action, and extra arguments")
+    verify_extra_implies_flamegraph(args)
 
     features = load_features()
     set_env(features)
@@ -273,9 +225,6 @@ if __name__ == "__main__":
 
     if args.test:
         test(features)
-
-    if args.benchmark:
-        benchmark(features, args.extra)
 
     if args.format:
         format()
