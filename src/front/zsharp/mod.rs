@@ -820,9 +820,13 @@ impl<'ast> ZGen<'ast> {
             .or_else(|| self.const_lookup_(&i.value).cloned())
         {
             Some(v) => Ok(v),
-            None if IS_CNST => self
-                .cvar_lookup(&i.value)
-                .ok_or_else(|| format!("Undefined const identifier {}", &i.value)),
+            None if IS_CNST => self.cvar_lookup(&i.value).ok_or_else(|| {
+                format!(
+                    "Undefined const identifier {} in {}",
+                    &i.value,
+                    self.cur_path().canonicalize().unwrap().to_string_lossy()
+                )
+            }),
             _ => match self
                 .circ_get_value(Loc::local(i.value.clone()))
                 .map_err(|e| format!("{}", e))?
