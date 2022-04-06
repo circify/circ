@@ -69,7 +69,12 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
         base_dir
     );
     let costs = CostModel::from_opa_cost_file(&p);
-    let mut smap = build_ilp(c, &costs);
+    let mut smap = TermMap::new();
+    while smap.len() == 0 {
+        // A hack for empty result during multi-threading
+        // Simply retry until get a non-empty result
+        smap = build_ilp(c, &costs);
+    }
     let mut trunc_smap = TermMap::new();
     for node in co.nodes.clone() {
         let share = smap.get_mut(&node).unwrap();
