@@ -21,7 +21,7 @@ esac
 function mpc_test {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc"
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc 
 }
 
-mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c
+mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c --cost-model $1 --selection-scheme $2

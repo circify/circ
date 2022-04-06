@@ -13,9 +13,15 @@ use std::fmt;
 use std::path::Path;
 
 #[cfg(not(feature = "lp"))]
-use super::assignment::some_arith_sharing;
-
-// const BOOLEAN_BITLEN: i32 = 1;
+use super::assignment::assign_all_boolean;
+#[cfg(not(feature = "lp"))]
+use super::assignment::assign_all_yao;
+#[cfg(not(feature = "lp"))]
+use super::assignment::assign_arithmetic_and_boolean;
+#[cfg(not(feature = "lp"))]
+use super::assignment::assign_arithmetic_and_yao;
+#[cfg(not(feature = "lp"))]
+use super::assignment::assign_greedy;
 
 const PUBLIC: u8 = 2;
 
@@ -395,17 +401,47 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
     let Computation {
         outputs: terms,
         metadata: md,
         ..
     } = ir.clone();
 
-    #[cfg(feature = "lp")]
-    let s_map: SharingMap = assign(&ir, cm);
-    #[cfg(not(feature = "lp"))]
-    let s_map: SharingMap = some_arith_sharing(&ir, cm);
+    let s_map: SharingMap;
+    match ss {
+        #[cfg(not(feature = "lp"))]
+        "b" => {
+            s_map = assign_all_boolean(&ir, cm);
+        }
+        #[cfg(not(feature = "lp"))]
+        "y" => {
+            s_map = assign_all_yao(&ir, cm);
+        }
+        #[cfg(not(feature = "lp"))]
+        "a+b" => {
+            s_map = assign_arithmetic_and_boolean(&ir, cm);
+        }
+        #[cfg(not(feature = "lp"))]
+        "a+y" => {
+            s_map = assign_arithmetic_and_yao(&ir, cm);
+        }
+        #[cfg(not(feature = "lp"))]
+        "greedy" => {
+            s_map = assign_greedy(&ir, cm);
+        }
+        #[cfg(feature = "lp")]
+        "lp" => {
+            s_map = assign(&ir, cm);
+        }
+        #[cfg(feature = "lp")]
+        "glp" => {
+            s_map = assign(&ir, cm);
+        }
+        _ => {
+            panic!("Unsupported sharing scheme: {}", ss);
+        }
+    }
 
     let mut converter = ToABY::new(s_map, md, path, lang);
 

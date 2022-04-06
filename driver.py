@@ -179,7 +179,7 @@ def set_features(features):
     return features
 
 
-def build_benchmark(features):
+def build_benchmark(features, extras):
     """
     Run cargo build and any test cases in the feature list
 
@@ -206,19 +206,23 @@ def build_benchmark(features):
         cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd, check=True)
 
+    if extras[0].isdigit():
+        extras = extras[1:]
+
     if "aby" in features:
         if "c" in features:
-            subprocess.run(["./scripts/build_mpc_c_benchmark.zsh"], check=True)
+            subprocess.run(["./scripts/build_mpc_c_benchmark.zsh"] + extras, check=True)
         subprocess.run(["./scripts/build_aby.zsh"], check=True)
 
 def benchmark(features, extras):
-    build_benchmark(features)
+    build_benchmark(features, extras)
 
     num_retries = 3
     if extras:
         num_retries = int(extras[0])
 
-    for _ in range(num_retries):
+    for i in range(num_retries):
+        print("LOG: run {}".format(i))
         subprocess.run(["python3", "./scripts/aby_tests/c_benchmark_aby.py"])
 
 if __name__ == "__main__":
