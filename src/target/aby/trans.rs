@@ -12,15 +12,10 @@ use crate::target::aby::utils::*;
 use std::fmt;
 use std::path::Path;
 
-#[cfg(not(feature = "lp"))]
 use super::assignment::assign_all_boolean;
-#[cfg(not(feature = "lp"))]
 use super::assignment::assign_all_yao;
-#[cfg(not(feature = "lp"))]
 use super::assignment::assign_arithmetic_and_boolean;
-#[cfg(not(feature = "lp"))]
 use super::assignment::assign_arithmetic_and_yao;
-#[cfg(not(feature = "lp"))]
 use super::assignment::assign_greedy;
 
 const PUBLIC: u8 = 2;
@@ -409,15 +404,10 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
     } = ir.clone();
 
     let s_map: SharingMap = match ss {
-        #[cfg(not(feature = "lp"))]
         "b" => assign_all_boolean(&ir, cm),
-        #[cfg(not(feature = "lp"))]
         "y" => assign_all_yao(&ir, cm),
-        #[cfg(not(feature = "lp"))]
         "a+b" => assign_arithmetic_and_boolean(&ir, cm),
-        #[cfg(not(feature = "lp"))]
         "a+y" => assign_arithmetic_and_yao(&ir, cm),
-        #[cfg(not(feature = "lp"))]
         "greedy" => assign_greedy(&ir, cm),
         #[cfg(feature = "lp")]
         "lp" => assign(&ir, cm),
