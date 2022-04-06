@@ -297,7 +297,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 arg_ty
             )),
         }?;
-        let strdef = self
+        let (strdef, strpath) = self
             .zgen
             .get_struct(&def_ty.id.value)
             .ok_or_else(|| format!("ZGenericInf: no such struct {}", &def_ty.id.value))?;
@@ -359,6 +359,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         // 2. walk through struct def to generate constraints on inner explicit generics
         let old_sfx = std::mem::replace(&mut self.sfx, new_sfx);
         let old_gens = std::mem::replace(&mut self.gens, &strdef.generics[..]);
+        self.zgen.file_stack_push(strpath);
         for ast::StructField { ty, id, .. } in strdef.fields.iter() {
             if let Some(t) = aty_map.remove(&id.value) {
                 self.fdef_gen_ty(t, ty)?;
@@ -369,6 +370,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 ));
             }
         }
+        self.zgen.file_stack_pop();
         if !aty_map.is_empty() {
             return Err(format!(
                 "ZGenericInf: struct {} value had extra members: {:?}",

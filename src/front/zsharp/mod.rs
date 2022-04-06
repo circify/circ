@@ -1403,15 +1403,13 @@ impl<'ast> ZGen<'ast> {
                     .fold(b, |b, d| Ok(Ty::Array(d?, Box::new(b?))))
             }
             ast::Type::Struct(s) => {
-                let sdef = self
-                    .get_struct(&s.id.value)
-                    .ok_or_else(|| {
-                        format!(
-                            "No such struct {} (did you bring it into scope?)",
-                            &s.id.value
-                        )
-                    })?
-                    .clone();
+                let (sdef, path) = self.get_struct(&s.id.value).ok_or_else(|| {
+                    format!(
+                        "No such struct {} (did you bring it into scope?)",
+                        &s.id.value
+                    )
+                })?;
+                let sdef = sdef.clone();
                 let g_len = sdef.generics.len();
                 let egv = s
                     .explicit_generics
@@ -1425,6 +1423,7 @@ impl<'ast> ZGen<'ast> {
                         &s.id.value
                     ));
                 }
+                self.file_stack_push(path);
                 self.generics_stack_push(generics);
                 let ty = Ty::new_struct(
                     s.id.value.clone(),
@@ -1436,6 +1435,7 @@ impl<'ast> ZGen<'ast> {
                         .collect::<Result<Vec<_>, _>>()?,
                 );
                 self.generics_stack_pop();
+                self.file_stack_pop();
                 Ok(ty)
             }
         }
@@ -1686,9 +1686,12 @@ impl<'ast> ZGen<'ast> {
         self.functions.get(&f_path).and_then(|m| m.get(&f_name))
     }
 
-    fn get_struct(&self, struct_id: &str) -> Option<&ast::StructDefinition<'ast>> {
+    fn get_struct(&self, struct_id: &str) -> Option<(&ast::StructDefinition<'ast>, PathBuf)> {
         let (s_path, s_name) = self.deref_import(struct_id);
-        self.structs.get(&s_path).and_then(|m| m.get(&s_name))
+        self.structs
+            .get(&s_path)
+            .and_then(|m| m.get(&s_name))
+            .map(|m| (m, s_path))
     }
 
     /*** circify wrapper functions (hides RefCell) ***/
