@@ -157,7 +157,7 @@ impl<'ast> ZGen<'ast> {
     /// Unwrap a result with a span-dependent error
     fn err<E: Display>(&self, e: E, s: &ast::Span) -> ! {
         println!("Error: {}", e);
-        println!("In: {}", self.cur_path().display());
+        println!("In: {}", self.cur_path().canonicalize().unwrap().display());
         s.lines().for_each(|l| print!("  {}", l));
         std::process::exit(1)
     }
