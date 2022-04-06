@@ -408,40 +408,25 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
         ..
     } = ir.clone();
 
-    let s_map: SharingMap;
-    match ss {
+    let s_map: SharingMap = match ss {
         #[cfg(not(feature = "lp"))]
-        "b" => {
-            s_map = assign_all_boolean(&ir, cm);
-        }
+        "b" => assign_all_boolean(&ir, cm),
         #[cfg(not(feature = "lp"))]
-        "y" => {
-            s_map = assign_all_yao(&ir, cm);
-        }
+        "y" => assign_all_yao(&ir, cm),
         #[cfg(not(feature = "lp"))]
-        "a+b" => {
-            s_map = assign_arithmetic_and_boolean(&ir, cm);
-        }
+        "a+b" => assign_arithmetic_and_boolean(&ir, cm),
         #[cfg(not(feature = "lp"))]
-        "a+y" => {
-            s_map = assign_arithmetic_and_yao(&ir, cm);
-        }
+        "a+y" => assign_arithmetic_and_yao(&ir, cm),
         #[cfg(not(feature = "lp"))]
-        "greedy" => {
-            s_map = assign_greedy(&ir, cm);
-        }
+        "greedy" => assign_greedy(&ir, cm),
         #[cfg(feature = "lp")]
-        "lp" => {
-            s_map = assign(&ir, cm);
-        }
+        "lp" => assign(&ir, cm),
         #[cfg(feature = "lp")]
-        "glp" => {
-            s_map = assign(&ir, cm);
-        }
+        "glp" => assign(&ir, cm),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }
-    }
+    };
 
     let mut converter = ToABY::new(s_map, md, path, lang);
 
