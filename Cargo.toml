@@ -25,7 +25,8 @@ thiserror = "1.0"
 bellman = { version = "0.11", optional = true } 
 ff = "0.11"
 fxhash = "0.2"
-good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
+good_lp = {git = "https://github.com/Clive2312/good_lp.git", optional = true }
+# good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
 lang-c = { version = "0.10.1", optional = true}

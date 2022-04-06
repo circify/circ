@@ -579,8 +579,8 @@ pub fn get_share_map(
         true => {
             // With mutation
             let before_mut = Instant::now();
-            let mutation_smaps = pg._mutate_partitions(&partitions);
-            // let mutation_smaps = pg._mutate_partitions_mp(&partitions);
+            // let mutation_smaps = pg._mutate_partitions(&partitions);
+            let mutation_smaps = pg._mutate_partitions_mp(&partitions);
             let after_mut = Instant::now();
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
             let after_assign = Instant::now();
