@@ -396,7 +396,7 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str, ps: &usize) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str, ps: &usize, ml: &usize, mss: &usize) {
     let Computation {
         outputs: terms,
         metadata: md,
@@ -410,9 +410,9 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str, ps: 
         "a+y" => assign_arithmetic_and_yao(&ir, cm),
         "greedy" => assign_greedy(&ir, cm),
         #[cfg(feature = "lp")]
-        "lp" => get_share_map(&ir, cm, path, lang, true, ps),
+        "lp" => get_share_map(&ir, cm, path, lang, true, ps, ml, mss),
         #[cfg(feature = "lp")]
-        "glp" => get_share_map(&ir, cm, path, lang, false, ps),
+        "glp" => get_share_map(&ir, cm, path, lang, false, ps, ml, mss),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }

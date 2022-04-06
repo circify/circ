@@ -109,6 +109,10 @@ enum Backend {
         selection_scheme: String,
         #[structopt(long, default_value = "3000", name = "part_size")]
         part_size: usize,
+        #[structopt(long, default_value = "4", name = "mut_level")]
+        mut_level: usize,
+        #[structopt(long, default_value = "1", name = "mut_step_size")]
+        mut_step_size: usize,
     },
 }
 
@@ -335,6 +339,8 @@ fn main() {
             cost_model,
             selection_scheme,
             part_size,
+            mut_level,
+            mut_step_size
         } => {
             println!("Converting to ABY");
             let lang_str = match language {
@@ -350,6 +356,8 @@ fn main() {
                 &cost_model,
                 &selection_scheme,
                 &part_size,
+                &mut_level,
+                &mut_step_size
             );
             println!(
                 "LOG: Compile cost: {:?}",

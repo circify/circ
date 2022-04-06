@@ -326,6 +326,24 @@ impl ParitionGraph {
         mut_cs
     }
 
+    fn _get_outer_n(&self, cs: &ComputationSubgraph, n: usize) -> ComputationSubgraph {
+        let mut last_cs = cs.clone();
+        for _ in 0..n {
+            let mut mut_cs: ComputationSubgraph = ComputationSubgraph::new();
+            for node in last_cs.nodes.clone() {
+                mut_cs.insert_node(&node);
+            }
+            for node in last_cs.ins.clone() {
+                for outer_node in node.cs.iter() {
+                    mut_cs.insert_node(&outer_node)
+                }
+            }
+            mut_cs.insert_edges();
+            last_cs = mut_cs;
+        }
+        last_cs
+    }
+
     #[cfg(feature = "lp")]
     fn _mutate_partitions(
         &self,
@@ -383,18 +401,13 @@ impl ParitionGraph {
         }
 
         let mut children = vec![];
-        // let (tx, rx) = channel();
 
         for ((i, j), (c, c_ref)) in mut_sets.iter() {
-            // let tx = tx.clone();
             let cm = self.cm.clone();
             let i = i.clone();
             let j = j.clone();
             let c = c.clone();
             let c_ref = c_ref.clone();
-            // thread::spawn(move|| {
-            //     tx.send((i, j, assign_mut(&c, &cm, &c_ref))).unwrap();
-            // });
             children.push(thread::spawn(move || (i, j, assign_mut(&c, &cm, &c_ref))));
         }
 
@@ -403,16 +416,46 @@ impl ParitionGraph {
             mut_smaps.get_mut(&i).unwrap().insert(j, smap);
         }
 
-        // let n = mut_sets.len();
+        mut_smaps
+    }
 
-        // for _ in 0..n{
-        //     let (i, j, smap) = rx.recv().unwrap();
-        //     mut_smaps
-        //         .get_mut(&i)
-        //         .unwrap()
-        //         .insert(j, smap);
-        // }
+    #[cfg(feature = "lp")]
+    /// Mutations with multi threading
+    fn _mutate_partitions_mp_step(
+        &self,
+        cs: &HashMap<usize, ComputationSubgraph>,
+        outer_level: usize,
+        step: usize
+    ) -> HashMap<usize, HashMap<usize, SharingMap>> {
+        // TODO: merge and stop
+        let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
 
+        let mut mut_sets: HashMap<(usize, usize), (ComputationSubgraph, ComputationSubgraph)> =
+            HashMap::new();
+
+        for (i, c) in cs.iter() {
+            mut_smaps.insert(*i, HashMap::new());
+            for j in 0..outer_level{
+                let outer_tmp = self._get_outer_n(c, j*step);
+                mut_sets.insert((*i, j), (outer_tmp.clone(), c.clone()));
+            }
+        }
+
+        let mut children = vec![];
+
+        for ((i, j), (c, c_ref)) in mut_sets.iter() {
+            let cm = self.cm.clone();
+            let i = i.clone();
+            let j = j.clone();
+            let c = c.clone();
+            let c_ref = c_ref.clone();
+            children.push(thread::spawn(move || (i, j, assign_mut(&c, &cm, &c_ref))));
+        }
+
+        for child in children {
+            let (i, j, smap) = child.join().unwrap();
+            mut_smaps.get_mut(&i).unwrap().insert(j, smap);
+        }
         mut_smaps
     }
 
@@ -550,6 +593,8 @@ pub fn get_share_map(
     lang: &str,
     _mut: bool,
     partition_size: &usize,
+    mut_level: &usize,
+    mut_step_size: & usize
 ) -> SharingMap {
     let mut pg = ParitionGraph::new(*partition_size, cs, cm, path, lang);
 
@@ -580,7 +625,8 @@ pub fn get_share_map(
             // With mutation
             let before_mut = Instant::now();
             // let mutation_smaps = pg._mutate_partitions(&partitions);
-            let mutation_smaps = pg._mutate_partitions_mp(&partitions);
+            // let mutation_smaps = pg._mutate_partitions_mp(&partitions);
+            let mutation_smaps = pg._mutate_partitions_mp_step(&partitions, *mut_level, *mut_step_size);
             let after_mut = Instant::now();
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
             let after_assign = Instant::now();
