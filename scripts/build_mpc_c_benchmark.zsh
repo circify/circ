@@ -11,10 +11,10 @@ export CARGO_MANIFEST_DIR=$(pwd)
 
 case "$OSTYPE" in 
     darwin*)
-        alias measure_time="gtime --format='%e seconds %M kB'"
+        alias measure_time="gtime --format='LOG: compile time: %e seconds %M kB'"
     ;;
     linux*)
-        alias measure_time="time --format='%e seconds %M kB'"
+        alias measure_time="time --format='LOG: compile time: %e seconds %M kB'"
     ;;
 esac
 
