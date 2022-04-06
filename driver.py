@@ -112,6 +112,25 @@ def test(features):
         if "aby" in features:
             subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
 
+def benchmark(features):
+    mode = load_mode()
+
+    check(features)
+    install(features)
+
+    cmd = ["cargo", "build"]
+    if mode:
+        cmd += ["--"+mode]
+    else:
+        # default to release mode
+        cmd += ["--release"]
+    cmd += ["--examples"]
+
+    cargo_features = filter_cargo_features(features)
+    if cargo_features:
+        cmd = cmd + ["--features"] + cargo_features
+    subprocess.run(cmd, check=True)
+
 def format():
     print("formatting!")
     subprocess.run(["cargo", "fmt", "--all"], check=True)
@@ -192,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
     parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
+    parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
     parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
     args = parser.parse_args()
 
@@ -225,6 +245,9 @@ if __name__ == "__main__":
 
     if args.test:
         test(features)
+
+    if args.benchmark:
+        benchmark(features)
 
     if args.format:
         format()
