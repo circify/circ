@@ -1636,8 +1636,8 @@ impl ComputationSubgraph {
                 self.outs.insert(t.clone());
             }
         }
-        println!("LOG: Input nodes of partition: {}", self.ins.len());
-        println!("LOG: Output nodes of partition: {}", self.outs.len());
+        // println!("LOG: Input nodes of partition: {}", self.ins.len());
+        // println!("LOG: Output nodes of partition: {}", self.outs.len());
     }
 }
 

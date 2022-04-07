@@ -7,6 +7,9 @@
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
+use crate::target::aby::assignment::ilp::calculate_conv_cost;
+use crate::target::aby::assignment::ilp::calculate_cost;
+use crate::target::aby::assignment::ilp::calculate_node_cost;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 #[cfg(feature = "lp")]
@@ -430,6 +433,13 @@ pub fn to_aby(
             panic!("Unsupported sharing scheme: {}", ss);
         }
     };
+
+    let cost = calculate_cost(&s_map, cm);
+    println!("LOG: Cost of assignment total: {}", cost);
+    let node_cost = calculate_node_cost(&s_map, cm);
+    println!("LOG: Cost of assignment node: {}", node_cost);
+    let conv_cost = calculate_conv_cost(&s_map, cm);
+    println!("LOG: Cost of assignment conv: {}", conv_cost);
 
     let mut converter = ToABY::new(s_map, md, path, lang);
 

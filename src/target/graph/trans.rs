@@ -6,9 +6,7 @@
 use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::assign_mut;
-use crate::target::aby::assignment::ilp::calculate_conv_cost;
 use crate::target::aby::assignment::ilp::calculate_cost;
-use crate::target::aby::assignment::ilp::calculate_node_cost;
 use crate::target::aby::assignment::ilp::comb_selection;
 use crate::target::aby::assignment::CostModel;
 use crate::target::aby::assignment::SharingMap;
@@ -617,14 +615,6 @@ pub fn get_share_map(
     // get local assignments
     // let local_smaps = pg.get_local_assignments(&partitions);
 
-    // TODO: remove this
-    let p = format!(
-        "{}/third_party/{}/adapted_costs.json",
-        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
-        "hycc"
-    );
-    let cm_ = CostModel::from_opa_cost_file(&p);
-
     let global_assign = match _mut {
         true => {
             // With mutation
@@ -663,13 +653,6 @@ pub fn get_share_map(
         "LOG: Part time: {:?}",
         after_part.duration_since(before_part)
     );
-
-    let cost = calculate_cost(&global_assign, &cm_);
-    println!("LOG: Cost of assignment total: {}", cost);
-    let node_cost = calculate_node_cost(&global_assign, &cm_);
-    println!("LOG: Cost of assignment node: {}", node_cost);
-    let conv_cost = calculate_conv_cost(&global_assign, &cm_);
-    println!("LOG: Cost of assignment conv: {}", conv_cost);
 
     global_assign
 }
