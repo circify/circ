@@ -396,7 +396,16 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str, ps: &usize, ml: &usize, mss: &usize) {
+pub fn to_aby(
+    ir: Computation,
+    path: &Path,
+    lang: &str,
+    cm: &str,
+    ss: &str,
+    #[allow(unused_variables)] ps: &usize,
+    #[allow(unused_variables)] ml: &usize,
+    #[allow(unused_variables)] mss: &usize,
+) {
     let Computation {
         outputs: terms,
         metadata: md,
@@ -412,7 +421,9 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str, ps: 
         #[cfg(feature = "lp")]
         "lp" => get_share_map(&ir, cm, path, lang, true, ps, ml, mss),
         #[cfg(feature = "lp")]
-        "glp" => get_share_map(&ir, cm, path, lang, false, ps, ml, mss),
+        "lp+nm" => get_share_map(&ir, cm, path, lang, false, ps, ml, mss),
+        #[cfg(feature = "lp")]
+        "glp" => assign(&ir, cm),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }
