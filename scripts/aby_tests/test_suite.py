@@ -610,6 +610,25 @@ benchmark_tests = [
     ],   
 ]
 
+def get_tests(name, size):
+    size = str(size)
+    if name == "biomatch":
+        return [
+            [
+                "biomatch_" + size,
+                "2pc_biomatch_" + size,
+                "./scripts/aby_tests/test_inputs/biomatch_benchmark_" + size + ".txt",
+            ],   
+        ]
+    elif name == "kmeans":
+        return [
+            [
+                "kmeans_" + size,
+                "2pc_kmeans_" + size,
+                "./scripts/aby_tests/test_inputs/kmeans_"+ size + ".txt",
+            ],   
+        ]
+
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",
