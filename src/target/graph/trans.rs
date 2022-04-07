@@ -627,11 +627,11 @@ pub fn get_share_map(
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
             let after_assign = Instant::now();
             println!(
-                "LOG: Mutation time: {:?}",
+                "LOG: Mutation+ILP time: {:?}",
                 after_mut.duration_since(before_mut)
             );
             println!(
-                "LOG: ILP time: {:?}",
+                "LOG: Comb time: {:?}",
                 after_assign.duration_since(after_mut)
             );
             pg.get_global_assignments(&selected_mut_maps)
@@ -655,6 +655,21 @@ pub fn get_share_map(
     );
 
     global_assign
+}
+
+/// Running global ILP
+pub fn get_share_map_glp(
+    cs: &Computation,
+    cm: &str
+) -> SharingMap {
+    let before_assign = Instant::now();
+    let assignment = assign(&cs.to_subgraph(), cm);
+    let after_assign = Instant::now();
+    println!(
+        "LOG: Global ILP time: {:?}",
+        after_assign.duration_since(before_assign)
+    );
+    assignment
 }
 
 #[cfg(test)]

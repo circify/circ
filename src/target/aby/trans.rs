@@ -6,15 +6,17 @@
 
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
-use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::calculate_conv_cost;
 use crate::target::aby::assignment::ilp::calculate_cost;
 use crate::target::aby::assignment::ilp::calculate_node_cost;
 use crate::target::aby::assignment::SharingMap;
+use crate::target::aby::assignment::CostModel;
 use crate::target::aby::utils::*;
 #[cfg(feature = "lp")]
 use crate::target::graph::trans::get_share_map;
+use crate::target::graph::trans::get_share_map_glp;
 use std::fmt;
+use std::env::var;
 use std::path::Path;
 
 use super::assignment::assign_all_boolean;
@@ -428,17 +430,29 @@ pub fn to_aby(
         #[cfg(feature = "lp")]
         "lp+nm" => get_share_map(&ir, cm, path, lang, false, np, ml, mss),
         #[cfg(feature = "lp")]
-        "glp" => assign(&ir.to_subgraph(), cm),
+        "glp" => get_share_map_glp(&ir, cm),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }
     };
 
-    let cost = calculate_cost(&s_map, cm);
+    let base_dir = match cm {
+        "opa" => "opa",
+        "hycc" => "hycc",
+        _ => panic!("Unknown cost model type: {}", cm),
+    };
+    let p = format!(
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        base_dir
+    );
+    let costs = CostModel::from_opa_cost_file(&p);
+
+    let cost = calculate_cost(&s_map, &costs);
     println!("LOG: Cost of assignment total: {}", cost);
-    let node_cost = calculate_node_cost(&s_map, cm);
+    let node_cost = calculate_node_cost(&s_map, &costs);
     println!("LOG: Cost of assignment node: {}", node_cost);
-    let conv_cost = calculate_conv_cost(&s_map, cm);
+    let conv_cost = calculate_conv_cost(&s_map, &costs);
     println!("LOG: Cost of assignment conv: {}", conv_cost);
 
     let mut converter = ToABY::new(s_map, md, path, lang);
