@@ -107,8 +107,8 @@ enum Backend {
         cost_model: String,
         #[structopt(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
-        #[structopt(long, default_value = "3000", name = "part_size")]
-        part_size: usize,
+        #[structopt(long, default_value = "3000", name = "num_parts")]
+        num_parts: usize,
         #[structopt(long, default_value = "4", name = "mut_level")]
         mut_level: usize,
         #[structopt(long, default_value = "1", name = "mut_step_size")]
@@ -338,9 +338,9 @@ fn main() {
         Backend::Mpc {
             cost_model,
             selection_scheme,
-            part_size,
+            num_parts,
             mut_level,
-            mut_step_size
+            mut_step_size,
         } => {
             println!("Converting to ABY");
             let lang_str = match language {
@@ -355,9 +355,9 @@ fn main() {
                 &lang_str,
                 &cost_model,
                 &selection_scheme,
-                &part_size,
+                &num_parts,
                 &mut_level,
-                &mut_step_size
+                &mut_step_size,
             );
             println!(
                 "LOG: Compile cost: {:?}",
