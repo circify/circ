@@ -107,7 +107,7 @@ enum Backend {
         cost_model: String,
         #[structopt(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
-        #[structopt(long, default_value = "3000", name = "num_parts")]
+        #[structopt(long, default_value = "8", name = "num_parts")]
         num_parts: usize,
         #[structopt(long, default_value = "4", name = "mut_level")]
         mut_level: usize,
