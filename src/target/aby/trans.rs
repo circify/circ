@@ -5,6 +5,8 @@
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
 use crate::ir::term::*;
+#[cfg(feature = "lp")]
+use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 #[cfg(feature = "lp")]
@@ -402,7 +404,7 @@ pub fn to_aby(
     lang: &str,
     cm: &str,
     ss: &str,
-    #[allow(unused_variables)] ps: &usize,
+    #[allow(unused_variables)] np: &usize,
     #[allow(unused_variables)] ml: &usize,
     #[allow(unused_variables)] mss: &usize,
 ) {
@@ -419,11 +421,11 @@ pub fn to_aby(
         "a+y" => assign_arithmetic_and_yao(&ir, cm),
         "greedy" => assign_greedy(&ir, cm),
         #[cfg(feature = "lp")]
-        "lp" => get_share_map(&ir, cm, path, lang, true, ps, ml, mss),
+        "lp" => get_share_map(&ir, cm, path, lang, true, np, ml, mss),
         #[cfg(feature = "lp")]
-        "lp+nm" => get_share_map(&ir, cm, path, lang, false, ps, ml, mss),
+        "lp+nm" => get_share_map(&ir, cm, path, lang, false, np, ml, mss),
         #[cfg(feature = "lp")]
-        "glp" => assign(&ir, cm),
+        "glp" => assign(&ir.to_subgraph(), cm),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }

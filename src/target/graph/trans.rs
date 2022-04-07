@@ -6,9 +6,9 @@
 use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::assign_mut;
+use crate::target::aby::assignment::ilp::calculate_conv_cost;
 use crate::target::aby::assignment::ilp::calculate_cost;
 use crate::target::aby::assignment::ilp::calculate_node_cost;
-use crate::target::aby::assignment::ilp::calculate_conv_cost;
 use crate::target::aby::assignment::ilp::comb_selection;
 use crate::target::aby::assignment::CostModel;
 use crate::target::aby::assignment::SharingMap;
@@ -49,8 +49,8 @@ struct ParitionGraph {
     num_nodes: usize,
     num_edges: usize,
     next_idx: usize,
-    partition_size: usize,
     num_parts: usize,
+    avg_partition_size: usize,
     term_to_node: HashMap<Term, Node>,
     node_to_term: HashMap<Node, Term>,
     term_to_part: HashMap<Term, usize>,
@@ -64,13 +64,13 @@ struct ParitionGraph {
 }
 
 impl ParitionGraph {
-    fn new(partition_size: usize, cs: &Computation, cm: &str, path: &Path, lang: &str) -> Self {
+    fn new(num_parts: usize, cs: &Computation, cm: &str, path: &Path, lang: &str) -> Self {
         let mut graph = Self {
             num_nodes: 0,
             num_edges: 0,
             next_idx: 0,
-            partition_size,
-            num_parts: 0,
+            num_parts,
+            avg_partition_size: 0,
             term_to_node: HashMap::new(),
             node_to_term: HashMap::new(),
             term_to_part: HashMap::new(),
@@ -230,12 +230,15 @@ impl ParitionGraph {
             self.chaco_(t);
         }
         self.write_graph();
-        self.get_num_partitions();
+        self.get_avg_partition_size();
+
+        println!("LOG: num_nodes: {}", self.num_nodes);
+        println!("LOG: avg_partition_size: {}", self.avg_partition_size);
     }
 
     // Determine number of partitions based on the number of terms in the Computation
-    fn get_num_partitions(&mut self) {
-        self.num_parts = self.num_nodes / self.partition_size + 1;
+    fn get_avg_partition_size(&mut self) {
+        self.avg_partition_size = self.num_nodes / self.num_parts
     }
 
     // Check if input graph is formatted correctly
@@ -427,7 +430,7 @@ impl ParitionGraph {
         &self,
         cs: &HashMap<usize, ComputationSubgraph>,
         outer_level: usize,
-        step: usize
+        step: usize,
     ) -> HashMap<usize, HashMap<usize, SharingMap>> {
         // TODO: merge and stop
         let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
@@ -437,8 +440,8 @@ impl ParitionGraph {
 
         for (i, c) in cs.iter() {
             mut_smaps.insert(*i, HashMap::new());
-            for j in 0..outer_level{
-                let outer_tmp = self._get_outer_n(c, j*step);
+            for j in 0..outer_level {
+                let outer_tmp = self._get_outer_n(c, j * step);
                 mut_sets.insert((*i, j), (outer_tmp.clone(), c.clone()));
             }
         }
@@ -594,11 +597,11 @@ pub fn get_share_map(
     path: &Path,
     lang: &str,
     _mut: bool,
-    partition_size: &usize,
+    num_parts: &usize,
     mut_level: &usize,
-    mut_step_size: & usize
+    mut_step_size: &usize,
 ) -> SharingMap {
-    let mut pg = ParitionGraph::new(*partition_size, cs, cm, path, lang);
+    let mut pg = ParitionGraph::new(*num_parts, cs, cm, path, lang);
 
     // Convert IR to Chaco  format
     pg.chaco();
@@ -628,7 +631,8 @@ pub fn get_share_map(
             let before_mut = Instant::now();
             // let mutation_smaps = pg._mutate_partitions(&partitions);
             // let mutation_smaps = pg._mutate_partitions_mp(&partitions);
-            let mutation_smaps = pg._mutate_partitions_mp_step(&partitions, *mut_level, *mut_step_size);
+            let mutation_smaps =
+                pg._mutate_partitions_mp_step(&partitions, *mut_level, *mut_step_size);
             let after_mut = Instant::now();
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
             let after_assign = Instant::now();

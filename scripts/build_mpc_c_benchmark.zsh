@@ -23,8 +23,8 @@ function mpc_test {
     cpath=$2
     cm=$3
     ss=$4
-    ps=$5
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model $cm --selection-scheme $ss --part-size $ps
+    np=$5
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model $cm --selection-scheme $ss --num-parts $np
 }
 
 mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c $1 $2 $3
