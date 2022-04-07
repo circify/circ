@@ -32,7 +32,7 @@ void match_decomposed(int *db, int *OUTPUT_matches, int len, int *sample) {
   }
 }
 
-int main( __attribute__((private(0))) int db[1024], __attribute__((private(1))) int sample[4])
+int main( __attribute__((private(0))) int db[N*K], __attribute__((private(1))) int sample[4])
 {
     //int matches[4];
     int matches[N];
