@@ -1,3 +1,5 @@
+#include "test.h"
+
 #define N 3
 
 typedef int DT;
@@ -23,6 +25,12 @@ DT abs(DT val) {
 		return -val;
 	} else {
 		return val;
+	}
+}
+
+void memcpy(int* destination, int* source, int size) {
+	for (int i = 0; i < size; i++) {
+		destination[i] = source[i];
 	}
 }
 
@@ -65,21 +73,21 @@ void swap(DT* m, DT* v, DT* OUTPUT_m, DT* OUTPUT_v, int n, int from, int to) {
 		v[from] = v[to];
 		v[to] = tmp;
 	}
-	memcpy(OUTPUT_m, m, N*N*sizeof(DT));
-	memcpy(OUTPUT_v, v, N*sizeof(DT));
+	memcpy(OUTPUT_m, m, N*N*sizeof(int));
+	memcpy(OUTPUT_v, v, N*sizeof(int));
 }
 
 /**
  * Performs the propagating swap for LU decomposition
  */
 void pivot_swap(DT *m, DT *b, DT *OUTPUT_m, DT *OUTPUT_b, int i, int n) {
-	memcpy(OUTPUT_m, m, sizeof(DT)*N*N);
-	memcpy(OUTPUT_b, b, sizeof(DT)*N);
+	memcpy(OUTPUT_m, m, sizeof(int)*N*N);
+	memcpy(OUTPUT_b, b, sizeof(int)*N);
 	for(int k=i+1; k < n; k++) {
 		if(m[k*n+i] > m[i*n+i]) {
 			swap(m, b, OUTPUT_m, OUTPUT_b, n, i, k);
-			memcpy(m, OUTPUT_m, sizeof(DT)*N*N);
-			memcpy(b, OUTPUT_b, sizeof(DT)*N);
+			memcpy(m, OUTPUT_m, sizeof(int)*N*N);
+			memcpy(b, OUTPUT_b, sizeof(int)*N);
 		}
 	}
 }
@@ -88,42 +96,49 @@ void pivot_swap(DT *m, DT *b, DT *OUTPUT_m, DT *OUTPUT_b, int i, int n) {
  *  Guassian with propagating pivot for fix point computations
  */
 void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
-	InputMatrix L;
-	identity(L.m);
+	// InputMatrix L;
+	// identity(L.m);
 	// Iterations
-	for(int i= 0; i < N-1; i++) {
+	// for(int i= 0; i < N-1; i++) {
 		// Swap
-		DT m_tmp[N*N];
-		DT b_tmp[N];
-		pivot_swap(m, b, m_tmp, b_tmp, i, N);
-		memcpy(m, m_tmp, sizeof(DT)*N*N);
-		memcpy(b, b_tmp, sizeof(DT)*N);
+		// DT m_tmp[N*N];
+		// DT b_tmp[N];
+		// pivot_swap(m, b, m_tmp, b_tmp, i, N);
+		// memcpy(m, m_tmp, sizeof(DT)*N*N);
+		// memcpy(b, b_tmp, sizeof(DT)*N);
 		
-		// Iterate over rows in remainder
-		for(int k=i+1; k < N; k++) {
-			//L.m[k*N+i] = a.m[k*N+i] / a.m[i*N+i]; // TODO need div-zero check
-			L.m[k*N+i] = fixedpt_div(m[k*N+i], m[i*N+i]);
-			// Iterates over columns in remainder
-			for(int j = i; j < N; j++) {
-				// Berechnung von R
-				// R(k,j) := R(k,j) - L(k,i) * R(i,j)
-				//a.m[k*N+j] = a.m[k*N+j] - L.m[k*N+i] * a.m[i*N+j];
-				m[k*N+j] = m[k*N+j] - fixedpt_mul(L.m[k*N+i],m[i*N+j]);
-			}
-			//b.b[k] = b.b[k] - L.m[k*N+i] * b.b[i];
-			b[k] = b[k] - fixedpt_mul(L.m[k*N+i],b[i]);
-		}	
-	}
+		// // Iterate over rows in remainder
+		// for(int k=i+1; k < N; k++) {
+		// 	//L.m[k*N+i] = a.m[k*N+i] / a.m[i*N+i]; // TODO need div-zero check
+		// 	L.m[k*N+i] = fixedpt_div(m[k*N+i], m[i*N+i]);
+		// 	// Iterates over columns in remainder
+		// 	for(int j = i; j < N; j++) {
+		// 		// Berechnung von R
+		// 		// R(k,j) := R(k,j) - L(k,i) * R(i,j)
+		// 		//a.m[k*N+j] = a.m[k*N+j] - L.m[k*N+i] * a.m[i*N+j];
+		// 		m[k*N+j] = m[k*N+j] - fixedpt_mul(L.m[k*N+i],m[i*N+j]);
+		// 	}
+		// 	//b.b[k] = b.b[k] - L.m[k*N+i] * b.b[i];
+		// 	b[k] = b[k] - fixedpt_mul(L.m[k*N+i],b[i]);
+		// }	
+	// }
 	// Output
-	solve_backtracking(m, b, OUTPUT_res);
+	// solve_backtracking(m, b, OUTPUT_res);
 	
 	//return out;
 }
 
 
-Output main(InputMatrix INPUT_A_m, InputVector INPUT_B_b) {
+
+// Output main(__attribute__((private(0))) InputMatrix INPUT_A_m, __attribute__((private(1))) InputVector INPUT_B_b) {
+// 	Output OUTPUT_res;
+// 	gaussj_D(INPUT_A_m.m, INPUT_B_b.b, OUTPUT_res.res);
+// 	return OUTPUT_res;
+// }
+
+Output main(__attribute__((private(0))) InputMatrix INPUT_A_m, __attribute__((private(1))) InputVector INPUT_B_b) {
 	Output OUTPUT_res;
-	gaussj_D(INPUT_A_m.m, INPUT_B_b.b, OUTPUT_res.res);
+	// gaussj_D(INPUT_A_m.m, INPUT_B_b.b, OUTPUT_res.res);
 	return OUTPUT_res;
 }
 

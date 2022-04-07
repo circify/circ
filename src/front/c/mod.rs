@@ -163,8 +163,6 @@ impl CGen {
                 }
             }
             TypeSpecifier::Struct(s) => {
-                println!("struct: {:#?}", s.node);
-
                 let StructType {
                     kind: _kind,
                     identifier,
@@ -580,6 +578,7 @@ impl CGen {
             BinaryOperator::Multiply => mul,
             BinaryOperator::Divide => div,
             BinaryOperator::Equals => eq,
+            BinaryOperator::NotEquals => neq,
             BinaryOperator::Greater => ugt,
             BinaryOperator::GreaterOrEqual => uge,
             BinaryOperator::Less => ult,
@@ -599,6 +598,7 @@ impl CGen {
     fn get_u_op(&self, op: UnaryOperator) -> fn(CTerm, CTerm) -> Result<CTerm, String> {
         match op {
             UnaryOperator::PostIncrement => add,
+            UnaryOperator::PostDecrement => sub,
             _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", op),
         }
     }
@@ -753,13 +753,27 @@ impl CGen {
             Expression::UnaryOperator(node) => {
                 let u_op = node.node;
                 match u_op.operator.node {
-                    UnaryOperator::PostIncrement => {
+                    UnaryOperator::PostIncrement | UnaryOperator::PostDecrement => {
                         let f = self.get_u_op(u_op.operator.node);
                         let i = self.gen_expr(u_op.operand.node.clone());
                         let one = cterm(CTermData::CInt(true, 32, bv_lit(1, 32)));
                         let loc = self.gen_lval(*u_op.operand);
                         let val = f(i, one).unwrap();
                         self.gen_assign(loc, val)
+                    }
+                    UnaryOperator::SizeOf => {
+                        let ty = match u_op.operand.node {
+                            Expression::Identifier(name) => {
+                                let n = name.node.name;
+                                match self.typedefs.get(&n) {
+                                    Some(ty) => ty.clone(),
+                                    None => panic!("Unknown type: {}", n),
+                                }
+                            }
+                            _ => unimplemented!("Unimplemented Sizeof: {:#?}", u_op.operand.node),
+                        };
+                        let size = ty.num_bits();
+                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(size, 32))))
                     }
                     _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", u_op),
                 }
@@ -810,8 +824,6 @@ impl CGen {
                     self.unwrap(r);
                 }
 
-                // println!("body: {:#?}", body.clone());
-
                 self.gen_stmt(body);
 
                 let ret = self
@@ -834,6 +846,18 @@ impl CGen {
                 let base = self.gen_expr(expression.node);
                 let field = identifier.node.name;
                 self.field_select(&base, &field)
+            }
+            Expression::SizeOf(s) => {
+                let ty = self.s_type_(s.node.specifiers.clone());
+                match ty {
+                    Some(t) => {
+                        let size = t.num_bits();
+                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(size, 32))))
+                    }
+                    None => {
+                        panic!("Cannot determine size of type: {:#?}", s);
+                    }
+                }
             }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
@@ -874,7 +898,6 @@ impl CGen {
     }
 
     fn gen_decl(&mut self, decl: Declaration) -> Vec<CTerm> {
-        println!("decl: {:#?}", decl);
         let specs = decl.specifiers.clone();
         if let DeclarationSpecifier::StorageClass(_store_node) = &specs[0].node {
             let new_decl = Declaration {
@@ -941,6 +964,8 @@ impl CGen {
                 match bin_op.node.operator.node {
                     BinaryOperator::Less => Some(ConstIteration { val }),
                     BinaryOperator::LessOrEqual => Some(ConstIteration { val: val + 1 }),
+                    BinaryOperator::Greater => Some(ConstIteration { val: val }),
+                    BinaryOperator::GreaterOrEqual => Some(ConstIteration { val: val - 1 }),
                     _ => None,
                 }
             }
@@ -951,6 +976,9 @@ impl CGen {
             Expression::UnaryOperator(u_op) => match u_op.node.operator.node {
                 UnaryOperator::PostIncrement | UnaryOperator::PreIncrement => {
                     Some(ConstIteration { val: 1 })
+                }
+                UnaryOperator::PostDecrement | UnaryOperator::PreDecrement => {
+                    Some(ConstIteration { val: -1 })
                 }
                 _ => None,
             },
@@ -1026,7 +1054,6 @@ impl CGen {
                     }
                 };
             }
-
             Statement::Expression(expr) => {
                 let e = expr.unwrap().node;
                 self.gen_expr(e);
@@ -1073,8 +1100,6 @@ impl CGen {
             self.unwrap(r);
         }
 
-        println!("body: {:#?}", f.body.clone());
-
         self.gen_stmt(f.body.clone());
         if let Some(r) = self.circ.exit_fn() {
             match self.mode {
@@ -1104,7 +1129,6 @@ impl CGen {
     fn visit_files(&mut self) {
         let TranslationUnit(nodes) = self.tu.clone();
         for n in nodes.iter() {
-            println!("{:#?}", n.node);
             match n.node {
                 ExternalDeclaration::Declaration(ref decl) => {
                     self.gen_decl(decl.node.clone());

@@ -8,13 +8,29 @@ use crate::ir::term::*;
 
 use std::fmt::{self, Display, Formatter};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Eq)]
 pub enum Ty {
     Bool,
     Int(bool, usize),
     Struct(String, FieldList<Ty>),
     Array(usize, Vec<usize>, Box<Ty>),
     Ptr(usize, Box<Ty>),
+}
+
+impl PartialEq for Ty {
+    fn eq(&self, other: &Self) -> bool {
+        use Ty::*;
+        match (self, other) {
+            (Bool, Bool) => true,
+            (Int(a, a_size), Int(b, b_size)) => a == b && a_size == b_size,
+            (Struct(_, a_list), Struct(_, b_list)) => a_list == b_list,
+            (Array(a_len, a_dims, a_ty), Array(b_len, b_dims, b_ty)) => {
+                a_len == b_len && a_dims == b_dims && *a_ty == *b_ty
+            }
+            (Ptr(a_size, a_ty), Ptr(b_size, b_ty)) => a_size == b_size && *a_ty == *b_ty,
+            _ => false,
+        }
+    }
 }
 
 impl Display for Ty {

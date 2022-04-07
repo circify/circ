@@ -125,6 +125,8 @@ impl TupleTree {
     }
     fn update(&self, i: usize, v: &Term) -> Self {
         assert_eq!(&self.0.op, &Op::Tuple);
+        println!("i = {}", i);
+        println!("cs = {}", self.0.cs.len());
         assert!(i < self.0.cs.len());
         let mut cs = self.0.cs.clone();
         cs[i] = v.clone();
