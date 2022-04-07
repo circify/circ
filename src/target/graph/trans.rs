@@ -7,6 +7,8 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::assign_mut;
 use crate::target::aby::assignment::ilp::calculate_cost;
+use crate::target::aby::assignment::ilp::calculate_node_cost;
+use crate::target::aby::assignment::ilp::calculate_conv_cost;
 use crate::target::aby::assignment::ilp::comb_selection;
 use crate::target::aby::assignment::CostModel;
 use crate::target::aby::assignment::SharingMap;
@@ -659,7 +661,11 @@ pub fn get_share_map(
     );
 
     let cost = calculate_cost(&global_assign, &cm_);
-    println!("LOG: Cost of assignment: {}", cost);
+    println!("LOG: Cost of assignment total: {}", cost);
+    let node_cost = calculate_node_cost(&global_assign, &cm_);
+    println!("LOG: Cost of assignment node: {}", node_cost);
+    let conv_cost = calculate_conv_cost(&global_assign, &cm_);
+    println!("LOG: Cost of assignment conv: {}", conv_cost);
 
     global_assign
 }

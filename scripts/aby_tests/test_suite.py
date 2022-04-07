@@ -617,7 +617,7 @@ def get_tests(name, size):
             [
                 "biomatch_" + size,
                 "2pc_biomatch_" + size,
-                "./scripts/aby_tests/test_inputs/biomatch_benchmark_" + size + ".txt",
+                "./scripts/aby_tests/test_inputs/biomatch_" + size + ".txt",
             ],   
         ]
     elif name == "kmeans":
