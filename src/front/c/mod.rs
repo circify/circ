@@ -655,7 +655,6 @@ impl CGen {
                     let term = r.unwrap_term();
                     let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
                     self.circ.assign_with_assertions(name, term, ty, PUBLIC_VIS);
-                    unimplemented!();
                 }
                 _ => unimplemented!("Mode: {}", self.mode),
             }
