@@ -84,7 +84,7 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
     let mut i = 0; // constraint #
     for (lc_a, lc_b, lc_c) in r1cs.constraints.iter() {
 
-        // circ Lc (const, monomials <Integer>) -> Vec<Integer> -> Vec<Variable>
+        // circ Lc (const, monomials <Integer>) -> Vec<Variable>
         let a = lc_to_v(&lc_a, const_id, &trans);
         let b = lc_to_v(&lc_b, const_id, &trans);
         let c = lc_to_v(&lc_c, const_id, &trans);

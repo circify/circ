@@ -42,11 +42,6 @@ use structopt::StructOpt;
 use libspartan::{Instance, NIZKGens, NIZK};
 use merlin::Transcript;
 use circ::target::r1cs::spartan::r1cs_to_spartan;
-//timing + proof sizes
-use std::time::{Duration, Instant};
-use serde::ser::Serialize;
-use serde_json::Result;
-use bincode;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
