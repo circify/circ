@@ -304,7 +304,6 @@ fn main() {
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
-            let num_r1cs = r1cs.constraints().len().clone();
 
             match action {
                 ProofAction::Count => (),
@@ -339,34 +338,24 @@ fn main() {
                 }
                 ProofAction::Spartan => {
                     println!("Converting R1CS to Spartan");
- 
                     let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs);
 
                     println!("Proving with Spartan");
-                    let prover = Instant::now();
-
                     // produce public parameters
                     let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
                     // produce proof
                     let mut prover_transcript = Transcript::new(b"nizk_example");
                     let pf = NIZK::prove(&inst, vars, &inps, &gens, &mut prover_transcript);            
     
-                    let prover_ms = prover.elapsed().as_millis();
-
                     println!("Verifying with Spartan");
-                    let verifier = Instant::now();                    
-
                     // verify proof
                     let mut verifier_transcript = Transcript::new(b"nizk_example");
                     assert!(pf
                         .verify(&inst, &inps, &mut verifier_transcript, &gens)
                         .is_ok());
 
-                    let verifier_ms = verifier.elapsed().as_millis();
-                    println!("proof verification successful!");
+                    println!("Proof verification successful!");
                     
-                    println!("{:#?}, r1cs: {}, prover ms: {}, verifier ms: {}", path_buf, num_r1cs, prover_ms, verifier_ms);
-
                 }
             }
         }
