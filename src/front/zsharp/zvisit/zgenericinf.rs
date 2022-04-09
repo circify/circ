@@ -21,6 +21,7 @@ pub(in super::super) struct ZGenericInf<'ast, 'gen, const IS_CNST: bool> {
     zgen: &'gen ZGen<'ast>,
     fdef: &'gen ast::FunctionDefinition<'ast>,
     gens: &'gen [ast::IdentifierExpression<'ast>],
+    path: &'gen Path,
     sfx: String,
     constr: Option<Term>,
 }
@@ -29,7 +30,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     pub fn new(
         zgen: &'gen ZGen<'ast>,
         fdef: &'gen ast::FunctionDefinition<'ast>,
-        path: &Path,
+        path: &'gen Path,
         name: &str,
     ) -> Self {
         let gens = fdef.generics.as_ref();
@@ -44,6 +45,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             zgen,
             fdef,
             gens,
+            path,
             sfx,
             constr: None,
         }
@@ -99,14 +101,16 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             };
         }
 
+        // self.fdef is in the context of self.path
+        self.zgen.file_stack_push(self.path.to_path_buf());
+
         // 1. build up the already-known generics
         for (cgv, id) in egv.iter().zip(self.fdef.generics.iter()) {
             if let Some(v) = match cgv {
                 CGV::Underscore(_) => None,
-                CGV::Value(v) => Some(self.zgen.literal_(v)),
-                CGV::Identifier(i) => Some(self.const_id_(i)),
+                CGV::Value(v) => Some(self.zgen.literal_(v)?),
+                CGV::Identifier(i) => Some(self.const_id_(i)?),
             } {
-                let v = v?;
                 let var = make_varname(&id.value, &self.sfx);
                 let val = match v.ty {
                     Ty::Uint(32) => Ok(v.term),
@@ -140,6 +144,9 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         // bracketing invariant
         assert!(self.gens == &self.fdef.generics[..]);
         assert!(self.sfx.ends_with(&self.fdef.id.value));
+
+        // back to calling context
+        self.zgen.file_stack_pop();
 
         // 4. run the solver on the term stack, if it's not already cached
         if let Some(res) = self
@@ -290,7 +297,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 arg_ty
             )),
         }?;
-        let strdef = self
+        let (strdef, strpath) = self
             .zgen
             .get_struct(&def_ty.id.value)
             .ok_or_else(|| format!("ZGenericInf: no such struct {}", &def_ty.id.value))?;
@@ -352,6 +359,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         // 2. walk through struct def to generate constraints on inner explicit generics
         let old_sfx = std::mem::replace(&mut self.sfx, new_sfx);
         let old_gens = std::mem::replace(&mut self.gens, &strdef.generics[..]);
+        self.zgen.file_stack_push(strpath);
         for ast::StructField { ty, id, .. } in strdef.fields.iter() {
             if let Some(t) = aty_map.remove(&id.value) {
                 self.fdef_gen_ty(t, ty)?;
@@ -362,6 +370,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 ));
             }
         }
+        self.zgen.file_stack_pop();
         if !aty_map.is_empty() {
             return Err(format!(
                 "ZGenericInf: struct {} value had extra members: {:?}",

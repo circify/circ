@@ -1,0 +1,20 @@
+import "utils/casts/u8_to_u16"
+
+def main() -> bool:
+    u8 u8_1 = 170
+    u16 f8_1 = u8_to_u16(u8_1)
+    assert(f8_1 == 170)
+
+    u8 u8_2 = 193
+    u16 f8_2 = u8_to_u16(u8_2)
+    assert(f8_2 == 193)
+
+    u8 u8_3 = 131
+    u16 f8_3 = u8_to_u16(u8_3)
+    assert(f8_3 == 131)
+
+    u8 u8_4 = 85
+    u16 f8_4 = u8_to_u16(u8_4)
+    assert(f8_4 == 85)
+
+    return true

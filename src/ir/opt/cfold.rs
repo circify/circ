@@ -58,11 +58,11 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
             Op::Implies => match get(0).as_bool_opt() {
-                Some(true) => Some(get(1).clone()),
+                Some(true) => Some(get(1)),
                 Some(false) => cbool(true),
                 None => match get(1).as_bool_opt() {
                     Some(true) => cbool(true),
-                    Some(false) => Some(term![NOT; get(0).clone()]),
+                    Some(false) => Some(term![NOT; get(0)]),
                     None => None,
                 },
             },
@@ -100,25 +100,25 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 use BvBinOp::*;
                 match (o, c0.as_bv_opt(), c1.as_bv_opt()) {
                     (Sub, Some(a), Some(b)) => cbv(a.clone() - b.clone()),
-                    (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0.clone()),
+                    (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0),
                     (Udiv, _, Some(b)) if b.uint() == &Integer::from(0) => Some(bv_lit(
                         (Integer::from(1) << b.width() as u32) - 1,
                         b.width(),
                     )),
                     (Udiv, Some(a), Some(b)) => cbv(a.clone() / b),
-                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0.clone()),
+                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0),
                     (Udiv, _, Some(b)) if b.uint() == &Integer::from(-1) => {
-                        Some(term![Op::BvUnOp(BvUnOp::Neg); c0.clone()])
+                        Some(term![Op::BvUnOp(BvUnOp::Neg); c0])
                     }
                     // TODO: Udiv by power of two?
                     (Urem, Some(a), Some(b)) => cbv(a.clone() % b),
                     // TODO: Urem by power of two?
-                    (Shl, Some(a), Some(b)) => cbv(a.clone() << b.clone()),
+                    (Shl, Some(a), Some(b)) => cbv(a.clone() << b),
                     (Shl, _, Some(b)) => {
                         assert!(b.uint() < &Integer::from(b.width()));
                         let n = b.uint().to_usize().unwrap();
                         Some(term![BV_CONCAT;
-                          term![Op::BvExtract(b.width()-n-1, 0); c0.clone()],
+                          term![Op::BvExtract(b.width()-n-1, 0); c0],
                           leaf_term(Op::Const(Value::BitVector(BitVector::zeros(n))))
                         ])
                     }
@@ -127,14 +127,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                         assert!(b.uint() < &Integer::from(b.width()));
                         let n = b.uint().to_usize().unwrap();
                         Some(term![Op::BvSext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0.clone()]])
+                                   term![Op::BvExtract(b.width()-1, n); c0]])
                     }
                     (Lshr, Some(a), Some(b)) => cbv(a.clone().lshr(b)),
                     (Lshr, _, Some(b)) => {
                         assert!(b.uint() < &Integer::from(b.width()));
                         let n = b.uint().to_usize().unwrap();
                         Some(term![Op::BvUext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0.clone()]])
+                                   term![Op::BvExtract(b.width()-1, n); c0]])
                     }
                     _ => None,
                 }
@@ -167,22 +167,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 let t = get(1);
                 let f = get(2);
                 match c.as_bool_opt() {
-                    Some(true) => Some(t.clone()),
-                    Some(false) => Some(f.clone()),
+                    Some(true) => Some(t),
+                    Some(false) => Some(f),
                     None => match t.as_bool_opt() {
-                        Some(true) => Some(fold_cache(&term![OR; c.clone(), f.clone()], cache)),
-                        Some(false) => Some(fold_cache(
-                            &term![AND; neg_bool(c.clone()), f.clone()],
-                            cache,
-                        )),
+                        Some(true) => Some(fold_cache(&term![OR; c, f], cache)),
+                        Some(false) => Some(fold_cache(&term![AND; neg_bool(c), f], cache)),
                         _ => match f.as_bool_opt() {
-                            Some(true) => Some(fold_cache(
-                                &term![OR; neg_bool(c.clone()), t.clone()],
-                                cache,
-                            )),
-                            Some(false) => {
-                                Some(fold_cache(&term![AND; c.clone(), t.clone()], cache))
-                            }
+                            Some(true) => Some(fold_cache(&term![OR; neg_bool(c), t], cache)),
+                            Some(false) => Some(fold_cache(&term![AND; c, t], cache)),
                             _ => None,
                         },
                     },
@@ -244,6 +236,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 leaf_term(Op::Const(Value::BitVector(BitVector::new(
                     Integer::from(b),
                     1,
+                ))))
+            }),
+            Op::BvUext(w) => get(0).as_bv_opt().map(|b| {
+                leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                    b.uint().clone(),
+                    b.width() + w,
                 ))))
             }),
             _ => None,

@@ -89,6 +89,7 @@ impl ToR1cs {
     }
 
     /// Return a bit indicating whether wire `x` is non-zero.
+    #[allow(clippy::wrong_self_convention)]
     fn is_zero(&mut self, x: Lc) -> Lc {
         // m * x - 1 + is_zero == 0
         // is_zero * x == 0

@@ -1,0 +1,1 @@
+from "EMBED" import u16_to_u32 as main

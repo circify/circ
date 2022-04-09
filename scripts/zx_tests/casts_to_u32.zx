@@ -1,0 +1,37 @@
+import "utils/casts/u8_to_u32"
+import "utils/casts/u16_to_u32"
+
+def main() -> bool:
+    u8 u8_1 = 170
+    u32 f8_1 = u8_to_u32(u8_1)
+    assert(f8_1 == 170)
+
+    u8 u8_2 = 193
+    u32 f8_2 = u8_to_u32(u8_2)
+    assert(f8_2 == 193)
+
+    u8 u8_3 = 131
+    u32 f8_3 = u8_to_u32(u8_3)
+    assert(f8_3 == 131)
+
+    u8 u8_4 = 85
+    u32 f8_4 = u8_to_u32(u8_4)
+    assert(f8_4 == 85)
+
+    u16 u16_1 = 49470
+    u32 f16_1 = u16_to_u32(u16_1)
+    assert(f16_1 == 49470)
+
+    u16 u16_2 = 33621
+    u32 f16_2 = u16_to_u32(u16_2)
+    assert(f16_2 == 33621)
+
+    u16 u16_3 = 43724
+    u32 f16_3 = u16_to_u32(u16_3)
+    assert(f16_3 == 43724)
+
+    u16 u16_4 = 58601
+    u32 f16_4 = u16_to_u32(u16_4)
+    assert(f16_4 == 58601)
+
+    return true
