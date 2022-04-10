@@ -90,10 +90,10 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 .map(Sort::BitVector)
         }
         Op::BvUext(a) => {
-            bv_or(&get_ty(&t.cs[0]), "bv-uext").map(|bv| Sort::BitVector(bv.as_bv() + a))
+            bv_or(get_ty(&t.cs[0]), "bv-uext").map(|bv| Sort::BitVector(bv.as_bv() + a))
         }
         Op::BvSext(a) => {
-            bv_or(&get_ty(&t.cs[0]), "bv-uext").map(|bv| Sort::BitVector(bv.as_bv() + a))
+            bv_or(get_ty(&t.cs[0]), "bv-uext").map(|bv| Sort::BitVector(bv.as_bv() + a))
         }
         Op::PfToBv(a) => Ok(Sort::BitVector(*a)),
         Op::Implies => Ok(Sort::Bool),
@@ -105,7 +105,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::FpBinPred(_) => Ok(Sort::Bool),
         Op::FpUnPred(_) => Ok(Sort::Bool),
         Op::FpUnOp(_) => Ok(get_ty(&t.cs[0]).clone()),
-        Op::BvToFp => match bv_or(&get_ty(&t.cs[0]), "bv-to-fp") {
+        Op::BvToFp => match bv_or(get_ty(&t.cs[0]), "bv-to-fp") {
             Ok(Sort::BitVector(32)) => Ok(Sort::F32),
             Ok(Sort::BitVector(64)) => Ok(Sort::F64),
             Ok(s) => Err(TypeErrorReason::Custom(format!(
@@ -123,7 +123,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::PfUnOp(_) => Ok(get_ty(&t.cs[0]).clone()),
         Op::PfNaryOp(_) => Ok(get_ty(&t.cs[0]).clone()),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
-        Op::Select => array_or(&get_ty(&t.cs[0]), "select").map(|(_, v)| v.clone()),
+        Op::Select => array_or(get_ty(&t.cs[0]), "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs[0]).clone()),
         Op::Tuple => Ok(Sort::Tuple(t.cs.iter().map(get_ty).cloned().collect())),
         Op::Field(i) => {
@@ -147,7 +147,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             let mut size = 0;
             let mut error = None;
 
-            match arrmap_or(&get_ty(&t.cs[0]), "map") {
+            match arrmap_or(get_ty(&t.cs[0]), "map") {
                 Ok((k, _, s)) => {
                     key_sort = k.clone();
                     size = *s;
@@ -158,7 +158,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             }
 
             for i in 0..arg_cnt {
-                match array_or(&get_ty(&t.cs[i]), "map inputs") {
+                match array_or(get_ty(&t.cs[i]), "map inputs") {
                     Ok((_, v)) => {
                         dterm_cs.push(v.default_term());
                     }
