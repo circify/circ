@@ -81,19 +81,14 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::BvUnOp(_) => Ok(get_ty(&t.cs[0]).clone()),
         Op::BoolToBv => Ok(Sort::BitVector(1)),
         Op::BvExtract(a, b) => Ok(Sort::BitVector(a - b + 1)),
-        Op::BvConcat => t
-            .cs
-            .iter()
-            .map(get_ty)
-            .try_fold(
-                0,
-                |l: usize,
-                 r: &Sort|
-                 -> Result<usize, TypeErrorReason> {
+        Op::BvConcat => {
+            t.cs.iter()
+                .map(get_ty)
+                .try_fold(0, |l: usize, r: &Sort| -> Result<usize, TypeErrorReason> {
                     bv_or(r, "concat").map(|rr| l + rr.as_bv())
-                },
-            )
-            .map(Sort::BitVector),
+                })
+                .map(Sort::BitVector)
+        }
         Op::BvUext(a) => {
             bv_or(&get_ty(&t.cs[0]), "bv-uext").map(|bv| Sort::BitVector(bv.as_bv() + a))
         }
@@ -216,12 +211,11 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                     to_check.push((c, false));
                 }
             } else {
-                let ty =
-                    check_raw_step(&back.0, &*term_tys).map_err(|reason| TypeError {
-                        op: back.0.op.clone(),
-                        args: vec![], // not quite right
-                        reason,
-                    })?;
+                let ty = check_raw_step(&back.0, &*term_tys).map_err(|reason| TypeError {
+                    op: back.0.op.clone(),
+                    args: vec![], // not quite right
+                    reason,
+                })?;
                 term_tys.insert(back.0.to_weak(), ty);
             }
         }
