@@ -999,7 +999,7 @@ impl TermTable {
             let okv = self.map.get_key_value(&*t.elm);
             std::mem::drop(t);
             if let Some((key, _)) = okv {
-                if Arc::strong_count(key) == 1 {
+                if Arc::strong_count(key) <= 1 {
                     to_check.extend(key.cs.iter().cloned());
                     let key = key.clone();
                     self.map.remove(&key);
@@ -1012,6 +1012,8 @@ impl TermTable {
         }
         debug!(target: "ir::term::gc", "{} of {} terms collected", old_size - new_size, old_size);
         self.last_len = new_size;
+
+        super::opt::cfold::collect();
     }
 }
 struct TypeTable {
@@ -1040,7 +1042,7 @@ impl TypeTable {
     }
     fn collect(&mut self) {
         let old_size = self.map.len();
-        self.map.retain(|term, _| term.to_hconsed().is_some());
+        self.map.retain(|term, _| term.elm.strong_count() > 1);
         let new_size = self.map.len();
         debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
         self.last_len = new_size;
@@ -1529,7 +1531,7 @@ macro_rules! term {
 /// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
 /// LRU cache of terms (like TermMap, but limited size)
-pub type TermCache<T> = hashconsing::coll::HConLru<Term, T>;
+pub type TermCache<T> = hashconsing::coll::WHConLru<Term, T>;
 /// Set of terms
 pub type TermSet = hashconsing::coll::HConSet<Term>;
 

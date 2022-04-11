@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 circ_fields = { path = "circ_fields" }
 #hashconsing = "1.3"
-hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "phash"}
+hashconsing = { git = "https://github.com/kwantam/hashconsing.git", branch = "phash"}
 rug = "1.11"
 gmp-mpfr-sys = "1.4"
 lazy_static = "1.4"
