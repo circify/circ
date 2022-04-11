@@ -52,65 +52,52 @@
 //! ## Phase 2
 //!
 //! We replace each output `t` with the sequence of outputs `(list T)`.
+//!
+//! ## Data representation
+//!
+//! Since the rewrite produces a large number of (possibly big) tuples, and we sometimes apply
+//! update operators to those tuples, we represent the rewritten tuple trees using an immutable,
+//! fast vector type, instead of standard terms. This allows for log-time updates.
 
-use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::{
-    check, extras, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, Value, AND,
+    check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap, Value, AND,
 };
 use std::collections::BTreeMap;
 
 use itertools::zip_eq;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-struct TupleTree(Term);
+enum TupleTree {
+    NonTuple(Term),
+    Tuple(im::Vector<TupleTree>),
+}
 
 impl TupleTree {
     fn flatten(&self) -> impl Iterator<Item = Term> {
         let mut out = Vec::new();
-        fn rec_unroll_into(t: &Term, out: &mut Vec<Term>) {
-            if t.op == Op::Tuple {
-                for c in &t.cs {
-                    rec_unroll_into(c, out);
-                }
-            } else {
-                out.push(t.clone());
-            }
-        }
-        rec_unroll_into(&self.0, &mut out);
-        out.into_iter()
-    }
-    fn structure(&self, flattened: impl IntoIterator<Item = Term>) -> Self {
-        fn term_structure(t: &Term, iter: &mut impl Iterator<Item = Term>) -> Term {
-            if t.op == Op::Tuple {
-                term(
-                    Op::Tuple,
-                    t.cs.iter().map(|c| term_structure(c, iter)).collect(),
-                )
-            } else {
-                iter.next().expect("bad structure")
-            }
-        }
-        Self(term_structure(&self.0, &mut flattened.into_iter()))
-    }
-    fn well_formed(&self) -> bool {
-        for t in PostOrderIter::new(self.0.clone()) {
-            if t.op != Op::Tuple {
-                for c in &t.cs {
-                    if c.op == Op::Tuple {
-                        return false;
+        fn rec_unroll_into(t: &TupleTree, out: &mut Vec<Term>) {
+            match t {
+                TupleTree::NonTuple(t) => out.push(t.clone()),
+                TupleTree::Tuple(t) => {
+                    for c in t {
+                        rec_unroll_into(c, out);
                     }
                 }
             }
         }
-        true
+        rec_unroll_into(self, &mut out);
+        out.into_iter()
     }
-    #[allow(dead_code)]
-    fn assert_well_formed(&self) {
-        assert!(
-            self.well_formed(),
-            "The following is not a well-formed tuple tree {}",
-            extras::Letified(self.0.clone())
-        );
+    fn structure(&self, flattened: impl IntoIterator<Item = Term>) -> Self {
+        fn term_structure(t: &TupleTree, iter: &mut impl Iterator<Item = Term>) -> TupleTree {
+            match t {
+                TupleTree::Tuple(tt) => {
+                    TupleTree::Tuple(tt.iter().map(|c| term_structure(c, iter)).collect())
+                }
+                TupleTree::NonTuple(_) => TupleTree::NonTuple(iter.next().expect("bad structure")),
+            }
+        }
+        term_structure(self, &mut flattened.into_iter())
     }
     fn map(&self, f: impl FnMut(Term) -> Term) -> Self {
         self.structure(self.flatten().map(f))
@@ -119,16 +106,28 @@ impl TupleTree {
         self.structure(itertools::zip_eq(self.flatten(), other.flatten()).map(|(a, b)| f(a, b)))
     }
     fn get(&self, i: usize) -> Self {
-        assert_eq!(&self.0.op, &Op::Tuple);
-        assert!(i < self.0.cs.len());
-        Self(self.0.cs[i].clone())
+        match self {
+            TupleTree::NonTuple(_) => panic!("Get ({}) on non-tuple {:?}", i, self),
+            TupleTree::Tuple(t) => {
+                assert!(i < t.len());
+                t.get(i).unwrap().clone()
+            }
+        }
     }
-    fn update(&self, i: usize, v: &Term) -> Self {
-        assert_eq!(&self.0.op, &Op::Tuple);
-        assert!(i < self.0.cs.len());
-        let mut cs = self.0.cs.clone();
-        cs[i] = v.clone();
-        Self(term(Op::Tuple, cs))
+    fn update(&self, i: usize, v: &TupleTree) -> Self {
+        match self {
+            TupleTree::NonTuple(_) => panic!("Update ({}) on non-tuple {:?}", i, self),
+            TupleTree::Tuple(t) => {
+                assert!(i < t.len());
+                TupleTree::Tuple(t.update(i, v.clone()))
+            }
+        }
+    }
+    fn unwrap_non_tuple(self) -> Term {
+        match self {
+            TupleTree::NonTuple(t) => t,
+            _ => panic!("{:?} is tuple!", self),
+        }
     }
 }
 
@@ -164,14 +163,11 @@ impl ValueTupleTree {
     }
 }
 
-fn termify_val_tuples(v: Value) -> Term {
+fn termify_val_tuples(v: Value) -> TupleTree {
     if let Value::Tuple(vs) = v {
-        term(
-            Op::Tuple,
-            Vec::from(vs).into_iter().map(termify_val_tuples).collect(),
-        )
+        TupleTree::Tuple(Vec::from(vs).into_iter().map(termify_val_tuples).collect())
     } else {
-        leaf_term(Op::Const(v))
+        TupleTree::NonTuple(leaf_term(Op::Const(v)))
     }
 }
 
@@ -208,68 +204,6 @@ fn untuple_value(v: &Value) -> Value {
     }
 }
 
-struct TupleLifter;
-
-impl RewritePass for TupleLifter {
-    fn visit<F: Fn() -> Vec<Term>>(
-        &mut self,
-        _computation: &mut Computation,
-        orig: &Term,
-        rewritten_children: F,
-    ) -> Option<Term> {
-        match &orig.op {
-            Op::Const(v) => Some(termify_val_tuples(untuple_value(v))),
-            Op::Ite => {
-                let mut cs = rewritten_children();
-                let f = TupleTree(cs.pop().unwrap());
-                let t = TupleTree(cs.pop().unwrap());
-                let c = cs.pop().unwrap();
-                debug_assert!(cs.is_empty());
-                Some(t.bimap(|a, b| term![Op::Ite; c.clone(), a, b], &f).0)
-            }
-            Op::Eq => {
-                let mut cs = rewritten_children();
-                let b = TupleTree(cs.pop().unwrap());
-                let a = TupleTree(cs.pop().unwrap());
-                debug_assert!(cs.is_empty());
-                let eqs = zip_eq(a.flatten(), b.flatten()).map(|(a, b)| term![Op::Eq; a, b]);
-                Some(term(AND, eqs.collect()))
-            }
-            Op::Store => {
-                let mut cs = rewritten_children();
-                let v = TupleTree(cs.pop().unwrap());
-                let i = cs.pop().unwrap();
-                let a = TupleTree(cs.pop().unwrap());
-                debug_assert!(cs.is_empty());
-                Some(a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v).0)
-            }
-            Op::Select => {
-                let mut cs = rewritten_children();
-                let i = cs.pop().unwrap();
-                let a = TupleTree(cs.pop().unwrap());
-                debug_assert!(cs.is_empty());
-                Some(a.map(|a| term![Op::Select; a, i.clone()]).0)
-            }
-            Op::Field(i) => {
-                let mut cs = rewritten_children();
-                let t = TupleTree(cs.pop().unwrap());
-                debug_assert!(cs.is_empty());
-                Some(t.get(*i).0)
-            }
-            Op::Update(i) => {
-                let mut cs = rewritten_children();
-                let v = cs.pop().unwrap();
-                let t = TupleTree(cs.pop().unwrap());
-                debug_assert!(cs.is_empty());
-                Some(t.update(*i, &v).0)
-            }
-            // The default rewrite is correct here.
-            Op::Tuple => None,
-            _ => None,
-        }
-    }
-}
-
 #[allow(dead_code)]
 fn tuple_free(t: Term) -> bool {
     PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
@@ -277,11 +211,63 @@ fn tuple_free(t: Term) -> bool {
 
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
-    let mut pass = TupleLifter;
-    pass.traverse(cs);
+    let mut lifted: TermMap<TupleTree> = TermMap::new();
+    for t in cs.terms_postorder() {
+        let mut cs: Vec<TupleTree> =
+            t.cs.iter()
+                .map(|c| lifted.get(c).unwrap().clone())
+                .collect();
+        let new_t = match &t.op {
+            Op::Const(v) => termify_val_tuples(untuple_value(v)),
+            Op::Ite => {
+                let f = cs.pop().unwrap();
+                let t = cs.pop().unwrap();
+                let c = cs.pop().unwrap().unwrap_non_tuple();
+                debug_assert!(cs.is_empty());
+                t.bimap(|a, b| term![Op::Ite; c.clone(), a, b], &f)
+            }
+            Op::Eq => {
+                let b = cs.pop().unwrap();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                let eqs = zip_eq(a.flatten(), b.flatten()).map(|(a, b)| term![Op::Eq; a, b]);
+                TupleTree::NonTuple(term(AND, eqs.collect()))
+            }
+            Op::Store => {
+                let v = cs.pop().unwrap();
+                let i = cs.pop().unwrap().unwrap_non_tuple();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v)
+            }
+            Op::Select => {
+                let i = cs.pop().unwrap().unwrap_non_tuple();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                a.map(|a| term![Op::Select; a, i.clone()])
+            }
+            Op::Field(i) => {
+                let t = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                t.get(*i)
+            }
+            Op::Update(i) => {
+                let v = cs.pop().unwrap();
+                let t = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                t.update(*i, &v)
+            }
+            Op::Tuple => TupleTree::Tuple(cs.into()),
+            _ => TupleTree::NonTuple(term(
+                t.op.clone(),
+                cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
+            )),
+        };
+        lifted.insert(t, new_t);
+    }
     cs.outputs = std::mem::take(&mut cs.outputs)
         .into_iter()
-        .flat_map(|o| TupleTree(o).flatten())
+        .flat_map(|o| lifted.get(&o).unwrap().clone().flatten())
         .collect();
     #[cfg(debug_assertions)]
     for o in &cs.outputs {
