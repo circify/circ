@@ -59,6 +59,10 @@ struct Options {
 
     #[structopt(long, default_value = "count")]
     action: ProofAction,
+
+    #[structopt(short = "q")]
+    /// quiet mode: don't print R1CS at the end
+    quiet: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -152,7 +156,9 @@ fn main() {
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
         ProofAction::Count => {
-            eprintln!("{:#?}", r1cs.constraints());
+            if !options.quiet {
+                eprintln!("{:#?}", r1cs.constraints());
+            }
         }
         ProofAction::Prove => {
             unimplemented!()
