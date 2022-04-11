@@ -60,7 +60,10 @@ impl FrontEnd for ZSharpFE {
         g.entry_fn("main");
         g.generics_stack_pop();
         g.file_stack_pop();
-        g.circ.into_inner().consume().borrow().clone()
+
+        std::rc::Rc::try_unwrap(g.into_circify().consume())
+            .unwrap_or_else(|rc| (*rc).clone())
+            .into_inner()
     }
 }
 
@@ -97,6 +100,23 @@ struct ZGen<'ast> {
     lhs_ty: RefCell<Option<Ty>>,
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
+}
+
+impl<'ast> Drop for ZGen<'ast> {
+    fn drop(&mut self) {
+        use std::mem::take;
+
+        // drop all fields that contain T or Ty
+        drop(self.generics_stack.take());
+        drop(take(&mut self.constants));
+        drop(self.cvars_stack.take());
+        drop(self.crets_stack.take());
+        drop(self.lhs_ty.take());
+        drop(self.ret_ty_stack.take());
+
+        // force garbage collection
+        garbage_collect();
+    }
 }
 
 enum ZAccess {
@@ -152,6 +172,10 @@ impl<'ast> ZGen<'ast> {
             .metadata
             .add_prover_and_verifier();
         this
+    }
+
+    fn into_circify(self) -> Circify<ZSharp> {
+        self.circ.replace(Circify::new(ZSharp::new(None)))
     }
 
     /// Unwrap a result with a span-dependent error
