@@ -37,6 +37,7 @@ from-pest = "0.3"
 itertools = "0.10"
 petgraph = "0.6"
 paste = "1.0"
+im = "15"
 
 [dev-dependencies]
 quickcheck = "1"
