@@ -21,7 +21,6 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Instant;
-// use std::sync::mpsc::channel;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Node {
@@ -480,17 +479,6 @@ impl ParitionGraph {
         local_smaps
     }
 
-    // fn get_mutate_local_assignments(
-    //     &self,
-    //     cs: &HashMap<usize, ComputationSubgraph>,
-    // ) -> HashMap<usize, SharingMap> {
-    //     let mut local_smaps: HashMap<usize, SharingMap> = HashMap::new();
-    //     for (i, c) in cs.iter() {
-    //         local_smaps.insert(*i, assign(c, &self.cm));
-    //     }
-    //     local_smaps
-    // }
-
     fn get_global_assignments(&self, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
         let mut global_smap: SharingMap = SharingMap::new();
 
@@ -596,8 +584,8 @@ pub fn get_share_map(
     lang: &str,
     _mut: bool,
     num_parts: &usize,
-    mut_level: &usize,
-    mut_step_size: &usize,
+    _mut_level: &usize,
+    _mut_step_size: &usize,
 ) -> SharingMap {
     let mut pg = ParitionGraph::new(*num_parts, cs, cm, path, lang);
 
@@ -621,8 +609,7 @@ pub fn get_share_map(
             let before_mut = Instant::now();
             // let mutation_smaps = pg._mutate_partitions(&partitions);
             // let mutation_smaps = pg._mutate_partitions_mp(&partitions);
-            let mutation_smaps =
-                pg._mutate_partitions_mp_step(&partitions, *mut_level, *mut_step_size);
+            let mutation_smaps = pg._mutate_partitions_mp_step(&partitions, *_mut_level, *_mut_step_size);
             let after_mut = Instant::now();
             let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, &cm);
             let after_assign = Instant::now();
@@ -744,7 +731,6 @@ mod test {
                     for i in 1..10000 {
                         let cs = c.clone();
                         children.push(thread::spawn(move || {
-                            // simple_ilp(i as f64);
                             let cm = "hycc";
                             (i, assign_mut(&cs, cm, &cs))
                         }));

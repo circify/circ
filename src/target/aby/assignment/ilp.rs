@@ -70,10 +70,15 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
     );
     let costs = CostModel::from_opa_cost_file(&p);
     let mut smap = TermMap::new();
-    while smap.len() == 0 {
+    let mut cnt = 1;
+    while smap.len() == 0 {∂
         // A hack for empty result during multi-threading
         // Simply retry until get a non-empty result
+        if cnt > 5{
+            panic!("MT BUG: Dead loop.")
+        }
         smap = build_ilp(c, &costs);
+        cnt = cnt + 1;
     }
     let mut trunc_smap = TermMap::new();
     for node in co.nodes.clone() {
@@ -201,25 +206,6 @@ fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
         }
     }
     assignment
-}
-
-/// A simple ilp for mp testing
-pub fn simple_ilp(i: f64) {
-    let base_dir = "hycc";
-    let p = format!(
-        "{}/third_party/{}/adapted_costs.json",
-        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
-        base_dir
-    );
-    let _cost = CostModel::from_opa_cost_file(&p);
-
-    let mut ilp = Ilp::new();
-    let v = ilp.new_variable(variable().binary(), format!("v"));
-    let b = ilp.new_variable(variable().binary(), format!("b"));
-    ilp.maximize(v + b + i);
-    let (_opt, solution) = ilp.default_solve().unwrap();
-    println!("v: {}, {}", i, solution.get("v").unwrap());
-    println!("b: {}, {}", i, solution.get("b").unwrap());
 }
 
 /// Use a ILP to find a optimal combination of mutation assignments
