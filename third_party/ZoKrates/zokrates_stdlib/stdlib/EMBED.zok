@@ -45,3 +45,33 @@ def unpack<N>(field i) -> bool[N]:
 
 def bit_array_le<N>(bool[N] a, bool[N] b) -> bool:
     return false
+
+def u8_to_field(u8 i) -> field:
+    return 0f
+
+def u16_to_field(u16 i) -> field:
+    return 0f
+
+def u32_to_field(u32 i) -> field:
+    return 0f
+
+def u64_to_field(u64 i) -> field:
+    return 0f
+
+def u8_to_u64(u8 i) -> u64:
+    return 0u64
+
+def u16_to_u64(u16 i) -> u64:
+    return 0u64
+
+def u32_to_u64(u32 i) -> u64:
+    return 0u64
+
+def u8_to_u32(u8 i) -> u32:
+    return 0u32
+
+def u16_to_u32(u16 i) -> u32:
+    return 0u32
+
+def u8_to_u16(u8 i) -> u16:
+    return 0u16
