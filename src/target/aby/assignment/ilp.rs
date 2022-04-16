@@ -71,7 +71,7 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
     let costs = CostModel::from_opa_cost_file(&p);
     let mut smap = TermMap::new();
     let mut cnt = 1;
-    while smap.len() == 0 {∂
+    while smap.len() == 0 {
         // A hack for empty result during multi-threading
         // Simply retry until get a non-empty result
         if cnt > 5{
