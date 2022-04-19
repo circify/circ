@@ -191,8 +191,8 @@ impl ToABY {
                 let op = "MUX";
 
                 self.check_bool(&t.cs[0]);
-                self.check_bv(&t.cs[1]);
-                self.check_bv(&t.cs[2]);
+                self.check_bool(&t.cs[1]);
+                self.check_bool(&t.cs[2]);
 
                 let sel = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
                 let a = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
