@@ -171,20 +171,11 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 Some(e) => Err(e),
                 None => {
                     let term_ = term((**op).clone(), dterm_cs);
-<<<<<<< HEAD
-                    let res_sort = check_raw(&term_)
-                        .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size));
-                    match res_sort {
-                        Ok(s) => Ok(s),
-                        _ => Err(TypeErrorReason::Custom("map failed".to_string())),
-                    }
-=======
                     Ok(Sort::Array(
                         Box::new(key_sort),
                         Box::new(get_ty(&term_).clone()),
                         size,
                     ))
->>>>>>> master
                 }
             }
         }

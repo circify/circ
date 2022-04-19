@@ -20,8 +20,6 @@ use super::assignment::assign_greedy;
 
 const PUBLIC: u8 = 2;
 
-const PUBLIC: u8 = 2;
-
 #[derive(Clone)]
 enum EmbeddedTerm {
     Bool(String),
