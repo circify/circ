@@ -119,6 +119,8 @@ impl TupleTree {
         self.structure(itertools::zip_eq(self.flatten(), other.flatten()).map(|(a, b)| f(a, b)))
     }
     fn get(&self, i: usize) -> Self {
+        println!("self: {}", self.0);
+        println!("self: {}", self.0.op);
         assert_eq!(&self.0.op, &Op::Tuple);
         assert!(i < self.0.cs.len());
         Self(self.0.cs[i].clone())

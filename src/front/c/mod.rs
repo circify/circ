@@ -268,6 +268,9 @@ impl CGen {
             let new_ty: Ty = match ty.clone() {
                 Ty::Struct(name, fs) => {
                     if decl_name != name {
+                        println!("struct: {}, {}", name.to_string(), ty.clone());
+                        println!("fs len(): {}", fs.clone().len());
+                        println!("fs: {}, {}", fs.get(0).clone().0, fs.get(0).clone().1);
                         let s_ty: Ty = Ty::Struct(decl_name.clone(), fs);
                         self.structs
                             .insert(decl_name.to_string().clone(), s_ty.clone());
@@ -703,34 +706,7 @@ impl CGen {
                             _ => self
                                 .array_select(index.base, cterm(CTermData::CInt(true, 32, offset))),
                         };
-
                         res
-
-                        // if let Ty::Array(size, sizes, ty) = index.base.term.type_() {
-                        //     // TODO: should be able to return pointer
-                        //     println!("size len: {}", sizes.len());
-                        //     if index.indices.len() < sizes.len() {
-                        //         // RETURN POINTER HERE!
-                        //         println!("offset: {}", offset);
-                        //         alloc_id = index.base.term
-                        //         cterm(CTermData::CStackPtr(
-                        //             index.base.term.type_(),
-                        //             bv_lit(offset, 32),
-
-                        //         ))
-                        //         unimplemented!("return pointer here!");
-                        //     } else {
-                        //         self.array_select(
-                        //             index.base,
-                        //             cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
-                        //         )
-                        //     }
-                        // } else {
-                        //     self.array_select(
-                        //         index.base,
-                        //         cterm(CTermData::CInt(true, 32, bv_lit(offset, 32))),
-                        //     )
-                        // }
                     }
                     _ => {
                         let f = self.get_bin_op(bin_op.operator.node.clone());
