@@ -97,9 +97,7 @@ pub fn linearize(c: &mut Computation) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ir::term::field::TEST_FIELD;
-    use rug::Integer;
-    use std::sync::Arc;
+    use crate::util::field::DFL_T;
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
@@ -117,10 +115,7 @@ mod test {
     }
 
     fn field_lit(u: usize) -> Term {
-        leaf_term(Op::Const(Value::Field(FieldElem::new(
-            Integer::from(u),
-            Arc::new(Integer::from(TEST_FIELD)),
-        ))))
+        leaf_term(Op::Const(Value::Field(DFL_T.new_v(u))))
     }
 
     #[test]
@@ -149,7 +144,7 @@ mod test {
     #[test]
     fn select_ite_stores_field() {
         let z = term![Op::Const(Value::Array(Array::new(
-            Sort::Field(Arc::new(Integer::from(TEST_FIELD))),
+            Sort::Field(DFL_T.clone()),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
             6

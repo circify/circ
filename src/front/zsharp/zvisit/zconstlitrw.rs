@@ -267,23 +267,26 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
     }
 
     fn visit_array_type(&mut self, aty: &mut ast::ArrayType<'ast>) -> ZVisitorResult {
-        if self.to_ty.is_some() {
-            if let Ty::Array(_, arr_ty) = self.to_ty.clone().unwrap() {
-                // ArrayType::value should match arr_ty
-                let to_ty = self.replace(Some(*arr_ty));
-                self.visit_basic_or_struct_type(&mut aty.ty)?;
-                self.to_ty = to_ty;
-            } else {
-                return Err(
-                    "ZConstLiteralRewriter: rewriting ArrayType to non-Array type"
-                        .to_string()
-                        .into(),
-                );
-            }
-        }
+        // ArrayType.ty should match arr_ty
+        let to_ty = self.replace(
+            self.to_ty
+                .as_ref()
+                .map(|to_ty| {
+                    if let Ty::Array(_, arr_ty) = to_ty {
+                        Ok(*arr_ty.clone())
+                    } else {
+                        Err(
+                            "ZConstLiteralRewriter: rewriting ArrayType to non-Array type"
+                                .to_string(),
+                        )
+                    }
+                })
+                .transpose()?,
+        );
+        self.visit_basic_or_struct_type(&mut aty.ty)?;
 
         // always rewrite ArrayType::dimensions literals to type U32
-        let to_ty = self.replace(Some(Ty::Uint(32)));
+        self.replace(Some(Ty::Uint(32)));
         aty.dimensions
             .iter_mut()
             .try_for_each(|d| self.visit_expression(d))?;

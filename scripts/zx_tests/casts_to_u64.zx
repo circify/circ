@@ -1,0 +1,54 @@
+import "utils/casts/u8_to_u64"
+import "utils/casts/u16_to_u64"
+import "utils/casts/u32_to_u64"
+
+def main() -> bool:
+    u8 u8_1 = 170
+    u64 f8_1 = u8_to_u64(u8_1)
+    assert(f8_1 == 170)
+
+    u8 u8_2 = 193
+    u64 f8_2 = u8_to_u64(u8_2)
+    assert(f8_2 == 193)
+
+    u8 u8_3 = 131
+    u64 f8_3 = u8_to_u64(u8_3)
+    assert(f8_3 == 131)
+
+    u8 u8_4 = 85
+    u64 f8_4 = u8_to_u64(u8_4)
+    assert(f8_4 == 85)
+
+    u16 u16_1 = 49470
+    u64 f16_1 = u16_to_u64(u16_1)
+    assert(f16_1 == 49470)
+
+    u16 u16_2 = 33621
+    u64 f16_2 = u16_to_u64(u16_2)
+    assert(f16_2 == 33621)
+
+    u16 u16_3 = 43724
+    u64 f16_3 = u16_to_u64(u16_3)
+    assert(f16_3 == 43724)
+
+    u16 u16_4 = 58601
+    u64 f16_4 = u16_to_u64(u16_4)
+    assert(f16_4 == 58601)
+
+    u32 u32_1 = 2495768655
+    u64 f32_1 = u32_to_u64(u32_1)
+    assert(f32_1 == 2495768655)
+
+    u32 u32_2 = 1964762788
+    u64 f32_2 = u32_to_u64(u32_2)
+    assert(f32_2 == 1964762788)
+
+    u32 u32_3 = 4069444903
+    u64 f32_3 = u32_to_u64(u32_3)
+    assert(f32_3 == 4069444903)
+
+    u32 u32_4 = 23477624
+    u64 f32_4 = u32_to_u64(u32_4)
+    assert(f32_4 == 23477624)
+
+    return true

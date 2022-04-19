@@ -12,10 +12,13 @@ use crate::target::aby::utils::*;
 use std::fmt;
 use std::path::Path;
 
-#[cfg(not(feature = "lp"))]
-use super::assignment::some_arith_sharing;
+use super::assignment::assign_all_boolean;
+use super::assignment::assign_all_yao;
+use super::assignment::assign_arithmetic_and_boolean;
+use super::assignment::assign_arithmetic_and_yao;
+use super::assignment::assign_greedy;
 
-// const BOOLEAN_BITLEN: i32 = 1;
+const PUBLIC: u8 = 2;
 
 const PUBLIC: u8 = 2;
 
@@ -110,11 +113,6 @@ impl ToABY {
         }
     }
 
-    /// Return constant gate evaluating to 1
-    // fn one(s_type: &str) -> String {
-    //     format!("{}->PutCONSGate((uint64_t)1, (uint32_t)1)", s_type)
-    // }
-
     fn embed_eq(&mut self, t: Term, a_term: Term, b_term: Term) {
         let share = self.get_share_name(&t);
         let s = self.term_to_share_cnt.get(&t).unwrap();
@@ -150,7 +148,6 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::Bool) => {
-                // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
@@ -168,9 +165,9 @@ impl ToABY {
                         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
                         self.bytecode_output.insert(0, line);
                     }
+                    self.inputs.insert(t.clone());
                 }
 
-                // write to input parameter file
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
@@ -275,7 +272,6 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
-                // write to bytecode file
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
@@ -296,7 +292,6 @@ impl ToABY {
                     self.inputs.insert(t.clone());
                 }
 
-                // write to input parameter file
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(
                         t.clone(),
@@ -403,17 +398,27 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
     let Computation {
         outputs: terms,
         metadata: md,
         ..
     } = ir.clone();
 
-    #[cfg(feature = "lp")]
-    let s_map: SharingMap = assign(&ir, cm);
-    #[cfg(not(feature = "lp"))]
-    let s_map: SharingMap = some_arith_sharing(&ir, cm);
+    let s_map: SharingMap = match ss {
+        "b" => assign_all_boolean(&ir, cm),
+        "y" => assign_all_yao(&ir, cm),
+        "a+b" => assign_arithmetic_and_boolean(&ir, cm),
+        "a+y" => assign_arithmetic_and_yao(&ir, cm),
+        "greedy" => assign_greedy(&ir, cm),
+        #[cfg(feature = "lp")]
+        "lp" => assign(&ir, cm),
+        #[cfg(feature = "lp")]
+        "glp" => assign(&ir, cm),
+        _ => {
+            panic!("Unsupported sharing scheme: {}", ss);
+        }
+    };
 
     let mut converter = ToABY::new(s_map, md, path, lang);
 

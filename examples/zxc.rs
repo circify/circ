@@ -8,14 +8,15 @@ use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 */
 use circ::front::zsharp::{self, ZSharpFE};
-
 use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
+use circ_fields::FieldT;
 /*
 use circ::target::r1cs::bellman::parse_instance;
 */
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+use circ::util::field::DFL_T;
 /*
 use std::fs::File;
 use std::io::Read;
@@ -49,7 +50,12 @@ struct Options {
     instance: PathBuf,
     */
     #[structopt(short = "L")]
+    /// skip linearity reduction entirely
     skip_linred: bool,
+
+    #[structopt(long, default_value = "50")]
+    /// linear combination constraints up to this size will be eliminated (if the pass is enabled)
+    lc_elimination_thresh: usize,
 
     #[structopt(long, default_value = "count")]
     action: ProofAction,
@@ -132,7 +138,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, circ::front::ZSHARP_MODULUS.clone());
+    let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs
@@ -141,12 +147,12 @@ fn main() {
             "R1cs size before linearity reduction: {}",
             r1cs.constraints().len()
         );
-        reduce_linearities(r1cs)
+        reduce_linearities(r1cs, Some(options.lc_elimination_thresh))
     };
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
         ProofAction::Count => {
-            println!("{:#?}", r1cs.constraints());
+            eprintln!("{:#?}", r1cs.constraints());
         }
         ProofAction::Prove => {
             unimplemented!()
