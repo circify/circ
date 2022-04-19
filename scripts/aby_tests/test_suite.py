@@ -485,6 +485,14 @@ biomatch_tests = [
     ],   
 ]
 
+benchmark_tests = [
+    [
+        "biomatch - 1",
+        "2pc_biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    ],   
+]
+
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",
