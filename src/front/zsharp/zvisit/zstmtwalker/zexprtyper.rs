@@ -155,9 +155,9 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     fn visit_unary_expression(&mut self, ue: &mut ast::UnaryExpression<'ast>) -> ZVisitorResult {
         use ast::{BasicType::*, Type::*, UnaryOperator::*};
         assert!(self.ty.is_none());
+        self.visit_expression(&mut ue.expression)?;
         match &ue.op {
             Pos(_) | Neg(_) => {
-                self.visit_expression(&mut ue.expression)?;
                 if let Some(ty) = &self.ty {
                     if !matches!(ty, Basic(_)) || matches!(ty, Basic(Boolean(_))) {
                         return Err(ZVisitorError(
@@ -167,10 +167,15 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                 }
             }
             Not(_) => {
-                self.ty.replace(Basic(Boolean(ast::BooleanType {
-                    span: ue.span.clone(),
-                })));
+                if let Some(ty) = &self.ty {
+                    if !matches!(ty, Basic(_)) || matches!(ty, Basic(Field(_))) {
+                        return Err(ZVisitorError(
+                            "ZExpressionTyper: got Field or non-Basic for unary !".to_string(),
+                        ));
+                    }
+                }
             }
+            Strict(_) => (),
         }
         Ok(())
     }

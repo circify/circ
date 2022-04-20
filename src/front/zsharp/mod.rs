@@ -418,6 +418,7 @@ impl<'ast> ZGen<'ast> {
                 }
             },
         }
+        .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
     fn unary_op(&self, o: &ast::UnaryOperator) -> fn(T) -> Result<T, String> {
@@ -425,6 +426,7 @@ impl<'ast> ZGen<'ast> {
             ast::UnaryOperator::Pos(_) => Ok,
             ast::UnaryOperator::Neg(_) => neg,
             ast::UnaryOperator::Not(_) => not,
+            ast::UnaryOperator::Strict(_) => const_val,
         }
     }
 
@@ -1076,9 +1078,16 @@ impl<'ast> ZGen<'ast> {
                         .ok_or_else(|| "interpreting expr as const bool failed".to_string())
                 }) {
                     Ok(true) => Ok(()),
-                    Ok(false) => Err("Const assert failed".to_string()),
+                    Ok(false) => Err(format!(
+                        "Const assert failed: {} at\n{}",
+                        e.message
+                            .as_ref()
+                            .map(|m| m.value.as_ref())
+                            .unwrap_or("(no error message given)"),
+                        span_to_string(e.expression.span()),
+                    )),
                     Err(err) if IS_CNST => Err(format!(
-                        "Const assert expression eval failed at {}: {}",
+                        "Const assert expression eval failed {} at\n{}",
                         err,
                         span_to_string(e.expression.span()),
                     )),

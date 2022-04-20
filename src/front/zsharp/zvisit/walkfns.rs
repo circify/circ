@@ -60,7 +60,7 @@ pub fn walk_main_import_directive<'ast, Z: ZVisitorMut<'ast>>(
     visitor: &mut Z,
     mimport: &mut ast::MainImportDirective<'ast>,
 ) -> ZVisitorResult {
-    visitor.visit_import_source(&mut mimport.source)?;
+    visitor.visit_any_string(&mut mimport.source)?;
     if let Some(ie) = &mut mimport.alias {
         visitor.visit_identifier_expression(ie)?;
     }
@@ -71,7 +71,7 @@ pub fn walk_from_import_directive<'ast, Z: ZVisitorMut<'ast>>(
     visitor: &mut Z,
     fimport: &mut ast::FromImportDirective<'ast>,
 ) -> ZVisitorResult {
-    visitor.visit_import_source(&mut fimport.source)?;
+    visitor.visit_any_string(&mut fimport.source)?;
     fimport
         .symbols
         .iter_mut()
@@ -79,9 +79,9 @@ pub fn walk_from_import_directive<'ast, Z: ZVisitorMut<'ast>>(
     visitor.visit_span(&mut fimport.span)
 }
 
-pub fn walk_import_source<'ast, Z: ZVisitorMut<'ast>>(
+pub fn walk_any_string<'ast, Z: ZVisitorMut<'ast>>(
     visitor: &mut Z,
-    is: &mut ast::ImportSource<'ast>,
+    is: &mut ast::AnyString<'ast>,
 ) -> ZVisitorResult {
     visitor.visit_span(&mut is.span)
 }
@@ -525,6 +525,7 @@ pub fn walk_unary_operator<'ast, Z: ZVisitorMut<'ast>>(
         Pos(po) => visitor.visit_pos_operator(po),
         Neg(ne) => visitor.visit_neg_operator(ne),
         Not(no) => visitor.visit_not_operator(no),
+        Strict(so) => visitor.visit_strict_operator(so),
     }
 }
 
@@ -765,6 +766,9 @@ pub fn walk_assertion_statement<'ast, Z: ZVisitorMut<'ast>>(
     asrt: &mut ast::AssertionStatement<'ast>,
 ) -> ZVisitorResult {
     visitor.visit_expression(&mut asrt.expression)?;
+    if let Some(s) = &mut asrt.message {
+        visitor.visit_any_string(s)?;
+    }
     visitor.visit_span(&mut asrt.span)
 }
 

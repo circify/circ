@@ -438,6 +438,12 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         ue: &mut ast::UnaryExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::{BasicType::*, Type::*, UnaryOperator::*};
+        // strict operator applies to any type; expression has same type
+        if let Strict(_) = &ue.op {
+            return self.unify_expression(ty, &mut ue.expression);
+        }
+
+        // remaining unary operators can only take Basic types
         let bt = if let Basic(bt) = ty {
             bt
         } else {
@@ -461,6 +467,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 )),
                 _ => Ok(Basic(bt)),
             },
+            Strict(_) => unreachable!(),
         }?;
 
         self.unify_expression(ety, &mut ue.expression)
