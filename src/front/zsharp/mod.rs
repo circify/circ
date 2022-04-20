@@ -338,6 +338,7 @@ impl<'ast> ZGen<'ast> {
         name: &str,
         accs: &[ast::AssigneeAccess<'ast>],
         val: T,
+        strict: bool,
     ) -> Result<(), String> {
         let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
         let old = if IS_CNST {
@@ -348,7 +349,9 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))?
                 .unwrap_term()
         };
-        let new = loc_store(old, &zaccs[..], val)?;
+        let new =
+            loc_store(old, &zaccs[..], val)
+                .and_then(|n| if strict { const_val(n) } else { Ok(n) })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -1121,7 +1124,7 @@ impl<'ast> ZGen<'ast> {
                 self.decl_impl_::<IS_CNST>(v_name, &ty)?;
                 for j in s..e {
                     self.enter_scope_impl_::<IS_CNST>();
-                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j))?;
+                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j), false)?;
                     for s in &i.statements {
                         self.stmt_impl_::<IS_CNST>(s)?;
                     }
@@ -1140,7 +1143,13 @@ impl<'ast> ZGen<'ast> {
                 if let Some(l) = d.lhs.first() {
                     match l {
                         ast::TypedIdentifierOrAssignee::Assignee(l) => {
-                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e)
+                            let strict = match &d.expression {
+                                ast::Expression::Unary(u) => {
+                                    matches!(&u.op, ast::UnaryOperator::Strict(_))
+                                }
+                                _ => false,
+                            };
+                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e, strict)
                         }
                         ast::TypedIdentifierOrAssignee::TypedIdentifier(l) => {
                             let decl_ty = self.type_impl_::<IS_CNST>(&l.ty)?;
