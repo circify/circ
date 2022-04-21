@@ -574,7 +574,7 @@ pub fn const_val(a: T) -> Result<T, String> {
 }
 
 fn const_value(t: &Term) -> Option<Value> {
-    let folded = constant_fold(t);
+    let folded = constant_fold(t, &[]);
     match &folded.op {
         Op::Const(v) => Some(v.clone()),
         _ => None,
