@@ -873,9 +873,9 @@ impl CGen {
             let mut exprs: Vec<CTerm> = Vec::new();
             for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
                 let expr: CTerm = if let Some(init) = d.node.initializer.clone() {
-                    expr = self.gen_init(info.ty.clone(), init.node);
+                    self.gen_init(info.ty.clone(), init.node)
                 } else {
-                    expr = info.ty.default(&mut self.circ)
+                    info.ty.default(&mut self.circ)
                 };
                 let res = self.circ.declare_init(
                     info.name.clone(),
