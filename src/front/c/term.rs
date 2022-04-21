@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum CTermData {
     CBool(Term),
     CInt(bool, usize, Term),
