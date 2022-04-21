@@ -299,6 +299,16 @@ fn wrap_bin_arith(
             term: CTermData::CBool(fb(x, y)),
             udef: false,
         }),
+        (CTermData::CArray(ty, aid), CTermData::CInt(_, _, y), Some(fu), _) => Ok(CTerm {
+            term: CTermData::CStackPtr(ty, fu(bv_lit(0, 32), y), aid),
+            udef: false,
+        }),
+        (CTermData::CStackPtr(ty, offset, aid), CTermData::CInt(_, _, y), Some(fu), _) => {
+            Ok(CTerm {
+                term: CTermData::CStackPtr(ty, fu(offset, y), aid),
+                udef: false,
+            })
+        }
 
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
@@ -511,37 +521,6 @@ pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_shift(">>", BvBinOp::Lshr, a, b)
 }
 
-fn _ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    match (a.term, b.term) {
-        (CTermData::CInt(sa, na, a), CTermData::CInt(sb, nb, b)) if na == nb => Ok(CTerm {
-            term: CTermData::CInt(sa && sb, na, term![Op::Ite; c, a, b]),
-            udef: false,
-        }),
-        (CTermData::CBool(a), CTermData::CBool(b)) => Ok(CTerm {
-            term: CTermData::CBool(term![Op::Ite; c, a, b]),
-            udef: false,
-        }),
-        (x, y) => Err(format!("Cannot perform ITE on {} and {}", x, y)),
-    }
-}
-
-// fn array<I: IntoIterator<Item = CTerm>>(elems: I) -> Result<CTerm, String> {
-//     let v: Vec<CTerm> = elems.into_iter().collect();
-//     if let Some(e) = v.first() {
-//         let ty = e.term.type_();
-//         if v.iter().skip(1).any(|a| a.term.type_() != ty) {
-//             Err(format!("Inconsistent types in array"))
-//         } else {
-//             Ok(CTerm {
-//                 term: CTermData::CArray(ty),
-//                 udef: false,
-//             })
-//         }
-//     } else {
-//         Err(format!("Empty array"))
-//     }
-// }
-
 pub struct Ct {
     values: Option<HashMap<String, Integer>>,
 }
@@ -686,6 +665,35 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(sa && sb, wa, term![Op::Ite; cond, a, b]),
                 udef: false,
             },
+            (CTermData::CStruct(_ta, _fa), CTermData::CStruct(_tb, _fb)) => {
+                unimplemented!();
+                // let mut fields =
+                //     fa.fields()
+                //         .zip(fb.fields())
+                //         .map(|((f_name, f_ty), (g_name, g_ty))| {
+                //             (
+                //                 f_name.clone(),
+                //                 self.ite(
+                //                     _ctx,
+                //                     term![Op::Select; cond, f_ty.clone(), g_ty.clone()],
+                //                     f.field(f_name).unwrap(),
+                //                     t.field(g_name).unwrap(),
+                //                 ),
+                //             )
+                //         });
+                // let mut mem = _ctx.mem.borrow_mut();
+                // let id = mem.zero_allocate(fields.len(), 32, ta.num_bits() + tb.num_bits());
+                // let struct_term = Self::T {
+                //     term: CTermData::CStruct(ta, FieldList::new(fields)),
+                //     udef: false,
+                // };
+                // for (i, (f_name, f_term)) in fields.enumerate() {
+                //     let val = f_term.term(_ctx);
+                //     let t_term = leaf_term(Op::Const(Value::Bool(true)));
+                //     mem.store(id, bv_lit(i, 32), val, t_term);
+                // }
+                // struct_term
+            }
             // (CTermData::CArray(a_ty, a), CTermData::CArray(b_ty, b)) if a_ty == b_ty => Self::T {
             //     term: CTermData::CArray(
             //         a_ty,

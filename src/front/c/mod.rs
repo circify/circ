@@ -1027,6 +1027,36 @@ impl CGen {
                 }
                 self.circ.exit_scope();
             }
+            // Statement::While(while_stmt) => {
+            //     self.circ.enter_scope();
+            //     let WhileStatement {
+            //         condition,
+            //         statement,
+            //     } = while_stmt.node;
+
+            //     let cond: Option<ConstIteration> = match for_stmt.condition.unwrap().node {
+            //         Expression::BinaryOperator(bin_op) => {
+            //             let expr = self.gen_expr(bin_op.node.rhs.node);
+            //             let val = self.fold_(expr);
+            //             match bin_op.node.operator.node {
+            //                 BinaryOperator::Less => Some(ConstIteration { val }),
+            //                 BinaryOperator::LessOrEqual => Some(ConstIteration { val: val + 1 }),
+            //                 BinaryOperator::Greater => Some(ConstIteration { val }),
+            //                 BinaryOperator::GreaterOrEqual => Some(ConstIteration { val: val - 1 }),
+            //                 _ => None,
+            //             }
+            //         }
+            //         _ => None,
+            //     };
+
+            //     for _ in 0..bound {
+            //         self.circ.enter_scope();
+            //         self.gen_stmt(for_stmt.node.statement.node.clone());
+            //         self.circ.exit_scope();
+            //         self.gen_expr(for_stmt.node.step.as_ref().unwrap().node.clone());
+            //     }
+            //     self.circ.exit_scope();
+            // }
             _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }
     }
