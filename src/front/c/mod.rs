@@ -204,7 +204,11 @@ impl CGen {
                             }
                         }
                     }
-                    Some(Ty::Struct(name, FieldList::new(fs)))
+                    let s_ty = Ty::Struct(name.clone(), FieldList::new(fs));
+                    if name != *"" {
+                        self.structs.insert(name, s_ty.clone());
+                    }
+                    Some(s_ty)
                 }
             }
             _ => unimplemented!("Type {:#?} not implemented yet.", t),
@@ -266,7 +270,6 @@ impl CGen {
         let mut res: Vec<DeclInfo> = Vec::new();
         for node in decl.declarators.into_iter() {
             let decl_name = name_from_decl(&node.node.declarator.node);
-
             // add to structs
             let ty = match ty.clone() {
                 Ty::Struct(_, _) => {
@@ -724,8 +727,8 @@ impl CGen {
                             }
                             _ => unimplemented!("Unimplemented Sizeof: {:#?}", u_op.operand.node),
                         };
-                        let size = ty.num_bits();
-                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(size, 32))))
+                        let _size = ty.num_bits();
+                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(1, 32))))
                     }
                     _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", u_op),
                 }
@@ -950,12 +953,12 @@ impl CGen {
         let cond_ = cond.unwrap();
         let incr_ = step.unwrap();
 
-        let start = init_.val;
-        let end = cond_.val;
-        let incr = incr_.val;
+        let start: f32 = init_.val as f32;
+        let end: f32 = cond_.val as f32;
+        let incr: f32 = incr_.val as f32;
 
         ConstIteration {
-            val: ((end - start) / incr),
+            val: ((end - start) / incr).ceil() as i32,
         }
     }
 

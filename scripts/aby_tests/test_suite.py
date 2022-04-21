@@ -1,11 +1,3 @@
-# new_tests = [
-#     [
-#         "Structs",
-#         "2pc_structs",
-#         "./scripts/aby_tests/test_inputs/add.txt",
-#     ], 
-# ]
-
 new_tests = [
     # [
     #     "Structs",
@@ -477,11 +469,6 @@ shift_tests = [
         "./scripts/aby_tests/test_inputs/lsh_2.txt",
     ], 
     [
-        "Left Shift a by 1 - 3",
-        "2pc_lhs",
-        "./scripts/aby_tests/test_inputs/lsh_3.txt",
-    ], 
-    [
         "Right Shift a by 1 - 1",
         "2pc_rhs",
         "./scripts/aby_tests/test_inputs/rsh_1.txt",
@@ -558,23 +545,6 @@ zok_misc_tests = [
     ], 
 ]
 
-kmeans_tests = [
-    [
-        "kmeans",
-        "2pc_kmeans",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
-    ],     
-]
-
-
-kmeans_tests_2 = [
-    [
-        "kmeans",
-        "2pc_kmeans_og",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
-    ],     
-]
-
 biomatch_tests = [
     [
         "biomatch - 1",
@@ -585,6 +555,30 @@ biomatch_tests = [
         "biomatch - 2",
         "2pc_biomatch",
         "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    ],   
+]
+
+kmeans_tests = [
+    [
+        "kmeans",
+        "2pc_kmeans",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],     
+]
+
+kmeans_tests_2 = [
+    [
+        "kmeans",
+        "2pc_kmeans_og",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],     
+]
+
+gauss_tests = [
+    [
+        "gauss",
+        "2pc_gauss",
+        "./scripts/aby_tests/test_inputs/gauss.txt",
     ],   
 ]
 

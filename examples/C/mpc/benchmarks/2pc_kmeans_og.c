@@ -1,11 +1,12 @@
-int D = 2;
-int NA = 10;
-int NB = 10;
-int NC = 5;
-int PRECISION = 4;
-int LEN = NA + NB;
-int LEN_OUTER = 10;
-int LEN_INNER = LEN / LEN_OUTER;
+#define D 2 // Dimension (fix)
+#define NA 10 // Number of data points from Party A
+#define NB 10 // Number of data points from Party B
+#define NC 5 // Number of clusters
+#define PRECISION 4
+
+#define LEN (NA+NB)
+#define LEN_OUTER 10
+#define LEN_INNER (LEN/LEN_OUTER)
 
 struct input_a{
 	int dataA[D*NA];
