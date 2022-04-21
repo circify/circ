@@ -92,7 +92,7 @@ impl<'a> Inliner<'a> {
 
     /// Applies the current substitutions to `t`.
     fn apply(&mut self, t: &Term) -> Term {
-        cfold::fold(&substitute_cache(t, &mut self.subst_cache))
+        cfold::fold(&substitute_cache(t, &mut self.subst_cache), &[])
     }
 
     /// Syntactically analyzes `t`, seeing if it has form

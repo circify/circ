@@ -360,8 +360,6 @@ impl ToABY {
 
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
             }
-            // TODO
-            Op::BvExtract(_start, _end) => {}
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
     }

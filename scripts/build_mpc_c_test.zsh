@@ -25,6 +25,9 @@ function mpc_test {
 }
 
 mpc_test 2 ./examples/C/mpc/2pc_test.c
+# mpc_test 2 ./examples/C/mpc/2pc_test_2.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_add.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_array_add.c
 
 # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c

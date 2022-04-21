@@ -150,10 +150,11 @@ impl CGen {
 
     fn type_(&mut self, t: TypeSpecifier) -> Option<Ty> {
         return match t {
+            TypeSpecifier::Void => None,
             TypeSpecifier::Int => Some(Ty::Int(true, 32)),
             TypeSpecifier::Unsigned => Some(Ty::Int(false, 32)),
+            TypeSpecifier::Long => Some(Ty::Int(true, 32)), // TODO: not 32 bits
             TypeSpecifier::Bool => Some(Ty::Bool),
-            TypeSpecifier::Void => None,
             TypeSpecifier::TypedefName(td) => {
                 let name = td.node.name;
                 if self.typedefs.contains_key(&name) {
@@ -168,39 +169,45 @@ impl CGen {
                     identifier,
                     declarations,
                 } = s.node;
-                let mut fs: Vec<(String, Ty)> = Vec::new();
-                match declarations {
-                    Some(decls) => {
-                        for d in decls.into_iter() {
-                            match d.node {
-                                StructDeclaration::Field(f) => {
-                                    let base_field_type =
-                                        self.s_type_(f.node.specifiers.clone()).unwrap();
-                                    for struct_decl in f.node.declarators.iter() {
-                                        let name = name_from_decl(
-                                            &struct_decl.node.declarator.clone().unwrap().node,
-                                        );
-                                        let decl =
-                                            struct_decl.node.declarator.clone().unwrap().node;
-                                        let derived_ty = self.get_derived_type(
-                                            base_field_type.clone(),
-                                            decl.derived,
-                                        );
-                                        fs.push((name, derived_ty));
+
+                let name = match identifier {
+                    Some(name) => name.node.name,
+                    None => "".to_string(),
+                };
+
+                if self.structs.contains_key(&name) && name != "".to_string() {
+                    Some(self.structs.get(&name).unwrap().clone())
+                } else {
+                    let mut fs: Vec<(String, Ty)> = Vec::new();
+                    match declarations {
+                        Some(decls) => {
+                            for d in decls.into_iter() {
+                                match d.node {
+                                    StructDeclaration::Field(f) => {
+                                        let base_field_type =
+                                            self.s_type_(f.node.specifiers.clone()).unwrap();
+                                        for struct_decl in f.node.declarators.iter() {
+                                            let name = name_from_decl(
+                                                &struct_decl.node.declarator.clone().unwrap().node,
+                                            );
+                                            let decl =
+                                                struct_decl.node.declarator.clone().unwrap().node;
+                                            let derived_ty = self.get_derived_type(
+                                                base_field_type.clone(),
+                                                decl.derived,
+                                            );
+                                            fs.push((name, derived_ty));
+                                        }
                                     }
-                                }
-                                StructDeclaration::StaticAssert(_a) => {
-                                    unimplemented!("Struct static assert not implemented!");
+                                    StructDeclaration::StaticAssert(_a) => {
+                                        unimplemented!("Struct static assert not implemented!");
+                                    }
                                 }
                             }
                         }
+                        None => {}
                     }
-                    None => {}
-                }
-
-                match identifier {
-                    Some(name) => Some(Ty::Struct(name.node.name, FieldList::new(fs))),
-                    None => Some(Ty::Struct("".to_string(), FieldList::new(fs))),
+                    Some(Ty::Struct(name.clone(), FieldList::new(fs)))
                 }
             }
             _ => unimplemented!("Type {:#?} not implemented yet.", t),
@@ -264,22 +271,14 @@ impl CGen {
         for node in decl.declarators.into_iter() {
             let decl_name = name_from_decl(&node.node.declarator.node);
 
-            // Save struct declarations to the cache
-            let new_ty: Ty = match ty.clone() {
-                Ty::Struct(name, fs) => {
-                    if decl_name != name {
-                        println!("struct: {}, {}", name.to_string(), ty.clone());
-                        println!("fs len(): {}", fs.clone().len());
-                        println!("fs: {}, {}", fs.get(0).clone().0, fs.get(0).clone().1);
-                        let s_ty: Ty = Ty::Struct(decl_name.clone(), fs);
-                        self.structs
-                            .insert(decl_name.to_string().clone(), s_ty.clone());
-                        s_ty
-                    } else if fs.clone().len() > 0 {
-                        self.structs.insert(name.to_string(), ty.clone());
+            // add to structs
+            let ty = match ty.clone() {
+                Ty::Struct(_, _) => {
+                    if !self.structs.contains_key(&decl_name) {
+                        self.structs.insert(decl_name.clone(), ty.clone());
                         ty.clone()
                     } else {
-                        self.structs.get(&name).unwrap().clone()
+                        self.structs.get(&decl_name).unwrap().clone()
                     }
                 }
                 _ => ty.clone(),
@@ -287,7 +286,7 @@ impl CGen {
 
             let d = DeclInfo {
                 name: decl_name,
-                ty: new_ty.clone(),
+                ty: ty.clone(),
             };
             res.push(d);
         }
@@ -306,6 +305,7 @@ impl CGen {
         let d = &decl.declarator.as_ref().unwrap().node;
         let derived_ty = self.get_derived_type(base_ty.unwrap(), d.derived.to_vec());
         let name = name_from_decl(d);
+
         ParamInfo {
             name,
             ty: derived_ty,
@@ -519,20 +519,6 @@ impl CGen {
                     }
                 };
                 self.array_store(old_inner, idx, val)
-
-                // println!("in index!!");
-                // let inner_loc = &*l.loc();
-                // println!("inner loc: {:#?}", inner_loc);
-                // let base = self
-                //     .circ
-                //     .get_value(inner_loc.clone())
-                //     .map_err(|e| format!("{}", e))?
-                //     .unwrap_term();
-                // println!("base: {:#?}", base);
-                // println!("getting old value rip");
-                // let old_inner = self.array_select(base.clone(), idx.clone())?;
-                // println!("after array select");
-                // let new_inner = self.rebuild_lval(old_inner.clone(), *l.clone(), val)?;
             }
             CLoc::Member(l, field) => {
                 let inner_loc = &*l.loc();
@@ -554,7 +540,7 @@ impl CGen {
     }
 
     fn fold_(&mut self, expr: CTerm) -> i32 {
-        let term_ = fold(&expr.term.term(&self.circ.cir_ctx()));
+        let term_ = fold(&expr.term.term(&self.circ.cir_ctx()), &[]);
         let cterm_ = cterm(CTermData::CInt(true, 32, term_));
         let val = const_int(cterm_);
         val.to_i32().unwrap()
@@ -683,7 +669,6 @@ impl CGen {
                                 if let Ty::Array(size, sizes, t) = ty {
                                     if index.indices.len() < sizes.len() {
                                         let diff = sizes.len() - index.indices.len();
-
                                         let new_sizes: Vec<usize> =
                                             sizes.clone().into_iter().take(diff).collect();
 
@@ -710,19 +695,18 @@ impl CGen {
                     }
                     _ => {
                         let f = self.get_bin_op(bin_op.operator.node.clone());
-                        let mut a = self.gen_expr(bin_op.lhs.node);
+                        let a = self.gen_expr(bin_op.lhs.node);
                         let mut b = self.gen_expr(bin_op.rhs.node);
-                        // TODO: fix hack, const int check for shifting
-                        if bin_op.operator.node == BinaryOperator::ShiftLeft
-                            || bin_op.operator.node == BinaryOperator::ShiftRight
-                        {
-                            let a_t = fold(&a.term.term(&self.circ.cir_ctx()));
-                            a = cterm(CTermData::CInt(true, 32, a_t));
 
-                            let b_t = fold(&b.term.term(&self.circ.cir_ctx()));
-                            b = cterm(CTermData::CInt(true, 32, b_t));
+                        // TODO: fix hack, const int check for shifting
+                        match bin_op.operator.node {
+                            BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => {
+                                let b_t = fold(&b.term.term(&self.circ.cir_ctx()), &[]);
+                                b = cterm(CTermData::CInt(true, 32, b_t));
+                                f(a, b)
+                            }
+                            _ => f(a, b),
                         }
-                        f(a, b)
                     }
                 }
             }
@@ -827,8 +811,8 @@ impl CGen {
                 let ty = self.s_type_(s.node.specifiers.clone());
                 match ty {
                     Some(t) => {
-                        let size = t.num_bits();
-                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(size, 32))))
+                        let _size = t.num_bits();
+                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(1, 32))))
                     }
                     None => {
                         panic!("Cannot determine size of type: {:#?}", s);
@@ -840,13 +824,13 @@ impl CGen {
         self.unwrap(res)
     }
 
-    fn gen_init(&mut self, derived_ty: Ty, init: Initializer) -> CTerm {
+    fn gen_init(&mut self, ty: Ty, init: Initializer) -> CTerm {
         match init {
             Initializer::Expression(e) => self.gen_expr(e.node),
-            Initializer::List(ref l) => match derived_ty.clone() {
+            Initializer::List(ref l) => match ty.clone() {
                 Ty::Array(n, _, _) => {
                     let mut values: Vec<CTerm> = Vec::new();
-                    let inner_type = derived_ty.clone().inner_ty();
+                    let inner_type = ty.clone().inner_ty();
                     let flattened_inits = flatten_inits(init);
                     for li in flattened_inits {
                         let expr = self.gen_init(inner_type.clone(), li.clone());
@@ -862,11 +846,11 @@ impl CGen {
                         let v_ = v.term.term(&self.circ.cir_ctx());
                         self.circ.store(id, offset, v_);
                     }
-                    cterm(CTermData::CArray(derived_ty, Some(id)))
+                    cterm(CTermData::CArray(ty, Some(id)))
                 }
                 Ty::Struct(_base, fs) => {
                     assert!(fs.clone().len() == l.len());
-                    derived_ty.default(&mut self.circ)
+                    ty.default(&mut self.circ)
                 }
                 _ => unreachable!("Initializer list for non-list type: {:#?}", l),
             },
@@ -979,7 +963,7 @@ impl CGen {
         let incr = incr_.val;
 
         ConstIteration {
-            val: ((end - start - 1) / incr) + 1,
+            val: ((end - start) / incr),
         }
     }
 

@@ -8,7 +8,6 @@ use rug::Integer;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Clone)]
 pub enum CTermData {
     CBool(Term),
@@ -58,10 +57,9 @@ impl CTermData {
                     }
                 }
                 CTermData::CStruct(_, fs) => {
-                    for (i, (_name, ct)) in fs.fields().enumerate() {
-                        let ts = ct.term.terms(inner_ctx);
-                        let t = term(Op::Field(i), ts);
-                        output.push(t);
+                    for (_name, ct) in fs.fields() {
+                        let mut ts = ct.term.terms(inner_ctx);
+                        output.append(&mut ts);
                     }
                 }
             }

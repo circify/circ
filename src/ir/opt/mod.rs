@@ -12,14 +12,14 @@ mod visit;
 use super::term::*;
 use log::debug;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// An optimization pass
 pub enum Opt {
     /// Convert non-scalar (tuple, array) inputs to scalar ones
     /// The scalar variable names are suffixed with .N, where N indicates the array/tuple position
     ScalarizeVars,
     /// Fold constants
-    ConstantFold,
+    ConstantFold(Box<[Op]>),
     /// Flatten n-ary operators
     Flatten,
     /// Binarize n-ary operators
@@ -42,16 +42,16 @@ pub enum Opt {
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -> Computation {
     for i in optimizations {
         debug!("Applying: {:?}", i);
-        match i {
+        match i.clone() {
             Opt::ScalarizeVars => {
                 scalarize_vars::scalarize_inputs(&mut cs);
             }
-            Opt::ConstantFold => {
+            Opt::ConstantFold(ignore) => {
                 let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                 for a in &mut cs.outputs {
                     // allow unbounded size during a single fold_cache call
                     cache.resize(std::usize::MAX);
-                    *a = cfold::fold_cache(a, &mut cache);
+                    *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
                     // then shrink back down to size between calls
                     cache.resize(TERM_CACHE_LIMIT);
                 }

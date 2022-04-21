@@ -24,7 +24,7 @@ fn cbv(b: BitVector) -> Option<Term> {
 }
 
 /// Fold away operators over constants.
-pub fn fold(node: &Term) -> Term {
+pub fn fold(node: &Term, ignore: &[Op]) -> Term {
     let mut cache_handle = FOLDS.write().unwrap();
     let cache = cache_handle.deref_mut();
 
@@ -32,14 +32,14 @@ pub fn fold(node: &Term) -> Term {
     let old_capacity = cache.cap();
     cache.resize(std::usize::MAX);
 
-    let ret = fold_cache(node, cache);
+    let ret = fold_cache(node, cache, ignore);
     // shrink cache to its max size
     cache.resize(old_capacity);
     ret
 }
 
 /// Do constant-folding backed by a cache.
-pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
+pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
 
@@ -53,6 +53,11 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
             continue;
         }
+        if ignore.contains(&t.op) {
+            cache.put(t.clone(), t);
+            continue;
+        }
+
         let mut c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
         let mut get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
@@ -170,11 +175,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     Some(true) => Some(t),
                     Some(false) => Some(f),
                     None => match t.as_bool_opt() {
-                        Some(true) => Some(fold_cache(&term![OR; c, f], cache)),
-                        Some(false) => Some(fold_cache(&term![AND; neg_bool(c), f], cache)),
+                        Some(true) => Some(fold_cache(&term![OR; c, f], cache, ignore)),
+                        Some(false) => Some(fold_cache(&term![AND; neg_bool(c), f], cache, ignore)),
                         _ => match f.as_bool_opt() {
-                            Some(true) => Some(fold_cache(&term![OR; neg_bool(c), t], cache)),
-                            Some(false) => Some(fold_cache(&term![AND; c, t], cache)),
+                            Some(true) => {
+                                Some(fold_cache(&term![OR; neg_bool(c), t], cache, ignore))
+                            }
+                            Some(false) => Some(fold_cache(&term![AND; c, t], cache, ignore)),
                             _ => None,
                         },
                     },
@@ -509,7 +516,7 @@ mod test {
 
     #[quickcheck]
     fn semantics_random(ArbitraryTermEnv(t, vs): ArbitraryTermEnv) {
-        let tt = fold(&t);
+        let tt = fold(&t, &[]);
         let orig = eval(&t, &vs);
         let new = eval(&tt, &vs);
         assert!(orig == new, "{} ({}) vs {} ({})", t, orig, tt, new);
@@ -517,23 +524,23 @@ mod test {
 
     #[test]
     fn b_xor() {
-        assert_eq!(fold(&term![XOR; bool(false), bool(true)]), bool(true),);
+        assert_eq!(fold(&term![XOR; bool(false), bool(true)], &[]), bool(true),);
     }
 
     #[test]
     fn b_or() {
-        assert_eq!(fold(&term![OR; bool(false), bool(true)]), bool(true),);
+        assert_eq!(fold(&term![OR; bool(false), bool(true)], &[]), bool(true),);
     }
 
     #[test]
     fn b_and() {
-        assert_eq!(fold(&term![AND; bool(false), bool(true)]), bool(false),);
+        assert_eq!(fold(&term![AND; bool(false), bool(true)], &[]), bool(false),);
     }
 
     #[test]
     fn shl() {
         assert_eq!(
-            fold(&term![BV_SHL; v_bv("a", 8), bv_lit(2, 8)]),
+            fold(&term![BV_SHL; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![BV_CONCAT; term![Op::BvExtract(5, 0); v_bv("a", 8)], bv_lit(0, 2)],
         );
     }
@@ -541,7 +548,7 @@ mod test {
     #[test]
     fn ashr() {
         assert_eq!(
-            fold(&term![BV_ASHR; v_bv("a", 8), bv_lit(2, 8)]),
+            fold(&term![BV_ASHR; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![Op::BvSext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
     }
@@ -549,7 +556,7 @@ mod test {
     #[test]
     fn lshr() {
         assert_eq!(
-            fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)]),
+            fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![Op::BvUext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
     }
