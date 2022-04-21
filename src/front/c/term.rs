@@ -64,7 +64,7 @@ impl CTermData {
                 }
             }
         }
-        terms_tail(self, &mut output, &ctx);
+        terms_tail(self, &mut output, ctx);
         output
     }
 
@@ -248,15 +248,12 @@ fn inner_usual_arith_conversions(a: &CTerm, b: &CTerm) -> (CTerm, CTerm) {
         let (s_ty, u_ty) = (s.term.type_(), u.term.type_());
         let (s_r, u_r) = (s_ty.int_conversion_rank(), u_ty.int_conversion_rank());
         let (s_, u_) = if u_r >= s_r {
-            (cast(Some(u_ty), s.clone()), u)
+            (cast(Some(u_ty), s), u)
         } else if s_ty.num_bits() > u_ty.num_bits() {
-            (s, cast(Some(s_ty), u.clone()))
+            (s, cast(Some(s_ty), u))
         } else {
             let ty = Ty::Int(false, s_ty.num_bits());
-            (
-                cast(Some(ty.clone()), s.clone()),
-                cast(Some(ty.clone()), u.clone()),
-            )
+            (cast(Some(ty.clone()), s), cast(Some(ty), u))
         };
         if signed_first {
             (s_, u_)
@@ -761,7 +758,7 @@ impl Embeddable for Ct {
             Ty::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
                     .fields()
-                    .map(|(f_name, f_ty)| (f_name.clone(), self.initialize_return(f_ty, &f_name)))
+                    .map(|(f_name, f_ty)| (f_name.clone(), self.initialize_return(f_ty, f_name)))
                     .collect();
                 CTerm {
                     term: CTermData::CStruct(ty.clone(), FieldList::new(fields)),
