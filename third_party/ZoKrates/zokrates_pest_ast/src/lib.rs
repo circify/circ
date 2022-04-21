@@ -20,7 +20,7 @@ pub use ast::{
     PostfixExpression, Pragma, PrivateNumber, PrivateVisibility, PublicVisibility, Range,
     RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement, StrOperator,
     StructDefinition, StructField, StructType, SymbolDeclaration, TernaryExpression, ToExpression,
-    Type, TypedIdentifier, TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type,
+    Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type,
     U32NumberExpression, U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type,
     U8NumberExpression, U8Suffix, U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility,
     EOI,
@@ -152,6 +152,7 @@ mod ast {
         Import(ImportDirective<'ast>),
         Constant(ConstantDefinition<'ast>),
         Struct(StructDefinition<'ast>),
+        Type(TypeDefinition<'ast>),
         Function(FunctionDefinition<'ast>),
     }
 
@@ -192,6 +193,16 @@ mod ast {
         pub ty: Type<'ast>,
         pub id: IdentifierExpression<'ast>,
         pub expression: Expression<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::type_definition))]
+    pub struct TypeDefinition<'ast> {
+        pub id: IdentifierExpression<'ast>,
+        pub generics: Vec<IdentifierExpression<'ast>>,
+        pub ty: Type<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }

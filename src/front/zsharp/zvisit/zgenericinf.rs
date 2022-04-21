@@ -362,7 +362,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         self.zgen.file_stack_push(strpath);
         for ast::StructField { ty, id, .. } in strdef.fields.iter() {
             if let Some(t) = aty_map.remove(&id.value) {
-                self.fdef_gen_ty(t, ty)?;
+                self.fdef_gen_ty(t, &ty)?;
             } else {
                 return Err(format!(
                     "ZGenericInf: missing member {} in struct {} value",

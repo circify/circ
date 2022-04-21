@@ -91,7 +91,11 @@ struct ZGen<'ast> {
     file_stack: RefCell<Vec<PathBuf>>,
     generics_stack: RefCell<Vec<HashMap<String, T>>>,
     functions: HashMap<PathBuf, HashMap<String, ast::FunctionDefinition<'ast>>>,
-    structs: HashMap<PathBuf, HashMap<String, ast::StructDefinition<'ast>>>,
+    // We use a single map for both type definitions and structures.
+    structs_and_tys: HashMap<
+        PathBuf,
+        HashMap<String, Result<ast::StructDefinition<'ast>, ast::TypeDefinition<'ast>>>,
+    >,
     constants: HashMap<PathBuf, HashMap<String, (ast::Type<'ast>, T)>>,
     import_map: HashMap<PathBuf, HashMap<String, (PathBuf, String)>>,
     mode: Mode,
@@ -154,7 +158,7 @@ impl<'ast> ZGen<'ast> {
             file_stack: Default::default(),
             generics_stack: Default::default(),
             functions: HashMap::new(),
-            structs: HashMap::new(),
+            structs_and_tys: HashMap::new(),
             constants: HashMap::new(),
             import_map: HashMap::new(),
             mode,
@@ -1445,20 +1449,23 @@ impl<'ast> ZGen<'ast> {
                     .fold(b, |b, d| Ok(Ty::Array(d?, Box::new(b?))))
             }
             ast::Type::Struct(s) => {
-                let (sdef, path) = self.get_struct(&s.id.value).ok_or_else(|| {
+                let (def, path) = self.get_struct_or_type(&s.id.value).ok_or_else(|| {
                     format!(
                         "No such struct {} (did you bring it into scope?)",
                         &s.id.value
                     )
                 })?;
-                let sdef = sdef.clone();
-                let g_len = sdef.generics.len();
+                let generics = match def.as_ref() {
+                    Ok(sdef) => &sdef.generics,
+                    Err(tdef) => &tdef.generics,
+                };
+                let g_len = generics.len();
                 let egv = s
                     .explicit_generics
                     .as_ref()
                     .map(|eg| eg.values.as_ref())
                     .unwrap_or(&[][..]);
-                let generics = self.egvs_impl_::<IS_CNST>(egv, sdef.generics)?;
+                let generics = self.egvs_impl_::<IS_CNST>(egv, generics.clone())?;
                 if generics.len() != g_len {
                     return Err(format!(
                         "Struct {} is not monomorphized or wrong number of generic parameters",
@@ -1467,15 +1474,18 @@ impl<'ast> ZGen<'ast> {
                 }
                 self.file_stack_push(path);
                 self.generics_stack_push(generics);
-                let ty = Ty::new_struct(
-                    s.id.value.clone(),
-                    sdef.fields
-                        .into_iter()
-                        .map::<Result<_, String>, _>(|f| {
-                            Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?))
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+                let ty = match def.as_ref() {
+                    Ok(sdef) => Ty::new_struct(
+                        sdef.id.value.clone(),
+                        sdef.fields
+                            .into_iter()
+                            .map::<Result<_, String>, _>(|f| {
+                                Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?))
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                    ),
+                    Err(tdef) => self.type_impl_::<IS_CNST>(&tdef.ty)?,
+                };
                 self.generics_stack_pop();
                 self.file_stack_pop();
                 Ok(ty)
@@ -1637,7 +1647,7 @@ impl<'ast> ZGen<'ast> {
         let mut clr = ZConstLiteralRewriter::new(None);
         for p in files {
             self.constants.insert(p.clone(), HashMap::new());
-            self.structs.insert(p.clone(), HashMap::new());
+            self.structs_and_tys.insert(p.clone(), HashMap::new());
             self.functions.insert(p.clone(), HashMap::new());
             self.file_stack_push(p.clone());
             for d in t.get_mut(&p).unwrap().declarations.iter_mut() {
@@ -1655,13 +1665,41 @@ impl<'ast> ZGen<'ast> {
                             .unwrap_or_else(|e| self.err(e.0, &s.span));
 
                         if self
-                            .structs
+                            .structs_and_tys
                             .get_mut(self.file_stack.borrow().last().unwrap())
                             .unwrap()
-                            .insert(s.id.value.clone(), s_ast)
+                            .insert(s.id.value.clone(), Ok(s_ast))
                             .is_some()
                         {
-                            self.err(format!("Struct {} redefined", &s.id.value), &s.span);
+                            self.err(
+                                format!("Struct {} defined over existing name", &s.id.value),
+                                &s.span,
+                            );
+                        }
+                    }
+                    ast::SymbolDeclaration::Type(t) => {
+                        debug!(
+                            "processing decl: type definition {} in {}",
+                            t.id.value,
+                            p.display()
+                        );
+                        let mut t_ast = t.clone();
+
+                        // rewrite literals in ArrayTypes
+                        clr.visit_type_definition(&mut t_ast)
+                            .unwrap_or_else(|e| self.err(e.0, &t.span));
+
+                        if self
+                            .structs_and_tys
+                            .get_mut(self.file_stack.borrow().last().unwrap())
+                            .unwrap()
+                            .insert(t.id.value.clone(), Err(t_ast))
+                            .is_some()
+                        {
+                            self.err(
+                                format!("Type {} defined over existing name", &t.id.value),
+                                &t.span,
+                            );
                         }
                     }
                     ast::SymbolDeclaration::Function(f) => {
@@ -1728,9 +1766,15 @@ impl<'ast> ZGen<'ast> {
         self.functions.get(&f_path).and_then(|m| m.get(&f_name))
     }
 
-    fn get_struct(&self, struct_id: &str) -> Option<(&ast::StructDefinition<'ast>, PathBuf)> {
+    fn get_struct_or_type(
+        &self,
+        struct_id: &str,
+    ) -> Option<(
+        &Result<ast::StructDefinition<'ast>, ast::TypeDefinition<'ast>>,
+        PathBuf,
+    )> {
         let (s_path, s_name) = self.deref_import(struct_id);
-        self.structs
+        self.structs_and_tys
             .get(&s_path)
             .and_then(|m| m.get(&s_name))
             .map(|m| (m, s_path))

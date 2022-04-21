@@ -41,6 +41,7 @@ pub fn walk_symbol_declaration<'ast, Z: ZVisitorMut<'ast>>(
         Import(i) => visitor.visit_import_directive(i),
         Constant(c) => visitor.visit_constant_definition(c),
         Struct(s) => visitor.visit_struct_definition(s),
+        Type(t) => visitor.visit_type_definition(t),
         Function(f) => visitor.visit_function_definition(f),
     }
 }
@@ -127,6 +128,19 @@ pub fn walk_struct_definition<'ast, Z: ZVisitorMut<'ast>>(
         .fields
         .iter_mut()
         .try_for_each(|f| visitor.visit_struct_field(f))?;
+    visitor.visit_span(&mut structdef.span)
+}
+
+pub fn walk_type_definition<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    structdef: &mut ast::TypeDefinition<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_identifier_expression(&mut structdef.id)?;
+    structdef
+        .generics
+        .iter_mut()
+        .try_for_each(|g| visitor.visit_identifier_expression(g))?;
+    visitor.visit_type(&mut structdef.ty)?;
     visitor.visit_span(&mut structdef.span)
 }
 

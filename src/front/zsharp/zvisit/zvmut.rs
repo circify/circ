@@ -83,6 +83,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_struct_definition(self, structdef)
     }
 
+    fn visit_type_definition(
+        &mut self,
+        structdef: &mut ast::TypeDefinition<'ast>,
+    ) -> ZVisitorResult {
+        walk_type_definition(self, structdef)
+    }
+
     fn visit_struct_field(&mut self, structfield: &mut ast::StructField<'ast>) -> ZVisitorResult {
         walk_struct_field(self, structfield)
     }
