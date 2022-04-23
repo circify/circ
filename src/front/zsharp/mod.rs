@@ -1455,7 +1455,7 @@ impl<'ast> ZGen<'ast> {
                         &s.id.value
                     )
                 })?;
-                let generics = match def.as_ref() {
+                let generics = match def {
                     Ok(sdef) => &sdef.generics,
                     Err(tdef) => &tdef.generics,
                 };
@@ -1770,14 +1770,14 @@ impl<'ast> ZGen<'ast> {
         &self,
         struct_id: &str,
     ) -> Option<(
-        &Result<ast::StructDefinition<'ast>, ast::TypeDefinition<'ast>>,
+        Result<&ast::StructDefinition<'ast>, &ast::TypeDefinition<'ast>>,
         PathBuf,
     )> {
         let (s_path, s_name) = self.deref_import(struct_id);
         self.structs_and_tys
             .get(&s_path)
             .and_then(|m| m.get(&s_name))
-            .map(|m| (m, s_path))
+            .map(|m| (m.as_ref(), s_path))
     }
 
     /*** circify wrapper functions (hides RefCell) ***/
