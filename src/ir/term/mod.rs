@@ -1064,8 +1064,16 @@ fn mk(elm: TermData) -> Term {
 
 /// Scans the term database and the type database and removes dead terms and types.
 pub fn garbage_collect() {
-    collect_terms();
-    collect_types();
+    // Don't garbage collect while panicking.
+    // this function may be called from Drop implementations, which are called
+    // when a thread is unwinding due to a panic. When that happens, RwLocks are
+    // poisoned, which would cause a panic-in-panic, no bueno.
+    if !std::thread::panicking() {
+        collect_terms();
+        collect_types();
+    } else {
+        log::warn!("Not garbage collecting because we are currently panicking.");
+    }
 }
 
 const LEN_THRESH_NUM: usize = 8;
