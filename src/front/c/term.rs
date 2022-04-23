@@ -665,34 +665,22 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(sa && sb, wa, term![Op::Ite; cond, a, b]),
                 udef: false,
             },
-            (CTermData::CStruct(_ta, _fa), CTermData::CStruct(_tb, _fb)) => {
-                unimplemented!();
-                // let mut fields =
-                //     fa.fields()
-                //         .zip(fb.fields())
-                //         .map(|((f_name, f_ty), (g_name, g_ty))| {
-                //             (
-                //                 f_name.clone(),
-                //                 self.ite(
-                //                     _ctx,
-                //                     term![Op::Select; cond, f_ty.clone(), g_ty.clone()],
-                //                     f.field(f_name).unwrap(),
-                //                     t.field(g_name).unwrap(),
-                //                 ),
-                //             )
-                //         });
-                // let mut mem = _ctx.mem.borrow_mut();
-                // let id = mem.zero_allocate(fields.len(), 32, ta.num_bits() + tb.num_bits());
-                // let struct_term = Self::T {
-                //     term: CTermData::CStruct(ta, FieldList::new(fields)),
-                //     udef: false,
-                // };
-                // for (i, (f_name, f_term)) in fields.enumerate() {
-                //     let val = f_term.term(_ctx);
-                //     let t_term = leaf_term(Op::Const(Value::Bool(true)));
-                //     mem.store(id, bv_lit(i, 32), val, t_term);
-                // }
-                // struct_term
+            (CTermData::CStruct(ta, fa), CTermData::CStruct(tb, fb)) if ta == tb => {
+                let fields: Vec<(String, CTerm)> = fa
+                    .fields()
+                    .zip(fb.fields())
+                    .map(|((a_name, a_term), (_b_name, b_term))| {
+                        (
+                            a_name.clone(),
+                            self.ite(_ctx, cond.clone(), a_term.clone(), b_term.clone()),
+                        )
+                    })
+                    .collect();
+
+                Self::T {
+                    term: CTermData::CStruct(ta, FieldList::new(fields)),
+                    udef: false,
+                }
             }
             // (CTermData::CArray(a_ty, a), CTermData::CArray(b_ty, b)) if a_ty == b_ty => Self::T {
             //     term: CTermData::CArray(
