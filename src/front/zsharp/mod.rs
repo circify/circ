@@ -1474,13 +1474,13 @@ impl<'ast> ZGen<'ast> {
                 }
                 self.file_stack_push(path);
                 self.generics_stack_push(generics);
-                let ty = match def.as_ref() {
+                let ty = match def {
                     Ok(sdef) => Ty::new_struct(
                         sdef.id.value.clone(),
                         sdef.fields
-                            .into_iter()
+                            .iter()
                             .map::<Result<_, String>, _>(|f| {
-                                Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?))
+                                Ok((f.id.value.clone(), self.type_impl_::<IS_CNST>(&f.ty)?))
                             })
                             .collect::<Result<Vec<_>, _>>()?,
                     ),

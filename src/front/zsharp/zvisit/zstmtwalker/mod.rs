@@ -644,10 +644,16 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             .ok_or_else(|| ZVisitorError(format!("ZStatementWalker: undeclared function {}", id)))
     }
 
-    fn get_struct(&self, id: &str) -> ZResult<&ast::StructDefinition<'ast>> {
-        self.zgen.get_struct(id).map(|(m, _)| m).ok_or_else(|| {
-            ZVisitorError(format!("ZStatementWalker: undeclared struct type {}", id))
-        })
+    fn get_struct_or_type(
+        &self,
+        id: &str,
+    ) -> ZResult<Result<&ast::StructDefinition<'ast>, &ast::TypeDefinition<'ast>>> {
+        self.zgen
+            .get_struct_or_type(id)
+            .map(|(m, _)| m)
+            .ok_or_else(|| {
+                ZVisitorError(format!("ZStatementWalker: undeclared struct type {}", id))
+            })
     }
 
     fn const_defined(&self, id: &str) -> bool {
@@ -727,7 +733,81 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         &self,
         sty: &ast::StructType<'ast>,
     ) -> ZResult<ast::StructDefinition<'ast>> {
-        let mut sdef = self.get_struct(&sty.id.value)?.clone();
+        match self.get_struct_or_type(&sty.id.value)? {
+            Ok(strdef) => self.monomorphize_struct_s(sty, strdef.clone()),
+            Err(tydef) => self.monomorphize_struct_t(sty, tydef),
+        }
+    }
+
+    fn monomorphize_struct_t(
+        &self,
+        sty: &ast::StructType<'ast>,
+        tydef: &ast::TypeDefinition<'ast>,
+    ) -> ZResult<ast::StructDefinition<'ast>> {
+        // first, recursively monomorphize the inner struct
+        let mut sdef = match &tydef.ty {
+            ast::Type::Basic(_) => Err("Basic"),
+            ast::Type::Array(_) => Err("Array"),
+            ast::Type::Struct(sty_inner) => Ok(sty_inner),
+        }
+        .map_err(|e| {
+            ZVisitorError(format!(
+            "ZStatementWalker: found {} type attempting to struct-monomorphize type alias {}:\n{}",
+            e,
+            &sty.id.value,
+            span_to_string(&sty.span),
+        ))
+        })
+        .and_then(|sty_inner| self.monomorphize_struct(sty_inner))?;
+
+        // short-circuit if there are no generics to apply in this TypeDefinition
+        if tydef.generics.is_empty() {
+            return if sty.explicit_generics.is_some() {
+                Err(ZVisitorError(format!(
+                    "ZStatementWalker: got explicit generics for non-generic type alias {}:\n{}",
+                    &sty.id.value,
+                    span_to_string(&sty.span),
+                )))
+            } else {
+                Ok(sdef)
+            };
+        }
+
+        if sty.explicit_generics.is_none() {
+            return Err(ZVisitorError(format!(
+                "ZStatementWalker: no explicit generics found monomorphizing type alias {}:\n{}",
+                &sty.id.value,
+                span_to_string(&sty.span),
+            )));
+        }
+
+        // monomorphize TypeDefinition generics vs StructType explicit_generics
+        use ast::ConstantGenericValue::*;
+        let gen_values = &sty.explicit_generics.as_ref().unwrap().values;
+        let gvmap = tydef
+            .generics
+            .iter()
+            .map(|ie| ie.value.clone())
+            .zip(gen_values.iter().map(|cgv| match cgv {
+                Underscore(_) => unreachable!(),
+                Value(l) => ast::Expression::Literal(l.clone()),
+                Identifier(i) => ast::Expression::Identifier(i.clone()),
+            }))
+            .collect::<HashMap<String, ast::Expression<'ast>>>();
+
+        let mut sf_rewriter = ZExpressionRewriter::new(gvmap);
+        sdef.fields
+            .iter_mut()
+            .try_for_each(|f| sf_rewriter.visit_struct_field(f))?;
+
+        Ok(sdef)
+    }
+
+    fn monomorphize_struct_s(
+        &self,
+        sty: &ast::StructType<'ast>,
+        mut sdef: ast::StructDefinition<'ast>,
+    ) -> ZResult<ast::StructDefinition<'ast>> {
         // short circuit for non-generic structs
         if sdef.generics.is_empty() {
             return if sty.explicit_generics.is_some() {
@@ -743,12 +823,12 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
 
         if sty.explicit_generics.is_none() {
             return Err(ZVisitorError(format!(
-                "ZStatementWalker: no explicit generics found monomorphizing struct {}",
+                "ZStatementWalker: no explicit generics found monomorphizing struct {}:\n{}",
                 &sty.id.value,
+                span_to_string(&sty.span),
             )));
         }
 
-        // XXX(q) rewrite id field of sdef?
         let generics = std::mem::take(&mut sdef.generics);
         let gen_values = &sty.explicit_generics.as_ref().unwrap().values;
         assert_eq!(generics.len(), gen_values.len());
@@ -773,12 +853,19 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         Ok(sdef)
     }
 
-    fn monomorphic_struct(&self, sty: &mut ast::StructType<'ast>) -> ZResult<ast::Type<'ast>> {
+    fn monomorphic_struct_or_type(
+        &self,
+        sty: &mut ast::StructType<'ast>,
+    ) -> ZResult<ast::Type<'ast>> {
         use ast::ConstantGenericValue as CGV;
 
         // get the struct definition and return early if we don't have to handle generics
-        let sdef = self.get_struct(&sty.id.value)?;
-        if sdef.generics.is_empty() {
+        let sdef = self.get_struct_or_type(&sty.id.value)?;
+        let generics = match sdef {
+            Ok(strdef) => &strdef.generics,
+            Err(tydef) => &tydef.generics,
+        };
+        if generics.is_empty() {
             return if sty.explicit_generics.is_some() {
                 Err(ZVisitorError(format!(
                     "ZStatementWalker: got explicit generics for non-generic struct type {}:\n{}",
@@ -802,7 +889,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 ))
             })
             .and_then(|eg| {
-                if eg.values.len() != sdef.generics.len() {
+                if eg.values.len() != generics.len() {
                     Err(ZVisitorError(format!(
                         "ZStatementWalker: wrong number of explicit generics for struct {}:\n{}",
                         &sty.id.value,
@@ -961,7 +1048,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
     fn visit_typed_identifier(&mut self, ti: &mut ast::TypedIdentifier<'ast>) -> ZVisitorResult {
         ZConstLiteralRewriter::new(None).visit_type(&mut ti.ty)?;
         let ty = if let ast::Type::Struct(sty) = &mut ti.ty {
-            self.monomorphic_struct(sty)?
+            self.monomorphic_struct_or_type(sty)?
         } else {
             ti.ty.clone()
         };
