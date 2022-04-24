@@ -1020,10 +1020,32 @@ impl<'ast> ZGen<'ast> {
                         .map(|m_expr| (m.id.value.clone(), m_expr))
                 })
                 .collect::<Result<Vec<_>, String>>()
-                .map(|members| T::new_struct(u.ty.value.clone(), members)),
+                .and_then(|members| Ok(T::new_struct(self.canon_struct(&u.ty.value)?, members))),
         }
         .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
+    }
+
+    fn canon_struct(&self, id: &str) -> Result<String, String> {
+        match self
+            .get_struct_or_type(id)
+            .ok_or_else(|| format!("No such struct or type {} canonicalizing InlineStruct", id))?
+        {
+            (Ok(_), _) => Ok(id.to_string()),
+            (Err(t), p) => match &t.ty {
+                ast::Type::Struct(s) => {
+                    self.file_stack_push(p);
+                    let ret = self.canon_struct(&s.id.value);
+                    self.file_stack_pop();
+                    ret
+                }
+                _ => Err(format!(
+                    "Found non-Struct canonicalizing struct {} at {}",
+                    id,
+                    p.to_string_lossy(),
+                )),
+            },
+        }
     }
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
