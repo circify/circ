@@ -9,6 +9,7 @@ use crate::ir::term::precomp::PreComp;
 use crate::target::bitsize;
 use crate::target::r1cs::*;
 
+use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use rug::ops::Pow;
@@ -53,7 +54,7 @@ struct ToR1cs {
 
 impl ToR1cs {
     fn new(
-        modulus: Integer,
+        modulus: FieldT,
         public_inputs: FxHashSet<String>,
     ) -> Self {
         let m = Arc::new(modulus.clone());
@@ -189,8 +190,12 @@ impl ToR1cs {
     /// If `signed` is set, then the MSB is negated; i.e., the two's-complement sum is returned.
     fn debitify<I: ExactSizeIterator<Item = TermLc>>(&self, bits: I, signed: bool) -> TermLc {
         let n = bits.len();
-        bits.enumerate().fold(self.zero.clone(), |sum, (i, bit)| {
-            let summand = bit * &Integer::from(2).pow(i as u32);
+        let two = self.r1cs.modulus.new_v(2);
+        let mut acc = self.r1cs.modulus.new_v(1);
+        bits.enumerate().fold(self.r1cs.zero(), |sum, (i, bit)| {
+            let summand = bit * &acc;
+            acc *= &two;
+
             if signed && i + 1 == n {
                 sum - &summand
             } else {
@@ -547,7 +552,9 @@ impl ToR1cs {
                     Op::BvUnOp(BvUnOp::Neg) => {
                         let x = self.get_bv_uint(&bv.cs[0]);
                         // Wrong for x == 0
-                        let almost_neg_x = self.zero.clone() + &Integer::from(2).pow(n as u32) - &x;
+                        let almost_neg_x = self.r1cs.zero()
+                            + &self.r1cs.modulus.new_v(Integer::from(2).pow(n as u32))
+                            - &x;
                         let is_zero = self.is_zero(x);
                         let neg_x = self.ite(is_zero, self.zero.clone(), &almost_neg_x);
                         self.set_bv_uint(bv, neg_x, n);
@@ -645,7 +652,9 @@ impl ToR1cs {
                         let b = self.get_bv_uint(&bv.cs[1]);
                         match o {
                             BvBinOp::Sub => {
-                                let sum = a + &(Integer::from(1) << n as u32) - &b;
+                                let sum =
+                                    a + &self.r1cs.modulus.new_v(Integer::from(2).pow(n as u32))
+                                        - &b;
                                 let mut bits = self.bitify("sub", &sum, n + 1, false);
                                 bits.truncate(n);
                                 self.set_bv_bits(bv, bits);
@@ -732,8 +741,14 @@ impl ToR1cs {
 
     #[allow(dead_code)]
     fn debug_lc<D: Display + ?Sized>(&self, tag: &D, lc: &TermLc) {
-        if let Some(v) = self.r1cs.eval(&lc.1) {
-            println!("{}: {} (value {},{:b})", tag, self.r1cs.format_lc(&lc.1), v, v);
+        if let Some(v) = self.r1cs.eval(lc) {
+            println!(
+                "{}: {} (value {},{:b})",
+                tag,
+                self.r1cs.format_lc(lc),
+                v,
+                <&FieldV as Into<Integer>>::into(&v)
+            );
         } else {
             println!("{}: {} (novalue)", tag, self.r1cs.format_lc(&lc.1));
         }
@@ -828,7 +843,7 @@ impl ToR1cs {
                     let public = self.public_inputs.contains(name);
                     self.fresh_var(name, c.clone(), public)
                 }
-                Op::Const(Value::Field(r)) => self.zero.clone() + r.i(),
+                Op::Const(Value::Field(r)) => self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs[0]).clone();
                     let t = self.get_pf(&c.cs[1]).clone();
@@ -879,7 +894,7 @@ impl ToR1cs {
 /// ## Returns
 ///
 /// * The R1CS instance
-pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
+pub fn to_r1cs(cs: Computation, modulus: FieldT) -> R1cs<String> {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();
     let public_inputs = metadata
@@ -911,15 +926,18 @@ pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use crate::util::field::DFL_T;
+
     use crate::ir::proof::Constraints;
     use crate::ir::term::dist::test::*;
     use crate::ir::term::dist::*;
     use crate::target::r1cs::opt::reduce_linearities;
+
+    use circ_fields::FieldT;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::distributions::Distribution;
     use rand::SeedableRng;
-    use std::sync::Arc;
 
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -946,7 +964,7 @@ pub mod test {
                 .collect(),
             ),
         );
-        let r1cs = to_r1cs(cs, Integer::from(17));
+        let r1cs = to_r1cs(cs, FieldT::from(Integer::from(17)));
         r1cs.check_all();
     }
 
@@ -988,7 +1006,7 @@ pub mod test {
             term![Op::Not; t]
         };
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
     }
 
@@ -999,7 +1017,7 @@ pub mod test {
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
     }
 
@@ -1008,9 +1026,9 @@ pub mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 
@@ -1021,9 +1039,9 @@ pub mod test {
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 
@@ -1042,7 +1060,7 @@ pub mod test {
                 .collect(),
             ),
         );
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
     }
 
@@ -1056,9 +1074,9 @@ pub mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![], Some(values));
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 
@@ -1071,16 +1089,13 @@ pub mod test {
     }
 
     fn pf(i: isize) -> Term {
-        leaf_term(Op::Const(Value::Field(FieldElem::new(
-            Integer::from(i),
-            Arc::new(Integer::from(crate::ir::term::field::TEST_FIELD)),
-        ))))
+        leaf_term(Op::Const(Value::Field(DFL_T.new_v(i))))
     }
 
     fn const_test(term: Term) {
         let mut cs = Computation::new(true);
         cs.assert(term);
-        let r1cs = to_r1cs(cs, Integer::from(crate::ir::term::field::TEST_FIELD));
+        let r1cs = to_r1cs(cs, DFL_T.clone());
         r1cs.check_all();
     }
 
@@ -1204,7 +1219,7 @@ pub mod test {
             ),
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let r1cs = to_r1cs(cs, Integer::from(17));
+        let r1cs = to_r1cs(cs, FieldT::from(Integer::from(17)));
         r1cs.check_all();
     }
 }

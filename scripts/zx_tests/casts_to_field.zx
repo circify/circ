@@ -1,0 +1,71 @@
+import "utils/casts/u8_to_field"
+import "utils/casts/u16_to_field"
+import "utils/casts/u32_to_field"
+import "utils/casts/u64_to_field"
+
+def main() -> bool:
+    u8 u8_1 = 170
+    field f8_1 = u8_to_field(u8_1)
+    assert(f8_1 == 170)
+
+    u8 u8_2 = 193
+    field f8_2 = u8_to_field(u8_2)
+    assert(f8_2 == 193)
+
+    u8 u8_3 = 131
+    field f8_3 = u8_to_field(u8_3)
+    assert(f8_3 == 131)
+
+    u8 u8_4 = 85
+    field f8_4 = u8_to_field(u8_4)
+    assert(f8_4 == 85)
+
+    u16 u16_1 = 49470
+    field f16_1 = u16_to_field(u16_1)
+    assert(f16_1 == 49470)
+
+    u16 u16_2 = 33621
+    field f16_2 = u16_to_field(u16_2)
+    assert(f16_2 == 33621)
+
+    u16 u16_3 = 43724
+    field f16_3 = u16_to_field(u16_3)
+    assert(f16_3 == 43724)
+
+    u16 u16_4 = 58601
+    field f16_4 = u16_to_field(u16_4)
+    assert(f16_4 == 58601)
+
+    u32 u32_1 = 2495768655
+    field f32_1 = u32_to_field(u32_1)
+    assert(f32_1 == 2495768655)
+
+    u32 u32_2 = 1964762788
+    field f32_2 = u32_to_field(u32_2)
+    assert(f32_2 == 1964762788)
+
+    u32 u32_3 = 4069444903
+    field f32_3 = u32_to_field(u32_3)
+    assert(f32_3 == 4069444903)
+
+    u32 u32_4 = 23477624
+    field f32_4 = u32_to_field(u32_4)
+    assert(f32_4 == 23477624)
+
+    u64 u64_1 = 4942755304703002651
+    field f64_1 = u64_to_field(u64_1)
+    assert(f64_1 == 4942755304703002651)
+
+    u64 u64_2 = 9575867038914511502
+    field f64_2 = u64_to_field(u64_2)
+    assert(f64_2 == 9575867038914511502)
+
+    u64 u64_3 = 17818881111009702690
+    field f64_3 = u64_to_field(u64_3)
+    assert(f64_3 == 17818881111009702690)
+
+    u64 u64_4 = 10370833667498611482
+    field f64_4 = u64_to_field(u64_4)
+    assert(f64_4 == 10370833667498611482)
+
+    return true

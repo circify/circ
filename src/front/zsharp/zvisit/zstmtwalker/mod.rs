@@ -638,7 +638,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     }
 
     fn get_struct(&self, id: &str) -> ZResult<&ast::StructDefinition<'ast>> {
-        self.zgen.get_struct(id).ok_or_else(|| {
+        self.zgen.get_struct(id).map(|(m, _)| m).ok_or_else(|| {
             ZVisitorError(format!("ZStatementWalker: undeclared struct type {}", id))
         })
     }

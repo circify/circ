@@ -30,111 +30,14 @@
 //! are 0.  If they are both 1 (for ANY `s`), then it must be 1.
 
 use fxhash::{FxHashMap, FxHashSet};
-use serde_json::Value;
 
 use super::{ShareType, SharingMap, SHARE_TYPES};
 use crate::ir::term::*;
+use crate::target::aby::assignment::CostModel;
 
 use crate::target::ilp::{variable, Expression, Ilp, Variable};
 
-use std::{env::var, fs::File, path::Path};
-
-/// A cost model for ABY operations and share conversions
-#[derive(Debug)]
-pub struct CostModel {
-    /// Conversion costs: maps (from, to) pairs to cost
-    conversions: FxHashMap<(ShareType, ShareType), f64>,
-
-    /// Operator costs: maps (op, type) to cost
-    ops: FxHashMap<Op, FxHashMap<ShareType, f64>>,
-}
-
-impl CostModel {
-    /// Create a cost model from an OPA json file, like [this](https://github.com/ishaq/OPA/blob/d613c15ff715fa62c03e37b673548f94c16bfe0d/solver/sample-costs.json)
-    pub fn from_opa_cost_file(p: &impl AsRef<Path>) -> CostModel {
-        use ShareType::*;
-        let get_cost_opt =
-            |share_name: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
-                let o = obj.get(share_name)?;
-                Some(
-                    o.get("32")
-                        .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
-                        .as_f64()
-                        .expect("not a number"),
-                )
-            };
-        let get_cost = |op_name: &str, obj: &serde_json::map::Map<String, Value>| -> f64 {
-            let o = obj
-                .get(op_name)
-                .unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
-            Some(
-                o.get("32")
-                    .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
-                    .as_f64()
-                    .expect("not a number"),
-            )
-            .unwrap()
-        };
-        let mut conversions = FxHashMap::default();
-        let mut ops = FxHashMap::default();
-        let f = File::open(p).expect("Missing file");
-        let json: Value = serde_json::from_reader(f).expect("Bad JSON");
-        let costs = json.as_object().unwrap();
-        // conversions
-        conversions.insert((Arithmetic, Boolean), get_cost("a2b", costs));
-        conversions.insert((Boolean, Arithmetic), get_cost("b2a", costs));
-        conversions.insert((Yao, Boolean), get_cost("y2b", costs));
-        conversions.insert((Boolean, Yao), get_cost("b2y", costs));
-        conversions.insert((Yao, Arithmetic), get_cost("y2a", costs));
-        conversions.insert((Arithmetic, Yao), get_cost("a2y", costs));
-
-        let ops_from_name = |name: &str| {
-            match name {
-                // assume comparisions are unsigned
-                "ge" => vec![BV_UGE],
-                "le" => vec![BV_ULE],
-                "gt" => vec![BV_UGT],
-                "lt" => vec![BV_ULT],
-                // assume n-ary ops apply to BVs
-                "add" => vec![BV_ADD],
-                "mul" => vec![BV_MUL],
-                "and" => vec![BV_AND],
-                "or" => vec![BV_OR],
-                "xor" => vec![BV_XOR],
-                // assume eq applies to BVs
-                "eq" => vec![Op::Eq],
-                "shl" => vec![BV_SHL],
-                // assume shr is logical, not arithmetic
-                "shr" => vec![BV_LSHR],
-                "sub" => vec![BV_SUB],
-                "mux" => vec![ITE],
-                "ne" => vec![Op::Not, Op::Eq],
-                "div" => vec![BV_UDIV],
-                "rem" => vec![BV_UREM],
-                // added to pass test case
-                "&&" => vec![AND],
-                "||" => vec![OR],
-                _ => panic!("Unknown operator name: {}", name),
-            }
-        };
-        for (op_name, cost) in costs {
-            // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
-            if !op_name.contains('2') {
-                for op in ops_from_name(op_name) {
-                    for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
-                    {
-                        if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
-                            ops.entry(op.clone())
-                                .or_insert_with(FxHashMap::default)
-                                .insert(*share_type, c);
-                        }
-                    }
-                }
-            }
-        }
-        CostModel { conversions, ops }
-    }
-}
+use std::env::var;
 
 /// Uses an ILP to assign...
 pub fn assign(c: &Computation, cm: &str) -> SharingMap {

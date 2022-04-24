@@ -147,7 +147,7 @@ pub fn free_variables(t: Term) -> FxHashSet<String> {
 pub fn as_uint_constant(t: &Term) -> Option<Integer> {
     match &t.op {
         Op::Const(Value::BitVector(bv)) => Some(bv.uint().clone()),
-        Op::Const(Value::Field(f)) => Some(f.i().clone()),
+        Op::Const(Value::Field(f)) => Some(f.i()),
         _ => None,
     }
 }
