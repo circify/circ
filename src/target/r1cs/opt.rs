@@ -174,6 +174,8 @@ mod test {
 
     use super::*;
 
+    use std::sync::Arc;
+
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
 
@@ -191,7 +193,12 @@ mod test {
             let s: u32 = Arbitrary::arbitrary(g);
             rug_rng.seed(&Integer::from(s));
             for v in &vars {
-                r1cs.add_signal(v.clone(), Some(modulus.clone().random_below(&mut rug_rng)));
+                let i = modulus.clone().random_below(&mut rug_rng);
+                r1cs.add_signal(
+                    v.clone(),
+                    Some(i.clone()),
+                    pf_lit(i, Arc::new(modulus.clone())),
+                );
             }
             for _ in 0..(2 * g.size()) {
                 let mut ac: isize = Arbitrary::arbitrary(g);

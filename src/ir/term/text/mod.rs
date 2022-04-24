@@ -582,4 +582,11 @@ mod test {
         let t2 = parse_term(s.as_bytes());
         assert_eq!(t, t2);
     }
+
+    #[quickcheck]
+    fn serde_roundtrip_random_bool(ArbitraryBoolEnv(t, _): ArbitraryBoolEnv) {
+        let json_string = serde_json::to_string(&t).unwrap();
+        let t2 = serde_json::from_str::<Term>(&json_string).unwrap();
+        assert_eq!(t, t2);
+    }
 }

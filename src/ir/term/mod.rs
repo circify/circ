@@ -27,6 +27,7 @@ use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
+use serde::{Serialize, Deserialize, Serializer, de::Visitor, Deserializer};
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::{Arc, RwLock};
@@ -607,7 +608,48 @@ impl Debug for TermData {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, PartialOrd)]
+impl Serialize for TermData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = text::serialize_term(&mk(self.clone()));
+        serializer.serialize_str(&bytes)
+    }
+}
+
+struct TermDeserVisitor;
+
+impl hashconsing::UniqueConsign for TermData {
+    fn unique_make(self) -> Term {
+        mk(self)
+    }
+}
+
+
+impl<'de> Visitor<'de> for TermDeserVisitor {
+    type Value = TermData;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a string (that textually defines a term)")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where
+    E: std::error::Error {
+        Ok((*text::parse_term(v.as_bytes())).clone())
+    }
+}
+
+impl<'de> Deserialize<'de> for TermData {
+    fn deserialize<D>(deserializer: D) -> Result<TermData, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(TermDeserVisitor)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, PartialOrd, Serialize, Deserialize)]
 /// An IR value (aka literal)
 pub enum Value {
     /// Bit-vector
@@ -628,7 +670,7 @@ pub enum Value {
     Tuple(Box<[Value]>),
 }
 
-#[derive(Clone, PartialEq, Debug, PartialOrd, Hash)]
+#[derive(Clone, PartialEq, Debug, PartialOrd, Hash, Serialize, Deserialize)]
 /// An IR array value.
 ///
 /// A sized, space array.
@@ -779,7 +821,7 @@ impl std::hash::Hash for Value {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 /// The "type" of an IR term
 pub enum Sort {
     /// bit-vectors of this width
@@ -1578,7 +1620,7 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
@@ -1696,7 +1738,7 @@ impl ComputationMetadata {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.

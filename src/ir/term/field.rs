@@ -2,6 +2,7 @@
 
 use rug::ops::RemRounding;
 use rug::Integer;
+use serde::{Serialize, Deserialize};
 
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use std::sync::Arc;
 /// Test modulus.
 pub const TEST_FIELD: usize = 1014088787;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 /// A prime field element
 pub struct FieldElem {
     i: Integer,
