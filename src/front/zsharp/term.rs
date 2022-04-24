@@ -945,31 +945,29 @@ impl Embeddable for ZSharp {
                 .cloned()
                 .unwrap_or_else(|| Integer::from(0))
         };
+        let name = user_name.as_ref().unwrap_or_else(|| &raw_name);
         match ty {
             Ty::Bool => T::new(
                 Ty::Bool,
                 ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::Bool,
-                    || Value::Bool(get_int_val() != 0),
                     visibility,
                 ),
             ),
             Ty::Field => T::new(
                 Ty::Field,
                 ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::Field(self.modulus.clone()),
-                    || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
                     visibility,
                 ),
             ),
             Ty::Uint(w) => T::new(
                 Ty::Uint(*w),
                 ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::BitVector(*w),
-                    || Value::BitVector(BitVector::new(get_int_val(), *w)),
                     visibility,
                 ),
             ),
@@ -1007,14 +1005,13 @@ impl Embeddable for ZSharp {
     }
     fn assign(
         &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        name: String,
-        t: Self::T,
-        visibility: Option<PartyId>,
+        _ctx: &mut CirCtx,
+        _ty: &Self::Ty,
+        _name: String,
+        _t: Self::T,
+        _visibility: Option<PartyId>,
     ) -> Self::T {
-        assert!(t.type_() == ty);
-        T::new(t.ty, ctx.cs.borrow_mut().assign(&name, t.term, visibility))
+        unreachable!()
     }
     fn values(&self) -> bool {
         self.values.is_some()

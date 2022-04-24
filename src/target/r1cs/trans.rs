@@ -43,7 +43,6 @@ struct Values {
 struct ToR1cs {
     r1cs: R1cs<String>,
     cache: TermMap<EmbeddedTerm>,
-    values: Option<Values>,
     wit_ext: PreComp,
     public_inputs: FxHashSet<String>,
     next_idx: usize,
@@ -55,11 +54,10 @@ struct ToR1cs {
 impl ToR1cs {
     fn new(
         modulus: Integer,
-        values: Option<FxHashMap<String, Value>>,
         public_inputs: FxHashSet<String>,
     ) -> Self {
         let m = Arc::new(modulus.clone());
-        let r1cs = R1cs::new(modulus, values.is_some());
+        let r1cs = R1cs::new(modulus);
         let zero = TermLc(pf_lit(0, m.clone()), r1cs.zero());
         let one = zero.clone() + 1;
         Self {
@@ -884,7 +882,6 @@ impl ToR1cs {
 pub fn to_r1cs(cs: Computation, modulus: Integer) -> R1cs<String> {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();
-    let values = cs.values.clone();
     let public_inputs = metadata
         .public_input_names()
         .map(ToOwned::to_owned)

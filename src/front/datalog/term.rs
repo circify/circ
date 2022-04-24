@@ -358,13 +358,11 @@ impl Embeddable for Datalog {
         user_name: Option<String>,
         visibility: Option<PartyId>,
     ) -> Self::T {
-        let get_int_val = || -> Integer { panic!("No values in Datalog") };
         match ty {
             Ty::Bool => T::new(
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
                     Sort::Bool,
-                    || Value::Bool(get_int_val() != 0),
                     visibility,
                 ),
                 Ty::Bool,
@@ -373,7 +371,6 @@ impl Embeddable for Datalog {
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
                     Sort::Field(self.modulus.clone()),
-                    || Value::Field(FieldElem::new(get_int_val(), self.modulus.clone())),
                     visibility,
                 ),
                 Ty::Field,
@@ -382,7 +379,6 @@ impl Embeddable for Datalog {
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
                     Sort::BitVector(*w as usize),
-                    || Value::BitVector(BitVector::new(get_int_val(), *w as usize)),
                     visibility,
                 ),
                 ty.clone(),
@@ -416,17 +412,13 @@ impl Embeddable for Datalog {
     }
     fn assign(
         &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        name: String,
-        t: Self::T,
-        visibility: Option<PartyId>,
+        _ctx: &mut CirCtx,
+        _ty: &Self::Ty,
+        _name: String,
+        _t: Self::T,
+        _visibility: Option<PartyId>,
     ) -> Self::T {
-        assert!(&t.ty == ty);
-        T::new(
-            ctx.cs.borrow_mut().assign(&name, t.ir, visibility),
-            ty.clone(),
-        )
+        unreachable!()
     }
     fn values(&self) -> bool {
         false
