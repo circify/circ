@@ -658,7 +658,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             .get_struct_or_type(id)
             .map(|(m, _)| m)
             .ok_or_else(|| {
-                ZVisitorError(format!("ZStatementWalker: undeclared struct type {}", id))
+                ZVisitorError(format!("ZStatementWalker: undeclared struct type {id}.\nNOTE: If {id} is a struct behind an imported type alias, its definition\n      must also be imported into the module where the alias is used."))
             })
     }
 

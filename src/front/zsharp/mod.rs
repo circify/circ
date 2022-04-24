@@ -1030,20 +1030,12 @@ impl<'ast> ZGen<'ast> {
         match self
             .get_struct_or_type(id)
             .ok_or_else(|| format!("No such struct or type {} canonicalizing InlineStruct", id))?
+            .0
         {
-            (Ok(_), _) => Ok(id.to_string()),
-            (Err(t), p) => match &t.ty {
-                ast::Type::Struct(s) => {
-                    self.file_stack_push(p);
-                    let ret = self.canon_struct(&s.id.value);
-                    self.file_stack_pop();
-                    ret
-                }
-                _ => Err(format!(
-                    "Found non-Struct canonicalizing struct {} at {}",
-                    id,
-                    p.to_string_lossy(),
-                )),
+            Ok(_) => Ok(id.to_string()),
+            Err(t) => match &t.ty {
+                ast::Type::Struct(s) => self.canon_struct(&s.id.value),
+                _ => Err(format!("Found non-Struct canonicalizing struct {}", id,)),
             },
         }
     }
