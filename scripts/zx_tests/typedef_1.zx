@@ -1,0 +1,4 @@
+type Foo = u8
+
+def main() -> Foo:
+    return 0
