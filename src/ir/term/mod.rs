@@ -1082,6 +1082,11 @@ const LEN_DECAY_NUM: usize = 15;
 const LEN_DECAY_DEN: usize = 16;
 /// Scan term and type databases only if they've grown in size since last scan
 pub fn maybe_garbage_collect() -> bool {
+    // Don't garbage collect while panicking.
+    // NOTE This function probably shouldn't be called from Drop impls, but let's be safe anyway.
+    if std::thread::panicking() {
+        return false;
+    }
     let mut ran = {
         let mut term_table = TERMS.write().unwrap();
         if term_table.should_collect() {
