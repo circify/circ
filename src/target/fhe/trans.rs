@@ -268,10 +268,9 @@ impl ToFHE {
 
                 for ival in arr.key_sort.elems_iter_values().take(arr.size) {
                     let val = arr.select(&ival);
-                    match val.clone() {
-                        Value::Array(_) => panic!("Const arr does not support multi-dim arrays"),
-                        _ => (),
-                    };
+                    if let Value::Array(_) = val.clone() {
+                        panic!("Const arr does not support multi-dim arrays")
+                    }
                     self.bytecode_output.push(format!(" {}", val));
                 }
 
