@@ -26,3 +26,15 @@ function fhe_test {
 # build boolean tests
 fhe_test ./examples/C/fhe/unit_tests/boolean_tests/2pc_boolean_and.c
 fhe_test ./examples/C/fhe/unit_tests/boolean_tests/2pc_boolean_or.c
+fhe_test ./examples/C/fhe/unit_tests/boolean_tests/2pc_boolean_equals.c
+
+# build nary boolean tests
+fhe_test ./examples/C/fhe/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.c
+
+# build arithmetic tests
+fhe_test ./examples/C/fhe/unit_tests/arithmetic_tests/2pc_add.c
+fhe_test ./examples/C/fhe/unit_tests/arithmetic_tests/2pc_mult.c
+fhe_test ./examples/C/fhe/unit_tests/arithmetic_tests/2pc_mult_add_pub.c
+
+# build nary arithmetic tests
+fhe_test ./examples/C/fhe/unit_tests/nary_arithmetic_tests/2pc_nary_arithmetic_add.c

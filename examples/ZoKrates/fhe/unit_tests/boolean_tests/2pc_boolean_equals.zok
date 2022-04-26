@@ -1,2 +1,2 @@
-def main(private<1> bool a, private<2> bool b) -> bool:
+def main(private bool a, private bool b) -> bool:
     return a == b

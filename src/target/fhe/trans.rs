@@ -9,6 +9,7 @@ use std::path::Path;
 enum EmbeddedTerm {
     Bool,
     Bv,
+    Arr,
 }
 
 struct ToFHE {
@@ -58,6 +59,7 @@ impl ToFHE {
                     }
                 }
             }
+
             _ => panic!("Term {} is not of type Var", t),
         }
     }
@@ -73,29 +75,36 @@ impl ToFHE {
         let s = self.term_to_stext_cnt.get(&t).unwrap();
         let a = self.term_to_stext_cnt.get(&t.cs[0]).unwrap();
         let b = self.term_to_stext_cnt.get(&t.cs[1]).unwrap();
-        let op = "EQ";
-        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-        self.bytecode_output.push(line);
+        let op;
         match check(&a_term) {
             Sort::Bool => {
                 self.check_bool(&a_term);
                 self.check_bool(&b_term);
                 self.cache.insert(t, EmbeddedTerm::Bool);
+                op = "B_EQ";
             }
             Sort::BitVector(_) => {
                 self.check_bv(&a_term);
                 self.check_bv(&b_term);
                 self.cache.insert(t, EmbeddedTerm::Bool);
+                op = "V_EQ";
             }
             e => panic!("Unimplemented sort for Eq: {:?}", e),
         }
+        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+        self.bytecode_output.push(line);
     }
 
     /// Given term `t`, type-check `t` is of type Bool
     fn check_bool(&self, t: &Term) {
-        self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing expression for {:?}", t));
+            .unwrap_or_else(|| panic!("Missing expression for {:?}", t))
+        {
+            EmbeddedTerm::Bool => (),
+            _ => panic!("Check_bool failed"),
+        };
     }
 
     fn embed_bool(&mut self, t: Term) {
@@ -106,18 +115,18 @@ impl ToFHE {
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToFHE::get_var_name(&t);
                     let enc = self.unwrap_vis(name);
-                    let share_cnt = self.term_to_stext_cnt.get(&t).unwrap();
                     let op = "IN";
 
-                    let line = format!("2 1 {} {} {} {}\n", term_name, enc, share_cnt, op);
+                    let line = format!("2 1 {} {} {} {}\n", term_name, enc, s, op);
                     self.bytecode_output.insert(0, line);
+                    self.inputs.insert(t.clone());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(t.clone(), EmbeddedTerm::Bool);
                 }
             }
             Op::Const(Value::Bool(b)) => {
-                let op = "CONS_bool";
+                let op = "CONS";
                 let line = format!("1 1 {} {} {}\n", *b as i32, s, op);
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bool);
@@ -164,9 +173,14 @@ impl ToFHE {
 
     /// Given term `t`, type-check `t` is of type Bv
     fn check_bv(&self, t: &Term) {
-        self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing expression for {:?}", t));
+            .unwrap_or_else(|| panic!("Missing expression for {:?}", t))
+        {
+            EmbeddedTerm::Bv => (),
+            _ => panic!("Check_bv failed"),
+        };
     }
 
     fn embed_bv(&mut self, t: Term) {
@@ -177,24 +191,115 @@ impl ToFHE {
                 if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
                     let term_name = ToFHE::get_var_name(&t);
                     let enc = self.unwrap_vis(name);
-                    let stext_cnt = self.term_to_stext_cnt.get(&t).unwrap();
                     let op = "IN";
 
-                    let line = format!("2 1 {} {} {} {}\n", term_name, enc, stext_cnt, op);
+                    let line = format!("2 1 {} {} {} {}\n", term_name, enc, s, op);
                     self.bytecode_output.insert(0, line);
+                    self.inputs.insert(t.clone());
                 }
                 if !self.cache.contains_key(&t) {
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                 }
             }
             Op::Const(Value::BitVector(b)) => {
-                let op = "CONS_bv";
+                let op = "CONS";
                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
+            Op::BvNaryOp(o) => {
+                self.bytecode_output.push(format!("{} 1", t.cs.len()));
+
+                for cterm in &t.cs {
+                    self.check_bv(cterm);
+                    self.bytecode_output
+                        .push(format!(" {}", self.term_to_stext_cnt.get(cterm).unwrap()));
+                }
+
+                let op = match o {
+                    BvNaryOp::Xor => "V_XOR",
+                    BvNaryOp::Or => "V_OR",
+                    BvNaryOp::And => "V_AND",
+                    BvNaryOp::Add => "ADD",
+                    BvNaryOp::Mul => "MUL",
+                };
+
+                self.bytecode_output.push(format!(" {} {}\n", s, op));
+
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+            }
             _ => {
                 panic!("Non-field in embed_bv: {:?}", t);
+            }
+        }
+    }
+
+    // Given term `t`, type-check `t` is of type arr
+    fn check_arr(&self, t: &Term) {
+        match self
+            .cache
+            .get(t)
+            .unwrap_or_else(|| panic!("Missing expression for {:?}", t))
+        {
+            EmbeddedTerm::Arr => (),
+            _ => panic!("Check_arr failed"),
+        };
+    }
+
+    fn embed_arr(&mut self, t: Term) {
+        let s = self.term_to_stext_cnt.get(&t).unwrap();
+        match &t.op {
+            Op::Var(name, Sort::Array(_, _, len)) => {
+                // write to bytecode file
+                if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
+                    let term_name = ToFHE::get_var_name(&t);
+                    let enc = self.unwrap_vis(name);
+                    let op = "ARR_IN";
+
+                    let line = format!("3 1 {} {} {} {} {}\n", term_name, enc, len, s, op);
+                    self.bytecode_output.insert(0, line);
+                }
+                if !self.cache.contains_key(&t) {
+                    self.cache.insert(t.clone(), EmbeddedTerm::Arr);
+                }
+            }
+            Op::Const(Value::Array(arr)) => {
+                self.bytecode_output.push(format!("{} 1", arr.size));
+
+                for ival in arr.key_sort.elems_iter_values().take(arr.size) {
+                    let val = arr.select(&ival);
+                    match val.clone() {
+                        Value::Array(_) => panic!("Const arr does not support multi-dim arrays"),
+                        _ => (),
+                    };
+                    self.bytecode_output.push(format!(" {}", val));
+                }
+
+                let op = "ARR_CONS";
+                let line = format!("{} {}\n", s, op);
+                self.bytecode_output.push(line);
+                self.cache.insert(t.clone(), EmbeddedTerm::Arr);
+            }
+            Op::Map(op) => {
+                self.bytecode_output.push(format!("{} 1", t.cs.len()));
+                for cterm in &t.cs {
+                    self.check_arr(cterm);
+                    self.bytecode_output
+                        .push(format!(" {}", self.term_to_stext_cnt.get(cterm).unwrap()));
+                }
+                let opstr = match **op {
+                    Op::BoolNaryOp(BoolNaryOp::Or) => "B_OR",
+                    Op::BoolNaryOp(BoolNaryOp::And) => "B_AND",
+                    Op::BoolNaryOp(BoolNaryOp::Xor) => "B_XOR",
+                    Op::BvNaryOp(BvNaryOp::Add) => "ADD",
+                    Op::BvNaryOp(BvNaryOp::Mul) => "MUL",
+                    _ => panic!("Map does not support operation {}", op),
+                };
+                self.bytecode_output.push(format!(" {} {}\n", s, opstr));
+                self.cache.insert(t.clone(), EmbeddedTerm::Arr);
+            }
+            _ => {
+                panic!("Non-field in embed_arr: {:?}", t);
             }
         }
     }
@@ -208,6 +313,9 @@ impl ToFHE {
                 Sort::BitVector(_) => {
                     self.embed_bv(c);
                 }
+                Sort::Array(..) => {
+                    self.embed_arr(c);
+                }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
         }
@@ -217,10 +325,20 @@ impl ToFHE {
     fn lower(&mut self, t: Term) {
         self.embed(t.clone());
 
-        let op = "OUT";
-        let s = self.term_to_stext_cnt.get(&t).unwrap();
-        let line = format!("1 0 {} {}\n", s, op);
-        self.bytecode_output.push(line);
+        match check(&t) {
+            Sort::Array(_, _, len) => {
+                let op = "ARR_OUT";
+                let s = self.term_to_stext_cnt.get(&t).unwrap();
+                let line = format!("2 0 {} {} {}\n", s, len, op);
+                self.bytecode_output.push(line);
+            }
+            _ => {
+                let op = "OUT";
+                let s = self.term_to_stext_cnt.get(&t).unwrap();
+                let line = format!("1 0 {} {}\n", s, op);
+                self.bytecode_output.push(line);
+            }
+        }
 
         // write lines to file
         write_lines_to_file(&self.bytecode_path, &self.bytecode_output);
