@@ -1,6 +1,6 @@
 //! Exporting our R1CS to bellman
 use ::bellman::{Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
-use ff::{PrimeField, PrimeFieldBits};
+use ff::{Field, PrimeField};
 use gmp_mpfr_sys::gmp::limb_t;
 use log::debug;
 use std::collections::HashMap;
@@ -9,10 +9,13 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
 
+use rug::integer::{IsPrime, Order};
+use rug::Integer;
+
 use super::*;
 
 /// Convert a (rug) integer to a prime field element.
-fn int_to_ff<F: PrimeField>(i: &Integer) -> F {
+fn int_to_ff<F: PrimeField>(i: Integer) -> F {
     let mut accumulator = F::from(0);
     let limb_bits = (std::mem::size_of::<limb_t>() as u64) << 3;
     let limb_base = F::from(2).pow_vartime(&[limb_bits]);
@@ -33,56 +36,66 @@ fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
 ) -> LinearCombination<F> {
     let mut lc_bellman = zero_lc;
     // This zero test is needed until https://github.com/zkcrypto/bellman/pull/78 is resolved
-    if lc.constant != 0 {
-        lc_bellman = lc_bellman + (int_to_ff(&lc.constant), CS::one());
+    if !lc.constant.is_zero() {
+        lc_bellman = lc_bellman + (int_to_ff((&lc.constant).into()), CS::one());
     }
     for (v, c) in &lc.monomials {
         // ditto
-        if c != &0 {
-            lc_bellman = lc_bellman + (int_to_ff(c), *vars.get(v).unwrap());
+        if !c.is_zero() {
+            lc_bellman = lc_bellman + (int_to_ff(c.into()), *vars.get(v).unwrap());
         }
     }
     lc_bellman
 }
 
-fn modulus_as_int<F: PrimeFieldBits>() -> Integer {
-    let mut bits = F::char_le_bits().to_bitvec();
-    let mut acc = Integer::from(0);
-    while let Some(b) = bits.pop() {
-        acc <<= 1;
-        acc += b as u8;
+// hmmm... this should work essentially all the time, I think
+fn get_modulus<F: Field + PrimeField>() -> Integer {
+    let neg_1_f = -F::one();
+    let p_lsf: Integer = Integer::from_digits(neg_1_f.to_repr().as_ref(), Order::Lsf) + 1;
+    let p_msf: Integer = Integer::from_digits(neg_1_f.to_repr().as_ref(), Order::Msf) + 1;
+    if p_lsf.is_probably_prime(30) != IsPrime::No {
+        p_lsf
+    } else if p_msf.is_probably_prime(30) != IsPrime::No {
+        p_msf
+    } else {
+        panic!("could not determine ff::Field byte order")
     }
-    acc
 }
 
-impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S> {
+impl<'a, F: PrimeField, S: Display + Eq + Hash + Ord> Circuit<F> for &'a R1cs<S> {
+    #[track_caller]
     fn synthesize<CS>(self, cs: &mut CS) -> std::result::Result<(), SynthesisError>
     where
         CS: ConstraintSystem<F>,
     {
-        let f_mod = modulus_as_int::<F>();
+        let f_mod = get_modulus::<F>();
         assert_eq!(
-            *self.modulus, f_mod,
-            "\nR1CS has modulus \n{},\n but Bellman CS expectes \n{}",
-            self.modulus, f_mod
+            self.modulus.modulus(),
+            &f_mod,
+            "\nR1CS has modulus \n{},\n but Bellman CS expects \n{}",
+            self.modulus,
+            f_mod
         );
-        let mut uses = self
-            .idxs_signals
-            .iter()
-            .map(|(i, _)| (*i, 0))
-            .collect::<HashMap<usize, usize>>();
+        let mut uses = HashMap::with_capacity(self.next_idx);
         for (a, b, c) in self.constraints.iter() {
-            [a, b, c].iter().for_each(|x| {
-                x.monomials
-                    .iter()
-                    .for_each(|(i, _)| *uses.get_mut(i).unwrap() += 1)
+            [a, b, c].iter().for_each(|y| {
+                y.monomials.keys().for_each(|k| {
+                    uses.get_mut(k)
+                        .map(|i| {
+                            *i += 1;
+                        })
+                        .or_else(|| {
+                            uses.insert(*k, 1);
+                            None
+                        });
+                })
             });
         }
-        let mut vars = HashMap::default();
+        let mut vars = HashMap::with_capacity(self.next_idx);
         for i in 0..self.next_idx {
             if let Some(s) = self.idxs_signals.get(&i) {
                 //for (_i, s) in self.idxs_signals.get() {
-                if uses.get(&i).unwrap() > &0 {
+                if uses.get(&i).is_some() {
                     let name_f = || format!("{}", s);
                     let val_f = || {
                         Ok({
@@ -92,7 +105,7 @@ impl<'a, F: PrimeField + PrimeFieldBits, S: Display + Eq + Hash + Ord> Circuit<F
                                 .expect("missing values")
                                 .get(&i)
                                 .unwrap();
-                            let ff_val = int_to_ff(i_val);
+                            let ff_val = int_to_ff(i_val.into());
                             debug!("value : {} -> {:?} ({})", s, ff_val, i_val);
                             ff_val
                         })
@@ -134,7 +147,7 @@ pub fn parse_instance<P: AsRef<Path>, F: PrimeField>(path: P) -> Vec<F> {
         .map(|line| {
             let s = line.unwrap();
             let i = Integer::from_str(s.trim()).unwrap();
-            int_to_ff(&i)
+            int_to_ff(i)
         })
         .collect()
 }
@@ -168,13 +181,13 @@ mod test {
 
     #[quickcheck]
     fn int_to_ff_random(BlsScalar(i): BlsScalar) -> bool {
-        let by_fn = int_to_ff::<Scalar>(&i);
+        let by_fn = int_to_ff::<Scalar>(i.clone());
         let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
         by_fn == by_str
     }
 
     fn convert(i: Integer) {
-        let by_fn = int_to_ff::<Scalar>(&i);
+        let by_fn = int_to_ff::<Scalar>(i.clone());
         let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
         assert_eq!(by_fn, by_str);
     }

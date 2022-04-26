@@ -1,9 +1,10 @@
 //! Distributions over terms (useful for fuzz testing)
 
 use super::*;
+
+use circ_fields::{FieldT, FieldV};
 use rand::{distributions::Distribution, prelude::SliceRandom, Rng};
 use std::iter::repeat;
-use std::sync::Arc;
 
 // A distribution of boolean terms with some size.
 // All subterms are booleans.
@@ -72,7 +73,7 @@ impl rand::distributions::Distribution<Term> for PureBoolDist {
 pub(crate) struct FixedSizeDist {
     pub size: usize,
     pub bv_width: Option<usize>,
-    pub pf_mod: Option<Arc<Integer>>,
+    pub pf_t: Option<FieldT>,
     pub tuples: bool,
     pub sort: Sort,
 }
@@ -198,7 +199,7 @@ impl FixedSizeDist {
                 if let Some(w) = &self.bv_width {
                     sort_choices.push(Sort::BitVector(*w));
                 }
-                if let Some(m) = &self.pf_mod {
+                if let Some(m) = &self.pf_t {
                     sort_choices.push(Sort::Field(m.clone()));
                 }
                 let s = sort_choices.choose(rng).unwrap();
@@ -243,7 +244,7 @@ impl FixedSizeDist {
     fn sample_sort<R: Rng + ?Sized>(&self, rng: &mut R, max_size: usize) -> Sort {
         match rng.gen_range(0..=3) {
             0 if self.bv_width.is_some() => Sort::BitVector(self.bv_width.unwrap()),
-            1 if self.pf_mod.is_some() => Sort::Field(self.pf_mod.clone().unwrap()),
+            1 if self.pf_t.is_some() => Sort::Field(self.pf_t.clone().unwrap()),
             2 if self.tuples && max_size > 1 => self.sample_tuple_sort(1, max_size - 1, rng),
             _ => Sort::Bool,
         }
@@ -263,16 +264,11 @@ impl rand::distributions::Distribution<BitVector> for UniformBitVector {
     }
 }
 
-pub(crate) struct UniformFieldElem(pub Arc<Integer>);
+pub(crate) struct UniformFieldV<'a>(&'a FieldT);
 
-impl rand::distributions::Distribution<FieldElem> for UniformFieldElem {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> FieldElem {
-        let mut rug_rng = rug::rand::RandState::new_mersenne_twister();
-        rug_rng.seed(&Integer::from(rng.next_u32()));
-        FieldElem::new(
-            Integer::from(self.0.random_below_ref(&mut rug_rng)),
-            self.0.clone(),
-        )
+impl<'a> rand::distributions::Distribution<FieldV> for UniformFieldV<'a> {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> FieldV {
+        self.0.random_v(rng)
     }
 }
 
@@ -284,7 +280,7 @@ impl<'a> rand::distributions::Distribution<Value> for UniformValue<'a> {
             Sort::Bool => Value::Bool(rng.gen()),
             Sort::F32 => Value::F32(rng.gen()),
             Sort::F64 => Value::F64(rng.gen()),
-            Sort::Field(m) => Value::Field(UniformFieldElem(m.clone()).sample(rng)),
+            Sort::Field(fty) => Value::Field(UniformFieldV(fty).sample(rng)),
             Sort::BitVector(w) => Value::BitVector(UniformBitVector(*w).sample(rng)),
             Sort::Tuple(sorts) => {
                 Value::Tuple(sorts.iter().map(|s| UniformValue(s).sample(rng)).collect())
@@ -320,6 +316,8 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 pub mod test {
     use super::*;
 
+    use crate::util::field::DFL_T;
+
     use fxhash::FxHashMap as HashMap;
     use quickcheck::{Arbitrary, Gen};
     use rand::distributions::Distribution;
@@ -339,7 +337,7 @@ pub mod test {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             let d = FixedSizeDist {
                 bv_width: Some(8),
-                pf_mod: Some(Arc::new(Integer::from(super::field::TEST_FIELD))),
+                pf_t: Some(DFL_T.clone()),
                 tuples: true,
                 size: g.size(),
                 sort: Sort::Bool,
@@ -402,9 +400,9 @@ pub mod test {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             let d = FixedSizeDist {
                 bv_width: Some(8),
+                pf_t: Default::default(),
                 tuples: true,
                 size: g.size(),
-                pf_mod: Some(Arc::new(Integer::from(super::field::TEST_FIELD))),
                 sort: Sort::Bool,
             };
             let t = d.sample(&mut rng);

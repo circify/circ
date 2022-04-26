@@ -97,7 +97,7 @@ impl ZStdLib {
     /// check if this path is the EMBED prototypes path
     pub fn is_embed<P: AsRef<Path>>(&self, p: P) -> bool {
         p.as_ref().starts_with(&self.path)
-            && p.as_ref().file_stem().map(|s| s.to_str()).flatten() == Some("EMBED")
+            && p.as_ref().file_stem().and_then(|s| s.to_str()) == Some("EMBED")
     }
 }
 

@@ -8,37 +8,46 @@ struct LinReducer<S: Eq + Hash> {
     r1cs: R1cs<S>,
     uses: HashMap<usize, HashSet<usize>>,
     queue: OnceQueue<usize>,
+    /// The maximum size LC (number of non-constant monomials)
+    /// that will be used for propagation
+    lc_size_thresh: usize,
 }
 
 impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
-    fn new(mut r1cs: R1cs<S>) -> Self {
-        let sigs: HashSet<usize> = r1cs
-            .constraints
-            .iter()
-            .flat_map(|(a, b, c)| {
-                a.monomials
-                    .keys()
-                    .chain(b.monomials.keys().chain(c.monomials.keys()))
-            })
-            .cloned()
-            .collect();
-        let mut uses: HashMap<usize, HashSet<usize>> =
-            sigs.into_iter().map(|i| (i, HashSet::default())).collect();
-        for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
-            let mut add = |y: &Lc| {
-                for x in y.monomials.keys() {
-                    uses.get_mut(x).unwrap().insert(i);
-                }
-            };
-            add(a);
-            add(b);
-            add(c);
-        }
+    fn new(mut r1cs: R1cs<S>, lc_size_thresh: usize) -> Self {
+        let uses = LinReducer::gen_uses(&r1cs);
         let queue = (0..r1cs.constraints.len()).collect::<OnceQueue<usize>>();
         for c in &mut r1cs.constraints {
             normalize(c);
         }
-        Self { r1cs, uses, queue }
+        Self {
+            r1cs,
+            uses,
+            queue,
+            lc_size_thresh,
+        }
+    }
+
+    // generate a new uses hash
+    fn gen_uses(r1cs: &R1cs<S>) -> HashMap<usize, HashSet<usize>> {
+        let mut uses: HashMap<usize, HashSet<usize>> =
+            HashMap::with_capacity_and_hasher(r1cs.next_idx, Default::default());
+        let mut add = |i: usize, y: &Lc| {
+            for x in y.monomials.keys() {
+                uses.get_mut(x).map(|m| m.insert(i)).or_else(|| {
+                    let mut m: HashSet<usize> = Default::default();
+                    m.insert(i);
+                    uses.insert(*x, m);
+                    None
+                });
+            }
+        };
+        for (i, (a, b, c)) in r1cs.constraints.iter().enumerate() {
+            add(i, a);
+            add(i, b);
+            add(i, c);
+        }
+        uses
     }
 
     /// Substitute `val` for `var` in constraint with id `con_id`.
@@ -49,22 +58,24 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
         let uses = &mut self.uses;
         let mut do_in = |a: &mut Lc| {
             if let Some(sc) = a.monomials.remove(&var) {
-                a.constant += val.constant.clone() * &sc;
-                a.constant.rem_floor_assign(&*val.modulus);
+                assert_eq!(&a.modulus, &val.modulus);
+                a.constant += sc.clone() * &val.constant;
+                let tot = a.monomials.len() + val.monomials.len();
+                if tot > a.monomials.capacity() {
+                    a.monomials.reserve(tot - a.monomials.capacity());
+                }
                 for (i, v) in &val.monomials {
                     match a.monomials.entry(*i) {
                         Entry::Occupied(mut e) => {
                             let m = e.get_mut();
-                            *m += v.clone() * &sc;
-                            m.rem_floor_assign(&*val.modulus);
-                            if e.get() == &Integer::from(0) {
+                            *m += sc.clone() * v;
+                            if e.get().is_zero() {
                                 uses.get_mut(i).unwrap().remove(&con_id);
                                 e.remove_entry();
                             }
                         }
                         Entry::Vacant(e) => {
-                            let m = e.insert(v.clone() * &sc);
-                            m.rem_floor_assign(&*val.modulus);
+                            e.insert(sc.clone() * v);
                             uses.get_mut(i).unwrap().insert(con_id);
                         }
                     }
@@ -105,21 +116,23 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
             if let Some((var, lc)) =
                 as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs.public_idxs)
             {
-                debug!(
-                    "Elim: {} -> {}",
-                    self.r1cs.idxs_signals.get(&var).unwrap(),
-                    self.r1cs.format_lc(&lc)
-                );
-                self.clear_constraint(con_id);
-                for use_id in self.uses[&var].clone() {
-                    if self.sub_in(var, &lc, use_id)
-                        && (self.r1cs.constraints[use_id].0.is_zero()
-                            || self.r1cs.constraints[use_id].1.is_zero())
-                    {
-                        self.queue.push(use_id);
+                if lc.monomials.len() < self.lc_size_thresh {
+                    debug!(
+                        "Elim: {} -> {}",
+                        self.r1cs.idxs_signals.get(&var).unwrap(),
+                        self.r1cs.format_lc(&lc)
+                    );
+                    self.clear_constraint(con_id);
+                    for use_id in self.uses[&var].clone() {
+                        if self.sub_in(var, &lc, use_id)
+                            && (self.r1cs.constraints[use_id].0.is_zero()
+                                || self.r1cs.constraints[use_id].1.is_zero())
+                        {
+                            self.queue.push(use_id);
+                        }
                     }
+                    debug_assert_eq!(0, self.uses[&var].len());
                 }
-                debug_assert_eq!(0, self.uses[&var].len());
             }
         }
         self.r1cs.constraints.retain(|c| !constantly_true(c));
@@ -133,8 +146,8 @@ fn as_linear_sub((a, b, c): &(Lc, Lc, Lc), public: &HashSet<usize>) -> Option<(u
             if !public.contains(i) {
                 let mut lc = c.clone();
                 let v = lc.monomials.remove(i).unwrap();
-                lc *= &(-v.invert(&*lc.modulus).unwrap());
-                return Some((*i, lc));
+                lc *= v.recip();
+                return Some((*i, -lc));
             }
         }
         None
@@ -159,14 +172,22 @@ fn normalize((a, b, c): &mut (Lc, Lc, Lc)) {
 
 fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
     match (a.as_const(), b.as_const(), c.as_const()) {
-        (Some(x), Some(y), Some(z)) => (x.clone() * y - z).rem_floor(&*a.modulus) == 0,
+        (Some(x), Some(y), Some(z)) => (x.clone() * y - z).is_zero(),
         _ => false,
     }
 }
 
 /// Attempt to shrink this system by reducing linearities.
-pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> R1cs<S> {
-    LinReducer::new(r1cs).run()
+///
+/// ## Parameters
+///
+///   * `lc_size_thresh`: the maximum size LC (number of non-constant monomials) that will be used
+///   for propagation. `None` means no size limit.
+pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(
+    r1cs: R1cs<S>,
+    lc_size_thresh: Option<usize>,
+) -> R1cs<S> {
+    LinReducer::new(r1cs, lc_size_thresh.unwrap_or(usize::MAX)).run()
 }
 
 #[cfg(test)]
@@ -176,6 +197,7 @@ mod test {
 
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
+    use rand::SeedableRng;
 
     #[derive(Clone, Debug)]
     pub struct SatR1cs(R1cs<String>);
@@ -183,33 +205,28 @@ mod test {
     impl Arbitrary for SatR1cs {
         fn arbitrary(g: &mut Gen) -> Self {
             let m = 101;
-            let modulus = Integer::from(m);
+            let modulus = FieldT::from(Integer::from(m));
             let n_vars = g.size() + 1;
             let vars: Vec<_> = (0..n_vars).map(|i| format!("v{}", i)).collect();
             let mut r1cs = R1cs::new(modulus.clone(), true);
-            let mut rug_rng = rug::rand::RandState::new_mersenne_twister();
-            let s: u32 = Arbitrary::arbitrary(g);
-            rug_rng.seed(&Integer::from(s));
+            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             for v in &vars {
-                r1cs.add_signal(v.clone(), Some(modulus.clone().random_below(&mut rug_rng)));
+                r1cs.add_signal(v.clone(), Some(modulus.random_v(&mut rng)));
             }
             for _ in 0..(2 * g.size()) {
-                let mut ac: isize = Arbitrary::arbitrary(g);
-                ac.rem_floor_assign(m);
+                let ac: isize = <isize as Arbitrary>::arbitrary(g) % m;
                 let a = if Arbitrary::arbitrary(g) {
                     r1cs.signal_lc(g.choose(&vars[..]).unwrap())
                 } else {
                     r1cs.zero()
                 } + ac;
-                let mut bc: isize = Arbitrary::arbitrary(g);
-                bc.rem_floor_assign(m);
+                let bc: isize = <isize as Arbitrary>::arbitrary(g) % m;
                 let b = if Arbitrary::arbitrary(g) {
                     r1cs.signal_lc(g.choose(&vars[..]).unwrap())
                 } else {
                     r1cs.zero()
                 } + bc;
-                let mut cc: isize = Arbitrary::arbitrary(g);
-                cc.rem_floor_assign(m);
+                let cc: isize = <isize as Arbitrary>::arbitrary(g) % m;
                 let mut c = if Arbitrary::arbitrary(g) {
                     r1cs.signal_lc(g.choose(&vars[..]).unwrap())
                 } else {
@@ -233,7 +250,7 @@ mod test {
 
     #[quickcheck]
     fn random(SatR1cs(r1cs): SatR1cs) {
-        let r1cs2 = reduce_linearities(r1cs);
+        let r1cs2 = reduce_linearities(r1cs, None);
         r1cs2.check_all();
     }
 }
