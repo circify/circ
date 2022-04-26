@@ -319,10 +319,7 @@ impl<'ast> ZGen<'ast> {
                 } else {
                     assert!(args.iter().all(|t| {
                         let t_sort = t.type_();
-                        match t_sort {
-                            Ty::Array(_, _) => true,
-                            _ => false,
-                        }
+                        matches!(t_sort, Ty::Array(_, _))
                     }));
                     vector_op(BV_ADD, args[0].clone(), args[1].clone())
                 }
@@ -913,7 +910,6 @@ impl<'ast> ZGen<'ast> {
         } else {
             debug!("Expr: {}", e.span().as_str());
         }
-
         match e {
             ast::Expression::Ternary(u) => {
                 match self.expr_impl_::<true>(&u.first).ok().and_then(const_bool) {

@@ -918,7 +918,7 @@ pub fn vector_op(op: Op, a: T, b: T) -> Result<T, String> {
                 panic!("Mismatched array types");
             }
         }
-        _ => Err(format!("Cannot do vector_add on non-array types")),
+        _ => Err("Cannot do vector_add on non-array types".to_string()),
     }
 }
 
