@@ -75,3 +75,7 @@ def u16_to_u32(u16 i) -> u32:
 
 def u8_to_u16(u8 i) -> u16:
     return 0u16
+
+// vector functions
+def vector_add<N>(u32[N] a, u32[N] b) -> u32[N]:
+    return [0; N]

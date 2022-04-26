@@ -268,7 +268,7 @@ impl<'ast> ZGen<'ast> {
             "bit_array_le" => {
                 if args.len() != 2 {
                     Err(format!(
-                        "Got {} args to EMBED/bit_array_le, expected 1",
+                        "Got {} args to EMBED/bit_array_le, expected 2",
                         args.len()
                     ))
                 } else if generics.len() != 1 {
@@ -303,6 +303,28 @@ impl<'ast> ZGen<'ast> {
                     ))
                 } else {
                     Ok(uint_lit(DFL_T.modulus().significant_bits(), 32))
+                }
+            }
+            "vector_add" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/vector_add, expected 2",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/vector_add, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    assert!(args.iter().all(|t| {
+                        let t_sort = t.type_();
+                        match t_sort {
+                            Ty::Array(_, _) => true,
+                            _ => false,
+                        }
+                    }));
+                    vector_op(BV_ADD, args[0].clone(), args[1].clone())
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),

@@ -908,6 +908,20 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
     ))
 }
 
+pub fn vector_op(op: Op, a: T, b: T) -> Result<T, String> {
+    match (&a.ty, &b.ty) {
+        (Ty::Array(a_s, a_ty), Ty::Array(b_s, b_ty)) => {
+            if a_s == b_s && a_ty == b_ty {
+                let t = term![Op::Map(Box::new(op)); a.term, b.term];
+                Ok(T::new(Ty::Array(*a_s, a_ty.clone()), t))
+            } else {
+                panic!("Mismatched array types");
+            }
+        }
+        _ => Err(format!("Cannot do vector_add on non-array types")),
+    }
+}
+
 pub struct ZSharp {
     values: Option<HashMap<String, Integer>>,
 }

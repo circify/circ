@@ -1,0 +1,6 @@
+from "EMBED" import vector_add
+
+def main() -> u32[5]:
+    u32[5] a = [1, 2, 3, 4, 5]
+    u32[5] b = [2, 3, 4, 5, 6]
+    return vector_add(a,b)
