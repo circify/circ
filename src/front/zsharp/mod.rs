@@ -318,7 +318,9 @@ impl<'ast> ZGen<'ast> {
                     ))
                 } else {
                     assert!(args.iter().all(|t| matches!(t.type_(), Ty::Array(_, _))));
-                    vector_op(BV_ADD, args[0].clone(), args[1].clone())
+                    let a = args.pop().unwrap();
+                    let b = args.pop().unwrap();
+                    vector_op(BV_ADD, a, b)
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),
