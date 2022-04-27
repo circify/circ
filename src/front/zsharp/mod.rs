@@ -317,10 +317,7 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    assert!(args.iter().all(|t| {
-                        let t_sort = t.type_();
-                        matches!(t_sort, Ty::Array(_, _))
-                    }));
+                    assert!(args.iter().all(|t| matches!(t.type_(), Ty::Array(_, _))));
                     vector_op(BV_ADD, args[0].clone(), args[1].clone())
                 }
             }

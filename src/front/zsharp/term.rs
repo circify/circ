@@ -915,7 +915,7 @@ pub fn vector_op(op: Op, a: T, b: T) -> Result<T, String> {
                 let t = term![Op::Map(Box::new(op)); a.term, b.term];
                 Ok(T::new(Ty::Array(*a_s, a_ty.clone()), t))
             } else {
-                panic!("Mismatched array types");
+                panic!("Mismatched array types (this is a bug: type checking should have caught this!)");
             }
         }
         _ => Err("Cannot do vector_add on non-array types".to_string()),
