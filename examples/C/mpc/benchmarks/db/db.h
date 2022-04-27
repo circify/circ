@@ -27,15 +27,23 @@ typedef struct
 
 
 // Stride start = 1
+// DT sum_tree(DT *data, int len, int stride) {
+// 	if(stride > len) {
+// 		return data[0];
+// 	} else {
+// 		for(int i = 0; i + stride < len; i+=stride<<1) {
+// 			data[i]+=data[i+stride];
+// 		}
+// 		return sum_tree(data, len, stride<<1);
+// 	}
+// }
+
 DT sum_tree(DT *data, int len, int stride) {
-	if(stride > len) {
-		return data[0];
-	} else {
-		for(int i = 0; i + stride < len; i+=stride<<1) {
-			data[i]+=data[i+stride];
-		}
-		return sum_tree(data, len, stride<<1);
+	int sum = 0;
+	for (int i = 0; i < len; i++) {
+		sum += data[i];
 	}
+	return sum;
 }
 
 // Counts how many non-zero values are in an array

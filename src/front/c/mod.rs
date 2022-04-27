@@ -315,13 +315,16 @@ impl CGen {
     pub fn get_fn_info(&mut self, fn_def: &FunctionDefinition) -> FnInfo {
         let name = name_from_func(fn_def);
         let ret_ty = self.ret_ty_from_func(fn_def);
-        let args = args_from_func(fn_def).unwrap();
+        let args = match args_from_func(fn_def) {
+            Some(args) => args.to_vec(),
+            None => vec![],
+        };
         let body = body_from_func(fn_def);
 
         FnInfo {
             name,
             ret_ty,
-            args: args.to_vec(),
+            args: args,
             body,
         }
     }

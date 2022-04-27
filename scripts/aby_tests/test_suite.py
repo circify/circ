@@ -1,25 +1,9 @@
 new_tests = [
-    # [
-    #     "Structs",
-    #     "2pc_structs",
-    #     "./scripts/aby_tests/test_inputs/loop.txt",
-    # ], 
     [
         "new",
-        "2pc_test",
-        # "./scripts/aby_tests/test_inputs/test.txt",
+        "playground",
         "./scripts/aby_tests/test_inputs/add.txt",
     ], 
-    # [
-    #     "biomatch - 1",
-    #     "2pc_test",
-    #     "./scripts/aby_tests/test_inputs/biomatch_1.txt",
-    # ],   
-    # [
-    #     "biomatch - 2",
-    #     "2pc_test",
-    #     "./scripts/aby_tests/test_inputs/biomatch_2.txt",
-    # ],   
 ]
 
 arithmetic_tests = [
@@ -580,6 +564,14 @@ gauss_tests = [
         "2pc_gauss",
         "./scripts/aby_tests/test_inputs/gauss.txt",
     ],   
+]
+
+db_tests = [
+    [
+        "db join",
+        "db_join",
+        "./scripts/aby_tests/test_inputs/db_join.txt",
+    ],  
 ]
 
 benchmark_tests = [

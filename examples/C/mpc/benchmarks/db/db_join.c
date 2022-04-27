@@ -2,15 +2,13 @@
  * Example on how to merge two data sets and to perform various analyses
  */
 
-#define LEN_A 50
-#define LEN_B 50
+#define LEN_A 5
+#define LEN_B 5
 
 #define ATT_A 2 //Number of attributes
 #define ATT_B 2
 
-
 #include "db.h"
-
 
 int cross_join(DT *OUTPUT_db, DT *a, DT *b) {
 	int id_a = 0;
@@ -91,11 +89,13 @@ DT agg_mean_tree(DT *db, int len, int att) {
 	}
 	DT mean = sum_tree(sum, len, 1);
 	int joined = db[len*att];
+	int ret;
 	if(joined > 0) {
-		return mean/joined;
+		ret = mean/joined;
 	} else {
-		return 0;
+		ret = 0;
 	}
+	return ret;
 }
 
 DT agg_mean(DT *db, int len, int att) {
