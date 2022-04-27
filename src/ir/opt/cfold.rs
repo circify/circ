@@ -250,7 +250,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     assert!(a.size == b.size);
                     let mut new_map: BTreeMap<Value, Value> = BTreeMap::new();
                     for (a_ind, a_val) in &a.map {
-                        let b_val = &b.map[&a_ind];
+                        let b_val = &b.map[a_ind];
                         let res = fold_cache(
                             &term![*op.clone(); leaf_term(Op::Const(a_val.clone())), leaf_term(Op::Const(b_val.clone()))],
                             cache,
