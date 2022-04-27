@@ -559,6 +559,7 @@ impl CGen {
             BinaryOperator::Multiply => mul,
             BinaryOperator::Divide => div,
             BinaryOperator::Equals => eq,
+            BinaryOperator::NotEquals => neq,
             BinaryOperator::Greater => ugt,
             BinaryOperator::GreaterOrEqual => uge,
             BinaryOperator::Less => ult,

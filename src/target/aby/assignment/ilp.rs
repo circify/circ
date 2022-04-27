@@ -45,6 +45,7 @@ pub fn assign(c: &ComputationSubgraph, cm: &str) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -61,6 +62,7 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -217,6 +219,7 @@ pub fn comb_selection(
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -460,10 +463,11 @@ pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
     let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
     for (t, to_ty) in smap {
         match &t.op {
-            Op::Var(..) | Op::Const(_) => {
+            Op::Var(..) | Op::Const(_) | Op::BvConcat | Op::BvExtract(..) => {
                 cost = cost + 0.0;
             }
             _ => {
+                println!("op: {}", t.op);
                 cost = cost + costs.ops.get(&t.op).unwrap().get(to_ty).unwrap();
             }
         }
@@ -486,7 +490,7 @@ pub fn calculate_node_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
     let mut cost: f64 = 0.0;
     for (t, to_ty) in smap {
         match &t.op {
-            Op::Var(..) | Op::Const(_) => {
+            Op::Var(..) | Op::Const(_) | Op::BvConcat | Op::BvExtract(..) => {
                 cost = cost + 0.0;
             }
             _ => {

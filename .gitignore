@@ -14,3 +14,4 @@ __pycache__
 .features.txt
 scripts/aby_tests/tests
 /flamegraph*.svg
+.out

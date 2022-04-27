@@ -38,8 +38,8 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
         server_proc = Popen(" ".join(server_cmd), shell=True, stdout=PIPE, stderr=PIPE)
         client_proc = Popen(" ".join(client_cmd), shell=True, stdout=PIPE, stderr=PIPE)
 
-        server_out, server_err = server_proc.communicate(timeout=30)
-        client_out, client_err = client_proc.communicate(timeout=30)
+        server_out, server_err = server_proc.communicate(timeout=1200)
+        client_out, client_err = client_proc.communicate(timeout=1200)
 
         if server_err:
             raise RuntimeError("Server error: "+server_err.decode("utf-8").strip())

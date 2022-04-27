@@ -437,6 +437,14 @@ pub fn eq(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_bin_cmp("==", Some(eq_base), Some(eq_base), a, b)
 }
 
+fn neq_base(a: Term, b: Term) -> Term {
+    term![Op::Not; term![Op::Eq; a, b]]
+}
+
+pub fn neq(a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_bin_cmp("!=", Some(neq_base), Some(neq_base), a, b)
+}
+
 fn ult_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinPred(BvBinPred::Ult); a, b]
 }

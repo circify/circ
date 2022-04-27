@@ -137,6 +137,7 @@ fn get_cost_model(cm: &str) -> CostModel {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(

@@ -468,13 +468,33 @@ impl ParitionGraph {
     }
 
     // Get Local Assignments for a ComputationSubgraph
-    fn get_local_assignments(
+    fn _get_local_assignments(
         &self,
         cs: &HashMap<usize, ComputationSubgraph>,
     ) -> HashMap<usize, SharingMap> {
         let mut local_smaps: HashMap<usize, SharingMap> = HashMap::new();
         for (i, c) in cs.iter() {
             local_smaps.insert(*i, assign(c, &self.cm));
+        }
+        local_smaps
+    }
+
+    // Get Local Assignments for a ComputationSubgraph, Multi-threading
+    fn get_local_assignments_mp(
+        &self,
+        cs: &HashMap<usize, ComputationSubgraph>,
+    ) -> HashMap<usize, SharingMap> {
+        let mut local_smaps: HashMap<usize, SharingMap> = HashMap::new();
+        let mut children = vec![];
+        for (i, c) in cs.iter() {
+            let i = i.clone();
+            let c = c.clone();
+            let cm = self.cm.clone();
+            children.push(thread::spawn(move || (i, assign(&c, &cm))));
+        }
+        for child in children {
+            let (i, smap) = child.join().unwrap();
+            local_smaps.insert(i, smap);
         }
         local_smaps
     }
@@ -626,7 +646,7 @@ pub fn get_share_map(
         false => {
             // Without mutation
             let before_assign = Instant::now();
-            let local_smaps = pg.get_local_assignments(&partitions);
+            let local_smaps = pg.get_local_assignments_mp(&partitions);
             let after_assign = Instant::now();
             println!(
                 "LOG: ILP time: {:?}",

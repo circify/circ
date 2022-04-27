@@ -439,6 +439,7 @@ pub fn to_aby(
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
