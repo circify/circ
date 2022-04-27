@@ -5,6 +5,7 @@ use crate::ir::term::*;
 use circ_fields::FieldV;
 use lazy_static::lazy_static;
 use rug::Integer;
+use std::collections::BTreeMap;
 use std::ops::DerefMut;
 use std::sync::RwLock;
 
@@ -244,6 +245,26 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     b.width() + w,
                 ))))
             }),
+            Op::Map(op) => match *op.clone() {
+                BV_ADD => match (get(0).as_array_opt(), get(1).as_array_opt()) {
+                    (Some(a), Some(b)) => {
+                        let mut arr: Vec<Term> = Vec::new();
+                        for (a_ind, a_val) in &a.map {
+                            let b_val = &b.map[&a_ind];
+                            arr.push(fold_cache(&term![*op.clone(); leaf_term(Op::Const(a_val.clone())), leaf_term(Op::Const(b_val.clone()))], cache));
+                        }
+                        let new_arr = Array::new(
+                            a.key_sort.clone(),
+                            Box::new(a.key_sort.default_value()),
+                            BTreeMap::new(),
+                            a.size,
+                        );
+                        Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            },
             _ => None,
         };
         let new_t = {
