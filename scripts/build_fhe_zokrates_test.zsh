@@ -24,18 +24,18 @@ function fhe_test {
 }
 
 # build boolean tests
-fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/2pc_boolean_and.zok
-fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/2pc_boolean_or.zok 
-fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/2pc_boolean_equals.zok 
+fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/boolean_and.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/boolean_or.zok 
+fhe_test ./examples/ZoKrates/fhe/unit_tests/boolean_tests/boolean_equals.zok 
 
 # build nary boolean tests
-fhe_test ./examples/ZoKrates/fhe/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/nary_boolean_tests/nary_boolean_and.zok
 
 # build arithmetic tests
-fhe_test ./examples/ZoKrates/fhe/unit_tests/arithmetic_tests/2pc_add.zok
-fhe_test ./examples/ZoKrates/fhe/unit_tests/arithmetic_tests/2pc_mult.zok
-fhe_test ./examples/ZoKrates/fhe/unit_tests/arithmetic_tests/2pc_mult_add_pub.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/arithmetic_tests/add.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/arithmetic_tests/mult.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/arithmetic_tests/mult_add_pub.zok
 
 # build nary arithmetic tests
-fhe_test ./examples/ZoKrates/fhe/unit_tests/nary_arithmetic_tests/2pc_nary_arithmetic_add.zok
+fhe_test ./examples/ZoKrates/fhe/unit_tests/nary_arithmetic_tests/nary_arithmetic_add.zok
 

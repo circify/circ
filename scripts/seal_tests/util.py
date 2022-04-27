@@ -34,7 +34,6 @@ def run_test(expected: List[str], cmd: List[str]) -> bool:
         if err:
             raise RuntimeError("Error: "+err.decode("utf-8").strip())
 
-        #out = out.decode("utf-8").strip()
         output = []
         for o in out.split():
             output.append(o.decode("utf-8"))
@@ -55,10 +54,6 @@ def run_tests(lang: str, tests: List[dict]):
     print(f"Running FHE tests for {lang} frontend")
     failed_test_descs = []
     num_retries = 2
-
-    run_test(['7','9','11','13','15'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/custom_tests/batch_add_bytecode.txt -t ./scripts/seal_tests/custom_tests/batch_add.txt"])
-    run_test(['6','14','24','36','50'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/custom_tests/batch_mult_bytecode.txt -t ./scripts/seal_tests/custom_tests/batch_mult.txt"])
-    run_test(['19','208','3007','40006','500005'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/custom_tests/batch_cons_bytecode.txt -t ./scripts/seal_tests/custom_tests/batch_cons.txt"])
     
     for test in tqdm(tests, leave=False, dynamic_ncols=True):
         assert len(test) == 3, "test configurations are wrong for test: "+test[0]

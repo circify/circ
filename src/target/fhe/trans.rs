@@ -135,7 +135,7 @@ impl ToFHE {
                 self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
             }
             Op::Ite => {
-                panic!("Bool Ite unimplemented");
+                unimplemented!("Bool Ite unimplemented");
             }
             Op::Not => {
                 let op = "NOT";
@@ -298,7 +298,7 @@ impl ToFHE {
                 self.cache.insert(t.clone(), EmbeddedTerm::Arr);
             }
             _ => {
-                panic!("Non-field in embed_arr: {:?}", t);
+                unimplemented!("Array operation not implemented");
             }
         }
     }

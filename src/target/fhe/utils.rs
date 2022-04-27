@@ -1,5 +1,7 @@
 //! Utility functions to write compiler output to FHE
 
+//TODO: parameterize these functions so they can be shared between ABY and SEAL backends
+
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
