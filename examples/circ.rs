@@ -20,6 +20,7 @@ use circ::ir::{
     term::extras::Letified,
 };
 use circ::target::aby::trans::to_aby;
+use circ::target::fhe::trans::to_fhe;
 #[cfg(feature = "lp")]
 use circ::target::ilp::trans::to_ilp;
 #[cfg(feature = "r1cs")]
@@ -101,6 +102,7 @@ enum Backend {
     },
     Smt {},
     Ilp {},
+    Fhe {},
     Mpc {
         #[structopt(long, default_value = "hycc", name = "cost_model")]
         cost_model: String,
@@ -187,6 +189,7 @@ fn main() {
         Backend::Ilp { .. } => Mode::Opt,
         Backend::Mpc { .. } => Mode::Mpc(options.parties),
         Backend::Smt { .. } => Mode::Proof,
+        Backend::Fhe { .. } => Mode::Fhe,
     };
     let language = determine_language(&options.frontend.language, &options.path);
     let cs = match language {
@@ -246,6 +249,7 @@ fn main() {
             ],
             // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
         ),
+        Mode::Fhe => opt(cs, vec![Opt::ConstantFold]),
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
@@ -383,6 +387,15 @@ fn main() {
             } else {
                 todo!()
             }
+        }
+        Backend::Fhe { .. } => {
+            println!("Converting to fhe");
+            let lang_str = match language {
+                DeterminedLanguage::C => "c".to_string(),
+                DeterminedLanguage::Zsharp => "zok".to_string(),
+                _ => panic!("Language isn't supported by FHE backend: {:#?}", language),
+            };
+            to_fhe(cs, &path_buf, &lang_str);
         }
         #[cfg(not(feature = "smt"))]
         Backend::Smt { .. } => {

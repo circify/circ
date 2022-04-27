@@ -1,0 +1,2 @@
+def main(private bool a, private bool b, private bool c) -> bool:
+  return a && b && c

@@ -658,7 +658,7 @@ impl<'ast> ZGen<'ast> {
         }
         if let Some(r) = self.circ_exit_fn() {
             match self.mode {
-                Mode::Mpc(_) => {
+                Mode::Mpc(_) | Mode::Fhe => {
                     let ret_term = r.unwrap_term();
                     let ret_terms = ret_term.terms();
                     self.circ
@@ -718,7 +718,7 @@ impl<'ast> ZGen<'ast> {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS,
             Some(ast::Visibility::Private(private)) => match self.mode {
-                Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
+                Mode::Fhe | Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
                         self.err(
                             format!(

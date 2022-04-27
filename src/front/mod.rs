@@ -30,6 +30,8 @@ pub trait FrontEnd {
 pub enum Mode {
     /// Generating an MPC circuit. Inputs are public or private (to a party in 1..N).
     Mpc(u8),
+    /// Generating an FHE circuit. Inputs are public (plaintext) or private (ciphertext).
+    Fhe,
     /// Generating for a proof circuit. Inputs are public of private (to the prover).
     Proof,
     /// Generating for an optimization circuit. Inputs are existentially quantified.
@@ -44,6 +46,7 @@ impl Display for Mode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match *self {
             Mode::Mpc(n) => write!(f, "{}-pc", n),
+            Mode::Fhe => write!(f, "fhe"),
             Mode::Proof => write!(f, "proof"),
             Mode::Opt => write!(f, "opt"),
             Mode::ProofOfHighValue(v) => write!(f, "proof_of_high_value({})", v),

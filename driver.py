@@ -23,6 +23,10 @@ def install(features):
             if verify_path_empty(ABY_SOURCE):
                 subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
+        if f == "seal":
+            if verify_path_empty(SEAL_SOURCE):
+                subprocess.run(["git", "clone", "https://github.com/Northrim/SEAL.git", SEAL_SOURCE])
+                subprocess.run(["./scripts/build_seal.zsh"])
 
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
@@ -76,6 +80,12 @@ def build(features):
         if "smt" in features and "zok" in features:
             subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"], check=True)
         subprocess.run(["./scripts/build_aby.zsh"], check=True)
+    if "seal" in features:
+        if "c" in features:
+            subprocess.run(["./scripts/build_fhe_c_test.zsh"], check=True)
+        if "smt" in features and "zok" in features:
+            subprocess.run(["./scripts/build_fhe_zokrates_test.zsh"], check=True)
+        subprocess.run(["./scripts/build_seal.zsh"], check=True)
 
 def test(features):
     """
@@ -101,6 +111,8 @@ def test(features):
     if "zok" in features and "smt" in features:
         if "aby" in features:
             subprocess.run(["python3", "./scripts/aby_tests/zokrates_test_aby.py"], check=True)
+        if "seal" in features:
+            subprocess.run(["python3", "./scripts/seal_tests/zokrates_test_seal.py"], check=True)
         if "lp" in features:
             subprocess.run(["./scripts/test_zok_to_ilp.zsh"], check=True)
         if "r1cs" in features:
@@ -111,6 +123,8 @@ def test(features):
     if "c" in features:
         if "aby" in features:
             subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
+        if "seal" in features:
+            subprocess.run(["python3", "./scripts/seal_tests/c_test_seal.py"], check=True)
 
 def benchmark(features):
     mode = load_mode()
@@ -165,6 +179,8 @@ def clean(features):
     print("cleaning!")
     if "aby" in features:
         subprocess.run(["./scripts/clean_aby.zsh"])
+    if "seal" in features:
+        subprocess.run(["./scripts/clean_seal.zsh"])
     subprocess.run(["rm", "-rf", "scripts/aby_tests/__pycache__"])
     subprocess.run(["rm", "-rf", "P", "V", "pi", "perf.data perf.data.old flamegraph.svg"])
 
@@ -210,7 +226,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", type=str, help="set `debug` or `release` mode")
     parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
     parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
-    parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
+    parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, seal, smt, zok>, reset features with -F none")
     parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
     parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
     args = parser.parse_args()
