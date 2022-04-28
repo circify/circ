@@ -31,6 +31,7 @@ use log::debug;
 use rug::Integer;
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::iter::Peekable;
 use std::sync::{Arc, RwLock};
 
 pub mod bv;
@@ -720,6 +721,63 @@ impl Array {
     pub fn select(&self, idx: &Value) -> Value {
         self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
+    }
+
+    /// Iter
+    pub fn into_iter(&self) -> std::collections::btree_map::IntoIter<Value, Value> {
+        self.map.into_iter()
+    }
+}
+
+/// Merge two Array Iterators
+struct ArrayMerge {
+    left: Peekable<std::collections::btree_map::IntoIter<Value, Value>>,
+    right: Peekable<std::collections::btree_map::IntoIter<Value, Value>>,
+    left_dfl: Value,
+    right_dfl: Value,
+}
+
+impl ArrayMerge {
+    pub fn new(a: Array, b: Array) -> Self {
+        if a.size != b.size {
+            panic!("IR Arrays have different lengths: {}, {}", a.size, b.size);
+        }
+        if a.key_sort != b.key_sort {
+            panic!(
+                "IR Arrays have different key sorts: {}, {}",
+                a.key_sort, b.key_sort
+            );
+        }
+        if a.default.sort() != b.default.sort() {
+            panic!(
+                "IR Arrays default values have different key sorts: {}, {}",
+                a.default.sort(),
+                b.default.sort()
+            );
+        }
+
+        Self {
+            left: a.into_iter().peekable(),
+            right: b.into_iter().peekable(),
+            left_dfl: *a.default,
+            right_dfl: *b.default,
+        }
+    }
+
+    pub fn peek(&self) -> (Option<&(Value, Value)>, Option<&(Value, Value)>) {
+        (self.left.peek(), self.right.peek())
+    }
+
+    pub fn left_next(&self) -> Option<(Value, Value)> {
+        self.left.next()
+    }
+
+    pub fn right_next(&self) -> Option<(Value, Value)> {
+        self.right.next()
+    }  
+
+    pub fn next(&self) -> (Option<(Value, Value)>, Option<(Value, Value)>) {
+        (self.left.next(), self.right.next())
     }
 }
 
