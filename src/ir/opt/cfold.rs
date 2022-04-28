@@ -5,7 +5,6 @@ use crate::ir::term::*;
 use circ_fields::FieldV;
 use lazy_static::lazy_static;
 use rug::Integer;
-use std::collections::BTreeMap;
 use std::ops::DerefMut;
 use std::sync::RwLock;
 
@@ -247,34 +246,24 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
             }),
             Op::Map(op) => match (get(0).as_array_opt(), get(1).as_array_opt()) {
                 (Some(a), Some(b)) => {
-                    assert!(a.size == b.size);
-
-                    for t in a. {
-
+                    // TODO: extend for n-ary arrays
+                    let mut res = a.clone();
+                    let mut merge = ArrayMerge::new(a.clone(), b.clone());
+                    for (i, va, vb) in merge.into_iter() {
+                        let r = fold_cache(
+                            &term![*op.clone(); leaf_term(Op::Const(va.clone())), leaf_term(Op::Const(vb.clone()))],
+                            cache,
+                        );
+                        match r.as_value_opt() {
+                            Some(v) => {
+                                res = res.clone().store(i, v.clone());
+                            }
+                            None => {
+                                panic!("Unable to constant fold idx: {}", i);
+                            }
+                        }
                     }
-
-
-
-                    // let mut new_map: BTreeMap<Value, Value> = BTreeMap::new();
-                    // for (a_ind, a_val) in &a.map {
-                    //     let b_val = &b.map[a_ind];
-                    //     let res = &term![*op.clone(); leaf_term(Op::Const(a_val.clone())), leaf_term(Op::Const(b_val.clone()))];
-                    //     match res.as_value_opt() {
-                    //         Some(r) => {
-                    //             new_map.insert(a_ind.clone(), r.clone());
-                    //         }
-                    //         None => {
-                    //             panic!("Unale to constant constant fold idx: {}", a_ind);
-                    //         }
-                    //     }
-                    // }
-                    // let new_arr = Array::new(
-                    //     a.key_sort.clone(),
-                    //     Box::new(a.key_sort.default_value()),
-                    //     new_map,
-                    //     a.size,
-                    // );
-                    Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                    Some(leaf_term(Op::Const(Value::Array(res))))
                 }
                 _ => None,
             },
