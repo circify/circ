@@ -364,7 +364,7 @@ impl Embeddable for Datalog {
             Ty::Field => T::new(
                 ctx.cs.borrow_mut().new_var(
                     &raw_name,
-                    Sort::Field(self.modulus.clone()),
+                    Sort::Field(DFL_T.clone()),
                     visibility,
                 ),
                 Ty::Field,

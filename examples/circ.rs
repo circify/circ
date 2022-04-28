@@ -17,13 +17,13 @@ use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
     opt::{opt, Opt},
-    term::extras::Letified,
+    term::{extras::Letified, text::parse_value_map},
 };
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::trans::to_ilp;
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::bellman::parse_instance;
+use circ::target::r1cs::bellman::{gen_params, prove, verify};
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
@@ -67,11 +67,6 @@ struct FrontendOptions {
     #[structopt(long)]
     value_threshold: Option<u64>,
 
-    /// File with input witness
-    #[allow(dead_code)]
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
-
     /// How many recursions to allow (datalog)
     #[structopt(short, long, name = "N", default_value = "5")]
     rec_limit: usize,
@@ -91,8 +86,8 @@ enum Backend {
         verifier_key: PathBuf,
         #[structopt(long, default_value = "pi", parse(from_os_str))]
         proof: PathBuf,
-        #[structopt(long, default_value = "x", parse(from_os_str))]
-        instance: PathBuf,
+        #[structopt(long, default_value = "in", parse(from_os_str))]
+        inputs: PathBuf,
         #[structopt(long, default_value = "50")]
         /// linear combination constraints up to this size will be eliminated
         lc_elimination_thresh: usize,
@@ -194,7 +189,7 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
-                inputs: options.frontend.inputs,
+                inputs: Default::default(),
                 mode,
             };
             ZSharpFE::gen(inputs)
@@ -215,7 +210,7 @@ fn main() {
         DeterminedLanguage::C => {
             let inputs = c::Inputs {
                 file: options.path,
-                inputs: options.frontend.inputs,
+                inputs: Default::default(),
                 mode,
             };
             C::gen(inputs)
@@ -279,45 +274,31 @@ fn main() {
             proof,
             prover_key,
             verifier_key,
-            instance,
+            inputs,
             lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+            let (r1cs, _, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
+            prover_data.r1cs = r1cs;
             match action {
                 ProofAction::Count => (),
                 ProofAction::Prove => {
                     println!("Proving");
-                    r1cs.check_all();
-                    let rng = &mut rand::thread_rng();
-                    let mut pk_file = File::open(prover_key).unwrap();
-                    let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
-                    let pf = create_random_proof(&r1cs, &pk, rng).unwrap();
-                    let mut pf_file = File::create(proof).unwrap();
-                    pf.write(&mut pf_file).unwrap();
+                    let input_map = parse_value_map(&std::fs::read(inputs).unwrap());
+                    prove::<Bls12, _, _>(prover_key, proof, &input_map).unwrap();
                 }
                 ProofAction::Setup => {
-                    let rng = &mut rand::thread_rng();
-                    let p =
-                        generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
-                    let mut pk_file = File::create(prover_key).unwrap();
-                    p.write(&mut pk_file).unwrap();
-                    let mut vk_file = File::create(verifier_key).unwrap();
-                    p.vk.write(&mut vk_file).unwrap();
+                    println!("Generating Parameters");
+                    gen_params::<Bls12, _, _>(prover_key, verifier_key, &prover_data, &verifier_data).unwrap();
                 }
                 ProofAction::Verify => {
                     println!("Verifying");
-                    let mut vk_file = File::open(verifier_key).unwrap();
-                    let vk = VerifyingKey::<Bls12>::read(&mut vk_file).unwrap();
-                    let pvk = prepare_verifying_key(&vk);
-                    let mut pf_file = File::open(proof).unwrap();
-                    let pf = Proof::read(&mut pf_file).unwrap();
-                    let instance_vec = parse_instance(&instance);
-                    verify_proof(&pvk, &pf, &instance_vec).unwrap();
+                    let input_map = parse_value_map(&std::fs::read(inputs).unwrap());
+                    verify::<Bls12, _, _>(verifier_key, proof, &input_map).unwrap();
                 }
             }
         }

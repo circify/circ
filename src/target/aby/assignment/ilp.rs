@@ -221,7 +221,6 @@ mod tests {
                 leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))
             ]],
             metadata: ComputationMetadata::default(),
-            values: None,
         };
         let _assignment = build_ilp(&cs, &costs);
     }
@@ -261,7 +260,6 @@ mod tests {
             leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
             ]],
             metadata: ComputationMetadata::default(),
-            values: None,
         };
         let assignment = build_ilp(&cs, &costs);
         // Big enough to do the math with arith
@@ -299,7 +297,6 @@ mod tests {
             leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
             ]],
             metadata: ComputationMetadata::default(),
-            values: None,
         };
         let assignment = build_ilp(&cs, &costs);
         // All yao

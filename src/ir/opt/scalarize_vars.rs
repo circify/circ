@@ -61,7 +61,6 @@ impl RewritePass for Pass {
         _rewritten_children: F,
     ) -> Option<Term> {
         if let Op::Var(name, sort) = &orig.op {
-            let party_visibility = computation.metadata.get_input_visibility(name);
             let mut new_var_reqs = Vec::new();
             let new = create_vars(
                 name,

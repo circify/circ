@@ -21,15 +21,6 @@ fn arr_val_to_tup(v: &Value) -> Value {
     }
 }
 
-fn arr_sort_to_tup(v: &Sort) -> Sort {
-    match v {
-        Sort::Array(_key, value, size) => {
-            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice())
-        }
-        v => v.clone(),
-    }
-}
-
 impl RewritePass for Linearizer {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
@@ -39,7 +30,7 @@ impl RewritePass for Linearizer {
     ) -> Option<Term> {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
-            Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
+            Op::Var(name, Sort::Array(..)) => {
                 let precomp = extras::array_to_tuple(orig);
                 let new_name = format!("{}.tup", name);
                 let new_sort = check(&precomp);

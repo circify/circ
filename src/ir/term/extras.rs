@@ -143,6 +143,16 @@ pub fn free_variables(t: Term) -> FxHashSet<String> {
         .collect()
 }
 
+/// Get all the free variables in this term, with sorts
+pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
+    PostOrderIter::new(t)
+        .filter_map(|n| match &n.op {
+            Op::Var(name, sort) => Some((name.into(), sort.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
 /// If this term is a constant field or bit-vector, get the unsigned int value.
 pub fn as_uint_constant(t: &Term) -> Option<Integer> {
     match &t.op {

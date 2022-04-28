@@ -428,7 +428,7 @@ impl<E: Embeddable> Debug for Circify<E> {
 impl<E: Embeddable> Circify<E> {
     /// Creates an empty state management module
     pub fn new(e: E) -> Self {
-        let cs = Rc::new(RefCell::new(Computation::new(e.values())));
+        let cs = Rc::new(RefCell::new(Computation::new()));
         Self {
             e,
             vals: HashMap::default(),
@@ -894,16 +894,6 @@ mod test {
                     Ty::Bool => T::Base(ctx.cs.borrow_mut().new_var(
                         &raw_name,
                         Sort::Bool,
-                        || {
-                            Value::Bool(
-                                user_name
-                                    .as_ref()
-                                    .and_then(|v| {
-                                        self.values.as_ref().and_then(|vs| vs.get(v).cloned())
-                                    })
-                                    .unwrap_or(false),
-                            )
-                        },
                         visibility,
                     )),
                     Ty::Pair(a, b) => T::Pair(
@@ -936,19 +926,13 @@ mod test {
             }
             fn assign(
                 &self,
-                ctx: &mut CirCtx,
+                _ctx: &mut CirCtx,
                 _ty: &Self::Ty,
-                name: String,
-                t: Self::T,
-                visibility: Option<PartyId>,
+                _name: String,
+                _t: Self::T,
+                _visibility: Option<PartyId>,
             ) -> Self::T {
-                match t {
-                    T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, visibility)),
-                    T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, visibility)),
-                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, visibility)),
-                    ),
-                }
+                unreachable!()
             }
             fn values(&self) -> bool {
                 self.values.is_some()

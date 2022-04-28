@@ -214,15 +214,6 @@ fn term_arr_val_to_tup(a: Term) -> Term {
     }
 }
 
-fn arr_sort_to_tup(v: &Sort) -> Sort {
-    match v {
-        Sort::Array(_key, value, size) => {
-            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice())
-        }
-        v => v.clone(),
-    }
-}
-
 #[track_caller]
 fn get_const(t: &Term) -> usize {
     as_uint_constant(t)
@@ -246,7 +237,7 @@ impl RewritePass for Replacer {
                 .collect()
         };
         match &orig.op {
-            Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
+            Op::Var(name, Sort::Array(..)) => {
                 if self.should_replace(orig) {
                     let precomp = extras::array_to_tuple(orig);
                     let new_name = format!("{}.tup", name);

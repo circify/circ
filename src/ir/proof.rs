@@ -1,5 +1,5 @@
 //! Proof-system-specfic extensions to [crate::ir] types.
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashSet;
 
 use super::term::*;
 
@@ -31,7 +31,6 @@ pub trait Constraints {
     fn from_constraint_system_parts(
         assertions: Vec<Term>,
         public_inputs: Vec<Term>,
-        values: Option<FxHashMap<String, Value>>,
     ) -> Self;
 }
 
@@ -39,7 +38,6 @@ impl Constraints for Computation {
     fn from_constraint_system_parts(
         assertions: Vec<Term>,
         public_inputs: Vec<Term>,
-        values: Option<FxHashMap<String, Value>>,
     ) -> Self {
         let mut metadata = ComputationMetadata::default();
         let all_vars = {
@@ -83,7 +81,6 @@ impl Constraints for Computation {
         Self {
             outputs: assertions,
             metadata,
-            values,
             precomputes: Default::default(),
         }
     }

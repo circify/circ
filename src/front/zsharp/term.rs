@@ -937,18 +937,6 @@ impl Embeddable for ZSharp {
         user_name: Option<String>,
         visibility: Option<PartyId>,
     ) -> Self::T {
-        let get_int_val = || -> Integer {
-            self.values
-                .as_ref()
-                .and_then(|vs| {
-                    user_name
-                        .as_ref()
-                        .and_then(|n| vs.get(n))
-                        .or_else(|| vs.get(&raw_name))
-                })
-                .cloned()
-                .unwrap_or_else(|| Integer::from(0))
-        };
         let name = user_name.as_ref().unwrap_or_else(|| &raw_name);
         match ty {
             Ty::Bool => T::new(
@@ -963,7 +951,7 @@ impl Embeddable for ZSharp {
                 Ty::Field,
                 ctx.cs.borrow_mut().new_var(
                     &name,
-                    Sort::Field(self.modulus.clone()),
+                    Sort::Field(DFL_T.clone()),
                     visibility,
                 ),
             ),

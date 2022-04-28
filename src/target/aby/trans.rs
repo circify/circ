@@ -105,8 +105,8 @@ impl ToABY {
     }
 
     fn unwrap_vis(&self, name: &str) -> u8 {
-        match self.md.input_vis.get(name).unwrap() {
-            Some(role) => *role,
+        match self.md.get_input_visibility(name) {
+            Some(role) => role,
             None => PUBLIC,
         }
     }

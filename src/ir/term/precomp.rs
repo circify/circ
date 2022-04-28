@@ -1,6 +1,6 @@
 //! Non-cryptographic pre-computation.
 //!
-//! Conceptually, this machinery allows a party with input material for a computation to map it
+//! Conceptually, this machinery allows a party with input material for one computation to map it
 //! into input material for another computation.
 
 use fxhash::{FxHashMap, FxHashSet};
@@ -13,11 +13,11 @@ use crate::ir::term::*;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
-    outputs: FxHashMap<String, Term>,
+    pub outputs: FxHashMap<String, Term>,
 }
 
 impl PreComp {
-    /// Create a new witness extender from a starting computation.
+    /// Create a new precomputation
     pub fn new() -> Self {
         Self::default()
     }
@@ -26,19 +26,28 @@ impl PreComp {
         let old = self.outputs.insert(name, value);
         assert!(old.is_none());
     }
-    /// Evaluate the extended witness.
+    /// Evaluate the precomputation.
     ///
     /// Requires an input environment that binds all inputs for the underlying computation.
     pub fn eval(&self, env: &FxHashMap<String, Value>) -> FxHashMap<String, Value> {
+        dbg!(self);
+        dbg!(env);
+        for k in env.keys() {
+            if self.outputs.contains_key(k) {
+                panic!("Input {} to the precomputation is also an output", k)
+            }
+        }
+        let mut outputs = env.clone();
         let mut value_cache: TermMap<Value> = TermMap::new();
         // iterate over all terms, evaluating them using the cache.
         for o in self.outputs.values() {
             eval_cached(o, env, &mut value_cache);
         }
+        outputs.extend(
         self.outputs
             .iter()
-            .map(|(name, term)| (name.clone(), value_cache.get(term).unwrap().clone()))
-            .collect()
+            .map(|(name, term)| (name.clone(), value_cache.get(term).unwrap().clone())));
+        outputs
     }
     /// Compute the inputs for this precomputation
     pub fn inputs_to_terms(&self) -> FxHashMap<String, Term> {
@@ -69,7 +78,7 @@ impl PreComp {
             })
             .collect();
         Self {
-            outputs: self
+            outputs: other
                 .outputs
                 .iter()
                 .map(|(name, term)| (name.clone(), extras::substitute_cache(term, &mut sub_cache)))
