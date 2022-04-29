@@ -211,7 +211,7 @@ dependencies = [
  "ff",
  "group",
  "pairing",
- "rand_core 0.6.3",
+ "rand_core",
  "subtle",
 ]
 
