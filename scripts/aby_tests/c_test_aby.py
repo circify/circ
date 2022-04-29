@@ -28,6 +28,8 @@ if __name__ == "__main__":
         gauss_tests + \
         db_tests
     
+    tests = new_tests
+    
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
 

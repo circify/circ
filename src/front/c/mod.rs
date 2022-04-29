@@ -270,6 +270,7 @@ impl CGen {
         let mut res: Vec<DeclInfo> = Vec::new();
         for node in decl.declarators.into_iter() {
             let decl_name = name_from_decl(&node.node.declarator.node);
+
             // add to structs
             let ty = match ty.clone() {
                 Ty::Struct(_, _) => {
@@ -880,6 +881,7 @@ impl CGen {
                 } else {
                     info.ty.default(&mut self.circ)
                 };
+
                 let res = self.circ.declare_init(
                     info.name.clone(),
                     info.ty.clone(),
@@ -1088,7 +1090,9 @@ impl CGen {
         }
 
         self.gen_stmt(f.body.clone());
+
         if let Some(r) = self.circ.exit_fn() {
+            println!("Exit fn: {}", self.fold_(r.clone().unwrap_term()));
             match self.mode {
                 Mode::Mpc(_) => {
                     let ret_term = r.unwrap_term();
