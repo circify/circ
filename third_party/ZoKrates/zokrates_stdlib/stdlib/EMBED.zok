@@ -77,5 +77,14 @@ def u8_to_u16(u8 i) -> u16:
     return 0u16
 
 // vector functions
-def vector_add<N>(u32[N] a, u32[N] b) -> u32[N]:
+def vadd_u8<N>(u8[N] a, u8[N] b) -> u8[N]:
+    return [0; N]
+
+def vadd_u16<N>(u16[N] a, u16[N] b) -> u16[N]:
+    return [0; N]
+
+def vadd_u32<N>(u32[N] a, u32[N] b) -> u32[N]:
+    return [0; N]
+
+def vadd_u64<N>(u64[N] a, u64[N] b) -> u64[N]:
     return [0; N]

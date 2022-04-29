@@ -1,0 +1,7 @@
+from "EMBED" import vadd_u8
+
+def main() -> u8[5]:
+    u8[5] a = [1, 2, 3, 4, 5]
+    u8[5] b = [2, 3, 4, 5, 6]
+    assert(vadd_u8(a, b) == [3, 5, 7, 9, 11])
+    return vadd_u8(a,b)

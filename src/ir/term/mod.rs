@@ -29,6 +29,7 @@ use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::Peekable;
@@ -768,16 +769,16 @@ impl ArrayMerge {
     /// Iter
     pub fn into_iter(&mut self) -> Box<dyn Iterator<Item = (Value, Value, Value)>> {
         let mut acc: Vec<(Value, Value, Value)> = Vec::new();
-        let mut next = self.next();
+        let mut next = self.next_();
         while let Some(n) = next {
             acc.push(n);
-            next = self.next();
+            next = self.next_();
         }
         Box::new(acc.into_iter())
     }
 
     /// Next
-    pub fn next(&mut self) -> Option<(Value, Value, Value)> {
+    pub fn next_(&mut self) -> Option<(Value, Value, Value)> {
         let l_peek = self.left.peek();
         let r_peek = self.right.peek();
 
@@ -785,19 +786,21 @@ impl ArrayMerge {
         let mut right_next = false;
 
         let res = match (l_peek, r_peek) {
-            (Some((l_ind, l_val)), Some((r_ind, r_val))) => {
-                if l_ind < r_ind {
+            (Some((l_ind, l_val)), Some((r_ind, r_val))) => match l_ind.cmp(r_ind) {
+                Ordering::Less => {
                     left_next = true;
                     Some((l_ind.clone(), l_val.clone(), self.right_dfl.clone()))
-                } else if r_ind < l_ind {
+                }
+                Ordering::Greater => {
                     right_next = true;
                     Some((r_ind.clone(), self.left_dfl.clone(), r_val.clone()))
-                } else {
+                }
+                Ordering::Equal => {
                     left_next = true;
                     right_next = true;
                     Some((l_ind.clone(), l_val.clone(), r_val.clone()))
                 }
-            }
+            },
             (Some((l_ind, l_val)), None) => {
                 left_next = true;
                 Some((l_ind.clone(), l_val.clone(), self.right_dfl.clone()))

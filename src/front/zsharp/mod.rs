@@ -305,21 +305,21 @@ impl<'ast> ZGen<'ast> {
                     Ok(uint_lit(DFL_T.modulus().significant_bits(), 32))
                 }
             }
-            "vector_add" => {
+            "vadd_u8" | "vadd_u16" | "vadd_u32" | "vadd_u64" => {
                 if args.len() != 2 {
                     Err(format!(
-                        "Got {} args to EMBED/vector_add, expected 2",
+                        "Got {} args to EMBED/vadd_*, expected 2",
                         args.len()
                     ))
                 } else if generics.len() != 1 {
                     Err(format!(
-                        "Got {} generic args to EMBED/vector_add, expected 1",
+                        "Got {} generic args to EMBED/vadd_*, expected 1",
                         generics.len()
                     ))
                 } else {
                     assert!(args.iter().all(|t| matches!(t.type_(), Ty::Array(_, _))));
-                    let a = args.pop().unwrap();
                     let b = args.pop().unwrap();
+                    let a = args.pop().unwrap();
                     vector_op(BV_ADD, a, b)
                 }
             }

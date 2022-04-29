@@ -909,16 +909,16 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
 }
 
 pub fn vector_op(op: Op, a: T, b: T) -> Result<T, String> {
-    match (&a.ty, &b.ty) {
+    match (a.ty, b.ty) {
         (Ty::Array(a_s, a_ty), Ty::Array(b_s, b_ty)) => {
             if a_s == b_s && a_ty == b_ty {
                 let t = term![Op::Map(Box::new(op)); a.term, b.term];
-                Ok(T::new(Ty::Array(*a_s, a_ty.clone()), t))
+                Ok(T::new(Ty::Array(a_s, a_ty), t))
             } else {
                 panic!("Mismatched array types (this is a bug: type checking should have caught this!)");
             }
         }
-        _ => Err("Cannot do vector_add on non-array types".to_string()),
+        _ => Err("Cannot do vector_op on non-array types".to_string()),
     }
 }
 
