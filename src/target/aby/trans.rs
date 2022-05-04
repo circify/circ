@@ -446,7 +446,7 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
     let mut converter = ToABY::new(s_map, md, path, lang);
 
     for t in terms {
-        println!("terms: {}", t);
+        // println!("terms: {}", t);
         converter.map_terms_to_shares(t.clone());
         converter.write_mapping_file(t.clone());
         converter.lower(t.clone());

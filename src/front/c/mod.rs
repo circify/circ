@@ -1092,7 +1092,6 @@ impl CGen {
         self.gen_stmt(f.body.clone());
 
         if let Some(r) = self.circ.exit_fn() {
-            println!("Exit fn: {}", self.fold_(r.clone().unwrap_term()));
             match self.mode {
                 Mode::Mpc(_) => {
                     let ret_term = r.unwrap_term();
