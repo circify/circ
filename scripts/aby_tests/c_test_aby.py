@@ -25,8 +25,8 @@ if __name__ == "__main__":
         biomatch_tests + \
         kmeans_tests + \
         kmeans_tests_2 + \
-        gauss_tests + \
         db_tests
+        # gauss_tests + \
         
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \

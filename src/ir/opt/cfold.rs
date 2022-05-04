@@ -53,7 +53,7 @@ pub fn fold(node: &Term, ignore: &[Op]) -> Term {
 }
 
 /// Do constant-folding backed by a cache.
-pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Term {
+pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
 
@@ -67,10 +67,6 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Te
             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
             continue;
         }
-        if ignore.contains(&t.op) {
-            cache.put(t.clone(), t);
-            continue;
-        }
 
         let mut c_get = |x: &Term| -> Term {
             cache
@@ -78,6 +74,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Te
                 .and_then(|x| x.to_hconsed())
                 .expect("postorder cache")
         };
+
+        if ignore.contains(&t.op) {
+            let new_t = term(t.op.clone(), t.cs.iter().map(|c| c_get(c)).collect());
+            cache.put(t.to_weak(), new_t.to_weak());
+            continue;
+        }
+
         let mut get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
