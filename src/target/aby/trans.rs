@@ -46,6 +46,20 @@ struct ToABY {
     share_map_output: Vec<String>,
 }
 
+impl Drop for ToABY {
+    fn drop(&mut self) {
+        use std::mem::take;
+        // drop everything that uses a Term
+        drop(take(&mut self.md));
+        self.inputs.clear();
+        self.cache.clear();
+        self.term_to_share_cnt.clear();
+        self.s_map.clear();
+        // clean up
+        garbage_collect();
+    }
+}
+
 impl ToABY {
     fn new(s_map: SharingMap, md: ComputationMetadata, path: &Path, lang: &str) -> Self {
         Self {
@@ -137,9 +151,14 @@ impl ToABY {
 
     /// Given term `t`, type-check `t` is of type Bool
     fn check_bool(&self, t: &Term) {
-        self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t));
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
+            EmbeddedTerm::Bool(_) => (),
+            _ => panic!("Non-bool for {:?}", t),
+        }
     }
 
     fn embed_bool(&mut self, t: Term) {
@@ -187,8 +206,8 @@ impl ToABY {
                 let op = "MUX";
 
                 self.check_bool(&t.cs[0]);
-                self.check_bv(&t.cs[1]);
-                self.check_bv(&t.cs[2]);
+                self.check_bool(&t.cs[1]);
+                self.check_bool(&t.cs[2]);
 
                 let sel = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
                 let a = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
@@ -268,9 +287,14 @@ impl ToABY {
 
     /// Given term `t`, type-check `t` is of type Bv
     fn check_bv(&self, t: &Term) {
-        self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t));
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
+            EmbeddedTerm::Bv(_) => (),
+            _ => panic!("Non-bv for {:?}", t),
+        }
     }
 
     fn embed_bv(&mut self, t: Term) {

@@ -10,7 +10,21 @@ use std::sync::RwLock;
 
 lazy_static! {
     // TODO: use weak pointers to allow GC
-    static ref FOLDS: RwLock<TermCache<Term>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
+    static ref FOLDS: RwLock<TermCache<TTerm>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
+}
+
+pub(in super::super) fn collect() {
+    let mut cache_handle = FOLDS.write().unwrap();
+    let cache = cache_handle.deref_mut();
+    let mut to_pop = Vec::new();
+    for (k, v) in cache.iter() {
+        if k.elm.strong_count() == 0 || v.elm.strong_count() == 0 {
+            to_pop.push(k.clone());
+        }
+    }
+    for k in to_pop.into_iter() {
+        cache.pop(&k);
+    }
 }
 
 /// Create a constant boolean
@@ -45,7 +59,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Te
 
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if cache.contains(&t) {
+        if cache.contains(&t.to_weak()) {
             continue;
         }
         if !children_pushed {
@@ -58,7 +72,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Te
             continue;
         }
 
-        let mut c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+        let mut c_get = |x: &Term| -> Term {
+            cache
+                .get(&x.to_weak())
+                .and_then(|x| x.to_hconsed())
+                .expect("postorder cache")
+        };
         let mut get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
@@ -254,13 +273,21 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>, ignore: &[Op]) -> Te
             _ => None,
         };
         let new_t = {
-            let mut cc_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+            let mut cc_get = |x: &Term| -> Term {
+                cache
+                    .get(&x.to_weak())
+                    .and_then(|x| x.to_hconsed())
+                    .expect("postorder cache")
+            };
             new_t_opt
                 .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| cc_get(c)).collect()))
         };
-        cache.put(t, new_t);
+        cache.put(t.to_weak(), new_t.to_weak());
     }
-    cache.get(node).expect("postorder cache").clone()
+    cache
+        .get(&node.to_weak())
+        .and_then(|x| x.to_hconsed())
+        .expect("postorder cache")
 }
 
 fn neg_bool(t: Term) -> Term {

@@ -1,6 +1,5 @@
 //! AST Walker for zokrates_pest_ast
 
-mod zexprrewriter;
 mod zexprtyper;
 
 use super::super::term::Ty;
@@ -10,7 +9,6 @@ use super::walkfns::*;
 use super::{
     bos_to_type, ZConstLiteralRewriter, ZResult, ZVisitorError, ZVisitorMut, ZVisitorResult,
 };
-use zexprrewriter::ZExpressionRewriter;
 use zexprtyper::ZExpressionTyper;
 
 use std::collections::HashMap;
@@ -42,13 +40,17 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         }
     }
 
+    fn eq_type(&self, ty: &ast::Type<'ast>, ty2: &ast::Type<'ast>) -> ZVisitorResult {
+        eq_type(ty, ty2, self.zgen)
+    }
+
     fn type_expression<'wlk>(
         &self,
         expr: &mut ast::Expression<'ast>,
         zty: &mut ZExpressionTyper<'ast, 'ret, 'wlk>,
     ) -> ZResult<Option<ast::Type<'ast>>> {
         zty.visit_expression(expr)?;
-        zty.take()
+        zty.take()?
             .map(|to_ty| self.unify_expression(to_ty.clone(), expr).map(|()| to_ty))
             .transpose()
     }
@@ -72,6 +74,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         expr: &mut ast::Expression<'ast>,
     ) -> ZVisitorResult {
         use ast::Expression::*;
+        let ty = self.canon_type(ty)?;
         match expr {
             Ternary(te) => self.unify_ternary(ty, te),
             Binary(be) => self.unify_binary(ty, be),
@@ -135,7 +138,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             }))
         });
         if let Some(ty) = rty {
-            eq_type(ty, &ret_ty)?;
+            self.eq_type(ty, &ret_ty)?;
         }
         Ok(ret_ty)
     }
@@ -187,7 +190,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         pf: &mut ast::PostfixExpression<'ast>,
     ) -> ZVisitorResult {
         let acc_ty = self.get_postfix_ty(pf, Some(&ty))?;
-        eq_type(&ty, &acc_ty)
+        self.eq_type(&ty, &acc_ty)
     }
 
     fn unify_array_initializer(
@@ -239,10 +242,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         };
 
         let mut sm_types = self
-            .monomorphize_struct(&st)?
+            .get_struct_or_type(&st.id.value)?
+            .expect("type aliases should have been flattened already")
             .fields
-            .into_iter()
-            .map(|sf| (sf.id.value, sf.ty))
+            .iter()
+            .map(|sf| (sf.id.value.clone(), sf.ty.clone()))
             .collect::<HashMap<String, ast::Type<'ast>>>();
 
         // unify each InlineStructExpression member with field def from struct def'n
@@ -307,7 +311,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         ty: ast::Type<'ast>,
         ie: &mut ast::IdentifierExpression<'ast>,
     ) -> ZVisitorResult {
-        self.lookup_type(ie).and_then(|ity| eq_type(&ty, &ity))
+        self.lookup_type(ie).and_then(|ity| self.eq_type(&ty, &ity))
     }
 
     fn unify_ternary(
@@ -382,7 +386,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                         (Some(lt), Some(rt)) if (matches!(lt, Basic(_)) && matches!(rt, Basic(_))) || matches!(&be.op, Eq | NotEq) => {
                             let lty = lty.unwrap();
                             let rty = rty.unwrap();
-                            eq_type(&lty, &rty)
+                            self.eq_type(&lty, &rty)
                                 .map_err(|e|
                                 ZVisitorError(format!(
                                     "ZStatementWalker: got differing types {:?}, {:?} for lhs, rhs of expr:\n{}\n{}",
@@ -438,6 +442,12 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         ue: &mut ast::UnaryExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::{BasicType::*, Type::*, UnaryOperator::*};
+        // strict operator applies to any type; expression has same type
+        if let Strict(_) = &ue.op {
+            return self.unify_expression(ty, &mut ue.expression);
+        }
+
+        // remaining unary operators can only take Basic types
         let bt = if let Basic(bt) = ty {
             bt
         } else {
@@ -461,6 +471,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 )),
                 _ => Ok(Basic(bt)),
             },
+            Strict(_) => unreachable!(),
         }?;
 
         self.unify_expression(ety, &mut ue.expression)
@@ -570,6 +581,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                     "ZStatementWalker: tried to walk accesses into a Basic type".to_string(),
                 ));
             }
+            ty = self.canon_type(ty)?;
             ty = match f(acc)? {
                 Select(aacc) => {
                     if let Type::Array(aty) = ty {
@@ -595,7 +607,8 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 Member(macc) => {
                     // XXX(unimpl) LHS of definitions must make generics explicit
                     if let Type::Struct(sty) = ty {
-                        self.monomorphize_struct(&sty)?
+                        self.get_struct_or_type(&sty.id.value)?
+                            .expect("type aliases should have been flattened already")
                             .fields
                             .iter()
                             .find(|f| f.id.value == macc.id.value)
@@ -637,10 +650,16 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             .ok_or_else(|| ZVisitorError(format!("ZStatementWalker: undeclared function {}", id)))
     }
 
-    fn get_struct(&self, id: &str) -> ZResult<&ast::StructDefinition<'ast>> {
-        self.zgen.get_struct(id).map(|(m, _)| m).ok_or_else(|| {
-            ZVisitorError(format!("ZStatementWalker: undeclared struct type {}", id))
-        })
+    fn get_struct_or_type(
+        &self,
+        id: &str,
+    ) -> ZResult<Result<&ast::StructDefinition<'ast>, &ast::TypeDefinition<'ast>>> {
+        self.zgen
+            .get_struct_or_type(id)
+            .map(|(m, _)| m)
+            .ok_or_else(|| {
+                ZVisitorError(format!("ZStatementWalker: undeclared struct type {id}.\nNOTE: If {id} is a struct behind an imported type alias, its definition\n      must also be imported into the module where the alias is used."))
+            })
     }
 
     fn const_defined(&self, id: &str) -> bool {
@@ -716,128 +735,17 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         self.vars.pop();
     }
 
-    fn monomorphize_struct(
-        &self,
-        sty: &ast::StructType<'ast>,
-    ) -> ZResult<ast::StructDefinition<'ast>> {
-        let mut sdef = self.get_struct(&sty.id.value)?.clone();
-        // short circuit for non-generic structs
-        if sdef.generics.is_empty() {
-            return if sty.explicit_generics.is_some() {
-                Err(ZVisitorError(format!(
-                    "ZStatementWalker: got explicit generics for non-generic struct type {}:\n{}",
-                    &sty.id.value,
-                    span_to_string(&sty.span),
-                )))
-            } else {
-                Ok(sdef)
-            };
+    // shallow canonicalization: flatten down to the first Basic, Array, or non-alias Struct
+    fn canon_type(&self, ty: ast::Type<'ast>) -> ZResult<ast::Type<'ast>> {
+        use ast::Type::*;
+        match ty {
+            Basic(b) => Ok(ast::Type::Basic(b)),
+            Array(a) => Ok(ast::Type::Array(a)),
+            Struct(s) => match self.get_struct_or_type(&s.id.value)? {
+                Ok(_) => Ok(ast::Type::Struct(s)),
+                Err(tydef) => self.canon_type(tydef.ty.clone()),
+            },
         }
-
-        if sty.explicit_generics.is_none() {
-            return Err(ZVisitorError(format!(
-                "ZStatementWalker: no explicit generics found monomorphizing struct {}",
-                &sty.id.value,
-            )));
-        }
-
-        // XXX(q) rewrite id field of sdef?
-        let generics = std::mem::take(&mut sdef.generics);
-        let gen_values = &sty.explicit_generics.as_ref().unwrap().values;
-        assert_eq!(generics.len(), gen_values.len());
-
-        use ast::ConstantGenericValue::*;
-        let gvmap = generics
-            .into_iter()
-            .map(|ie| ie.value)
-            .zip(gen_values.iter().map(|cgv| match cgv {
-                Underscore(_) => unreachable!(),
-                Value(l) => ast::Expression::Literal(l.clone()),
-                Identifier(i) => ast::Expression::Identifier(i.clone()),
-            }))
-            .collect::<HashMap<String, ast::Expression<'ast>>>();
-
-        // rewrite struct definition
-        let mut sf_rewriter = ZExpressionRewriter::new(gvmap);
-        sdef.fields
-            .iter_mut()
-            .try_for_each(|f| sf_rewriter.visit_struct_field(f))?;
-
-        Ok(sdef)
-    }
-
-    fn monomorphic_struct(&self, sty: &mut ast::StructType<'ast>) -> ZResult<ast::Type<'ast>> {
-        use ast::ConstantGenericValue as CGV;
-
-        // get the struct definition and return early if we don't have to handle generics
-        let sdef = self.get_struct(&sty.id.value)?;
-        if sdef.generics.is_empty() {
-            return if sty.explicit_generics.is_some() {
-                Err(ZVisitorError(format!(
-                    "ZStatementWalker: got explicit generics for non-generic struct type {}:\n{}",
-                    &sty.id.value,
-                    span_to_string(&sty.span),
-                )))
-            } else {
-                Ok(ast::Type::Struct(sty.clone()))
-            };
-        }
-
-        // check explicit generics
-        let mut eg = sty
-            .explicit_generics
-            .take()
-            .ok_or_else(|| {
-                ZVisitorError(format!(
-                    "ZStatementWalker: must declare explicit generics for type {} in LHS:\n{}",
-                    &sty.id.value,
-                    span_to_string(&sty.span),
-                ))
-            })
-            .and_then(|eg| {
-                if eg.values.len() != sdef.generics.len() {
-                    Err(ZVisitorError(format!(
-                        "ZStatementWalker: wrong number of explicit generics for struct {}:\n{}",
-                        &sty.id.value,
-                        span_to_string(&sty.span),
-                    )))
-                } else if eg.values.iter().any(|v| matches!(v, CGV::Underscore(_))) {
-                    Err(ZVisitorError(format!(
-                        "ZStatementWalker: must specify all generic arguments for LHS struct {}:\n{}",
-                        &sty.id.value,
-                        span_to_string(&sty.span),
-                    )))
-                } else {
-                    // make sure identifiers are actually defined!
-                    eg.values.iter().try_for_each(|v|
-                        if let CGV::Identifier(ie) = v {
-                            if self.const_defined(&ie.value) || self.generic_defined(&ie.value) {
-                                Ok(())
-                            } else {
-                                Err(ZVisitorError(format!(
-                                    "ZStatementWalker: {} undef or non-const in {} generics:\n{}",
-                                    &ie.value,
-                                    &sty.id.value,
-                                    span_to_string(&sty.span),
-                                )))
-                            }
-                        } else {
-                            Ok(())
-                        }
-                    ).map(|_| eg)
-                }
-            })?;
-
-        // rewrite untyped literals
-        let mut rewriter = ZConstLiteralRewriter::new(None);
-        eg.values
-            .iter_mut()
-            .try_for_each(|cgv| rewriter.visit_constant_generic_value(cgv))?;
-
-        // put gen_values back
-        sty.explicit_generics = Some(eg);
-
-        Ok(ast::Type::Struct(sty.clone()))
     }
 }
 
@@ -953,12 +861,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
 
     fn visit_typed_identifier(&mut self, ti: &mut ast::TypedIdentifier<'ast>) -> ZVisitorResult {
         ZConstLiteralRewriter::new(None).visit_type(&mut ti.ty)?;
-        let ty = if let ast::Type::Struct(sty) = &mut ti.ty {
-            self.monomorphic_struct(sty)?
-        } else {
-            ti.ty.clone()
-        };
-        self.insert_var(&ti.identifier.value, ty)?;
+        self.insert_var(&ti.identifier.value, ti.ty.clone())?;
         walk_typed_identifier(self, ti)
     }
 
@@ -1017,7 +920,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
                 .as_mut()
                 .map(|fexp| self.unify_expression(tty, &mut fexp.0))
                 .unwrap_or(Ok(())),
-            (Some(fty), Some(tty)) => eq_type(&fty, &tty).map_err(|e| {
+            (Some(fty), Some(tty)) => self.eq_type(&fty, &tty).map_err(|e| {
                 ZVisitorError(format!(
                     "typing Range: {}\n{}",
                     e.0,

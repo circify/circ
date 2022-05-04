@@ -60,7 +60,10 @@ impl FrontEnd for ZSharpFE {
         g.entry_fn("main");
         g.generics_stack_pop();
         g.file_stack_pop();
-        g.circ.into_inner().consume().borrow().clone()
+
+        std::rc::Rc::try_unwrap(g.into_circify().consume())
+            .unwrap_or_else(|rc| (*rc).clone())
+            .into_inner()
     }
 }
 
@@ -88,7 +91,11 @@ struct ZGen<'ast> {
     file_stack: RefCell<Vec<PathBuf>>,
     generics_stack: RefCell<Vec<HashMap<String, T>>>,
     functions: HashMap<PathBuf, HashMap<String, ast::FunctionDefinition<'ast>>>,
-    structs: HashMap<PathBuf, HashMap<String, ast::StructDefinition<'ast>>>,
+    // We use a single map for both type definitions and structures.
+    structs_and_tys: HashMap<
+        PathBuf,
+        HashMap<String, Result<ast::StructDefinition<'ast>, ast::TypeDefinition<'ast>>>,
+    >,
     constants: HashMap<PathBuf, HashMap<String, (ast::Type<'ast>, T)>>,
     import_map: HashMap<PathBuf, HashMap<String, (PathBuf, String)>>,
     mode: Mode,
@@ -97,6 +104,23 @@ struct ZGen<'ast> {
     lhs_ty: RefCell<Option<Ty>>,
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
+}
+
+impl<'ast> Drop for ZGen<'ast> {
+    fn drop(&mut self) {
+        use std::mem::take;
+
+        // drop all fields that contain T or Ty
+        drop(self.generics_stack.take());
+        drop(take(&mut self.constants));
+        drop(self.cvars_stack.take());
+        drop(self.crets_stack.take());
+        drop(self.lhs_ty.take());
+        drop(self.ret_ty_stack.take());
+
+        // force garbage collection
+        garbage_collect();
+    }
 }
 
 enum ZAccess {
@@ -134,7 +158,7 @@ impl<'ast> ZGen<'ast> {
             file_stack: Default::default(),
             generics_stack: Default::default(),
             functions: HashMap::new(),
-            structs: HashMap::new(),
+            structs_and_tys: HashMap::new(),
             constants: HashMap::new(),
             import_map: HashMap::new(),
             mode,
@@ -152,6 +176,10 @@ impl<'ast> ZGen<'ast> {
             .metadata
             .add_prover_and_verifier();
         this
+    }
+
+    fn into_circify(self) -> Circify<ZSharp> {
+        self.circ.replace(Circify::new(ZSharp::new(None)))
     }
 
     /// Unwrap a result with a span-dependent error
@@ -314,6 +342,7 @@ impl<'ast> ZGen<'ast> {
         name: &str,
         accs: &[ast::AssigneeAccess<'ast>],
         val: T,
+        strict: bool,
     ) -> Result<(), String> {
         let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
         let old = if IS_CNST {
@@ -324,7 +353,9 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))?
                 .unwrap_term()
         };
-        let new = loc_store(old, &zaccs[..], val)?;
+        let new =
+            loc_store(old, &zaccs[..], val)
+                .and_then(|n| if strict { const_val(n) } else { Ok(n) })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -394,6 +425,7 @@ impl<'ast> ZGen<'ast> {
                 }
             },
         }
+        .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
     fn unary_op(&self, o: &ast::UnaryOperator) -> fn(T) -> Result<T, String> {
@@ -401,6 +433,7 @@ impl<'ast> ZGen<'ast> {
             ast::UnaryOperator::Pos(_) => Ok,
             ast::UnaryOperator::Neg(_) => neg,
             ast::UnaryOperator::Not(_) => not,
+            ast::UnaryOperator::Strict(_) => const_val,
         }
     }
 
@@ -987,10 +1020,24 @@ impl<'ast> ZGen<'ast> {
                         .map(|m_expr| (m.id.value.clone(), m_expr))
                 })
                 .collect::<Result<Vec<_>, String>>()
-                .map(|members| T::new_struct(u.ty.value.clone(), members)),
+                .and_then(|members| Ok(T::new_struct(self.canon_struct(&u.ty.value)?, members))),
         }
         .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
+    }
+
+    fn canon_struct(&self, id: &str) -> Result<String, String> {
+        match self
+            .get_struct_or_type(id)
+            .ok_or_else(|| format!("No such struct or type {} canonicalizing InlineStruct", id))?
+            .0
+        {
+            Ok(_) => Ok(id.to_string()),
+            Err(t) => match &t.ty {
+                ast::Type::Struct(s) => self.canon_struct(&s.id.value),
+                _ => Err(format!("Found non-Struct canonicalizing struct {}", id,)),
+            },
+        }
     }
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
@@ -1052,9 +1099,16 @@ impl<'ast> ZGen<'ast> {
                         .ok_or_else(|| "interpreting expr as const bool failed".to_string())
                 }) {
                     Ok(true) => Ok(()),
-                    Ok(false) => Err("Const assert failed".to_string()),
+                    Ok(false) => Err(format!(
+                        "Const assert failed: {} at\n{}",
+                        e.message
+                            .as_ref()
+                            .map(|m| m.value.as_ref())
+                            .unwrap_or("(no error message given)"),
+                        span_to_string(e.expression.span()),
+                    )),
                     Err(err) if IS_CNST => Err(format!(
-                        "Const assert expression eval failed at {}: {}",
+                        "Const assert expression eval failed {} at\n{}",
                         err,
                         span_to_string(e.expression.span()),
                     )),
@@ -1088,7 +1142,7 @@ impl<'ast> ZGen<'ast> {
                 self.decl_impl_::<IS_CNST>(v_name, &ty)?;
                 for j in s..e {
                     self.enter_scope_impl_::<IS_CNST>();
-                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j))?;
+                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j), false)?;
                     for s in &i.statements {
                         self.stmt_impl_::<IS_CNST>(s)?;
                     }
@@ -1107,7 +1161,13 @@ impl<'ast> ZGen<'ast> {
                 if let Some(l) = d.lhs.first() {
                     match l {
                         ast::TypedIdentifierOrAssignee::Assignee(l) => {
-                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e)
+                            let strict = match &d.expression {
+                                ast::Expression::Unary(u) => {
+                                    matches!(&u.op, ast::UnaryOperator::Strict(_))
+                                }
+                                _ => false,
+                            };
+                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e, strict)
                         }
                         ast::TypedIdentifierOrAssignee::TypedIdentifier(l) => {
                             let decl_ty = self.type_impl_::<IS_CNST>(&l.ty)?;
@@ -1403,20 +1463,23 @@ impl<'ast> ZGen<'ast> {
                     .fold(b, |b, d| Ok(Ty::Array(d?, Box::new(b?))))
             }
             ast::Type::Struct(s) => {
-                let (sdef, path) = self.get_struct(&s.id.value).ok_or_else(|| {
+                let (def, path) = self.get_struct_or_type(&s.id.value).ok_or_else(|| {
                     format!(
                         "No such struct {} (did you bring it into scope?)",
                         &s.id.value
                     )
                 })?;
-                let sdef = sdef.clone();
-                let g_len = sdef.generics.len();
+                let generics = match def {
+                    Ok(sdef) => &sdef.generics,
+                    Err(tdef) => &tdef.generics,
+                };
+                let g_len = generics.len();
                 let egv = s
                     .explicit_generics
                     .as_ref()
                     .map(|eg| eg.values.as_ref())
                     .unwrap_or(&[][..]);
-                let generics = self.egvs_impl_::<IS_CNST>(egv, sdef.generics)?;
+                let generics = self.egvs_impl_::<IS_CNST>(egv, generics.clone())?;
                 if generics.len() != g_len {
                     return Err(format!(
                         "Struct {} is not monomorphized or wrong number of generic parameters",
@@ -1425,15 +1488,18 @@ impl<'ast> ZGen<'ast> {
                 }
                 self.file_stack_push(path);
                 self.generics_stack_push(generics);
-                let ty = Ty::new_struct(
-                    s.id.value.clone(),
-                    sdef.fields
-                        .into_iter()
-                        .map::<Result<_, String>, _>(|f| {
-                            Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?))
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+                let ty = match def {
+                    Ok(sdef) => Ty::new_struct(
+                        sdef.id.value.clone(),
+                        sdef.fields
+                            .iter()
+                            .map::<Result<_, String>, _>(|f| {
+                                Ok((f.id.value.clone(), self.type_impl_::<IS_CNST>(&f.ty)?))
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                    ),
+                    Err(tdef) => self.type_impl_::<IS_CNST>(&tdef.ty)?,
+                };
                 self.generics_stack_pop();
                 self.file_stack_pop();
                 Ok(ty)
@@ -1595,7 +1661,7 @@ impl<'ast> ZGen<'ast> {
         let mut clr = ZConstLiteralRewriter::new(None);
         for p in files {
             self.constants.insert(p.clone(), HashMap::new());
-            self.structs.insert(p.clone(), HashMap::new());
+            self.structs_and_tys.insert(p.clone(), HashMap::new());
             self.functions.insert(p.clone(), HashMap::new());
             self.file_stack_push(p.clone());
             for d in t.get_mut(&p).unwrap().declarations.iter_mut() {
@@ -1613,13 +1679,41 @@ impl<'ast> ZGen<'ast> {
                             .unwrap_or_else(|e| self.err(e.0, &s.span));
 
                         if self
-                            .structs
+                            .structs_and_tys
                             .get_mut(self.file_stack.borrow().last().unwrap())
                             .unwrap()
-                            .insert(s.id.value.clone(), s_ast)
+                            .insert(s.id.value.clone(), Ok(s_ast))
                             .is_some()
                         {
-                            self.err(format!("Struct {} redefined", &s.id.value), &s.span);
+                            self.err(
+                                format!("Struct {} defined over existing name", &s.id.value),
+                                &s.span,
+                            );
+                        }
+                    }
+                    ast::SymbolDeclaration::Type(t) => {
+                        debug!(
+                            "processing decl: type definition {} in {}",
+                            t.id.value,
+                            p.display()
+                        );
+                        let mut t_ast = t.clone();
+
+                        // rewrite literals in ArrayTypes
+                        clr.visit_type_definition(&mut t_ast)
+                            .unwrap_or_else(|e| self.err(e.0, &t.span));
+
+                        if self
+                            .structs_and_tys
+                            .get_mut(self.file_stack.borrow().last().unwrap())
+                            .unwrap()
+                            .insert(t.id.value.clone(), Err(t_ast))
+                            .is_some()
+                        {
+                            self.err(
+                                format!("Type {} defined over existing name", &t.id.value),
+                                &t.span,
+                            );
                         }
                     }
                     ast::SymbolDeclaration::Function(f) => {
@@ -1686,12 +1780,18 @@ impl<'ast> ZGen<'ast> {
         self.functions.get(&f_path).and_then(|m| m.get(&f_name))
     }
 
-    fn get_struct(&self, struct_id: &str) -> Option<(&ast::StructDefinition<'ast>, PathBuf)> {
+    fn get_struct_or_type(
+        &self,
+        struct_id: &str,
+    ) -> Option<(
+        Result<&ast::StructDefinition<'ast>, &ast::TypeDefinition<'ast>>,
+        PathBuf,
+    )> {
         let (s_path, s_name) = self.deref_import(struct_id);
-        self.structs
+        self.structs_and_tys
             .get(&s_path)
             .and_then(|m| m.get(&s_name))
-            .map(|m| (m, s_path))
+            .map(|m| (m.as_ref(), s_path))
     }
 
     /*** circify wrapper functions (hides RefCell) ***/
