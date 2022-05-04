@@ -54,8 +54,8 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_from_import_directive(self, fimport)
     }
 
-    fn visit_import_source(&mut self, is: &mut ast::ImportSource<'ast>) -> ZVisitorResult {
-        walk_import_source(self, is)
+    fn visit_any_string(&mut self, is: &mut ast::AnyString<'ast>) -> ZVisitorResult {
+        walk_any_string(self, is)
     }
 
     fn visit_import_symbol(&mut self, is: &mut ast::ImportSymbol<'ast>) -> ZVisitorResult {
@@ -81,6 +81,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         structdef: &mut ast::StructDefinition<'ast>,
     ) -> ZVisitorResult {
         walk_struct_definition(self, structdef)
+    }
+
+    fn visit_type_definition(
+        &mut self,
+        structdef: &mut ast::TypeDefinition<'ast>,
+    ) -> ZVisitorResult {
+        walk_type_definition(self, structdef)
     }
 
     fn visit_struct_field(&mut self, structfield: &mut ast::StructField<'ast>) -> ZVisitorResult {
@@ -306,6 +313,10 @@ pub trait ZVisitorMut<'ast>: Sized {
     }
 
     fn visit_not_operator(&mut self, _po: &mut ast::NotOperator) -> ZVisitorResult {
+        Ok(())
+    }
+
+    fn visit_strict_operator(&mut self, _so: &mut ast::StrOperator) -> ZVisitorResult {
         Ok(())
     }
 

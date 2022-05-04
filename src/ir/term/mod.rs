@@ -999,7 +999,7 @@ impl TermTable {
             let okv = self.map.get_key_value(&*t.elm);
             std::mem::drop(t);
             if let Some((key, _)) = okv {
-                if Arc::strong_count(key) == 1 {
+                if Arc::strong_count(key) <= 1 {
                     to_check.extend(key.cs.iter().cloned());
                     let key = key.clone();
                     self.map.remove(&key);
@@ -1012,6 +1012,8 @@ impl TermTable {
         }
         debug!(target: "ir::term::gc", "{} of {} terms collected", old_size - new_size, old_size);
         self.last_len = new_size;
+
+        super::opt::cfold::collect();
     }
 }
 struct TypeTable {
@@ -1040,7 +1042,7 @@ impl TypeTable {
     }
     fn collect(&mut self) {
         let old_size = self.map.len();
-        self.map.retain(|term, _| term.to_hconsed().is_some());
+        self.map.retain(|term, _| term.elm.strong_count() > 1);
         let new_size = self.map.len();
         debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
         self.last_len = new_size;
@@ -1062,8 +1064,16 @@ fn mk(elm: TermData) -> Term {
 
 /// Scans the term database and the type database and removes dead terms and types.
 pub fn garbage_collect() {
-    collect_terms();
-    collect_types();
+    // Don't garbage collect while panicking.
+    // this function may be called from Drop implementations, which are called
+    // when a thread is unwinding due to a panic. When that happens, RwLocks are
+    // poisoned, which would cause a panic-in-panic, no bueno.
+    if !std::thread::panicking() {
+        collect_terms();
+        collect_types();
+    } else {
+        log::warn!("Not garbage collecting because we are currently panicking.");
+    }
 }
 
 const LEN_THRESH_NUM: usize = 8;
@@ -1072,6 +1082,11 @@ const LEN_DECAY_NUM: usize = 15;
 const LEN_DECAY_DEN: usize = 16;
 /// Scan term and type databases only if they've grown in size since last scan
 pub fn maybe_garbage_collect() -> bool {
+    // Don't garbage collect while panicking.
+    // NOTE This function probably shouldn't be called from Drop impls, but let's be safe anyway.
+    if std::thread::panicking() {
+        return false;
+    }
     let mut ran = {
         let mut term_table = TERMS.write().unwrap();
         if term_table.should_collect() {
@@ -1529,7 +1544,7 @@ macro_rules! term {
 /// Map from terms
 pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
 /// LRU cache of terms (like TermMap, but limited size)
-pub type TermCache<T> = hashconsing::coll::HConLru<Term, T>;
+pub type TermCache<T> = hashconsing::coll::WHConLru<Term, T>;
 /// Set of terms
 pub type TermSet = hashconsing::coll::HConSet<Term>;
 

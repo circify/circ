@@ -84,12 +84,19 @@ impl ZStdLib {
         let paths = [parent.to_path_buf(), self.path.clone()];
         for mut p in paths {
             p.push(child);
-            if p.extension().is_none() {
-                p.set_extension("zok");
-            }
             debug!("Checking {}", p.display());
             if p.exists() {
                 return p;
+            }
+            if p.extension().is_some() {
+                continue;
+            }
+            for ext in ["zok", "zx"] {
+                p.set_extension(ext);
+                debug!("Checking {}", p.display());
+                if p.exists() {
+                    return p;
+                }
             }
         }
         panic!("Could not find {} from {}", child, parent.display())

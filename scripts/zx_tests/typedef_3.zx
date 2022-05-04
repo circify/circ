@@ -1,0 +1,21 @@
+struct Foo<N> {
+    field[N] n
+}
+
+type Bar = Foo<5>
+
+struct Baz<N> {
+    Bar b
+    Foo<N> q
+}
+
+type Quux = Baz<7>
+
+const u32 SEVEN = 7
+
+type Bazinga = field[SEVEN]
+
+def main() -> bool:
+    Quux q = Quux { b: Bar { n: [0; 5] }, q: Foo { n: [1; 7] } }
+    Baz<5> r = Quux { b: Foo { n: [q.b.n[0]; 5] }, q: Bar { n: [2; 5] } }
+    return r.b.n[4] == q.b.n[4]

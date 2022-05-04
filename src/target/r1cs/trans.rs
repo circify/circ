@@ -57,6 +57,15 @@ impl ToR1cs {
         }
     }
 
+    /// Take the converted R1CS instance and garbage collect
+    fn take_r1cs(mut self) -> R1cs<String> {
+        drop(std::mem::take(&mut self.cache));
+        drop(self.values.take());
+        self.public_inputs.clear();
+        garbage_collect();
+        self.r1cs
+    }
+
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
     fn fresh_var<D: Display + ?Sized>(
@@ -956,8 +965,9 @@ pub fn to_r1cs(cs: Computation, modulus: FieldT) -> R1cs<String> {
     for c in assertions {
         converter.assert(c);
     }
-    debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs,);
-    converter.r1cs
+    debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs);
+
+    converter.take_r1cs()
 }
 
 #[cfg(test)]
