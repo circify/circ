@@ -63,6 +63,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Field(_) => vec![t.cs[0].clone()],
         Op::Update(_i) => vec![t.cs[0].clone()],
         Op::Map(_) => t.cs.clone(),
+        Op::Call(_) => t.cs.clone(), // returns function call arguments
     }
 }
 

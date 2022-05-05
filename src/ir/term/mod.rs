@@ -138,6 +138,9 @@ pub enum Op {
 
     /// Map (operation)
     Map(Box<Op>),
+
+    /// Funcation Call
+    Call(FunctionDefinition),
 }
 
 /// Boolean AND
@@ -249,6 +252,7 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
+            Op::Call(fd) => Some(fd.params.keys().len()),
         }
     }
 }
@@ -292,6 +296,7 @@ impl Display for Op {
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
+            Op::Call(fd) => write!(f, "(call({}))", fd.name),
         }
     }
 }
@@ -1851,6 +1856,24 @@ impl Computation {
         terms.pop();
         terms.into_iter()
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// An IR computation.
+pub struct FunctionDefinition {
+    /// Name of function
+    pub name: String,
+    /// Type signature of function parameters
+    pub params: BTreeMap<String, Sort>,
+    /// Return type of function
+    pub ret_ty: Sort,
+}
+
+#[derive(Clone, Debug, Default)]
+/// An IR computation.
+pub struct Computations {
+    /// The outputs of the computation.
+    pub outputs: BTreeMap<FunctionDefinition, Computation>,
 }
 
 #[cfg(test)]
