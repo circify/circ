@@ -51,6 +51,7 @@ impl ToR1cs {
         field: FieldT,
         public_inputs: FxHashSet<String>,
     ) -> Self {
+        debug!("Starting R1CS back-end, field: {}", field);
         let r1cs = R1cs::new(field.clone());
         let zero = TermLc(pf_lit(field.new_v(0u8)), r1cs.zero());
         let one = zero.clone() + 1;
@@ -867,7 +868,7 @@ impl ToR1cs {
 /// ## Returns
 ///
 /// * The R1CS instance
-pub fn to_r1cs(cs: Computation, modulus: FieldT) -> (R1cs<String>, PreComp, ProverData, VerifierData) {
+pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverData, VerifierData) {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();
     let public_inputs = metadata
@@ -893,12 +894,12 @@ pub fn to_r1cs(cs: Computation, modulus: FieldT) -> (R1cs<String>, PreComp, Prov
         converter.assert(c);
     }
     debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs,);
-    let cs_precomputation = cs.precomputes;
+    cs.precomputes = cs.precomputes.sequential_compose(&converter.wit_ext);
     let r1cs = converter.r1cs;
-    let precompute = cs_precomputation.sequential_compose(&converter.wit_ext);
-    let prover_data = r1cs.prover_data(&precompute);
-    let verifier_data = r1cs.verifier_data(&precompute);
-    (r1cs, precompute, prover_data, verifier_data)
+    dbg!(&converter.wit_ext);
+    let prover_data = r1cs.prover_data(&cs);
+    let verifier_data = r1cs.verifier_data(&cs);
+    (r1cs, prover_data, verifier_data)
 }
 
 #[cfg(test)]
@@ -942,7 +943,8 @@ pub mod test {
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
             ],
         );
-        let (r1cs, precomp, _, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let (r1cs, pd, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
     }
@@ -985,7 +987,8 @@ pub mod test {
             term![Op::Not; t]
         };
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
     }
@@ -997,7 +1000,8 @@ pub mod test {
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
     }
@@ -1007,7 +1011,8 @@ pub mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
         let r1cs2 = reduce_linearities(r1cs, None);
@@ -1021,7 +1026,8 @@ pub mod test {
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
         let r1cs2 = reduce_linearities(r1cs, None);
@@ -1043,7 +1049,8 @@ pub mod test {
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
         );
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
     }
@@ -1058,7 +1065,8 @@ pub mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
         let r1cs2 = reduce_linearities(r1cs, None);
@@ -1080,7 +1088,8 @@ pub mod test {
     fn const_test(term: Term) {
         let mut cs = Computation::new();
         cs.assert(term);
-        let (r1cs, precomp, _, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&Default::default());
         r1cs.check_all(&extended_values);
     }
@@ -1203,7 +1212,8 @@ pub mod test {
             ],
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (r1cs, precomp, _, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let (r1cs, pd, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
     }

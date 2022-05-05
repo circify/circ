@@ -1,6 +1,6 @@
 //! C Terms
 use crate::circify::mem::AllocId;
-use crate::circify::{CirCtx, Embeddable};
+use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::front::c::types::*;
 use crate::front::c::Circify;
 use crate::ir::term::*;
@@ -444,6 +444,12 @@ impl Ct {
     }
 }
 
+impl Typed<Ty> for CTerm {
+    fn type_(&self) -> Ty {
+        cterm.term.type_()
+    }
+}
+
 impl Embeddable for Ct {
     type T = CTerm;
     type Ty = Ty;
@@ -577,10 +583,6 @@ impl Embeddable for Ct {
 
     fn values(&self) -> bool {
         self.values.is_some()
-    }
-
-    fn type_of(&self, cterm: &Self::T) -> Self::Ty {
-        cterm.term.type_()
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {

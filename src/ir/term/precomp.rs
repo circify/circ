@@ -13,7 +13,8 @@ use crate::ir::term::*;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
-    pub outputs: FxHashMap<String, Term>,
+    outputs: FxHashMap<String, Term>,
+    sequence: Vec<String>,
 }
 
 impl PreComp {
@@ -21,33 +22,52 @@ impl PreComp {
     pub fn new() -> Self {
         Self::default()
     }
+    /// immutable access to the outputs
+    pub fn outputs(&self)-> &FxHashMap<String, Term> {
+        &self.outputs
+    }
     /// Add a new output variable to the precomputation. `value` is the term that computes its value.
     pub fn add_output(&mut self, name: String, value: Term) {
+        self.sequence.push(name.clone());
         let old = self.outputs.insert(name, value);
         assert!(old.is_none());
+    }
+    /// Retain only the parts of this precomputation that can be evaluated from
+    /// the `known` inputs.
+    pub fn restrict_to_inputs(&mut self, mut known: FxHashSet<String>) {
+        let os = &mut self.outputs;
+        let seq = &mut self.sequence;
+        seq.retain(|o| {
+            let term = os.get(o).unwrap();
+            let drop = extras::free_variables(term.clone())
+                .iter()
+                .any(|v| !known.contains(v));
+            if drop {
+                os.remove(o);
+            } else {
+                known.insert(o.clone());
+            }
+            !drop
+        });
     }
     /// Evaluate the precomputation.
     ///
     /// Requires an input environment that binds all inputs for the underlying computation.
     pub fn eval(&self, env: &FxHashMap<String, Value>) -> FxHashMap<String, Value> {
-        dbg!(self);
-        dbg!(env);
         for k in env.keys() {
             if self.outputs.contains_key(k) {
                 panic!("Input {} to the precomputation is also an output", k)
             }
         }
-        let mut outputs = env.clone();
         let mut value_cache: TermMap<Value> = TermMap::new();
+        let mut env = env.clone();
         // iterate over all terms, evaluating them using the cache.
-        for o in self.outputs.values() {
-            eval_cached(o, env, &mut value_cache);
+        for o_name in &self.sequence {
+            let o = self.outputs.get(o_name).unwrap();
+            eval_cached(o, &env, &mut value_cache);
+            env.insert(o_name.clone(), value_cache.get(o).unwrap().clone());
         }
-        outputs.extend(
-        self.outputs
-            .iter()
-            .map(|(name, term)| (name.clone(), value_cache.get(term).unwrap().clone())));
-        outputs
+        env
     }
     /// Compute the inputs for this precomputation
     pub fn inputs_to_terms(&self) -> FxHashMap<String, Term> {
@@ -65,24 +85,13 @@ impl PreComp {
     }
 
     /// Bind the outputs of `self` to the inputs of `other`.
-    pub fn sequential_compose(&self, other: &PreComp) -> PreComp {
-        let self_outputs: FxHashSet<String> = self.outputs.keys().cloned().collect();
-        let other_inputs: FxHashSet<String> = other.inputs();
-        assert!(self_outputs.is_subset(&other_inputs),
-            "Tried to compose two precomputations, but their interfaces did not match. The first computation had unmatched outputs\n{:?}", self_outputs.difference(&other_inputs).collect::<Vec<_>>());
-        let other_inputs_to_terms: FxHashMap<String, Term> = other.inputs_to_terms();
-        let mut sub_cache: TermMap<Term> = other_inputs_to_terms
-            .into_iter()
-            .filter_map(|(name, var_term)| {
-                self.outputs.get(&name).map(|val| (var_term, val.clone()))
-            })
-            .collect();
-        Self {
-            outputs: other
-                .outputs
-                .iter()
-                .map(|(name, term)| (name.clone(), extras::substitute_cache(term, &mut sub_cache)))
-                .collect(),
+    pub fn sequential_compose(mut self, other: &PreComp) -> PreComp {
+        for o_name in &other.sequence {
+            let o = other.outputs.get(o_name).unwrap().clone();
+            assert!(!self.outputs.contains_key(o_name));
+            self.outputs.insert(o_name.clone(), o);
+            self.sequence.push(o_name.clone());
         }
+        self
     }
 }

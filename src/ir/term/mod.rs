@@ -958,6 +958,14 @@ impl Sort {
             Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
         }
     }
+
+    /// Is this a scalar?
+    pub fn is_scalar(&self) -> bool {
+        match self {
+            Sort::Tuple(..) | Sort::Array(..) => false,
+            _ => true,
+        }
+    }
 }
 
 impl Display for Sort {
@@ -1675,6 +1683,8 @@ pub struct ComputationMetadata {
     pub next_party_id: PartyId,
     /// All inputs, including who knows them. If no visibility is set, the input is public.
     pub input_vis: FxHashMap<String, (Term, Option<PartyId>)>,
+    /// The inputs for the computation itself (not the precomputation).
+    pub computation_inputs: FxHashSet<String>,
 }
 
 impl ComputationMetadata {
@@ -1688,13 +1698,15 @@ impl ComputationMetadata {
     pub fn new_input(&mut self, input_name: String, party: Option<PartyId>, sort: Sort) {
         let term = leaf_term(Op::Var(input_name.clone(), sort));
         debug_assert!(
-            !self.input_vis.contains_key(&input_name),
+            !self.input_vis.contains_key(&input_name)
+                || self.input_vis.get(&input_name).unwrap().1 == party,
             "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
             input_name,
             party,
             self.input_vis.get(&input_name).unwrap()
         );
-        self.input_vis.insert(input_name, (term, party));
+        self.input_vis.insert(input_name.clone(), (term, party));
+        self.computation_inputs.insert(input_name);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
@@ -1717,17 +1729,25 @@ impl ComputationMetadata {
     pub fn is_input_public(&self, input_name: &str) -> bool {
         self.get_input_visibility(input_name).is_none()
     }
-    /// Get all public inputs.
-    pub fn public_input_names(&self) -> impl Iterator<Item = &str> {
-        self.input_vis.iter().filter_map(|(name, party)| {
-            if party.1.is_none() {
+    /// What sort is this input?
+    pub fn input_sort(&self, input_name: &str) -> Sort {
+        check(&self.input_vis.get(input_name).unwrap().0)
+    }
+    /// Get all public inputs to the computation itself.
+    ///
+    /// Excludes pre-computation inputs
+    pub fn public_input_names<'a>(&'a self) -> impl Iterator<Item = &str> + 'a {
+        self.input_vis.iter().filter_map(move |(name, party)| {
+            if party.1.is_none() && self.computation_inputs.contains(name) {
                 Some(name.as_str())
             } else {
                 None
             }
         })
     }
-    /// Get all public inputs.
+    /// Get all public inputs to the computation itself.
+    ///
+    /// Excludes pre-computation inputs.
     // I think the lint is just broken here.
     // TODO: submit a patch
     #[allow(clippy::needless_lifetimes)]
@@ -1735,13 +1755,26 @@ impl ComputationMetadata {
         // TODO: check order?
         self.input_vis
             .iter()
-            .filter_map(move |(_input_name, (term, vis))| {
-                if vis.is_none() {
+            .filter_map(move |(name, (term, vis))| {
+                if vis.is_none() && self.computation_inputs.contains(name) {
                     Some(term.clone())
                 } else {
                     None
                 }
             })
+    }
+    /// Get all the inputs visible to `party`.
+    pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashSet<String> {
+        self.input_vis
+            .iter()
+            .filter_map(|(name, (_, vis))| {
+                if vis.is_none() || vis == &party {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -1759,9 +1792,28 @@ pub struct Computation {
 impl Computation {
     /// Create a new variable, `name: s`, where `val_fn` can be called to get the concrete value,
     /// and `public` indicates whether this variable is public in the constraint system.
-    pub fn new_var(&mut self, name: &str, s: Sort, party: Option<PartyId>) -> Term {
-        debug!("Var: {} (visibility: {:?})", name, party);
+    ///
+    /// ## Arguments
+    ///
+    ///    * `name`: the name of the new variable
+    ///    * `s`: its sort
+    ///    * `party`: its visibility: who knows it initially
+    ///    * `precompute`: a precomputation that can determine its value (optional). Note that the
+    ///      precomputation may rely on information that some parties do not have. In this case,
+    ///      those parties will have to provide a value for the variables directly.
+    pub fn new_var(
+        &mut self,
+        name: &str,
+        s: Sort,
+        party: Option<PartyId>,
+        precompute: Option<Term>,
+    ) -> Term {
+        debug!("Var: {} : {} (visibility: {:?})", name, s, party);
         self.metadata.new_input(name.to_owned(), party, s.clone());
+        if let Some(p) = precompute {
+            assert_eq!(&s, &check(&p));
+            self.precomputes.add_output(name.to_owned(), p);
+        }
         leaf_term(Op::Var(name.to_owned(), s))
     }
 
@@ -1773,6 +1825,7 @@ impl Computation {
     ///
     /// The sort for `new_input_var` will be computed from `precomp`.
     pub fn extend_precomputation(&mut self, new_input_var: String, precomp: Term) {
+        debug!("Precompute {}", new_input_var);
         let vis = {
             let mut input_visiblities: FxHashSet<Option<PartyId>> =
                 extras::free_variables(precomp.clone())
@@ -1787,8 +1840,7 @@ impl Computation {
             }
         };
         let sort = check(&precomp);
-        self.new_var(&new_input_var, sort, vis);
-        self.precomputes.add_output(new_input_var, precomp);
+        self.new_var(&new_input_var, sort, vis, Some(precomp));
     }
 
     /// Assert `s` in the system.

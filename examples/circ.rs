@@ -189,7 +189,6 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
-                inputs: Default::default(),
                 mode,
             };
             ZSharpFE::gen(inputs)

@@ -6,7 +6,6 @@ use log::debug;
 use paste::paste;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -371,18 +370,33 @@ impl R1cs<String> {
         }
     }
 
+    /// Add the signals of this R1CS instance to the precomputation.
+    fn extend_precomputation(&self, precompute: &mut precomp::PreComp, public_signals_only: bool) {
+        for i in 0..self.next_idx {
+            let sig_name = self.idxs_signals.get(&i).unwrap();
+            if !public_signals_only || self.public_idxs.contains(&i) {
+                if !precompute.outputs().contains_key(sig_name) {
+                    let term = self.terms[i].clone();
+                    precompute.add_output(sig_name.clone(), term);
+                }
+            }
+        }
+    }
+
     /// Compute the verifier data for this R1CS relation, given a precomputation
     /// that computes the variables that are relation inputs
-    pub fn verifier_data(&self, precompute: &precomp::PreComp) -> VerifierData {
-        let mut precompute = precompute.clone();
-        precompute.outputs.retain(|k, _| self.is_public_input(k));
+    pub fn verifier_data(&self, cs: &Computation) -> VerifierData {
+        let mut precompute = cs.precomputes.clone();
+        self.extend_precomputation(&mut precompute, true);
+        let public_inputs = cs.metadata.get_inputs_for_party(None);
+        precompute.restrict_to_inputs(public_inputs);
         let pf_input_order: Vec<String> = (0..self.next_idx)
             .filter(|i| self.public_idxs.contains(i))
             .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
             .collect();
         let mut precompute_inputs = HashMap::default();
         for input in &pf_input_order {
-            if let Some(output_term) = precompute.outputs.get(input) {
+            if let Some(output_term) = precompute.outputs().get(input) {
                 for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
                     precompute_inputs.insert(v, s);
                 }
@@ -399,22 +413,29 @@ impl R1cs<String> {
 
     /// Compute the verifier data for this R1CS relation, given a precomputation
     /// that computes the variables that are relation inputs
-    pub fn prover_data(&self, precompute: &precomp::PreComp) -> ProverData {
-        let mut precompute = precompute.clone();
-        precompute.outputs.retain(|k, _| self.is_public_input(k));
+    pub fn prover_data(&self, cs: &Computation) -> ProverData {
+        let mut precompute = cs.precomputes.clone();
+        self.extend_precomputation(&mut precompute, false);
+        // we still need to remove the non-r1cs variables
+        use crate::ir::proof::PROVER_ID;
+        let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
+        precompute.restrict_to_inputs(all_inputs);
         let pf_input_order: Vec<String> = (0..self.next_idx)
             .filter(|i| self.public_idxs.contains(i))
             .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
             .collect();
         let mut precompute_inputs = HashMap::default();
         for input in &pf_input_order {
-            if let Some(output_term) = precompute.outputs.get(input) {
+            if let Some(output_term) = precompute.outputs().get(input) {
                 for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
                     precompute_inputs.insert(v, s);
                 }
             } else {
                 precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
             }
+        }
+        for o in precompute.outputs().keys() {
+            precompute_inputs.remove(o);
         }
         ProverData {
             precompute_inputs,

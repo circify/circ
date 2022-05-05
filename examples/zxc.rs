@@ -33,9 +33,6 @@ struct Options {
     #[structopt(parse(from_os_str), name = "PATH")]
     path: PathBuf,
 
-    #[structopt(flatten)]
-    frontend: FrontendOptions,
-
     /*
     #[structopt(long, default_value = "P", parse(from_os_str))]
     prover_key: PathBuf,
@@ -59,13 +56,6 @@ struct Options {
 
     #[structopt(long, default_value = "count")]
     action: ProofAction,
-}
-
-#[derive(Debug, StructOpt)]
-struct FrontendOptions {
-    /// File with input witness
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
 }
 
 arg_enum! {
@@ -97,7 +87,6 @@ fn main() {
     let cs = {
         let inputs = zsharp::Inputs {
             file: options.path,
-            inputs: options.frontend.inputs,
             mode: Mode::Proof,
         };
         ZSharpFE::gen(inputs)

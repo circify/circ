@@ -4,7 +4,7 @@ use std::fmt::{self, Display, Formatter};
 
 use rug::Integer;
 
-use crate::circify::{CirCtx, Embeddable};
+use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
 use crate::util::field::DFL_T;
@@ -115,6 +115,13 @@ impl Ty {
     /// Creates a new structure type, sorting the keys.
     pub fn new_struct<I: IntoIterator<Item = (String, Ty)>>(name: String, fields: I) -> Self {
         Self::Struct(name, FieldList::new(fields.into_iter().collect()))
+    }
+    /// Array value type
+    pub fn array_val_ty(&self) -> &Self {
+        match self {
+            Self::Array(_, b) => b,
+            _ => panic!("Not an array type: {:?}", self),
+        }
     }
 }
 
@@ -909,7 +916,6 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
 }
 
 pub struct ZSharp {
-    values: Option<HashMap<String, Integer>>,
 }
 
 fn field_name(struct_name: &str, field_name: &str) -> String {
@@ -921,23 +927,28 @@ fn idx_name(struct_name: &str, idx: usize) -> String {
 }
 
 impl ZSharp {
-    pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
-        Self { values }
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Typed<Ty> for T {
+    fn type_(&self) -> Ty {
+        self.ty.clone()
     }
 }
 
 impl Embeddable for ZSharp {
     type T = T;
     type Ty = Ty;
-    fn declare(
+    fn declare_input(
         &self,
         ctx: &mut CirCtx,
         ty: &Self::Ty,
-        raw_name: String,
-        user_name: Option<String>,
+        name: String,
         visibility: Option<PartyId>,
+        precompute: Option<T>,
     ) -> Self::T {
-        let name = user_name.as_ref().unwrap_or_else(|| &raw_name);
         match ty {
             Ty::Bool => T::new(
                 Ty::Bool,
@@ -945,6 +956,7 @@ impl Embeddable for ZSharp {
                     &name,
                     Sort::Bool,
                     visibility,
+                    precompute.map(|p| p.term),
                 ),
             ),
             Ty::Field => T::new(
@@ -953,6 +965,7 @@ impl Embeddable for ZSharp {
                     &name,
                     Sort::Field(DFL_T.clone()),
                     visibility,
+                    precompute.map(|p| p.term),
                 ),
             ),
             Ty::Uint(w) => T::new(
@@ -961,30 +974,35 @@ impl Embeddable for ZSharp {
                     &name,
                     Sort::BitVector(*w),
                     visibility,
+                    precompute.map(|p| p.term),
                 ),
             ),
-            Ty::Array(n, ty) => array((0..*n).map(|i| {
-                self.declare(
-                    ctx,
-                    &*ty,
-                    idx_name(&raw_name, i),
-                    user_name.as_ref().map(|u| idx_name(u, i)),
-                    visibility,
+            Ty::Array(n, ty) => {
+                let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
+                    Some(Ok(v)) => v.into_iter().map(Some).collect(),
+                    Some(Err(e)) => panic!("{}", e),
+                    None => std::iter::repeat(None).take(*n).collect(),
+                };
+                debug_assert_eq!(*n, ps.len());
+                array(
+                    ps.into_iter().enumerate().map(|(i, p)| {
+                        self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, p)
+                    }),
                 )
-            }))
-            .unwrap(),
+                .unwrap()
+            }
             Ty::Struct(n, fs) => T::new_struct(
                 n.clone(),
                 fs.fields()
                     .map(|(f_name, f_ty)| {
                         (
                             f_name.clone(),
-                            self.declare(
+                            self.declare_input(
                                 ctx,
                                 f_ty,
-                                field_name(&raw_name, f_name),
-                                user_name.as_ref().map(|u| field_name(u, f_name)),
+                                field_name(&name, f_name),
                                 visibility,
+                                precompute.as_ref().map(|_| unimplemented!("precomputations for declared inputs that are Z# structures")),
                             ),
                         )
                     })
@@ -995,22 +1013,8 @@ impl Embeddable for ZSharp {
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         ite(cond, t, f).unwrap()
     }
-    fn assign(
-        &self,
-        _ctx: &mut CirCtx,
-        _ty: &Self::Ty,
-        _name: String,
-        _t: Self::T,
-        _visibility: Option<PartyId>,
-    ) -> Self::T {
-        unreachable!()
-    }
-    fn values(&self) -> bool {
-        self.values.is_some()
-    }
-
-    fn type_of(&self, term: &Self::T) -> Self::Ty {
-        term.type_().clone()
+    fn create_uninit(&self, _ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
+        ty.default()
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
