@@ -552,6 +552,19 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
         .collect()
 }
 
+/// Serialize an IR "value map": a map from strings to values.
+///
+/// See [parse_value_map].
+pub fn serialize_value_map(src: &HashMap<String, Value>) -> String {
+    let mut out = String::new();
+    writeln!(&mut out, "(let (").unwrap();
+    for (var, val) in src {
+        writeln!(&mut out, "  ({} {})", var, val).unwrap();
+    }
+    writeln!(&mut out, ") true;ignored \n)").unwrap();
+    out
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

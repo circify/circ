@@ -896,7 +896,6 @@ pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverDat
     debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs,);
     cs.precomputes = cs.precomputes.sequential_compose(&converter.wit_ext);
     let r1cs = converter.r1cs;
-    dbg!(&converter.wit_ext);
     let prover_data = r1cs.prover_data(&cs);
     let verifier_data = r1cs.verifier_data(&cs);
     (r1cs, prover_data, verifier_data)

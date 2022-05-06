@@ -40,6 +40,7 @@ pub struct ZSharpFE;
 impl FrontEnd for ZSharpFE {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computation {
+        debug!("Starting Z# front-end, field: {}", Sort::Field(DFL_T.clone()));
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(asts, i.mode, loader.stdlib());
@@ -56,10 +57,6 @@ impl FrontEnd for ZSharpFE {
 impl ZSharpFE {
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
     pub fn interpret(i: Inputs) -> T {
-        if i.inputs.is_some() {
-            panic!("zsharp::interpret() requires main() to take no args");
-        }
-
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(asts, i.mode, loader.stdlib());

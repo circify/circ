@@ -54,11 +54,6 @@ impl PreComp {
     ///
     /// Requires an input environment that binds all inputs for the underlying computation.
     pub fn eval(&self, env: &FxHashMap<String, Value>) -> FxHashMap<String, Value> {
-        for k in env.keys() {
-            if self.outputs.contains_key(k) {
-                panic!("Input {} to the precomputation is also an output", k)
-            }
-        }
         let mut value_cache: TermMap<Value> = TermMap::new();
         let mut env = env.clone();
         // iterate over all terms, evaluating them using the cache.

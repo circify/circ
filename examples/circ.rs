@@ -17,11 +17,11 @@ use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
     opt::{opt, Opt},
-    term::{extras::Letified, text::parse_value_map},
+    term::{extras::Letified, text::{parse_value_map, serialize_value_map}, check},
 };
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
-use circ::target::ilp::trans::to_ilp;
+use circ::target::ilp::{trans::to_ilp, assignment_to_values};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::bellman::{gen_params, prove, verify};
 use circ::target::r1cs::opt::reduce_linearities;
@@ -30,6 +30,7 @@ use circ::target::r1cs::trans::to_r1cs;
 use circ::target::smt::find_model;
 use circ::util::field::DFL_T;
 use circ_fields::FieldT;
+use fxhash::FxHashMap as HashMap;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
@@ -84,10 +85,6 @@ enum Backend {
         prover_key: PathBuf,
         #[structopt(long, default_value = "V", parse(from_os_str))]
         verifier_key: PathBuf,
-        #[structopt(long, default_value = "pi", parse(from_os_str))]
-        proof: PathBuf,
-        #[structopt(long, default_value = "in", parse(from_os_str))]
-        inputs: PathBuf,
         #[structopt(long, default_value = "50")]
         /// linear combination constraints up to this size will be eliminated
         lc_elimination_thresh: usize,
@@ -131,17 +128,7 @@ arg_enum! {
     #[derive(PartialEq, Debug)]
     enum ProofAction {
         Count,
-        Prove,
         Setup,
-        Verify,
-    }
-}
-
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    enum ProofOption {
-        Count,
-        Prove,
     }
 }
 
@@ -270,34 +257,29 @@ fn main() {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
             action,
-            proof,
             prover_key,
             verifier_key,
-            inputs,
             lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
-            let (r1cs, _, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+            let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
+            // save the optimized r1cs: the prover needs it to synthesize.
             prover_data.r1cs = r1cs;
             match action {
                 ProofAction::Count => (),
-                ProofAction::Prove => {
-                    println!("Proving");
-                    let input_map = parse_value_map(&std::fs::read(inputs).unwrap());
-                    prove::<Bls12, _, _>(prover_key, proof, &input_map).unwrap();
-                }
                 ProofAction::Setup => {
                     println!("Generating Parameters");
-                    gen_params::<Bls12, _, _>(prover_key, verifier_key, &prover_data, &verifier_data).unwrap();
-                }
-                ProofAction::Verify => {
-                    println!("Verifying");
-                    let input_map = parse_value_map(&std::fs::read(inputs).unwrap());
-                    verify::<Bls12, _, _>(verifier_key, proof, &input_map).unwrap();
+                    gen_params::<Bls12, _, _>(
+                        prover_key,
+                        verifier_key,
+                        &prover_data,
+                        &verifier_data,
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -322,6 +304,12 @@ fn main() {
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
+            let inputs_and_sorts: HashMap<_, _> = cs
+                .metadata
+                .input_vis
+                .iter()
+                .map(|(name, (sort, _))| (name.clone(), check(sort)))
+                .collect();
             let ilp = to_ilp(cs);
             let solver_result = ilp.solve(default_solver);
             let (max, vars) = solver_result.expect("ILP could not be solved");
@@ -330,15 +318,9 @@ fn main() {
             for (var, val) in &vars {
                 println!("  {}: {}", var, val.round() as u64);
             }
-            let mut f = File::create("assignment.txt").unwrap();
-            for (var, val) in &vars {
-                if var.contains("f0") {
-                    let i = var.find("f0").unwrap();
-                    let s = &var[i + 8..];
-                    let e = s.find('_').unwrap();
-                    writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
-                }
-            }
+            let values = assignment_to_values(&vars, &inputs_and_sorts);
+            let values_as_str = serialize_value_map(&values);
+            std::fs::write("assignment.txt", values_as_str).unwrap();
         }
         #[cfg(not(feature = "lp"))]
         Backend::Ilp { .. } => {

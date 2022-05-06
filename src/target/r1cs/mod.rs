@@ -319,15 +319,6 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         &self.constraints
     }
 
-    fn is_public_input<Q: ?Sized>(&self, input: &Q) -> bool
-    where
-        Q: Borrow<S>,
-    {
-        self.signal_idxs
-            .get(input.borrow())
-            .map(|idx| self.public_idxs.contains(idx))
-            .expect("Uknown input")
-    }
 }
 
 impl R1cs<String> {

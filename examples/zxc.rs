@@ -127,7 +127,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let (r1cs, _, _, _) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+    let (r1cs, _, _) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs
