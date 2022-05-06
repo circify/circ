@@ -5,7 +5,6 @@ use crate::front::c::types::*;
 use crate::front::c::Circify;
 use crate::ir::term::*;
 use rug::Integer;
-use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
 #[allow(clippy::enum_variant_names)]
@@ -36,6 +35,13 @@ impl CTermData {
         }
         terms_tail(self, &mut output);
         output
+    }
+    pub fn simple_term(&self) -> Term {
+        match self {
+            CTermData::CBool(b) => b.clone(),
+            CTermData::CInt(_, _, b) => b.clone(),
+            _ => panic!(),
+        }
     }
     pub fn term(&self, circ: &Circify<Ct>) -> Term {
         match self {
@@ -431,7 +437,6 @@ fn _ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
 // }
 
 pub struct Ct {
-    values: Option<HashMap<String, Integer>>,
 }
 
 fn idx_name(struct_name: &str, idx: usize) -> String {
@@ -439,47 +444,35 @@ fn idx_name(struct_name: &str, idx: usize) -> String {
 }
 
 impl Ct {
-    pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
-        Self { values }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
 impl Typed<Ty> for CTerm {
     fn type_(&self) -> Ty {
-        cterm.term.type_()
+        self.term.type_()
     }
 }
 
 impl Embeddable for Ct {
     type T = CTerm;
     type Ty = Ty;
-    fn declare(
+    fn declare_input(
         &self,
         ctx: &mut CirCtx,
         ty: &Self::Ty,
-        raw_name: String,
-        user_name: Option<String>,
+        name: String,
         visibility: Option<PartyId>,
+        precompute: Option<Self::T>,
     ) -> Self::T {
-        let get_int_val = || -> Integer {
-            self.values
-                .as_ref()
-                .and_then(|vs| {
-                    user_name
-                        .as_ref()
-                        .and_then(|n| vs.get(n))
-                        .or_else(|| vs.get(&raw_name))
-                })
-                .cloned()
-                .unwrap_or_else(|| Integer::from(0))
-        };
         match ty {
             Ty::Bool => Self::T {
                 term: CTermData::CBool(ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::Bool,
-                    || Value::Bool(get_int_val() != 0),
                     visibility,
+                    precompute.map(|p| p.term.simple_term()),
                 )),
                 udef: false,
             },
@@ -488,23 +481,24 @@ impl Embeddable for Ct {
                     *s,
                     *w,
                     ctx.cs.borrow_mut().new_var(
-                        &raw_name,
+                        &name,
                         Sort::BitVector(*w),
-                        || Value::BitVector(BitVector::new(get_int_val(), *w)),
                         visibility,
+                        precompute.map(|p| p.term.simple_term()),
                     ),
                 ),
                 udef: false,
             },
             Ty::Array(n, ty) => {
+                assert!(precompute.is_none());
                 let v: Vec<Self::T> = (0..n.unwrap())
                     .map(|i| {
-                        self.declare(
+                        self.declare_input(
                             ctx,
                             &*ty,
-                            idx_name(&raw_name, i),
-                            user_name.as_ref().map(|u| idx_name(u, i)),
+                            idx_name(&name, i),
                             visibility,
+                            None,
                         )
                     })
                     .collect();
@@ -547,42 +541,19 @@ impl Embeddable for Ct {
         }
     }
 
-    fn assign(
-        &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        name: String,
-        t: Self::T,
-        visibility: Option<PartyId>,
-    ) -> Self::T {
-        assert!(&t.term.type_() == ty);
-        match (ty, t.term) {
-            (_, CTermData::CBool(b)) => Self::T {
-                term: CTermData::CBool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
-                udef: false,
-            },
-            (_, CTermData::CInt(s, w, b)) => Self::T {
-                term: CTermData::CInt(s, w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
-                udef: false,
-            },
-            // (_, CTermData::CArray(ety, list)) => Self::T {
-            //     term: CTermData::CArray(
-            //         ety.clone(),
-            //         list.into_iter()
-            //             .enumerate()
-            //             .map(|(i, elem)| {
-            //                 self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
-            //             })
-            //             .collect(),
-            //     ),
-            //     udef: false,
-            // },
-            _ => unimplemented!(),
+    fn create_uninit(&self, ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
+        match ty {
+            Ty::Bool | Ty::Int(..) => ty.default(),
+            Ty::Array(n, ty) => {
+                let mut mem = ctx.mem.borrow_mut();
+                let id = mem.zero_allocate(n.unwrap(), 32, ty.num_bits());
+                let arr = Self::T {
+                    term: CTermData::CArray(*ty.clone(), Some(id)),
+                    udef: false,
+                };
+                arr
+            }
         }
-    }
-
-    fn values(&self) -> bool {
-        self.values.is_some()
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {

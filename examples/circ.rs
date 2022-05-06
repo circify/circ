@@ -196,7 +196,6 @@ fn main() {
         DeterminedLanguage::C => {
             let inputs = c::Inputs {
                 file: options.path,
-                inputs: Default::default(),
                 mode,
             };
             C::gen(inputs)

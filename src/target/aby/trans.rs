@@ -85,6 +85,10 @@ impl ToABY {
                 let n = new_name.split('_').collect::<Vec<&str>>();
 
                 match n.len() {
+                    1 => n[0].to_string(),
+                    2 => {
+                        format!("{}_{}", n[0], n[1])
+                    }
                     5 => n[3].to_string(),
                     6.. => {
                         let l = n.len() - 1;
