@@ -171,11 +171,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 Some(e) => Err(e),
                 None => {
                     let value_sort = rec_check_raw_helper(&**op, &arg_sorts_to_inner_op)?;
-                    Ok(Sort::Array(
-                        Box::new(key_sort),
-                        Box::new(value_sort),
-                        size,
-                    ))
+                    Ok(Sort::Array(Box::new(key_sort), Box::new(value_sort), size))
                 }
             }
         }
