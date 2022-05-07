@@ -141,7 +141,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::Update(_i) => Ok(get_ty(&t.cs[0]).clone()),
         Op::Map(op) => {
             let arg_cnt = t.cs.len();
-            let mut dterm_cs = Vec::new();
+            let mut arg_sorts_to_inner_op = Vec::new();
 
             let mut key_sort = Sort::Bool;
             let mut size = 0;
@@ -160,7 +160,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             for i in 0..arg_cnt {
                 match array_or(get_ty(&t.cs[i]), "map inputs") {
                     Ok((_, v)) => {
-                        dterm_cs.push(v.default_term());
+                        arg_sorts_to_inner_op.push(v);
                     }
                     Err(e) => {
                         error = Some(e);
@@ -170,12 +170,8 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             match error {
                 Some(e) => Err(e),
                 None => {
-                    let term_ = term((**op).clone(), dterm_cs);
-                    Ok(Sort::Array(
-                        Box::new(key_sort),
-                        Box::new(get_ty(&term_).clone()),
-                        size,
-                    ))
+                    let value_sort = rec_check_raw_helper(&**op, &arg_sorts_to_inner_op)?;
+                    Ok(Sort::Array(Box::new(key_sort), Box::new(value_sort), size))
                 }
             }
         }
