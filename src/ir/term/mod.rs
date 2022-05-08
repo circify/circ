@@ -1047,16 +1047,17 @@ lazy_static! {
 
 // Tests are executed concurrently, meaning that terms might be collected
 // in one thread, breaking constant folding or type checking running in a
-// different thread. Thus, for testing only, we add a lock that the collector
-// must take read-write, and cfolding / type-checking takes read-only.
+// different thread. To fix this, we add a lock that the collector takes
+// read-write, and cfolding / type-checking takes read-only.
 //
 // Deadlock analysis:
 //      cfold takes FOLD_CACHE(w) -> TERMS(w)
 //      type checking takes TERM_TYPES(w)
 //      garbage collector takes one lock at a time
 //
-// So as long as all three lock COLLECT first, there are no deadlock issues.
-#[cfg(test)]
+// The following locking priority MUST be observed:
+//
+// COLLECT -> FOLD_CACHE -> TERMS -> TERM_TYPES
 lazy_static! {
     pub(super) static ref COLLECT: RwLock<()> = RwLock::new(());
 }
@@ -1077,9 +1078,8 @@ pub fn garbage_collect() {
         return;
     }
 
-    #[cfg(test)]
+    // lock the collector before locking anything else
     let _lock = COLLECT.write().unwrap();
-
     collect_terms();
     collect_types();
     super::opt::cfold::collect();
@@ -1098,9 +1098,8 @@ pub fn maybe_garbage_collect() -> bool {
         return false;
     }
 
-    #[cfg(test)]
+    // lock the collector before locking anything else
     let _lock = COLLECT.write().unwrap();
-
     let mut ran = false;
     {
         let mut term_table = TERMS.write().unwrap();
@@ -1108,7 +1107,7 @@ pub fn maybe_garbage_collect() -> bool {
             term_table.collect();
             ran = true;
         }
-    }
+    } // TERMS lock goes out of scope here
     if ran {
         collect_types();
         super::opt::cfold::collect();

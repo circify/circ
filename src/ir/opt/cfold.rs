@@ -39,7 +39,7 @@ fn cbv(b: BitVector) -> Option<Term> {
 
 /// Fold away operators over constants.
 pub fn fold(node: &Term) -> Term {
-    #[cfg(test)]
+    // lock the collector before locking FOLDS (and, inside fold_cache, TERMS)
     let _lock = super::super::term::COLLECT.read().unwrap();
 
     let mut cache_handle = FOLDS.write().unwrap();

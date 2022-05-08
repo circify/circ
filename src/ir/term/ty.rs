@@ -185,9 +185,8 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
         return Ok(s.clone());
     }
 
-    #[cfg(test)]
+    // lock the collector before locking TERM_TYPES
     let _lock = COLLECT.read().unwrap();
-
     let mut term_tys = TERM_TYPES.write().unwrap();
     // to_check is a stack of (node, cs checked) pairs.
     let mut to_check = vec![(t.clone(), false)];
@@ -401,9 +400,8 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
         return Ok(s.clone());
     }
 
-    #[cfg(test)]
+    // lock the collector before locking TERM_TYPES
     let _lock = COLLECT.read().unwrap();
-
     let mut term_tys = TERM_TYPES.write().unwrap();
     // to_check is a stack of (node, cs checked) pairs.
     let mut to_check = vec![(t.clone(), false)];
