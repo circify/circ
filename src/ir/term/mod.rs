@@ -1012,13 +1012,10 @@ impl TermTable {
         }
         debug!(target: "ir::term::gc", "{} of {} terms collected", old_size - new_size, old_size);
         self.last_len = new_size;
-
-        super::opt::cfold::collect();
     }
 }
 struct TypeTable {
     map: FxHashMap<TTerm, Sort>,
-    last_len: usize,
 }
 impl std::ops::Deref for TypeTable {
     type Target = FxHashMap<TTerm, Sort>;
@@ -1032,20 +1029,11 @@ impl std::ops::DerefMut for TypeTable {
     }
 }
 impl TypeTable {
-    fn should_collect(&mut self) -> bool {
-        let ret = LEN_THRESH_DEN * self.map.len() > LEN_THRESH_NUM * self.last_len;
-        if self.last_len > TERM_CACHE_LIMIT {
-            // when last_len is big, force a garbage collect every once in a while
-            self.last_len = (self.last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN;
-        }
-        ret
-    }
     fn collect(&mut self) {
         let old_size = self.map.len();
         self.map.retain(|term, _| term.elm.strong_count() > 1);
         let new_size = self.map.len();
         debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
-        self.last_len = new_size;
     }
 }
 
@@ -1055,6 +1043,23 @@ lazy_static! {
         count: 0,
         last_len: 0,
     });
+}
+
+// Tests are executed concurrently, meaning that terms might be collected
+// in one thread, breaking constant folding or type checking running in a
+// different thread. To fix this, we add a lock that the collector takes
+// read-write, and cfolding / type-checking takes read-only.
+//
+// Deadlock analysis:
+//      cfold takes FOLD_CACHE(w) -> TERMS(w)
+//      type checking takes TERM_TYPES(w)
+//      garbage collector takes one lock at a time
+//
+// The following locking priority MUST be observed:
+//
+// COLLECT -> FOLD_CACHE -> TERMS -> TERM_TYPES
+lazy_static! {
+    pub(super) static ref COLLECT: RwLock<()> = RwLock::new(());
 }
 
 fn mk(elm: TermData) -> Term {
@@ -1068,12 +1073,16 @@ pub fn garbage_collect() {
     // this function may be called from Drop implementations, which are called
     // when a thread is unwinding due to a panic. When that happens, RwLocks are
     // poisoned, which would cause a panic-in-panic, no bueno.
-    if !std::thread::panicking() {
-        collect_terms();
-        collect_types();
-    } else {
+    if std::thread::panicking() {
         log::warn!("Not garbage collecting because we are currently panicking.");
+        return;
     }
+
+    // lock the collector before locking anything else
+    let _lock = COLLECT.write().unwrap();
+    collect_terms();
+    collect_types();
+    super::opt::cfold::collect();
 }
 
 const LEN_THRESH_NUM: usize = 8;
@@ -1085,23 +1094,23 @@ pub fn maybe_garbage_collect() -> bool {
     // Don't garbage collect while panicking.
     // NOTE This function probably shouldn't be called from Drop impls, but let's be safe anyway.
     if std::thread::panicking() {
+        log::warn!("Not garbage collecting because we are currently panicking.");
         return false;
     }
-    let mut ran = {
+
+    // lock the collector before locking anything else
+    let _lock = COLLECT.write().unwrap();
+    let mut ran = false;
+    {
         let mut term_table = TERMS.write().unwrap();
         if term_table.should_collect() {
             term_table.collect();
-            true
-        } else {
-            false
-        }
-    };
-    {
-        let mut type_table = ty::TERM_TYPES.write().unwrap();
-        if type_table.should_collect() {
-            type_table.collect();
             ran = true;
         }
+    } // TERMS lock goes out of scope here
+    if ran {
+        collect_types();
+        super::opt::cfold::collect();
     }
     ran
 }
