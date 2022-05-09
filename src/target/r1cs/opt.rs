@@ -195,10 +195,10 @@ mod test {
 
     use super::*;
 
+    use fxhash::FxHashMap;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::SeedableRng;
-    use fxhash::FxHashMap;
 
     #[derive(Clone, Debug)]
     pub struct SatR1cs(R1cs<String>, FxHashMap<String, Value>);
@@ -214,7 +214,10 @@ mod test {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             for v in &vars {
                 values.insert(v.clone(), Value::Field(field.random_v(&mut rng)));
-                r1cs.add_signal(v.clone(), leaf_term(Op::Var(v.clone(), Sort::Field(field.clone()))));
+                r1cs.add_signal(
+                    v.clone(),
+                    leaf_term(Op::Var(v.clone(), Sort::Field(field.clone()))),
+                );
             }
             for _ in 0..(2 * g.size()) {
                 let ac: isize = <isize as Arbitrary>::arbitrary(g) % m;

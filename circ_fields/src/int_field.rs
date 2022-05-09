@@ -6,7 +6,7 @@ use rug::{
     ops::{RemRounding, RemRoundingAssign},
     Integer,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;

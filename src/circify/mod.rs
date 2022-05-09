@@ -358,18 +358,14 @@ pub trait Embeddable {
     ) -> Self::T;
 
     /// Create a new uninitialized value of the given term in your language.
-    /// 
+    ///
     /// For most languages, this should just be a kind of default value.
     ///
     /// ## Arguments
     ///
     ///    * `ctx`: circuit context: you must add the circuit-level *input*
     ///    * `ty`: the type
-    fn create_uninit(
-        &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-    ) -> Self::T;
+    fn create_uninit(&self, ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T;
 
     /// Construct an it-then-else (ternary) langauge value.
     ///
@@ -464,9 +460,9 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Declare a new *input* to the computation.
-    /// 
+    ///
     /// See [Embeddable::declare_input]
-    /// 
+    ///
     /// ## Arguments
     /// * nice_name: the in-program name of the input
     /// * ty: the type
@@ -481,7 +477,11 @@ impl<E: Embeddable> Circify<E> {
         mangle_name: bool,
     ) -> Result<E::T> {
         let ssa_name = self.declare_env_name(nice_name.clone(), ty)?.clone();
-        let name = if mangle_name { ssa_name.clone() } else { nice_name };
+        let name = if mangle_name {
+            ssa_name.clone()
+        } else {
+            nice_name
+        };
         let t = self
             .e
             .declare_input(&mut self.cir_ctx, ty, name, visibility, precomputed_value);
@@ -491,11 +491,7 @@ impl<E: Embeddable> Circify<E> {
 
     /// Declares a new (uninitialized) value of type `ty`, with name `name`, in the current lexical
     /// scope.
-    pub fn declare_uninit(
-        &mut self,
-        name: VarName,
-        ty: &E::Ty,
-    ) -> Result<()> {
+    pub fn declare_uninit(&mut self, name: VarName, ty: &E::Ty) -> Result<()> {
         let ssa_name = self.declare_env_name(name, ty)?.clone();
         let t = self.e.create_uninit(&mut self.cir_ctx, ty);
         assert!(self.vals.insert(ssa_name, Val::Term(t)).is_none());
@@ -895,11 +891,7 @@ mod test {
             type T = T;
             type Ty = Ty;
 
-            fn create_uninit(
-                &self,
-                _ctx: &mut CirCtx,
-                ty: &Self::Ty,
-            ) -> Self::T {
+            fn create_uninit(&self, _ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
                 ty.default()
             }
 
@@ -943,8 +935,20 @@ mod test {
                             _ => panic!("Invalid precompute {:?} for Pair type", precompute),
                         };
                         T::Pair(
-                            Box::new(self.declare_input(ctx, &**a, format!("{}.0", name), visibility, p_1)),
-                            Box::new(self.declare_input(ctx, &**b, format!("{}.1", name), visibility, p_2)),
+                            Box::new(self.declare_input(
+                                ctx,
+                                &**a,
+                                format!("{}.0", name),
+                                visibility,
+                                p_1,
+                            )),
+                            Box::new(self.declare_input(
+                                ctx,
+                                &**b,
+                                format!("{}.1", name),
+                                visibility,
+                                p_2,
+                            )),
                         )
                     }
                 }

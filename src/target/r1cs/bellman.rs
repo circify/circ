@@ -1,8 +1,8 @@
 //! Exporting our R1CS to bellman
 use ::bellman::{
     groth16::{
-        create_random_proof, generate_random_parameters,
-        prepare_verifying_key, verify_proof, Parameters, Proof, VerifyingKey,
+        create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
+        Parameters, Proof, VerifyingKey,
     },
     Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable,
 };
@@ -271,8 +271,7 @@ pub fn verify<E: MultiMillerLoop, P1: AsRef<Path>, P2: AsRef<Path>>(
     vk_path: P1,
     pf_path: P2,
     inputs_map: &FxHashMap<String, Value>,
-) -> io::Result<()>
-{
+) -> io::Result<()> {
     let (vk, verifier_data) = read_verifier_key_and_data::<_, E>(vk_path)?;
     let pvk = prepare_verifying_key(&vk);
     let inputs = verifier_data.eval(inputs_map);

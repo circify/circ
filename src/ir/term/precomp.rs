@@ -23,7 +23,7 @@ impl PreComp {
         Self::default()
     }
     /// immutable access to the outputs
-    pub fn outputs(&self)-> &FxHashMap<String, Term> {
+    pub fn outputs(&self) -> &FxHashMap<String, Term> {
         &self.outputs
     }
     /// Add a new output variable to the precomputation. `value` is the term that computes its value.

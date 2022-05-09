@@ -19,7 +19,7 @@ use int_field::IntField;
 use ff::Field;
 use paste::paste;
 use rug::Integer;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use std::sync::Arc;

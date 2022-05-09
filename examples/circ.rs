@@ -17,11 +17,15 @@ use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
     opt::{opt, Opt},
-    term::{extras::Letified, text::{parse_value_map, serialize_value_map}, check},
+    term::{
+        check,
+        extras::Letified,
+        text::{parse_value_map, serialize_value_map},
+    },
 };
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
-use circ::target::ilp::{trans::to_ilp, assignment_to_values};
+use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::bellman::{gen_params, prove, verify};
 use circ::target::r1cs::opt::reduce_linearities;

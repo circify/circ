@@ -44,7 +44,7 @@ fn create_vars(
                             element,
                             val_s,
                             new_var_requests,
-                        false,
+                            false,
                         )
                     })
                     .collect(),

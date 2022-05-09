@@ -40,7 +40,10 @@ pub struct ZSharpFE;
 impl FrontEnd for ZSharpFE {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computation {
-        debug!("Starting Z# front-end, field: {}", Sort::Field(DFL_T.clone()));
+        debug!(
+            "Starting Z# front-end, field: {}",
+            Sort::Field(DFL_T.clone())
+        );
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(asts, i.mode, loader.stdlib());
@@ -668,7 +671,7 @@ impl<'ast> ZGen<'ast> {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
             let vis = self.interpret_visibility(&p.visibility);
-            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None,false);
+            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false);
             self.unwrap(r, &p.span);
         }
         for s in &f.statements {
@@ -691,9 +694,12 @@ impl<'ast> ZGen<'ast> {
                     let ty = ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
                     let ret_val = r.unwrap_term();
-                    let ret_var_val = self.circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
+                    let ret_var_val = self
+                        .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
-                    self.circ.borrow_mut().assert(eq(ret_val, ret_var_val).unwrap().term);
+                    self.circ
+                        .borrow_mut()
+                        .assert(eq(ret_val, ret_var_val).unwrap().term);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
@@ -1038,7 +1044,9 @@ impl<'ast> ZGen<'ast> {
         if IS_CNST {
             self.cvar_declare(name, ty)
         } else {
-            self.circ.borrow_mut().declare_uninit(name, ty)
+            self.circ
+                .borrow_mut()
+                .declare_uninit(name, ty)
                 .map_err(|e| format!("{}", e))
         }
     }
@@ -1813,7 +1821,9 @@ impl<'ast> ZGen<'ast> {
         precomputed_value: Option<T>,
         mangle_name: bool,
     ) -> Result<T, CircError> {
-        self.circ.borrow_mut().declare_input(name, ty, vis, precomputed_value, mangle_name)
+        self.circ
+            .borrow_mut()
+            .declare_input(name, ty, vis, precomputed_value, mangle_name)
     }
 
     fn circ_declare_init(&self, name: String, ty: Ty, val: Val<T>) -> Result<Val<T>, CircError> {

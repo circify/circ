@@ -1,7 +1,7 @@
 //! Bit-vector literal definition
 
 use rug::Integer;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Sub};

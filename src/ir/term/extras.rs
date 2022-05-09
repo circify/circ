@@ -165,7 +165,11 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
 /// The elements in this array (select terms) as a vector.
 pub fn array_elements(t: &Term) -> Vec<Term> {
     if let Sort::Array(key_sort, _, size) = check(t) {
-        key_sort.elems_iter().take(size).map(|key| term(Op::Select, vec![t.clone(), key])).collect()
+        key_sort
+            .elems_iter()
+            .take(size)
+            .map(|key| term(Op::Select, vec![t.clone(), key]))
+            .collect()
     } else {
         panic!()
     }
@@ -175,7 +179,6 @@ pub fn array_elements(t: &Term) -> Vec<Term> {
 pub fn array_to_tuple(t: &Term) -> Term {
     term(Op::Tuple, array_elements(t))
 }
-
 
 #[cfg(test)]
 mod test {

@@ -436,8 +436,7 @@ fn _ite(c: Term, a: CTerm, b: CTerm) -> Result<CTerm, String> {
 //     }
 // }
 
-pub struct Ct {
-}
+pub struct Ct {}
 
 fn idx_name(struct_name: &str, idx: usize) -> String {
     format!("{}.{}", struct_name, idx)
@@ -492,15 +491,7 @@ impl Embeddable for Ct {
             Ty::Array(n, ty) => {
                 assert!(precompute.is_none());
                 let v: Vec<Self::T> = (0..n.unwrap())
-                    .map(|i| {
-                        self.declare_input(
-                            ctx,
-                            &*ty,
-                            idx_name(&name, i),
-                            visibility,
-                            None,
-                        )
-                    })
+                    .map(|i| self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, None))
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(n.unwrap(), 32, ty.num_bits());

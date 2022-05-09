@@ -915,8 +915,7 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
     ))
 }
 
-pub struct ZSharp {
-}
+pub struct ZSharp {}
 
 fn field_name(struct_name: &str, field_name: &str) -> String {
     format!("{}.{}", struct_name, field_name)

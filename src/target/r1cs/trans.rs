@@ -4,8 +4,8 @@
 //! thesis](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.683.6940&rep=rep1&type=pdf)
 //! is a good intro to how this process works.
 use crate::ir::term::extras::Letified;
-use crate::ir::term::*;
 use crate::ir::term::precomp::PreComp;
+use crate::ir::term::*;
 use crate::target::bitsize;
 use crate::target::r1cs::*;
 
@@ -47,10 +47,7 @@ struct ToR1cs {
 }
 
 impl ToR1cs {
-    fn new(
-        field: FieldT,
-        public_inputs: FxHashSet<String>,
-    ) -> Self {
+    fn new(field: FieldT, public_inputs: FxHashSet<String>) -> Self {
         debug!("Starting R1CS back-end, field: {}", field);
         let r1cs = R1cs::new(field.clone());
         let zero = TermLc(pf_lit(field.new_v(0u8)), r1cs.zero());
@@ -86,7 +83,8 @@ impl ToR1cs {
 
     /// Enforce `x` to be bit-valued
     fn enforce_bit(&mut self, b: TermLc) {
-        self.r1cs.constraint(b.1.clone(), (b - 1).1, self.r1cs.zero());
+        self.r1cs
+            .constraint(b.1.clone(), (b - 1).1, self.r1cs.zero());
     }
 
     /// Get a new bit-valued variable, with name dependent on `d`.
@@ -152,7 +150,13 @@ impl ToR1cs {
     /// Given wire `x`, returns a vector of `n` wires which are the bits of `x`.
     /// Constrains `x` to fit in `n` (`signed`) bits.
     /// The LSB is at index 0.
-    fn bitify<D: Display + ?Sized>(&mut self, d: &D, x: &TermLc, n: usize, signed: bool) -> Vec<TermLc> {
+    fn bitify<D: Display + ?Sized>(
+        &mut self,
+        d: &D,
+        x: &TermLc,
+        n: usize,
+        signed: bool,
+    ) -> Vec<TermLc> {
         debug!("Bitify({}): {}", n, self.r1cs.format_lc(&x.1));
         let bits = self.decomp(d, x, n);
         let sum = self.debitify(bits.iter().cloned(), signed);
@@ -161,7 +165,13 @@ impl ToR1cs {
     }
 
     /// Given wire `x`, returns whether `x` fits in `n` `signed` bits.
-    fn fits_in_bits<D: Display + ?Sized>(&mut self, d: &D, x: &TermLc, n: usize, signed: bool) -> TermLc {
+    fn fits_in_bits<D: Display + ?Sized>(
+        &mut self,
+        d: &D,
+        x: &TermLc,
+        n: usize,
+        signed: bool,
+    ) -> TermLc {
         let bits = self.decomp(d, x, n);
         let sum = self.debitify(bits.iter().cloned(), signed);
         self.are_equal(sum, x)
@@ -205,11 +215,7 @@ impl ToR1cs {
     /// Return the product of `a` and `b`.
     fn mul(&mut self, a: TermLc, b: TermLc) -> TermLc {
         let mul_val = term![PF_MUL; a.0, b.0];
-        let c = self.fresh_var(
-            "mul",
-            mul_val,
-            false,
-        );
+        let c = self.fresh_var("mul", mul_val, false);
         self.r1cs.constraint(a.1, b.1, c.1.clone());
         c
     }
@@ -493,7 +499,13 @@ impl ToR1cs {
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
     /// Returns a bit sequence.
-    fn shift_bv_bits(&mut self, x: TermLc, y: Vec<TermLc>, ext_bit: Option<TermLc>, n: usize) -> Vec<TermLc> {
+    fn shift_bv_bits(
+        &mut self,
+        x: TermLc,
+        y: Vec<TermLc>,
+        ext_bit: Option<TermLc>,
+        n: usize,
+    ) -> Vec<TermLc> {
         let s = self.shift_bv(x, y, ext_bit);
         let mut bits = self.bitify("shift", &s, 2 * n - 1, false);
         bits.truncate(n);
@@ -508,7 +520,11 @@ impl ToR1cs {
                 match &bv.op {
                     Op::Var(name, Sort::BitVector(_)) => {
                         let public = self.public_inputs.contains(name);
-                        let var = self.fresh_var(name, term![Op::UbvToPf(self.field.clone()); bv.clone()], public);
+                        let var = self.fresh_var(
+                            name,
+                            term![Op::UbvToPf(self.field.clone()); bv.clone()],
+                            public,
+                        );
                         self.set_bv_uint(bv.clone(), var, n);
                         if !public {
                             self.get_bv_bits(&bv);
@@ -817,7 +833,10 @@ impl ToR1cs {
                     let public = self.public_inputs.contains(name);
                     self.fresh_var(name, c.clone(), public)
                 }
-                Op::Const(Value::Field(r)) => TermLc(c.clone(), self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus))),
+                Op::Const(Value::Field(r)) => TermLc(
+                    c.clone(),
+                    self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
+                ),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs[0]).clone();
                     let t = self.get_pf(&c.cs[1]).clone();
@@ -843,7 +862,8 @@ impl ToR1cs {
                 Op::PfUnOp(PfUnOp::Recip) => {
                     let x = self.get_pf(&c.cs[0]).clone();
                     let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
-                    self.r1cs.constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
+                    self.r1cs
+                        .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                     inv_x
                 }
                 _ => panic!("Non-field in embed_pf: {}", c),
@@ -854,7 +874,8 @@ impl ToR1cs {
     }
 
     fn assert_zero(&mut self, x: TermLc) {
-        self.r1cs.constraint(self.r1cs.zero(), self.r1cs.zero(), x.1);
+        self.r1cs
+            .constraint(self.r1cs.zero(), self.r1cs.zero(), x.1);
     }
     fn assert(&mut self, t: Term) {
         debug!("Assert: {}", Letified(t.clone()));
@@ -925,13 +946,12 @@ pub mod test {
     #[test]
     fn bool() {
         init();
-        let values: FxHashMap<String, Value> = 
-                vec![
-                    ("a".to_owned(), Value::Bool(true)),
-                    ("b".to_owned(), Value::Bool(false)),
-                ]
-                .into_iter()
-                .collect();
+        let values: FxHashMap<String, Value> = vec![
+            ("a".to_owned(), Value::Bool(true)),
+            ("b".to_owned(), Value::Bool(false)),
+        ]
+        .into_iter()
+        .collect();
         let cs = Computation::from_constraint_system_parts(
             vec![
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
@@ -1035,14 +1055,13 @@ pub mod test {
 
     #[test]
     fn eq_test() {
-        let values =
-            vec![(
-                "b".to_owned(),
-                Value::BitVector(BitVector::new(Integer::from(152), 8)),
-            )]
-            .into_iter()
-            .collect();
-        
+        let values = vec![(
+            "b".to_owned(),
+            Value::BitVector(BitVector::new(Integer::from(152), 8)),
+        )]
+        .into_iter()
+        .collect();
+
         let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
@@ -1194,12 +1213,12 @@ pub mod test {
 
     #[test]
     fn tuple() {
-                let values = vec![
-                    ("a".to_owned(), Value::Bool(true)),
-                    ("b".to_owned(), Value::Bool(false)),
-                ]
-                .into_iter()
-                .collect();
+        let values = vec![
+            ("a".to_owned(), Value::Bool(true)),
+            ("b".to_owned(), Value::Bool(false)),
+        ]
+        .into_iter()
+        .collect();
         let mut cs = Computation::from_constraint_system_parts(
             vec![
                 term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
