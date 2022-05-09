@@ -62,6 +62,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Field(_) => vec![t.cs[0].clone()],
         Op::Update(_i) => vec![t.cs[0].clone()],
         Op::Map(_) => t.cs.clone(),
+        Op::Call(_, _, _) => Vec::new(),
     }
 }
 
@@ -174,6 +175,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 }
             }
         }
+        Op::Call(_, _, ret) => Ok(ret.clone()),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }
@@ -390,6 +392,16 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             rec_check_raw_helper(&(*op.clone()), &new_a[..])
                 .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size))
         }
+        (Op::Call(_, ex_args, ret), act_args) => {
+            if ex_args.len() != act_args.len() {
+                Err(TypeErrorReason::ExpectedArgs(ex_args.len(), act_args.len()))
+            } else {
+                for (e, a) in ex_args.iter().zip(act_args) {
+                    eq_or(e, a, "in function call")?;
+                }
+                Ok(ret.clone())
+            }
+        }
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
     }
 }
@@ -467,6 +479,8 @@ pub enum TypeErrorReason {
     ExpectedTuple(&'static str),
     /// An empty n-ary operator.
     EmptyNary(String),
+    /// Expected _ args, but got _
+    ExpectedArgs(usize, usize),
     /// Something else
     Custom(String),
     /// Bad bounds
