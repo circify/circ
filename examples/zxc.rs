@@ -114,12 +114,12 @@ fn main() {
             Opt::ScalarizeVars,
             Opt::Flatten,
             Opt::Sha,
-            Opt::ConstantFold,
+            Opt::ConstantFold(Box::new([])),
             Opt::Flatten,
             Opt::Inline,
             // Tuples must be eliminated before oblivious array elim
             Opt::Tuple,
-            Opt::ConstantFold,
+            Opt::ConstantFold(Box::new([])),
             Opt::Obliv,
             // The obliv elim pass produces more tuples, that must be eliminated
             Opt::Tuple,
@@ -127,7 +127,7 @@ fn main() {
             // The linear scan pass produces more tuples, that must be eliminated
             Opt::Tuple,
             Opt::Flatten,
-            Opt::ConstantFold,
+            Opt::ConstantFold(Box::new([])),
             Opt::Inline,
         ],
     );
