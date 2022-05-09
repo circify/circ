@@ -139,8 +139,8 @@ pub enum Op {
     /// Map (operation)
     Map(Box<Op>),
 
-    /// Funcation Call
-    Call(FunctionDefinition),
+    /// Function Call
+    Call(FuncDef),
 }
 
 /// Boolean AND
@@ -1859,8 +1859,8 @@ impl Computation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-/// An IR computation.
-pub struct FunctionDefinition {
+/// A function definition.
+pub struct FuncDef {
     /// Name of function
     pub name: String,
     /// Type signature of function parameters
@@ -1870,10 +1870,10 @@ pub struct FunctionDefinition {
 }
 
 #[derive(Clone, Debug, Default)]
-/// An IR computation.
+/// A map of IR computations.
 pub struct Computations {
     /// The outputs of the computation.
-    pub outputs: BTreeMap<FunctionDefinition, Computation>,
+    pub functions: BTreeMap<FuncDef, Computation>,
 }
 
 #[cfg(test)]
