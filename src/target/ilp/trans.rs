@@ -47,6 +47,13 @@ impl ToMilp {
         }
     }
 
+    /// Take the converted ILP instance and garbage collect
+    fn take_ilp(mut self) -> Ilp {
+        self.cache.clear();
+        garbage_collect();
+        self.ilp
+    }
+
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
     fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D) -> Expression {
@@ -669,7 +676,8 @@ pub fn to_ilp(cs: Computation) -> Ilp {
         }
         s => panic!("Cannot optimize term of sort {}", s),
     };
-    converter.ilp
+
+    converter.take_ilp()
 }
 
 #[cfg(test)]
