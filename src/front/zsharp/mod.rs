@@ -164,7 +164,7 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn into_circify(self) -> Circify<ZSharp> {
-        self.circ.replace(Circify::new(ZSharp::new(None)))
+        self.circ.replace(Circify::new(ZSharp::new()))
     }
 
     /// Unwrap a result with a span-dependent error

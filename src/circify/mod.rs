@@ -806,7 +806,7 @@ impl<E: Embeddable> Circify<E> {
             &mut self.cir_ctx,
             CirCtx {
                 mem: Rc::new(RefCell::new(mem::MemManager::default())),
-                cs: Rc::new(RefCell::new(Computation::new(false))),
+                cs: Rc::new(RefCell::new(Computation::new())),
             },
         )
         .cs

@@ -67,15 +67,6 @@ impl ToR1cs {
         }
     }
 
-    /// Take the converted R1CS instance and garbage collect
-    fn take_r1cs(mut self) -> R1cs<String> {
-        drop(std::mem::take(&mut self.cache));
-        drop(self.values.take());
-        self.public_inputs.clear();
-        garbage_collect();
-        self.r1cs
-    }
-
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
     ///
