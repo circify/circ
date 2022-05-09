@@ -496,7 +496,7 @@ impl<E: Embeddable> Circify<E> {
         name: VarName,
         ty: &E::Ty,
     ) -> Result<()> {
-        let ssa_name = self.declare_env_name(name.clone(), ty)?.clone();
+        let ssa_name = self.declare_env_name(name, ty)?.clone();
         let t = self.e.create_uninit(&mut self.cir_ctx, ty);
         assert!(self.vals.insert(ssa_name, Val::Term(t)).is_none());
         Ok(())

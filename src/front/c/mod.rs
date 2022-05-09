@@ -644,7 +644,7 @@ impl CGen {
                     let ty = f.ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
                     let term = r.unwrap_term();
-                    let r2 = self.circ.declare_input(name.clone(), ty, PROVER_VIS, None, false).unwrap();
+                    let r2 = self.circ.declare_input(name, ty, PROVER_VIS, None, false).unwrap();
                     self.circ.assert(eq(term, r2).unwrap().term.simple_term());
                     unimplemented!();
                 }

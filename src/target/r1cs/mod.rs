@@ -266,7 +266,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             self.format_lc(&b),
             self.format_lc(&c)
         );
-        self.constraints.push((a.clone(), b.clone(), c.clone()));
+        self.constraints.push((a, b, c));
     }
     /// Get a nice string represenation of the combination `a`.
     pub fn format_lc(&self, a: &Lc) -> String {
@@ -318,7 +318,6 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
         &self.constraints
     }
-
 }
 
 impl R1cs<String> {
@@ -365,11 +364,11 @@ impl R1cs<String> {
     fn extend_precomputation(&self, precompute: &mut precomp::PreComp, public_signals_only: bool) {
         for i in 0..self.next_idx {
             let sig_name = self.idxs_signals.get(&i).unwrap();
-            if !public_signals_only || self.public_idxs.contains(&i) {
-                if !precompute.outputs().contains_key(sig_name) {
-                    let term = self.terms[i].clone();
-                    precompute.add_output(sig_name.clone(), term);
-                }
+            if (!public_signals_only || self.public_idxs.contains(&i))
+                && !precompute.outputs().contains_key(sig_name)
+            {
+                let term = self.terms[i].clone();
+                precompute.add_output(sig_name.clone(), term);
             }
         }
     }

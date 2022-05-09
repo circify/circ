@@ -691,7 +691,7 @@ impl<'ast> ZGen<'ast> {
                     let ty = ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
                     let ret_val = r.unwrap_term();
-                    let ret_var_val = self.circ_declare_input(name.clone(), ty, PUBLIC_VIS, Some(ret_val.clone()), false)
+                    let ret_var_val = self.circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
                     self.circ.borrow_mut().assert(eq(ret_val, ret_var_val).unwrap().term);
                 }

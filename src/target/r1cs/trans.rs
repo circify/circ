@@ -81,8 +81,7 @@ impl ToR1cs {
             self.r1cs.publicize(&n);
         }
         debug!("fresh: {}", n);
-        let r = TermLc(comp, self.r1cs.signal_lc(&n));
-        r
+        TermLc(comp, self.r1cs.signal_lc(&n))
     }
 
     /// Enforce `x` to be bit-valued
@@ -102,6 +101,7 @@ impl ToR1cs {
     }
 
     /// Return a bit indicating whether wire `x` is non-zero.
+    #[allow(clippy::wrong_self_convention)]
     fn is_zero(&mut self, x: TermLc) -> TermLc {
         let eqz = term![Op::Eq; x.0.clone(), self.zero.0.clone()];
         // m * x - 1 + is_zero == 0
@@ -647,7 +647,7 @@ impl ToR1cs {
                                 let a_bv_term = term![Op::PfToBv(n); a.0.clone()];
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
                                 let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
-                                let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term.clone(), b_bv_term.clone()]];
+                                let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
                                 let q = self.fresh_var("div_q", q_term, false);
                                 let r = self.fresh_var("div_r", r_term, false);
                                 let qb = self.bitify("div_q", &q, n, false);
@@ -843,7 +843,7 @@ impl ToR1cs {
                 Op::PfUnOp(PfUnOp::Recip) => {
                     let x = self.get_pf(&c.cs[0]).clone();
                     let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
-                    self.r1cs.constraint(x.1.clone(), inv_x.1.clone(), self.r1cs.zero() + 1);
+                    self.r1cs.constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                     inv_x
                 }
                 _ => panic!("Non-field in embed_pf: {}", c),

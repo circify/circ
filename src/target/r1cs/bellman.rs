@@ -112,7 +112,7 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
             if let Some(s) = self.0.idxs_signals.get(&i) {
                 //for (_i, s) in self.0.idxs_signals.get() {
                 if uses.get(&i).is_some() {
-                    let name_f = || format!("{}", s);
+                    let name_f = || s.to_string();
                     let val_f = || {
                         Ok({
                             let i_val = self.1.as_ref().expect("missing values").get(s).unwrap();
@@ -276,7 +276,7 @@ pub fn verify<E: MultiMillerLoop, P1: AsRef<Path>, P2: AsRef<Path>>(
     let (vk, verifier_data) = read_verifier_key_and_data::<_, E>(vk_path)?;
     let pvk = prepare_verifying_key(&vk);
     let inputs = verifier_data.eval(inputs_map);
-    let inputs_as_ff: Vec<E::Fr> = inputs.into_iter().map(|i| int_to_ff(i)).collect();
+    let inputs_as_ff: Vec<E::Fr> = inputs.into_iter().map(int_to_ff).collect();
     let mut pf_file = File::open(pf_path).unwrap();
     let pf = Proof::read(&mut pf_file).unwrap();
     verify_proof(&pvk, &pf, &inputs_as_ff).unwrap();

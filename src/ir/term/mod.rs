@@ -961,10 +961,7 @@ impl Sort {
 
     /// Is this a scalar?
     pub fn is_scalar(&self) -> bool {
-        match self {
-            Sort::Tuple(..) | Sort::Array(..) => false,
-            _ => true,
-        }
+        !matches!(self, Sort::Tuple(..) | Sort::Array(..))
     }
 }
 
@@ -1743,7 +1740,6 @@ impl ComputationMetadata {
                 )
             })
             .1
-            .clone()
     }
     /// Is this input public?
     pub fn is_input(&self, input_name: &str) -> bool {

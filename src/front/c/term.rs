@@ -547,11 +547,10 @@ impl Embeddable for Ct {
             Ty::Array(n, ty) => {
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(n.unwrap(), 32, ty.num_bits());
-                let arr = Self::T {
+                Self::T {
                     term: CTermData::CArray(*ty.clone(), Some(id)),
                     udef: false,
-                };
-                arr
+                }
             }
         }
     }
