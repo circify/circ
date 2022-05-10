@@ -1,3 +1,5 @@
+- detect lack of return at bottom of function rather than crashing
+
 - error messages: (String, &Span) instead of String to avoid recursively
   expanding Spans on error?
 
