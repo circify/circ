@@ -50,27 +50,27 @@ pub struct C;
 impl FrontEnd for C {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computations {
+        let mut cs: Computations = Computations::new();
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
         let mut g = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
-        let mut cs: Computations = Computations::new();
         g.visit_files();
-        for (f, fn_info) in g.functions.into_iter() {
-            let mut gen = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
-            gen.visit_files();
-            gen.entry_fn(&f);
+        let functions = g.functions.clone();
+        for (f, fn_info) in functions.into_iter() {
+            g = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
+            g.visit_files();
+            g.entry_fn(&f);
             let fn_def = fn_info_to_defs(&fn_info);
-            let mem = gen.circ.cir_ctx().mem.borrow().clone();
+            let mem = g.circ.cir_ctx().mem.borrow().clone();
             cs.insert_mem(fn_def.clone(), mem);
-            let comp = gen.circ.consume().borrow().clone();
+            let comp = g.circ.consume().borrow().clone();
             cs.insert_comp(fn_def, comp.clone());
-            // println!("functions: {}", f);
-            // let Computation { outputs, .. } = comp.clone();
-            // for t in outputs {
-            //     println!("term: {}", t);
-            // }
+            println!("functions: {}", f);
+            let Computation { outputs, .. } = comp.clone();
+            for t in outputs {
+                println!("term: {}", t);
+            }
         }
-        unimplemented!();
         cs
     }
 }
@@ -404,7 +404,6 @@ impl CGen {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
                 let inner_ty = ty.inner_ty();
                 let new_offset = term![BV_ADD; offset, idx];
-                // println!("self.circ.load {}", self.circ.load(i, new_offset.clone()));
                 Ok(cterm(match inner_ty {
                     Ty::Bool => CTermData::Bool(self.circ.load(i, new_offset)),
                     Ty::Int(s, w) => CTermData::Int(s, w, self.circ.load(i, new_offset)),
@@ -419,11 +418,9 @@ impl CGen {
         match (array.clone().term, idx.term) {
             (CTermData::Array(ty, id), CTermData::Int(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
-                // println!("store term val: {}", val);
                 let vals = val.term.terms(self.circ.cir_ctx());
                 for (o, v) in vals.iter().enumerate() {
                     let updated_idx = term![BV_ADD; idx_term.clone(), bv_lit(o as i32, 32)];
-                    // println!("array_store: {}", v.clone());
                     self.circ.store(i, updated_idx, v.clone());
                 }
                 if vals.len() > 1 {
@@ -452,7 +449,6 @@ impl CGen {
 
     /// Computes base[val / loc]    
     fn rebuild_lval(&mut self, base: CTerm, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
-        println!("rebuild called");
         match loc {
             CLoc::Var(_) => Ok(val),
             CLoc::Idx(inner_loc, idx) => {
@@ -477,7 +473,6 @@ impl CGen {
     }
 
     fn gen_lval(&mut self, expr: Node<Expression>) -> CLoc {
-        println!("gen lval: {:#?}", expr);
         match expr.node {
             Expression::Identifier(_) => {
                 let base_name = name_from_expr(expr);
@@ -551,8 +546,6 @@ impl CGen {
                         self.array_select(base, idx).unwrap()
                     }
                 };
-                println!("assign old inner: {}", old_inner);
-                println!("val: {}", val);
                 self.array_store(old_inner, idx, val)
             }
             CLoc::Member(l, field) => {
@@ -686,8 +679,6 @@ impl CGen {
                     BinaryOperator::Assign => {
                         let loc = self.gen_lval(*bin_op.lhs);
                         let val = self.gen_expr(bin_op.rhs.node.clone());
-                        println!("assign!");
-                        // println!("val: {}", val);
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::AssignPlus | BinaryOperator::AssignDivide => {
@@ -701,7 +692,6 @@ impl CGen {
                     BinaryOperator::Index => {
                         let index = self.gen_index(expr);
                         let offset = self.index_offset(&index);
-                        println!("offset: {}", offset);
                         match index.base.term {
                             CTermData::Array(ref ty, id) => {
                                 if let Ty::Array(size, sizes, t) = ty {
@@ -719,21 +709,14 @@ impl CGen {
                                         )
                                     }
                                 } else {
-                                    println!("here?");
                                     self.array_select(
                                         index.base,
                                         cterm(CTermData::Int(true, 32, offset)),
                                     )
                                 }
                             }
-                            _ => {
-                                println!("there?");
-                                println!("index base: {}", index.base.term);
-                                self.array_select(
-                                    index.base,
-                                    cterm(CTermData::Int(true, 32, offset)),
-                                )
-                            }
+                            _ => self
+                                .array_select(index.base, cterm(CTermData::Int(true, 32, offset))),
                         }
                     }
                     _ => {
@@ -906,7 +889,6 @@ impl CGen {
                     for (i, v) in values.iter().enumerate() {
                         let offset = bv_lit(i, 32);
                         let v_ = v.term.term(self.circ.cir_ctx());
-                        println!("store init: {}", v_);
                         self.circ.store(id, offset, v_);
                     }
                     cterm(CTermData::Array(ty, Some(id)))
@@ -1147,6 +1129,7 @@ impl CGen {
         self.circ.enter_fn(f.name.to_owned(), ret_ty.clone());
 
         for param in f.params.iter() {
+            println!("param decl: {}, {}", param.name.clone(), param.ty);
             let r = self
                 .circ
                 .declare(param.name.clone(), &param.ty, true, param.vis);
