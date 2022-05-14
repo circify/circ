@@ -911,7 +911,7 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
 pub fn vector_op(op: Op, a: T, b: T) -> Result<T, String> {
     match (a.ty, b.ty) {
         (Ty::Array(a_s, a_ty), Ty::Array(b_s, b_ty)) => {
-            assert_eq!((a_s, a_ty.clone()), (b_s, b_ty.clone()));
+            assert_eq!((a_s, a_ty.clone()), (b_s, b_ty));
             let t = term![Op::Map(Box::new(op)); a.term, b.term];
             Ok(T::new(Ty::Array(a_s, a_ty), t))
         }

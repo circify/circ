@@ -255,7 +255,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                             a.size,
                         );
                         let merge = ArrayMerge::new(a, b);
-                        for (i, va, vb) in merge.into_iter() {
+                        for (i, va, vb) in merge {
                             let r = fold_cache(
                                 &term![*op.clone(); leaf_term(Op::Const(va.clone())), leaf_term(Op::Const(vb.clone()))],
                                 cache,

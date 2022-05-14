@@ -773,7 +773,7 @@ impl<'a> Iterator for ArrayMerge<'a> {
     type Item = (&'a Value, &'a Value, &'a Value);
     fn next(&mut self) -> Option<(&'a Value, &'a Value, &'a Value)> {
         let res: Option<(&'a Value, &'a Value, &'a Value)> =
-            match (self.left.peek().clone(), self.right.peek().clone()) {
+            match (self.left.peek(), self.right.peek()) {
                 (Some((l_ind, _l_val)), Some((r_ind, _r_val))) => match l_ind.cmp(r_ind) {
                     Ordering::Less => {
                         let (l_ind, l_val) = self.left.next().unwrap();
@@ -791,11 +791,11 @@ impl<'a> Iterator for ArrayMerge<'a> {
                 },
                 (Some(_), None) => {
                     let (l_ind, l_val) = self.left.next().unwrap();
-                    Some((l_ind, l_val, &self.right_dfl))
+                    Some((l_ind, l_val, self.right_dfl))
                 }
                 (None, Some(_)) => {
                     let (r_ind, r_val) = self.left.next().unwrap();
-                    Some((r_ind, &self.left_dfl, r_val))
+                    Some((r_ind, self.left_dfl, r_val))
                 }
                 (None, None) => None,
             };
