@@ -725,100 +725,80 @@ impl Array {
     }
 
     /// Iter
-    pub fn into_iter(&self) -> std::collections::btree_map::IntoIter<Value, Value> {
-        self.map.clone().into_iter()
+    pub fn iter(&self) -> std::collections::btree_map::Iter<Value, Value> {
+        self.map.iter()
     }
 }
 
 /// Merge two Array Iterators
-pub struct ArrayMerge {
-    left: Peekable<Box<std::collections::btree_map::IntoIter<Value, Value>>>,
-    right: Peekable<Box<std::collections::btree_map::IntoIter<Value, Value>>>,
-    left_dfl: Value,
-    right_dfl: Value,
+pub struct ArrayMerge<'a> {
+    left: Peekable<std::collections::btree_map::Iter<'a, Value, Value>>,
+    right: Peekable<std::collections::btree_map::Iter<'a, Value, Value>>,
+    left_dfl: &'a Value,
+    right_dfl: &'a Value,
 }
 
-impl ArrayMerge {
+impl<'a> ArrayMerge<'a> {
     /// Create a new [ArrayMerge] from two [Array]s
-    pub fn new(a: Array, b: Array) -> Self {
-        if a.size != b.size {
-            panic!("IR Arrays have different lengths: {}, {}", a.size, b.size);
-        }
-        if a.key_sort != b.key_sort {
-            panic!(
-                "IR Arrays have different key sorts: {}, {}",
-                a.key_sort, b.key_sort
-            );
-        }
-        if a.default.sort() != b.default.sort() {
-            panic!(
-                "IR Arrays default values have different key sorts: {}, {}",
-                a.default.sort(),
-                b.default.sort()
-            );
-        }
+    pub fn new(a: &'a Array, b: &'a Array) -> Self {
+        assert!(
+            a.size != b.size,
+            "IR Arrays have different lengths: {}, {}",
+            a.size,
+            b.size
+        );
+        assert!(
+            a.key_sort != b.key_sort,
+            "IR Arrays have different key sorts: {}, {}",
+            a.key_sort,
+            b.key_sort,
+        );
+        assert!(
+            a.default.sort() != b.default.sort(),
+            "IR Arrays default values have different key sorts: {}, {}",
+            a.default.sort(),
+            b.default.sort()
+        );
 
         Self {
-            left: Box::new(a.into_iter()).peekable(),
-            right: Box::new(b.into_iter()).peekable(),
-            left_dfl: *a.default,
-            right_dfl: *b.default,
+            left: a.iter().peekable(),
+            right: b.iter().peekable(),
+            left_dfl: &*a.default,
+            right_dfl: &*b.default,
         }
     }
+}
 
-    /// Iter
-    pub fn into_iter(&mut self) -> Box<dyn Iterator<Item = (Value, Value, Value)>> {
-        let mut acc: Vec<(Value, Value, Value)> = Vec::new();
-        let mut next = self.next_();
-        while let Some(n) = next {
-            acc.push(n);
-            next = self.next_();
-        }
-        Box::new(acc.into_iter())
-    }
-
-    /// Next
-    pub fn next_(&mut self) -> Option<(Value, Value, Value)> {
-        let l_peek = self.left.peek();
-        let r_peek = self.right.peek();
-
-        let mut left_next = false;
-        let mut right_next = false;
-
-        let res = match (l_peek, r_peek) {
-            (Some((l_ind, l_val)), Some((r_ind, r_val))) => match l_ind.cmp(r_ind) {
-                Ordering::Less => {
-                    left_next = true;
-                    Some((l_ind.clone(), l_val.clone(), self.right_dfl.clone()))
+impl<'a> Iterator for ArrayMerge<'a> {
+    type Item = (&'a Value, &'a Value, &'a Value);
+    fn next(&mut self) -> Option<(&'a Value, &'a Value, &'a Value)> {
+        let res: Option<(&'a Value, &'a Value, &'a Value)> =
+            match (self.left.peek().clone(), self.right.peek().clone()) {
+                (Some((l_ind, _l_val)), Some((r_ind, _r_val))) => match l_ind.cmp(r_ind) {
+                    Ordering::Less => {
+                        let (l_ind, l_val) = self.left.next().unwrap();
+                        Some((l_ind, l_val, self.right_dfl))
+                    }
+                    Ordering::Greater => {
+                        let (r_ind, r_val) = self.right.next().unwrap();
+                        Some((r_ind, self.left_dfl, r_val))
+                    }
+                    Ordering::Equal => {
+                        let (l_ind, l_val) = self.left.next().unwrap();
+                        let (_r_ind, r_val) = self.right.next().unwrap();
+                        Some((l_ind, l_val, r_val))
+                    }
+                },
+                (Some(_), None) => {
+                    let (l_ind, l_val) = self.left.next().unwrap();
+                    Some((l_ind, l_val, &self.right_dfl))
                 }
-                Ordering::Greater => {
-                    right_next = true;
-                    Some((r_ind.clone(), self.left_dfl.clone(), r_val.clone()))
+                (None, Some(_)) => {
+                    let (r_ind, r_val) = self.left.next().unwrap();
+                    Some((r_ind, &self.left_dfl, r_val))
                 }
-                Ordering::Equal => {
-                    left_next = true;
-                    right_next = true;
-                    Some((l_ind.clone(), l_val.clone(), r_val.clone()))
-                }
-            },
-            (Some((l_ind, l_val)), None) => {
-                left_next = true;
-                Some((l_ind.clone(), l_val.clone(), self.right_dfl.clone()))
-            }
-            (None, Some((r_ind, r_val))) => {
-                right_next = true;
-                Some((r_ind.clone(), self.left_dfl.clone(), r_val.clone()))
-            }
-            (None, None) => None,
-        };
-
-        if left_next {
-            self.left.next();
-        }
-        if right_next {
-            self.right.next();
-        }
-
+                (None, None) => None,
+            };
         res
     }
 }

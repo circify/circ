@@ -244,29 +244,36 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     b.width() + w,
                 ))))
             }),
-            Op::Map(op) => match (get(0).as_array_opt(), get(1).as_array_opt()) {
-                (Some(a), Some(b)) => {
-                    // TODO: extend for n-ary arrays
-                    let mut res = a.clone();
-                    let mut merge = ArrayMerge::new(a.clone(), b.clone());
-                    for (i, va, vb) in merge.into_iter() {
-                        let r = fold_cache(
-                            &term![*op.clone(); leaf_term(Op::Const(va.clone())), leaf_term(Op::Const(vb.clone()))],
-                            cache,
+            Op::Map(op) => {
+                assert!(t.cs.len() == 2); // TODO: extend for n-ary arrays
+                match (get(0).as_array_opt(), get(1).as_array_opt()) {
+                    (Some(a), Some(b)) => {
+                        let mut res = Array::new(
+                            a.key_sort.clone(),
+                            a.default.clone(),
+                            Default::default(),
+                            a.size,
                         );
-                        match r.as_value_opt() {
-                            Some(v) => {
-                                res = res.clone().store(i, v.clone());
-                            }
-                            None => {
-                                panic!("Unable to constant fold idx: {}", i);
+                        let merge = ArrayMerge::new(a, b);
+                        for (i, va, vb) in merge.into_iter() {
+                            let r = fold_cache(
+                                &term![*op.clone(); leaf_term(Op::Const(va.clone())), leaf_term(Op::Const(vb.clone()))],
+                                cache,
+                            );
+                            match r.as_value_opt() {
+                                Some(v) => {
+                                    res = res.store(i.clone(), v.clone());
+                                }
+                                None => {
+                                    panic!("Unable to constant fold idx: {}", i);
+                                }
                             }
                         }
+                        Some(leaf_term(Op::Const(Value::Array(res))))
                     }
-                    Some(leaf_term(Op::Const(Value::Array(res))))
+                    _ => None,
                 }
-                _ => None,
-            },
+            }
             _ => None,
         };
         let new_t = {
