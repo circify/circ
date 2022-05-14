@@ -445,34 +445,69 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
-    let Computation {
-        outputs: terms,
-        metadata: md,
-        ..
-    } = ir.clone();
+pub fn to_aby(ir: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
+    // Entry function
+    let entry_fn_name = "main";
+    let comp: Computation = ir.get_comp(entry_fn_name).unwrap().clone();
 
     let s_map: SharingMap = match ss {
-        "b" => assign_all_boolean(&ir, cm),
-        "y" => assign_all_yao(&ir, cm),
-        "a+b" => assign_arithmetic_and_boolean(&ir, cm),
-        "a+y" => assign_arithmetic_and_yao(&ir, cm),
-        "greedy" => assign_greedy(&ir, cm),
+        "b" => assign_all_boolean(&comp, cm),
+        "y" => assign_all_yao(&comp, cm),
+        "a+b" => assign_arithmetic_and_boolean(&comp, cm),
+        "a+y" => assign_arithmetic_and_yao(&comp, cm),
+        "greedy" => assign_greedy(&comp, cm),
         #[cfg(feature = "lp")]
-        "lp" => assign(&ir, cm),
+        "lp" => assign(&comp, cm),
         #[cfg(feature = "lp")]
-        "glp" => assign(&ir, cm),
+        "glp" => assign(&comp, cm),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }
     };
 
-    let mut converter = ToABY::new(s_map, md, path, lang);
-
-    for t in terms {
-        // println!("terms: {}", t);
+    let mut converter = ToABY::new(s_map, comp.metadata, path, lang);
+    for t in comp.outputs {
+        println!("terms: {}", t);
         converter.map_terms_to_shares(t.clone());
         converter.write_mapping_file(t.clone());
         converter.lower(t.clone());
     }
+
+    // for (fd, cs) in ir.functions.iter() {
+    //     println!("================================================");
+    //     println!("fn: {}", fd.name);
+    //     println!("================================================");
+    //     let Computation {
+    //         outputs: terms,
+    //         metadata: md,
+    //         ..
+    //     } = cs.clone();
+
+    //     for t in terms {
+    //         println!("terms: {}", t);
+    //     }
+
+    //     // let s_map: SharingMap = match ss {
+    //     "b" => assign_all_boolean(&cs, cm),
+    //     "y" => assign_all_yao(&cs, cm),
+    //     "a+b" => assign_arithmetic_and_boolean(&cs, cm),
+    //     "a+y" => assign_arithmetic_and_yao(&cs, cm),
+    //     "greedy" => assign_greedy(&cs, cm),
+    //     #[cfg(feature = "lp")]
+    //     "lp" => assign(&cs, cm),
+    //     #[cfg(feature = "lp")]
+    //     "glp" => assign(&cs, cm),
+    //     _ => {
+    //         panic!("Unsupported sharing scheme: {}", ss);
+    //     }
+    // };
+
+    // let mut converter = ToABY::new(s_map, md, path, lang);
+    // for t in terms {
+    //     // println!("terms: {}", t);
+    //     converter.map_terms_to_shares(t.clone());
+    //     converter.write_mapping_file(t.clone());
+    //     converter.lower(t.clone());
+    // }
+    // }
 }

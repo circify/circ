@@ -11,11 +11,12 @@ use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
 #[cfg(feature = "c")]
 use circ::front::c::{self, C};
+#[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
-use circ::ir::term::{Op, BV_LSHR, BV_SHL};
+use circ::ir::term::{Computations, Op, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
@@ -190,7 +191,7 @@ fn main() {
         Backend::Smt { .. } => Mode::Proof,
     };
     let language = determine_language(&options.frontend.language, &options.path);
-    let cs = match language {
+    let mut cs = match language {
         #[cfg(all(feature = "smt", feature = "zok"))]
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
@@ -204,6 +205,7 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             panic!("Missing feature: smt,zok");
         }
+        #[cfg(all(feature = "smt", feature = "zok"))]
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs {
                 file: options.path,
@@ -211,6 +213,10 @@ fn main() {
                 lint_prim_rec: options.frontend.lint_prim_rec,
             };
             Datalog::gen(inputs)
+        }
+        #[cfg(not(all(feature = "smt", feature = "zok")))]
+        DeterminedLanguage::Datalog => {
+            panic!("Missing feature: smt,zok");
         }
         #[cfg(feature = "c")]
         DeterminedLanguage::C => {
@@ -226,7 +232,7 @@ fn main() {
             panic!("Missing feature: c");
         }
     };
-    let cs = match mode {
+    cs = match mode {
         Mode::Opt => opt(
             cs,
             vec![Opt::ScalarizeVars, Opt::ConstantFold(Box::new([]))],
@@ -247,11 +253,13 @@ fn main() {
                     Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
-                    Opt::ConstantFold(Box::new(ignore)),
+                    Opt::ConstantFold(Box::new(ignore.clone())),
                     // Binarize nary terms
                     Opt::Binarize,
+                    // Inline Function Calls
+                    Opt::InlineCalls,
+                    Opt::ConstantFold(Box::new(ignore)),
                 ],
-                // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
             )
         }
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
@@ -278,6 +286,12 @@ fn main() {
             ],
         ),
     };
+    for (f, comp) in cs.functions.iter() {
+        println!("functions: {}", f.name);
+        for t in &comp.outputs {
+            println!("term: {}", t);
+        }
+    }
     println!("Done with IR optimization");
 
     match options.backend {
@@ -350,23 +364,23 @@ fn main() {
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
-            let ilp = to_ilp(cs);
-            let solver_result = ilp.solve(default_solver);
-            let (max, vars) = solver_result.expect("ILP could not be solved");
-            println!("Max value: {}", max.round() as u64);
-            println!("Assignment:");
-            for (var, val) in &vars {
-                println!("  {}: {}", var, val.round() as u64);
-            }
-            let mut f = File::create("assignment.txt").unwrap();
-            for (var, val) in &vars {
-                if var.contains("f0") {
-                    let i = var.find("f0").unwrap();
-                    let s = &var[i + 8..];
-                    let e = s.find('_').unwrap();
-                    writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
-                }
-            }
+            // let ilp = to_ilp(cs);
+            // let solver_result = ilp.solve(default_solver);
+            // let (max, vars) = solver_result.expect("ILP could not be solved");
+            // println!("Max value: {}", max.round() as u64);
+            // println!("Assignment:");
+            // for (var, val) in &vars {
+            //     println!("  {}: {}", var, val.round() as u64);
+            // }
+            // let mut f = File::create("assignment.txt").unwrap();
+            // for (var, val) in &vars {
+            //     if var.contains("f0") {
+            //         let i = var.find("f0").unwrap();
+            //         let s = &var[i + 8..];
+            //         let e = s.find('_').unwrap();
+            //         writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
+            //     }
+            // }
         }
         #[cfg(not(feature = "lp"))]
         Backend::Ilp { .. } => {

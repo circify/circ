@@ -6,6 +6,7 @@ use std::collections::HashMap;
 /// Identifier for an Allocation block in memory
 pub type AllocId = usize;
 
+#[derive(Clone, Debug)]
 struct Alloc {
     addr_width: usize,
     val_width: usize,
@@ -28,6 +29,7 @@ impl Alloc {
     }
 }
 
+#[derive(Clone, Debug)]
 /// Manages a circuit-embedded stack.
 pub struct MemManager {
     allocs: HashMap<AllocId, Alloc>,

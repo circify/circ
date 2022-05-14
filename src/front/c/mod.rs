@@ -49,13 +49,29 @@ pub struct C;
 
 impl FrontEnd for C {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computation {
+    fn gen(i: Inputs) -> Computations {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
-        let mut g = CGen::new(i.inputs, i.mode, p.unit);
+        let mut g = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
+        let mut cs: Computations = Computations::new();
         g.visit_files();
-        g.entry_fn("main");
-        g.circ.consume().borrow().clone()
+        for (f, fn_info) in g.functions.into_iter() {
+            let mut gen = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
+            gen.visit_files();
+            gen.entry_fn(&f);
+            let fn_def = fn_info_to_defs(&fn_info);
+            let mem = gen.circ.cir_ctx().mem.borrow().clone();
+            cs.insert_mem(fn_def.clone(), mem);
+            let comp = gen.circ.consume().borrow().clone();
+            cs.insert_comp(fn_def, comp.clone());
+            // println!("functions: {}", f);
+            // let Computation { outputs, .. } = comp.clone();
+            // for t in outputs {
+            //     println!("term: {}", t);
+            // }
+        }
+        unimplemented!();
+        cs
     }
 }
 
@@ -293,12 +309,16 @@ impl CGen {
         res
     }
 
-    pub fn get_param_info(&mut self, decl: ParameterDeclaration, v: bool) -> ParamInfo {
+    pub fn get_param_info(&mut self, decl: ParameterDeclaration) -> ParamInfo {
         let mut vis: Option<PartyId> = None;
         let base_ty: Option<Ty>;
-        if v {
-            vis = interpret_visibility(&decl.specifiers[0].node, self.mode);
-            base_ty = self.d_type_(decl.specifiers[1..].to_vec());
+        if decl.specifiers.len() > 0 {
+            if let DeclarationSpecifier::Extension(_) = &decl.specifiers[0].node {
+                vis = interpret_visibility(&decl.specifiers[0].node, self.mode);
+                base_ty = self.d_type_(decl.specifiers[1..].to_vec());
+            } else {
+                base_ty = self.d_type_(decl.specifiers);
+            }
         } else {
             base_ty = self.d_type_(decl.specifiers);
         }
@@ -315,17 +335,25 @@ impl CGen {
 
     pub fn get_fn_info(&mut self, fn_def: &FunctionDefinition) -> FnInfo {
         let name = name_from_func(fn_def);
-        let ret_ty = self.ret_ty_from_func(fn_def);
+        let ret_ty = match self.ret_ty_from_func(fn_def) {
+            Some(ty) => ty,
+            None => Ty::Void,
+        };
         let args = match args_from_func(fn_def) {
             Some(args) => args.to_vec(),
             None => vec![],
         };
+
+        let params = args
+            .iter()
+            .map(|a| self.get_param_info(a.clone()))
+            .collect();
         let body = body_from_func(fn_def);
 
         FnInfo {
             name,
             ret_ty,
-            args: args,
+            params,
             body,
         }
     }
@@ -335,7 +363,7 @@ impl CGen {
     }
 
     pub fn field_select(&self, struct_: &CTerm, field: &str) -> Result<CTerm, String> {
-        if let CTermData::CStruct(_, fs) = &struct_.term {
+        if let CTermData::Struct(_, fs) = &struct_.term {
             if let Some((_, term_)) = fs.search(field) {
                 Ok(term_.clone())
             } else {
@@ -347,11 +375,11 @@ impl CGen {
     }
 
     pub fn field_store(&self, struct_: CTerm, field: &str, val: CTerm) -> Result<CTerm, String> {
-        if let CTermData::CStruct(struct_ty, fs) = &struct_.term {
+        if let CTermData::Struct(struct_ty, fs) = &struct_.term {
             if let Some((idx, _)) = fs.search(field) {
                 let mut new_fs = fs.clone();
                 new_fs.set(idx, val);
-                let res = cterm(CTermData::CStruct(struct_ty.clone(), new_fs.clone()));
+                let res = cterm(CTermData::Struct(struct_ty.clone(), new_fs.clone()));
                 Ok(res)
             } else {
                 return Err(format!("No field '{}'", field));
@@ -363,22 +391,23 @@ impl CGen {
 
     fn array_select(&self, array: CTerm, idx: CTerm) -> Result<CTerm, String> {
         match (array.clone().term, idx.term) {
-            (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx)) => {
+            (CTermData::Array(ty, id), CTermData::Int(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
                 let inner_ty = ty.inner_ty();
                 Ok(cterm(match inner_ty {
-                    Ty::Bool => CTermData::CBool(self.circ.load(i, idx)),
-                    Ty::Int(s, w) => CTermData::CInt(s, w, self.circ.load(i, idx)),
+                    Ty::Bool => CTermData::Bool(self.circ.load(i, idx)),
+                    Ty::Int(s, w) => CTermData::Int(s, w, self.circ.load(i, idx)),
                     _ => unimplemented!(),
                 }))
             }
-            (CTermData::CStackPtr(ty, offset, id), CTermData::CInt(_, _, idx)) => {
+            (CTermData::StackPtr(ty, offset, id), CTermData::Int(_, _, idx)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array));
                 let inner_ty = ty.inner_ty();
                 let new_offset = term![BV_ADD; offset, idx];
+                // println!("self.circ.load {}", self.circ.load(i, new_offset.clone()));
                 Ok(cterm(match inner_ty {
-                    Ty::Bool => CTermData::CBool(self.circ.load(i, new_offset)),
-                    Ty::Int(s, w) => CTermData::CInt(s, w, self.circ.load(i, new_offset)),
+                    Ty::Bool => CTermData::Bool(self.circ.load(i, new_offset)),
+                    Ty::Int(s, w) => CTermData::Int(s, w, self.circ.load(i, new_offset)),
                     _ => unimplemented!(),
                 }))
             }
@@ -388,20 +417,22 @@ impl CGen {
 
     pub fn array_store(&mut self, array: CTerm, idx: CTerm, val: CTerm) -> Result<CTerm, String> {
         match (array.clone().term, idx.term) {
-            (CTermData::CArray(ty, id), CTermData::CInt(_, _, idx_term)) => {
+            (CTermData::Array(ty, id), CTermData::Int(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
+                // println!("store term val: {}", val);
                 let vals = val.term.terms(self.circ.cir_ctx());
                 for (o, v) in vals.iter().enumerate() {
                     let updated_idx = term![BV_ADD; idx_term.clone(), bv_lit(o as i32, 32)];
+                    // println!("array_store: {}", v.clone());
                     self.circ.store(i, updated_idx, v.clone());
                 }
                 if vals.len() > 1 {
-                    Ok(cterm(CTermData::CArray(ty, id)))
+                    Ok(cterm(CTermData::Array(ty, id)))
                 } else {
                     Ok(val)
                 }
             }
-            (CTermData::CStackPtr(ty, offset, id), CTermData::CInt(_, _, idx_term)) => {
+            (CTermData::StackPtr(ty, offset, id), CTermData::Int(_, _, idx_term)) => {
                 let i = id.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", array.clone()));
                 let vals = val.term.terms(self.circ.cir_ctx());
                 for (o, v) in vals.iter().enumerate() {
@@ -410,7 +441,7 @@ impl CGen {
                     self.circ.store(i, updated_idx, v.clone());
                 }
                 if vals.len() > 1 {
-                    Ok(cterm(CTermData::CArray(ty, id)))
+                    Ok(cterm(CTermData::Array(ty, id)))
                 } else {
                     Ok(val)
                 }
@@ -421,6 +452,7 @@ impl CGen {
 
     /// Computes base[val / loc]    
     fn rebuild_lval(&mut self, base: CTerm, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
+        println!("rebuild called");
         match loc {
             CLoc::Var(_) => Ok(val),
             CLoc::Idx(inner_loc, idx) => {
@@ -445,6 +477,7 @@ impl CGen {
     }
 
     fn gen_lval(&mut self, expr: Node<Expression>) -> CLoc {
+        println!("gen lval: {:#?}", expr);
         match expr.node {
             Expression::Identifier(_) => {
                 let base_name = name_from_expr(expr);
@@ -460,7 +493,7 @@ impl CGen {
                         // get offset
                         let index = self.gen_index(expr.node.clone());
                         let offset = self.index_offset(&index);
-                        let idx = cterm(CTermData::CInt(true, 32, offset));
+                        let idx = cterm(CTermData::Int(true, 32, offset));
 
                         if let Expression::BinaryOperator(_) = bin_op.lhs.node {
                             // Matrix case
@@ -518,6 +551,8 @@ impl CGen {
                         self.array_select(base, idx).unwrap()
                     }
                 };
+                println!("assign old inner: {}", old_inner);
+                println!("val: {}", val);
                 self.array_store(old_inner, idx, val)
             }
             CLoc::Member(l, field) => {
@@ -541,7 +576,7 @@ impl CGen {
 
     fn fold_(&mut self, expr: CTerm) -> i32 {
         let term_ = fold(&expr.term.term(self.circ.cir_ctx()), &[]);
-        let cterm_ = cterm(CTermData::CInt(true, 32, term_));
+        let cterm_ = cterm(CTermData::Int(true, 32, term_));
         let val = const_int(cterm_);
         val.to_i32().unwrap()
     }
@@ -549,7 +584,7 @@ impl CGen {
     fn const_(&self, c: Constant) -> CTerm {
         match c {
             // TODO: move const integer function out to separate function
-            Constant::Integer(i) => cterm(CTermData::CInt(
+            Constant::Integer(i) => cterm(CTermData::Int(
                 true,
                 32,
                 bv_lit(i.number.parse::<i32>().unwrap(), 32),
@@ -650,7 +685,9 @@ impl CGen {
                 match bin_op.operator.node {
                     BinaryOperator::Assign => {
                         let loc = self.gen_lval(*bin_op.lhs);
-                        let val = self.gen_expr(bin_op.rhs.node);
+                        let val = self.gen_expr(bin_op.rhs.node.clone());
+                        println!("assign!");
+                        // println!("val: {}", val);
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::AssignPlus | BinaryOperator::AssignDivide => {
@@ -664,32 +701,39 @@ impl CGen {
                     BinaryOperator::Index => {
                         let index = self.gen_index(expr);
                         let offset = self.index_offset(&index);
+                        println!("offset: {}", offset);
                         match index.base.term {
-                            CTermData::CArray(ref ty, id) => {
+                            CTermData::Array(ref ty, id) => {
                                 if let Ty::Array(size, sizes, t) = ty {
                                     if index.indices.len() < sizes.len() {
                                         let diff = sizes.len() - index.indices.len();
                                         let new_sizes: Vec<usize> =
                                             sizes.clone().into_iter().take(diff).collect();
-
                                         let new_ty =
                                             Ty::Array(*size, new_sizes, Box::new(*t.clone()));
-                                        Ok(cterm(CTermData::CStackPtr(new_ty, offset, id)))
+                                        Ok(cterm(CTermData::StackPtr(new_ty, offset, id)))
                                     } else {
                                         self.array_select(
                                             index.base,
-                                            cterm(CTermData::CInt(true, 32, offset)),
+                                            cterm(CTermData::Int(true, 32, offset)),
                                         )
                                     }
                                 } else {
+                                    println!("here?");
                                     self.array_select(
                                         index.base,
-                                        cterm(CTermData::CInt(true, 32, offset)),
+                                        cterm(CTermData::Int(true, 32, offset)),
                                     )
                                 }
                             }
-                            _ => self
-                                .array_select(index.base, cterm(CTermData::CInt(true, 32, offset))),
+                            _ => {
+                                println!("there?");
+                                println!("index base: {}", index.base.term);
+                                self.array_select(
+                                    index.base,
+                                    cterm(CTermData::Int(true, 32, offset)),
+                                )
+                            }
                         }
                     }
                     _ => {
@@ -701,7 +745,7 @@ impl CGen {
                         match bin_op.operator.node {
                             BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => {
                                 let b_t = fold(&b.term.term(self.circ.cir_ctx()), &[]);
-                                b = cterm(CTermData::CInt(true, 32, b_t));
+                                b = cterm(CTermData::Int(true, 32, b_t));
                                 f(a, b)
                             }
                             _ => f(a, b),
@@ -715,7 +759,7 @@ impl CGen {
                     UnaryOperator::PostIncrement | UnaryOperator::PostDecrement => {
                         let f = self.get_u_op(u_op.operator.node);
                         let i = self.gen_expr(u_op.operand.node.clone());
-                        let one = cterm(CTermData::CInt(true, 32, bv_lit(1, 32)));
+                        let one = cterm(CTermData::Int(true, 32, bv_lit(1, 32)));
                         let loc = self.gen_lval(*u_op.operand);
                         let val = f(i, one).unwrap();
                         self.gen_assign(loc, val)
@@ -732,7 +776,7 @@ impl CGen {
                             _ => unimplemented!("Unimplemented Sizeof: {:#?}", u_op.operand.node),
                         };
                         let _size = ty.num_bits();
-                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(1, 32))))
+                        Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
                     }
                     _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", u_op),
                 }
@@ -756,45 +800,64 @@ impl CGen {
                     .unwrap_or_else(|| panic!("No function '{}'", fname))
                     .clone();
 
-                let FnInfo {
-                    name,
-                    ret_ty,
-                    args: parameters,
-                    body,
-                } = f;
-
-                // Add parameters
+                let ret_ty = f.ret_ty.clone();
+                let fn_def = fn_info_to_defs(&f);
                 let args = arguments
                     .iter()
-                    .map(|e| self.gen_expr(e.node.clone()))
+                    .map(|e| self.gen_expr(e.node.clone()).term.term(self.circ.cir_ctx()))
                     .collect::<Vec<_>>();
 
+                let call_term = term(Op::Call(fn_def), args);
+
+                let ret = match ret_ty {
+                    Ty::Void | Ty::Bool => cterm(CTermData::Bool(call_term)),
+                    Ty::Int(sign, width) => cterm(CTermData::Int(sign, width, call_term)),
+                    _ => unimplemented!("Unimplemented return type: {}", ret_ty),
+                };
+
+                Ok(ret)
+
+                // return
+                // println!("{}", fn_def.name);
+                // unimplemented!("here");
+
+                // let FnInfo {
+                //     name,
+                //     ret_ty,
+                //     params: parameters,
+                //     body,
+                // } = f;
+
+                // // Add parameters
+                // let args = arguments
+                //     .iter()
+                //     .map(|e| self.gen_expr(e.node.clone()))
+                //     .collect::<Vec<_>>();
+
                 // setup stack frame for entry function
-                self.circ.enter_fn(name, ret_ty.clone());
-                assert_eq!(parameters.len(), args.len());
 
-                for (p, a) in parameters.iter().zip(args) {
-                    let param_info = self.get_param_info(p.clone(), false);
-                    let r = self.circ.declare_init(
-                        param_info.name.clone(),
-                        param_info.ty,
-                        Val::Term(a),
-                    );
-                    self.unwrap(r);
-                }
+                // self.circ.enter_fn(name, ret_ty.clone());
+                // assert_eq!(parameters.len(), args.len());
 
-                self.gen_stmt(body);
+                // for (p, a) in parameters.iter().zip(args) {
+                //     let r = self
+                //         .circ
+                //         .declare_init(p.name.clone(), p.ty.clone(), Val::Term(a));
+                //     self.unwrap(r);
+                // }
 
-                let ret = self
-                    .circ
-                    .exit_fn()
-                    .map(|a| a.unwrap_term())
-                    .unwrap_or_else(|| cterm(CTermData::CBool(bool_lit(false))));
+                // self.gen_stmt(body);
 
-                match ret_ty {
-                    None => Ok(ret),
-                    _ => Ok(cast(ret_ty, ret)),
-                }
+                // let ret = self
+                //     .circ
+                //     .exit_fn()
+                //     .map(|a| a.unwrap_term())
+                //     .unwrap_or_else(|| cterm(CTermData::CBool(bool_lit(false))));
+
+                // match ret_ty {
+                //     None => Ok(ret),
+                //     _ => Ok(cast(ret_ty, ret)),
+                // }
             }
             Expression::Member(member) => {
                 let MemberExpression {
@@ -811,7 +874,7 @@ impl CGen {
                 match ty {
                     Some(t) => {
                         let _size = t.num_bits();
-                        Ok(cterm(CTermData::CInt(true, 32, bv_lit(1, 32))))
+                        Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
                     }
                     None => {
                         panic!("Cannot determine size of type: {:#?}", s);
@@ -843,9 +906,10 @@ impl CGen {
                     for (i, v) in values.iter().enumerate() {
                         let offset = bv_lit(i, 32);
                         let v_ = v.term.term(self.circ.cir_ctx());
+                        println!("store init: {}", v_);
                         self.circ.store(id, offset, v_);
                     }
-                    cterm(CTermData::CArray(ty, Some(id)))
+                    cterm(CTermData::Array(ty, Some(id)))
                 }
                 Ty::Struct(_base, fs) => {
                     assert!(fs.len() == l.len());
@@ -1076,16 +1140,16 @@ impl CGen {
             .clone();
 
         // setup stack frame for entry function
-        self.circ.enter_fn(f.name.to_owned(), f.ret_ty.clone());
+        let ret_ty = match f.ret_ty {
+            Ty::Void => None,
+            _ => Some(f.ret_ty.clone()),
+        };
+        self.circ.enter_fn(f.name.to_owned(), ret_ty.clone());
 
-        for arg in f.args.iter() {
-            let param_info = self.get_param_info(arg.clone(), true);
-            let r = self.circ.declare(
-                param_info.name.clone(),
-                &param_info.ty,
-                true,
-                param_info.vis,
-            );
+        for param in f.params.iter() {
+            let r = self
+                .circ
+                .declare(param.name.clone(), &param.ty, true, param.vis);
             self.unwrap(r);
         }
 
@@ -1104,11 +1168,12 @@ impl CGen {
                         .extend(ret_terms);
                 }
                 Mode::Proof => {
-                    let ty = f.ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
                     let term = r.unwrap_term();
-                    let _r = self.circ.declare(name.clone(), ty, false, PROVER_VIS);
-                    self.circ.assign_with_assertions(name, term, ty, PUBLIC_VIS);
+                    let ty = ret_ty.as_ref().unwrap();
+                    let _r = self.circ.declare(name.clone(), &ty, false, PROVER_VIS);
+                    self.circ
+                        .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
                     unimplemented!();
                 }
                 _ => unimplemented!("Mode: {}", self.mode),

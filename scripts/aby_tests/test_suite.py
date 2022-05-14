@@ -553,6 +553,14 @@ kmeans_tests = [
 kmeans_tests_2 = [
     [
         "kmeans",
+        "2pc_kmeans_",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],     
+]
+
+kmeans_tests_3 = [
+    [
+        "kmeans",
         "2pc_kmeans_og",
         "./scripts/aby_tests/test_inputs/kmeans.txt",
     ],     

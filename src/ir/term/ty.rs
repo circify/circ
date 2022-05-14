@@ -175,6 +175,10 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 }
             }
         }
+        Op::Call(fd) => match &fd.ret_ty {
+            Some(ret_ty) => Ok(ret_ty.clone()),
+            None => panic!("Function does not return value: {}", t.op),
+        },
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }

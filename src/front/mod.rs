@@ -2,12 +2,13 @@
 
 #[cfg(feature = "c")]
 pub mod c;
+#[cfg(all(feature = "smt", feature = "zok"))]
 pub mod datalog;
 #[cfg(all(feature = "smt", feature = "zok"))]
 pub mod zsharp;
 
 use crate::ir::proof;
-use crate::ir::term::{Computation, PartyId};
+use crate::ir::term::{Computations, PartyId};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -22,7 +23,7 @@ pub trait FrontEnd {
     type Inputs;
 
     /// Compile the program (and possibly assignment) to constraints
-    fn gen(i: Self::Inputs) -> Computation;
+    fn gen(i: Self::Inputs) -> Computations;
 }
 
 #[derive(Clone, Copy, Debug)]

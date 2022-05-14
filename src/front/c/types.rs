@@ -10,6 +10,7 @@ use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Eq)]
 pub enum Ty {
+    Void,
     Bool,
     Int(bool, usize),
     Struct(String, FieldList<Ty>),
@@ -21,6 +22,7 @@ impl PartialEq for Ty {
     fn eq(&self, other: &Self) -> bool {
         use Ty::*;
         match (self, other) {
+            (Void, Void) => true,
             (Bool, Bool) => true,
             (Int(a, a_size), Int(b, b_size)) => a == b && a_size == b_size,
             (Struct(_, a_list), Struct(_, b_list)) => a_list == b_list,
@@ -36,6 +38,7 @@ impl PartialEq for Ty {
 impl Display for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            Ty::Void => write!(f, "void"),
             Ty::Bool => write!(f, "bool"),
             Ty::Int(s, w) => {
                 if *s {
@@ -75,8 +78,9 @@ impl fmt::Debug for Ty {
 }
 
 impl Ty {
-    fn sort(&self) -> Sort {
+    pub fn sort(&self) -> Sort {
         match self {
+            Self::Void => unimplemented!("Void not implemented"),
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
             Self::Array(n, _, b) => {
@@ -85,33 +89,38 @@ impl Ty {
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
-            Self::Ptr(_, _) => panic!("Ptrs don't have a CirC sort"),
+            Self::Ptr(n, b) => Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n),
         }
     }
+
     fn default_ir_term(&self) -> Term {
         self.sort().default_term()
     }
+
     pub fn default(&self, circ: &mut Circify<Ct>) -> CTerm {
         match self {
+            Self::Void => {
+                unimplemented!("Void not implemented");
+            }
             Self::Bool => CTerm {
-                term: CTermData::CBool(self.default_ir_term()),
+                term: CTermData::Bool(self.default_ir_term()),
                 udef: false,
             },
             Self::Int(s, w) => CTerm {
-                term: CTermData::CInt(*s, *w, self.default_ir_term()),
+                term: CTermData::Int(*s, *w, self.default_ir_term()),
                 udef: false,
             },
             Self::Array(s, _, ty) => {
                 let id = circ.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
-                    term: CTermData::CArray(self.clone(), Some(id)),
+                    term: CTermData::Array(self.clone(), Some(id)),
                     udef: false,
                 }
             }
             Self::Ptr(s, ty) => {
                 let id = circ.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
-                    term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
+                    term: CTermData::StackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
                     udef: false,
                 }
             }
@@ -121,7 +130,7 @@ impl Ty {
                     .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(circ)))
                     .collect();
                 CTerm {
-                    term: CTermData::CStruct(self.clone(), FieldList::new(fields)),
+                    term: CTermData::Struct(self.clone(), FieldList::new(fields)),
                     udef: false,
                 }
             }
@@ -166,6 +175,7 @@ impl Ty {
 
     pub fn _total_num_bits(&self, ty: Ty) -> usize {
         match ty {
+            Ty::Void => 0,
             Ty::Int(_, w) => w,
             Ty::Bool => 1,
             Ty::Array(s, _, t) => s * t.num_bits(),
@@ -176,6 +186,7 @@ impl Ty {
 
     pub fn num_bits(&self) -> usize {
         match self {
+            Ty::Void => 0,
             Ty::Int(_, w) => *w,
             Ty::Bool => 1,
             Ty::Array(_, _, _) => 32,
@@ -188,6 +199,7 @@ impl Ty {
         match self {
             Ty::Int(_, _) => self,
             Ty::Bool => self,
+            Ty::Void => self,
             Ty::Array(_, _, t) => *t,
             Ty::Ptr(_, t) => *t,
             Ty::Struct(_, _) => unimplemented!("Struct does not have an inner type"),

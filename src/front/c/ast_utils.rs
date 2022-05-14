@@ -1,7 +1,9 @@
 use crate::front::c::types::Ty;
 use crate::front::c::Expression::Identifier;
+use crate::front::c::FuncDef;
 use lang_c::ast::*;
 use lang_c::span::Node;
+use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 
 use crate::front::Mode;
@@ -12,8 +14,8 @@ use crate::front::PUBLIC_VIS;
 #[derive(Clone)]
 pub struct FnInfo {
     pub name: String,
-    pub ret_ty: Option<Ty>,
-    pub args: Vec<ParameterDeclaration>,
+    pub ret_ty: Ty,
+    pub params: Vec<ParamInfo>,
     pub body: Statement,
 }
 
@@ -23,7 +25,7 @@ pub struct DeclInfo {
     pub ty: Ty,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ParamInfo {
     pub name: String,
     pub ty: Ty,
@@ -39,7 +41,7 @@ impl Display for FnInfo {
         write!(
             f,
             "name: {},\nargs: {:#?},\nbody: {:#?}",
-            self.name, self.args, self.body
+            self.name, self.params, self.body
         )
     }
 }
@@ -109,6 +111,24 @@ pub fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclar
 
 pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
+}
+
+pub fn fn_info_to_defs(fn_info: &FnInfo) -> FuncDef {
+    let mut params = BTreeMap::new();
+    for param in &fn_info.params {
+        let name = param.name.clone();
+        let ty = param.ty.clone().sort();
+        params.insert(name, ty);
+    }
+    let ret_ty = match &fn_info.ret_ty {
+        Ty::Void => None,
+        _ => Some(fn_info.ret_ty.clone().sort()),
+    };
+    FuncDef {
+        name: fn_info.name.clone(),
+        params,
+        ret_ty,
+    }
 }
 
 pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {

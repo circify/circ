@@ -21,6 +21,7 @@
 //!    * [Computation]: a collection of variables and assertions about them
 //!    * [Value]: a variable-free (and evaluated) term
 //!
+use crate::circify::mem::MemManager;
 use crate::util::once::OnceQueue;
 
 use circ_fields::{FieldT, FieldV};
@@ -1867,7 +1868,7 @@ impl Computation {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
 /// A function definition.
 pub struct FuncDef {
     /// Name of function
@@ -1875,7 +1876,7 @@ pub struct FuncDef {
     /// Type signature of function parameters
     pub params: BTreeMap<String, Sort>,
     /// Return type of function
-    pub ret_ty: Sort,
+    pub ret_ty: Option<Sort>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1883,6 +1884,48 @@ pub struct FuncDef {
 pub struct Computations {
     /// The outputs of the computation.
     pub functions: BTreeMap<FuncDef, Computation>,
+    /// Memory Context
+    pub mems: BTreeMap<FuncDef, MemManager>,
+}
+
+impl Computations {
+    /// Create new empty computations.
+    pub fn new() -> Self {
+        Self {
+            functions: BTreeMap::new(),
+            mems: BTreeMap::new(),
+        }
+    }
+
+    /// Insert computation
+    pub fn insert_comp(&mut self, func: FuncDef, comp: Computation) {
+        self.functions.insert(func, comp);
+    }
+
+    /// Get the first computation by function name
+    pub fn get_comp(&self, name: &str) -> Option<&Computation> {
+        for (key, value) in self.functions.iter() {
+            if key.name == name {
+                return Some(value);
+            }
+        }
+        None
+    }
+
+    /// Insert memory context
+    pub fn insert_mem(&mut self, func: FuncDef, mem: MemManager) {
+        self.mems.insert(func, mem);
+    }
+
+    /// Get memory context
+    pub fn get_mem(&self, name: &str) -> Option<&MemManager> {
+        for (key, value) in self.mems.iter() {
+            if key.name == name {
+                return Some(value);
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]
