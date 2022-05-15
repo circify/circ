@@ -606,7 +606,7 @@ pub fn const_bool(a: T) -> Option<bool> {
 pub fn const_val(a: T) -> Result<T, String> {
     match const_value(&a.term) {
         Some(v) => Ok(T::new(a.ty, leaf_term(Op::Const(v)))),
-        _ => Err(format!("{} is not a constant basic type", &a)),
+        _ => Err(format!("{} is not a constant value", &a)),
     }
 }
 

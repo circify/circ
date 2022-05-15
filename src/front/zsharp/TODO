@@ -1,14 +1,3 @@
-- casts
-    - widening casts are free!
-    - check narrowing cast correctness!
-    - look at unpack functions again
-    - look at pack: advantage to builtin?
-
-    u8:             | u16 u32 u64 field
-    u16: u8         |     u32 u64 field
-    u32: u8 u16     |         u64 field
-    u64: u8 u16 u32 |             field
-
 - error messages: (String, &Span) instead of String to avoid recursively
   expanding Spans on error?
 
@@ -31,9 +20,6 @@
 
 --
 wants
-
-- improve speed (atomics?)
-  - shake is fast in zxi but slow in zxc (linearity reduction)
 
 --> fix field up-front?
 
@@ -80,3 +66,17 @@ wants
 [x] lints
 
 [x] pretty-printing T
+
+[x] improve speed (atomics?)
+  - shake is fast in zxi but slow in zxc (linearity reduction)
+
+[x] casts
+    - widening casts are free!
+    - check narrowing cast correctness!
+    - look at unpack functions again
+    - look at pack: advantage to builtin?
+
+    u8:             | u16 u32 u64 field
+    u16: u8         |     u32 u64 field
+    u32: u8 u16     |         u64 field
+    u64: u8 u16 u32 |             field

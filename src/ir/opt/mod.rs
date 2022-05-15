@@ -47,6 +47,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
                 scalarize_vars::scalarize_inputs(&mut cs);
             }
             Opt::ConstantFold => {
+                // lock the collector because fold_cache locks TERMS
+                let _lock = super::term::COLLECT.read().unwrap();
+
                 let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                 for a in &mut cs.outputs {
                     // allow unbounded size during a single fold_cache call

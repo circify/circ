@@ -426,6 +426,27 @@ impl<E: Embeddable> Debug for Circify<E> {
     }
 }
 
+impl<E: Embeddable> Drop for Circify<E> {
+    fn drop(&mut self) {
+        // drop all fields that contain T or Ty
+        self.vals.clear();
+        self.fn_stack.clear();
+        self.globals.entries.clear();
+        self.typedefs.clear();
+
+        // we don't bother dropping cir_ctx before garbage collecting.
+        // If we're dropping Circify after calling consume(), then
+        // we'd just be dropping a dummy. Otherwise, we're dropping
+        // a live CirCtx, in which case the Computation's Drop impl
+        // will garbage collect.
+        //
+        //drop(self.take_ctx());
+
+        // force garbage collection
+        garbage_collect();
+    }
+}
+
 impl<E: Embeddable> Circify<E> {
     /// Creates an empty state management module
     pub fn new(e: E) -> Self {
@@ -794,8 +815,15 @@ impl<E: Embeddable> Circify<E> {
     }
 
     /// Get the constraints from this manager
-    pub fn consume(self) -> Rc<RefCell<Computation>> {
-        self.cir_ctx.cs
+    pub fn consume(mut self) -> Rc<RefCell<Computation>> {
+        std::mem::replace(
+            &mut self.cir_ctx,
+            CirCtx {
+                mem: Rc::new(RefCell::new(mem::MemManager::default())),
+                cs: Rc::new(RefCell::new(Computation::new(false))),
+            },
+        )
+        .cs
     }
 
     /// Load from an AllocId

@@ -45,6 +45,20 @@ struct ToABY {
     share_map_output: Vec<String>,
 }
 
+impl Drop for ToABY {
+    fn drop(&mut self) {
+        use std::mem::take;
+        // drop everything that uses a Term
+        drop(take(&mut self.md));
+        self.inputs.clear();
+        self.cache.clear();
+        self.term_to_share_cnt.clear();
+        self.s_map.clear();
+        // clean up
+        garbage_collect();
+    }
+}
+
 impl ToABY {
     fn new(s_map: SharingMap, md: ComputationMetadata, path: &Path, lang: &str) -> Self {
         Self {

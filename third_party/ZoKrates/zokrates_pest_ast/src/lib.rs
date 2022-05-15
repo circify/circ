@@ -14,13 +14,13 @@ pub use ast::{
     Curve, DecimalLiteralExpression, DecimalNumber, DecimalSuffix, DefinitionStatement,
     ExplicitGenerics, Expression, FieldSuffix, FieldType, File, FromExpression,
     FromImportDirective, FunctionDefinition, HexLiteralExpression, HexNumberExpression,
-    IdentifierExpression, ImportDirective, ImportSource, ImportSymbol, InlineArrayExpression,
+    IdentifierExpression, ImportDirective, AnyString, ImportSymbol, InlineArrayExpression,
     InlineStructExpression, InlineStructMember, IterationStatement, LiteralExpression,
     MainImportDirective, MemberAccess, NegOperator, NotOperator, Parameter, PosOperator,
     PostfixExpression, Pragma, PrivateNumber, PrivateVisibility, PublicVisibility, Range,
-    RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement,
+    RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement, StrOperator,
     StructDefinition, StructField, StructType, SymbolDeclaration, TernaryExpression, ToExpression,
-    Type, TypedIdentifier, TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type,
+    Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type,
     U32NumberExpression, U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type,
     U8NumberExpression, U8Suffix, U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility,
     EOI,
@@ -43,6 +43,7 @@ mod ast {
     // based on https://docs.python.org/3/reference/expressions.html#operator-precedence
     fn build_precedence_climber() -> PrecClimber<Rule> {
         PrecClimber::new(vec![
+            Operator::new(Rule::op_ternary, Assoc::Right),
             Operator::new(Rule::op_or, Assoc::Left),
             Operator::new(Rule::op_and, Assoc::Left),
             Operator::new(Rule::op_lt, Assoc::Left)
@@ -94,6 +95,12 @@ mod ast {
             Rule::op_bit_or => Expression::binary(BinaryOperator::BitOr, lhs, rhs, span),
             Rule::op_right_shift => Expression::binary(BinaryOperator::RightShift, lhs, rhs, span),
             Rule::op_left_shift => Expression::binary(BinaryOperator::LeftShift, lhs, rhs, span),
+            Rule::op_ternary => Expression::ternary(
+                lhs,
+                Box::new(Expression::from_pest(&mut pair.into_inner()).unwrap()),
+                rhs,
+                span,
+            ),
             _ => unreachable!(),
         })
     }
@@ -145,6 +152,7 @@ mod ast {
         Import(ImportDirective<'ast>),
         Constant(ConstantDefinition<'ast>),
         Struct(StructDefinition<'ast>),
+        Type(TypeDefinition<'ast>),
         Function(FunctionDefinition<'ast>),
     }
 
@@ -190,6 +198,16 @@ mod ast {
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::type_definition))]
+    pub struct TypeDefinition<'ast> {
+        pub id: IdentifierExpression<'ast>,
+        pub generics: Vec<IdentifierExpression<'ast>>,
+        pub ty: Type<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::import_directive))]
     pub enum ImportDirective<'ast> {
         Main(MainImportDirective<'ast>),
@@ -199,7 +217,7 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::main_import_directive))]
     pub struct MainImportDirective<'ast> {
-        pub source: ImportSource<'ast>,
+        pub source: AnyString<'ast>,
         pub alias: Option<IdentifierExpression<'ast>>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
@@ -217,15 +235,15 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::from_import_directive))]
     pub struct FromImportDirective<'ast> {
-        pub source: ImportSource<'ast>,
+        pub source: AnyString<'ast>,
         pub symbols: Vec<ImportSymbol<'ast>>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
-    #[pest_ast(rule(Rule::import_source))]
-    pub struct ImportSource<'ast> {
+    #[pest_ast(rule(Rule::string))]
+    pub struct AnyString<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
         pub value: String,
         #[pest_ast(outer())]
@@ -390,6 +408,7 @@ mod ast {
     #[pest_ast(rule(Rule::expression_statement))]
     pub struct AssertionStatement<'ast> {
         pub expression: Expression<'ast>,
+        pub message: Option<AnyString<'ast>>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
@@ -522,7 +541,12 @@ mod ast {
         Pos(PosOperator),
         Neg(NegOperator),
         Not(NotOperator),
+        Strict(StrOperator),
     }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::op_str))]
+    pub struct StrOperator;
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::op_pos))]
@@ -1105,7 +1129,7 @@ mod tests {
                 pragma: None,
                 declarations: vec![
                     SymbolDeclaration::Import(ImportDirective::Main(MainImportDirective {
-                        source: ImportSource {
+                        source: AnyString {
                             value: String::from("foo"),
                             span: Span::new(&source, 8, 11).unwrap()
                         },
@@ -1166,7 +1190,7 @@ mod tests {
                 pragma: None,
                 declarations: vec![
                     SymbolDeclaration::Import(ImportDirective::Main(MainImportDirective {
-                        source: ImportSource {
+                        source: AnyString {
                             value: String::from("foo"),
                             span: Span::new(&source, 8, 11).unwrap()
                         },
@@ -1251,7 +1275,7 @@ mod tests {
                 pragma: None,
                 declarations: vec![
                     SymbolDeclaration::Import(ImportDirective::Main(MainImportDirective {
-                        source: ImportSource {
+                        source: AnyString {
                             value: String::from("foo"),
                             span: Span::new(&source, 8, 11).unwrap()
                         },

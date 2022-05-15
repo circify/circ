@@ -1,0 +1,5 @@
+from "./typedef_3" import Bazinga
+
+def main() -> bool:
+    Bazinga foo = [0; 7]
+    return foo[0] == 1
