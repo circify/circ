@@ -1,0 +1,7 @@
+from "EMBED" import vadd_u16
+
+def main() -> u16[5]:
+    u16[5] a = [1, 2, 3, 4, 5]
+    u16[5] b = [2, 3, 4, 5, 6]
+    assert(vadd_u16(a, b) == [3, 5, 7, 9, 11])
+    return vadd_u16(a,b)

@@ -296,7 +296,7 @@ impl<'ast> ZGen<'ast> {
             "bit_array_le" => {
                 if args.len() != 2 {
                     Err(format!(
-                        "Got {} args to EMBED/bit_array_le, expected 1",
+                        "Got {} args to EMBED/bit_array_le, expected 2",
                         args.len()
                     ))
                 } else if generics.len() != 1 {
@@ -331,6 +331,24 @@ impl<'ast> ZGen<'ast> {
                     ))
                 } else {
                     Ok(uint_lit(DFL_T.modulus().significant_bits(), 32))
+                }
+            }
+            "vadd_u8" | "vadd_u16" | "vadd_u32" | "vadd_u64" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/vadd_*, expected 2",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/vadd_*, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    assert!(args.iter().all(|t| matches!(t.type_(), Ty::Array(_, _))));
+                    let b = args.pop().unwrap();
+                    let a = args.pop().unwrap();
+                    vector_op(BV_ADD, a, b)
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),
@@ -924,7 +942,6 @@ impl<'ast> ZGen<'ast> {
         } else {
             debug!("Expr: {}", e.span().as_str());
         }
-
         match e {
             ast::Expression::Ternary(u) => {
                 match self.expr_impl_::<true>(&u.first).ok().and_then(const_bool) {

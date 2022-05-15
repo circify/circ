@@ -1,0 +1,6 @@
+from "EMBED" import vadd_u32
+
+def main() -> u32[5]:
+    u32[5] a = [1, 2, 3, 4, 5]
+    u32[5] b = []
+    return vadd_u32(a,b)

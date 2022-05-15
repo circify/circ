@@ -29,8 +29,10 @@ use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
+use std::iter::Peekable;
 use std::sync::{Arc, RwLock};
 
 pub mod bv;
@@ -720,6 +722,84 @@ impl Array {
     pub fn select(&self, idx: &Value) -> Value {
         self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
+    }
+
+    /// Iter
+    pub fn iter(&self) -> std::collections::btree_map::Iter<Value, Value> {
+        self.map.iter()
+    }
+}
+
+/// Merge two Array Iterators
+pub struct ArrayMerge<'a> {
+    left: Peekable<std::collections::btree_map::Iter<'a, Value, Value>>,
+    right: Peekable<std::collections::btree_map::Iter<'a, Value, Value>>,
+    left_dfl: &'a Value,
+    right_dfl: &'a Value,
+}
+
+impl<'a> ArrayMerge<'a> {
+    /// Create a new [ArrayMerge] from two [Array]s
+    pub fn new(a: &'a Array, b: &'a Array) -> Self {
+        assert!(
+            a.size == b.size,
+            "IR Arrays have different lengths: {}, {}",
+            a.size,
+            b.size
+        );
+        assert!(
+            a.key_sort == b.key_sort,
+            "IR Arrays have different key sorts: {}, {}",
+            a.key_sort,
+            b.key_sort,
+        );
+        assert!(
+            a.default.sort() == b.default.sort(),
+            "IR Arrays default values have different key sorts: {}, {}",
+            a.default.sort(),
+            b.default.sort()
+        );
+
+        Self {
+            left: a.iter().peekable(),
+            right: b.iter().peekable(),
+            left_dfl: &*a.default,
+            right_dfl: &*b.default,
+        }
+    }
+}
+
+impl<'a> Iterator for ArrayMerge<'a> {
+    type Item = (&'a Value, &'a Value, &'a Value);
+    fn next(&mut self) -> Option<(&'a Value, &'a Value, &'a Value)> {
+        let res: Option<(&'a Value, &'a Value, &'a Value)> =
+            match (self.left.peek(), self.right.peek()) {
+                (Some((l_ind, _l_val)), Some((r_ind, _r_val))) => match l_ind.cmp(r_ind) {
+                    Ordering::Less => {
+                        let (l_ind, l_val) = self.left.next().unwrap();
+                        Some((l_ind, l_val, self.right_dfl))
+                    }
+                    Ordering::Greater => {
+                        let (r_ind, r_val) = self.right.next().unwrap();
+                        Some((r_ind, self.left_dfl, r_val))
+                    }
+                    Ordering::Equal => {
+                        let (l_ind, l_val) = self.left.next().unwrap();
+                        let (_r_ind, r_val) = self.right.next().unwrap();
+                        Some((l_ind, l_val, r_val))
+                    }
+                },
+                (Some(_), None) => {
+                    let (l_ind, l_val) = self.left.next().unwrap();
+                    Some((l_ind, l_val, self.right_dfl))
+                }
+                (None, Some(_)) => {
+                    let (r_ind, r_val) = self.left.next().unwrap();
+                    Some((r_ind, self.left_dfl, r_val))
+                }
+                (None, None) => None,
+            };
+        res
     }
 }
 

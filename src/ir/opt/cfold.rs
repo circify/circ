@@ -266,6 +266,36 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>) -> Term {
                     b.width() + w,
                 ))))
             }),
+            Op::Map(op) => {
+                assert!(t.cs.len() == 2); // TODO: extend for n-ary arrays
+                match (get(0).as_array_opt(), get(1).as_array_opt()) {
+                    (Some(a), Some(b)) => {
+                        let mut res = Array::new(
+                            a.key_sort.clone(),
+                            a.default.clone(),
+                            Default::default(),
+                            a.size,
+                        );
+                        let merge = ArrayMerge::new(a, b);
+                        for (i, va, vb) in merge {
+                            let r = fold_cache(
+                                &term![*op.clone(); leaf_term(Op::Const(va.clone())), leaf_term(Op::Const(vb.clone()))],
+                                cache,
+                            );
+                            match r.as_value_opt() {
+                                Some(v) => {
+                                    res = res.store(i.clone(), v.clone());
+                                }
+                                None => {
+                                    panic!("Unable to constant fold idx: {}", i);
+                                }
+                            }
+                        }
+                        Some(leaf_term(Op::Const(Value::Array(res))))
+                    }
+                    _ => None,
+                }
+            }
             _ => None,
         };
         let new_t = {
