@@ -742,19 +742,19 @@ impl<'a> ArrayMerge<'a> {
     /// Create a new [ArrayMerge] from two [Array]s
     pub fn new(a: &'a Array, b: &'a Array) -> Self {
         assert!(
-            a.size != b.size,
+            a.size == b.size,
             "IR Arrays have different lengths: {}, {}",
             a.size,
             b.size
         );
         assert!(
-            a.key_sort != b.key_sort,
+            a.key_sort == b.key_sort,
             "IR Arrays have different key sorts: {}, {}",
             a.key_sort,
             b.key_sort,
         );
         assert!(
-            a.default.sort() != b.default.sort(),
+            a.default.sort() == b.default.sort(),
             "IR Arrays default values have different key sorts: {}, {}",
             a.default.sort(),
             b.default.sort()
