@@ -138,6 +138,9 @@ pub enum Op {
 
     /// Map (operation)
     Map(Box<Op>),
+
+    /// Call a function (name, argument sorts, return sort)
+    Call(String, Vec<Sort>, Sort),
 }
 
 /// Boolean AND
@@ -249,6 +252,7 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
+            Op::Call(_, args, _) => Some(args.len()),
         }
     }
 }
@@ -292,6 +296,7 @@ impl Display for Op {
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
+            Op::Call(name, _, _) => write!(f, "fn:{}", name),
         }
     }
 }
