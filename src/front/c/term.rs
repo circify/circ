@@ -612,31 +612,6 @@ impl Embeddable for Ct {
                 }
                 arr
             }
-            Ty::Ptr(n, ty) => {
-                let v: Vec<Self::T> = (0..*n)
-                    .map(|i| {
-                        self.declare(
-                            ctx,
-                            &*ty,
-                            idx_name(&raw_name, i),
-                            user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility,
-                        )
-                    })
-                    .collect();
-                let mut mem = ctx.mem.borrow_mut();
-                let id = mem.zero_allocate(*n, 32, ty.num_bits());
-                let ptr = Self::T {
-                    term: CTermData::StackPtr(*ty.clone(), bv_lit(0, *n), Some(id)),
-                    udef: false,
-                };
-                for (i, t) in v.iter().enumerate() {
-                    let val = t.term.term(ctx);
-                    let t_term = leaf_term(Op::Const(Value::Bool(true)));
-                    mem.store(id, bv_lit(i, 32), val, t_term);
-                }
-                ptr
-            }
             Ty::Struct(n, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
                     .fields()
@@ -659,9 +634,7 @@ impl Embeddable for Ct {
                     FieldList::new(fields),
                 ))
             }
-            Ty::Void => {
-                unimplemented!("Void not implemented")
-            }
+            _ => unimplemented!("Unimplemented declare: {}", ty),
         }
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
@@ -691,16 +664,6 @@ impl Embeddable for Ct {
                     udef: false,
                 }
             }
-            // (CTermData::Array(a_ty, a), CTermData::Array(b_ty, b)) if a_ty == b_ty => Self::T {
-            //     term: CTermData::Array(
-            //         a_ty,
-            //         a.into_iter()
-            //             .zip(b.into_iter())
-            //             .map(|(a_i, b_i)| self.ite(ctx, cond.clone(), a_i, b_i))
-            //             .collect(),
-            //     ),
-            //     udef: false,
-            // },
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
         }
     }
@@ -723,18 +686,6 @@ impl Embeddable for Ct {
                 term: CTermData::Int(s, w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
                 udef: false,
             },
-            // (_, CTermData::Array(ety, list)) => Self::T {
-            //     term: CTermData::Array(
-            //         ety.clone(),
-            //         list.into_iter()
-            //             .enumerate()
-            //             .map(|(i, elem)| {
-            //                 self.assign(ctx, &ety, idx_name(&name, i), elem, visibility.clone())
-            //             })
-            //             .collect(),
-            //     ),
-            //     udef: false,
-            // },
             _ => unimplemented!(),
         }
     }
