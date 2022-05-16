@@ -325,7 +325,7 @@ impl CGen {
         FnInfo {
             name,
             ret_ty,
-            args: args,
+            args,
             body,
         }
     }

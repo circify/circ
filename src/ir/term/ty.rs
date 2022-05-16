@@ -6,7 +6,6 @@ lazy_static! {
     /// Cache of all types
     pub(super) static ref TERM_TYPES: RwLock<TypeTable> = RwLock::new(TypeTable {
         map: FxHashMap::default(),
-        last_len: 0,
     });
 }
 
@@ -141,7 +140,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::Update(_i) => Ok(get_ty(&t.cs[0]).clone()),
         Op::Map(op) => {
             let arg_cnt = t.cs.len();
-            let mut dterm_cs = Vec::new();
+            let mut arg_sorts_to_inner_op = Vec::new();
 
             let mut key_sort = Sort::Bool;
             let mut size = 0;
@@ -160,7 +159,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             for i in 0..arg_cnt {
                 match array_or(get_ty(&t.cs[i]), "map inputs") {
                     Ok((_, v)) => {
-                        dterm_cs.push(v.default_term());
+                        arg_sorts_to_inner_op.push(v);
                     }
                     Err(e) => {
                         error = Some(e);
@@ -170,12 +169,8 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             match error {
                 Some(e) => Err(e),
                 None => {
-                    let term_ = term((**op).clone(), dterm_cs);
-                    Ok(Sort::Array(
-                        Box::new(key_sort),
-                        Box::new(get_ty(&term_).clone()),
-                        size,
-                    ))
+                    let value_sort = rec_check_raw_helper(&**op, &arg_sorts_to_inner_op)?;
+                    Ok(Sort::Array(Box::new(key_sort), Box::new(value_sort), size))
                 }
             }
         }
@@ -189,43 +184,39 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
     if let Some(s) = TERM_TYPES.read().unwrap().get(&t.to_weak()) {
         return Ok(s.clone());
     }
-    {
-        let mut term_tys = TERM_TYPES.write().unwrap();
-        // to_check is a stack of (node, cs checked) pairs.
-        let mut to_check = vec![(t.clone(), false)];
-        while !to_check.is_empty() {
-            let back = to_check.last_mut().unwrap();
-            let weak = back.0.to_weak();
-            // The idea here is to check that
-            if let Some((p, _)) = term_tys.get_key_value(&weak) {
-                if p.to_hconsed().is_some() {
-                    to_check.pop();
-                    continue;
-                } else {
-                    term_tys.remove(&weak);
-                }
-            }
-            if !back.1 {
-                back.1 = true;
-                for c in check_dependencies(&back.0) {
-                    to_check.push((c, false));
-                }
+
+    // lock the collector before locking TERM_TYPES
+    let _lock = COLLECT.read().unwrap();
+    let mut term_tys = TERM_TYPES.write().unwrap();
+    // to_check is a stack of (node, cs checked) pairs.
+    let mut to_check = vec![(t.clone(), false)];
+    while !to_check.is_empty() {
+        let back = to_check.last_mut().unwrap();
+        let weak = back.0.to_weak();
+        // The idea here is to check that
+        if let Some((p, _)) = term_tys.get_key_value(&weak) {
+            if p.to_hconsed().is_some() {
+                to_check.pop();
+                continue;
             } else {
-                let ty = check_raw_step(&back.0, &*term_tys).map_err(|reason| TypeError {
-                    op: back.0.op.clone(),
-                    args: vec![], // not quite right
-                    reason,
-                })?;
-                term_tys.insert(back.0.to_weak(), ty);
+                term_tys.remove(&weak);
             }
         }
+        if !back.1 {
+            back.1 = true;
+            for c in check_dependencies(&back.0) {
+                to_check.push((c, false));
+            }
+        } else {
+            let ty = check_raw_step(&back.0, &*term_tys).map_err(|reason| TypeError {
+                op: back.0.op.clone(),
+                args: vec![], // not quite right
+                reason,
+            })?;
+            term_tys.insert(back.0.to_weak(), ty);
+        }
     }
-    Ok(TERM_TYPES
-        .read()
-        .unwrap()
-        .get(&t.to_weak())
-        .unwrap()
-        .clone())
+    Ok(term_tys.get(&t.to_weak()).unwrap().clone())
 }
 
 /// Helper function for rec_check_raw
@@ -408,50 +399,45 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
     if let Some(s) = TERM_TYPES.read().unwrap().get(&t.to_weak()) {
         return Ok(s.clone());
     }
-    {
-        let mut term_tys = TERM_TYPES.write().unwrap();
-        // to_check is a stack of (node, cs checked) pairs.
-        let mut to_check = vec![(t.clone(), false)];
-        while !to_check.is_empty() {
-            let back = to_check.last_mut().unwrap();
-            let weak = back.0.to_weak();
-            // The idea here is to check that
-            if let Some((p, _)) = term_tys.get_key_value(&weak) {
-                if p.to_hconsed().is_some() {
-                    to_check.pop();
-                    continue;
-                } else {
-                    term_tys.remove(&weak);
-                }
-            }
-            if !back.1 {
-                back.1 = true;
-                for c in back.0.cs.clone() {
-                    to_check.push((c, false));
-                }
+
+    // lock the collector before locking TERM_TYPES
+    let _lock = COLLECT.read().unwrap();
+    let mut term_tys = TERM_TYPES.write().unwrap();
+    // to_check is a stack of (node, cs checked) pairs.
+    let mut to_check = vec![(t.clone(), false)];
+    while !to_check.is_empty() {
+        let back = to_check.last_mut().unwrap();
+        let weak = back.0.to_weak();
+        // The idea here is to check that
+        if let Some((p, _)) = term_tys.get_key_value(&weak) {
+            if p.to_hconsed().is_some() {
+                to_check.pop();
+                continue;
             } else {
-                let tys = back
-                    .0
-                    .cs
-                    .iter()
-                    .map(|c| term_tys.get(&c.to_weak()).unwrap())
-                    .collect::<Vec<_>>();
-                let ty =
-                    rec_check_raw_helper(&back.0.op, &tys[..]).map_err(|reason| TypeError {
-                        op: back.0.op.clone(),
-                        args: tys.into_iter().cloned().collect(),
-                        reason,
-                    })?;
-                term_tys.insert(back.0.to_weak(), ty);
+                term_tys.remove(&weak);
             }
         }
+        if !back.1 {
+            back.1 = true;
+            for c in back.0.cs.clone() {
+                to_check.push((c, false));
+            }
+        } else {
+            let tys = back
+                .0
+                .cs
+                .iter()
+                .map(|c| term_tys.get(&c.to_weak()).unwrap())
+                .collect::<Vec<_>>();
+            let ty = rec_check_raw_helper(&back.0.op, &tys[..]).map_err(|reason| TypeError {
+                op: back.0.op.clone(),
+                args: tys.into_iter().cloned().collect(),
+                reason,
+            })?;
+            term_tys.insert(back.0.to_weak(), ty);
+        }
     }
-    Ok(TERM_TYPES
-        .read()
-        .unwrap()
-        .get(&t.to_weak())
-        .unwrap()
-        .clone())
+    Ok(term_tys.get(&t.to_weak()).unwrap().clone())
 }
 
 #[derive(Debug, PartialEq, Eq)]

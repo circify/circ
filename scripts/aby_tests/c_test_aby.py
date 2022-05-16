@@ -24,8 +24,8 @@ if __name__ == "__main__":
         c_misc_tests + \
         biomatch_tests + \
         kmeans_tests + \
-        kmeans_tests_2 + \
-        db_tests
+        kmeans_tests_2 
+        # db_tests
         # gauss_tests + \
         
     # TODO: add support for return value - int promotion

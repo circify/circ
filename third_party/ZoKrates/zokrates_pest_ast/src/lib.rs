@@ -8,22 +8,22 @@ use zokrates_parser::Rule;
 extern crate lazy_static;
 
 pub use ast::{
-    Access, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType, AssertionStatement,
-    Assignee, AssigneeAccess, BasicOrStructType, BasicType, BinaryExpression, BinaryOperator,
-    BooleanLiteralExpression, BooleanType, CallAccess, ConstantDefinition, ConstantGenericValue,
-    Curve, DecimalLiteralExpression, DecimalNumber, DecimalSuffix, DefinitionStatement,
-    ExplicitGenerics, Expression, FieldSuffix, FieldType, File, FromExpression,
-    FromImportDirective, FunctionDefinition, HexLiteralExpression, HexNumberExpression,
-    IdentifierExpression, ImportDirective, AnyString, ImportSymbol, InlineArrayExpression,
-    InlineStructExpression, InlineStructMember, IterationStatement, LiteralExpression,
-    MainImportDirective, MemberAccess, NegOperator, NotOperator, Parameter, PosOperator,
-    PostfixExpression, Pragma, PrivateNumber, PrivateVisibility, PublicVisibility, Range,
-    RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement, StrOperator,
-    StructDefinition, StructField, StructType, SymbolDeclaration, TernaryExpression, ToExpression,
-    Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type,
-    U32NumberExpression, U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type,
-    U8NumberExpression, U8Suffix, U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility,
-    EOI,
+    Access, AnyString, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType,
+    AssertionStatement, Assignee, AssigneeAccess, BasicOrStructType, BasicType, BinaryExpression,
+    BinaryOperator, BooleanLiteralExpression, BooleanType, CallAccess, ConstantDefinition,
+    ConstantGenericValue, Curve, DecimalLiteralExpression, DecimalNumber, DecimalSuffix,
+    DefinitionStatement, ExplicitGenerics, Expression, FieldSuffix, FieldType, File,
+    FromExpression, FromImportDirective, FunctionDefinition, HexLiteralExpression,
+    HexNumberExpression, IdentifierExpression, ImportDirective, ImportSymbol,
+    InlineArrayExpression, InlineStructExpression, InlineStructMember, IterationStatement,
+    LiteralExpression, MainImportDirective, MemberAccess, NegOperator, NotOperator, Parameter,
+    PosOperator, PostfixExpression, Pragma, PrivateNumber, PrivateVisibility, PublicVisibility,
+    Range, RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement,
+    StrOperator, StructDefinition, StructField, StructType, SymbolDeclaration, TernaryExpression,
+    ToExpression, Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee,
+    U16NumberExpression, U16Suffix, U16Type, U32NumberExpression, U32Suffix, U32Type,
+    U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix, U8Type, UnaryExpression,
+    UnaryOperator, Underscore, Visibility, EOI,
 };
 
 mod ast {
