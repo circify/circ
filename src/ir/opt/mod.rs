@@ -42,10 +42,10 @@ pub enum Opt {
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
-pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
+pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> Functions {
     for i in optimizations {
-        let mut opt_cs: Computations = cs.clone();
-        for (fd, comp) in cs.functions.iter_mut() {
+        let mut opt_fs: Functions = fs.clone();
+        for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?}", i);
             match i.clone() {
                 Opt::ScalarizeVars => scalarize_vars::scalarize_inputs(comp),
@@ -108,7 +108,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 Opt::InlineCalls => {
                     let mut cache = inline_calls::Cache::new();
                     for a in &mut comp.outputs {
-                        *a = inline_calls::inline_function_calls(a.clone(), &mut cache, &opt_cs);
+                        *a = inline_calls::inline_function_calls(a.clone(), &mut cache, &opt_fs);
                     }
                 }
                 Opt::Tuple => {
@@ -118,10 +118,10 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());
-            opt_cs.insert_comp(fd.clone(), comp.clone());
+            opt_fs.insert(name.clone(), comp.clone());
         }
-        cs = opt_cs;
+        fs = opt_fs;
     }
     garbage_collect();
-    cs
+    fs
 }

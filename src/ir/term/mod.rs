@@ -140,8 +140,8 @@ pub enum Op {
     /// Map (operation)
     Map(Box<Op>),
 
-    /// Function Call
-    Call(FuncDef),
+    /// Call a function (name, argument sorts, return sorts)
+    Call(String, Vec<Sort>, Vec<Sort>),
 }
 
 /// Boolean AND
@@ -253,7 +253,7 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
-            Op::Call(fd) => Some(fd.params.keys().len()),
+            Op::Call(_, args, _) => Some(args.len()),
         }
     }
 }
@@ -297,7 +297,7 @@ impl Display for Op {
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
-            Op::Call(fd) => write!(f, "(call({}))", fd.name),
+            Op::Call(name, _, _) => write!(f, "fn:{}", name),
         }
     }
 }
@@ -1868,63 +1868,29 @@ impl Computation {
     }
 }
 
-#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
-/// A function definition.
-pub struct FuncDef {
-    /// Name of function
-    pub name: String,
-    /// Type signature of function parameters
-    pub params: BTreeMap<String, Sort>,
-    /// Return type of function
-    pub ret_ty: Option<Sort>,
-}
-
 #[derive(Clone, Debug, Default)]
 /// A map of IR computations.
-pub struct Computations {
-    /// The outputs of the computation.
-    pub functions: BTreeMap<FuncDef, Computation>,
-    /// Memory Context
-    pub mems: BTreeMap<FuncDef, MemManager>,
+pub struct Functions {
+    /// The computation for each function
+    pub computations: BTreeMap<String, Computation>,
 }
 
-impl Computations {
+impl Functions {
     /// Create new empty computations.
     pub fn new() -> Self {
         Self {
-            functions: BTreeMap::new(),
-            mems: BTreeMap::new(),
+            computations: BTreeMap::new(),
         }
     }
 
     /// Insert computation
-    pub fn insert_comp(&mut self, func: FuncDef, comp: Computation) {
-        self.functions.insert(func, comp);
+    pub fn insert(&mut self, name: String, comp: Computation) {
+        self.computations.insert(name, comp);
     }
 
     /// Get the first computation by function name
-    pub fn get_comp(&self, name: &str) -> Option<&Computation> {
-        for (key, value) in self.functions.iter() {
-            if key.name == name {
-                return Some(value);
-            }
-        }
-        None
-    }
-
-    /// Insert memory context
-    pub fn insert_mem(&mut self, func: FuncDef, mem: MemManager) {
-        self.mems.insert(func, mem);
-    }
-
-    /// Get memory context
-    pub fn get_mem(&self, name: &str) -> Option<&MemManager> {
-        for (key, value) in self.mems.iter() {
-            if key.name == name {
-                return Some(value);
-            }
-        }
-        None
+    pub fn get_comp(&self, name: String) -> Option<&Computation> {
+        self.computations.get(&name)
     }
 }
 

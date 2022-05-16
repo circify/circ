@@ -36,7 +36,7 @@ fn match_arg(name: &String, params: &BTreeMap<String, Term>) -> Term {
     params.get(&new_name).unwrap().clone()
 }
 
-fn inline(fd: &FuncDef, args: &Vec<Term>, cs: &Computations) -> Term {
+fn inline(fd: &FuncDef, args: &Vec<Term>, fs: &Functions) -> Term {
     assert!(fd.params.len() == args.len());
     let mut params: BTreeMap<String, Term> = BTreeMap::new();
     for (p, t) in fd.params.keys().zip(args) {
@@ -74,7 +74,7 @@ fn inline(fd: &FuncDef, args: &Vec<Term>, cs: &Computations) -> Term {
 pub fn inline_function_calls(
     term_: Term,
     Cache(ref mut rewritten): &mut Cache,
-    cs: &Computations,
+    fs: &Functions,
 ) -> Term {
     let mut stack = vec![(term_.clone(), false)];
 
@@ -89,7 +89,7 @@ pub fn inline_function_calls(
             continue;
         }
         let entry = match &t.op {
-            Op::Call(fd) => inline(fd, &t.cs, cs),
+            Op::Call(name, args, rets) => inline(fd, &t.cs, fs),
             _ => t.clone(),
         };
         rewritten.insert(t, entry);
@@ -105,7 +105,7 @@ pub fn inline_function_calls(
             }
         }
         let entry = match &t.op {
-            Op::Call(fd) => {
+            Op::Call(name, args, rets) => {
                 println!("Inlining: {}", fd.name);
                 inline(fd, &t.cs, cs)
             }
