@@ -10,6 +10,7 @@ pub mod tuple;
 mod visit;
 
 use super::term::*;
+
 use log::debug;
 
 #[derive(Debug)]

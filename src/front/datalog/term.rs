@@ -7,7 +7,7 @@ use rug::Integer;
 use super::error::ErrorKind;
 use super::ty::Ty;
 
-use crate::circify::{CirCtx, Embeddable};
+use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::ir::term::*;
 use crate::util::field::DFL_T;
 
@@ -341,65 +341,32 @@ pub fn array_idx(a: &T, i: &T) -> Result<T> {
 /// Datalog lang def
 pub struct Datalog;
 
+impl Typed<Ty> for T {
+    fn type_(&self) -> Ty {
+        self.ty.clone()
+    }
+}
+
 impl Embeddable for Datalog {
     type T = T;
     type Ty = Ty;
-    fn declare(
+    fn create_uninit(&self, _ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
+        ty.default()
+    }
+    fn declare_input(
         &self,
         ctx: &mut CirCtx,
         ty: &Self::Ty,
-        raw_name: String,
-        user_name: Option<String>,
+        name: String,
         visibility: Option<PartyId>,
+        precompute: Option<T>,
     ) -> Self::T {
-        let get_int_val = || -> Integer { panic!("No values in Datalog") };
-        match ty {
-            Ty::Bool => T::new(
-                ctx.cs.borrow_mut().new_var(
-                    &raw_name,
-                    Sort::Bool,
-                    || Value::Bool(get_int_val() != 0),
-                    visibility,
-                ),
-                Ty::Bool,
-            ),
-            Ty::Field => T::new(
-                ctx.cs.borrow_mut().new_var(
-                    &raw_name,
-                    Sort::Field(DFL_T.clone()),
-                    || Value::Field(DFL_T.new_v(get_int_val())),
-                    visibility,
-                ),
-                Ty::Field,
-            ),
-            Ty::Uint(w) => T::new(
-                ctx.cs.borrow_mut().new_var(
-                    &raw_name,
-                    Sort::BitVector(*w as usize),
-                    || Value::BitVector(BitVector::new(get_int_val(), *w as usize)),
-                    visibility,
-                ),
-                ty.clone(),
-            ),
-            Ty::Array(n, inner_ty) => T::new(
-                (0..*n)
-                    .map(|i| {
-                        self.declare(
-                            ctx,
-                            &*inner_ty,
-                            idx_name(&raw_name, i),
-                            user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility,
-                        )
-                    })
-                    .enumerate()
-                    .fold(
-                        ty.default_ir_term(),
-                        |arr, (i, v)| term![Op::Store; arr, pf_ir_lit(i), v.ir],
-                    ),
-                ty.clone(),
-            ),
-        }
+        T::new(
+            ctx.cs
+                .borrow_mut()
+                .new_var(&name, ty.sort(), visibility, precompute.map(|v| v.ir)),
+            ty.clone(),
+        )
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         if t.ty == f.ty {
@@ -407,27 +374,6 @@ impl Embeddable for Datalog {
         } else {
             panic!("Cannot ITE {} and {}", t, f)
         }
-    }
-    fn assign(
-        &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        name: String,
-        t: Self::T,
-        visibility: Option<PartyId>,
-    ) -> Self::T {
-        assert!(&t.ty == ty);
-        T::new(
-            ctx.cs.borrow_mut().assign(&name, t.ir, visibility),
-            ty.clone(),
-        )
-    }
-    fn values(&self) -> bool {
-        false
-    }
-
-    fn type_of(&self, term: &Self::T) -> Self::Ty {
-        term.ty.clone()
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
@@ -448,6 +394,6 @@ impl Datalog {
     }
 }
 
-fn idx_name(struct_name: &str, idx: usize) -> String {
-    format!("{}.{}", struct_name, idx)
-}
+// fn idx_name(struct_name: &str, idx: usize) -> String {
+//     format!("{}.{}", struct_name, idx)
+// }

@@ -134,6 +134,8 @@ struct IrInterp<'src> {
     int_arcs: Vec<Arc<Integer>>,
     /// The current default field modulus, if any
     modulus_stack: Vec<Arc<Integer>>,
+    /// Whether we should un-bind out-of-scope ids
+    do_unbinds: bool,
 }
 
 enum CtrlOp {
@@ -150,13 +152,16 @@ impl<'src> IrInterp<'src> {
             bindings: HashMap::default(),
             int_arcs: Vec::new(),
             modulus_stack: Vec::new(),
+            do_unbinds: true,
         }
     }
 
     /// Takes bindings in order bound, and unbinds
     fn unbind(&mut self, bindings: Vec<Vec<u8>>) {
-        for b in bindings {
-            self.bindings.get_mut(b.as_slice()).unwrap().pop().unwrap();
+        if self.do_unbinds {
+            for b in bindings {
+                self.bindings.get_mut(b.as_slice()).unwrap().pop().unwrap();
+            }
         }
     }
 
@@ -522,6 +527,44 @@ pub fn serialize_term(t: &Term) -> String {
     output
 }
 
+/// Parse an IR "value map": a map from strings to values.
+///
+/// A serliazed IR map is a subset of serialized IR terms.  It must have
+/// let-bindings for each map entry.  Each entry *must* be bound to a value
+/// literal.  Duplicate entries are undefined behavior.
+///
+/// The value of the term does not matter, and is ignored.
+pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
+    let tree = parse_tok_tree(src);
+    let mut i = IrInterp::new();
+    i.do_unbinds = false;
+    i.term(&tree);
+    i.bindings
+        .iter()
+        .map(|(name, term)| {
+            let name = std::str::from_utf8(*name).unwrap().to_string();
+            let val = match &term[0].op {
+                Op::Const(v) => v.clone(),
+                _ => panic!("Non-value binding {} associated with {}", term[0], name),
+            };
+            (name, val)
+        })
+        .collect()
+}
+
+/// Serialize an IR "value map": a map from strings to values.
+///
+/// See [parse_value_map].
+pub fn serialize_value_map(src: &HashMap<String, Value>) -> String {
+    let mut out = String::new();
+    writeln!(&mut out, "(let (").unwrap();
+    for (var, val) in src {
+        writeln!(&mut out, "  ({} {})", var, val).unwrap();
+    }
+    writeln!(&mut out, ") true;ignored \n)").unwrap();
+    out
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -599,6 +642,13 @@ mod test {
         let s = serialize_term(&t);
         println!("{}", s);
         let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[quickcheck]
+    fn serde_roundtrip_random_bool(ArbitraryBoolEnv(t, _): ArbitraryBoolEnv) {
+        let json_string = serde_json::to_string(&t).unwrap();
+        let t2 = serde_json::from_str::<Term>(&json_string).unwrap();
         assert_eq!(t, t2);
     }
 

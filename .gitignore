@@ -12,5 +12,6 @@ __pycache__
 /flamegraph.*
 /.gdb_history
 .features.txt
+.mode.txt
 scripts/aby_tests/tests
 /flamegraph*.svg

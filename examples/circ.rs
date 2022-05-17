@@ -17,19 +17,24 @@ use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::{
     opt::{opt, Opt},
-    term::extras::Letified,
+    term::{
+        check,
+        extras::Letified,
+        text::{parse_value_map, serialize_value_map},
+    },
 };
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
-use circ::target::ilp::trans::to_ilp;
+use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::bellman::parse_instance;
+use circ::target::r1cs::bellman::{gen_params, prove, verify};
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
 use circ::util::field::DFL_T;
 use circ_fields::FieldT;
+use fxhash::FxHashMap as HashMap;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
@@ -67,11 +72,6 @@ struct FrontendOptions {
     #[structopt(long)]
     value_threshold: Option<u64>,
 
-    /// File with input witness
-    #[allow(dead_code)]
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
-
     /// How many recursions to allow (datalog)
     #[structopt(short, long, name = "N", default_value = "5")]
     rec_limit: usize,
@@ -89,10 +89,6 @@ enum Backend {
         prover_key: PathBuf,
         #[structopt(long, default_value = "V", parse(from_os_str))]
         verifier_key: PathBuf,
-        #[structopt(long, default_value = "pi", parse(from_os_str))]
-        proof: PathBuf,
-        #[structopt(long, default_value = "x", parse(from_os_str))]
-        instance: PathBuf,
         #[structopt(long, default_value = "50")]
         /// linear combination constraints up to this size will be eliminated
         lc_elimination_thresh: usize,
@@ -136,17 +132,7 @@ arg_enum! {
     #[derive(PartialEq, Debug)]
     enum ProofAction {
         Count,
-        Prove,
         Setup,
-        Verify,
-    }
-}
-
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    enum ProofOption {
-        Count,
-        Prove,
     }
 }
 
@@ -194,7 +180,6 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
-                inputs: options.frontend.inputs,
                 mode,
             };
             ZSharpFE::gen(inputs)
@@ -215,7 +200,6 @@ fn main() {
         DeterminedLanguage::C => {
             let inputs = c::Inputs {
                 file: options.path,
-                inputs: options.frontend.inputs,
                 mode,
             };
             C::gen(inputs)
@@ -276,48 +260,29 @@ fn main() {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
             action,
-            proof,
             prover_key,
             verifier_key,
-            instance,
             lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+            let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
+            // save the optimized r1cs: the prover needs it to synthesize.
+            prover_data.r1cs = r1cs;
             match action {
                 ProofAction::Count => (),
-                ProofAction::Prove => {
-                    println!("Proving");
-                    r1cs.check_all();
-                    let rng = &mut rand::thread_rng();
-                    let mut pk_file = File::open(prover_key).unwrap();
-                    let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
-                    let pf = create_random_proof(&r1cs, &pk, rng).unwrap();
-                    let mut pf_file = File::create(proof).unwrap();
-                    pf.write(&mut pf_file).unwrap();
-                }
                 ProofAction::Setup => {
-                    let rng = &mut rand::thread_rng();
-                    let p =
-                        generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
-                    let mut pk_file = File::create(prover_key).unwrap();
-                    p.write(&mut pk_file).unwrap();
-                    let mut vk_file = File::create(verifier_key).unwrap();
-                    p.vk.write(&mut vk_file).unwrap();
-                }
-                ProofAction::Verify => {
-                    println!("Verifying");
-                    let mut vk_file = File::open(verifier_key).unwrap();
-                    let vk = VerifyingKey::<Bls12>::read(&mut vk_file).unwrap();
-                    let pvk = prepare_verifying_key(&vk);
-                    let mut pf_file = File::open(proof).unwrap();
-                    let pf = Proof::read(&mut pf_file).unwrap();
-                    let instance_vec = parse_instance(&instance);
-                    verify_proof(&pvk, &pf, &instance_vec).unwrap();
+                    println!("Generating Parameters");
+                    gen_params::<Bls12, _, _>(
+                        prover_key,
+                        verifier_key,
+                        &prover_data,
+                        &verifier_data,
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -342,6 +307,12 @@ fn main() {
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
+            let inputs_and_sorts: HashMap<_, _> = cs
+                .metadata
+                .input_vis
+                .iter()
+                .map(|(name, (sort, _))| (name.clone(), check(sort)))
+                .collect();
             let ilp = to_ilp(cs);
             let solver_result = ilp.solve(default_solver);
             let (max, vars) = solver_result.expect("ILP could not be solved");
@@ -350,15 +321,9 @@ fn main() {
             for (var, val) in &vars {
                 println!("  {}: {}", var, val.round() as u64);
             }
-            let mut f = File::create("assignment.txt").unwrap();
-            for (var, val) in &vars {
-                if var.contains("f0") {
-                    let i = var.find("f0").unwrap();
-                    let s = &var[i + 8..];
-                    let e = s.find('_').unwrap();
-                    writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
-                }
-            }
+            let values = assignment_to_values(&vars, &inputs_and_sorts);
+            let values_as_str = serialize_value_map(&values);
+            std::fs::write("assignment.txt", values_as_str).unwrap();
         }
         #[cfg(not(feature = "lp"))]
         Backend::Ilp { .. } => {

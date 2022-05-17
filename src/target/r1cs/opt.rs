@@ -195,23 +195,29 @@ mod test {
 
     use super::*;
 
+    use fxhash::FxHashMap;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::SeedableRng;
 
     #[derive(Clone, Debug)]
-    pub struct SatR1cs(R1cs<String>);
+    pub struct SatR1cs(R1cs<String>, FxHashMap<String, Value>);
 
     impl Arbitrary for SatR1cs {
         fn arbitrary(g: &mut Gen) -> Self {
             let m = 101;
-            let modulus = FieldT::from(Integer::from(m));
+            let field = FieldT::from(Integer::from(m));
             let n_vars = g.size() + 1;
             let vars: Vec<_> = (0..n_vars).map(|i| format!("v{}", i)).collect();
-            let mut r1cs = R1cs::new(modulus.clone(), true);
+            let mut values: FxHashMap<String, Value> = Default::default();
+            let mut r1cs = R1cs::new(field.clone());
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             for v in &vars {
-                r1cs.add_signal(v.clone(), Some(modulus.random_v(&mut rng)));
+                values.insert(v.clone(), Value::Field(field.random_v(&mut rng)));
+                r1cs.add_signal(
+                    v.clone(),
+                    leaf_term(Op::Var(v.clone(), Sort::Field(field.clone()))),
+                );
             }
             for _ in 0..(2 * g.size()) {
                 let ac: isize = <isize as Arbitrary>::arbitrary(g) % m;
@@ -232,11 +238,11 @@ mod test {
                 } else {
                     r1cs.zero()
                 } + cc;
-                let off = r1cs.eval(&a).unwrap() * r1cs.eval(&b).unwrap() - r1cs.eval(&c).unwrap();
+                let off = r1cs.eval(&a, &values) * r1cs.eval(&b, &values) - r1cs.eval(&c, &values);
                 c += &off;
                 r1cs.constraint(a, b, c);
             }
-            SatR1cs(r1cs)
+            SatR1cs(r1cs, values)
         }
         fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
             let c = self.clone();
@@ -249,8 +255,8 @@ mod test {
     }
 
     #[quickcheck]
-    fn random(SatR1cs(r1cs): SatR1cs) {
+    fn random(SatR1cs(r1cs, values): SatR1cs) {
         let r1cs2 = reduce_linearities(r1cs, None);
-        r1cs2.check_all();
+        r1cs2.check_all(&values);
     }
 }

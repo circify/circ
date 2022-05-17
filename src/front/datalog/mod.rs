@@ -125,7 +125,8 @@ impl<'ast> Gen<'ast> {
         for d in &rule.args {
             let (ty, public) = self.ty(&d.ty);
             let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
-            self.circ.declare(d.ident.value.into(), &ty, public, vis)?;
+            self.circ
+                .declare_input(d.ident.value.into(), &ty, vis, None, false)?;
         }
         let r = self.rule_cases(rule)?;
         self.exit_function(name);
@@ -144,7 +145,8 @@ impl<'ast> Gen<'ast> {
         if let Some(decls) = c.existential.as_ref() {
             for d in &decls.declarations {
                 let (ty, _public) = self.ty(&d.ty);
-                self.circ.declare(d.ident.value.into(), &ty, false, None)?;
+                self.circ
+                    .declare_input(d.ident.value.into(), &ty, PROVER_VIS, None, true)?;
             }
         }
         c.exprs.iter().try_fold(term::bool_lit(true), |x, y| {
@@ -313,7 +315,8 @@ impl<'ast> Gen<'ast> {
             for d in &rule.args {
                 let (ty, public) = self.ty(&d.ty);
                 let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
-                self.circ.declare(d.ident.value.into(), &ty, public, vis)?;
+                self.circ
+                    .declare_input(d.ident.value.into(), &ty, vis, None, false)?;
             }
             let mut bug_in_rule_if_any = Vec::new();
             for cond in &rule.conds {
@@ -323,7 +326,8 @@ impl<'ast> Gen<'ast> {
                 if let Some(decls) = cond.existential.as_ref() {
                     for d in &decls.declarations {
                         let (ty, _public) = self.ty(&d.ty);
-                        self.circ.declare(d.ident.value.into(), &ty, false, None)?;
+                        self.circ
+                            .declare_input(d.ident.value.into(), &ty, None, None, true)?;
                     }
                 }
                 let mut bad_recursion = Vec::new();

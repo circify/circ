@@ -215,12 +215,12 @@ mod tests {
         );
         let costs = CostModel::from_opa_cost_file(&p);
         let cs = Computation {
+            precomputes: Default::default(),
             outputs: vec![term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
                 leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))
             ]],
             metadata: ComputationMetadata::default(),
-            values: None,
         };
         let _assignment = build_ilp(&cs, &costs);
     }
@@ -233,6 +233,7 @@ mod tests {
         );
         let costs = CostModel::from_opa_cost_file(&p);
         let cs = Computation {
+            precomputes: Default::default(),
             outputs: vec![term![Op::Eq;
                 term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
@@ -259,7 +260,6 @@ mod tests {
             leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
             ]],
             metadata: ComputationMetadata::default(),
-            values: None,
         };
         let assignment = build_ilp(&cs, &costs);
         // Big enough to do the math with arith
@@ -279,6 +279,7 @@ mod tests {
         );
         let costs = CostModel::from_opa_cost_file(&p);
         let cs = Computation {
+            precomputes: Default::default(),
             outputs: vec![term![Op::Eq;
                 term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
@@ -296,7 +297,6 @@ mod tests {
             leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
             ]],
             metadata: ComputationMetadata::default(),
-            values: None,
         };
         let assignment = build_ilp(&cs, &costs);
         // All yao

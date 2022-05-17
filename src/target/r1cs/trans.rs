@@ -4,12 +4,13 @@
 //! thesis](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.683.6940&rep=rep1&type=pdf)
 //! is a good intro to how this process works.
 use crate::ir::term::extras::Letified;
+use crate::ir::term::precomp::PreComp;
 use crate::ir::term::*;
 use crate::target::bitsize;
 use crate::target::r1cs::*;
 
-use circ_fields::{FieldT, FieldV};
-use fxhash::{FxHashMap, FxHashSet};
+use circ_fields::FieldT;
+use fxhash::FxHashSet;
 use log::debug;
 use rug::ops::Pow;
 use rug::Integer;
@@ -21,15 +22,15 @@ use std::rc::Rc;
 
 struct BvEntry {
     width: usize,
-    uint: Lc,
-    bits: Vec<Lc>,
+    uint: TermLc,
+    bits: Vec<TermLc>,
 }
 
 #[derive(Clone)]
 enum EmbeddedTerm {
     Bv(Rc<RefCell<BvEntry>>),
-    Bool(Lc),
-    Field(Lc),
+    Bool(TermLc),
+    Field(TermLc),
     #[allow(dead_code)]
     Tuple(Vec<EmbeddedTerm>),
 }
@@ -37,61 +38,61 @@ enum EmbeddedTerm {
 struct ToR1cs {
     r1cs: R1cs<String>,
     cache: TermMap<EmbeddedTerm>,
-    values: Option<FxHashMap<String, Value>>,
+    wit_ext: PreComp,
     public_inputs: FxHashSet<String>,
     next_idx: usize,
+    zero: TermLc,
+    one: TermLc,
+    field: FieldT,
 }
 
 impl ToR1cs {
-    fn new(
-        modulus: FieldT,
-        values: Option<FxHashMap<String, Value>>,
-        public_inputs: FxHashSet<String>,
-    ) -> Self {
+    fn new(field: FieldT, public_inputs: FxHashSet<String>) -> Self {
+        debug!("Starting R1CS back-end, field: {}", field);
+        let r1cs = R1cs::new(field.clone());
+        let zero = TermLc(pf_lit(field.new_v(0u8)), r1cs.zero());
+        let one = zero.clone() + 1;
         Self {
-            r1cs: R1cs::new(modulus, values.is_some()),
+            r1cs,
             cache: TermMap::new(),
-            values,
+            wit_ext: precomp::PreComp::new(),
             public_inputs,
             next_idx: 0,
+            zero,
+            one,
+            field,
         }
-    }
-
-    /// Take the converted R1CS instance and garbage collect
-    fn take_r1cs(mut self) -> R1cs<String> {
-        drop(std::mem::take(&mut self.cache));
-        drop(self.values.take());
-        self.public_inputs.clear();
-        garbage_collect();
-        self.r1cs
     }
 
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
-    fn fresh_var<D: Display + ?Sized>(
-        &mut self,
-        ctx: &D,
-        value: Option<FieldV>,
-        public: bool,
-    ) -> Lc {
+    ///
+    /// `comp` is a term that computes the value.
+    fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, public: bool) -> TermLc {
         let n = format!("{}_n{}", ctx, self.next_idx);
         self.next_idx += 1;
-        self.r1cs.add_signal(n.clone(), value);
+        debug_assert!(matches!(check(&comp), Sort::Field(_)));
+        self.r1cs.add_signal(n.clone(), comp.clone());
+        self.wit_ext.add_output(n.clone(), comp.clone());
         if public {
             self.r1cs.publicize(&n);
         }
-        self.r1cs.signal_lc(&n)
+        debug!("fresh: {}", n);
+        TermLc(comp, self.r1cs.signal_lc(&n))
     }
 
     /// Enforce `x` to be bit-valued
-    fn enforce_bit(&mut self, b: Lc) {
-        self.r1cs.constraint(b.clone(), b - 1, self.r1cs.zero());
+    fn enforce_bit(&mut self, b: TermLc) {
+        self.r1cs
+            .constraint(b.1.clone(), (b - 1).1, self.r1cs.zero());
     }
 
     /// Get a new bit-valued variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
-    fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D, value: Option<FieldV>) -> Lc {
-        let v = self.fresh_var(ctx, value, false);
+    fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term) -> TermLc {
+        debug_assert!(matches!(check(&comp), Sort::Bool));
+        let comp = term![Op::Ite; comp, self.one.0.clone(), self.zero.0.clone()];
+        let v = self.fresh_var(ctx, comp, false);
         //debug!("Fresh bit: {}", self.r1cs.format_lc(&v));
         self.enforce_bit(v.clone());
         v
@@ -99,92 +100,48 @@ impl ToR1cs {
 
     /// Return a bit indicating whether wire `x` is non-zero.
     #[allow(clippy::wrong_self_convention)]
-    fn is_zero(&mut self, x: Lc) -> Lc {
+    fn is_zero(&mut self, x: TermLc) -> TermLc {
+        let eqz = term![Op::Eq; x.0.clone(), self.zero.0.clone()];
         // m * x - 1 + is_zero == 0
         // is_zero * x == 0
         let m = self.fresh_var(
             "is_zero_inv",
-            self.r1cs.eval(&x).map(|x| {
-                if x.is_zero() {
-                    self.r1cs.modulus.zero()
-                } else {
-                    x.recip()
-                }
-            }),
+            term![Op::Ite; eqz.clone(), self.zero.0.clone(), term![PF_RECIP; x.0.clone()]],
             false,
         );
         let is_zero = self.fresh_var(
             "is_zero",
-            self.r1cs
-                .eval(&x)
-                .map(|x| self.r1cs.modulus.new_v(x.is_zero())),
+            term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
             false,
         );
-        self.r1cs.constraint(m, x.clone(), -is_zero.clone() + 1);
-        self.r1cs.constraint(is_zero.clone(), x, self.r1cs.zero());
+        self.r1cs
+            .constraint(m.1, x.1.clone(), -is_zero.1.clone() + 1);
+        self.r1cs
+            .constraint(is_zero.1.clone(), x.1, self.r1cs.zero());
         is_zero
     }
 
     /// Return a bit indicating whether wires `x` and `y` are equal.
-    fn are_equal(&mut self, x: Lc, y: &Lc) -> Lc {
+    fn are_equal(&mut self, x: TermLc, y: &TermLc) -> TermLc {
         self.is_zero(x - y)
     }
 
     /// Return a bit indicating whether wires `x` and `y` are equal.
-    fn bits_are_equal(&mut self, x: &Lc, y: &Lc) -> Lc {
+    fn bits_are_equal(&mut self, x: &TermLc, y: &TermLc) -> TermLc {
         self.mul(x.clone() * 2, y.clone()) - x - y + 1
-    }
-
-    /// Evaluate `var`'s value as an (integer-casted) boolean.
-    /// Returns `None` if values are not stored.
-    fn eval_bool(&self, var: &str) -> Option<FieldV> {
-        self.values
-            .as_ref()
-            .map(|vs| match vs.get(var).expect("missing value") {
-                Value::Bool(b) => self.r1cs.modulus.new_v(*b),
-                v => panic!("{} should be a bool, but is {:?}", var, v),
-            })
-    }
-
-    /// Evaluate `var`'s value as an (integer-casted) bit-vector.
-    /// Returns `None` if values are not stored.
-    fn eval_bv(&self, var: &str) -> Option<FieldV> {
-        self.values.as_ref().map(|vs| {
-            match vs
-                .get(var)
-                .unwrap_or_else(|| panic!("missing value for {}", var))
-            {
-                Value::BitVector(b) => self.r1cs.modulus.new_v(b.uint()),
-                v => panic!("{} should be a bit-vector, but is {:?}", var, v),
-            }
-        })
-    }
-
-    /// Evaluate `var`'s value as a field element
-    /// Returns `None` if values are not stored.
-    fn eval_pf(&self, var: &str) -> Option<FieldV> {
-        self.values
-            .as_ref()
-            .map(|vs| match vs.get(var).expect("missing value") {
-                Value::Field(b) => b.as_ty_ref(&self.r1cs.modulus),
-                v => panic!("{} should be a field element, but is {:?}", var, v),
-            })
     }
 
     /// Given wire `x`, returns a vector of `n` wires which are the bits of `x`.
     /// They *have not* been constrained to sum to `x`.
     /// They have values according the the (infinite) two's complement representation of `x`.
     /// The LSB is at index 0.
-    fn decomp<D: Display + ?Sized>(&mut self, d: &D, x: &Lc, n: usize) -> Vec<Lc> {
-        let x_val: Option<Integer> = self.r1cs.eval(x).map(|x| x.into());
-        (0..n as u32)
+    fn decomp<D: Display + ?Sized>(&mut self, d: &D, x: &TermLc, n: usize) -> Vec<TermLc> {
+        (0..n)
             .map(|i| {
                 self.fresh_bit(
                     // We get the right repr here because of infinite two's complement.
                     &format!("{}_b{}", d, i),
-                    x_val
-                        .as_ref()
-                        .map(|x| self.r1cs.modulus.new_v(x.get_bit(i))),
+                    term![Op::BvBit(i); term![Op::PfToBv(n); x.0.clone()]],
                 )
             })
             .collect::<Vec<_>>()
@@ -193,8 +150,14 @@ impl ToR1cs {
     /// Given wire `x`, returns a vector of `n` wires which are the bits of `x`.
     /// Constrains `x` to fit in `n` (`signed`) bits.
     /// The LSB is at index 0.
-    fn bitify<D: Display + ?Sized>(&mut self, d: &D, x: &Lc, n: usize, signed: bool) -> Vec<Lc> {
-        debug!("Bitify({}): {}", n, self.r1cs.format_lc(x));
+    fn bitify<D: Display + ?Sized>(
+        &mut self,
+        d: &D,
+        x: &TermLc,
+        n: usize,
+        signed: bool,
+    ) -> Vec<TermLc> {
+        debug!("Bitify({}): {}", n, self.r1cs.format_lc(&x.1));
         let bits = self.decomp(d, x, n);
         let sum = self.debitify(bits.iter().cloned(), signed);
         self.assert_zero(sum - x);
@@ -202,7 +165,13 @@ impl ToR1cs {
     }
 
     /// Given wire `x`, returns whether `x` fits in `n` `signed` bits.
-    fn fits_in_bits<D: Display + ?Sized>(&mut self, d: &D, x: &Lc, n: usize, signed: bool) -> Lc {
+    fn fits_in_bits<D: Display + ?Sized>(
+        &mut self,
+        d: &D,
+        x: &TermLc,
+        n: usize,
+        signed: bool,
+    ) -> TermLc {
         let bits = self.decomp(d, x, n);
         let sum = self.debitify(bits.iter().cloned(), signed);
         self.are_equal(sum, x)
@@ -212,11 +181,11 @@ impl ToR1cs {
     /// `\sum_{i>0} b_i2^i`.
     ///
     /// If `signed` is set, then the MSB is negated; i.e., the two's-complement sum is returned.
-    fn debitify<I: ExactSizeIterator<Item = Lc>>(&self, bits: I, signed: bool) -> Lc {
+    fn debitify<I: ExactSizeIterator<Item = TermLc>>(&self, bits: I, signed: bool) -> TermLc {
         let n = bits.len();
-        let two = self.r1cs.modulus.new_v(2);
-        let mut acc = self.r1cs.modulus.new_v(1);
-        bits.enumerate().fold(self.r1cs.zero(), |sum, (i, bit)| {
+        let two = self.r1cs.modulus.new_v(2u8);
+        let mut acc = self.r1cs.modulus.new_v(1u8);
+        bits.enumerate().fold(self.zero.clone(), |sum, (i, bit)| {
             let summand = bit * &acc;
             acc *= &two;
 
@@ -229,10 +198,10 @@ impl ToR1cs {
     }
 
     /// Given `xs`, an iterator of bit-valued wires, returns the XOR of all of them.
-    fn nary_xor<I: ExactSizeIterator<Item = Lc>>(&mut self, mut xs: I) -> Lc {
+    fn nary_xor<I: ExactSizeIterator<Item = TermLc>>(&mut self, mut xs: I) -> TermLc {
         let n = xs.len();
         if n > 3 {
-            let sum = xs.into_iter().fold(self.r1cs.zero(), |s, i| s + &i);
+            let sum = xs.into_iter().fold(self.zero.clone(), |s, i| s + &i);
             let sum_bits = self.bitify("sum", &sum, bitsize(n), false);
             assert!(n > 0);
             assert!(self.r1cs.modulus() > &n);
@@ -244,25 +213,20 @@ impl ToR1cs {
     }
 
     /// Return the product of `a` and `b`.
-    fn mul(&mut self, a: Lc, b: Lc) -> Lc {
-        let c = self.fresh_var(
-            "mul",
-            self.r1cs
-                .eval(&a)
-                .and_then(|a| self.r1cs.eval(&b).map(|b| a * b)),
-            false,
-        );
-        self.r1cs.constraint(a, b, c.clone());
+    fn mul(&mut self, a: TermLc, b: TermLc) -> TermLc {
+        let mul_val = term![PF_MUL; a.0, b.0];
+        let c = self.fresh_var("mul", mul_val, false);
+        self.r1cs.constraint(a.1, b.1, c.1.clone());
         c
     }
 
     /// Given a bit-values `a`, returns its (boolean) not.
-    fn bool_not(&self, a: &Lc) -> Lc {
-        self.r1cs.zero() + 1 - a
+    fn bool_not(&self, a: &TermLc) -> TermLc {
+        self.zero.clone() + 1 - a
     }
 
     /// Given `xs`, an iterator of bit-valued wires, returns the AND of all of them.
-    fn nary_and<I: ExactSizeIterator<Item = Lc>>(&mut self, mut xs: I) -> Lc {
+    fn nary_and<I: ExactSizeIterator<Item = TermLc>>(&mut self, mut xs: I) -> TermLc {
         let n = xs.len();
         if n <= 3 {
             let first = xs.next().expect("empty AND");
@@ -270,23 +234,23 @@ impl ToR1cs {
         } else {
             // Needed to end the closures borrow of self, before the next line.
             #[allow(clippy::needless_collect)]
-            let negs: Vec<Lc> = xs.map(|x| self.bool_not(&x)).collect();
+            let negs: Vec<TermLc> = xs.map(|x| self.bool_not(&x)).collect();
             let a = self.nary_or(negs.into_iter());
             self.bool_not(&a)
         }
     }
 
     /// Given `xs`, an iterator of bit-valued wires, returns the OR of all of them.
-    fn nary_or<I: ExactSizeIterator<Item = Lc>>(&mut self, xs: I) -> Lc {
+    fn nary_or<I: ExactSizeIterator<Item = TermLc>>(&mut self, xs: I) -> TermLc {
         let n = xs.len();
         if n <= 3 {
             // Needed to end the closures borrow of self, before the next line.
             #[allow(clippy::needless_collect)]
-            let negs: Vec<Lc> = xs.map(|x| self.bool_not(&x)).collect();
+            let negs: Vec<TermLc> = xs.map(|x| self.bool_not(&x)).collect();
             let a = self.nary_and(negs.into_iter());
             self.bool_not(&a)
         } else {
-            let sum = xs.fold(self.r1cs.zero(), |s, x| s + &x);
+            let sum = xs.fold(self.zero.clone(), |s, x| s + &x);
             let z = self.is_zero(sum);
             self.bool_not(&z)
         }
@@ -294,7 +258,7 @@ impl ToR1cs {
 
     /// Given a bit-valued `c`, and branches `t` and `f`, returns a wire which is `t` iff `c`, else
     /// `f`.
-    fn ite(&mut self, c: Lc, t: Lc, f: &Lc) -> Lc {
+    fn ite(&mut self, c: TermLc, t: TermLc, f: &TermLc) -> TermLc {
         self.mul(c, t - f) + f
     }
 
@@ -338,7 +302,7 @@ impl ToR1cs {
         }
     }
 
-    fn embed_eq(&mut self, a: &Term, b: &Term) -> Lc {
+    fn embed_eq(&mut self, a: &Term, b: &Term) -> TermLc {
         match check(a) {
             Sort::Bool => {
                 let a = self.get_bool(a).clone();
@@ -389,7 +353,7 @@ impl ToR1cs {
         }
     }
 
-    fn embed_bool(&mut self, c: Term) -> &Lc {
+    fn embed_bool(&mut self, c: Term) -> &TermLc {
         //println!("Embed: {}", c);
         debug_assert!(check(&c) == Sort::Bool);
         // TODO: skip if already embedded
@@ -397,13 +361,14 @@ impl ToR1cs {
             let lc = match &c.op {
                 Op::Var(name, Sort::Bool) => {
                     let public = self.public_inputs.contains(name);
-                    let v = self.fresh_var(name, self.eval_bool(name), public);
+                    let comp = term![Op::Ite; c.clone(), self.one.0.clone(), self.zero.0.clone()];
+                    let v = self.fresh_var(name, comp, public);
                     if !public {
                         self.enforce_bit(v.clone());
                     }
                     v
                 }
-                Op::Const(Value::Bool(b)) => self.r1cs.zero() + *b as isize,
+                Op::Const(Value::Bool(b)) => self.zero.clone() + *b as isize,
                 Op::Eq => self.embed_eq(&c.cs[0], &c.cs[1]),
                 Op::Ite => {
                     let a = self.get_bool(&c.cs[0]).clone();
@@ -465,7 +430,7 @@ impl ToR1cs {
             };
             self.cache.insert(c.clone(), EmbeddedTerm::Bool(lc));
         }
-        //println!("=> {}", self.r1cs.format_lc(self.bools.get(&c).unwrap()));
+        debug!("=> {}", self.r1cs.format_lc(&self.get_bool(&c).1));
 
         //        self.r1cs.eval(self.bools.get(&c).unwrap()).map(|v| {
         //            println!("-> {}", v);
@@ -492,13 +457,13 @@ impl ToR1cs {
 
     /// Returns whether `a - b` fits in `size` non-negative bits.
     /// i.e. is in `{0, 1, ..., 2^n-1}`.
-    fn bv_ge(&mut self, a: Lc, b: &Lc, size: usize) -> Lc {
+    fn bv_ge(&mut self, a: TermLc, b: &TermLc, size: usize) -> TermLc {
         self.fits_in_bits("ge", &(a - b), size, false)
     }
 
     /// Returns whether `a` is (`strict`ly) (`signed`ly) greater than `b`.
     /// Assumes they are each `w`-bit bit-vectors.
-    fn bv_cmp(&mut self, w: usize, signed: bool, strict: bool, a: &Term, b: &Term) -> Lc {
+    fn bv_cmp(&mut self, w: usize, signed: bool, strict: bool, a: &Term, b: &Term) -> TermLc {
         let a = if signed {
             self.get_bv_signed_int(a)
         } else {
@@ -514,13 +479,13 @@ impl ToR1cs {
     }
 
     /// Shift `x` left by `2^y`, if bit-valued `c` is true.
-    fn const_pow_shift_bv(&mut self, x: &Lc, y: usize, c: Lc) -> Lc {
+    fn const_pow_shift_bv(&mut self, x: &TermLc, y: usize, c: TermLc) -> TermLc {
         self.ite(c, x.clone() * (1 << (1 << y)), x)
     }
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
     /// Returns an *oversized* number
-    fn shift_bv(&mut self, x: Lc, y: Vec<Lc>, ext_bit: Option<Lc>) -> Lc {
+    fn shift_bv(&mut self, x: TermLc, y: Vec<TermLc>, ext_bit: Option<TermLc>) -> TermLc {
         if let Some(b) = ext_bit {
             let left = self.shift_bv(x, y.clone(), None);
             let right = self.shift_bv(b.clone(), y, None) - 1;
@@ -534,7 +499,13 @@ impl ToR1cs {
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
     /// Returns a bit sequence.
-    fn shift_bv_bits(&mut self, x: Lc, y: Vec<Lc>, ext_bit: Option<Lc>, n: usize) -> Vec<Lc> {
+    fn shift_bv_bits(
+        &mut self,
+        x: TermLc,
+        y: Vec<TermLc>,
+        ext_bit: Option<TermLc>,
+        n: usize,
+    ) -> Vec<TermLc> {
         let s = self.shift_bv(x, y, ext_bit);
         let mut bits = self.bitify("shift", &s, 2 * n - 1, false);
         bits.truncate(n);
@@ -549,8 +520,11 @@ impl ToR1cs {
                 match &bv.op {
                     Op::Var(name, Sort::BitVector(_)) => {
                         let public = self.public_inputs.contains(name);
-                        let val = self.eval_bv(name);
-                        let var = self.fresh_var(name, val, public);
+                        let var = self.fresh_var(
+                            name,
+                            term![Op::UbvToPf(self.field.clone()); bv.clone()],
+                            public,
+                        );
                         self.set_bv_uint(bv.clone(), var, n);
                         if !public {
                             self.get_bv_bits(&bv);
@@ -558,7 +532,7 @@ impl ToR1cs {
                     }
                     Op::Const(Value::BitVector(b)) => {
                         let bit_lcs = (0..b.width())
-                            .map(|i| self.r1cs.zero() + b.uint().get_bit(i as u32) as isize)
+                            .map(|i| self.zero.clone() + b.uint().get_bit(i as u32) as isize)
                             .collect();
                         self.set_bv_bits(bv, bit_lcs);
                     }
@@ -577,17 +551,17 @@ impl ToR1cs {
                     Op::BvUnOp(BvUnOp::Neg) => {
                         let x = self.get_bv_uint(&bv.cs[0]);
                         // Wrong for x == 0
-                        let almost_neg_x = self.r1cs.zero()
+                        let almost_neg_x = self.zero.clone()
                             + &self.r1cs.modulus.new_v(Integer::from(2).pow(n as u32))
                             - &x;
                         let is_zero = self.is_zero(x);
-                        let neg_x = self.ite(is_zero, self.r1cs.zero(), &almost_neg_x);
+                        let neg_x = self.ite(is_zero, self.zero.clone(), &almost_neg_x);
                         self.set_bv_uint(bv, neg_x, n);
                     }
                     Op::BvUext(extra_n) => {
                         if self.bv_has_bits(&bv.cs[0]) {
                             let bits = self.get_bv_bits(&bv.cs[0]);
-                            let ext_bits = std::iter::repeat(self.r1cs.zero()).take(*extra_n);
+                            let ext_bits = std::iter::repeat(self.zero.clone()).take(*extra_n);
                             self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
                         } else {
                             let x = self.get_bv_uint(&bv.cs[0]);
@@ -617,14 +591,14 @@ impl ToR1cs {
                                 .iter()
                                 .map(|c| self.get_bv_bits(c))
                                 .collect::<Vec<_>>();
-                            let mut bits_bv_idx: Vec<Vec<Lc>> = Vec::new();
+                            let mut bits_bv_idx: Vec<Vec<TermLc>> = Vec::new();
                             while !bits_by_bv[0].is_empty() {
                                 bits_bv_idx.push(
                                     bits_by_bv.iter_mut().map(|bv| bv.pop().unwrap()).collect(),
                                 );
                             }
                             bits_bv_idx.reverse();
-                            let f = |v: Vec<Lc>| match o {
+                            let f = |v: Vec<TermLc>| match o {
                                 BvNaryOp::And => self.nary_and(v.into_iter()),
                                 BvNaryOp::Or => self.nary_or(v.into_iter()),
                                 BvNaryOp::Xor => self.nary_xor(v.into_iter()),
@@ -643,19 +617,19 @@ impl ToR1cs {
                             let (res, width) = match o {
                                 BvNaryOp::Add => {
                                     let sum =
-                                        values.into_iter().fold(self.r1cs.zero(), |s, v| s + &v);
+                                        values.into_iter().fold(self.zero.clone(), |s, v| s + &v);
                                     let extra_width = bitsize(bv.cs.len().saturating_sub(1));
                                     (sum, n + extra_width)
                                 }
                                 BvNaryOp::Mul => {
                                     if bv.cs.len() * n < f_width {
-                                        let z = self.r1cs.zero() + 1;
+                                        let z = self.zero.clone() + 1;
                                         (
                                             values.into_iter().fold(z, |acc, v| self.mul(acc, v)),
                                             bv.cs.len() * n,
                                         )
                                     } else {
-                                        let z = self.r1cs.zero() + 1;
+                                        let z = self.zero.clone() + 1;
                                         let p = values.into_iter().fold(z, |acc, v| {
                                             let p = self.mul(acc, v);
                                             let mut bits = self.bitify("binMul", &p, 2 * n, false);
@@ -686,42 +660,20 @@ impl ToR1cs {
                             }
                             BvBinOp::Udiv | BvBinOp::Urem => {
                                 let is_zero = self.is_zero(b.clone());
-                                let (q_v, r_v) = self
-                                    .r1cs
-                                    .eval(&a)
-                                    .and_then(|a| {
-                                        self.r1cs.eval(&b).map(|b| {
-                                            if b.is_zero() {
-                                                (
-                                                    self.r1cs
-                                                        .modulus
-                                                        .new_v(Integer::from(2).pow(n as u32) - 1),
-                                                    a,
-                                                )
-                                            } else {
-                                                let aa: Integer = a.into();
-                                                let bb: Integer = b.into();
-                                                let q = aa.clone() / &bb;
-                                                let r = aa % bb;
-                                                (
-                                                    self.r1cs.modulus.new_v(q),
-                                                    self.r1cs.modulus.new_v(r),
-                                                )
-                                            }
-                                        })
-                                    })
-                                    .map(|(a, b)| (Some(a), Some(b)))
-                                    .unwrap_or((None, None));
-                                let q = self.fresh_var("div_q", q_v, false);
-                                let r = self.fresh_var("div_q", r_v, false);
+                                let a_bv_term = term![Op::PfToBv(n); a.0.clone()];
+                                let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
+                                let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
+                                let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
+                                let q = self.fresh_var("div_q", q_term, false);
+                                let r = self.fresh_var("div_r", r_term, false);
                                 let qb = self.bitify("div_q", &q, n, false);
                                 let rb = self.bitify("div_r", &r, n, false);
-                                self.r1cs.constraint(q.clone(), b.clone(), a - &r);
+                                self.r1cs.constraint(q.1.clone(), b.1.clone(), (a - &r).1);
                                 let is_gt = self.bv_ge(b - 1, &r, n);
                                 let is_not_ge = self.bool_not(&is_gt);
                                 let is_not_zero = self.bool_not(&is_zero);
                                 self.r1cs
-                                    .constraint(is_not_ge, is_not_zero, self.r1cs.zero());
+                                    .constraint(is_not_ge.1, is_not_zero.1, self.r1cs.zero());
                                 let bits = match o {
                                     BvBinOp::Udiv => qb,
                                     BvBinOp::Urem => rb,
@@ -787,21 +739,11 @@ impl ToR1cs {
     }
 
     #[allow(dead_code)]
-    fn debug_lc<D: Display + ?Sized>(&self, tag: &D, lc: &Lc) {
-        if let Some(v) = self.r1cs.eval(lc) {
-            println!(
-                "{}: {} (value {},{:b})",
-                tag,
-                self.r1cs.format_lc(lc),
-                v,
-                <&FieldV as Into<Integer>>::into(&v)
-            );
-        } else {
-            println!("{}: {} (novalue)", tag, self.r1cs.format_lc(lc));
-        }
+    fn debug_lc<D: Display + ?Sized>(&self, tag: &D, lc: &TermLc) {
+        println!("{}: {}", tag, self.r1cs.format_lc(&lc.1));
     }
 
-    fn get_bool(&self, t: &Term) -> &Lc {
+    fn get_bool(&self, t: &Term) -> &TermLc {
         match self
             .cache
             .get(t)
@@ -812,7 +754,7 @@ impl ToR1cs {
         }
     }
 
-    fn set_bv_bits(&mut self, t: Term, bits: Vec<Lc>) {
+    fn set_bv_bits(&mut self, t: Term, bits: Vec<TermLc>) {
         let sum = self.debitify(bits.iter().cloned(), false);
         assert!(!self.cache.contains_key(&t));
         self.cache.insert(
@@ -825,7 +767,7 @@ impl ToR1cs {
         );
     }
 
-    fn set_bv_uint(&mut self, t: Term, uint: Lc, width: usize) {
+    fn set_bv_uint(&mut self, t: Term, uint: TermLc, width: usize) {
         assert!(!self.cache.contains_key(&t));
         self.cache.insert(
             t,
@@ -849,19 +791,19 @@ impl ToR1cs {
     }
 
     fn bv_has_bits(&self, t: &Term) -> bool {
-        !self.get_bv(t).borrow().bits.is_empty()
+        !(*self.get_bv(t)).borrow().bits.is_empty()
     }
 
-    fn get_bv_uint(&self, t: &Term) -> Lc {
-        self.get_bv(t).borrow().uint.clone()
+    fn get_bv_uint(&self, t: &Term) -> TermLc {
+        (*self.get_bv(t)).borrow().uint.clone()
     }
 
-    fn get_bv_signed_int(&mut self, t: &Term) -> Lc {
+    fn get_bv_signed_int(&mut self, t: &Term) -> TermLc {
         let bits = self.get_bv_bits(t);
         self.debitify(bits.into_iter(), true)
     }
 
-    fn get_bv_bits(&mut self, t: &Term) -> Vec<Lc> {
+    fn get_bv_bits(&mut self, t: &Term) -> Vec<TermLc> {
         let entry_rc = self.get_bv(t);
         let mut entry = entry_rc.borrow_mut();
         if entry.bits.is_empty() {
@@ -870,7 +812,7 @@ impl ToR1cs {
         entry.bits.clone()
     }
 
-    fn get_pf(&self, t: &Term) -> &Lc {
+    fn get_pf(&self, t: &Term) -> &TermLc {
         match self
             .cache
             .get(t)
@@ -881,16 +823,20 @@ impl ToR1cs {
         }
     }
 
-    fn embed_pf(&mut self, c: Term) -> &Lc {
+    fn embed_pf(&mut self, c: Term) -> &TermLc {
+        debug!("embed_pf {}", extras::Letified(c.clone()));
         //println!("Embed: {}", c);
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
             let lc = match &c.op {
                 Op::Var(name, Sort::Field(_)) => {
                     let public = self.public_inputs.contains(name);
-                    self.fresh_var(name, self.eval_pf(name), public)
+                    self.fresh_var(name, c.clone(), public)
                 }
-                Op::Const(Value::Field(r)) => self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
+                Op::Const(Value::Field(r)) => TermLc(
+                    c.clone(),
+                    self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
+                ),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs[0]).clone();
                     let t = self.get_pf(&c.cs[1]).clone();
@@ -900,7 +846,7 @@ impl ToR1cs {
                 Op::PfNaryOp(o) => {
                     let args = c.cs.iter().map(|c| self.get_pf(c));
                     match o {
-                        PfNaryOp::Add => args.fold(self.r1cs.zero(), std::ops::Add::add),
+                        PfNaryOp::Add => args.fold(self.zero.clone(), std::ops::Add::add),
                         PfNaryOp::Mul => {
                             // Needed to end the above closures borrow of self, before the mul call
                             #[allow(clippy::needless_collect)]
@@ -915,8 +861,9 @@ impl ToR1cs {
                 Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
                 Op::PfUnOp(PfUnOp::Recip) => {
                     let x = self.get_pf(&c.cs[0]).clone();
-                    let inv_x = self.fresh_var("recip", self.r1cs.eval(&x), false);
-                    self.r1cs.constraint(x, inv_x.clone(), self.r1cs.zero() + 1);
+                    let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
+                    self.r1cs
+                        .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                     inv_x
                 }
                 _ => panic!("Non-field in embed_pf: {}", c),
@@ -926,8 +873,9 @@ impl ToR1cs {
         self.get_pf(&c)
     }
 
-    fn assert_zero(&mut self, x: Lc) {
-        self.r1cs.constraint(self.r1cs.zero(), self.r1cs.zero(), x);
+    fn assert_zero(&mut self, x: TermLc) {
+        self.r1cs
+            .constraint(self.r1cs.zero(), self.r1cs.zero(), x.1);
     }
     fn assert(&mut self, t: Term) {
         debug!("Assert: {}", Letified(t.clone()));
@@ -937,18 +885,19 @@ impl ToR1cs {
 }
 
 /// Convert this (IR) constraint system `cs` to R1CS, over a prime field defined by `modulus`.
-pub fn to_r1cs(cs: Computation, modulus: FieldT) -> R1cs<String> {
-    let Computation {
-        outputs: assertions,
-        metadata,
-        values,
-    } = cs;
+///
+/// ## Returns
+///
+/// * The R1CS instance
+pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverData, VerifierData) {
+    let assertions = cs.outputs.clone();
+    let metadata = cs.metadata.clone();
     let public_inputs = metadata
         .public_input_names()
         .map(ToOwned::to_owned)
         .collect();
     debug!("public inputs: {:?}", public_inputs);
-    let mut converter = ToR1cs::new(modulus, values, public_inputs);
+    let mut converter = ToR1cs::new(modulus, public_inputs);
     debug!(
         "Term count: {}",
         assertions
@@ -965,9 +914,12 @@ pub fn to_r1cs(cs: Computation, modulus: FieldT) -> R1cs<String> {
     for c in assertions {
         converter.assert(c);
     }
-    debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs);
-
-    converter.take_r1cs()
+    debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs,);
+    cs.precomputes = cs.precomputes.sequential_compose(&converter.wit_ext);
+    let r1cs = converter.r1cs;
+    let prover_data = r1cs.prover_data(&cs);
+    let verifier_data = r1cs.verifier_data(&cs);
+    (r1cs, prover_data, verifier_data)
 }
 
 #[cfg(test)]
@@ -981,6 +933,7 @@ pub mod test {
     use crate::target::r1cs::opt::reduce_linearities;
 
     use circ_fields::FieldT;
+    use fxhash::FxHashMap;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::distributions::Distribution;
@@ -992,6 +945,13 @@ pub mod test {
 
     #[test]
     fn bool() {
+        init();
+        let values: FxHashMap<String, Value> = vec![
+            ("a".to_owned(), Value::Bool(true)),
+            ("b".to_owned(), Value::Bool(false)),
+        ]
+        .into_iter()
+        .collect();
         let cs = Computation::from_constraint_system_parts(
             vec![
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
@@ -1001,17 +961,11 @@ pub mod test {
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
             ],
-            Some(
-                vec![
-                    ("a".to_owned(), Value::Bool(true)),
-                    ("b".to_owned(), Value::Bool(false)),
-                ]
-                .into_iter()
-                .collect(),
-            ),
         );
-        let r1cs = to_r1cs(cs, FieldT::from(Integer::from(17)));
-        r1cs.check_all();
+        let (r1cs, pd, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
     }
 
     #[derive(Clone, Debug)]
@@ -1051,63 +1005,72 @@ pub mod test {
         } else {
             term![Op::Not; t]
         };
-        let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
     }
 
     #[quickcheck]
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
+        let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
     }
 
     #[quickcheck]
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
         let r1cs2 = reduce_linearities(r1cs, None);
-        r1cs2.check_all();
+        r1cs2.check_all(&extended_values);
     }
 
     #[quickcheck]
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new(), Some(values));
+        let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
         let r1cs2 = reduce_linearities(r1cs, None);
-        r1cs2.check_all();
+        r1cs2.check_all(&extended_values);
     }
 
     #[test]
     fn eq_test() {
+        let values = vec![(
+            "b".to_owned(),
+            Value::BitVector(BitVector::new(Integer::from(152), 8)),
+        )]
+        .into_iter()
+        .collect();
+
         let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
-            Some(
-                vec![(
-                    "b".to_owned(),
-                    Value::BitVector(BitVector::new(Integer::from(152), 8)),
-                )]
-                .into_iter()
-                .collect(),
-            ),
         );
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
     }
 
     #[test]
@@ -1119,11 +1082,13 @@ pub mod test {
             .collect();
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
-        let cs = Computation::from_constraint_system_parts(vec![t], vec![], Some(values));
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
         let r1cs2 = reduce_linearities(r1cs, None);
-        r1cs2.check_all();
+        r1cs2.check_all(&extended_values);
     }
 
     /// A bit-vector literal with value `u` and size `w`
@@ -1139,14 +1104,17 @@ pub mod test {
     }
 
     fn const_test(term: Term) {
-        let mut cs = Computation::new(true);
+        let mut cs = Computation::new();
         cs.assert(term);
-        let r1cs = to_r1cs(cs, DFL_T.clone());
-        r1cs.check_all();
+        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&Default::default());
+        r1cs.check_all(&extended_values);
     }
 
     #[test]
     fn div_test() {
+        init();
         const_test(term![
             Op::Eq;
             term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b1111,4)],
@@ -1191,6 +1159,7 @@ pub mod test {
 
     #[test]
     fn sh_test() {
+        init();
         const_test(term![
             Op::Eq;
             term![Op::BvBinOp(BvBinOp::Shl); bv(0b1111,4), bv(0b0011,4)],
@@ -1244,6 +1213,12 @@ pub mod test {
 
     #[test]
     fn tuple() {
+        let values = vec![
+            ("a".to_owned(), Value::Bool(true)),
+            ("b".to_owned(), Value::Bool(false)),
+        ]
+        .into_iter()
+        .collect();
         let mut cs = Computation::from_constraint_system_parts(
             vec![
                 term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
@@ -1253,17 +1228,11 @@ pub mod test {
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
             ],
-            Some(
-                vec![
-                    ("a".to_owned(), Value::Bool(true)),
-                    ("b".to_owned(), Value::Bool(false)),
-                ]
-                .into_iter()
-                .collect(),
-            ),
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let r1cs = to_r1cs(cs, FieldT::from(Integer::from(17)));
-        r1cs.check_all();
+        let (r1cs, pd, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let precomp = pd.precompute;
+        let extended_values = precomp.eval(&values);
+        r1cs.check_all(&extended_values);
     }
 }

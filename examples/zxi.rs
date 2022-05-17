@@ -11,10 +11,6 @@ struct Options {
     #[structopt(parse(from_os_str))]
     zsharp_path: PathBuf,
 
-    /// File with input witness
-    #[structopt(short, long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
-
     /// Number of parties for an MPC. If missing, generates a proof circuit.
     #[structopt(short, long, name = "PARTIES")]
     parties: Option<u8>,
@@ -41,7 +37,6 @@ fn main() {
     };
     let inputs = Inputs {
         file: options.zsharp_path,
-        inputs: options.inputs,
         mode,
     };
     let cs = ZSharpFE::interpret(inputs);
