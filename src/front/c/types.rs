@@ -89,7 +89,7 @@ impl Ty {
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
-            Self::Ptr(n, b) => Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n),
+            _ => unimplemented!("Sort not implemented for: {}", self),
         }
     }
 

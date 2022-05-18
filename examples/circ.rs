@@ -16,7 +16,7 @@ use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
-use circ::ir::term::{Computations, Op, BV_LSHR, BV_SHL};
+use circ::ir::term::{Functions, Op, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
@@ -258,7 +258,6 @@ fn main() {
                     Opt::Binarize,
                     // Inline Function Calls
                     Opt::InlineCalls,
-                    Opt::ConstantFold(Box::new(ignore)),
                 ],
             )
         }
@@ -286,12 +285,14 @@ fn main() {
             ],
         ),
     };
-    for (f, comp) in cs.functions.iter() {
-        println!("functions: {}", f.name);
+
+    for (name, comp) in cs.computations.iter() {
+        println!("functions: {}", name);
         for t in &comp.outputs {
             println!("term: {}", t);
         }
     }
+
     println!("Done with IR optimization");
 
     match options.backend {

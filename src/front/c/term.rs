@@ -42,6 +42,8 @@ impl CTermData {
                             let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
                             output.push(idx_term);
                         }
+                    } else {
+                        panic!("CTermData::Array does not hold Array type");
                     }
                 }
                 CTermData::StackPtr(t, _o, a) => {
@@ -79,11 +81,15 @@ impl CTermData {
 
     pub fn term(&self, ctx: &CirCtx) -> Term {
         let ts = self.terms(ctx);
-        if ts.len() == 1 {
-            ts.get(0).unwrap().clone()
-        } else {
-            term(Op::Tuple, ts)
-        }
+        assert!(ts.len() == 1);
+        ts.get(0).unwrap().clone()
+        // if ts.is_empty() {
+        //     panic!("No terms found, unknown / wrong variable name");
+        // } else if ts.len() == 1 {
+        //     ts.get(0).unwrap().clone()
+        // } else {
+        //     term(Op::Tuple, ts)
+        // }
     }
 }
 
@@ -587,12 +593,12 @@ impl Embeddable for Ct {
                 ),
                 udef: false,
             },
-            Ty::Array(n, _, ty) => {
+            Ty::Array(n, _, inner_ty) => {
                 let v: Vec<Self::T> = (0..*n)
                     .map(|i| {
                         self.declare(
                             ctx,
-                            &*ty,
+                            &*inner_ty,
                             idx_name(&raw_name, i),
                             user_name.as_ref().map(|u| idx_name(u, i)),
                             visibility,
@@ -600,9 +606,9 @@ impl Embeddable for Ct {
                     })
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
-                let id = mem.zero_allocate(*n, 32, ty.num_bits());
+                let id = mem.zero_allocate(*n, 32, inner_ty.num_bits());
                 let arr = Self::T {
-                    term: CTermData::Array(*ty.clone(), Some(id)),
+                    term: CTermData::Array(ty.clone(), Some(id)),
                     udef: false,
                 };
                 for (i, t) in v.iter().enumerate() {

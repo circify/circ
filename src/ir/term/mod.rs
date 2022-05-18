@@ -21,7 +21,6 @@
 //!    * [Computation]: a collection of variables and assertions about them
 //!    * [Value]: a variable-free (and evaluated) term
 //!
-use crate::circify::mem::MemManager;
 use crate::util::once::OnceQueue;
 
 use circ_fields::{FieldT, FieldV};
@@ -140,8 +139,13 @@ pub enum Op {
     /// Map (operation)
     Map(Box<Op>),
 
-    /// Call a function (name, argument sorts, return sorts)
-    Call(String, Vec<Sort>, Vec<Sort>),
+    /// Call a function (name, argument sorts, return sorts, return_name)
+    Call(
+        String,
+        BTreeMap<String, Sort>,
+        BTreeMap<String, Sort>,
+        String,
+    ),
 }
 
 /// Boolean AND
@@ -253,7 +257,7 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
-            Op::Call(_, args, _) => Some(args.len()),
+            Op::Call(_, args, _, _) => Some(args.len()),
         }
     }
 }
@@ -297,7 +301,7 @@ impl Display for Op {
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
-            Op::Call(name, _, _) => write!(f, "fn:{}", name),
+            Op::Call(name, _, _, _) => write!(f, "fn:{}", name),
         }
     }
 }
@@ -1867,6 +1871,17 @@ impl Computation {
         terms.into_iter()
     }
 }
+
+// #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+// /// A function definition.
+// pub struct FuncDef {
+//     /// Name of function
+//     pub name: String,
+//     /// Type signature of function parameters
+//     pub params: BTreeMap<String, Sort>,
+//     /// Return type of function
+//     pub ret_ty: Vec<Sort>,
+// }
 
 #[derive(Clone, Debug, Default)]
 /// A map of IR computations.

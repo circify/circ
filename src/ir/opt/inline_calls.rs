@@ -1,6 +1,6 @@
 //! Inline function call terms
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::ir::term::*;
 
@@ -36,38 +36,33 @@ fn match_arg(name: &String, params: &BTreeMap<String, Term>) -> Term {
     params.get(&new_name).unwrap().clone()
 }
 
-fn inline(fd: &FuncDef, args: &Vec<Term>, fs: &Functions) -> Term {
-    assert!(fd.params.len() == args.len());
-    let mut params: BTreeMap<String, Term> = BTreeMap::new();
-    for (p, t) in fd.params.keys().zip(args) {
-        println!("param: {}", p);
-        params.insert(p.clone(), t.clone());
-    }
-
-    let comp = cs.functions.get(fd).unwrap();
-    assert!(comp.outputs.len() == 1);
-    let o = &comp.outputs[0];
-    let mut cache = TermMap::new();
-    for t in PostOrderIter::new(o.clone()) {
-        match &t.op {
-            Op::Var(name, _sort) => {
-                let ret = match_arg(name, &params);
-                cache.insert(t.clone(), ret.clone());
-            }
-            _ => {
-                let mut children = Vec::new();
-                for c in &t.cs {
-                    if let Some(rewritten_c) = cache.get(c) {
-                        children.push(rewritten_c.clone());
-                    } else {
-                        children.push(c.clone());
-                    }
+fn inline(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Term> {
+    let mut res: Vec<Term> = Vec::new();
+    let comp = fs.computations.get(name).unwrap();
+    for o in comp.outputs.iter().rev() {
+        let mut cache = TermMap::new();
+        for t in PostOrderIter::new(o.clone()) {
+            match &t.op {
+                Op::Var(name, _sort) => {
+                    let ret = match_arg(name, &params);
+                    cache.insert(t.clone(), ret.clone());
                 }
-                cache.insert(t.clone(), term(t.op.clone(), children));
+                _ => {
+                    let mut children = Vec::new();
+                    for c in &t.cs {
+                        if let Some(rewritten_c) = cache.get(c) {
+                            children.push(rewritten_c.clone());
+                        } else {
+                            children.push(c.clone());
+                        }
+                    }
+                    cache.insert(t.clone(), term(t.op.clone(), children));
+                }
             }
         }
+        res.push(cache.get(o).unwrap().clone());
     }
-    cache.get(o).unwrap().clone()
+    res
 }
 
 /// Traverse terms and inline function calls
@@ -76,38 +71,80 @@ pub fn inline_function_calls(
     Cache(ref mut rewritten): &mut Cache,
     fs: &Functions,
 ) -> Term {
-    let mut stack = vec![(term_.clone(), false)];
-
-    // Maps terms to their rewritten versions.
-    while let Some((t, children_pushed)) = stack.pop() {
-        if rewritten.contains_key(&t) {
-            continue;
-        }
-        if !children_pushed {
-            stack.push((t.clone(), true));
-            stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
-            continue;
-        }
-        let entry = match &t.op {
-            Op::Call(name, args, rets) => inline(fd, &t.cs, fs),
-            _ => t.clone(),
-        };
-        rewritten.insert(t, entry);
-    }
-
+    let mut call_cache: HashMap<Term, Vec<Term>> = HashMap::new();
     for t in PostOrderIter::new(term_.clone()) {
+        println!("inlining term: {}", t);
         let mut children = Vec::new();
         for c in &t.cs {
             if let Some(rewritten_c) = rewritten.get(c) {
-                children.push(rewritten_c.clone());
+                if call_cache.contains_key(c) {
+                    children.push(call_cache.get_mut(c).unwrap().pop().unwrap().clone());
+                } else {
+                    children.push(rewritten_c.clone());
+                }
             } else {
                 children.push(c.clone());
             }
         }
         let entry = match &t.op {
-            Op::Call(name, args, rets) => {
-                println!("Inlining: {}", fd.name);
-                inline(fd, &t.cs, cs)
+            Op::Call(name, args, _rets, _) => {
+                println!("Inlining: {}", name);
+
+                // Check number of args
+                let num_args = args.values().fold(0, |sum, x| {
+                    sum + match x {
+                        Sort::Array(_, _, l) => *l,
+                        _ => 1,
+                    }
+                });
+                assert!(
+                    num_args == t.cs.len(),
+                    "Number of arguments mismatch. {}, {}",
+                    num_args,
+                    t.cs.len()
+                );
+
+                // Check arg types
+                let arg_types = args
+                    .values()
+                    .map(|x| match &x {
+                        Sort::Array(_, val_sort, l) => {
+                            let mut res: Vec<Sort> = Vec::new();
+                            for _ in 0..*l {
+                                res.push(*val_sort.clone());
+                            }
+                            res
+                        }
+                        _ => vec![x.clone()],
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                assert!(
+                    arg_types == t.cs.iter().map(|c| check(c)).collect::<Vec<Sort>>(),
+                    "Argument type mismatch"
+                );
+
+                let mut params: BTreeMap<String, Term> = BTreeMap::new();
+                let arg_keys = args
+                    .iter()
+                    .map(|(n, x)| match &x {
+                        Sort::Array(_, _, l) => {
+                            let mut res: Vec<String> = Vec::new();
+                            for i in 0..*l {
+                                res.push(format!("{}_{}", n.clone(), i));
+                            }
+                            res
+                        }
+                        _ => vec![n.clone()],
+                    })
+                    .flatten();
+                for (n, c) in arg_keys.zip(t.cs.clone()) {
+                    params.insert(n.clone(), c.clone());
+                }
+                let res = inline(name, params, fs);
+                call_cache.insert(t.clone(), res.clone());
+                res[0].clone()
             }
             _ => term(t.op.clone(), children),
         };
@@ -120,53 +157,3 @@ pub fn inline_function_calls(
         panic!("Couldn't find rewritten binarized term: {}", term_);
     }
 }
-
-// /// Traverse `term`, binarize n-ary operators.
-// pub fn binarize_nary_ops(term_: Term) -> Term {
-//     let mut c = Cache::new();
-//     binarize_nary_ops_cached(term_, &mut c)
-// }
-// /// Traverse `term`, binarize n-ary operators.
-// pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache) -> Term {
-//     let mut stack = vec![(term_.clone(), false)];
-
-//     // Maps terms to their rewritten versions.
-//     while let Some((t, children_pushed)) = stack.pop() {
-//         if rewritten.contains_key(&t) {
-//             continue;
-//         }
-//         if !children_pushed {
-//             stack.push((t.clone(), true));
-//             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
-//             continue;
-//         }
-//         let entry = match &t.op {
-//             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op, &t.cs),
-//             _ => t.clone(),
-//
-//    };
-//         rewritten.insert(t, entry);
-//     }
-
-//     for t in PostOrderIter::new(term_.clone()) {
-//         let mut children = Vec::new();
-//         for c in &t.cs {
-//             if let Some(rewritten_c) = rewritten.get(c) {
-//                 children.push(rewritten_c.clone());
-//             } else {
-//                 children.push(c.clone());
-//             }
-//         }
-//         let entry = match t.op {
-//             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op, &children),
-//             _ => term(t.op.clone(), children),
-//         };
-//         rewritten.insert(t.clone(), entry);
-//     }
-
-//     if let Some(t) = rewritten.get(&term_) {
-//         t.clone()
-//     } else {
-//         panic!("Couldn't find rewritten binarized term: {}", term_);
-//     }
-// }

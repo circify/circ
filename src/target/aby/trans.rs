@@ -445,10 +445,10 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
+pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
     // Entry function
     let entry_fn_name = "main";
-    let comp: Computation = ir.get_comp(entry_fn_name).unwrap().clone();
+    let comp: Computation = ir.computations.get(entry_fn_name).unwrap().clone();
 
     let s_map: SharingMap = match ss {
         "b" => assign_all_boolean(&comp, cm),

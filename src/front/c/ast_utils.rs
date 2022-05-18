@@ -1,6 +1,8 @@
+use crate::circify::RET_NAME;
 use crate::front::c::types::Ty;
 use crate::front::c::Expression::Identifier;
-use crate::front::c::FuncDef;
+use crate::front::c::Sort;
+use crate::front::c::Term;
 use lang_c::ast::*;
 use lang_c::span::Node;
 use std::collections::BTreeMap;
@@ -113,22 +115,35 @@ pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
 }
 
-pub fn fn_info_to_defs(fn_info: &FnInfo) -> FuncDef {
-    let mut params = BTreeMap::new();
-    for param in &fn_info.params {
-        let name = param.name.clone();
-        let ty = param.ty.clone().sort();
-        params.insert(name, ty);
-    }
-    let ret_ty = match &fn_info.ret_ty {
-        Ty::Void => None,
-        _ => Some(fn_info.ret_ty.clone().sort()),
+pub fn fn_info_to_defs(
+    fn_info: &FnInfo,
+    arg_terms: &Vec<Vec<Term>>, // arguments taken at call site
+) -> (String, BTreeMap<String, Sort>, BTreeMap<String, Sort>) {
+    let mut rets: BTreeMap<String, Sort> = BTreeMap::new();
+    match &fn_info.ret_ty {
+        Ty::Void => {}
+        _ => {
+            rets.insert(RET_NAME.to_string(), fn_info.ret_ty.clone().sort());
+        }
     };
-    FuncDef {
-        name: fn_info.name.clone(),
-        params,
-        ret_ty,
+    assert!(fn_info.params.len() == arg_terms.len());
+    let mut params = BTreeMap::new();
+    for (param, arg) in fn_info.params.iter().zip(arg_terms.iter()) {
+        let name = param.name.clone();
+        let ty = match &param.ty {
+            Ty::Ptr(n, t) => {
+                let new_ty =
+                    Sort::Array(Box::new(Sort::BitVector(*n)), Box::new(t.sort()), arg.len());
+                // Add pointers as return
+                rets.insert(name.clone(), new_ty.clone());
+                new_ty
+            }
+            _ => param.ty.sort(),
+        };
+        params.insert(name, ty.clone());
     }
+
+    (fn_info.name.clone(), params, rets)
 }
 
 pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {
