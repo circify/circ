@@ -770,6 +770,11 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Exit a function call.
+    ///
+    /// ## Returns
+    ///
+    /// Returns the return value of the function, if any.
     pub fn exit_fn_call(&mut self, ret_names: &Vec<&String>) -> HashMap<String, Val<E::T>> {
         if let Some(fn_) = self.fn_stack.last() {
             let mut rets: HashMap<String, Val<E::T>> = HashMap::new();
@@ -783,11 +788,6 @@ impl<E: Embeddable> Circify<E> {
 
             // Get references if possible
             for name in ret_names {
-                println!(
-                    "value: {}",
-                    self.get_value(Loc::local(name.to_string())).unwrap()
-                );
-
                 rets.insert(
                     name.to_string(),
                     self.get_value(Loc::local(name.to_string())).unwrap(),

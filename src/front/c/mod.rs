@@ -65,12 +65,12 @@ impl FrontEnd for C {
         g.entry_fn("main");
         let main_comp = g.circ.consume().borrow().clone();
 
-        println!("fn: {}", "main");
-        let Computation { outputs, .. } = main_comp.clone();
-        for t in outputs {
-            println!("term: {}", t);
-            println!("");
-        }
+        // println!("fn: {}", "main");
+        // let Computation { outputs, .. } = main_comp.clone();
+        // for t in outputs {
+        //     println!("term: {}", t);
+        //     println!("");
+        // }
 
         fs.insert("main".to_string(), main_comp);
 
@@ -841,9 +841,6 @@ impl CGen {
                     .collect::<Vec<_>>();
                 let flatten_args = arg_terms.clone().into_iter().flatten().collect::<Vec<_>>();
                 let (name, args, rets) = fn_info_to_defs(&f, &arg_terms);
-                for (name, sort) in rets.iter() {
-                    println!("return name: {}, sort: {}", name, sort);
-                }
                 let call_term = term(
                     Op::Call(
                         name.clone(),
@@ -1292,14 +1289,13 @@ impl CGen {
         ret_name: &String,
     ) {
         debug!("Call: {}", name);
-
         println!("Call: {}", name);
-        for (n, a) in args {
-            println!("args: {}, {}", n, a);
-        }
-        for (r, s) in rets.iter() {
-            println!("ret: {}, {}", r, s);
-        }
+        // for (n, a) in args {
+        //     println!("args: {}, {}", n, a);
+        // }
+        // for (r, s) in rets.iter() {
+        //     println!("ret: {}, {}", r, s);
+        // }
 
         // Get function types
         let f = self

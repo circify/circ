@@ -1,5 +1,8 @@
 void fa(int * c, int * d) {
     for (int i = 0; i < 2; i++) {
+        c[i] = c[i] + 1;
+    }
+    for (int i = 0; i < 2; i++) {
         d[i] = c[i];
     }
 }

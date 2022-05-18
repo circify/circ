@@ -34,11 +34,10 @@ impl fmt::Display for EmbeddedTerm {
 }
 
 struct ToABY {
-    md: ComputationMetadata,
+    fs: Functions,
     inputs: TermSet,
     cache: TermMap<EmbeddedTerm>,
     term_to_share_cnt: TermMap<i32>,
-    s_map: SharingMap,
     share_cnt: i32,
     bytecode_path: String,
     share_map_path: String,
@@ -50,24 +49,23 @@ impl Drop for ToABY {
     fn drop(&mut self) {
         use std::mem::take;
         // drop everything that uses a Term
-        drop(take(&mut self.md));
+        // drop(take(&mut self.md));
         self.inputs.clear();
         self.cache.clear();
         self.term_to_share_cnt.clear();
-        self.s_map.clear();
+        // self.s_map.clear();
         // clean up
         garbage_collect();
     }
 }
 
 impl ToABY {
-    fn new(s_map: SharingMap, md: ComputationMetadata, path: &Path, lang: &str) -> Self {
+    fn new(fs: Functions, path: &Path, lang: &str) -> Self {
         Self {
-            md,
+            fs,
             inputs: TermSet::new(),
             cache: TermMap::new(),
             term_to_share_cnt: TermMap::new(),
-            s_map,
             share_cnt: 0,
             bytecode_path: get_path(path, lang, "bytecode"),
             share_map_path: get_path(path, lang, "share_map"),
@@ -84,13 +82,13 @@ impl ToABY {
     }
 
     fn write_mapping_file(&mut self, term_: Term) {
-        for t in PostOrderIter::new(term_) {
-            let share_type = self.s_map.get(&t).unwrap();
-            let share_str = share_type.char();
-            let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
-            let line = format!("{} {}\n", *share_cnt, share_str);
-            self.share_map_output.push(line);
-        }
+        // for t in PostOrderIter::new(term_) {
+        //     let share_type = self.s_map.get(&t).unwrap();
+        //     let share_str = share_type.char();
+        //     let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
+        //     let line = format!("{} {}\n", *share_cnt, share_str);
+        //     self.share_map_output.push(line);
+        // }
     }
 
     fn get_var_name(t: &Term) -> String {
@@ -120,10 +118,11 @@ impl ToABY {
     }
 
     fn unwrap_vis(&self, name: &str) -> u8 {
-        match self.md.input_vis.get(name).unwrap() {
-            Some(role) => *role,
-            None => PUBLIC,
-        }
+        unimplemented!();
+        // match self.md.input_vis.get(name).unwrap() {
+        //     Some(role) => *role,
+        //     None => PUBLIC,
+        // }
     }
 
     fn embed_eq(&mut self, t: Term, a_term: Term, b_term: Term) {
@@ -166,32 +165,32 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::Bool) => {
-                if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
-                    let term_name = ToABY::get_var_name(&t);
-                    let vis = self.unwrap_vis(name);
-                    let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
-                    let op = "IN";
+                // if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
+                //     let term_name = ToABY::get_var_name(&t);
+                //     let vis = self.unwrap_vis(name);
+                //     let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
+                //     let op = "IN";
 
-                    if vis == PUBLIC {
-                        let bitlen = 1;
-                        let line = format!(
-                            "3 1 {} {} {} {} {}\n",
-                            term_name, vis, bitlen, share_cnt, op
-                        );
-                        self.bytecode_output.insert(0, line);
-                    } else {
-                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
-                        self.bytecode_output.insert(0, line);
-                    }
-                    self.inputs.insert(t.clone());
-                }
+                //     if vis == PUBLIC {
+                //         let bitlen = 1;
+                //         let line = format!(
+                //             "3 1 {} {} {} {} {}\n",
+                //             term_name, vis, bitlen, share_cnt, op
+                //         );
+                //         self.bytecode_output.insert(0, line);
+                //     } else {
+                //         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
+                //         self.bytecode_output.insert(0, line);
+                //     }
+                //     self.inputs.insert(t.clone());
+                // }
 
-                if !self.cache.contains_key(&t) {
-                    self.cache.insert(
-                        t.clone(),
-                        EmbeddedTerm::Bool(format!("s_{}", ToABY::get_var_name(&t))),
-                    );
-                }
+                // if !self.cache.contains_key(&t) {
+                //     self.cache.insert(
+                //         t.clone(),
+                //         EmbeddedTerm::Bool(format!("s_{}", ToABY::get_var_name(&t))),
+                //     );
+                // }
             }
             Op::Const(Value::Bool(b)) => {
                 let op = "CONS_bool";
@@ -302,32 +301,32 @@ impl ToABY {
         let s = self.term_to_share_cnt.get(&t).unwrap();
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
-                if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
-                    let term_name = ToABY::get_var_name(&t);
-                    let vis = self.unwrap_vis(name);
-                    let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
-                    let op = "IN";
+                // if !self.inputs.contains(&t) && self.md.input_vis.contains_key(name) {
+                //     let term_name = ToABY::get_var_name(&t);
+                //     let vis = self.unwrap_vis(name);
+                //     let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
+                //     let op = "IN";
 
-                    if vis == PUBLIC {
-                        let bitlen = 32;
-                        let line = format!(
-                            "3 1 {} {} {} {} {}\n",
-                            term_name, vis, bitlen, share_cnt, op
-                        );
-                        self.bytecode_output.insert(0, line);
-                    } else {
-                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
-                        self.bytecode_output.insert(0, line);
-                    }
-                    self.inputs.insert(t.clone());
-                }
+                //     if vis == PUBLIC {
+                //         let bitlen = 32;
+                //         let line = format!(
+                //             "3 1 {} {} {} {} {}\n",
+                //             term_name, vis, bitlen, share_cnt, op
+                //         );
+                //         self.bytecode_output.insert(0, line);
+                //     } else {
+                //         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
+                //         self.bytecode_output.insert(0, line);
+                //     }
+                //     self.inputs.insert(t.clone());
+                // }
 
-                if !self.cache.contains_key(&t) {
-                    self.cache.insert(
-                        t.clone(),
-                        EmbeddedTerm::Bv(format!("s_{}", ToABY::get_var_name(&t))),
-                    );
-                }
+                // if !self.cache.contains_key(&t) {
+                //     self.cache.insert(
+                //         t.clone(),
+                //         EmbeddedTerm::Bv(format!("s_{}", ToABY::get_var_name(&t))),
+                //     );
+                // }
             }
             Op::Const(Value::BitVector(b)) => {
                 let op = "CONS_bv";
@@ -442,36 +441,44 @@ impl ToABY {
         write_lines_to_file(&self.bytecode_path, &self.bytecode_output);
         write_lines_to_file(&self.share_map_path, &self.share_map_output);
     }
+
+    fn entry_fn(&mut self, name: &str) {
+        // Entry function
+        let comp: Computation = self.fs.computations.get(name).unwrap().clone();
+        for t in comp.outputs {
+            self.lower(t.clone());
+        }
+    }
 }
 
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
-    // Entry function
-    let entry_fn_name = "main";
-    let comp: Computation = ir.computations.get(entry_fn_name).unwrap().clone();
+    unimplemented!("Lowering to ABY");
+    // let mut converter = ToABY::new(ir, path, lang);
+    // converter.entry_fn("main");
 
-    let s_map: SharingMap = match ss {
-        "b" => assign_all_boolean(&comp, cm),
-        "y" => assign_all_yao(&comp, cm),
-        "a+b" => assign_arithmetic_and_boolean(&comp, cm),
-        "a+y" => assign_arithmetic_and_yao(&comp, cm),
-        "greedy" => assign_greedy(&comp, cm),
-        #[cfg(feature = "lp")]
-        "lp" => assign(&comp, cm),
-        #[cfg(feature = "lp")]
-        "glp" => assign(&comp, cm),
-        _ => {
-            panic!("Unsupported sharing scheme: {}", ss);
-        }
-    };
+    // let s_map: SharingMap = match ss {
+    //     "b" => assign_all_boolean(&comp, cm),
+    //     "y" => assign_all_yao(&comp, cm),
+    //     "a+b" => assign_arithmetic_and_boolean(&comp, cm),
+    //     "a+y" => assign_arithmetic_and_yao(&comp, cm),
+    //     "greedy" => assign_greedy(&comp, cm),
+    //     #[cfg(feature = "lp")]
+    //     "lp" => assign(&comp, cm),
+    //     #[cfg(feature = "lp")]
+    //     "glp" => assign(&comp, cm),
+    //     _ => {
+    //         panic!("Unsupported sharing scheme: {}", ss);
+    //     }
+    // };
 
-    let mut converter = ToABY::new(s_map, comp.metadata, path, lang);
-    for t in comp.outputs {
-        println!("terms: {}", t);
-        converter.map_terms_to_shares(t.clone());
-        converter.write_mapping_file(t.clone());
-        converter.lower(t.clone());
-    }
+    // let mut converter = ToABY::new(s_map, comp.metadata, path, lang);
+    // for t in comp.outputs {
+    //     println!("terms: {}", t);
+    //     converter.map_terms_to_shares(t.clone());
+    //     converter.write_mapping_file(t.clone());
+    //     converter.lower(t.clone());
+    // }
 
     // for (fd, cs) in ir.functions.iter() {
     //     println!("================================================");

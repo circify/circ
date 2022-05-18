@@ -256,8 +256,8 @@ fn main() {
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     // Binarize nary terms
                     Opt::Binarize,
-                    // Inline Function Calls
-                    Opt::InlineCalls,
+                    // // Inline Function Calls
+                    // Opt::InlineCalls,
                 ],
             )
         }
@@ -286,12 +286,12 @@ fn main() {
         ),
     };
 
-    for (name, comp) in cs.computations.iter() {
-        println!("functions: {}", name);
-        for t in &comp.outputs {
-            println!("term: {}", t);
-        }
-    }
+    // for (name, comp) in cs.computations.iter() {
+    //     println!("functions: {}", name);
+    //     for t in &comp.outputs {
+    //         println!("term: {}", t);
+    //     }
+    // }
 
     println!("Done with IR optimization");
 

@@ -40,7 +40,7 @@ typedef struct
 
 DT sum_tree(DT *data, int len, int stride) {
 	int sum = 0;
-	for (int i = 0; i < len; i++) {
+	for (int i = 0; i < LEN_A*LEN_B; i++) {
 		sum += data[i];
 	}
 	return sum;

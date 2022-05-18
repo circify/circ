@@ -73,7 +73,6 @@ pub fn inline_function_calls(
 ) -> Term {
     let mut call_cache: HashMap<Term, Vec<Term>> = HashMap::new();
     for t in PostOrderIter::new(term_.clone()) {
-        println!("inlining term: {}", t);
         let mut children = Vec::new();
         for c in &t.cs {
             if let Some(rewritten_c) = rewritten.get(c) {
