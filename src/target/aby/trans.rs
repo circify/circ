@@ -29,7 +29,14 @@ enum EmbeddedTerm {
 
 impl fmt::Display for EmbeddedTerm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            EmbeddedTerm::Bool(s) => {
+                write!(f, "bool({})", s)
+            }
+            EmbeddedTerm::Bv(s) => {
+                write!(f, "bv({})", s)
+            }
+        }
     }
 }
 
