@@ -60,7 +60,8 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap, Value, AND,
+    bv_lit, check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap,
+    Value, AND,
 };
 use std::collections::BTreeMap;
 
@@ -69,6 +70,7 @@ use itertools::zip_eq;
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum TupleTree {
     NonTuple(Term),
+    CallTuple(Term),
     Tuple(im::Vector<TupleTree>),
 }
 
@@ -77,6 +79,7 @@ impl TupleTree {
         let mut out = Vec::new();
         fn rec_unroll_into(t: &TupleTree, out: &mut Vec<Term>) {
             match t {
+                TupleTree::CallTuple(t) => out.push(t.clone()),
                 TupleTree::NonTuple(t) => out.push(t.clone()),
                 TupleTree::Tuple(t) => {
                     for c in t {
@@ -95,6 +98,9 @@ impl TupleTree {
                     TupleTree::Tuple(tt.iter().map(|c| term_structure(c, iter)).collect())
                 }
                 TupleTree::NonTuple(_) => TupleTree::NonTuple(iter.next().expect("bad structure")),
+                TupleTree::CallTuple(_) => {
+                    TupleTree::CallTuple(iter.next().expect("bad structure"))
+                }
             }
         }
         term_structure(self, &mut flattened.into_iter())
@@ -107,7 +113,12 @@ impl TupleTree {
     }
     fn get(&self, i: usize) -> Self {
         match self {
-            TupleTree::NonTuple(_) => panic!("Get ({}) on non-tuple {:?}", i, self),
+            TupleTree::CallTuple(cs) => {
+                TupleTree::CallTuple(term![Op::Select; cs.clone(), bv_lit(i, 32)])
+            }
+            TupleTree::NonTuple(cs) => {
+                panic!("Get ({}) on non-tuple {:?}", i, self)
+            }
             TupleTree::Tuple(t) => {
                 assert!(i < t.len());
                 t.get(i).unwrap().clone()
@@ -116,7 +127,11 @@ impl TupleTree {
     }
     fn update(&self, i: usize, v: &TupleTree) -> Self {
         match self {
-            TupleTree::NonTuple(_) => panic!("Update ({}) on non-tuple {:?}", i, self),
+            TupleTree::CallTuple(cs) => {
+                let val = v.clone().unwrap_non_tuple();
+                TupleTree::CallTuple(term![Op::Store; cs.clone(), bv_lit(i, 32), val.clone()])
+            }
+            TupleTree::NonTuple(cs) => panic!("Update ({}) on non-tuple {:?}", i, self),
             TupleTree::Tuple(t) => {
                 assert!(i < t.len());
                 TupleTree::Tuple(t.update(i, v.clone()))
@@ -126,6 +141,7 @@ impl TupleTree {
     fn unwrap_non_tuple(self) -> Term {
         match self {
             TupleTree::NonTuple(t) => t,
+            TupleTree::CallTuple(t) => t,
             _ => panic!("{:?} is tuple!", self),
         }
     }
@@ -258,6 +274,10 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 t.update(*i, &v)
             }
             Op::Tuple => TupleTree::Tuple(cs.into()),
+            Op::Call(..) => TupleTree::CallTuple(term(
+                t.op.clone(),
+                cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
+            )),
             _ => TupleTree::NonTuple(term(
                 t.op.clone(),
                 cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),

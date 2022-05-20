@@ -857,7 +857,7 @@ impl CGen {
                     self.function_queue.push(call_term.clone());
                 }
 
-                // TODO: rewiring
+                // Rewiring
                 for (ret_name, sort) in rets.iter() {
                     if ret_name != "return" {
                         let call = term(
@@ -873,11 +873,12 @@ impl CGen {
                         if let Sort::Array(_, _, l) = sort {
                             let ct = cargs_map.get(ret_name).unwrap();
                             if let CTermData::Array(_, id) = ct.term {
-                                for i in 0..*l {
-                                    let updated_idx = bv_lit(i as i32, 32);
-                                    // TODO: index calculation
-                                    self.circ.store(id.unwrap(), updated_idx, call.clone());
-                                }
+                                self.circ.replace(id.unwrap(), call.clone());
+                            //     for i in 0..*l {
+                            //         let updated_idx = bv_lit(i as i32, 32);
+                            //         // TODO: index calculation
+                            //         self.circ.store(id.unwrap(), updated_idx, call.clone());
+                            //     }
                             } else {
                                 unimplemented!("This should only be handling ptrs to arrays");
                             }

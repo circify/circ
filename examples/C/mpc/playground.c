@@ -1,22 +1,15 @@
-void fa(int * c, int * d) {
+void fa(int * c) {
     for (int i = 0; i < 2; i++) {
         c[i] = c[i] + 1;
-    }
-    for (int i = 0; i < 2; i++) {
-        d[i] = c[i];
     }
 }
 
 int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) {
     int c[2] = {a, b};
-    int d[2] = {0, 0};
-    // for (int i = 0; i < 2; i++) {
-    //     c[i]++;
-    // }
-    fa(c, d);
+    fa(c);
     int sum = 0;
     for (int i = 0; i < 2; i++) {
-        sum += d[i];
+        sum += c[i];
     }
     return sum;
 }

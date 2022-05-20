@@ -16,7 +16,7 @@ use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
-use circ::ir::term::{Functions, Op, BV_LSHR, BV_SHL};
+use circ::ir::term::{Functions, Op, PostOrderIter, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
     term::extras::Letified,
@@ -286,12 +286,15 @@ fn main() {
         ),
     };
 
-    // for (name, comp) in cs.computations.iter() {
-    //     println!("functions: {}", name);
-    //     for t in &comp.outputs {
-    //         println!("term: {}", t);
-    //     }
-    // }
+    for (name, comp) in cs.computations.iter() {
+        println!("functions: {}", name);
+        for t in &comp.outputs {
+            for c in PostOrderIter::new(t.clone()) {
+                println!("term: {}, {}", c, c.uid());
+            }
+        }
+        println!("\n");
+    }
 
     println!("Done with IR optimization");
 

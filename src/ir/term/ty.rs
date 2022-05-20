@@ -176,12 +176,12 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             }
         }
         Op::Call(_, _, ret, ret_name) => {
-            let s = ret[ret_name].clone();
-            match s {
-                Sort::Array(_, val_sort, _) => Ok(*val_sort),
-                _ => Ok(s),
-            }
-            // Ok(ret[ret_name].clone());
+            // let s = ret[ret_name].clone();
+            // match s {
+            //     Sort::Array(_, val_sort, _) => Ok(*val_sort),
+            //     _ => Ok(s),
+            // }
+            Ok(ret[ret_name].clone())
         }
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }

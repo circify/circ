@@ -868,6 +868,11 @@ impl<E: Embeddable> Circify<E> {
         self.cir_ctx.mem.borrow_mut().store(id, offset, val, cond);
     }
 
+    /// Replace term at AllocId
+    pub fn replace(&mut self, id: AllocId, val: Term) {
+        self.cir_ctx.mem.borrow_mut().replace(id, val);
+    }
+
     /// Zero allocate an array
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
         self.cir_ctx
