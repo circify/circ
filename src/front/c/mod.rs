@@ -874,6 +874,7 @@ impl CGen {
                             let ct = cargs_map.get(ret_name).unwrap();
                             if let CTermData::Array(_, id) = ct.term {
                                 self.circ.replace(id.unwrap(), call.clone());
+                            // self.circ.assign(l, Val::Term(val));
                             //     for i in 0..*l {
                             //         let updated_idx = bv_lit(i as i32, 32);
                             //         // TODO: index calculation
