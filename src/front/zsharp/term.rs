@@ -5,6 +5,7 @@ use std::fmt::{self, Display, Formatter};
 use rug::Integer;
 
 use crate::circify::{CirCtx, Embeddable, Typed};
+use crate::front::field_list::FieldList;
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
 use crate::util::field::DFL_T;
@@ -16,44 +17,6 @@ pub enum Ty {
     Field,
     Struct(String, FieldList<Ty>),
     Array(usize, Box<Ty>),
-}
-
-pub use field_list::FieldList;
-
-/// This module contains [FieldList].
-///
-/// It gets its own module so that its member can be private.
-mod field_list {
-    use std::collections::BTreeMap;
-
-    #[derive(Clone, PartialEq, Eq)]
-    pub struct FieldList<T> {
-        // must be kept in sorted order
-        list: Vec<(String, T)>,
-    }
-
-    impl<T> FieldList<T> {
-        pub fn new(mut list: Vec<(String, T)>) -> Self {
-            list.sort_by_cached_key(|p| p.0.clone());
-            FieldList { list }
-        }
-        pub fn search(&self, key: &str) -> Option<(usize, &T)> {
-            let idx = self
-                .list
-                .binary_search_by_key(&key, |p| p.0.as_str())
-                .ok()?;
-            Some((idx, &self.list[idx].1))
-        }
-        pub fn get(&self, idx: usize) -> (&str, &T) {
-            (&self.list[idx].0, &self.list[idx].1)
-        }
-        pub fn fields(&self) -> impl Iterator<Item = &(String, T)> {
-            self.list.iter()
-        }
-        pub fn into_map(self) -> BTreeMap<String, T> {
-            self.list.into_iter().collect()
-        }
-    }
 }
 
 impl Display for Ty {
@@ -618,7 +581,7 @@ pub fn const_val(a: T) -> Result<T, String> {
 }
 
 fn const_value(t: &Term) -> Option<Value> {
-    let folded = constant_fold(t);
+    let folded = constant_fold(t, &[]);
     match &folded.op {
         Op::Const(v) => Some(v.clone()),
         _ => None,

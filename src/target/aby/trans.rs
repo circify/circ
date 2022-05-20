@@ -4,6 +4,7 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
+use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
@@ -28,7 +29,14 @@ enum EmbeddedTerm {
 
 impl fmt::Display for EmbeddedTerm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            EmbeddedTerm::Bool(s) => {
+                write!(f, "bool({})", s)
+            }
+            EmbeddedTerm::Bv(s) => {
+                write!(f, "bv({})", s)
+            }
+        }
     }
 }
 
@@ -239,6 +247,13 @@ impl ToABY {
                     // This is to bypass adding an AND gate with a single conditional term
                     // Refer to pub fn condition() in src/circify/mod.rs
                     self.check_bool(&t.cs[0]);
+                    let a = *self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                    match o {
+                        BoolNaryOp::And => self.term_to_share_cnt.insert(t.clone(), a),
+                        _ => {
+                            unimplemented!("Single operand boolean operation");
+                        }
+                    };
                     self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
                 } else {
                     self.check_bool(&t.cs[0]);
@@ -374,22 +389,39 @@ impl ToABY {
                     BvBinOp::Urem => "REM",
                     BvBinOp::Shl => "SHL",
                     BvBinOp::Lshr => "LSHR",
-                    BvBinOp::Ashr => "ASHR",
+                    _ => panic!("Binop not supported: {}", o),
                 };
 
-                self.check_bv(&t.cs[0]);
-                self.check_bv(&t.cs[1]);
+                match o {
+                    BvBinOp::Sub | BvBinOp::Udiv | BvBinOp::Urem => {
+                        self.check_bv(&t.cs[0]);
+                        self.check_bv(&t.cs[1]);
 
-                let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+                        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                        let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
 
-                let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                self.bytecode_output.push(line);
+                        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+                        self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                        self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                    }
+                    BvBinOp::Shl | BvBinOp::Lshr => {
+                        self.check_bv(&t.cs[0]);
+                        self.check_bv(&t.cs[1]);
+
+                        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                        let const_shift_amount_term = fold(&t.cs[1], &[]);
+                        let const_shift_amount =
+                            const_shift_amount_term.as_bv_opt().unwrap().uint();
+
+                        let line = format!("2 1 {} {} {} {}\n", a, const_shift_amount, s, op);
+                        self.bytecode_output.push(line);
+
+                        self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                    }
+                    _ => panic!("Binop not supported: {}", o),
+                };
             }
-            // TODO
-            Op::BvExtract(_start, _end) => {}
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
     }

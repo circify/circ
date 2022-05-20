@@ -15,6 +15,7 @@ use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
+use circ::ir::term::{Op, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
     term::{
@@ -210,38 +211,45 @@ fn main() {
         }
     };
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
-        Mode::Mpc(_) => opt(
+        Mode::Opt => opt(
             cs,
-            vec![
-                Opt::Sha,
-                Opt::ConstantFold,
-                Opt::ScalarizeVars,
-                Opt::ConstantFold,
-                // The obliv elim pass produces more tuples, that must be eliminated
-                Opt::Obliv,
-                Opt::Tuple,
-                // The linear scan pass produces more tuples, that must be eliminated
-                Opt::LinearScan,
-                Opt::Tuple,
-                Opt::ConstantFold,
-                // Binarize nary terms
-                Opt::Binarize,
-            ],
-            // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![Opt::ScalarizeVars, Opt::ConstantFold(Box::new([]))],
         ),
+        Mode::Mpc(_) => {
+            let ignore = [BV_LSHR, BV_SHL];
+            opt(
+                cs,
+                vec![
+                    Opt::ScalarizeVars,
+                    Opt::Flatten,
+                    Opt::Sha,
+                    Opt::ConstantFold(Box::new(ignore.clone())),
+                    Opt::Flatten,
+                    Opt::Obliv,
+                    // The obliv elim pass produces more tuples, that must be eliminated
+                    Opt::Tuple,
+                    Opt::LinearScan,
+                    // The linear scan pass produces more tuples, that must be eliminated
+                    Opt::Tuple,
+                    Opt::ConstantFold(Box::new(ignore)),
+                    // Binarize nary terms
+                    Opt::Binarize,
+                ],
+                // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            )
+        }
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
                 Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
-                Opt::ConstantFold,
+                Opt::ConstantFold(Box::new([])),
                 Opt::Flatten,
                 Opt::Inline,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
-                Opt::ConstantFold,
+                Opt::ConstantFold(Box::new([])),
                 Opt::Obliv,
                 // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Tuple,
@@ -249,7 +257,7 @@ fn main() {
                 // The linear scan pass produces more tuples, that must be eliminated
                 Opt::Tuple,
                 Opt::Flatten,
-                Opt::ConstantFold,
+                Opt::ConstantFold(Box::new([])),
                 Opt::Inline,
             ],
         ),

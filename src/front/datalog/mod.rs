@@ -207,7 +207,7 @@ impl<'ast> Gen<'ast> {
                             .find(|&(_, arg)| arg.dec.is_some())
                         {
                             let ir = &args[i].ir;
-                            let reduced_ir = fold(ir);
+                            let reduced_ir = fold(ir, &[]);
                             let r = as_uint_constant(&reduced_ir);
                             debug!("Dec arg: {}, const value {:?}", rule.args[i].ident.value, r);
                             r

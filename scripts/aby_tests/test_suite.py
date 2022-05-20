@@ -1,3 +1,11 @@
+new_tests = [
+    [
+        "new",
+        "playground",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
 arithmetic_tests = [
     [
         "Add two numbers",
@@ -394,6 +402,45 @@ function_tests = [
     ], 
 ]
 
+struct_tests = [
+    [
+        "Struct add",
+        "2pc_struct_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Struct array add",
+        "2pc_struct_array_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
+matrix_tests = [
+    [
+        "Matrix add",
+        "2pc_matrix_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Matrix assign add",
+        "2pc_matrix_assign_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+    [
+        "Matrix ptr add",
+        "2pc_matrix_ptr_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
+ptr_tests = [
+    [
+        "Ptr add",
+        "2pc_ptr_add",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ], 
+]
+
 shift_tests = [
      [
         "Left Shift a by 1 - 1",
@@ -404,11 +451,6 @@ shift_tests = [
         "Left Shift a by 1 - 2",
         "2pc_lhs",
         "./scripts/aby_tests/test_inputs/lsh_2.txt",
-    ], 
-    [
-        "Left Shift a by 1 - 3",
-        "2pc_lhs",
-        "./scripts/aby_tests/test_inputs/lsh_3.txt",
     ], 
     [
         "Right Shift a by 1 - 1",
@@ -446,7 +488,30 @@ div_tests = [
     ], 
 ]
 
-misc_tests = [
+c_misc_tests = [
+    [
+        "Millionaire's problem: server has more money than client",
+        "2pc_millionaires",
+        "./scripts/aby_tests/test_inputs/lt_1.txt",
+    ], 
+    [
+        "Millionaire's problem: server has equal money to client",
+        "2pc_millionaires",
+        "./scripts/aby_tests/test_inputs/lt_2.txt",
+    ], 
+    [
+        "Millionaire's problem: server has less money than client",
+        "2pc_millionaires",
+        "./scripts/aby_tests/test_inputs/lt_3.txt",
+    ], 
+    [
+        "Multivariables",
+        "2pc_multi_var",
+        "./scripts/aby_tests/test_inputs/multi.txt",
+    ]
+]
+
+zok_misc_tests = [
     [
         "Millionaire's problem: server has more money than client",
         "2pc_millionaires",
@@ -464,14 +529,6 @@ misc_tests = [
     ], 
 ]
 
-kmeans_tests = [
-    [
-        "kmeans",
-        "2pc_kmeans",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
-    ],     
-]
-
 biomatch_tests = [
     [
         "biomatch - 1",
@@ -483,6 +540,38 @@ biomatch_tests = [
         "2pc_biomatch",
         "./scripts/aby_tests/test_inputs/biomatch_2.txt",
     ],   
+]
+
+kmeans_tests = [
+    [
+        "kmeans",
+        "2pc_kmeans",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],     
+]
+
+kmeans_tests_2 = [
+    [
+        "kmeans",
+        "2pc_kmeans_og",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],     
+]
+
+gauss_tests = [
+    [
+        "gauss",
+        "2pc_gauss",
+        "./scripts/aby_tests/test_inputs/gauss.txt",
+    ],   
+]
+
+db_tests = [
+    [
+        "db join",
+        "db_join",
+        "./scripts/aby_tests/test_inputs/db_join.txt",
+    ],  
 ]
 
 benchmark_tests = [
