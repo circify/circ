@@ -12,8 +12,8 @@ lazy_static = "1.4"
 num-traits = "0.2"
 paste = "1.0"
 rand = "0.8"
-rug = "1.11"
-serde = { version = "1.0", features = ["derive"] }
+rug = { version = "1.11", features = ["serde"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 
 [dev-dependencies]
 rand = "0.8"

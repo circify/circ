@@ -1,8 +1,7 @@
 //! C Types
+use crate::circify::CirCtx;
 use crate::front::c::term::CTerm;
 use crate::front::c::term::CTermData;
-use crate::front::c::Circify;
-use crate::front::c::Ct;
 use crate::front::field_list::FieldList;
 use crate::ir::term::*;
 
@@ -88,10 +87,12 @@ impl Ty {
             Self::Ptr(_, _) => panic!("Ptrs don't have a CirC sort"),
         }
     }
+
     fn default_ir_term(&self) -> Term {
         self.sort().default_term()
     }
-    pub fn default(&self, circ: &mut Circify<Ct>) -> CTerm {
+
+    pub fn default(&self, ctx: &CirCtx) -> CTerm {
         match self {
             Self::Bool => CTerm {
                 term: CTermData::CBool(self.default_ir_term()),
@@ -102,23 +103,26 @@ impl Ty {
                 udef: false,
             },
             Self::Array(s, _, ty) => {
-                let id = circ.zero_allocate(*s, 32, ty.num_bits());
+                let mut mem = ctx.mem.borrow_mut();
+                let id = mem.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
                     term: CTermData::CArray(self.clone(), Some(id)),
                     udef: false,
                 }
             }
-            Self::Ptr(s, ty) => {
-                let id = circ.zero_allocate(*s, 32, ty.num_bits());
-                CTerm {
-                    term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
-                    udef: false,
-                }
+            Self::Ptr(_s, _ty) => {
+                // let mut mem = ctx.mem.borrow_mut();
+                // let id = mem.zero_allocate(*s, 32, ty.num_bits());
+                // CTerm {
+                //     term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
+                //     udef: false,
+                // }
+                unimplemented!("Unknown array size");
             }
             Self::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
                     .fields()
-                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(circ)))
+                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(ctx)))
                     .collect();
                 CTerm {
                     term: CTermData::CStruct(self.clone(), FieldList::new(fields)),

@@ -1,11 +1,10 @@
 //! C Terms
 use crate::circify::mem::AllocId;
-use crate::circify::{CirCtx, Embeddable};
+use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::front::c::types::*;
 use crate::front::field_list::FieldList;
 use crate::ir::term::*;
 use rug::Integer;
-use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone)]
@@ -74,6 +73,26 @@ impl CTermData {
         assert!(ts.len() == 1);
         ts.get(0).unwrap().clone()
     }
+
+    pub fn simple_term(&self) -> Term {
+        match self {
+            CTermData::CBool(b) => b.clone(),
+            CTermData::CInt(_, _, b) => b.clone(),
+            _ => panic!(),
+        }
+    }
+
+    // pub fn term(&self, circ: &Circify<Ct>) -> Term {
+    //     match self {
+    //         CTermData::CBool(b) => b.clone(),
+    //         CTermData::CInt(_, _, b) => b.clone(),
+    //         CTermData::CArray(_, b) => {
+    //             // TODO: load all of the array
+    //             let i = b.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", self));
+    //             circ.load(i, bv_lit(0, 32))
+    //         }
+    //     }
+    // }
 }
 
 impl Display for CTermData {
@@ -521,50 +540,42 @@ pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_shift(">>", BvBinOp::Lshr, a, b)
 }
 
-pub struct Ct {
-    values: Option<HashMap<String, Integer>>,
-}
+pub struct Ct {}
 
 fn idx_name(struct_name: &str, idx: usize) -> String {
     format!("{}.{}", struct_name, idx)
 }
 
 impl Ct {
-    pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
-        Self { values }
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Typed<Ty> for CTerm {
+    fn type_(&self) -> Ty {
+        self.term.type_()
     }
 }
 
 impl Embeddable for Ct {
     type T = CTerm;
     type Ty = Ty;
-    fn declare(
+    fn declare_input(
         &self,
         ctx: &mut CirCtx,
         ty: &Self::Ty,
-        raw_name: String,
-        user_name: Option<String>,
+        name: String,
         visibility: Option<PartyId>,
+        precompute: Option<Self::T>,
     ) -> Self::T {
-        let get_int_val = || -> Integer {
-            self.values
-                .as_ref()
-                .and_then(|vs| {
-                    user_name
-                        .as_ref()
-                        .and_then(|n| vs.get(n))
-                        .or_else(|| vs.get(&raw_name))
-                })
-                .cloned()
-                .unwrap_or_else(|| Integer::from(0))
-        };
         match ty {
             Ty::Bool => Self::T {
                 term: CTermData::CBool(ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::Bool,
-                    || Value::Bool(get_int_val() != 0),
                     visibility,
+                    precompute.map(|p| p.term.simple_term()),
                 )),
                 udef: false,
             },
@@ -573,25 +584,18 @@ impl Embeddable for Ct {
                     *s,
                     *w,
                     ctx.cs.borrow_mut().new_var(
-                        &raw_name,
+                        &name,
                         Sort::BitVector(*w),
-                        || Value::BitVector(BitVector::new(get_int_val(), *w)),
                         visibility,
+                        precompute.map(|p| p.term.simple_term()),
                     ),
                 ),
                 udef: false,
             },
             Ty::Array(n, _, ty) => {
+                assert!(precompute.is_none());
                 let v: Vec<Self::T> = (0..*n)
-                    .map(|i| {
-                        self.declare(
-                            ctx,
-                            &*ty,
-                            idx_name(&raw_name, i),
-                            user_name.as_ref().map(|u| idx_name(u, i)),
-                            visibility,
-                        )
-                    })
+                    .map(|i| self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, None))
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(*n, 32, ty.num_bits());
@@ -612,12 +616,12 @@ impl Embeddable for Ct {
                     .map(|(f_name, f_ty)| {
                         (
                             f_name.clone(),
-                            self.declare(
+                            self.declare_input(
                                 ctx,
                                 f_ty,
-                                field_name(&raw_name, f_name),
-                                user_name.as_ref().map(|u| field_name(u, f_name)),
+                                field_name(&name, f_name),
                                 visibility,
+                                None,
                             ),
                         )
                     })
@@ -662,34 +666,8 @@ impl Embeddable for Ct {
         }
     }
 
-    fn assign(
-        &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        name: String,
-        t: Self::T,
-        visibility: Option<PartyId>,
-    ) -> Self::T {
-        assert!(&t.term.type_() == ty);
-        match (ty, t.term) {
-            (_, CTermData::CBool(b)) => Self::T {
-                term: CTermData::CBool(ctx.cs.borrow_mut().assign(&name, b, visibility)),
-                udef: false,
-            },
-            (_, CTermData::CInt(s, w, b)) => Self::T {
-                term: CTermData::CInt(s, w, ctx.cs.borrow_mut().assign(&name, b, visibility)),
-                udef: false,
-            },
-            _ => unimplemented!(),
-        }
-    }
-
-    fn values(&self) -> bool {
-        self.values.is_some()
-    }
-
-    fn type_of(&self, cterm: &Self::T) -> Self::Ty {
-        cterm.term.type_()
+    fn create_uninit(&self, ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
+        ty.default(ctx)
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {

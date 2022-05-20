@@ -1,4 +1,7 @@
 //! Replacing array and tuple variables with scalars.
+use fxhash::FxHashSet;
+use log::debug;
+
 use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::*;
 
@@ -6,70 +9,53 @@ struct Pass;
 
 fn create_vars(
     prefix: &str,
+    prefix_term: Term,
     sort: &Sort,
-    value: Option<Value>,
-    party: Option<PartyId>,
-    new_var_requests: &mut Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
+    new_var_requests: &mut Vec<(String, Term)>,
+    top_rec_level: bool,
 ) -> Term {
     match sort {
-        Sort::Tuple(sorts) => {
-            let mut values = value.map(|v| match v {
-                Value::Tuple(t) => t,
-                _ => panic!(),
-            });
-            term(
-                Op::Tuple,
-                sorts
-                    .iter()
-                    .enumerate()
-                    .map(|(i, sort)| {
-                        create_vars(
-                            &format!("{}.{}", prefix, i),
-                            sort,
-                            values
-                                .as_mut()
-                                .map(|v| std::mem::replace(&mut v[i], Value::Bool(true))),
-                            party,
-                            new_var_requests,
-                        )
-                    })
-                    .collect(),
-            )
-        }
+        Sort::Tuple(sorts) => term(
+            Op::Tuple,
+            sorts
+                .iter()
+                .enumerate()
+                .map(|(i, sort)| {
+                    create_vars(
+                        &format!("{}.{}", prefix, i),
+                        term![Op::Field(i); prefix_term.clone()],
+                        sort,
+                        new_var_requests,
+                        false,
+                    )
+                })
+                .collect(),
+        ),
         Sort::Array(key_s, val_s, size) => {
-            let mut values = value.map(|v| match v {
-                Value::Array(Array {
-                    default, map, size, ..
-                }) => {
-                    let mut vals = vec![*default; size];
-                    for (key_val, val_val) in map.into_iter() {
-                        let idx = key_val.as_usize().unwrap();
-                        vals[idx] = val_val;
-                    }
-                    vals
-                }
-                _ => panic!(),
-            });
+            let array_elements = extras::array_elements(&prefix_term);
             make_array(
                 (**key_s).clone(),
                 (**val_s).clone(),
                 (0..*size)
-                    .map(|i| {
+                    .zip(array_elements)
+                    .map(|(i, element)| {
                         create_vars(
                             &format!("{}.{}", prefix, i),
+                            element,
                             val_s,
-                            values
-                                .as_mut()
-                                .map(|v| std::mem::replace(&mut v[i], Value::Bool(true))),
-                            party,
                             new_var_requests,
+                            false,
                         )
                     })
                     .collect(),
             )
         }
         _ => {
-            new_var_requests.push((prefix.into(), sort.clone(), value, party));
+            // don't request a new variable if we're not recursing...
+            if !top_rec_level {
+                debug!("New scalar var: {}", prefix);
+                new_var_requests.push((prefix.into(), prefix_term));
+            }
             leaf_term(Op::Var(prefix.into(), sort.clone()))
         }
     }
@@ -83,20 +69,10 @@ impl RewritePass for Pass {
         _rewritten_children: F,
     ) -> Option<Term> {
         if let Op::Var(name, sort) = &orig.op {
-            let party_visibility = computation.metadata.get_input_visibility(name);
             let mut new_var_reqs = Vec::new();
-            let new = create_vars(
-                name,
-                sort,
-                computation
-                    .values
-                    .as_ref()
-                    .map(|v| v.get(name).unwrap().clone()),
-                party_visibility,
-                &mut new_var_reqs,
-            );
-            if !new_var_reqs.is_empty() {
-                computation.replace_input(orig.clone(), new_var_reqs);
+            let new = create_vars(name, orig.clone(), sort, &mut new_var_reqs, true);
+            for (name, term) in new_var_reqs {
+                computation.extend_precomputation(name, term);
             }
             Some(new)
         } else {
@@ -111,15 +87,34 @@ pub fn scalarize_inputs(cs: &mut Computation) {
     pass.traverse(cs);
     #[cfg(debug_assertions)]
     assert_all_vars_are_scalars(cs);
+    remove_non_scalar_vars_from_main_computation(cs);
 }
 
 /// Check that every variables is a scalar.
 pub fn assert_all_vars_are_scalars(cs: &Computation) {
-    for t in cs
-        .terms_postorder()
+    for t in cs.terms_postorder() {
+        if let Op::Var(_name, sort) = &t.op {
+            match sort {
+                Sort::Array(..) | Sort::Tuple(..) => {
+                    panic!("Variable {} is non-scalar", t);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// Check that every variables is a scalar.
+fn remove_non_scalar_vars_from_main_computation(cs: &mut Computation) {
+    let new_inputs = cs
+        .metadata
+        .computation_inputs
+        .clone()
         .into_iter()
-        .chain(cs.metadata.inputs.iter().cloned())
-    {
+        .filter(|i| cs.metadata.input_sort(i).is_scalar())
+        .collect::<FxHashSet<_>>();
+    cs.metadata.computation_inputs = new_inputs;
+    for t in cs.terms_postorder() {
         if let Op::Var(_name, sort) = &t.op {
             match sort {
                 Sort::Array(..) | Sort::Tuple(..) => {

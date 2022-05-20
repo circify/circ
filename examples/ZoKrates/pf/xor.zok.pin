@@ -1,0 +1,7 @@
+(let (
+    (a #x0001)
+    (b #x0004)
+    (c #x0001)
+    (d #x0000)
+) false ; ignored
+)

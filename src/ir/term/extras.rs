@@ -133,6 +133,26 @@ pub fn free_in(v: &str, t: Term) -> bool {
     false
 }
 
+/// Get all the free variables in this term
+pub fn free_variables(t: Term) -> FxHashSet<String> {
+    PostOrderIter::new(t)
+        .filter_map(|n| match &n.op {
+            Op::Var(name, _) => Some(name.into()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Get all the free variables in this term, with sorts
+pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
+    PostOrderIter::new(t)
+        .filter_map(|n| match &n.op {
+            Op::Var(name, sort) => Some((name.into(), sort.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
 /// If this term is a constant field or bit-vector, get the unsigned int value.
 pub fn as_uint_constant(t: &Term) -> Option<Integer> {
     match &t.op {
@@ -140,6 +160,24 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
         Op::Const(Value::Field(f)) => Some(f.i()),
         _ => None,
     }
+}
+
+/// The elements in this array (select terms) as a vector.
+pub fn array_elements(t: &Term) -> Vec<Term> {
+    if let Sort::Array(key_sort, _, size) = check(t) {
+        key_sort
+            .elems_iter()
+            .take(size)
+            .map(|key| term(Op::Select, vec![t.clone(), key]))
+            .collect()
+    } else {
+        panic!()
+    }
+}
+
+/// Wrap an array term as a tuple term.
+pub fn array_to_tuple(t: &Term) -> Term {
+    term(Op::Tuple, array_elements(t))
 }
 
 #[cfg(test)]

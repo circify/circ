@@ -232,16 +232,10 @@ impl<Ty: Display> FnFrame<Ty> {
         this
     }
     fn last_lex_mut(&mut self) -> Result<&mut LexScope<Ty>> {
-        if let Some(n) = self
-            .stack
-            .iter_mut()
-            .rev()
-            .filter_map(|f| match f {
-                StateEntry::Lex(l) => Some(l),
-                _ => None,
-            })
-            .next()
-        {
+        if let Some(n) = self.stack.iter_mut().rev().find_map(|f| match f {
+            StateEntry::Lex(l) => Some(l),
+            _ => None,
+        }) {
             Ok(n)
         } else {
             Err(CircError::NoScope(self.name.clone()))
@@ -331,67 +325,52 @@ impl<Ty: Display> FnFrame<Ty> {
     }
 }
 
+/// Trait for *values* that have *types*. `Self` is the value-type. `T` is the type-type.
+pub trait Typed<T> {
+    /// Compute the type of this value.
+    fn type_(&self) -> T;
+}
+
 /// A language whose state can be managed
 pub trait Embeddable {
     /// Type for this language
     type Ty: Display + Clone + Debug + PartialEq + Eq;
     /// Terms for this language
-    type T: Display + Clone + Debug;
+    type T: Display + Clone + Debug + Typed<Self::Ty>;
 
-    /// Compute the type of `term`.
-    fn type_of(&self, term: &Self::T) -> Self::Ty;
-
-    /// Declare a new value of type
-    fn declare(
-        &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        raw_name: String,
-        user_name: Option<String>,
-        visibility: Option<PartyId>,
-    ) -> Self::T;
-    /// Construct an it-then-else (ternary) langauge value.
-    ///
-    /// Conceptually, `(ite cond t f)`
-    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T;
-    /// Create a fresh variable representation of type `ty`, and constrain it to be equal to `t`.
-    ///
-    /// For simple types, this is usually just a single new variable, and single equality.
-    /// For compound types, it can be more.
-    ///
-    /// For a language with booleans and pairs, calling `assign(ctx, Bool, "a", t, public)` produces
-    /// * new variable "a", of sort [Sort::Bool], which is public iff `public`.
-    /// * an assertion `(= a t)`.
-    ///
-    ///
-    /// Calling `assign(ctx, Pair(Bool,Bool), "a", (pair s t), public)` produces
-    /// * new variables
-    ///   * "a.0", of sort [Sort::Bool], which is public iff `public`.
-    ///   * "a.1", of sort [Sort::Bool], which is public iff `public`.
-    /// * assertions
-    ///   * `(= a.0 s)`
-    ///   * `(= a.1 t)`
-    ///
+    /// Declare a language-level *input* to the computation.
     ///
     /// ## Arguments
     ///
-    ///    * `ctx`: circuit context: used to make assertions
-    ///    * `ty`: type of the new variable (or collection of variables)
-    ///    * `name`: name (prefix) of the new variable(s). Different calls are guaranteed to be
-    ///    prefix-free.
-    ///    * `t`: value that the new langauge variable should be equal to.
-    ///    * `public`: whether the newly created variable(s) should be public inputs to the
-    ///    constraint system. Otherwise they are private inputs.
-    fn assign(
+    ///    * `ctx`: circuit context: you must add the circuit-level *input*
+    ///    * `ty`: the type
+    ///    * `name`: the name
+    ///    * `visibility`: who knows it
+    ///    * `precompute`: an optional term for pre-computing the values of this input. If a party
+    ///    knows the inputs to the precomputation, they can use the precomputation.
+    fn declare_input(
         &self,
         ctx: &mut CirCtx,
         ty: &Self::Ty,
         name: String,
-        t: Self::T,
         visibility: Option<PartyId>,
+        precompute: Option<Self::T>,
     ) -> Self::T;
-    /// Does the front-end have access to concrete values for the circuit?
-    fn values(&self) -> bool;
+
+    /// Create a new uninitialized value of the given term in your language.
+    ///
+    /// For most languages, this should just be a kind of default value.
+    ///
+    /// ## Arguments
+    ///
+    ///    * `ctx`: circuit context: you must add the circuit-level *input*
+    ///    * `ty`: the type
+    fn create_uninit(&self, ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T;
+
+    /// Construct an it-then-else (ternary) langauge value.
+    ///
+    /// Conceptually, `(ite cond t f)`
+    fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T;
 
     /// Create a new term for the default return value of a function returning type `ty`.
     /// The name `ssa_name` is globally unique, and can be used if needed.
@@ -450,7 +429,7 @@ impl<E: Embeddable> Drop for Circify<E> {
 impl<E: Embeddable> Circify<E> {
     /// Creates an empty state management module
     pub fn new(e: E) -> Self {
-        let cs = Rc::new(RefCell::new(Computation::new(e.values())));
+        let cs = Rc::new(RefCell::new(Computation::new()));
         Self {
             e,
             vals: HashMap::default(),
@@ -480,26 +459,41 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
-    /// Declares a new (unconstrained) value of type `ty`, with name `name`, in the current lexical
-    /// scope.
-    /// If `input`, then the language's declaration function is provided with `name` as the
-    /// user-visible name for this variable, which can be used to look up user-provided values.
-    /// If `public`, then the language's declaration function is told to make this variable public.
-    pub fn declare(
+    /// Declare a new *input* to the computation.
+    ///
+    /// See [Embeddable::declare_input]
+    ///
+    /// ## Arguments
+    /// * nice_name: the in-program name of the input
+    /// * ty: the type
+    /// * visibility: who should know this input
+    /// * mangle_name: if true, then creates a unique version of nice_name, and declares that. Otherwise, uses nice_name.
+    pub fn declare_input(
         &mut self,
-        name: VarName,
+        nice_name: VarName,
         ty: &E::Ty,
-        input: bool,
         visibility: Option<PartyId>,
-    ) -> Result<()> {
-        let ssa_name = self.declare_env_name(name.clone(), ty)?.clone();
-        let t = self.e.declare(
-            &mut self.cir_ctx,
-            ty,
-            ssa_name.clone(),
-            if input { Some(name) } else { None },
-            visibility,
-        );
+        precomputed_value: Option<E::T>,
+        mangle_name: bool,
+    ) -> Result<E::T> {
+        let ssa_name = self.declare_env_name(nice_name.clone(), ty)?.clone();
+        let name = if mangle_name {
+            ssa_name.clone()
+        } else {
+            nice_name
+        };
+        let t = self
+            .e
+            .declare_input(&mut self.cir_ctx, ty, name, visibility, precomputed_value);
+        assert!(self.vals.insert(ssa_name, Val::Term(t.clone())).is_none());
+        Ok(t)
+    }
+
+    /// Declares a new (uninitialized) value of type `ty`, with name `name`, in the current lexical
+    /// scope.
+    pub fn declare_uninit(&mut self, name: VarName, ty: &E::Ty) -> Result<()> {
+        let ssa_name = self.declare_env_name(name, ty)?.clone();
+        let t = self.e.create_uninit(&mut self.cir_ctx, ty);
         assert!(self.vals.insert(ssa_name, Val::Term(t)).is_none());
         Ok(())
     }
@@ -580,18 +574,6 @@ impl<E: Embeddable> Circify<E> {
         Ok(val)
     }
 
-    /// Emit assertions corresponding to setting the variable `name` equal to `term`.
-    /// Both should be of type `ty`.
-    pub fn assign_with_assertions(
-        &mut self,
-        name: String,
-        term: E::T,
-        ty: &E::Ty,
-        visiblity: Option<PartyId>,
-    ) {
-        self.e.assign(&mut self.cir_ctx, ty, name, term, visiblity);
-    }
-
     /// Assign `loc` in the current scope to `val`.
     ///
     /// If `public`, then make the new variable version a public (fixed) rather than private
@@ -610,7 +592,7 @@ impl<E: Embeddable> Circify<E> {
         let old_val = self.vals.get(&old_name).unwrap();
         match (old_val, val) {
             (Val::Term(old), Val::Term(new)) => {
-                let new_ty = self.e.type_of(&new);
+                let new_ty = new.type_();
                 assert_eq!(
                     ty, new_ty,
                     "Term {} has type {} but was assigned to {} of type {}",
@@ -820,7 +802,7 @@ impl<E: Embeddable> Circify<E> {
             &mut self.cir_ctx,
             CirCtx {
                 mem: Rc::new(RefCell::new(mem::MemManager::default())),
-                cs: Rc::new(RefCell::new(Computation::new(false))),
+                cs: Rc::new(RefCell::new(Computation::new())),
             },
         )
         .cs
@@ -903,56 +885,16 @@ mod test {
             Pair(Box<T>, Box<T>),
         }
 
-        struct BoolPair {
-            values: Option<HashMap<String, bool>>,
-        }
+        struct BoolPair();
 
         impl Embeddable for BoolPair {
             type T = T;
             type Ty = Ty;
 
-            fn declare(
-                &self,
-                ctx: &mut CirCtx,
-                ty: &Self::Ty,
-                raw_name: String,
-                user_name: Option<String>,
-                visibility: Option<PartyId>,
-            ) -> Self::T {
-                match ty {
-                    Ty::Bool => T::Base(ctx.cs.borrow_mut().new_var(
-                        &raw_name,
-                        Sort::Bool,
-                        || {
-                            Value::Bool(
-                                user_name
-                                    .as_ref()
-                                    .and_then(|v| {
-                                        self.values.as_ref().and_then(|vs| vs.get(v).cloned())
-                                    })
-                                    .unwrap_or(false),
-                            )
-                        },
-                        visibility,
-                    )),
-                    Ty::Pair(a, b) => T::Pair(
-                        Box::new(self.declare(
-                            ctx,
-                            &**a,
-                            format!("{}.0", raw_name),
-                            user_name.as_ref().map(|u| format!("{}.0", u)),
-                            visibility,
-                        )),
-                        Box::new(self.declare(
-                            ctx,
-                            &**b,
-                            format!("{}.1", raw_name),
-                            user_name.as_ref().map(|u| format!("{}.1", u)),
-                            visibility,
-                        )),
-                    ),
-                }
+            fn create_uninit(&self, _ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
+                ty.default()
             }
+
             fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
                 match (t, f) {
                     (T::Base(a), T::Base(b)) => T::Base(term![Op::Ite; cond, a, b]),
@@ -963,58 +905,78 @@ mod test {
                     (a, b) => panic!("Cannot ITE {}, {}", a, b),
                 }
             }
-            fn assign(
-                &self,
-                ctx: &mut CirCtx,
-                _ty: &Self::Ty,
-                name: String,
-                t: Self::T,
-                visibility: Option<PartyId>,
-            ) -> Self::T {
-                match t {
-                    T::Base(a) => T::Base(ctx.cs.borrow_mut().assign(&name, a, visibility)),
-                    T::Pair(a, b) => T::Pair(
-                        Box::new(self.assign(ctx, _ty, format!("{}.0", name), *a, visibility)),
-                        Box::new(self.assign(ctx, _ty, format!("{}.1", name), *b, visibility)),
-                    ),
-                }
-            }
-            fn values(&self) -> bool {
-                self.values.is_some()
-            }
 
-            fn type_of(&self, term: &Self::T) -> Self::Ty {
-                match term {
-                    T::Base(_a) => Ty::Bool,
-                    T::Pair(a, b) => Ty::Pair(Box::new(self.type_of(a)), Box::new(self.type_of(b))),
-                }
-            }
             fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &SsaName) -> Self::T {
                 ty.default()
+            }
+
+            fn declare_input(
+                &self,
+                ctx: &mut CirCtx,
+                ty: &Self::Ty,
+                name: String,
+                visibility: Option<PartyId>,
+                precompute: Option<Self::T>,
+            ) -> Self::T {
+                match ty {
+                    Ty::Bool => T::Base(ctx.cs.borrow_mut().new_var(
+                        &name,
+                        Sort::Bool,
+                        visibility,
+                        precompute.map(|p| match p {
+                            T::Base(t) => t,
+                            _ => panic!("Invalid precompute {:?} for Bool type", p),
+                        }),
+                    )),
+                    Ty::Pair(a, b) => {
+                        let (p_1, p_2) = match precompute {
+                            Some(T::Pair(a, b)) => (Some(*a), Some(*b)),
+                            None => (None, None),
+                            _ => panic!("Invalid precompute {:?} for Pair type", precompute),
+                        };
+                        T::Pair(
+                            Box::new(self.declare_input(
+                                ctx,
+                                &**a,
+                                format!("{}.0", name),
+                                visibility,
+                                p_1,
+                            )),
+                            Box::new(self.declare_input(
+                                ctx,
+                                &**b,
+                                format!("{}.1", name),
+                                visibility,
+                                p_2,
+                            )),
+                        )
+                    }
+                }
+            }
+        }
+
+        impl Typed<Ty> for T {
+            fn type_(&self) -> Ty {
+                match self {
+                    T::Base(_a) => Ty::Bool,
+                    T::Pair(a, b) => Ty::Pair(Box::new(a.type_()), Box::new(b.type_())),
+                }
             }
         }
 
         #[test]
         fn trial() {
-            let values: HashMap<String, bool> = vec![
-                ("a".to_owned(), false),
-                ("b.0".to_owned(), false),
-                ("b.1".to_owned(), false),
-            ]
-            .into_iter()
-            .collect();
-            let e = BoolPair {
-                values: Some(values),
-            };
+            let e = BoolPair();
             let mut c = Circify::new(e);
             c.cir_ctx.cs.borrow_mut().metadata.add_prover_and_verifier();
-            c.declare("a".to_owned(), &Ty::Bool, true, Some(PROVER_ID))
+            c.declare_input("a".to_owned(), &Ty::Bool, Some(PROVER_ID), None, false)
                 .unwrap();
-            c.declare(
+            c.declare_input(
                 "b".to_owned(),
                 &Ty::Pair(Box::new(Ty::Bool), Box::new(Ty::Bool)),
-                true,
                 Some(PROVER_ID),
+                None,
+                false,
             )
             .unwrap();
         }
