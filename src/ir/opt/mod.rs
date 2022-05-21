@@ -64,6 +64,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
                     }
+                    println!("cache size per term: {}", cache.len());
                 }
                 Opt::Sha => {
                     for a in &mut comp.outputs {
