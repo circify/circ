@@ -1348,6 +1348,17 @@ impl CGen {
                 .extend(ret_terms);
         }
 
+        // if let Some(r) = self.circ.exit_fn() {
+        //     let ret_term = r.unwrap_term();
+        //     let ret_terms = ret_term.term.terms(self.circ.cir_ctx());
+        //     self.circ
+        //         .cir_ctx()
+        //         .cs
+        //         .borrow_mut()
+        //         .outputs
+        //         .extend(ret_terms);
+        // }
+
         // match self.mode {
         //     Mode::Mpc(_) => {
         //         let ret_term = r.unwrap_term();
