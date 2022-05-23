@@ -58,6 +58,8 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     let _lock = super::term::COLLECT.read().unwrap();
                     let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                     for a in &mut comp.outputs {
+                        // println!("cfold: {}", a);
+                        // println!();
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());

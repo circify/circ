@@ -1,19 +1,20 @@
-int fa(int * c) {
-    for (int i = 0; i < 500; i++) {
-        c[i] = c[i] + 1;
+int fa(int * c, int a) {
+    for (int i = 0; i < 5; i++) {
+        c[i] = c[i] + a;
     }
     return 1;
 }
 
 int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) {
-    int c[500];
-    int ret = fa(c);
+    int c[5];
+    int ret = fa(c, a);
     int sum = ret;
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 5; i++) {
         sum += c[i];
     }
     return sum;
 }
+
 
 
 // int fa(int a, int b, int c) {

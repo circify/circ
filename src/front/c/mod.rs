@@ -1336,21 +1336,10 @@ impl CGen {
 
         self.gen_stmt(f.body.clone());
 
-        let ret_names = &rets.keys().collect::<Vec<&String>>();
-        let rets = self.circ.exit_fn_call(ret_names);
-        for (name, val) in rets {
-            let ret_terms = val.unwrap_term().term.terms(self.circ.cir_ctx());
-            self.circ
-                .cir_ctx()
-                .cs
-                .borrow_mut()
-                .outputs
-                .extend(ret_terms);
-        }
-
-        // if let Some(r) = self.circ.exit_fn() {
-        //     let ret_term = r.unwrap_term();
-        //     let ret_terms = ret_term.term.terms(self.circ.cir_ctx());
+        // let ret_names = &rets.keys().collect::<Vec<&String>>();
+        // let rets = self.circ.exit_fn_call(ret_names);
+        // for (name, val) in rets {
+        //     let ret_terms = val.unwrap_term().term.terms(self.circ.cir_ctx());
         //     self.circ
         //         .cir_ctx()
         //         .cs
@@ -1358,6 +1347,17 @@ impl CGen {
         //         .outputs
         //         .extend(ret_terms);
         // }
+
+        if let Some(r) = self.circ.exit_fn() {
+            let ret_term = r.unwrap_term();
+            let ret_terms = ret_term.term.terms(self.circ.cir_ctx());
+            self.circ
+                .cir_ctx()
+                .cs
+                .borrow_mut()
+                .outputs
+                .extend(ret_terms);
+        }
 
         // match self.mode {
         //     Mode::Mpc(_) => {
