@@ -31,25 +31,6 @@ pub fn binarize_nary_ops(term_: Term) -> Term {
 }
 /// Traverse `term`, binarize n-ary operators.
 pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache) -> Term {
-    let mut stack = vec![(term_.clone(), false)];
-
-    // Maps terms to their rewritten versions.
-    while let Some((t, children_pushed)) = stack.pop() {
-        if rewritten.contains_key(&t) {
-            continue;
-        }
-        if !children_pushed {
-            stack.push((t.clone(), true));
-            stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
-            continue;
-        }
-        let entry = match &t.op {
-            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op, &t.cs),
-            _ => t.clone(),
-        };
-        rewritten.insert(t, entry);
-    }
-
     for t in PostOrderIter::new(term_.clone()) {
         let mut children = Vec::new();
         for c in &t.cs {
@@ -61,9 +42,9 @@ pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cach
         }
         let entry = match t.op {
             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op, &children),
-            _ => term(t.op.clone(), children),
+            _ => term(t.op.clone(), children.clone()),
         };
-        rewritten.insert(t.clone(), entry);
+        rewritten.insert(t, entry);
     }
 
     if let Some(t) = rewritten.get(&term_) {
