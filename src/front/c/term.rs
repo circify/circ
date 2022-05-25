@@ -614,15 +614,17 @@ impl Embeddable for Ct {
                 ),
                 udef: false,
             },
-            Ty::Array(n, _, ty) => {
+            Ty::Array(n, _, inner_ty) => {
                 assert!(precompute.is_none());
                 let v: Vec<Self::T> = (0..*n)
-                    .map(|i| self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, None))
+                    .map(|i| {
+                        self.declare_input(ctx, &*inner_ty, idx_name(&name, i), visibility, None)
+                    })
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
-                let id = mem.zero_allocate(*n, 32, ty.num_bits());
+                let id = mem.zero_allocate(*n, 32, inner_ty.num_bits());
                 let arr = Self::T {
-                    term: CTermData::Array(*ty.clone(), Some(id)),
+                    term: CTermData::Array(ty.clone(), Some(id)),
                     udef: false,
                 };
                 for (i, t) in v.iter().enumerate() {
