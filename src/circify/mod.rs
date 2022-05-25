@@ -775,27 +775,21 @@ impl<E: Embeddable> Circify<E> {
     /// ## Returns
     ///
     /// Returns the return value of the function, if any.
-    pub fn exit_fn_call(&mut self, ret_names: &Vec<&String>) -> HashMap<String, Val<E::T>> {
+    pub fn exit_fn_call(&mut self, ret_names: &Vec<String>) -> Option<Vec<Val<E::T>>> {
         if let Some(fn_) = self.fn_stack.last() {
-            let mut rets: HashMap<String, Val<E::T>> = HashMap::new();
+            let mut rets: Vec<Val<E::T>> = Vec::new();
             // Get return value if possible
             if fn_.has_return {
-                rets.insert(
-                    RET_NAME.to_string(),
-                    self.get_value(Loc::local(RET_NAME.to_owned())).unwrap(),
-                );
+                rets.push(self.get_value(Loc::local(RET_NAME.to_owned())).unwrap());
             }
 
             // Get references if possible
             for name in ret_names {
-                rets.insert(
-                    name.to_string(),
-                    self.get_value(Loc::local(name.to_string())).unwrap(),
-                );
+                rets.push(self.get_value(Loc::local(name.to_string())).unwrap());
             }
 
             self.fn_stack.pop().unwrap();
-            rets
+            Some(rets)
         } else {
             panic!("No fn to exit")
         }

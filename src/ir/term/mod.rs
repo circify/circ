@@ -139,13 +139,8 @@ pub enum Op {
     /// Map (operation)
     Map(Box<Op>),
 
-    /// Call a function (name, argument sorts, return sorts, return_name)
-    Call(
-        String,
-        BTreeMap<String, Sort>,
-        BTreeMap<String, Sort>,
-        String,
-    ),
+    /// Call a function (name, argument names, argument sorts, return sorts)
+    Call(String, Vec<String>, Vec<Sort>, Sort),
 }
 
 /// Boolean AND
@@ -257,7 +252,7 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
-            Op::Call(_, args, _, _) => Some(args.len()),
+            Op::Call(_, _, args, _) => Some(args.len()),
         }
     }
 }

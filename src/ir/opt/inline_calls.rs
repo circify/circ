@@ -39,12 +39,16 @@ fn match_arg(name: &String, params: &BTreeMap<String, Term>) -> Term {
 fn inline(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Term> {
     let mut res: Vec<Term> = Vec::new();
     let comp = fs.computations.get(name).unwrap();
-    for o in comp.outputs.iter().rev() {
+    println!("Comp: {}", name);
+    println!("params: {:#?}", params);
+    for o in comp.outputs.iter() {
+        println!("o: {}", o);
         let mut cache = TermMap::new();
         for t in PostOrderIter::new(o.clone()) {
             match &t.op {
-                Op::Var(name, _sort) => {
+                Op::Var(name, _) => {
                     let ret = match_arg(name, &params);
+                    println!("ret: {}", ret);
                     cache.insert(t.clone(), ret.clone());
                 }
                 _ => {
@@ -62,6 +66,7 @@ fn inline(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Ter
         }
         res.push(cache.get(o).unwrap().clone());
     }
+    println!("res: {:#?}", res);
     res
 }
 
@@ -73,12 +78,11 @@ pub fn inline_function_calls(
 ) -> Term {
     let mut call_cache: HashMap<Term, Vec<Term>> = HashMap::new();
     for t in PostOrderIter::new(term_.clone()) {
+        println!("inline t: {}", t);
         let mut children = Vec::new();
         for c in &t.cs {
             if let Some(rewritten_c) = rewritten.get(c) {
-                if call_cache.contains_key(c) {
-                    children.push(call_cache.get_mut(c).unwrap().pop().unwrap().clone());
-                } else {
+                if !call_cache.contains_key(c) {
                     children.push(rewritten_c.clone());
                 }
             } else {
@@ -86,11 +90,23 @@ pub fn inline_function_calls(
             }
         }
         let entry = match &t.op {
-            Op::Call(name, args, _rets, _) => {
+            Op::Field(index) => {
+                assert!(t.cs.len() > 0);
+                if let Op::Call(..) = &t.cs[0].op {
+                    if call_cache.contains_key((&t.cs[0])) {
+                        call_cache.get(&t.cs[0]).unwrap()[index + 1].clone()
+                    } else {
+                        panic!("Fields on a Call term should return");
+                    }
+                } else {
+                    term(t.op.clone(), children)
+                }
+            }
+            Op::Call(name, arg_names, arg_sorts, _) => {
                 println!("Inlining: {}", name);
 
                 // Check number of args
-                let num_args = args.values().fold(0, |sum, x| {
+                let num_args = arg_sorts.iter().fold(0, |sum, x| {
                     sum + match x {
                         Sort::Array(_, _, l) => *l,
                         _ => 1,
@@ -104,8 +120,8 @@ pub fn inline_function_calls(
                 );
 
                 // Check arg types
-                let arg_types = args
-                    .values()
+                let arg_types = arg_sorts
+                    .iter()
                     .map(|x| match &x {
                         Sort::Array(_, val_sort, l) => {
                             let mut res: Vec<Sort> = Vec::new();
@@ -125,8 +141,9 @@ pub fn inline_function_calls(
                 );
 
                 let mut params: BTreeMap<String, Term> = BTreeMap::new();
-                let arg_keys = args
+                let arg_keys = arg_names
                     .iter()
+                    .zip(arg_sorts.iter())
                     .map(|(n, x)| match &x {
                         Sort::Array(_, _, l) => {
                             let mut res: Vec<String> = Vec::new();
@@ -147,6 +164,7 @@ pub fn inline_function_calls(
             }
             _ => term(t.op.clone(), children),
         };
+        println!("rewritten: {}\n", entry);
         rewritten.insert(t.clone(), entry);
     }
 
