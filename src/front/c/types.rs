@@ -1,4 +1,5 @@
 //! C Types
+use crate::circify::CirCtx;
 use crate::front::c::term::CTerm;
 use crate::front::c::term::CTermData;
 use crate::front::c::Circify;
@@ -97,7 +98,7 @@ impl Ty {
         self.sort().default_term()
     }
 
-    pub fn default(&self, circ: &mut Circify<Ct>) -> CTerm {
+    pub fn default(&self, ctx: &CirCtx) -> CTerm {
         match self {
             Self::Void => {
                 unimplemented!("Void not implemented");
@@ -111,23 +112,26 @@ impl Ty {
                 udef: false,
             },
             Self::Array(s, _, ty) => {
-                let id = circ.zero_allocate(*s, 32, ty.num_bits());
+                let mut mem = ctx.mem.borrow_mut();
+                let id = mem.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
                     term: CTermData::Array(self.clone(), Some(id)),
                     udef: false,
                 }
             }
-            Self::Ptr(s, ty) => {
-                let id = circ.zero_allocate(*s, 32, ty.num_bits());
-                CTerm {
-                    term: CTermData::StackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
-                    udef: false,
-                }
+            Self::Ptr(_s, _ty) => {
+                // let mut mem = ctx.mem.borrow_mut();
+                // let id = mem.zero_allocate(*s, 32, ty.num_bits());
+                // CTerm {
+                //     term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
+                //     udef: false,
+                // }
+                unimplemented!("Unknown array size");
             }
             Self::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
                     .fields()
-                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(circ)))
+                    .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(ctx)))
                     .collect();
                 CTerm {
                     term: CTermData::Struct(self.clone(), FieldList::new(fields)),

@@ -1,11 +1,12 @@
 //! Bit-vector literal definition
 
 use rug::Integer;
+use serde::{Deserialize, Serialize};
 
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Sub};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 /// A bit-vector constant
 pub struct BitVector {
     uint: Integer,

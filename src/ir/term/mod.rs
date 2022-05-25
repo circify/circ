@@ -29,6 +29,7 @@ use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::{Arc, RwLock};
@@ -36,6 +37,7 @@ use std::sync::{Arc, RwLock};
 pub mod bv;
 pub mod dist;
 pub mod extras;
+pub mod precomp;
 pub mod text;
 pub mod ty;
 
@@ -616,7 +618,49 @@ impl Debug for TermData {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, PartialOrd)]
+impl Serialize for TermData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = text::serialize_term(&mk(self.clone()));
+        serializer.serialize_str(&bytes)
+    }
+}
+
+struct TermDeserVisitor;
+
+impl hashconsing::UniqueConsign for TermData {
+    fn unique_make(self) -> Term {
+        mk(self)
+    }
+}
+
+impl<'de> Visitor<'de> for TermDeserVisitor {
+    type Value = TermData;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a string (that textually defines a term)")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: std::error::Error,
+    {
+        Ok((*text::parse_term(v.as_bytes())).clone())
+    }
+}
+
+impl<'de> Deserialize<'de> for TermData {
+    fn deserialize<D>(deserializer: D) -> Result<TermData, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(TermDeserVisitor)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, PartialOrd, Serialize, Deserialize)]
 /// An IR value (aka literal)
 pub enum Value {
     /// Bit-vector
@@ -637,7 +681,7 @@ pub enum Value {
     Tuple(Box<[Value]>),
 }
 
-#[derive(Clone, PartialEq, Debug, PartialOrd, Hash)]
+#[derive(Clone, PartialEq, Debug, PartialOrd, Hash, Serialize, Deserialize)]
 /// An IR array value.
 ///
 /// A sized, space array.
@@ -788,7 +832,7 @@ impl std::hash::Hash for Value {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 /// The "type" of an IR term
 pub enum Sort {
     /// bit-vectors of this width
@@ -918,6 +962,11 @@ impl Sort {
             Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
             Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
         }
+    }
+
+    /// Is this a scalar?
+    pub fn is_scalar(&self) -> bool {
+        !matches!(self, Sort::Tuple(..) | Sort::Array(..))
     }
 }
 
@@ -1287,13 +1336,40 @@ impl Value {
     }
 }
 
-/// Evaluate the term `t`, using variable values in `h`.
-pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
-    let vs = &mut TermMap::<Value>::new();
-    for c in PostOrderIter::new(t.clone()) {
-        eval_value(vs, h, c.clone());
+/// Recursively the term `t`, using variable values in `h` and storing intermediate evaluations in
+/// the cache `vs`.
+pub fn eval_cached<'a>(
+    t: &Term,
+    h: &FxHashMap<String, Value>,
+    vs: &'a mut TermMap<Value>,
+) -> &'a Value {
+    // the custom traversal (rather than [PostOrderIter]) allows us to break early based on the cache
+
+    // (children pushed, term)
+    let mut stack = vec![(false, t.clone())];
+    while let Some((children_pushed, node)) = stack.pop() {
+        if vs.contains_key(&node) {
+            continue;
+        }
+        if children_pushed {
+            eval_value(vs, h, node);
+        } else {
+            stack.push((true, node.clone()));
+            for c in &node.cs {
+                // vs doubles as our visited set.
+                if !vs.contains_key(c) {
+                    stack.push((false, c.clone()));
+                }
+            }
+        }
     }
-    vs.get(t).unwrap().clone()
+    vs.get(t).unwrap()
+}
+
+/// Recursively evaluate the term `t`, using variable values in `h`.
+pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
+    let mut vs = TermMap::<Value>::new();
+    eval_cached(t, h, &mut vs).clone()
 }
 
 /// Helper function for eval function. Handles a single term
@@ -1376,7 +1452,9 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
         }),
         Op::PfToBv(w) => Value::BitVector({
             let i = vs.get(&c.cs[0]).unwrap().as_pf().i();
-            assert!(i < (Integer::from(1) << *w as u32));
+            let m = Integer::from(1) << *w as u32;
+            let i = i.div_rem_floor(m.clone()).1;
+            assert!(i < m);
             BitVector::new(i, *w)
         }),
         Op::BvUext(w) => Value::BitVector({
@@ -1411,7 +1489,13 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
         Op::PfUnOp(o) => Value::Field({
             let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
             match o {
-                PfUnOp::Recip => a.recip(),
+                PfUnOp::Recip => {
+                    if a.is_zero() {
+                        a.ty().zero()
+                    } else {
+                        a.recip()
+                    }
+                }
                 PfUnOp::Neg => -a,
             }
         }),
@@ -1522,6 +1606,11 @@ pub fn term(op: Op, cs: Vec<Term>) -> Term {
     t
 }
 
+/// Make a prime-field constant term.
+pub fn pf_lit(elem: FieldV) -> Term {
+    leaf_term(Op::Const(Value::Field(elem)))
+}
+
 /// Make a bit-vector constant term.
 pub fn bv_lit<T>(uint: T, width: usize) -> Term
 where
@@ -1611,17 +1700,17 @@ pub type PartyId = u8;
 /// Ciphertext/Plaintext identifier
 pub type EncStatus = bool;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
     pub party_ids: FxHashMap<String, PartyId>,
     /// The next free id.
     pub next_party_id: PartyId,
-    /// The order of the inputs
-    pub inputs: Vec<Term>,
     /// All inputs, including who knows them. If no visibility is set, the input is public.
-    pub input_vis: FxHashMap<String, Option<PartyId>>,
+    pub input_vis: FxHashMap<String, (Term, Option<PartyId>)>,
+    /// The inputs for the computation itself (not the precomputation).
+    pub computation_inputs: FxHashSet<String>,
 }
 
 impl ComputationMetadata {
@@ -1635,61 +1724,27 @@ impl ComputationMetadata {
     pub fn new_input(&mut self, input_name: String, party: Option<PartyId>, sort: Sort) {
         let term = leaf_term(Op::Var(input_name.clone(), sort));
         debug_assert!(
-            !self.input_vis.contains_key(&input_name),
+            !self.input_vis.contains_key(&input_name)
+                || self.input_vis.get(&input_name).unwrap().1 == party,
             "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
             input_name,
             party,
             self.input_vis.get(&input_name).unwrap()
         );
-        self.input_vis.insert(input_name, party);
-        self.inputs.push(term);
-    }
-    /// Replace the `original` computation input with `new`, in the order given.
-    ///
-    /// If the old input order was
-    ///
-    ///    w x y z x1 x2 x3
-    ///
-    /// and `x` was replaced with `x1`, `x2`, `x3`, then the new input order is
-    ///
-    ///    w x1 x2 x3 y z
-    ///
-    /// and other metadata associated with `x` is removed.
-    ///
-    /// This is probably called after making the new inputs with `new_input`.
-    pub fn replace_input(
-        &mut self,
-        original: Term,
-        new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
-    ) {
-        let mut i = self.inputs.iter().position(|t| t == &original).unwrap();
-        self.inputs.remove(i);
-        let name = if let Op::Var(n, _) = &original.op {
-            n.to_string()
-        } else {
-            unreachable!()
-        };
-        self.input_vis.remove(&name).unwrap();
-        for (input_name, sort, _, party) in new {
-            let term = leaf_term(Op::Var(input_name.clone(), sort));
-            debug_assert!(
-                !self.input_vis.contains_key(&input_name),
-                "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
-                input_name,
-                party,
-                self.input_vis.get(&input_name).unwrap()
-            );
-            self.input_vis.insert(input_name.clone(), party);
-            self.inputs.insert(i, term);
-            i += 1;
-        }
+        self.input_vis.insert(input_name.clone(), (term, party));
+        self.computation_inputs.insert(input_name);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        *self
-            .input_vis
+        self.input_vis
             .get(input_name)
-            .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", input_name, self.inputs))
+            .unwrap_or_else(|| {
+                panic!(
+                    "Missing input {} in inputs{:#?}",
+                    input_name, self.input_vis
+                )
+            })
+            .1
     }
     /// Is this input public?
     pub fn is_input(&self, input_name: &str) -> bool {
@@ -1699,144 +1754,133 @@ impl ComputationMetadata {
     pub fn is_input_public(&self, input_name: &str) -> bool {
         self.get_input_visibility(input_name).is_none()
     }
-    /// Get all public inputs.
-    pub fn public_input_names(&self) -> impl Iterator<Item = &str> {
-        self.input_vis.iter().filter_map(|(name, party)| {
-            if party.is_none() {
+    /// What sort is this input?
+    pub fn input_sort(&self, input_name: &str) -> Sort {
+        check(&self.input_vis.get(input_name).unwrap().0)
+    }
+    /// Get all public inputs to the computation itself.
+    ///
+    /// Excludes pre-computation inputs
+    pub fn public_input_names<'a>(&'a self) -> impl Iterator<Item = &str> + 'a {
+        self.input_vis.iter().filter_map(move |(name, party)| {
+            if party.1.is_none() && self.computation_inputs.contains(name) {
                 Some(name.as_str())
             } else {
                 None
             }
         })
     }
-    /// Get all public inputs.
+    /// Get all public inputs to the computation itself.
+    ///
+    /// Excludes pre-computation inputs.
     // I think the lint is just broken here.
     // TODO: submit a patch
     #[allow(clippy::needless_lifetimes)]
     pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a {
-        self.inputs.iter().filter_map(move |input| {
-            if let Op::Var(name, _) = &input.op {
-                let party = self.get_input_visibility(name);
-                if party.is_none() {
-                    Some(input.clone())
+        // TODO: check order?
+        self.input_vis
+            .iter()
+            .filter_map(move |(name, (term, vis))| {
+                if vis.is_none() && self.computation_inputs.contains(name) {
+                    Some(term.clone())
                 } else {
                     None
                 }
-            } else {
-                unreachable!()
-            }
-        })
+            })
+    }
+    /// Get all the inputs visible to `party`.
+    pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashSet<String> {
+        self.input_vis
+            .iter()
+            .filter_map(|(name, (_, vis))| {
+                if vis.is_none() || vis == &party {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
     pub outputs: Vec<Term>,
-    /// The values of variables in the system.
-    ///
-    /// These are tracked when doing witness extension for proof systems.
-    pub values: Option<FxHashMap<String, Value>>,
     /// Metadata about the computation. I.e. who knows what inputs
     pub metadata: ComputationMetadata,
+    /// Pre-computations
+    pub precomputes: precomp::PreComp,
 }
 
 impl Computation {
     /// Create a new variable, `name: s`, where `val_fn` can be called to get the concrete value,
     /// and `public` indicates whether this variable is public in the constraint system.
-    pub fn new_var<F: FnOnce() -> Value>(
+    ///
+    /// ## Arguments
+    ///
+    ///    * `name`: the name of the new variable
+    ///    * `s`: its sort
+    ///    * `party`: its visibility: who knows it initially
+    ///    * `precompute`: a precomputation that can determine its value (optional). Note that the
+    ///      precomputation may rely on information that some parties do not have. In this case,
+    ///      those parties will have to provide a value for the variables directly.
+    pub fn new_var(
         &mut self,
         name: &str,
         s: Sort,
-        val_fn: F,
         party: Option<PartyId>,
+        precompute: Option<Term>,
     ) -> Term {
-        debug!("Var: {} (visibility: {:?})", name, party);
+        debug!("Var: {} : {} (visibility: {:?})", name, s, party);
         self.metadata.new_input(name.to_owned(), party, s.clone());
-        if let Some(vs) = self.values.as_mut() {
-            let val = val_fn();
-            debug!("  val = {}", val);
-            if let Some(v) = vs.insert(name.to_owned(), val) {
-                panic!("{} already had a value: {}", name, v);
-            }
+        if let Some(p) = precompute {
+            assert_eq!(&s, &check(&p));
+            self.precomputes.add_output(name.to_owned(), p);
         }
         leaf_term(Op::Var(name.to_owned(), s))
     }
-    /// Replace the `original` computation input with `new`, in the order given.
+
+    /// Add a new input `new_input_var` to this computation,
+    /// whose value is determined by `precomp`: a term over existing inputs.
     ///
-    /// If the old input order was
+    /// The visibility for `new_input_var` will be computed from the visibility of variables in
+    /// `precomp`: there must be at most **one** non-public variable.
     ///
-    ///    w x y z
-    ///
-    /// and `x` was replaced with `x1`, `x2`, `x3`, then the new input order is
-    ///
-    ///    w x1 x2 x3 y z
-    ///
-    /// and other metadata associated with `x` is removed.
-    ///
-    /// This is called in place of `new_var` during transformations.
-    pub fn replace_input(
-        &mut self,
-        original: Term,
-        mut new: Vec<(String, Sort, Option<Value>, Option<PartyId>)>,
-    ) {
-        if let Some(vs) = self.values.as_mut() {
-            if let Op::Var(name, _) = &original.op {
-                vs.remove(name);
-                for (name, _, val_opt, _) in &mut new {
-                    vs.insert(name.clone(), std::mem::take(val_opt).unwrap());
-                }
+    /// The sort for `new_input_var` will be computed from `precomp`.
+    pub fn extend_precomputation(&mut self, new_input_var: String, precomp: Term) {
+        debug!("Precompute {}", new_input_var);
+        let vis = {
+            let mut input_visiblities: FxHashSet<Option<PartyId>> =
+                extras::free_variables(precomp.clone())
+                    .into_iter()
+                    .map(|v| self.metadata.get_input_visibility(&v))
+                    .collect();
+            input_visiblities.remove(&None);
+            match input_visiblities.len() {
+                0 => None,
+                1 => input_visiblities.into_iter().next().unwrap(),
+                _ => panic!("Precomputation for new var {} with term\n\t{}\ninvolves multiple input non-public visibilities:\n\t{:?}", new_input_var, precomp, input_visiblities),
             }
-        }
-        self.metadata.replace_input(original, new);
+        };
+        let sort = check(&precomp);
+        self.new_var(&new_input_var, sort, vis, Some(precomp));
     }
 
-    /// Change the value associated with an input
-    pub fn map_value(&mut self, name: &str, f: impl FnOnce(Value) -> Value) {
-        if let Some(vs) = self.values.as_mut() {
-            let loc = vs.get_mut(name).unwrap();
-            let v = std::mem::replace(loc, Value::Bool(false));
-            *loc = f(v);
-        }
-    }
-
-    /// Create a new variable, `name` in the constraint system, and set it equal to `term`.
-    /// `public` indicates whether this variable is public in the constraint system.
-    pub fn assign(&mut self, name: &str, term: Term, party: Option<PartyId>) -> Term {
-        let val = self.eval(&term);
-        let sort = check(&term);
-        let var = self.new_var(name, sort, || val.unwrap(), party);
-        self.assert(term![Op::Eq; var.clone(), term]);
-        var
-    }
     /// Assert `s` in the system.
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
         debug!("Assert: {}", &s.op);
         self.outputs.push(s);
     }
-    /// If tracking values, evaluate `term`, and set the result to `name`.
-    pub fn eval_and_save(&mut self, name: &str, term: &Term) {
-        if let Some(vs) = self.values.as_mut() {
-            let v = eval(term, vs);
-            vs.insert(name.to_owned(), v);
-        }
-    }
-    /// Evaluate `term`, if values are being tracked.
-    pub fn eval(&self, term: &Term) -> Option<Value> {
-        self.values.as_ref().map(|vs| eval(term, vs))
-    }
+
     /// Create a new system, which tracks values iff `values`.
-    pub fn new(values: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             outputs: Vec::new(),
             metadata: ComputationMetadata::default(),
-            values: if values {
-                Some(FxHashMap::default())
-            } else {
-                None
-            },
+            precomputes: Default::default(),
         }
     }
 

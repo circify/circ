@@ -7,8 +7,9 @@ disable -r time
 # cargo build --release --features r1cs,smt,zok --example circ
 # cargo build --example circ
 
-#BIN=./target/debug/examples/circ
-BIN=./target/release/examples/circ
+MODE=release # debug or release
+BIN=./target/$MODE/examples/circ
+ZK_BIN=./target/$MODE/examples/zk
 
 case "$OSTYPE" in 
     darwin*)
@@ -28,8 +29,8 @@ function r1cs_test {
 function pf_test {
     ex_name=$1
     $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
-    $BIN --inputs examples/ZoKrates/pf/$ex_name.zok.in examples/ZoKrates/pf/$ex_name.zok r1cs --action prove
-    $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --instance examples/ZoKrates/pf/$ex_name.zok.x --action verify
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
     rm -rf P V pi
 }
 

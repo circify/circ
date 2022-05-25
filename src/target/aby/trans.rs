@@ -29,7 +29,14 @@ enum EmbeddedTerm {
 
 impl fmt::Display for EmbeddedTerm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            EmbeddedTerm::Bool(s) => {
+                write!(f, "bool({})", s)
+            }
+            EmbeddedTerm::Bv(s) => {
+                write!(f, "bv({})", s)
+            }
+        }
     }
 }
 
@@ -98,6 +105,10 @@ impl ToABY {
                 let n = new_name.split('_').collect::<Vec<&str>>();
 
                 match n.len() {
+                    1 => n[0].to_string(),
+                    2 => {
+                        format!("{}_{}", n[0], n[1])
+                    }
                     5 => n[3].to_string(),
                     6.. => {
                         let l = n.len() - 1;
@@ -119,8 +130,8 @@ impl ToABY {
 
     fn unwrap_vis(&self, name: &str) -> u8 {
         unimplemented!();
-        // match self.md.input_vis.get(name).unwrap() {
-        //     Some(role) => *role,
+        // match self.md.get_input_visibility(name) {
+        //     Some(role) => role,
         //     None => PUBLIC,
         // }
     }

@@ -10,34 +10,10 @@ use std::collections::HashMap;
 use std::env::var_os;
 
 use crate::circify::includer::Loader;
-use rug::Integer;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use typed_arena::Arena;
-
-/// Parse an inputs file where each line has format: `no-withespace integer`.
-///
-/// Permits blank lines and ignores non-separating whitespace.
-///
-/// ```ignore
-/// x 5
-/// x.y -7
-/// ```
-pub fn parse_inputs(p: PathBuf) -> HashMap<String, Integer> {
-    let mut m = HashMap::default();
-    for l in BufReader::new(File::open(p).unwrap()).lines() {
-        let l = l.unwrap();
-        let l = l.trim();
-        if !l.is_empty() {
-            let mut s = l.split_whitespace();
-            let key = s.next().unwrap().to_owned();
-            let value = Integer::from(Integer::parse_radix(&s.next().unwrap(), 10).unwrap());
-            m.insert(key, value);
-        }
-    }
-    m
-}
 
 /// A representation of the standard libary's location.
 #[derive(Default)]

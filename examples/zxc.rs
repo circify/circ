@@ -33,9 +33,6 @@ struct Options {
     #[structopt(parse(from_os_str), name = "PATH")]
     path: PathBuf,
 
-    #[structopt(flatten)]
-    frontend: FrontendOptions,
-
     /*
     #[structopt(long, default_value = "P", parse(from_os_str))]
     prover_key: PathBuf,
@@ -63,13 +60,6 @@ struct Options {
     #[structopt(short = "q")]
     /// quiet mode: don't print R1CS at the end
     quiet: bool,
-}
-
-#[derive(Debug, StructOpt)]
-struct FrontendOptions {
-    /// File with input witness
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
 }
 
 arg_enum! {
@@ -101,7 +91,6 @@ fn main() {
     let cs = {
         let inputs = zsharp::Inputs {
             file: options.path,
-            inputs: options.frontend.inputs,
             mode: Mode::Proof,
         };
         ZSharpFE::gen(inputs)
@@ -142,7 +131,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+    let (r1cs, _, _) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs

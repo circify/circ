@@ -25,23 +25,11 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 use crate::front::PROVER_VIS;
-use crate::front::PUBLIC_VIS;
 
 /// Inputs to the C compiler
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
-    /// The file to look for concrete arguments to main in. Optional.
-    ///
-    /// ## Examples
-    ///
-    /// If main takes `x: u64, y: field`, this file might contain
-    ///
-    /// ```ignore
-    /// x 4
-    /// y -1
-    /// ```
-    pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
 }
@@ -60,7 +48,7 @@ impl FrontEnd for C {
         let p = parser.parse_file(&i.file).unwrap();
 
         // Convert to CirC IR
-        let mut g = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
+        let mut g = CGen::new(i.mode.clone(), p.unit.clone());
         g.visit_files();
         g.entry_fn("main");
         let main_comp = g.circ.consume().borrow().clone();
@@ -76,7 +64,7 @@ impl FrontEnd for C {
 
         while !g.function_queue.is_empty() {
             // generate new context
-            g.circ = Circify::new(Ct::new(i.inputs.clone().map(parser::parse_inputs)));
+            g.circ = Circify::new(Ct::new());
             let call = g.function_queue.pop().unwrap();
             if let Op::Call(name, arg_names, arg_sorts, rets) = &call.op {
                 g.fn_call(name, arg_names, arg_sorts, rets);
@@ -150,9 +138,9 @@ struct CGen {
 }
 
 impl CGen {
-    fn new(inputs: Option<PathBuf>, mode: Mode, tu: TranslationUnit) -> Self {
+    fn new(mode: Mode, tu: TranslationUnit) -> Self {
         let this = Self {
-            circ: Circify::new(Ct::new(inputs.map(parser::parse_inputs))),
+            circ: Circify::new(Ct::new()),
             function_queue: Vec::new(),
             function_cache: HashSet::new(),
             mode,
@@ -1035,7 +1023,7 @@ impl CGen {
                 }
                 Ty::Struct(_base, fs) => {
                     assert!(fs.len() == l.len());
-                    ty.default(&mut self.circ)
+                    ty.default(&mut self.circ.cir_ctx())
                 }
                 _ => unreachable!("Initializer list for non-list type: {:#?}", l),
             },
@@ -1065,7 +1053,7 @@ impl CGen {
                 let expr: CTerm = if let Some(init) = d.node.initializer.clone() {
                     self.gen_init(info.ty.clone(), init.node)
                 } else {
-                    info.ty.default(&mut self.circ)
+                    info.ty.default(self.circ.cir_ctx())
                 };
 
                 let res = self.circ.declare_init(
@@ -1262,16 +1250,13 @@ impl CGen {
             .clone();
 
         // setup stack frame for entry function
-        let ret_ty = match f.ret_ty {
-            Ty::Void => None,
-            _ => Some(f.ret_ty.clone()),
-        };
-        self.circ.enter_fn(f.name.to_owned(), ret_ty.clone());
+        self.circ
+            .enter_fn(f.name.to_owned(), Some(f.ret_ty.clone()));
 
         for param in f.params.iter() {
             let r = self
                 .circ
-                .declare(param.name.clone(), &param.ty, true, param.vis);
+                .declare_input(param.name.clone(), &param.ty, param.vis, None, true);
             self.unwrap(r);
         }
 
@@ -1289,15 +1274,16 @@ impl CGen {
                         .outputs
                         .extend(ret_terms);
                 }
-                Mode::Proof => {
-                    let name = "return".to_owned();
-                    let term = r.unwrap_term();
-                    let ty = ret_ty.as_ref().unwrap();
-                    let _r = self.circ.declare(name.clone(), &ty, false, PROVER_VIS);
-                    self.circ
-                        .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
-                    unimplemented!();
-                }
+                // Mode::Proof => {
+                //     let name = "return".to_owned();
+                //     let term = r.unwrap_term();
+                //     let r2 = self
+                //         .circ
+                //         .declare_input(name, ty, PROVER_VIS, None, false)
+                //         .unwrap();
+                //     self.circ.assert(eq(term, r2).unwrap().term.simple_term());
+                //     unimplemented!();
+                // }
                 _ => unimplemented!("Mode: {}", self.mode),
             }
         }
@@ -1356,7 +1342,9 @@ impl CGen {
                 }
                 _ => param.ty,
             };
-            let r = self.circ.declare(p_name, &p_ty, true, None);
+            let r = self
+                .circ
+                .declare_input(p_name, &p_ty, param.vis, None, true);
             self.unwrap(r);
         }
 

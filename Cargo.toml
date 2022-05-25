@@ -10,7 +10,7 @@ edition = "2018"
 circ_fields = { path = "circ_fields" }
 #hashconsing = "1.3"
 hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "phash"}
-rug = "1.11"
+rug = { version = "1.11", features = ["serde"] }
 gmp-mpfr-sys = "1.4"
 lazy_static = "1.4"
 rand = "0.8"
@@ -26,10 +26,14 @@ bellman = { version = "0.11", optional = true }
 ff = "0.11"
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
+group = "0.11"
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
+serde = { version = "1.0", features = ["derive", "rc"] }
+bincode = "1"
 lang-c = { version = "0.10.1", optional = true}
 logos = "0.12"
+pairing = "0.21"
 pest = "2.1"
 pest_derive = "2.1"
 pest-ast = "0.3"
@@ -48,7 +52,7 @@ structopt = "0.3"
 approx = "0.5.0"
 
 [features]
-default = ["bls12381"]
+default = ["bls12381", "ff_dfl"]
 bls12381 = []
 ff_dfl = []
 c = ["lang-c"]

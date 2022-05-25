@@ -1,7 +1,8 @@
 //! Proof-system-specfic extensions to [crate::ir] types.
+use fxhash::FxHashSet;
 
 use super::term::*;
-use fxhash::{FxHashMap, FxHashSet};
+
 /// The prover's canonical party name
 pub const PROVER_NAME: &str = "prover";
 /// The verifier's canonical party name
@@ -27,19 +28,11 @@ impl ConstraintMetadata for ComputationMetadata {
 /// Extra [Computation] methods for proof systems
 pub trait Constraints {
     /// Build a [Computation] from assertions, a list of public inputs, and values
-    fn from_constraint_system_parts(
-        assertions: Vec<Term>,
-        public_inputs: Vec<Term>,
-        values: Option<FxHashMap<String, Value>>,
-    ) -> Self;
+    fn from_constraint_system_parts(assertions: Vec<Term>, public_inputs: Vec<Term>) -> Self;
 }
 
 impl Constraints for Computation {
-    fn from_constraint_system_parts(
-        assertions: Vec<Term>,
-        public_inputs: Vec<Term>,
-        values: Option<FxHashMap<String, Value>>,
-    ) -> Self {
+    fn from_constraint_system_parts(assertions: Vec<Term>, public_inputs: Vec<Term>) -> Self {
         let mut metadata = ComputationMetadata::default();
         let all_vars = {
             let mut set = FxHashSet::default();
@@ -82,7 +75,7 @@ impl Constraints for Computation {
         Self {
             outputs: assertions,
             metadata,
-            values,
+            precomputes: Default::default(),
         }
     }
 }

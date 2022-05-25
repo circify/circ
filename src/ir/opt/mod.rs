@@ -13,6 +13,7 @@ mod visit;
 use std::time::Instant;
 
 use super::term::*;
+
 use log::debug;
 
 #[derive(Clone, Debug)]
