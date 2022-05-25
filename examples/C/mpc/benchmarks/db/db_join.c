@@ -2,8 +2,8 @@
  * Example on how to merge two data sets and to perform various analyses
  */
 
-#define LEN_A 11
-#define LEN_B 11
+#define LEN_A 7
+#define LEN_B 7
 
 #define ATT_A 2 //Number of attributes
 #define ATT_B 2
