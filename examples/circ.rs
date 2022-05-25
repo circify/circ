@@ -232,6 +232,14 @@ fn main() {
             panic!("Missing feature: c");
         }
     };
+
+    for (name, comp) in cs.computations.iter() {
+        println!("pre opt functions: {}", name);
+        for t in &comp.outputs {
+            println!("pre opt function term: {}, {}", t, t.uid());
+        }
+    }
+
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -292,14 +300,14 @@ fn main() {
         println!("functions: {}", name);
         for t in &comp.outputs {
             println!("function term: {}, {}", t, t.uid());
-            for t1 in PostOrderIter::new(t.clone()) {
-                println!("term: {}, {}", t1, t1.uid());
-                for c in t1.cs.iter() {
-                    println!("children: {}, {}", c, c.uid());
-                }
-                println!();
-            }
-            println!();
+            // for t1 in PostOrderIter::new(t.clone()) {
+            //     println!("term: {}, {}", t1, t1.uid());
+            //     for c in t1.cs.iter() {
+            //         println!("children: {}, {}", c, c.uid());
+            //     }
+            //     println!();
+            // }
+            // println!();
         }
         println!("\n");
     }
