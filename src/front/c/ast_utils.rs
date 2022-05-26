@@ -118,7 +118,7 @@ pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
 pub fn fn_info_to_defs(
     fn_info: &FnInfo,
     arg_terms: &Vec<Vec<Term>>, // arguments taken at call site
-) -> (String, BTreeMap<String, Sort>, BTreeMap<String, Sort>) {
+) -> (String, Vec<String>, Vec<Sort>, BTreeMap<String, Sort>) {
     let mut rets: BTreeMap<String, Sort> = BTreeMap::new();
     match &fn_info.ret_ty {
         Ty::Void => {}
@@ -127,7 +127,8 @@ pub fn fn_info_to_defs(
         }
     };
     assert!(fn_info.params.len() == arg_terms.len());
-    let mut params = BTreeMap::new();
+    let mut param_names: Vec<String> = Vec::new();
+    let mut param_sorts: Vec<Sort> = Vec::new();
     for (param, arg) in fn_info.params.iter().zip(arg_terms.iter()) {
         let name = param.name.clone();
         let ty = match &param.ty {
@@ -140,10 +141,10 @@ pub fn fn_info_to_defs(
             }
             _ => param.ty.sort(),
         };
-        params.insert(name, ty.clone());
+        param_names.push(name);
+        param_sorts.push(ty.clone());
     }
-
-    (fn_info.name.clone(), params, rets)
+    (fn_info.name.clone(), param_names, param_sorts, rets)
 }
 
 pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {

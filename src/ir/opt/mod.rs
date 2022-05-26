@@ -10,7 +10,10 @@ pub mod sha;
 pub mod tuple;
 mod visit;
 
+use std::time::Instant;
+
 use super::term::*;
+
 use log::debug;
 
 #[derive(Clone, Debug)]
@@ -47,6 +50,8 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
         let mut opt_fs: Functions = fs.clone();
         for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?}", i);
+            println!("Applying: {:?} to {}", i, name);
+            let now = Instant::now();
             match i.clone() {
                 Opt::ScalarizeVars => scalarize_vars::scalarize_inputs(comp),
                 Opt::ConstantFold(ignore) => {
@@ -60,6 +65,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
                     }
+                    println!("cache size per term: {}", cache.len());
                 }
                 Opt::Sha => {
                     for a in &mut comp.outputs {
@@ -114,6 +120,8 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     tuple::eliminate_tuples(comp);
                 }
             }
+            println!("{:?} took {} seconds.\n", i, now.elapsed().as_secs());
+
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());

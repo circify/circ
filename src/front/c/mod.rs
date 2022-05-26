@@ -25,23 +25,11 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 use crate::front::PROVER_VIS;
-use crate::front::PUBLIC_VIS;
 
 /// Inputs to the C compiler
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
-    /// The file to look for concrete arguments to main in. Optional.
-    ///
-    /// ## Examples
-    ///
-    /// If main takes `x: u64, y: field`, this file might contain
-    ///
-    /// ```ignore
-    /// x 4
-    /// y -1
-    /// ```
-    pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
 }
@@ -60,7 +48,7 @@ impl FrontEnd for C {
         let p = parser.parse_file(&i.file).unwrap();
 
         // Convert to CirC IR
-        let mut g = CGen::new(i.inputs.clone(), i.mode.clone(), p.unit.clone());
+        let mut g = CGen::new(i.mode.clone(), p.unit.clone());
         g.visit_files();
         g.entry_fn("main");
         let main_comp = g.circ.consume().borrow().clone();
@@ -76,10 +64,10 @@ impl FrontEnd for C {
 
         while !g.function_queue.is_empty() {
             // generate new context
-            g.circ = Circify::new(Ct::new(i.inputs.clone().map(parser::parse_inputs)));
+            g.circ = Circify::new(Ct::new());
             let call = g.function_queue.pop().unwrap();
-            if let Op::Call(name, args, rets, ret_name) = &call.op {
-                g.fn_call(name, args, rets, ret_name);
+            if let Op::Call(name, arg_names, arg_sorts, rets) = &call.op {
+                g.fn_call(name, arg_names, arg_sorts, rets);
                 let comp = g.circ.consume().borrow().clone();
 
                 // println!("fn: {}", name);
@@ -150,9 +138,9 @@ struct CGen {
 }
 
 impl CGen {
-    fn new(inputs: Option<PathBuf>, mode: Mode, tu: TranslationUnit) -> Self {
+    fn new(mode: Mode, tu: TranslationUnit) -> Self {
         let this = Self {
-            circ: Circify::new(Ct::new(inputs.map(parser::parse_inputs))),
+            circ: Circify::new(Ct::new()),
             function_queue: Vec::new(),
             function_cache: HashSet::new(),
             mode,
@@ -826,6 +814,7 @@ impl CGen {
 
                 let ret_ty = f.ret_ty.clone();
 
+                let mut arg_names: Vec<String> = Vec::new();
                 let cargs = arguments
                     .iter()
                     .map(|e| self.gen_expr(e.node.clone()))
@@ -833,20 +822,26 @@ impl CGen {
                 let mut cargs_map: HashMap<String, CTerm> = HashMap::new();
                 for (p, c) in f.params.iter().zip(cargs.iter()) {
                     cargs_map.insert(p.name.clone(), c.clone());
+                    arg_names.push(p.name.clone());
                 }
-
                 let arg_terms = cargs
                     .iter()
                     .map(|e| e.term.terms(self.circ.cir_ctx()))
                     .collect::<Vec<_>>();
                 let flatten_args = arg_terms.clone().into_iter().flatten().collect::<Vec<_>>();
-                let (name, args, rets) = fn_info_to_defs(&f, &arg_terms);
+                let (name, arg_names, arg_sorts, rets) = fn_info_to_defs(&f, &arg_terms);
+
                 let call_term = term(
                     Op::Call(
                         name.clone(),
-                        args.clone(),
-                        rets.clone(),
-                        "return".to_string(),
+                        arg_names.clone(),
+                        arg_sorts.clone(),
+                        Sort::Tuple(
+                            rets.values()
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .into_boxed_slice(),
+                        ),
                     ),
                     flatten_args.clone(),
                 );
@@ -857,57 +852,72 @@ impl CGen {
                     self.function_queue.push(call_term.clone());
                 }
 
-                // TODO: rewiring
+                // Rewiring
                 for (ret_name, sort) in rets.iter() {
-                    if ret_name != "return" {
-                        let call = term(
-                            Op::Call(
-                                name.clone(),
-                                args.clone(),
-                                rets.clone(),
-                                ret_name.to_string(),
-                            ),
-                            flatten_args.clone(),
-                        );
-
-                        if let Sort::Array(_, _, l) = sort {
-                            let ct = cargs_map.get(ret_name).unwrap();
-                            if let CTermData::Array(_, id) = ct.term {
-                                for i in 0..*l {
-                                    let updated_idx = bv_lit(i as i32, 32);
-                                    // TODO: index calculation
-                                    self.circ.store(id.unwrap(), updated_idx, call.clone());
-                                }
-                            } else {
-                                unimplemented!("This should only be handling ptrs to arrays");
-                            }
+                    if let Sort::Array(_, _, l) = sort {
+                        let ct = cargs_map.get(ret_name).unwrap();
+                        if let CTermData::Array(_, id) = ct.term {
+                            self.circ.replace(id.unwrap(), call_term.clone());
                         } else {
                             unimplemented!("This should only be handling ptrs to arrays");
                         }
-
-                        //     println!("CT: {}", ct.term.term());
-                        //     //             self
-                        //     // .circ
-                        //     // .assign(l, Val::Term(val))
-                        //     // .map_err(|e| format!("{}", e))?
-                        //     // .unwrap_term()
-                        //     unimplemented!();
-
-                        //     // if let CTermData::Array(_, id) = ct.term {
-
-                        //     // }
-                        //     //     for i in 0..*l {
-                        //     //         let updated_idx = bv_lit(i as i32, 32);
-                        //     //         self.circ.store(id.unwrap(), updated_idx, call.clone());
-                        //     //     }
-                        //     // } else {
-                        //     //     unimplemented!("This should only be handling ptrs to arrays");
-                        //     // }
-                        // } else {
-                        //     unimplemented!("This should only be handling ptrs to arrays");
-                        // }
                     }
                 }
+
+                // // Rewiring
+                // for (ret_name, sort) in rets.iter() {
+                //     println!("retname: {}", ret_name);
+                //     if ret_name != "return" {
+                //         let call = term(
+                //             Op::Call(
+                //                 name.clone(),
+                //                 args.clone(),
+                //                 rets.clone(),
+                //                 ret_name.to_string(),
+                //             ),
+                //             flatten_args.clone(),
+                //         );
+
+                //         if let Sort::Array(_, _, l) = sort {
+                //             let ct = cargs_map.get(ret_name).unwrap();
+                //             if let CTermData::Array(_, id) = ct.term {
+                //                 self.circ.replace(id.unwrap(), call.clone());
+                //             // self.circ.assign(l, Val::Term(val));
+                //             //     for i in 0..*l {
+                //             //         let updated_idx = bv_lit(i as i32, 32);
+                //             //         // TODO: index calculation
+                //             //         self.circ.store(id.unwrap(), updated_idx, call.clone());
+                //             //     }
+                //             } else {
+                //                 unimplemented!("This should only be handling ptrs to arrays");
+                //             }
+                //         } else {
+                //             unimplemented!("This should only be handling ptrs to arrays");
+                //         }
+
+                //         //     println!("CT: {}", ct.term.term());
+                //         //     //             self
+                //         //     // .circ
+                //         //     // .assign(l, Val::Term(val))
+                //         //     // .map_err(|e| format!("{}", e))?
+                //         //     // .unwrap_term()
+                //         //     unimplemented!();
+
+                //         //     // if let CTermData::Array(_, id) = ct.term {
+
+                //         //     // }
+                //         //     //     for i in 0..*l {
+                //         //     //         let updated_idx = bv_lit(i as i32, 32);
+                //         //     //         self.circ.store(id.unwrap(), updated_idx, call.clone());
+                //         //     //     }
+                //         //     // } else {
+                //         //     //     unimplemented!("This should only be handling ptrs to arrays");
+                //         //     // }
+                //         // } else {
+                //         //     unimplemented!("This should only be handling ptrs to arrays");
+                //         // }
+                //     }
+                // }
 
                 // Return value
                 let ret = match ret_ty {
@@ -1013,7 +1023,7 @@ impl CGen {
                 }
                 Ty::Struct(_base, fs) => {
                     assert!(fs.len() == l.len());
-                    ty.default(&mut self.circ)
+                    ty.default(&mut self.circ.cir_ctx())
                 }
                 _ => unreachable!("Initializer list for non-list type: {:#?}", l),
             },
@@ -1043,7 +1053,7 @@ impl CGen {
                 let expr: CTerm = if let Some(init) = d.node.initializer.clone() {
                     self.gen_init(info.ty.clone(), init.node)
                 } else {
-                    info.ty.default(&mut self.circ)
+                    info.ty.default(self.circ.cir_ctx())
                 };
 
                 let res = self.circ.declare_init(
@@ -1240,16 +1250,13 @@ impl CGen {
             .clone();
 
         // setup stack frame for entry function
-        let ret_ty = match f.ret_ty {
-            Ty::Void => None,
-            _ => Some(f.ret_ty.clone()),
-        };
-        self.circ.enter_fn(f.name.to_owned(), ret_ty.clone());
+        self.circ
+            .enter_fn(f.name.to_owned(), Some(f.ret_ty.clone()));
 
         for param in f.params.iter() {
             let r = self
                 .circ
-                .declare(param.name.clone(), &param.ty, true, param.vis);
+                .declare_input(param.name.clone(), &param.ty, param.vis, None, true);
             self.unwrap(r);
         }
 
@@ -1267,15 +1274,16 @@ impl CGen {
                         .outputs
                         .extend(ret_terms);
                 }
-                Mode::Proof => {
-                    let name = "return".to_owned();
-                    let term = r.unwrap_term();
-                    let ty = ret_ty.as_ref().unwrap();
-                    let _r = self.circ.declare(name.clone(), &ty, false, PROVER_VIS);
-                    self.circ
-                        .assign_with_assertions(name, term, &ty, PUBLIC_VIS);
-                    unimplemented!();
-                }
+                // Mode::Proof => {
+                //     let name = "return".to_owned();
+                //     let term = r.unwrap_term();
+                //     let r2 = self
+                //         .circ
+                //         .declare_input(name, ty, PROVER_VIS, None, false)
+                //         .unwrap();
+                //     self.circ.assert(eq(term, r2).unwrap().term.simple_term());
+                //     unimplemented!();
+                // }
                 _ => unimplemented!("Mode: {}", self.mode),
             }
         }
@@ -1284,18 +1292,17 @@ impl CGen {
     fn fn_call(
         &mut self,
         name: &String,
-        args: &BTreeMap<String, Sort>,
-        rets: &BTreeMap<String, Sort>,
-        ret_name: &String,
+        arg_names: &Vec<String>,
+        arg_sorts: &Vec<Sort>,
+        rets: &Sort,
     ) {
         debug!("Call: {}", name);
         println!("Call: {}", name);
-        // for (n, a) in args {
-        //     println!("args: {}, {}", n, a);
-        // }
-        // for (r, s) in rets.iter() {
-        //     println!("ret: {}, {}", r, s);
-        // }
+
+        let mut arg_map: BTreeMap<String, Sort> = BTreeMap::new();
+        for (n, s) in arg_names.iter().zip(arg_sorts.iter()) {
+            arg_map.insert(n.to_string(), s.clone());
+        }
 
         // Get function types
         let f = self
@@ -1311,16 +1318,23 @@ impl CGen {
         };
         self.circ.enter_fn(name.to_owned(), ret_ty);
 
+        // Keep track of the names of arguments that are references
+        let mut ret_names: Vec<String> = Vec::new();
+
         // define input parameters
-        assert!(args.len() == f.params.len());
+        assert!(arg_map.len() == f.params.len());
         for param in f.params {
             let p_name = param.name;
-            assert!(args.contains_key(&p_name));
-            let s = args.get(&p_name).unwrap();
+            assert!(arg_map.contains_key(&p_name));
+            let s = arg_map.get(&p_name).unwrap();
             let p_ty = match param.ty {
                 Ty::Ptr(_, t) => {
                     if let Sort::Array(_, _, len) = s {
                         let dims = vec![*len];
+
+                        // Add reference
+                        ret_names.push(p_name.clone());
+
                         Ty::Array(*len, dims, t)
                     } else {
                         panic!("Ptr type does not match with Array sort: {}", s)
@@ -1328,23 +1342,49 @@ impl CGen {
                 }
                 _ => param.ty,
             };
-            let r = self.circ.declare(p_name, &p_ty, true, None);
+            let r = self
+                .circ
+                .declare_input(p_name, &p_ty, param.vis, None, true);
             self.unwrap(r);
         }
 
         self.gen_stmt(f.body.clone());
 
-        let ret_names = &rets.keys().collect::<Vec<&String>>();
-        let rets = self.circ.exit_fn_call(ret_names);
-        for (name, val) in rets {
-            let ret_terms = val.unwrap_term().term.terms(self.circ.cir_ctx());
+        if let Some(returns) = self.circ.exit_fn_call(&ret_names) {
+            let ret_terms = returns
+                .into_iter()
+                .map(|x| x.unwrap_term().term.terms(self.circ.cir_ctx()))
+                .flatten()
+                .collect::<Vec<Term>>();
             self.circ
                 .cir_ctx()
                 .cs
                 .borrow_mut()
                 .outputs
-                .extend(ret_terms);
+                .push(term(Op::Tuple, ret_terms));
         }
+
+        // for (name, val) in returns {
+        //     println!("name: {}", name);
+        //     // let ret_terms = val.unwrap_term().term.terms(self.circ.cir_ctx());
+        //     // self.circ
+        //     //     .cir_ctx()
+        //     //     .cs
+        //     //     .borrow_mut()
+        //     //     .outputs
+        //     //     .extend(ret_terms);
+        // }
+
+        // if let Some(r) = self.circ.exit_fn() {
+        //     let ret_term = r.unwrap_term();
+        //     let ret_terms = ret_term.term.terms(self.circ.cir_ctx());
+        //     self.circ
+        //         .cir_ctx()
+        //         .cs
+        //         .borrow_mut()
+        //         .outputs
+        //         .extend(ret_terms);
+        // }
 
         // match self.mode {
         //     Mode::Mpc(_) => {

@@ -19,7 +19,7 @@ pub const PUBLIC_VIS: Option<PartyId> = None;
 
 /// A front-end
 pub trait FrontEnd {
-    /// Representation of an input program (possibly with argument assignments) for this language
+    /// Representation of an input program for this language
     type Inputs;
 
     /// Compile the program (and possibly assignment) to constraints

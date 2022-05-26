@@ -16,6 +16,24 @@ fn eq() {
 }
 
 #[test]
+fn bv2pf() {
+    assert_eq!(
+        leaf_term(Op::Const(eval(
+            &text::parse_term(b"(bvshl #b0001 #b0010)"),
+            &FxHashMap::default()
+        ))),
+        text::parse_term(b" #b0100 ")
+    );
+    assert_eq!(
+        leaf_term(Op::Const(eval(
+            &text::parse_term(b" (set_default_modulus 17 ((pf2bv 4) #f1)) "),
+            &FxHashMap::default()
+        ))),
+        text::parse_term(b" #b0001 ")
+    );
+}
+
+#[test]
 fn map_test_bool_key() {
     let a1 = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(true)]);
     let a2 = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(false)]);
@@ -26,6 +44,7 @@ fn map_test_bool_key() {
         eval(&expected, &FxHashMap::default())
     );
 }
+
 #[test]
 fn map_test_bv_key() {
     let a1 = make_array(

@@ -21,15 +21,6 @@ fn arr_val_to_tup(v: &Value) -> Value {
     }
 }
 
-fn arr_sort_to_tup(v: &Sort) -> Sort {
-    match v {
-        Sort::Array(_key, value, size) => {
-            Sort::Tuple(vec![arr_sort_to_tup(value); *size].into_boxed_slice())
-        }
-        v => v.clone(),
-    }
-}
-
 impl RewritePass for Linearizer {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
@@ -39,16 +30,12 @@ impl RewritePass for Linearizer {
     ) -> Option<Term> {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
-            Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
-                let new_value = computation
-                    .values
-                    .as_ref()
-                    .map(|vs| arr_val_to_tup(vs.get(name).unwrap()));
-                let vis = computation.metadata.get_input_visibility(name);
-                let new_sort = arr_sort_to_tup(sort);
-                let new_var_info = vec![(name.clone(), new_sort.clone(), new_value, vis)];
-                computation.replace_input(orig.clone(), new_var_info);
-                Some(leaf_term(Op::Var(name.clone(), new_sort)))
+            Op::Var(name, Sort::Array(..)) => {
+                let precomp = extras::array_to_tuple(orig);
+                let new_name = format!("{}.tup", name);
+                let new_sort = check(&precomp);
+                computation.extend_precomputation(new_name.clone(), precomp);
+                Some(leaf_term(Op::Var(new_name, new_sort)))
             }
             Op::Select => {
                 let cs = rewritten_children();

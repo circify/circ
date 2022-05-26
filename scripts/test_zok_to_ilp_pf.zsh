@@ -6,7 +6,9 @@ disable -r time
 
 # cargo build --release --features lp,r1cs,smt,zok --example circ
 
-BIN=./target/release/examples/circ
+MODE=release # release or debug
+BIN=./target/$MODE/examples/circ
+ZK_BIN=./target/$MODE/examples/zk
 
 function ilp_test {
     zpath=$1
@@ -16,9 +18,9 @@ function ilp_test {
     if [[ $max == $expected_max ]]
     then
         $BIN --value-threshold $max $zpath r1cs --action setup
-        $BIN --inputs assignment.txt --value-threshold $max $zpath r1cs --action prove
-        touch x
-        $BIN $zpath r1cs --instance x --action verify
+        $ZK_BIN --inputs assignment.txt --action prove
+        echo "true" > x
+        $ZK_BIN --inputs x --action verify
         echo "pass: $zpath"
         rm assignment.txt P V pi x
     else

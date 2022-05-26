@@ -2,8 +2,8 @@
  * Example on how to merge two data sets and to perform various analyses
  */
 
-#define LEN_A 20
-#define LEN_B 20
+#define LEN_A 7
+#define LEN_B 7
 
 #define ATT_A 2 //Number of attributes
 #define ATT_B 2
@@ -83,11 +83,19 @@ int cross_join_trivial(DT *OUTPUT_db, DT *a, DT *b) {
 
 
 DT agg_mean_tree(DT *db, int len, int att) {
+<<<<<<< HEAD
 	DT sum[LEN_A*LEN_B];
 	for(int i = 0; i < LEN_A*LEN_B; i++) {
 		sum[i] = db[i*att+1] + db[i*att+2];
 	}
 	DT mean = sum_tree(sum, LEN_A*LEN_B, 1);
+=======
+	DT sum[len];
+	for(int i = 0; i < len; i++) {
+		sum[i] = db[i*att+1] + db[i*att+2];
+	}
+	DT mean = sum_tree(sum, len, 1);
+>>>>>>> master
 	int joined = db[len*att];
 	int ret;
 	if(joined > 0) {
