@@ -126,6 +126,16 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());
             opt_fs.insert(name.clone(), comp.clone());
+
+            // // Print size of computation
+            println!("number of output terms: {}", comp.outputs.len());
+            for t in &comp.outputs {
+                //     // println!("pre opt function term: {}, {}", t, t.uid());
+                println!(
+                    "opt term length: {}",
+                    PostOrderIter::new(t.clone()).collect::<Vec<_>>().len()
+                );
+            }
         }
         fs = opt_fs;
     }

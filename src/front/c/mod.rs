@@ -1350,10 +1350,16 @@ impl CGen {
 
         self.gen_stmt(f.body.clone());
 
+        println!("ret_names: {:#?}", ret_names);
+
         if let Some(returns) = self.circ.exit_fn_call(&ret_names) {
             let ret_terms = returns
                 .into_iter()
-                .map(|x| x.unwrap_term().term.terms(self.circ.cir_ctx()))
+                .map(|x| {
+                    let a = x.unwrap_term().term.terms(self.circ.cir_ctx());
+                    println!("size of a: {}", a.len());
+                    a
+                })
                 .flatten()
                 .collect::<Vec<Term>>();
             self.circ

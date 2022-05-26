@@ -2,8 +2,8 @@
  * Example on how to merge two data sets and to perform various analyses
  */
 
-#define LEN_A 10
-#define LEN_B 10
+#define LEN_A 5
+#define LEN_B 5
 
 #define ATT_A 2 //Number of attributes
 #define ATT_B 2
@@ -122,12 +122,12 @@ int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(
 	// merge databases
 	res.joined = cross_join(db, INPUT_A.db, INPUT_B.db);
 	
-	if(res.joined >= LEN_A*LEN_B) { // Limits the last element
-		res.joined = LEN_A*LEN_B-1;
-	}
-	db[LEN_A*LEN_B*ATT] = res.joined;
-	res.analysis1 = agg_mean_tree(db, LEN_A*LEN_B, ATT);
-	res.analysis2 = res.analysis1;
+	// if(res.joined >= LEN_A*LEN_B) { // Limits the last element
+	// 	res.joined = LEN_A*LEN_B-1;
+	// }
+	// db[LEN_A*LEN_B*ATT] = res.joined;
+	// res.analysis1 = agg_mean_tree(db, LEN_A*LEN_B, ATT);
+	// res.analysis2 = res.analysis1;
 	//res.analysis2 = variance(db, LEN_A*LEN_B);
 	return res.joined + res.analysis1 + res.analysis2;
 } 

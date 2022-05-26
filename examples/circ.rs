@@ -220,7 +220,11 @@ fn main() {
     for (name, comp) in cs.computations.iter() {
         println!("pre opt functions: {}", name);
         for t in &comp.outputs {
-            println!("pre opt function term: {}, {}", t, t.uid());
+            // println!("pre opt function term: {}, {}", t, t.uid());
+            println!(
+                "term length: {}",
+                PostOrderIter::new(t.clone()).collect::<Vec<_>>().len()
+            );
         }
     }
 
@@ -248,8 +252,8 @@ fn main() {
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
-                    // Inline Function Calls
-                    Opt::InlineCalls,
+                    // // Inline Function Calls
+                    // Opt::InlineCalls,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
@@ -280,21 +284,21 @@ fn main() {
         ),
     };
 
-    for (name, comp) in cs.computations.iter() {
-        println!("functions: {}", name);
-        for t in &comp.outputs {
-            println!("function term: {}, {}", t, t.uid());
-            // for t1 in PostOrderIter::new(t.clone()) {
-            //     println!("term: {}, {}", t1, t1.uid());
-            //     for c in t1.cs.iter() {
-            //         println!("children: {}, {}", c, c.uid());
-            //     }
-            //     println!();
-            // }
-            // println!();
-        }
-        println!("\n");
-    }
+    // for (name, comp) in cs.computations.iter() {
+    //     println!("functions: {}", name);
+    //     for t in &comp.outputs {
+    //         println!("function term: {}, {}", t, t.uid());
+    //         // for t1 in PostOrderIter::new(t.clone()) {
+    //         //     println!("term: {}, {}", t1, t1.uid());
+    //         //     for c in t1.cs.iter() {
+    //         //         println!("children: {}, {}", c, c.uid());
+    //         //     }
+    //         //     println!();
+    //         // }
+    //         // println!();
+    //     }
+    //     println!("\n");
+    // }
 
     println!("Done with IR optimization");
 
