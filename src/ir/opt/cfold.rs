@@ -5,6 +5,7 @@ use crate::ir::term::*;
 use circ_fields::FieldV;
 use lazy_static::lazy_static;
 use rug::Integer;
+use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::RwLock;
 
@@ -59,6 +60,9 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
 
+    // Operator Count
+    let mut op_map: HashMap<Op, usize> = HashMap::new();
+
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
         if cache.contains(&t.to_weak()) {
@@ -84,6 +88,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         }
 
         let mut get = |i: usize| c_get(&t.cs[i]);
+
+        // Add op
+        if !op_map.contains_key(&t.op) {
+            op_map.insert(t.op.clone(), 0);
+        }
+        op_map.insert(t.op.clone(), op_map.get(&t.op).unwrap() + 1);
+
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
             Op::Implies => match get(0).as_bool_opt() {
@@ -289,6 +300,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         };
         cache.put(t.to_weak(), new_t.to_weak());
     }
+
+    // // pretty print hashmap
+    // println!("op_map: {:#?}", op_map.len());
+    // if op_map.len() > 1 {
+    //     println!("{:#?}", op_map);
+    // }
+
     cache
         .get(&node.to_weak())
         .and_then(|x| x.to_hconsed())

@@ -10,7 +10,7 @@ pub mod sha;
 pub mod tuple;
 mod visit;
 
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 use super::term::*;
 
@@ -59,11 +59,31 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     let _lock = super::term::COLLECT.read().unwrap();
                     let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                     for a in &mut comp.outputs {
+                        let n = Instant::now();
+                        // println!("a: {}", a.op);
+                        let b = a.clone();
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
+                        // println!("{:#?}", n.elapsed());
+                        // if n.elapsed().as_secs() > 1 {
+                        //     println!("OVER 1 second");
+                        // // Operator Count
+                        // let mut op_map: HashMap<Op, usize> = HashMap::new();
+                        // for t in PostOrderIter::new(b.clone()) {
+                        //     println!("t.op: {}", t.op);
+                        //     println!("t.cs.len(): {}", t.cs.len());
+                        //     // Add op
+                        //     if !op_map.contains_key(&t.op) {
+                        //         op_map.insert(t.op.clone(), 0);
+                        //     }
+                        //     op_map.insert(t.op.clone(), op_map.get(&t.op).unwrap() + 1);
+                        // }
+                        // println!("{:#?}", op_map);
+                        // println!("b: {}", b);
+                        // }
                     }
                     println!("cache size per term: {}", cache.len());
                 }

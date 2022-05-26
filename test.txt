@@ -1,0 +1,934 @@
+Requirement already satisfied: tqdm==4.63.0 in /usr0/home/ejchen/.local/lib/python3.8/site-packages (from -r requirements.txt (line 1)) (4.63.0)
+Options { path: "./examples/C/mpc/benchmarks/db/db_join.c", frontend: FrontendOptions { language: Auto, value_threshold: None, rec_limit: 5, lint_prim_rec: false }, parties: 2, backend: Mpc { cost_model: "hycc", selection_scheme: "a+b" } }
+Call: agg_mean_tree
+Call: sum_tree
+Call: cross_join
+Applying: ScalarizeVars to agg_mean_tree
+ScalarizeVars took 0 seconds.
+
+Applying: ScalarizeVars to cross_join
+ScalarizeVars took 0 seconds.
+
+Applying: ScalarizeVars to main
+ScalarizeVars took 0 seconds.
+
+Applying: ScalarizeVars to sum_tree
+ScalarizeVars took 0 seconds.
+
+Applying: Flatten to agg_mean_tree
+Flatten took 0 seconds.
+
+Applying: Flatten to cross_join
+Flatten took 0 seconds.
+
+Applying: Flatten to main
+Flatten took 0 seconds.
+
+Applying: Flatten to sum_tree
+Flatten took 0 seconds.
+
+Applying: Sha to agg_mean_tree
+Sha took 0 seconds.
+
+Applying: Sha to cross_join
+Sha took 0 seconds.
+
+Applying: Sha to main
+Sha took 0 seconds.
+
+Applying: Sha to sum_tree
+Sha took 0 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to agg_mean_tree
+a: tuple
+1.410254ms
+comp.outputs.size: 1
+cache size per term: 1296
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 0 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to cross_join
+a: tuple
+1.37385ms
+comp.outputs.size: 1
+cache size per term: 2182
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 0 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to main
+a: bvadd
+648.944µs
+comp.outputs.size: 1
+cache size per term: 697
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 0 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to sum_tree
+a: tuple
+539.222µs
+comp.outputs.size: 1
+cache size per term: 394
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 0 seconds.
+
+Applying: Flatten to agg_mean_tree
+Flatten took 0 seconds.
+
+Applying: Flatten to cross_join
+Flatten took 0 seconds.
+
+Applying: Flatten to main
+Flatten took 0 seconds.
+
+Applying: Flatten to sum_tree
+Flatten took 0 seconds.
+
+Applying: Tuple to agg_mean_tree
+Tuple took 0 seconds.
+
+Applying: Tuple to cross_join
+Tuple took 0 seconds.
+
+Applying: Tuple to main
+Tuple took 0 seconds.
+
+Applying: Tuple to sum_tree
+Tuple took 0 seconds.
+
+Applying: Obliv to agg_mean_tree
+Obliv took 0 seconds.
+
+Applying: Obliv to cross_join
+Obliv took 0 seconds.
+
+Applying: Obliv to main
+Obliv took 0 seconds.
+
+Applying: Obliv to sum_tree
+Obliv took 0 seconds.
+
+Applying: Tuple to agg_mean_tree
+Tuple took 0 seconds.
+
+Applying: Tuple to cross_join
+Tuple took 0 seconds.
+
+Applying: Tuple to main
+Tuple took 0 seconds.
+
+Applying: Tuple to sum_tree
+Tuple took 0 seconds.
+
+Applying: LinearScan to agg_mean_tree
+LinearScan took 0 seconds.
+
+Applying: LinearScan to cross_join
+LinearScan took 0 seconds.
+
+Applying: LinearScan to main
+LinearScan took 0 seconds.
+
+Applying: LinearScan to sum_tree
+LinearScan took 0 seconds.
+
+Applying: Tuple to agg_mean_tree
+Tuple took 1 seconds.
+
+Applying: Tuple to cross_join
+Tuple took 6 seconds.
+
+Applying: Tuple to main
+Tuple took 0 seconds.
+
+Applying: Tuple to sum_tree
+Tuple took 0 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to agg_mean_tree
+a: ite
+2.233902973s
+a: ite
+132.769µs
+a: ite
+106.752µs
+a: ite
+107.679µs
+a: ite
+100.275µs
+a: ite
+98.077µs
+a: ite
+104.624µs
+a: ite
+117.425µs
+a: ite
+112.206µs
+a: ite
+98.052µs
+a: ite
+96.779µs
+a: ite
+95.313µs
+a: ite
+96.805µs
+a: ite
+108.269µs
+a: ite
+107.367µs
+a: ite
+79.521µs
+a: ite
+72.756µs
+a: ite
+76.442µs
+a: ite
+73.347µs
+a: ite
+74.685µs
+a: ite
+74.768µs
+a: ite
+73.244µs
+a: ite
+74.352µs
+a: ite
+75.453µs
+a: ite
+75.05µs
+a: ite
+74.206µs
+a: ite
+74.075µs
+a: ite
+71.834µs
+a: ite
+72.816µs
+a: ite
+72.51µs
+a: ite
+71.733µs
+a: ite
+71.7µs
+a: ite
+74.926µs
+a: ite
+82.217µs
+a: ite
+90.691µs
+a: ite
+94.711µs
+a: ite
+74.683µs
+a: ite
+72.564µs
+a: ite
+72.04µs
+a: ite
+74.065µs
+a: ite
+71.536µs
+a: ite
+73.559µs
+a: ite
+73.771µs
+a: ite
+72.8µs
+a: ite
+73.105µs
+a: ite
+73.645µs
+a: ite
+76.297µs
+a: ite
+79.855µs
+a: ite
+82.041µs
+a: ite
+74.358µs
+a: ite
+70.918µs
+a: ite
+72.929µs
+a: ite
+73.784µs
+a: ite
+75.831µs
+a: ite
+84.528µs
+a: ite
+104.321µs
+a: ite
+83.526µs
+a: ite
+100.066µs
+a: ite
+94.935µs
+a: ite
+83.956µs
+a: ite
+84.381µs
+a: ite
+74.396µs
+a: ite
+73.448µs
+a: ite
+70.766µs
+a: ite
+72.048µs
+a: ite
+72.291µs
+a: ite
+70.343µs
+a: ite
+71.413µs
+a: ite
+72.425µs
+a: ite
+71.052µs
+a: ite
+71.769µs
+a: ite
+76.771µs
+a: ite
+79.072µs
+a: ite
+72.658µs
+a: ite
+74.162µs
+a: ite
+70.41µs
+a: ite
+70.534µs
+a: ite
+71.12µs
+a: ite
+69.105µs
+a: ite
+69.348µs
+a: ite
+71.935µs
+a: ite
+70.154µs
+a: ite
+70.064µs
+a: ite
+70.893µs
+a: ite
+72.548µs
+a: ite
+70.903µs
+a: ite
+72.406µs
+a: ite
+71.765µs
+a: ite
+68.679µs
+a: ite
+70.795µs
+a: ite
+72.511µs
+a: ite
+70.533µs
+a: ite
+70.79µs
+a: ite
+70.955µs
+a: ite
+69.559µs
+a: ite
+70.339µs
+a: ite
+74.614µs
+a: ite
+69.304µs
+a: ite
+68.605µs
+a: ite
+72.103µs
+a: ite
+72.744µs
+a: ite
+69.158µs
+a: ite
+66.696µs
+a: ite
+69.434µs
+a: ite
+69.324µs
+a: ite
+76.892µs
+a: ite
+71.501µs
+a: ite
+71.042µs
+a: ite
+69.53µs
+a: ite
+72.084µs
+a: ite
+69.764µs
+a: ite
+69.985µs
+a: ite
+71.257µs
+a: ite
+70.628µs
+a: ite
+69.032µs
+a: ite
+70.381µs
+a: ite
+72.448µs
+a: ite
+70.166µs
+a: ite
+71.436µs
+a: ite
+73.351µs
+a: ite
+70.441µs
+a: ite
+70.245µs
+a: ite
+72.23µs
+a: ite
+70.682µs
+a: ite
+70.609µs
+a: ite
+67.24µs
+a: ite
+69.589µs
+a: ite
+69.082µs
+a: ite
+68.521µs
+a: ite
+68.175µs
+a: ite
+67.765µs
+a: ite
+70.251µs
+a: ite
+70.272µs
+a: ite
+71.273µs
+a: ite
+83.3µs
+a: ite
+72.381µs
+a: ite
+69.916µs
+a: ite
+70.78µs
+a: ite
+71.309µs
+a: ite
+113.578µs
+a: ite
+72.146µs
+a: ite
+72.166µs
+a: ite
+70.073µs
+a: ite
+70.163µs
+a: ite
+70.814µs
+a: ite
+70.726µs
+a: ite
+69.152µs
+a: ite
+70.35µs
+a: ite
+70.236µs
+comp.outputs.size: 149
+cache size per term: 3347935
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 2 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to cross_join
+a: ite
+547.354µs
+a: ite
+13.744388814s
+a: ite
+153.551µs
+a: ite
+115.217µs
+a: ite
+99.31µs
+a: ite
+97.582µs
+a: ite
+99.263µs
+a: ite
+106.292µs
+a: ite
+103.933µs
+a: ite
+108.336µs
+a: ite
+94.883µs
+a: ite
+97.488µs
+a: ite
+96.426µs
+a: ite
+97.607µs
+a: ite
+118.742µs
+a: ite
+94.741µs
+a: ite
+94.702µs
+a: ite
+94.217µs
+a: ite
+105.298µs
+a: ite
+93.326µs
+a: ite
+101.766µs
+a: ite
+95.476µs
+a: ite
+94.267µs
+a: ite
+93.669µs
+a: ite
+94.356µs
+a: ite
+93.996µs
+a: ite
+91.871µs
+a: ite
+93.391µs
+a: ite
+93.423µs
+a: ite
+93.203µs
+a: ite
+91.083µs
+a: ite
+105.873µs
+a: ite
+102.177µs
+a: ite
+91.761µs
+a: ite
+91.896µs
+a: ite
+92.651µs
+a: ite
+92.705µs
+a: ite
+99.163µs
+a: ite
+99.899µs
+a: ite
+111.842µs
+a: ite
+104.276µs
+a: ite
+92.316µs
+a: ite
+92.102µs
+a: ite
+92.675µs
+a: ite
+91.443µs
+a: ite
+93.402µs
+a: ite
+95.16µs
+a: ite
+92.463µs
+a: ite
+91.158µs
+a: ite
+89.349µs
+a: ite
+93.656µs
+a: ite
+98.745µs
+a: ite
+90.516µs
+a: ite
+90.986µs
+a: ite
+92.693µs
+a: ite
+93.84µs
+a: ite
+91.765µs
+a: ite
+91.191µs
+a: ite
+89.839µs
+a: ite
+91.798µs
+a: ite
+91.697µs
+a: ite
+92.367µs
+a: ite
+89.178µs
+a: ite
+89.855µs
+a: ite
+91.186µs
+a: ite
+89.593µs
+a: ite
+91.426µs
+a: ite
+91.304µs
+a: ite
+89.228µs
+a: ite
+89.615µs
+a: ite
+90.381µs
+a: ite
+89.084µs
+a: ite
+96.497µs
+a: ite
+97.426µs
+a: ite
+96.976µs
+a: ite
+97.462µs
+a: ite
+94.379µs
+a: ite
+88.912µs
+a: ite
+88.5µs
+a: ite
+97.259µs
+a: ite
+97.464µs
+a: ite
+98.31µs
+a: ite
+96.599µs
+a: ite
+94.509µs
+a: ite
+94.835µs
+a: ite
+96.744µs
+a: ite
+94.776µs
+a: ite
+95.026µs
+a: ite
+94.642µs
+a: ite
+92.067µs
+a: ite
+92.558µs
+a: ite
+95.033µs
+a: ite
+91.714µs
+a: ite
+94.476µs
+a: ite
+95.274µs
+a: ite
+120.679µs
+a: ite
+121.907µs
+a: ite
+102.597µs
+a: ite
+96.438µs
+a: ite
+92.718µs
+a: ite
+91.164µs
+a: ite
+91.609µs
+a: ite
+92.91µs
+a: ite
+91.643µs
+a: ite
+91.746µs
+a: ite
+91.988µs
+a: ite
+90.267µs
+a: ite
+88.819µs
+a: ite
+91.871µs
+a: ite
+92.241µs
+a: ite
+90.849µs
+a: ite
+91.117µs
+a: ite
+93.225µs
+a: ite
+91.412µs
+a: ite
+91.642µs
+a: ite
+90.159µs
+a: ite
+92.594µs
+a: ite
+114.416µs
+a: ite
+99.416µs
+a: ite
+91.167µs
+a: ite
+90.491µs
+a: ite
+88.244µs
+a: ite
+88.859µs
+a: ite
+87.238µs
+a: ite
+88.614µs
+a: ite
+89.709µs
+a: ite
+86.556µs
+a: ite
+87.864µs
+a: ite
+88.808µs
+a: ite
+95.94µs
+a: ite
+90.026µs
+a: ite
+89.773µs
+a: ite
+89.371µs
+a: ite
+90.926µs
+a: ite
+90µs
+a: ite
+89.891µs
+a: ite
+89.639µs
+a: ite
+96.769µs
+a: ite
+97.454µs
+a: ite
+88.352µs
+a: ite
+89.241µs
+a: ite
+87.5µs
+a: ite
+88.014µs
+a: ite
+88.161µs
+a: ite
+87.818µs
+a: ite
+94.072µs
+a: ite
+90.36µs
+a: ite
+88.504µs
+a: ite
+89.737µs
+a: cross_join_f0_lex0_a_v0.0
+2.902µs
+a: cross_join_f0_lex0_a_v0.1
+1.873µs
+a: cross_join_f0_lex0_a_v0.2
+1.862µs
+a: cross_join_f0_lex0_a_v0.3
+2.133µs
+a: cross_join_f0_lex0_a_v0.4
+1.718µs
+a: cross_join_f0_lex0_a_v0.5
+1.774µs
+a: cross_join_f0_lex0_a_v0.6
+1.781µs
+a: cross_join_f0_lex0_a_v0.7
+1.954µs
+a: cross_join_f0_lex0_a_v0.8
+2.281µs
+a: cross_join_f0_lex0_a_v0.9
+2.096µs
+a: cross_join_f0_lex0_a_v0.10
+1.908µs
+a: cross_join_f0_lex0_a_v0.11
+1.708µs
+a: cross_join_f0_lex0_a_v0.12
+1.64µs
+a: cross_join_f0_lex0_a_v0.13
+1.7µs
+a: cross_join_f0_lex0_b_v0.0
+2.106µs
+a: cross_join_f0_lex0_b_v0.1
+1.675µs
+a: cross_join_f0_lex0_b_v0.2
+1.803µs
+a: cross_join_f0_lex0_b_v0.3
+1.793µs
+a: cross_join_f0_lex0_b_v0.4
+1.798µs
+a: cross_join_f0_lex0_b_v0.5
+2.192µs
+a: cross_join_f0_lex0_b_v0.6
+2.245µs
+a: cross_join_f0_lex0_b_v0.7
+1.788µs
+a: cross_join_f0_lex0_b_v0.8
+1.701µs
+a: cross_join_f0_lex0_b_v0.9
+1.671µs
+a: cross_join_f0_lex0_b_v0.10
+1.716µs
+a: cross_join_f0_lex0_b_v0.11
+1.842µs
+a: cross_join_f0_lex0_b_v0.12
+1.721µs
+a: cross_join_f0_lex0_b_v0.13
+1.872µs
+comp.outputs.size: 177
+cache size per term: 9757444
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 16 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to main
+a: bvadd
+27.957112ms
+comp.outputs.size: 1
+cache size per term: 299
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 0 seconds.
+
+Applying: ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) to sum_tree
+a: bvadd
+9.913017ms
+a: sum_tree_f0_lex0_data_v0.0
+3.208µs
+a: sum_tree_f0_lex0_data_v0.1
+1.937µs
+a: sum_tree_f0_lex0_data_v0.2
+1.849µs
+a: sum_tree_f0_lex0_data_v0.3
+2.087µs
+a: sum_tree_f0_lex0_data_v0.4
+1.806µs
+a: sum_tree_f0_lex0_data_v0.5
+1.827µs
+a: sum_tree_f0_lex0_data_v0.6
+1.872µs
+a: sum_tree_f0_lex0_data_v0.7
+1.748µs
+a: sum_tree_f0_lex0_data_v0.8
+1.775µs
+a: sum_tree_f0_lex0_data_v0.9
+1.758µs
+a: sum_tree_f0_lex0_data_v0.10
+1.889µs
+a: sum_tree_f0_lex0_data_v0.11
+1.771µs
+a: sum_tree_f0_lex0_data_v0.12
+1.742µs
+a: sum_tree_f0_lex0_data_v0.13
+1.74µs
+a: sum_tree_f0_lex0_data_v0.14
+1.968µs
+a: sum_tree_f0_lex0_data_v0.15
+1.752µs
+a: sum_tree_f0_lex0_data_v0.16
+1.747µs
+a: sum_tree_f0_lex0_data_v0.17
+1.741µs
+a: sum_tree_f0_lex0_data_v0.18
+1.743µs
+a: sum_tree_f0_lex0_data_v0.19
+1.754µs
+a: sum_tree_f0_lex0_data_v0.20
+1.74µs
+a: sum_tree_f0_lex0_data_v0.21
+13.465µs
+a: sum_tree_f0_lex0_data_v0.22
+1.741µs
+a: sum_tree_f0_lex0_data_v0.23
+1.761µs
+a: sum_tree_f0_lex0_data_v0.24
+2.029µs
+a: sum_tree_f0_lex0_data_v0.25
+1.695µs
+a: sum_tree_f0_lex0_data_v0.26
+1.676µs
+a: sum_tree_f0_lex0_data_v0.27
+8.939µs
+a: sum_tree_f0_lex0_data_v0.28
+1.694µs
+a: sum_tree_f0_lex0_data_v0.29
+1.654µs
+a: sum_tree_f0_lex0_data_v0.30
+1.695µs
+a: sum_tree_f0_lex0_data_v0.31
+1.866µs
+a: sum_tree_f0_lex0_data_v0.32
+1.631µs
+a: sum_tree_f0_lex0_data_v0.33
+1.594µs
+a: sum_tree_f0_lex0_data_v0.34
+1.754µs
+a: sum_tree_f0_lex0_data_v0.35
+1.728µs
+a: sum_tree_f0_lex0_data_v0.36
+1.895µs
+a: sum_tree_f0_lex0_data_v0.37
+1.702µs
+a: sum_tree_f0_lex0_data_v0.38
+1.692µs
+a: sum_tree_f0_lex0_data_v0.39
+2.249µs
+a: sum_tree_f0_lex0_data_v0.40
+1.776µs
+a: sum_tree_f0_lex0_data_v0.41
+1.68µs
+a: sum_tree_f0_lex0_data_v0.42
+1.693µs
+a: sum_tree_f0_lex0_data_v0.43
+1.784µs
+a: sum_tree_f0_lex0_data_v0.44
+1.748µs
+a: sum_tree_f0_lex0_data_v0.45
+1.735µs
+a: sum_tree_f0_lex0_data_v0.46
+1.593µs
+a: sum_tree_f0_lex0_data_v0.47
+1.704µs
+a: sum_tree_f0_lex0_data_v0.48
+1.565µs
+comp.outputs.size: 50
+cache size per term: 50
+ConstantFold([BvBinOp(Lshr), BvBinOp(Shl)]) took 0 seconds.
+
+Applying: Binarize to agg_mean_tree
+Binarize took 0 seconds.
+
+Applying: Binarize to cross_join
+Binarize took 5 seconds.
+
+Applying: Binarize to main
+Binarize took 0 seconds.
+
+Applying: Binarize to sum_tree
+Binarize took 0 seconds.
+
+Done with IR optimization
+Converting to aby
+Cost model: hycc
+Selection scheme: a+b
+The command
+	./scripts/build_mpc_c_test.zsh
+failed with exit code 101

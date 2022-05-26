@@ -16,6 +16,7 @@ use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
+use circ::ir::term::Term;
 use circ::ir::term::{Functions, Op, PostOrderIter, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
@@ -45,6 +46,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
+
+use std::collections::BTreeMap;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -217,12 +220,12 @@ fn main() {
         }
     };
 
-    for (name, comp) in cs.computations.iter() {
-        println!("pre opt functions: {}", name);
-        for t in &comp.outputs {
-            println!("pre opt function term: {}, {}", t, t.uid());
-        }
-    }
+    // for (name, comp) in cs.computations.iter() {
+    //     println!("pre opt functions: {}", name);
+    //     for t in &comp.outputs {
+    //         println!("pre opt function term: {}, {}", t, t.uid());
+    //     }
+    // }
 
     cs = match mode {
         Mode::Opt => opt(
@@ -248,8 +251,8 @@ fn main() {
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
-                    // Inline Function Calls
-                    Opt::InlineCalls,
+                    // // Inline Function Calls
+                    // Opt::InlineCalls,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
@@ -280,21 +283,30 @@ fn main() {
         ),
     };
 
+    let mut tmp: BTreeMap<u64, Term> = BTreeMap::new();
+
     for (name, comp) in cs.computations.iter() {
-        println!("functions: {}", name);
         for t in &comp.outputs {
-            println!("function term: {}, {}", t, t.uid());
-            // for t1 in PostOrderIter::new(t.clone()) {
-            //     println!("term: {}, {}", t1, t1.uid());
-            //     for c in t1.cs.iter() {
-            //         println!("children: {}, {}", c, c.uid());
-            //     }
-            //     println!();
-            // }
-            // println!();
+            for t1 in PostOrderIter::new(t.clone()) {
+                let uid = t1.uid();
+                tmp.insert(uid, t1.clone());
+            }
         }
-        println!("\n");
+        // println!("functions: {}", name);
+        // for t in &comp.outputs {
+        //     println!("function term: {}, {}", t, t.uid());
+        //     for t1 in PostOrderIter::new(t.clone()) {
+        //         println!("term:{}", t1.uid());
+        //         for c in t1.cs.iter() {
+        //             println!("children: {}", c.uid());
+        //         }
+        //         println!();
+        //     }
+        //     println!();
+        // }
+        // println!("\n");
     }
+    // println!("uids: {:#?}", tmp);
 
     println!("Done with IR optimization");
 
