@@ -120,7 +120,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     tuple::eliminate_tuples(comp);
                 }
             }
-            println!("{:?} took {} seconds.\n", i, now.elapsed().as_secs());
+            println!("{:?} took {:#?}.\n", i, now.elapsed());
 
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
