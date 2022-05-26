@@ -1,4 +1,4 @@
-#define LEN 100000
+#define LEN 1
 
 int fa(int * c, int a) {
     for (int i = 0; i < LEN; i++) {

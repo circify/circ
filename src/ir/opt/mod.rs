@@ -51,6 +51,13 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
         for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?}", i);
             println!("Applying: {:?} to {}", i, name);
+
+            for t in comp.terms_postorder() {
+                println!("{}\n", t);
+                // println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
+            }
+            unimplemented!();
+
             let now = Instant::now();
             match i.clone() {
                 Opt::ScalarizeVars => scalarize_vars::scalarize_inputs(comp),
@@ -59,11 +66,13 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     let _lock = super::term::COLLECT.read().unwrap();
                     let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                     for a in &mut comp.outputs {
+                        let n = Instant::now();
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
+                        println!("{:#?}", n.elapsed());
                     }
                     println!("cache size per term: {}", cache.len());
                 }
@@ -127,14 +136,19 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
             debug!("After {:?}: {} terms", i, comp.terms());
             opt_fs.insert(name.clone(), comp.clone());
 
+            println!("After {:?}: {} outputs", i, comp.outputs.len());
+            println!("After {:?}: {} terms", i, comp.terms());
+
             // // Print size of computation
             println!("number of output terms: {}", comp.outputs.len());
+
             for t in &comp.outputs {
                 //     // println!("pre opt function term: {}, {}", t, t.uid());
-                println!(
-                    "opt term length: {}",
-                    PostOrderIter::new(t.clone()).collect::<Vec<_>>().len()
-                );
+                // println!(
+                //     "opt term length: {}",
+                //     PostOrderIter::new(t.clone()).collect::<Vec<_>>().len()
+                // );
+                println!("term: {}, {}", t, check(t));
             }
         }
         fs = opt_fs;

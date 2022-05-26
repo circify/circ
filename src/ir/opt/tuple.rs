@@ -107,45 +107,33 @@ impl TupleTree {
     }
     fn get(&self, i: usize) -> Self {
         match self {
-            TupleTree::NonTuple(cs) => panic!("Get ({}) on non-tuple {:?}", i, self),
-            TupleTree::Tuple(t) => {
-                if let TupleTree::NonTuple(leaf) = &t[0] {
-                    if t.len() == 1 {
-                        let new_leaf = TupleTree::NonTuple(term![Op::Field(i); leaf.clone()]);
-                        let mut tree: im::Vector<TupleTree> = im::Vector::new();
-                        tree.push_back(new_leaf);
-                        TupleTree::Tuple(tree)
-                    } else {
-                        assert!(i < t.len());
-                        t.get(i).unwrap().clone()
-                    }
+            TupleTree::NonTuple(cs) => {
+                if let Sort::Tuple(_) = check(cs) {
+                    TupleTree::NonTuple(term![Op::Field(i); cs.clone()])
                 } else {
-                    assert!(i < t.len());
-                    t.get(i).unwrap().clone()
+                    panic!("Get ({}) on non-tuple {:?}", i, self)
                 }
+            }
+            TupleTree::Tuple(t) => {
+                assert!(i < t.len());
+                t.get(i).unwrap().clone()
             }
         }
     }
     fn update(&self, i: usize, v: &TupleTree) -> Self {
         match self {
-            TupleTree::NonTuple(cs) => panic!("Update ({}) on non-tuple {:?}", i, self),
-            TupleTree::Tuple(t) => {
-                if let TupleTree::NonTuple(leaf) = &t[0] {
-                    if t.len() == 1 {
-                        let new_leaf = TupleTree::NonTuple(
-                            term![Op::Update(i); leaf.clone(), v.clone().unwrap_non_tuple()],
-                        );
-                        let mut tree: im::Vector<TupleTree> = im::Vector::new();
-                        tree.push_back(new_leaf);
-                        TupleTree::Tuple(tree)
-                    } else {
-                        assert!(i < t.len());
-                        TupleTree::Tuple(t.update(i, v.clone()))
-                    }
+            TupleTree::NonTuple(cs) => {
+                if let Sort::Tuple(_) = check(cs) {
+                    TupleTree::NonTuple(
+                        term![Op::Update(i); cs.clone(), v.clone().unwrap_non_tuple()],
+                    )
                 } else {
-                    assert!(i < t.len());
-                    TupleTree::Tuple(t.update(i, v.clone()))
+                    panic!("Get ({}) on non-tuple {:?}", i, self)
                 }
+            }
+            TupleTree::Tuple(t) => {
+                assert!(i < t.len());
+                TupleTree::Tuple(t.update(i, v.clone()))
             }
         }
     }
@@ -290,12 +278,6 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 t.update(*i, &v)
             }
             Op::Tuple => TupleTree::Tuple(cs.into()),
-            Op::Call(..) => {
-                let leaf = TupleTree::NonTuple(t.clone());
-                let mut tree: im::Vector<TupleTree> = im::Vector::new();
-                tree.push_back(leaf);
-                TupleTree::Tuple(tree)
-            }
             _ => TupleTree::NonTuple(term(
                 t.op.clone(),
                 cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),

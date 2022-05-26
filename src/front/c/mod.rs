@@ -1362,12 +1362,12 @@ impl CGen {
                 })
                 .flatten()
                 .collect::<Vec<Term>>();
-            self.circ
-                .cir_ctx()
-                .cs
-                .borrow_mut()
-                .outputs
-                .push(term(Op::Tuple, ret_terms));
+
+            // typecheck
+            let ret = term(Op::Tuple, ret_terms);
+            check_rec(&ret);
+            
+            self.circ.cir_ctx().cs.borrow_mut().outputs.push(ret);
         }
 
         // for (name, val) in returns {
