@@ -126,7 +126,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());
-
             // for t in comp.terms_postorder() {
             //     println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
             // }

@@ -817,17 +817,17 @@ impl CGen {
                 let ret_ty = f.ret_ty.clone();
 
                 // Map of argument names to CTerms
-                let mut cargs_map: HashMap<String, CTerm> = HashMap::new();
-                let cargs = arguments
+                let mut args_map: HashMap<String, CTerm> = HashMap::new();
+                let args = arguments
                     .iter()
                     .map(|e| self.gen_expr(e.node.clone()))
                     .collect::<Vec<_>>();
-                for (p, c) in f.params.iter().zip(cargs.iter()) {
-                    cargs_map.insert(p.name.clone(), c.clone());
+                for (p, c) in f.params.iter().zip(args.iter()) {
+                    args_map.insert(p.name.clone(), c.clone());
                 }
 
                 // Vector of argument Terms
-                let arg_terms = cargs
+                let arg_terms = args
                     .iter()
                     .map(|e| e.term.terms(self.circ.cir_ctx()))
                     .collect::<Vec<_>>();
@@ -852,11 +852,12 @@ impl CGen {
                 }
 
                 // Rewiring
-                for (ret_name, sort) in ret_names.iter().zip(ret_sorts.iter()) {
+                for (i, (ret_name, sort)) in ret_names.iter().zip(ret_sorts.iter()).enumerate() {
                     if let Sort::Array(_, _, l) = sort {
-                        let ct = cargs_map.get(ret_name).unwrap();
+                        let ct = args_map.get(ret_name).unwrap();
                         if let CTermData::Array(_, id) = ct.term {
-                            self.circ.replace(id.unwrap(), call_term.clone());
+                            self.circ
+                                .replace(id.unwrap(), term![Op::Field(i);call_term.clone()]);
                         } else {
                             unimplemented!("This should only be handling ptrs to arrays");
                         }
