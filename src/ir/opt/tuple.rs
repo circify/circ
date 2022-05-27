@@ -141,11 +141,7 @@ impl TupleTree {
         match self {
             TupleTree::NonTuple(t) => t,
             TupleTree::Tuple(t) => {
-                assert!(t.len() == 1);
-                match t[0].clone() {
-                    TupleTree::NonTuple(nt) => nt.clone(),
-                    _ => panic!("{:?} is tuple!", t),
-                }
+                panic!("{:?} is tuple!", t)
             }
         }
     }

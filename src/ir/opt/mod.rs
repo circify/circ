@@ -56,7 +56,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                 println!("{}\n", t);
                 // println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
             }
-            unimplemented!();
 
             let now = Instant::now();
             match i.clone() {

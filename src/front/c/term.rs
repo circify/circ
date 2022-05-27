@@ -83,13 +83,6 @@ impl CTermData {
         let ts = self.terms(ctx);
         assert!(ts.len() == 1);
         ts.get(0).unwrap().clone()
-        // if ts.is_empty() {
-        //     panic!("No terms found, unknown / wrong variable name");
-        // } else if ts.len() == 1 {
-        //     ts.get(0).unwrap().clone()
-        // } else {
-        //     term(Op::Tuple, ts)
-        // }
     }
 
     pub fn simple_term(&self) -> Term {

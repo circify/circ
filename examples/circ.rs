@@ -217,17 +217,6 @@ fn main() {
         }
     };
 
-    for (name, comp) in cs.computations.iter() {
-        println!("pre opt functions: {}", name);
-        for t in &comp.outputs {
-            // println!("pre opt function term: {}, {}", t, t.uid());
-            println!(
-                "term length: {}",
-                PostOrderIter::new(t.clone()).collect::<Vec<_>>().len()
-            );
-        }
-    }
-
     cs = match mode {
         Mode::Opt => opt(
             cs,

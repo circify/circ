@@ -1,4 +1,3 @@
-use crate::circify::RET_NAME;
 use crate::front::c::types::Ty;
 use crate::front::c::Expression::Identifier;
 use crate::front::c::Sort;
@@ -123,7 +122,7 @@ pub fn fn_info_to_defs(
     match &fn_info.ret_ty {
         Ty::Void => {}
         _ => {
-            rets.insert(RET_NAME.to_string(), fn_info.ret_ty.clone().sort());
+            rets.insert("return".to_string(), fn_info.ret_ty.clone().sort());
         }
     };
     assert!(fn_info.params.len() == arg_terms.len());

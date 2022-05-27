@@ -85,7 +85,7 @@ pub fn inline_function_calls(
             Op::Field(index) => {
                 assert!(t.cs.len() > 0);
                 if let Op::Call(..) = &t.cs[0].op {
-                    if call_cache.contains_key((&t.cs[0])) {
+                    if call_cache.contains_key(&t.cs[0]) {
                         call_cache.get(&t.cs[0]).unwrap()[index + 1].clone()
                     } else {
                         panic!("Fields on a Call term should return");

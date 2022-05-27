@@ -858,8 +858,7 @@ impl<E: Embeddable> Circify<E> {
     }
 }
 
-/// Return variable name
-pub const RET_NAME: &str = "return";
+const RET_NAME: &str = "return";
 const RET_BREAK_NAME: &str = "return";
 
 #[cfg(test)]
