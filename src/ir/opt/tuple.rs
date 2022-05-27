@@ -60,7 +60,8 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap, Value, AND,
+    bv_lit, check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap,
+    Value, AND,
 };
 use std::collections::BTreeMap;
 
@@ -110,6 +111,8 @@ impl TupleTree {
             TupleTree::NonTuple(cs) => {
                 if let Sort::Tuple(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Field(i); cs.clone()])
+                } else if let Sort::Array(_, _, _) = check(cs) {
+                    TupleTree::NonTuple(term![Op::Select; cs.clone(), bv_lit(i, 32)])
                 } else {
                     panic!("Get ({}) on non-tuple {:?}", i, self)
                 }
@@ -126,6 +129,10 @@ impl TupleTree {
                 if let Sort::Tuple(_) = check(cs) {
                     TupleTree::NonTuple(
                         term![Op::Update(i); cs.clone(), v.clone().unwrap_non_tuple()],
+                    )
+                } else if let Sort::Array(_, _, _) = check(cs) {
+                    TupleTree::NonTuple(
+                        term![Op::Store; cs.clone(), bv_lit(i, 32), v.clone().unwrap_non_tuple()],
                     )
                 } else {
                     panic!("Get ({}) on non-tuple {:?}", i, self)
