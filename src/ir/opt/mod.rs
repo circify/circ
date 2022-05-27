@@ -3,7 +3,7 @@ pub mod binarize;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
-pub mod inline_calls;
+pub mod link;
 pub mod mem;
 pub mod scalarize_vars;
 pub mod sha;
@@ -51,12 +51,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
         for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?}", i);
             println!("Applying: {:?} to {}", i, name);
-
-            for t in comp.terms_postorder() {
-                println!("{}\n", t);
-                // println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
-            }
-
             let now = Instant::now();
             match i.clone() {
                 Opt::ScalarizeVars => scalarize_vars::scalarize_inputs(comp),
@@ -119,36 +113,25 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     inline::inline(&mut comp.outputs, &public_inputs);
                 }
                 Opt::InlineCalls => {
-                    let mut cache = inline_calls::Cache::new();
+                    let mut cache = link::Cache::new();
                     for a in &mut comp.outputs {
-                        *a = inline_calls::inline_function_calls(a.clone(), &mut cache, &opt_fs);
+                        *a = link::link_function_calls(a.clone(), &mut cache, &opt_fs);
                     }
                 }
                 Opt::Tuple => {
                     tuple::eliminate_tuples(comp);
                 }
             }
-            println!("{:?} took {:#?}.\n", i, now.elapsed());
-
+            debug!("{:?} took {:#?}.\n", i, now.elapsed());
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());
+
+            // for t in comp.terms_postorder() {
+            //     println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
+            // }
+
             opt_fs.insert(name.clone(), comp.clone());
-
-            println!("After {:?}: {} outputs", i, comp.outputs.len());
-            println!("After {:?}: {} terms", i, comp.terms());
-
-            // // Print size of computation
-            println!("number of output terms: {}", comp.outputs.len());
-
-            for t in &comp.outputs {
-                //     // println!("pre opt function term: {}, {}", t, t.uid());
-                // println!(
-                //     "opt term length: {}",
-                //     PostOrderIter::new(t.clone()).collect::<Vec<_>>().len()
-                // );
-                println!("term: {}, {}", t, check(t));
-            }
         }
         fs = opt_fs;
     }

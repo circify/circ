@@ -117,12 +117,14 @@ pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
 pub fn fn_info_to_defs(
     fn_info: &FnInfo,
     arg_terms: &Vec<Vec<Term>>, // arguments taken at call site
-) -> (String, Vec<String>, Vec<Sort>, BTreeMap<String, Sort>) {
-    let mut rets: BTreeMap<String, Sort> = BTreeMap::new();
+) -> (String, Vec<String>, Vec<Sort>, Vec<String>, Vec<Sort>) {
+    let mut ret_names: Vec<String> = Vec::new();
+    let mut ret_sorts: Vec<Sort> = Vec::new();
     match &fn_info.ret_ty {
         Ty::Void => {}
         _ => {
-            rets.insert("return".to_string(), fn_info.ret_ty.clone().sort());
+            ret_names.push("return".to_string());
+            ret_sorts.push(fn_info.ret_ty.clone().sort());
         }
     };
     assert!(fn_info.params.len() == arg_terms.len());
@@ -135,7 +137,8 @@ pub fn fn_info_to_defs(
                 let new_ty =
                     Sort::Array(Box::new(Sort::BitVector(*n)), Box::new(t.sort()), arg.len());
                 // Add pointers as return
-                rets.insert(name.clone(), new_ty.clone());
+                ret_names.push(name.clone());
+                ret_sorts.push(new_ty.clone());
                 new_ty
             }
             _ => param.ty.sort(),
@@ -143,7 +146,13 @@ pub fn fn_info_to_defs(
         param_names.push(name);
         param_sorts.push(ty.clone());
     }
-    (fn_info.name.clone(), param_names, param_sorts, rets)
+    (
+        fn_info.name.clone(),
+        param_names,
+        param_sorts,
+        ret_names,
+        ret_sorts,
+    )
 }
 
 pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {

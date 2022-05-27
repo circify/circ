@@ -36,7 +36,7 @@ fn match_arg(name: &String, params: &BTreeMap<String, Term>) -> Term {
     params.get(&new_name).unwrap().clone()
 }
 
-fn inline(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Term> {
+fn link(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Term> {
     let mut res: Vec<Term> = Vec::new();
     let comp = fs.computations.get(name).unwrap();
     for o in comp.outputs.iter() {
@@ -65,8 +65,8 @@ fn inline(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Ter
     res
 }
 
-/// Traverse terms and inline function calls
-pub fn inline_function_calls(
+/// Traverse terms and link function calls
+pub fn link_function_calls(
     term_: Term,
     Cache(ref mut rewritten): &mut Cache,
     fs: &Functions,
@@ -86,7 +86,7 @@ pub fn inline_function_calls(
                 assert!(t.cs.len() > 0);
                 if let Op::Call(..) = &t.cs[0].op {
                     if call_cache.contains_key(&t.cs[0]) {
-                        call_cache.get(&t.cs[0]).unwrap()[index + 1].clone()
+                        call_cache.get(&t.cs[0]).unwrap()[*index].clone()
                     } else {
                         panic!("Fields on a Call term should return");
                     }
@@ -150,7 +150,7 @@ pub fn inline_function_calls(
                 for (n, c) in arg_keys.zip(t.cs.clone()) {
                     params.insert(n.clone(), c.clone());
                 }
-                let res = inline(name, params, fs);
+                let res = link(name, params, fs);
                 call_cache.insert(t.clone(), res.clone());
                 res[0].clone()
             }
