@@ -4,7 +4,6 @@ use crate::front::c::Sort;
 use crate::front::c::Term;
 use lang_c::ast::*;
 use lang_c::span::Node;
-use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 
 use crate::front::Mode;

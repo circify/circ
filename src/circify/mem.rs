@@ -116,6 +116,15 @@ impl MemManager {
         alloc.cur_term = val;
     }
 
+    /// Get the stored term in the allocation `id`
+    pub fn term(&self, id: AllocId) -> Term {
+        self.allocs
+            .get(&id)
+            .expect("Missing allocation")
+            .cur_term
+            .clone()
+    }
+
     /// Is `offset` in bounds for the allocation `id`?
     pub fn in_bounds(&self, id: AllocId, offset: Term) -> Term {
         let alloc = self.allocs.get(&id).expect("Missing allocation");

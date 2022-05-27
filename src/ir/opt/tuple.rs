@@ -229,13 +229,20 @@ fn untuple_value(v: &Value) -> Value {
 
 #[allow(dead_code)]
 fn tuple_free(t: Term) -> bool {
-    PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
+    PostOrderIter::new(t).all(|c| {
+        if let Op::Call(..) = c.op {
+            matches!(check(&c), Sort::Tuple(..))
+        } else {
+            !matches!(check(&c), Sort::Tuple(..))
+        }
+    })
 }
 
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
     let mut lifted: TermMap<TupleTree> = TermMap::new();
     for t in cs.terms_postorder() {
+        println!("tuples: {}", t);
         let mut cs: Vec<TupleTree> =
             t.cs.iter()
                 .map(|c| lifted.get(c).unwrap().clone())

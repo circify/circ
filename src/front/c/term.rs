@@ -22,7 +22,7 @@ impl CTermData {
         match self {
             Self::Bool(_) => Ty::Bool,
             Self::Int(s, w, _) => Ty::Int(*s, *w),
-            Self::Array(t, _) => t.clone(),
+            Self::Array(t, id) => t.clone(),
             Self::StackPtr(t, _o, _) => t.clone(),
             Self::Struct(ty, _) => ty.clone(),
         }
@@ -30,46 +30,61 @@ impl CTermData {
     /// Get all IR terms inside this value, as a list.
     pub fn terms(&self, ctx: &CirCtx) -> Vec<Term> {
         let mut output: Vec<Term> = Vec::new();
-        fn terms_tail(term_: &CTermData, output: &mut Vec<Term>, inner_ctx: &CirCtx) {
+        fn terms_tail(term_: &CTermData, output: &mut Vec<Term>, ctx: &CirCtx) {
             match term_ {
                 CTermData::Bool(t) => output.push(t.clone()),
                 CTermData::Int(_, _, t) => output.push(t.clone()),
                 CTermData::Array(t, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
                     if let Ty::Array(l, _, _) = t {
-                        for i in 0..*l {
-                            let offset = bv_lit(i, 32);
-                            let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
-                            output.push(idx_term);
-                        }
+                        output.push(ctx.mem.borrow_mut().term(alloc_id));
+                        // let selects: Vec<Term> = Vec::new();
+                        // for i in 0..*l {
+                        //     let offset = bv_lit(i, 32);
+                        //     let idx_term = inner_.mem.borrow_mut().load(alloc_id, offset);
+                        //     selects.push(idx_term);
+                        // }
+                        // output.push(t);
                     } else {
                         panic!("CTermData::Array does not hold Array type");
-                    }
+                    };
                 }
                 CTermData::StackPtr(t, _o, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
                     match t {
-                        Ty::Array(l, _, _) => {
+                        Ty::Array(l, _, ty) => {
+                            let mut base = term![Op::Const(Value::Array(Array::default(
+                                Sort::BitVector(32),
+                                &(*ty).sort(),
+                                l.clone()
+                            )))];
                             for i in 0..*l {
                                 let offset = bv_lit(i, 32);
-                                let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
-                                output.push(idx_term);
+                                let idx_term = ctx.mem.borrow_mut().load(alloc_id, offset);
+                                base = term![Op::Store; base, bv_lit(i, 32), idx_term];
                             }
+                            output.push(base);
                         }
-                        Ty::Int(_, _) => {
-                            let size = inner_ctx.mem.borrow_mut().get_size(alloc_id);
+                        Ty::Int(_, s) => {
+                            let size = ctx.mem.borrow_mut().get_size(alloc_id);
+                            let mut base = term![Op::Const(Value::Array(Array::default(
+                                Sort::BitVector(32),
+                                &Sort::BitVector(*s),
+                                size.clone()
+                            )))];
                             for i in 0..size {
                                 let offset = bv_lit(i, 32);
-                                let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
-                                output.push(idx_term);
+                                let idx_term = ctx.mem.borrow_mut().load(alloc_id, offset);
+                                base = term![Op::Store; base, bv_lit(i, 32), idx_term];
                             }
+                            output.push(base);
                         }
                         _ => panic!("Unsupported type for stack pointer: {:#?}", t),
                     }
                 }
                 CTermData::Struct(_, fs) => {
                     for (_name, ct) in fs.fields() {
-                        let mut ts = ct.term.terms(inner_ctx);
+                        let mut ts = ct.term.terms(ctx);
                         output.append(&mut ts);
                     }
                 }
