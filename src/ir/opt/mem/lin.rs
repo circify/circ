@@ -1,10 +1,29 @@
 //! Linear Memory implementation.
 //!
 //! The idea is to replace each array with a tuple, and use ITEs to account for variable indexing.
+//!
+//! There are a few hard cases:
+//!
+//!    * variables: array-constructors in their sorts are replaced with tuple constructors
+//!       * the new variable gets a ".tup" suffix
+//!       * if this is the entry function, we emit a precomputation phase
+//!       * otherwise, we do not: it is the callee's problem.
+//!    * function outputs: same
+//!    * values: same, but value constructors
+//!    * function inputs: since variable names change, function inputs must also change.
+//!       * argument names need a ".tup" suffix
+//!       * argument terms (actual parameters) must be array-free.
+//!
+//! There is a difference in how this pass operates for entry functions and non-entry
+//! functions. For **both**, input variables are re-rewritten to be array-free.
+//!
+//! However, for entry-functions, a term expressing this re-write is added to the precomputation.
 use super::super::visit::RewritePass;
 use crate::ir::term::*;
 
-struct Linearizer;
+struct Linearizer {
+    is_entry: bool,
+}
 
 fn arr_val_to_tup(v: &Value) -> Value {
     match v {
@@ -30,12 +49,40 @@ impl RewritePass for Linearizer {
     ) -> Option<Term> {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
-            Op::Var(name, Sort::Array(..)) => {
-                let precomp = extras::array_to_tuple(orig);
+            Op::Var(name, s) if extras::sort_contains_array(s) => {
+                let precomp = extras::rec_array_to_tuple(orig);
                 let new_name = format!("{}.tup", name);
                 let new_sort = check(&precomp);
-                computation.extend_precomputation(new_name.clone(), precomp);
+                if self.is_entry {
+                    computation.extend_precomputation(new_name.clone(), precomp);
+                }
                 Some(leaf_term(Op::Var(new_name, new_sort)))
+            }
+            Op::Call(name, arg_names, arg_sorts, ret_sort) => {
+                let (new_arg_names, new_arg_sorts): (Vec<String>, Vec<Sort>) = arg_names
+                    .into_iter()
+                    .zip(arg_sorts)
+                    .map(|(name, sort)| {
+                        if extras::sort_contains_array(sort) {
+                            (
+                                format!("{}.tup", name),
+                                extras::rec_array_to_tuple_sort(sort),
+                            )
+                        } else {
+                            (name.clone(), sort.clone())
+                        }
+                    })
+                    .unzip();
+
+                Some(term(
+                    Op::Call(
+                        name.clone(),
+                        new_arg_names,
+                        new_arg_sorts,
+                        extras::rec_array_to_tuple_sort(ret_sort),
+                    ),
+                    rewritten_children(),
+                ))
             }
             Op::Select => {
                 let cs = rewritten_children();
@@ -76,8 +123,8 @@ impl RewritePass for Linearizer {
 }
 
 /// Eliminate arrays using linear scans. See module documentation.
-pub fn linearize(c: &mut Computation) {
-    let mut pass = Linearizer;
+pub fn linearize(c: &mut Computation, is_entry: bool) {
+    let mut pass = Linearizer { is_entry };
     pass.traverse(c);
 }
 
@@ -123,7 +170,7 @@ mod test {
         ];
         let mut c = Computation::default();
         c.outputs.push(t);
-        linearize(&mut c);
+        linearize(&mut c, true);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
     }
@@ -146,7 +193,7 @@ mod test {
         ];
         let mut c = Computation::default();
         c.outputs.push(t);
-        linearize(&mut c);
+        linearize(&mut c, true);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
     }

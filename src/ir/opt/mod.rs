@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use super::term::*;
 
-use log::debug;
+use log::{debug, trace};
 
 #[derive(Clone, Debug)]
 /// An optimization pass
@@ -124,11 +124,10 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
             }
             debug!("{:?} took {:#?}.\n", i, now.elapsed());
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
-            //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());
-            // for t in comp.terms_postorder() {
-            //     println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
-            // }
+            for t in &comp.outputs {
+                trace!("After {:?}: {}", i, extras::Letified(t.clone()));
+            }
 
             opt_fs.insert(name.clone(), comp.clone());
         }

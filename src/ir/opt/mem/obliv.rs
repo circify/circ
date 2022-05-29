@@ -20,6 +20,10 @@
 //!    * If `a[i\v]`, then `a[i\v]` and `a` are equi-oblivious
 //!    * If `ite(c,a,b)`, then `ite(c,a,b)`, `a`, and `b` are equi-oblivious
 //!    * If `a=b`, then `a` and `b` are equi-oblivious
+//!    * If any other term is array-valued, that array is non-oblivious. Including:
+//!        * variables
+//!        * function call outputs
+//!        * tuple fields
 //!
 //! This procedure is iterated to fixpoint.
 //!
@@ -73,7 +77,7 @@ use super::super::visit::*;
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
 
-use log::debug;
+use log::{debug, trace};
 
 struct NonOblivComputer {
     not_obliv: TermSet,
@@ -82,7 +86,7 @@ struct NonOblivComputer {
 impl NonOblivComputer {
     fn mark(&mut self, a: &Term) -> bool {
         if !a.is_const() && self.not_obliv.insert(a.clone()) {
-            debug!("Not obliv: {}", a);
+            trace!("Not obliv: {}", a);
             true
         } else {
             false
@@ -174,10 +178,20 @@ impl ProgressAnalysisPass for NonOblivComputer {
                     false
                 }
             }
-            Op::Tuple => {
-                panic!("Tuple in obliv")
-            }
-            _ => false,
+            // constants are oblivious
+            Op::Const(..) => false,
+            _ => match check(term) {
+                Sort::Array(..) => {
+                    // variables, fields, and function outputs are non-oblivious.
+                    debug_assert!(
+                        matches!(term.op, Op::Call(..) | Op::Var(..) | Op::Field(..)),
+                        "Unexpected array term {}",
+                        term
+                    );
+                    self.mark(term)
+                }
+                _ => false,
+            },
         }
     }
 }
@@ -236,15 +250,17 @@ impl RewritePass for Replacer {
                 .map(term_arr_val_to_tup)
                 .collect()
         };
+        debug!("visiting {}", orig);
         match &orig.op {
-            Op::Var(name, Sort::Array(..)) => {
+            Op::Var(name, s @ Sort::Array(..)) => {
                 if self.should_replace(orig) {
-                    let precomp = extras::array_to_tuple(orig);
+                    let precomp = extras::rec_array_to_tuple(orig);
                     let new_name = format!("{}.tup", name);
                     let new_sort = check(&precomp);
                     computation.extend_precomputation(new_name.clone(), precomp);
                     Some(leaf_term(Op::Var(new_name, new_sort)))
                 } else {
+                    debug!("Not replacing variable {} of sort {}", orig, s);
                     None
                 }
             }

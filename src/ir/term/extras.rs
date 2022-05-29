@@ -163,21 +163,39 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
 }
 
 /// The elements in this array (select terms) as a vector.
-pub fn array_elements(t: &Term) -> Vec<Term> {
+pub fn array_elements<'a>(t: &'a Term) -> impl Iterator<Item = Term> + 'a {
     if let Sort::Array(key_sort, _, size) = check(t) {
         key_sort
             .elems_iter()
             .take(size)
-            .map(|key| term(Op::Select, vec![t.clone(), key]))
-            .collect()
+            .map(move |key| term(Op::Select, vec![t.clone(), key]))
     } else {
         panic!()
     }
 }
 
 /// Wrap an array term as a tuple term.
-pub fn array_to_tuple(t: &Term) -> Term {
-    term(Op::Tuple, array_elements(t))
+pub fn rec_array_to_tuple(t: &Term) -> Term {
+    term(Op::Tuple, array_elements(t).map(|c| rec_array_to_tuple(&c)).collect())
+}
+
+/// Does this sort contain an array?
+pub fn sort_contains_array(s: &Sort) -> bool {
+    match s {
+        Sort::Tuple(ss) => ss.iter().any(sort_contains_array),
+        Sort::Array(..) => true,
+        _ => false,
+    }
+}
+
+/// Given a sort `s` which may contain array constructors, construct a new sort in which the arrays
+/// have been flattened to tuples.
+pub fn rec_array_to_tuple_sort(s: &Sort) -> Sort {
+    match s {
+        Sort::Tuple(ss) => Sort::Tuple(ss.iter().map(rec_array_to_tuple_sort).collect()),
+        Sort::Array(_key, val, sz) => Sort::Tuple(vec![rec_array_to_tuple_sort(val); *sz].into()),
+        _ => s.clone(),
+    }
 }
 
 #[cfg(test)]

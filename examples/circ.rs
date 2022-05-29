@@ -227,7 +227,7 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    Opt::ScalarizeVars,
+                    //Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
