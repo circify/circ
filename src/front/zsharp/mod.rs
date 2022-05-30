@@ -39,7 +39,7 @@ pub struct ZSharpFE;
 
 impl FrontEnd for ZSharpFE {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computation {
+    fn gen(i: Inputs) -> Functions {
         debug!(
             "Starting Z# front-end, field: {}",
             Sort::Field(DFL_T.clone())
@@ -54,9 +54,11 @@ impl FrontEnd for ZSharpFE {
         g.generics_stack_pop();
         g.file_stack_pop();
 
-        std::rc::Rc::try_unwrap(g.into_circify().consume())
-            .unwrap_or_else(|rc| (*rc).clone())
-            .into_inner()
+        Functions::from_computation(
+            std::rc::Rc::try_unwrap(g.into_circify().consume())
+                .unwrap_or_else(|rc| (*rc).clone())
+                .into_inner(),
+        )
     }
 }
 

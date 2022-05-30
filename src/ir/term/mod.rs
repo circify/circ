@@ -298,7 +298,17 @@ impl Display for Op {
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
-            Op::Call(name, _, _, _) => write!(f, "fn:{}", name),
+            Op::Call(name, arg_names, arg_sorts, sort) => {
+                write!(f, "(call {} (", name)?;
+                for arg_name in arg_names {
+                    write!(f, " {}", arg_name)?;
+                }
+                write!(f, ") (")?;
+                for arg_sort in arg_sorts {
+                    write!(f, " {}", arg_sort)?;
+                }
+                write!(f, ") {})", sort)
+            }
         }
     }
 }
@@ -1700,7 +1710,7 @@ pub type PartyId = u8;
 /// Ciphertext/Plaintext identifier
 pub type EncStatus = bool;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
@@ -1801,9 +1811,62 @@ impl ComputationMetadata {
             })
             .collect()
     }
+
+    /// From a list of parties, a list of inputs, and a list of visibilities,
+    /// create a [ComputationMetadata].
+    pub fn from_parts(
+        parties: Vec<String>,
+        mut inputs: FxHashMap<String, Term>,
+        visibilities: FxHashMap<String, String>,
+    ) -> Self {
+        let party_ids: FxHashMap<String, PartyId> = parties
+            .into_iter()
+            .enumerate()
+            .map(|(i, n)| (n, i as u8))
+            .collect();
+        let next_party_id = party_ids.len() as u8;
+        let computation_inputs: FxHashSet<String> = inputs.iter().map(|(i, _)| i.clone()).collect();
+        let input_vis = computation_inputs
+            .iter()
+            .map(|i| {
+                let vis = visibilities.get(i).map(|p| *party_ids.get(p).unwrap());
+                let term = inputs.remove(i).unwrap().clone();
+                (i.clone(), (term, vis))
+            })
+            .collect();
+        ComputationMetadata {
+            party_ids,
+            next_party_id,
+            input_vis,
+            computation_inputs,
+        }
+    }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+impl Display for ComputationMetadata {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "(metadata\n  (")?;
+        for id in 0..self.next_party_id {
+            let party = self.party_ids.iter().find(|(_, i)| **i == id).unwrap().0;
+            write!(f, " {}", party)?;
+        }
+        write!(f, ")\n  (")?;
+        for input in self.input_vis.keys() {
+            let sort = self.input_sort(input);
+            write!(f, " ({} {})", input, sort)?;
+        }
+        write!(f, ")\n  (")?;
+        for (input, (_, vis)) in &self.input_vis {
+            if let Some(id) = vis {
+                let party = self.party_ids.iter().find(|(_, i)| *i == id).unwrap();
+                write!(f, " ({} {})", input, party.0)?;
+            }
+        }
+        write!(f, ")\n)")
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
@@ -1922,12 +1985,15 @@ impl Computation {
 //     pub ret_ty: Vec<Sort>,
 // }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 /// A map of IR computations.
 pub struct Functions {
     /// The computation for each function
     pub computations: BTreeMap<String, Computation>,
 }
+
+/// The canonical name of the entry function.
+pub const ENTRY_NAME: &str = "main";
 
 impl Functions {
     /// Create new empty computations.
@@ -1945,6 +2011,20 @@ impl Functions {
     /// Get the first computation by function name
     pub fn get_comp(&self, name: String) -> Option<&Computation> {
         self.computations.get(&name)
+    }
+
+    /// Create a computation with a single entry function
+    pub fn from_computation(comp: Computation) -> Self {
+        let mut this = Self::new();
+        this.insert(ENTRY_NAME.into(), comp);
+        this
+    }
+
+    /// Get the entry function (named [ENTRY_NAME]) or panic
+    pub fn get_entry(&self) -> &Computation {
+        self.computations
+            .get(ENTRY_NAME)
+            .unwrap_or_else(|| panic!("No entry function: {}", ENTRY_NAME))
     }
 }
 

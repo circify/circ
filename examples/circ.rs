@@ -358,9 +358,10 @@ fn main() {
         }
         #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
+            let c = cs.get_entry();
             if options.frontend.lint_prim_rec {
-                assert_eq!(cs.outputs.len(), 1);
-                match find_model(&cs.outputs[0]) {
+                assert_eq!(c.outputs.len(), 1);
+                match find_model(&c.outputs[0]) {
                     Some(m) => {
                         println!("Not primitive recursive!");
                         for (var, val) in m {

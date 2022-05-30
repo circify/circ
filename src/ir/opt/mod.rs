@@ -49,9 +49,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
     for i in optimizations {
         let mut opt_fs: Functions = fs.clone();
         for (name, comp) in fs.computations.iter_mut() {
-            debug!("Applying: {:?}", i);
-            println!("Applying: {:?} to {}", i, name);
+            debug!("Applying: {:?} to {}", i, name);
             let now = Instant::now();
+            trace!("Before {:?}: {}", i, extras::Letified(term(Op::Tuple, comp.outputs().clone())));
             match i.clone() {
                 Opt::ScalarizeVars => scalarize_vars::scalarize_inputs(comp),
                 Opt::ConstantFold(ignore) => {
@@ -78,7 +78,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     mem::obliv::elim_obliv(comp);
                 }
                 Opt::LinearScan => {
-                    mem::lin::linearize(comp);
+                    mem::lin::linearize(comp, name == ENTRY_NAME);
                 }
                 Opt::FlattenAssertions => {
                     let mut new_outputs = Vec::new();
@@ -125,9 +125,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
             debug!("{:?} took {:#?}.\n", i, now.elapsed());
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             debug!("After {:?}: {} terms", i, comp.terms());
-            for t in &comp.outputs {
-                trace!("After {:?}: {}", i, extras::Letified(t.clone()));
-            }
+            trace!("After {:?}: {}", i, extras::Letified(term(Op::Tuple, comp.outputs().clone())));
 
             opt_fs.insert(name.clone(), comp.clone());
         }
