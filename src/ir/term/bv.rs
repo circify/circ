@@ -253,13 +253,24 @@ impl BitVector {
 
 impl Display for BitVector {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "#b")?;
-        for i in 0..self.width {
-            write!(
-                f,
-                "{}",
-                self.uint.get_bit((self.width - i - 1) as u32) as u8
-            )?;
+        if self.width & 0b11 == 0 {
+            let mut s = String::new();
+            let mut i = self.uint().clone();
+            for _ in 0..(self.width >> 2) {
+                s += &format!("{:x}", i.clone() & 0xf);
+                i >>= 4;
+            }
+            let s: String = s.chars().rev().collect();
+            write!(f, "#x{}", s)?;
+        } else {
+            write!(f, "#b")?;
+            for i in 0..self.width {
+                write!(
+                    f,
+                    "{}",
+                    self.uint.get_bit((self.width - i - 1) as u32) as u8
+                )?;
+            }
         }
         Ok(())
     }
