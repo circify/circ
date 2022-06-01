@@ -174,30 +174,6 @@ pub fn array_elements<'a>(t: &'a Term) -> impl Iterator<Item = Term> + 'a {
     }
 }
 
-/// Wrap an array term as a tuple term.
-pub fn rec_array_to_tuple(t: &Term) -> Term {
-    term(Op::Tuple, array_elements(t).map(|c| rec_array_to_tuple(&c)).collect())
-}
-
-/// Does this sort contain an array?
-pub fn sort_contains_array(s: &Sort) -> bool {
-    match s {
-        Sort::Tuple(ss) => ss.iter().any(sort_contains_array),
-        Sort::Array(..) => true,
-        _ => false,
-    }
-}
-
-/// Given a sort `s` which may contain array constructors, construct a new sort in which the arrays
-/// have been flattened to tuples.
-pub fn rec_array_to_tuple_sort(s: &Sort) -> Sort {
-    match s {
-        Sort::Tuple(ss) => Sort::Tuple(ss.iter().map(rec_array_to_tuple_sort).collect()),
-        Sort::Array(_key, val, sz) => Sort::Tuple(vec![rec_array_to_tuple_sort(val); *sz].into()),
-        _ => s.clone(),
-    }
-}
-
 #[cfg(test)]
 mod test {
 

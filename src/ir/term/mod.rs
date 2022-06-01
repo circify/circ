@@ -1841,6 +1841,12 @@ impl ComputationMetadata {
             computation_inputs,
         }
     }
+
+    /// Remove an input
+    pub fn remove_var(&mut self, name: &str) {
+        self.input_vis.remove(name);
+        self.computation_inputs.remove(name);
+    }
 }
 
 impl Display for ComputationMetadata {
@@ -1929,6 +1935,11 @@ impl Computation {
         };
         let sort = check(&precomp);
         self.new_var(&new_input_var, sort, vis, Some(precomp));
+    }
+
+    /// Change the sort of a variables
+    pub fn remove_var(&mut self, var: &str) {
+        self.metadata.remove_var(var);
     }
 
     /// Assert `s` in the system.

@@ -130,7 +130,7 @@ impl ProgressAnalysisPass for NonOblivComputer {
                     // Imprecisely, mark v as non-obliv iff the array is.
                     progress = self.bi_implicate(term, v) || progress;
                 }
-                if let Op::Const(_) = i.op {
+                if i.is_const() {
                     progress = self.bi_implicate(term, a) || progress;
                 } else {
                     progress = self.mark(a) || progress;
@@ -148,7 +148,7 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let a = &term.cs[0];
                 let i = &term.cs[1];
                 let mut progress = false;
-                if let Op::Const(_) = i.op {
+                if i.is_const() {
                     // pass
                 } else {
                     progress = self.mark(a) || progress;
@@ -206,27 +206,6 @@ impl Replacer {
         !self.not_obliv.contains(a)
     }
 }
-fn arr_val_to_tup(v: &Value) -> Value {
-    match v {
-        Value::Array(Array {
-            default, map, size, ..
-        }) => Value::Tuple({
-            let mut vec = vec![arr_val_to_tup(default); *size].into_boxed_slice();
-            for (i, v) in map {
-                vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
-            }
-            vec
-        }),
-        v => v.clone(),
-    }
-}
-
-fn term_arr_val_to_tup(a: Term) -> Term {
-    match &a.op {
-        Op::Const(v @ Value::Array(..)) => leaf_term(Op::Const(arr_val_to_tup(v))),
-        _ => a,
-    }
-}
 
 #[track_caller]
 fn get_const(t: &Term) -> usize {
@@ -247,14 +226,14 @@ impl RewritePass for Replacer {
         let get_cs = || -> Vec<Term> {
             rewritten_children()
                 .into_iter()
-                .map(term_arr_val_to_tup)
+                .map(super::term_arr_val_to_tup)
                 .collect()
         };
         debug!("visiting {}", orig);
         match &orig.op {
             Op::Var(name, s @ Sort::Array(..)) => {
                 if self.should_replace(orig) {
-                    let precomp = extras::rec_array_to_tuple(orig);
+                    let precomp = super::array_to_tuple(orig);
                     let new_name = format!("{}.tup", name);
                     let new_sort = check(&precomp);
                     computation.extend_precomputation(new_name.clone(), precomp);
