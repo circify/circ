@@ -17,13 +17,11 @@
 //!    * function outputs: same as variables
 //!    * values: are re-built
 //!    * function inputs: un-modified
-//! 
+//!
 use super::super::visit::RewritePass;
 use crate::ir::term::*;
 
-struct Linearizer {
-    is_entry: bool,
-}
+struct Linearizer;
 
 impl RewritePass for Linearizer {
     fn visit<F: Fn() -> Vec<Term>>(
@@ -34,45 +32,20 @@ impl RewritePass for Linearizer {
     ) -> Option<Term> {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(super::arr_val_to_tup(v)))),
-            Op::Var(name, s) if super::sort_contains_array(s) => {
-                let precomp = super::array_to_tuple(orig);
-                let new_name = format!("{}.tup", name);
-                let new_sort = check(&precomp);
-                if self.is_entry {
-                    computation.extend_precomputation(new_name.clone(), precomp);
-                } else {
-                    let vis = computation.metadata.get_input_visibility(name);
-                    computation.remove_var(name);
-                    computation.new_var(&new_name, new_sort.clone(), vis, None);
+            Op::Var(_name, s) if super::sort_contains_array(s) => Some(super::array_to_tuple(orig)),
+            Op::Call(_name, _arg_names, arg_sorts, ret_sort) => {
+                let mut args = rewritten_children();
+                for (a, s) in args.iter_mut().zip(arg_sorts) {
+                    if super::sort_contains_array(s) {
+                        *a = super::resort(a, s)
+                    }
                 }
-                let new_term = leaf_term(Op::Var(new_name, new_sort));
-                Some(new_term)
-            }
-            Op::Call(name, arg_names, arg_sorts, ret_sort) => {
-                let (new_arg_names, new_arg_sorts): (Vec<String>, Vec<Sort>) = arg_names
-                    .into_iter()
-                    .zip(arg_sorts)
-                    .map(|(name, sort)| {
-                        if super::sort_contains_array(sort) {
-                            (
-                                format!("{}.tup", name),
-                                super::array_to_tuple_sort(sort),
-                            )
-                        } else {
-                            (name.clone(), sort.clone())
-                        }
-                    })
-                    .unzip();
-
-                Some(term(
-                    Op::Call(
-                        name.clone(),
-                        new_arg_names,
-                        new_arg_sorts,
-                        super::array_to_tuple_sort(ret_sort),
-                    ),
-                    rewritten_children(),
-                ))
+                let out = term(orig.op.clone(), args);
+                Some(if super::sort_contains_array(ret_sort) {
+                    super::array_to_tuple(&out)
+                } else {
+                    out
+                })
             }
             Op::Select => {
                 let cs = rewritten_children();
@@ -129,8 +102,8 @@ impl RewritePass for Linearizer {
 }
 
 /// Eliminate arrays using linear scans. See module documentation.
-pub fn linearize(c: &mut Computation, is_entry: bool) {
-    let mut pass = Linearizer { is_entry };
+pub fn linearize(c: &mut Computation) {
+    let mut pass = Linearizer;
     pass.traverse(c);
 }
 
@@ -160,25 +133,28 @@ mod test {
 
     #[test]
     fn select_ite_stores() {
-        let z = term![Op::Const(Value::Array(Array::new(
-            Sort::BitVector(4),
-            Box::new(Sort::BitVector(4).default_value()),
-            Default::default(),
-            6
-        )))];
-        let t = term![Op::Select;
-            term![Op::Ite;
-              leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
-            ],
-            bv_lit(3, 4)
-        ];
-        let mut c = Computation::default();
-        c.outputs.push(t);
-        linearize(&mut c, true);
-        assert!(array_free(&c.outputs[0]));
-        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
+        let before = text::parse_computation(b"
+        (computation
+          (metadata () () ())
+          (let ((z (#a (bv 4) #x0 6 ())))
+            (select (ite true (store z #x3 #x1) (store z #x2 #x1)) #x3)
+          )
+        )",
+        );
+        let expected = text::parse_computation(
+            b"
+        (computation
+          (metadata () () ())
+          (let (
+          (z (#t #x0 #x0 #x0 #x0 #x0 #x0))
+          )
+            ((field 3) (ite true ((update 3) z #x1) ((update 2) z #x1)))
+          )
+        )",
+        );
+        let mut after = before.clone();
+        linearize(&mut after);
+        assert_eq!(after, expected);
     }
 
     #[test]
@@ -199,9 +175,9 @@ mod test {
         ];
         let mut c = Computation::default();
         c.outputs.push(t);
-        linearize(&mut c, true);
+        linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
-        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
+        assert_eq!(1, count_ites(&c.outputs[0]));
     }
 
     #[test]
@@ -217,13 +193,15 @@ mod test {
         let expected = text::parse_computation(
             b"
         (computation
-          (metadata () ((A.tup (tuple (bv 8) (bv 8) (bv 8)))) ())
-          (bvadd ((field 0) A.tup) ((field 1) A.tup))
+          (metadata () ((A (array (bv 8) (bv 8) 3))) ())
+          (let ((tupin (tuple (select A #x00) (select A #x01) (select A #x02))))
+            (bvadd ((field 0) tupin) ((field 1) tupin))
+          )
         )
         ",
         );
         let mut after = before.clone();
-        linearize(&mut after, false);
+        linearize(&mut after);
         assert_eq!(after, expected);
     }
 
@@ -239,15 +217,47 @@ mod test {
         );
         let expected = text::parse_computation(b"
         (computation
-          (metadata () ((a (bv 8)) (A.tup (tuple (bv 8) (bv 8) (bv 8)))) ())
-          (bvadd
-            ((field 0) A.tup)
-            ((field 1) A.tup)
-            (ite (= a #b00000010) ((field 2) A.tup) (ite (= a #b00000001) ((field 1) A.tup) ((field 0) A.tup))))
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (let ((tupin (tuple (select A #x00) (select A #x01) (select A #x02))))
+            (bvadd
+              ((field 0) tupin)
+              ((field 1) tupin)
+              (ite (= a #b00000010) ((field 2) tupin) (ite (= a #b00000001) ((field 1) tupin) ((field 0) tupin))))
+          )
         )
         ");
         let mut after = before.clone();
-        linearize(&mut after, false);
+        linearize(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn var_tuple_in_array() {
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((A (array (bv 8) (tuple (bv 8) bool) 3))) ())
+          (or ((field 1) (select A #x00))
+              (= ((field 0) (select A #x01))
+                 ((field 0) (select A #x02))))
+        )",
+        );
+        let expected = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((A (array (bv 8) (tuple (bv 8) bool) 3))) ())
+          (let ((tupin
+            (tuple
+              (tuple ((field 0) (select A #x00)) ((field 1) (select A #x00)))
+              (tuple ((field 0) (select A #x01)) ((field 1) (select A #x01)))
+              (tuple ((field 0) (select A #x02)) ((field 1) (select A #x02))))))
+          (or ((field 1) ((field 0) tupin))
+              (= ((field 0) ((field 1) tupin))
+                 ((field 0) ((field 2) tupin)))))
+        )",
+        );
+        let mut after = before.clone();
+        linearize(&mut after);
         assert_eq!(after, expected);
     }
 }

@@ -78,7 +78,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     mem::obliv::elim_obliv(comp);
                 }
                 Opt::LinearScan => {
-                    mem::lin::linearize(comp, name == ENTRY_NAME);
+                    mem::lin::linearize(comp);
                 }
                 Opt::FlattenAssertions => {
                     let mut new_outputs = Vec::new();

@@ -43,7 +43,7 @@ fn array_to_tuple(t: &Term) -> Term {
                 .map(|c| array_to_tuple(&c))
                 .collect(),
         ),
-        Sort::Tuple(..) => term(Op::Tuple, t.cs.iter().map(array_to_tuple).collect()),
+        Sort::Tuple(..) => term(Op::Tuple, extras::tuple_elements(t).map(|c| array_to_tuple(&c)).collect()),
         _ => t.clone(),
     }
 }
@@ -64,5 +64,23 @@ fn array_to_tuple_sort(s: &Sort) -> Sort {
         Sort::Tuple(ss) => Sort::Tuple(ss.iter().map(array_to_tuple_sort).collect()),
         Sort::Array(_key, val, sz) => Sort::Tuple(vec![array_to_tuple_sort(val); *sz].into()),
         _ => s.clone(),
+    }
+}
+
+/// Given a term of tuples, re-shape into sort `s`.
+fn resort(t: &Term, s: &Sort) -> Term {
+    match s {
+        Sort::Array(k, v, sz) => extras::tuple_or_array_elements(t).zip(k.elems_iter()).fold(
+            s.default_term(),
+            |acc, (t, i)| term![Op::Store; acc, i, resort(&t, v)],
+        ),
+        Sort::Tuple(ss) => term(
+            Op::Tuple,
+            extras::tuple_elements(t)
+                .zip(ss.iter())
+                .map(|(t, s)| resort(&t, s))
+                .collect(),
+        ),
+        _ => t.clone(),
     }
 }

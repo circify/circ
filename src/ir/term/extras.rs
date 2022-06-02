@@ -174,6 +174,24 @@ pub fn array_elements<'a>(t: &'a Term) -> impl Iterator<Item = Term> + 'a {
     }
 }
 
+/// The elements in this tuple (field terms) as a vector.
+pub fn tuple_elements<'a>(t: &'a Term) -> impl Iterator<Item = Term> + 'a {
+    if let Sort::Tuple(ts) = check(t) {
+        (0..ts.len()).map(move |i| term(Op::Field(i), vec![t.clone()]))
+    } else {
+        panic!()
+    }
+}
+
+/// The elements in this tuple or array.
+pub fn tuple_or_array_elements<'a>(t: &'a Term) -> impl Iterator<Item = Term> + 'a {
+    match check(t) {
+        Sort::Tuple(..) => tuple_elements(t).collect::<Vec<_>>().into_iter(),
+        Sort::Array(..) => array_elements(t).collect::<Vec<_>>().into_iter(),
+        _ => panic!(),
+    }
+}
+
 #[cfg(test)]
 mod test {
 

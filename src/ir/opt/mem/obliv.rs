@@ -218,7 +218,7 @@ fn get_const(t: &Term) -> usize {
 impl RewritePass for Replacer {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
-        computation: &mut Computation,
+        _computation: &mut Computation,
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
@@ -231,18 +231,6 @@ impl RewritePass for Replacer {
         };
         debug!("visiting {}", orig);
         match &orig.op {
-            Op::Var(name, s @ Sort::Array(..)) => {
-                if self.should_replace(orig) {
-                    let precomp = super::array_to_tuple(orig);
-                    let new_name = format!("{}.tup", name);
-                    let new_sort = check(&precomp);
-                    computation.extend_precomputation(new_name.clone(), precomp);
-                    Some(leaf_term(Op::Var(new_name, new_sort)))
-                } else {
-                    debug!("Not replacing variable {} of sort {}", orig, s);
-                    None
-                }
-            }
             Op::Select => {
                 // we mark the selected term as non-obliv...
                 if self.should_replace(orig) {
@@ -290,7 +278,11 @@ pub fn elim_obliv(t: &mut Computation) {
     let mut replace_pass = Replacer {
         not_obliv: prop_pass.not_obliv,
     };
-    <Replacer as RewritePass>::traverse(&mut replace_pass, t)
+    let initial_output_sorts: Vec<Sort> = t.outputs.iter().map(check).collect();
+    <Replacer as RewritePass>::traverse(&mut replace_pass, t);
+    for (o, s) in t.outputs.iter_mut().zip(initial_output_sorts) {
+        *o = super::resort(o, &s)
+    }
 }
 
 #[cfg(test)]
@@ -407,4 +399,89 @@ mod test {
         assert!(!array_free(&c.outputs[0]));
         assert!(array_free(&c.outputs[1]));
     }
+
+    #[test]
+    fn ignore_vars() {
+        let before = text::parse_computation(b"
+        (computation
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (bvadd
+            (select A #x00)
+            (select (store (#a (bv 8) #x00 4 ()) #x00 a) #x00)
+            (select (store (#a (bv 8) #x01 5 ()) #x00 a) #x01)
+          )
+        )");
+        let expected = text::parse_computation(b"
+        (computation
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (bvadd
+            (select A #x00)
+            ((field 0) ((update 0) (#t  #x00 #x00 #x00 #x00) a))
+            ((field 1) ((update 0) (#t  #x01 #x01 #x01 #x01 #x01) a))
+          )
+        )");
+        let mut after = before.clone();
+        elim_obliv(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn preserve_output_type() {
+        let before = text::parse_computation(b"
+        (computation
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (store
+            (store (#a (bv 8) #x00 3 ()) #x01 (select A #x00))
+            #x00 #x05
+          )
+        )");
+        let expected = text::parse_computation(b"
+        (computation
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (let ((tupout
+            ((update 0) 
+              ((update 1)
+                (#t #x00 #x00 #x00)
+                (select A #x00)
+              )
+              #x05
+            )
+            ))
+          (store
+            (store
+              (store (#a (bv 8) #x00 3 ()) #x00 ((field 0) tupout))
+              #x01 ((field 1) tupout)
+            )
+            #x02 ((field 2) tupout)
+          )
+          )
+        )");
+        let mut after = before.clone();
+        elim_obliv(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn identity_fn() {
+        let before = text::parse_computation(b"
+        (computation
+          (metadata () ((A (array (bv 8) (bv 8) 3))) ())
+          A
+        )");
+        let expected = text::parse_computation(b"
+        (computation
+          (metadata () ((A (array (bv 8) (bv 8) 3))) ())
+          (store
+            (store
+                (store
+                    (#a (bv 8) #x00 3 ( ))
+                    #x00 (select A #x00))
+                #x01 (select A #x01))
+            #x02 (select A #x02))
+        )");
+        let mut after = before.clone();
+        elim_obliv(&mut after);
+        assert_eq!(after, expected);
+    }
+
 }
