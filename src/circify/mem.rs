@@ -6,7 +6,6 @@ use std::collections::HashMap;
 /// Identifier for an Allocation block in memory
 pub type AllocId = usize;
 
-#[derive(Clone, Debug)]
 struct Alloc {
     addr_width: usize,
     val_width: usize,
@@ -29,7 +28,6 @@ impl Alloc {
     }
 }
 
-#[derive(Clone, Debug)]
 /// Manages a circuit-embedded stack.
 pub struct MemManager {
     allocs: HashMap<AllocId, Alloc>,
@@ -116,6 +114,15 @@ impl MemManager {
     pub fn replace(&mut self, id: AllocId, val: Term) {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         alloc.cur_term = val;
+    }
+
+    /// Get the stored term in the allocation `id`
+    pub fn term(&self, id: AllocId) -> Term {
+        self.allocs
+            .get(&id)
+            .expect("Missing allocation")
+            .cur_term
+            .clone()
     }
 
     /// Is `offset` in bounds for the allocation `id`?

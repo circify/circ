@@ -141,7 +141,7 @@ pub enum Op {
     /// Map (operation)
     Map(Box<Op>),
 
-    /// Call a function (name, argument names, argument sorts, return sorts)
+    /// Call a function (name, argument names, argument sorts, return sort)
     Call(String, Vec<String>, Vec<Sort>, Sort),
 }
 

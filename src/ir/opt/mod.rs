@@ -3,7 +3,7 @@ pub mod binarize;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
-pub mod inline_calls;
+pub mod link;
 pub mod mem;
 pub mod scalarize_vars;
 pub mod sha;
@@ -60,30 +60,12 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                     for a in &mut comp.outputs {
                         let n = Instant::now();
-                        // println!("a: {}", a.op);
-                        let b = a.clone();
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
-                        // println!("{:#?}", n.elapsed());
-                        // if n.elapsed().as_secs() > 1 {
-                        //     println!("OVER 1 second");
-                        // // Operator Count
-                        // let mut op_map: HashMap<Op, usize> = HashMap::new();
-                        // for t in PostOrderIter::new(b.clone()) {
-                        //     println!("t.op: {}", t.op);
-                        //     println!("t.cs.len(): {}", t.cs.len());
-                        //     // Add op
-                        //     if !op_map.contains_key(&t.op) {
-                        //         op_map.insert(t.op.clone(), 0);
-                        //     }
-                        //     op_map.insert(t.op.clone(), op_map.get(&t.op).unwrap() + 1);
-                        // }
-                        // println!("{:#?}", op_map);
-                        // println!("b: {}", b);
-                        // }
+                        println!("{:#?}", n.elapsed());
                     }
                     println!("cache size per term: {}", cache.len());
                 }
@@ -131,20 +113,23 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     inline::inline(&mut comp.outputs, &public_inputs);
                 }
                 Opt::InlineCalls => {
-                    let mut cache = inline_calls::Cache::new();
+                    let mut cache = link::Cache::new();
                     for a in &mut comp.outputs {
-                        *a = inline_calls::inline_function_calls(a.clone(), &mut cache, &opt_fs);
+                        *a = link::link_function_calls(a.clone(), &mut cache, &opt_fs);
                     }
                 }
                 Opt::Tuple => {
                     tuple::eliminate_tuples(comp);
                 }
             }
-            println!("{:?} took {} seconds.\n", i, now.elapsed().as_secs());
-
+            debug!("{:?} took {:#?}.\n", i, now.elapsed());
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, comp.terms());
+            // for t in comp.terms_postorder() {
+            //     println!("post t, ty: {}\n{}\n{}\n", t, check(&t), check_rec(&t));
+            // }
+
             opt_fs.insert(name.clone(), comp.clone());
         }
         fs = opt_fs;

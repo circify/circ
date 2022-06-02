@@ -2,8 +2,6 @@
 use crate::circify::CirCtx;
 use crate::front::c::term::CTerm;
 use crate::front::c::term::CTermData;
-use crate::front::c::Circify;
-use crate::front::c::Ct;
 use crate::front::field_list::FieldList;
 use crate::ir::term::*;
 
@@ -120,12 +118,6 @@ impl Ty {
                 }
             }
             Self::Ptr(_s, _ty) => {
-                // let mut mem = ctx.mem.borrow_mut();
-                // let id = mem.zero_allocate(*s, 32, ty.num_bits());
-                // CTerm {
-                //     term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
-                //     udef: false,
-                // }
                 unimplemented!("Unknown array size");
             }
             Self::Struct(_name, fs) => {
