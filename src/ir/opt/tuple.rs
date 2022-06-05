@@ -40,7 +40,7 @@
 //! * `(eq c t f) -> (and (list (bimap (= * *) T F)))`
 //! * `(tuple [t_i]_i) -> (tuple [T_i]_i)`
 //! * `(field_j t) -> get T j`
-//! * `(update_j t) -> update T j V`
+//! * `(update_j t v) -> update T j V`
 //! * `(select a i) -> map (select * I) A`
 //! * `(store a i v) -> bimap (store * I *) A V`
 //! * `(OTHER [t_i]_i) -> (OTHER [T_i]_i)`
@@ -61,11 +61,13 @@
 
 use crate::ir::term::{
     bv_lit, check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap,
-    Value, AND,
+    TermSet, Value, AND,
 };
 use std::collections::BTreeMap;
 
 use itertools::zip_eq;
+
+use log::trace;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum TupleTree {
@@ -152,6 +154,12 @@ impl TupleTree {
             }
         }
     }
+    fn to_term(&self) -> Term {
+        match &self {
+            TupleTree::NonTuple(t) => t.clone(),
+            TupleTree::Tuple(t) => term(Op::Tuple, t.iter().map(TupleTree::to_term).collect()),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -229,19 +237,14 @@ fn untuple_value(v: &Value) -> Value {
 
 #[allow(dead_code)]
 fn tuple_free(t: Term) -> bool {
-    PostOrderIter::new(t).all(|c| {
-        if let Op::Call(..) = c.op {
-            matches!(check(&c), Sort::Tuple(..))
-        } else {
-            !matches!(check(&c), Sort::Tuple(..))
-        }
-    })
+    PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
 }
 
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
     let mut lifted: TermMap<TupleTree> = TermMap::new();
     for t in cs.terms_postorder() {
+        trace!("b4: {}", t);
         let mut cs: Vec<TupleTree> =
             t.cs.iter()
                 .map(|c| lifted.get(c).unwrap().clone())
@@ -287,19 +290,21 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 t.update(*i, &v)
             }
             Op::Tuple => TupleTree::Tuple(cs.into()),
+            Op::Call(..) => {
+                // We don't require function arguments to be non-tuples.
+                let args: Vec<Term> = cs.iter().map(TupleTree::to_term).collect();
+                TupleTree::NonTuple(term(t.op.clone(), args))
+            }
             _ => TupleTree::NonTuple(term(
                 t.op.clone(),
                 cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
             )),
         };
+        trace!("{} -> {:?}", t, new_t);
         lifted.insert(t, new_t);
     }
     cs.outputs = std::mem::take(&mut cs.outputs)
         .into_iter()
         .flat_map(|o| lifted.get(&o).unwrap().clone().flatten())
         .collect();
-    #[cfg(debug_assertions)]
-    for o in &cs.outputs {
-        assert!(tuple_free(o.clone()));
-    }
 }

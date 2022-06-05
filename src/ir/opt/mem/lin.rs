@@ -1,25 +1,27 @@
 //! Linear Memory implementation.
 //!
 //! The idea is to replace each array with a tuple, and use ITEs to account for variable indexing.
+//!
+//! At a sort level, the following rewrites are performed:
+//!
+//!    * lowercase letters denote un-rewritten entities, and uppercase letter
+//!      denote post-rewrite entities.
+//!    * `(tuple s1 ... sn)` -> `(tuple S1 ... Sn)`
+//!    * `(array k v N)` -> `(tuple (repeat N V))`
+//!    * `s` -> `s`
+//!
+//! Notes about different classes of terms:
+//!
+//!    * variables: arrays are *fully read* and re-assembled as tuples
+//!      * the original variable is *not modified*
+//!    * function outputs: same as variables
+//!    * values: are re-built
+//!    * function inputs: un-modified
+//!
 use super::super::visit::RewritePass;
 use crate::ir::term::*;
 
 struct Linearizer;
-
-fn arr_val_to_tup(v: &Value) -> Value {
-    match v {
-        Value::Array(Array {
-            default, map, size, ..
-        }) => Value::Tuple({
-            let mut vec = vec![arr_val_to_tup(default); *size].into_boxed_slice();
-            for (i, v) in map {
-                vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
-            }
-            vec
-        }),
-        v => v.clone(),
-    }
-}
 
 impl RewritePass for Linearizer {
     fn visit<F: Fn() -> Vec<Term>>(
@@ -29,13 +31,21 @@ impl RewritePass for Linearizer {
         rewritten_children: F,
     ) -> Option<Term> {
         match &orig.op {
-            Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
-            Op::Var(name, Sort::Array(..)) => {
-                let precomp = extras::array_to_tuple(orig);
-                let new_name = format!("{}.tup", name);
-                let new_sort = check(&precomp);
-                computation.extend_precomputation(new_name.clone(), precomp);
-                Some(leaf_term(Op::Var(new_name, new_sort)))
+            Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(super::arr_val_to_tup(v)))),
+            Op::Var(_name, s) if super::sort_contains_array(s) => Some(super::array_to_tuple(orig)),
+            Op::Call(_name, _arg_names, arg_sorts, ret_sort) => {
+                let mut args = rewritten_children();
+                for (a, s) in args.iter_mut().zip(arg_sorts) {
+                    if super::sort_contains_array(s) {
+                        *a = super::resort(a, s)
+                    }
+                }
+                let out = term(orig.op.clone(), args);
+                Some(if super::sort_contains_array(ret_sort) {
+                    super::array_to_tuple(&out)
+                } else {
+                    out
+                })
             }
             Op::Select => {
                 let cs = rewritten_children();
@@ -43,11 +53,19 @@ impl RewritePass for Linearizer {
                 let tup = &cs[0];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
-                    let first = fields.next().unwrap();
-                    Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
-                        term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
-                    }))
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx)
+                            .expect("non-integer constant")
+                            .to_usize()
+                            .expect("non-usize constant");
+                        Some(term![Op::Field(idx_usize); tup.clone()])
+                    } else {
+                        let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
+                        let first = fields.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
+                            term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
+                        }))
+                    }
                 } else {
                     unreachable!()
                 }
@@ -59,12 +77,20 @@ impl RewritePass for Linearizer {
                 let val = &cs[2];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut updates =
-                        (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
-                    let first = updates.next().unwrap();
-                    Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
-                        term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
-                    }))
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx)
+                            .expect("non-integer constant")
+                            .to_usize()
+                            .expect("non-usize constant");
+                        Some(term![Op::Update(idx_usize); tup.clone(), val.clone()])
+                    } else {
+                        let mut updates =
+                            (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
+                        let first = updates.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
+                            term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
+                        }))
+                    }
                 } else {
                     unreachable!()
                 }
@@ -107,25 +133,28 @@ mod test {
 
     #[test]
     fn select_ite_stores() {
-        let z = term![Op::Const(Value::Array(Array::new(
-            Sort::BitVector(4),
-            Box::new(Sort::BitVector(4).default_value()),
-            Default::default(),
-            6
-        )))];
-        let t = term![Op::Select;
-            term![Op::Ite;
-              leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
-            ],
-            bv_lit(3, 4)
-        ];
-        let mut c = Computation::default();
-        c.outputs.push(t);
-        linearize(&mut c);
-        assert!(array_free(&c.outputs[0]));
-        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
+        let before = text::parse_computation(b"
+        (computation
+          (metadata () () ())
+          (let ((z (#a (bv 4) #x0 6 ())))
+            (select (ite true (store z #x3 #x1) (store z #x2 #x1)) #x3)
+          )
+        )",
+        );
+        let expected = text::parse_computation(
+            b"
+        (computation
+          (metadata () () ())
+          (let (
+          (z (#t #x0 #x0 #x0 #x0 #x0 #x0))
+          )
+            ((field 3) (ite true ((update 3) z #x1) ((update 2) z #x1)))
+          )
+        )",
+        );
+        let mut after = before.clone();
+        linearize(&mut after);
+        assert_eq!(after, expected);
     }
 
     #[test]
@@ -148,6 +177,87 @@ mod test {
         c.outputs.push(t);
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
-        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
+        assert_eq!(1, count_ites(&c.outputs[0]));
+    }
+
+    #[test]
+    fn oblivious() {
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((A (array (bv 8) (bv 8) 3))) ())
+          (bvadd (select A #x00) (select A #x01))
+        )
+        ",
+        );
+        let expected = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((A (array (bv 8) (bv 8) 3))) ())
+          (let ((tupin (tuple (select A #x00) (select A #x01) (select A #x02))))
+            (bvadd ((field 0) tupin) ((field 1) tupin))
+          )
+        )
+        ",
+        );
+        let mut after = before.clone();
+        linearize(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn semi_oblivious() {
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (bvadd (select A #x00) (select A #x01) (select A a))
+        )
+        ",
+        );
+        let expected = text::parse_computation(b"
+        (computation
+          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
+          (let ((tupin (tuple (select A #x00) (select A #x01) (select A #x02))))
+            (bvadd
+              ((field 0) tupin)
+              ((field 1) tupin)
+              (ite (= a #b00000010) ((field 2) tupin) (ite (= a #b00000001) ((field 1) tupin) ((field 0) tupin))))
+          )
+        )
+        ");
+        let mut after = before.clone();
+        linearize(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn var_tuple_in_array() {
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((A (array (bv 8) (tuple (bv 8) bool) 3))) ())
+          (or ((field 1) (select A #x00))
+              (= ((field 0) (select A #x01))
+                 ((field 0) (select A #x02))))
+        )",
+        );
+        let expected = text::parse_computation(
+            b"
+        (computation
+          (metadata () ((A (array (bv 8) (tuple (bv 8) bool) 3))) ())
+          (let ((tupin
+            (tuple
+              (tuple ((field 0) (select A #x00)) ((field 1) (select A #x00)))
+              (tuple ((field 0) (select A #x01)) ((field 1) (select A #x01)))
+              (tuple ((field 0) (select A #x02)) ((field 1) (select A #x02))))))
+          (or ((field 1) ((field 0) tupin))
+              (= ((field 0) ((field 1) tupin))
+                 ((field 0) ((field 2) tupin)))))
+        )",
+        );
+        let mut after = before.clone();
+        linearize(&mut after);
+        assert_eq!(after, expected);
     }
 }

@@ -237,7 +237,7 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    Opt::ScalarizeVars,
+                    //Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
@@ -261,12 +261,13 @@ fn main() {
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
-                Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold(Box::new([])),
                 Opt::Flatten,
-                Opt::Inline,
+                Opt::InlineCalls,
+                // Now we can scalarize the entry interface
+                Opt::ScalarizeVars,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
                 Opt::ConstantFold(Box::new([])),
@@ -320,7 +321,9 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+            let main = cs.get_entry();
+            let (r1cs, mut prover_data, verifier_data) =
+                to_r1cs(main.clone(), FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
@@ -361,23 +364,24 @@ fn main() {
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
-            // let ilp = to_ilp(cs);
-            // let solver_result = ilp.solve(default_solver);
-            // let (max, vars) = solver_result.expect("ILP could not be solved");
-            // println!("Max value: {}", max.round() as u64);
-            // println!("Assignment:");
-            // for (var, val) in &vars {
-            //     println!("  {}: {}", var, val.round() as u64);
-            // }
-            // let mut f = File::create("assignment.txt").unwrap();
-            // for (var, val) in &vars {
-            //     if var.contains("f0") {
-            //         let i = var.find("f0").unwrap();
-            //         let s = &var[i + 8..];
-            //         let e = s.find('_').unwrap();
-            //         writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
-            //     }
-            // }
+            let main = cs.get_entry();
+            let inputs_and_sorts: HashMap<_, _> = main
+                .metadata
+                .input_vis
+                .iter()
+                .map(|(name, (sort, _))| (name.clone(), check(sort)))
+                .collect();
+            let ilp = to_ilp(main.clone());
+            let solver_result = ilp.solve(default_solver);
+            let (max, vars) = solver_result.expect("ILP could not be solved");
+            println!("Max value: {}", max.round() as u64);
+            println!("Assignment:");
+            for (var, val) in &vars {
+                println!("  {}: {}", var, val.round() as u64);
+            }
+            let values = assignment_to_values(&vars, &inputs_and_sorts);
+            let values_as_str = serialize_value_map(&values);
+            std::fs::write("assignment.txt", values_as_str).unwrap();
         }
         #[cfg(not(feature = "lp"))]
         Backend::Ilp { .. } => {
@@ -385,9 +389,10 @@ fn main() {
         }
         #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
+            let c = cs.get_entry();
             if options.frontend.lint_prim_rec {
-                assert_eq!(cs.outputs.len(), 1);
-                match find_model(&cs.outputs[0]) {
+                assert_eq!(c.outputs.len(), 1);
+                match find_model(&c.outputs[0]) {
                     Some(m) => {
                         println!("Not primitive recursive!");
                         for (var, val) in m {
