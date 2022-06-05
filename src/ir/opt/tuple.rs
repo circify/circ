@@ -242,7 +242,6 @@ fn tuple_free(t: Term) -> bool {
 pub fn eliminate_tuples(cs: &mut Computation) {
     let mut lifted: TermMap<TupleTree> = TermMap::new();
     for t in cs.terms_postorder() {
-        println!("tuples: {}", t);
         let mut cs: Vec<TupleTree> =
             t.cs.iter()
                 .map(|c| lifted.get(c).unwrap().clone())

@@ -833,10 +833,6 @@ impl CGen {
                 // create call terms
                 let (name, arg_names, arg_sorts, ret_names, ret_sorts) =
                     fn_info_to_defs(&f, &arg_terms);
-                println!("arg names: {:#?}", arg_names);
-                println!("arg sorts: {:#?}", arg_sorts);
-                println!("args: {:#?}", args);
-                println!("arg_terms: {}", &args[0].term.term(self.circ.cir_ctx()));
                 for a in args.iter() {
                     println!("type check: {}", check(&a.term.term(self.circ.cir_ctx())));
                     println!(
