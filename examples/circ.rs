@@ -283,32 +283,6 @@ fn main() {
             ],
         ),
     };
-
-    let mut tmp: BTreeMap<u64, Term> = BTreeMap::new();
-
-    for (name, comp) in cs.computations.iter() {
-        for t in &comp.outputs {
-            for t1 in PostOrderIter::new(t.clone()) {
-                let uid = t1.uid();
-                tmp.insert(uid, t1.clone());
-            }
-        }
-        // println!("functions: {}", name);
-        // for t in &comp.outputs {
-        //     println!("function term: {}, {}", t, t.uid());
-        //     for t1 in PostOrderIter::new(t.clone()) {
-        //         println!("term:{}", t1.uid());
-        //         for c in t1.cs.iter() {
-        //             println!("children: {}", c.uid());
-        //         }
-        //         println!();
-        //     }
-        //     println!();
-        // }
-        // println!("\n");
-    }
-    // println!("uids: {:#?}", tmp);
-
     println!("Done with IR optimization");
 
     match options.backend {

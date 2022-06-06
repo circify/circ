@@ -4,6 +4,8 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
+use rug::Integer;
+
 use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
@@ -24,22 +26,26 @@ const PUBLIC: u8 = 2;
 
 #[derive(Clone)]
 enum EmbeddedTerm {
-    Bool(String),
-    Bv(String),
-    Tuple(String),
+    Bool,
+    Bv,
+    Array,
+    Tuple,
 }
 
 impl fmt::Display for EmbeddedTerm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            EmbeddedTerm::Bool(s) => {
-                write!(f, "bool({})", s)
+            EmbeddedTerm::Bool => {
+                write!(f, "bool")
             }
-            EmbeddedTerm::Bv(s) => {
-                write!(f, "bv({})", s)
+            EmbeddedTerm::Bv => {
+                write!(f, "bv")
             }
-            EmbeddedTerm::Tuple(s) => {
-                write!(f, "Tuple({})", s)
+            EmbeddedTerm::Array => {
+                write!(f, "array")
+            }
+            EmbeddedTerm::Tuple => {
+                write!(f, "tuple")
             }
         }
     }
@@ -53,7 +59,7 @@ struct ToABY<'a> {
     curr_comp: String,
     inputs: TermSet,
     cache: TermMap<EmbeddedTerm>,
-    term_to_share_cnt: TermMap<i32>,
+    term_to_shares: TermMap<Vec<i32>>,
     share_cnt: i32,
     bytecode_output: Vec<String>,
     share_map_output: Vec<String>,
@@ -66,7 +72,7 @@ impl Drop for ToABY<'_> {
         // drop(take(&mut self.md));
         self.inputs.clear();
         self.cache.clear();
-        self.term_to_share_cnt.clear();
+        self.term_to_shares.clear();
         // self.s_map.clear();
         // clean up
         garbage_collect();
@@ -83,7 +89,7 @@ impl<'a> ToABY<'a> {
             curr_comp: "".to_string(),
             inputs: TermSet::new(),
             cache: TermMap::new(),
-            term_to_share_cnt: TermMap::new(),
+            term_to_shares: TermMap::new(),
             share_cnt: 0,
             bytecode_output: Vec::new(),
             share_map_output: Vec::new(),
@@ -91,25 +97,36 @@ impl<'a> ToABY<'a> {
     }
 
     fn map_terms_to_shares(&mut self) {
-        for (_, comp) in self.fs.computations.iter() {
+        let computations = self.fs.computations.clone();
+        for (_, comp) in computations.iter() {
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
-                    self.term_to_share_cnt.insert(t, self.share_cnt);
-                    self.share_cnt += 1;
+                    let sort: Sort = check(&t);
+                    let num_shares = self.get_sort_len(&sort);
+                    let mut shares: Vec<i32> = Vec::new();
+                    for _ in 0..num_shares {
+                        shares.push(self.share_cnt);
+                        self.share_cnt += 1;
+                    }
+                    self.term_to_shares.insert(t, shares);
                 }
             }
         }
     }
 
     fn write_mapping_file(&mut self) {
-        for (name, comp) in self.fs.computations.iter() {
+        let computations = self.fs.computations.clone();
+        for (name, comp) in computations.iter() {
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
-                    let share_type = self.s_map.get(name).unwrap().get(&t).unwrap();
+                    let share_map = self.get_sharing_map(name);
+                    let share_type = share_map.get(&t).unwrap();
                     let share_str = share_type.char();
-                    let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
-                    let line = format!("{} {}\n", *share_cnt, share_str);
-                    self.share_map_output.push(line);
+                    let shares = self.get_shares(&t);
+                    for s in shares {
+                        let line = format!("{} {}\n", s, share_str);
+                        self.share_map_output.push(line);
+                    }
                 }
             }
         }
@@ -149,9 +166,55 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    fn get_share_name(&mut self, t: &Term) -> String {
-        let share_cnt = self.term_to_share_cnt.get(t).unwrap();
-        format!("s_{}", share_cnt)
+    fn get_sharing_map(&mut self, name: &str) -> SharingMap {
+        match self.s_map.get(name) {
+            Some(s) => s.clone(),
+            None => panic!("Unknown sharing map for function: {}", name),
+        }
+    }
+
+    fn get_share(&mut self, t: &Term) -> i32 {
+        match self.term_to_shares.get(t) {
+            Some(v) => {
+                assert!(v.len() == 1);
+                v[0]
+            }
+            None => panic!("Unknown share: {}", t),
+        }
+    }
+
+    fn get_share_at(&mut self, t: &Term, i: usize) -> i32 {
+        match self.term_to_shares.get(t) {
+            Some(v) => {
+                assert!(i < v.len());
+                v[i]
+            }
+            None => panic!("Unknown share: {}", t),
+        }
+    }
+
+    fn get_shares(&mut self, t: &Term) -> Vec<i32> {
+        match self.term_to_shares.get(t) {
+            Some(v) => v.clone(),
+            None => panic!("Unknown share: {}", t),
+        }
+    }
+
+    fn get_sort_len(&mut self, s: &Sort) -> usize {
+        let mut len = 0;
+        len += match s {
+            Sort::BitVector(_) => 1,
+            Sort::Array(_, _, n) => *n,
+            Sort::Tuple(sorts) => {
+                let mut inner_len = 0;
+                for inner_s in sorts.iter() {
+                    inner_len += self.get_sort_len(inner_s);
+                }
+                inner_len
+            }
+            _ => panic!("Sort is not supported: {:#?}", s),
+        };
+        len
     }
 
     fn unwrap_vis(&self, name: &str) -> u8 {
@@ -163,10 +226,9 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed_eq(&mut self, t: Term, a_term: Term, b_term: Term) {
-        let share = self.get_share_name(&t);
-        let s = self.term_to_share_cnt.get(&t).unwrap();
-        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-        let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+        let s = self.get_share(&t);
+        let a = self.get_share(&t.cs[0]);
+        let b = self.get_share(&t.cs[1]);
         let op = "EQ";
         let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
         self.bytecode_output.push(line);
@@ -174,12 +236,12 @@ impl<'a> ToABY<'a> {
             Sort::Bool => {
                 self.check_bool(&a_term);
                 self.check_bool(&b_term);
-                self.cache.insert(t, EmbeddedTerm::Bool(share));
+                self.cache.insert(t, EmbeddedTerm::Bool);
             }
             Sort::BitVector(_) => {
                 self.check_bv(&a_term);
                 self.check_bv(&b_term);
-                self.cache.insert(t, EmbeddedTerm::Bool(share));
+                self.cache.insert(t, EmbeddedTerm::Bool);
             }
             e => panic!("Unimplemented sort for Eq: {:?}", e),
         }
@@ -192,21 +254,20 @@ impl<'a> ToABY<'a> {
             .get(t)
             .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
         {
-            EmbeddedTerm::Bool(_) => (),
+            EmbeddedTerm::Bool => (),
             _ => panic!("Non-bool for {:?}", t),
         }
     }
 
     fn embed_bool(&mut self, t: Term) {
-        let share = self.get_share_name(&t);
-        let s = self.term_to_share_cnt.get(&t).unwrap();
+        let s = self.get_share(&t);
         match &t.op {
             Op::Var(name, Sort::Bool) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
-                    let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
+                    let share_cnt = self.get_share(&t);
                     let op = "IN";
 
                     if vis == PUBLIC {
@@ -224,17 +285,14 @@ impl<'a> ToABY<'a> {
                 }
 
                 if !self.cache.contains_key(&t) {
-                    self.cache.insert(
-                        t.clone(),
-                        EmbeddedTerm::Bool(format!("s_{}", ToABY::get_var_name(&t))),
-                    );
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bool);
                 }
             }
             Op::Const(Value::Bool(b)) => {
                 let op = "CONS_bool";
                 let line = format!("1 1 {} {} {}\n", *b as i32, s, op);
                 self.bytecode_output.push(line);
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bool);
             }
             Op::Eq => {
                 self.embed_eq(t.clone(), t.cs[0].clone(), t.cs[1].clone());
@@ -246,25 +304,25 @@ impl<'a> ToABY<'a> {
                 self.check_bool(&t.cs[1]);
                 self.check_bool(&t.cs[2]);
 
-                let sel = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                let a = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
-                let b = self.term_to_share_cnt.get(&t.cs[2]).unwrap();
+                let sel = self.get_share(&t.cs[0]);
+                let a = self.get_share(&t.cs[1]);
+                let b = self.get_share(&t.cs[2]);
 
                 let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s, op);
                 self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bool);
             }
             Op::Not => {
                 let op = "NOT";
 
                 self.check_bool(&t.cs[0]);
 
-                let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                let a = self.get_share(&t.cs[0]);
                 let line = format!("1 1 {} {} {}\n", a, s, op);
                 self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bool);
             }
             Op::BoolNaryOp(o) => {
                 if t.cs.len() == 1 {
@@ -273,14 +331,14 @@ impl<'a> ToABY<'a> {
                     // This is to bypass adding an AND gate with a single conditional term
                     // Refer to pub fn condition() in src/circify/mod.rs
                     self.check_bool(&t.cs[0]);
-                    let a = *self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                    let a = self.get_share(&t.cs[0]);
                     match o {
-                        BoolNaryOp::And => self.term_to_share_cnt.insert(t.clone(), a),
+                        BoolNaryOp::And => self.term_to_shares.insert(t.clone(), vec![a]),
                         _ => {
                             unimplemented!("Single operand boolean operation");
                         }
                     };
-                    self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bool);
                 } else {
                     self.check_bool(&t.cs[0]);
                     self.check_bool(&t.cs[1]);
@@ -291,12 +349,12 @@ impl<'a> ToABY<'a> {
                         BoolNaryOp::Xor => "XOR",
                     };
 
-                    let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                    let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+                    let a = self.get_share(&t.cs[0]);
+                    let b = self.get_share(&t.cs[1]);
                     let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
                     self.bytecode_output.push(line);
 
-                    self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bool);
                 }
             }
             Op::BvBinPred(o) => {
@@ -311,12 +369,12 @@ impl<'a> ToABY<'a> {
                 self.check_bv(&t.cs[0]);
                 self.check_bv(&t.cs[1]);
 
-                let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+                let a = self.get_share(&t.cs[0]);
+                let b = self.get_share(&t.cs[1]);
                 let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
                 self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bool);
             }
             _ => panic!("Non-field in embed_bool: {}", t),
         }
@@ -329,21 +387,20 @@ impl<'a> ToABY<'a> {
             .get(t)
             .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
         {
-            EmbeddedTerm::Bv(_) => (),
+            EmbeddedTerm::Bv => (),
             _ => panic!("Non-bv for {:?}", t),
         }
     }
 
     fn embed_bv(&mut self, t: Term) {
-        let share = self.get_share_name(&t);
-        let s = self.term_to_share_cnt.get(&t).unwrap();
+        let s = self.get_share(&t);
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&t);
                     let vis = self.unwrap_vis(name);
-                    let share_cnt = self.term_to_share_cnt.get(&t).unwrap();
+                    let share_cnt = self.get_share(&t);
                     let op = "IN";
 
                     if vis == PUBLIC {
@@ -361,17 +418,14 @@ impl<'a> ToABY<'a> {
                 }
 
                 if !self.cache.contains_key(&t) {
-                    self.cache.insert(
-                        t.clone(),
-                        EmbeddedTerm::Bv(format!("s_{}", ToABY::get_var_name(&t))),
-                    );
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                 }
             }
             Op::Const(Value::BitVector(b)) => {
                 let op = "CONS_bv";
                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
                 self.bytecode_output.push(line);
-                self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::Ite => {
                 let op = "MUX";
@@ -380,14 +434,14 @@ impl<'a> ToABY<'a> {
                 self.check_bv(&t.cs[1]);
                 self.check_bv(&t.cs[2]);
 
-                let sel = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                let a = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
-                let b = self.term_to_share_cnt.get(&t.cs[2]).unwrap();
+                let sel = self.get_share(&t.cs[0]);
+                let a = self.get_share(&t.cs[1]);
+                let b = self.get_share(&t.cs[2]);
 
                 let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s, op);
                 self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::BvNaryOp(o) => {
                 let op = match o {
@@ -401,13 +455,13 @@ impl<'a> ToABY<'a> {
                 self.check_bv(&t.cs[0]);
                 self.check_bv(&t.cs[1]);
 
-                let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+                let a = self.get_share(&t.cs[0]);
+                let b = self.get_share(&t.cs[1]);
 
                 let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
                 self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::BvBinOp(o) => {
                 let op = match o {
@@ -424,19 +478,19 @@ impl<'a> ToABY<'a> {
                         self.check_bv(&t.cs[0]);
                         self.check_bv(&t.cs[1]);
 
-                        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                        let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+                        let a = self.get_share(&t.cs[0]);
+                        let b = self.get_share(&t.cs[1]);
 
                         let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
                         self.bytecode_output.push(line);
 
-                        self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                        self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                     }
                     BvBinOp::Shl | BvBinOp::Lshr => {
                         self.check_bv(&t.cs[0]);
                         self.check_bv(&t.cs[1]);
 
-                        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                        let a = self.get_share(&t.cs[0]);
                         let const_shift_amount_term = fold(&t.cs[1], &[]);
                         let const_shift_amount =
                             const_shift_amount_term.as_bv_opt().unwrap().uint();
@@ -444,52 +498,112 @@ impl<'a> ToABY<'a> {
                         let line = format!("2 1 {} {} {} {}\n", a, const_shift_amount, s, op);
                         self.bytecode_output.push(line);
 
-                        self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                        self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                     }
                     _ => panic!("Binop not supported: {}", o),
                 };
+            }
+            Op::Field(i) => {
+                assert!(t.cs.len() == 1);
+                let shares = self.get_shares(&t.cs[0]);
+                self.term_to_shares.insert(t.clone(), vec![shares[*i]]);
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+            }
+            Op::Select => {
+                assert!(t.cs.len() == 2);
+                let shares = self.get_shares(&t.cs[0]);
+
+                let idx: usize = if let Op::Const(v) = &t.cs[1].op {
+                    match v {
+                        Value::BitVector(b) => b.uint().to_usize().unwrap(),
+                        _ => todo!(),
+                    }
+                } else {
+                    todo!("Non-constant index into an array");
+                };
+
+                self.term_to_shares.insert(t.clone(), vec![shares[idx]]);
+                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
     }
 
-    /// Given term `t`, type-check `t` is of type Bv
-    fn check_tuple(&self, t: &Term) {
-        match self
-            .cache
-            .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
-        {
-            EmbeddedTerm::Tuple(_) => (),
-            _ => panic!("Non-tuple for {:?}", t),
-        }
-    }
-
-    fn embed_tuple(&mut self, t: Term) {
-        let share = self.get_share_name(&t);
-        let s = self.term_to_share_cnt.get(&t).unwrap();
+    fn embed_scalar(&mut self, t: Term) {
         match &t.op {
-            Op::Call(name, arg_names, arg_sorts, ret) => {
-                let op = format!("CALL {}", name);
+            Op::Const(Value::Array(arr)) => {
+                for i in 0..arr.size {
+                    // TODO: sort of index might not be a 32-bit bitvector
+                    let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
+                    let v = match arr.map.get(&idx) {
+                        Some(c) => c,
+                        None => &*arr.default,
+                    };
+                    let s = self.get_share(&t);
+
+                    match v {
+                        Value::BitVector(b) => {
+                            let op = "CONS_bv";
+                            let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                            self.bytecode_output.push(line);
+                            self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+                        }
+                        _ => todo!(),
+                    }
+                }
+
+                // TODO: store sharing map
+            }
+            Op::Field(i) => {
+                assert!(t.cs.len() == 1);
+                let shares = self.get_shares(&t.cs[0]);
+                self.term_to_shares.insert(t.clone(), vec![shares[*i]]);
+                self.cache.insert(t.clone(), EmbeddedTerm::Array);
+            }
+            Op::Call(name, arg_names, _arg_sorts, ret) => {
+                let shares = self.get_shares(&t);
+                let op = format!("CALL({})", name);
                 let num_args = arg_names.len();
+                let num_rets = self.get_sort_len(ret);
+
+                // map argument shares
                 let mut arg_shares: Vec<i32> = Vec::new();
                 for c in t.cs.iter() {
-                    arg_shares.push(*self.term_to_share_cnt.get(c).unwrap());
+                    arg_shares.push(self.get_share(c));
                 }
                 let arg_shares_str: String =
-                    arg_shares.iter().map(|&id| id.to_string() + " ").collect();
+                    arg_shares.iter().map(|&s| s.to_string() + " ").collect();
 
-                let line = format!("{} 1 {} {} {}\n", num_args, arg_shares_str, s, op);
+                // map return shares
+                let s: String = shares.iter().map(|&s| s.to_string() + " ").collect();
+                let line = format!("{} {} {}{}{}\n", num_args, num_rets, arg_shares_str, s, op);
                 self.bytecode_output.push(line);
-
-                self.cache.insert(t.clone(), EmbeddedTerm::Tuple(share));
+                self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
-            _ => panic!("Non-field in embed_tuple: {:?}", t),
+            _ => panic!("Non-field in embed_scalar: {:?}", t),
         }
     }
+
+    // /// Given term `t`, type-check `t` is of type Bv
+    // fn check_tuple(&self, t: &Term) {
+    //     match self
+    //         .cache
+    //         .get(t)
+    //         .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+    //     {
+    //         EmbeddedTerm::Tuple => (),
+    //         _ => panic!("Non-tuple for {:?}", t),
+    //     }
+    // }
 
     fn embed(&mut self, t: Term) {
         for c in PostOrderIter::new(t) {
+            println!("t: {}", c);
+            println!("in cache: {}", self.cache.contains_key(&c));
+
+            if self.cache.contains_key(&c) {
+                continue;
+            }
             match check(&c) {
                 Sort::Bool => {
                     self.embed_bool(c);
@@ -497,11 +611,15 @@ impl<'a> ToABY<'a> {
                 Sort::BitVector(_) => {
                     self.embed_bv(c);
                 }
-                Sort::Tuple(_) => {
-                    self.embed_tuple(c);
+                Sort::Array(..) | Sort::Tuple(_) => {
+                    self.embed_scalar(c);
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
+            println!(
+                "self.bytecode.output: {}\n",
+                self.bytecode_output.last().unwrap()
+            );
         }
     }
 
@@ -509,22 +627,31 @@ impl<'a> ToABY<'a> {
     fn lower(&mut self) {
         let computations = self.fs.computations.clone();
         for (name, comp) in computations.iter() {
+            println!("name: {}", name);
+
+            let mut outputs: Vec<String> = Vec::new();
             for t in comp.outputs.iter() {
+                println!("outputs: {}", t);
                 self.curr_comp = name.to_string();
                 for t_ in PostOrderIter::new(t.clone()) {
                     self.embed(t_.clone());
-
-                    let op = "OUT";
-                    let s = self.term_to_share_cnt.get(&t).unwrap();
-                    let line = format!("1 0 {} {}\n", s, op);
-                    self.bytecode_output.push(line);
-
-                    // write bytecode per function
-                    let bytecode_path =
-                        get_path(self.path, &self.lang, &format!("{}_bytecode", name));
-                    write_lines_to_file(&bytecode_path, &self.bytecode_output);
                 }
+
+                let op = "OUT";
+                let s = self.get_share(&t);
+                let line = format!("1 0 {} {}\n", s, op);
+
+                outputs.push(line);
             }
+
+            // write bytecode per function
+            let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
+            self.bytecode_output.append(&mut outputs);
+            write_lines_to_file(&bytecode_path, &self.bytecode_output);
+
+            //reset for next function
+            self.bytecode_output.clear();
+            self.inputs.clear();
         }
 
         // write share map

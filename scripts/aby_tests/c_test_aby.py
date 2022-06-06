@@ -24,10 +24,12 @@ if __name__ == "__main__":
         c_misc_tests + \
         biomatch_tests + \
         kmeans_tests + \
-        kmeans_tests_2 
-        # db_tests
-        # gauss_tests + \
-        
+        kmeans_tests_2
+    # db_tests
+    # gauss_tests + \
+
+    tests = ts
+
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
 

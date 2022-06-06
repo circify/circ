@@ -23,18 +23,19 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
         .into_string()
         .unwrap();
 
-    match fs::create_dir_all("scripts/aby_tests/tests") {
-        Err(why) => panic!("couldn't create {}: {}", "scripts/aby_tests/tests", why),
+    let name = format!("{}_{}", filename, lang);
+    let dir_path = format!("scripts/aby_tests/tests/{}", name);
+    match fs::create_dir_all(&dir_path) {
+        Err(why) => panic!("couldn't create {}: {}", dir_path, why),
         Ok(file) => file,
     };
 
-    let name = format!("{}_{}", filename, lang);
-    let path = format!("scripts/aby_tests/tests/{}_{}.txt", name, t);
-    match fs::File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}", path, why),
+    let file_path = format!("{}/{}_{}.txt", dir_path, name, t);
+    match fs::File::create(&file_path) {
+        Err(why) => panic!("couldn't create {}: {}", file_path, why),
         Ok(file) => file,
     };
-    path
+    file_path
 }
 
 /// Write circuit output to temporary file
