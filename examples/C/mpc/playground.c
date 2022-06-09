@@ -22,11 +22,11 @@ int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) {
 // }
 
 // int fb(int a) {
-//     return fa(a, a, a) + 2;
+//     return fa(a, a, a);
 // }
 
 // int fc(int a) {
-//     return fb(a) + 3;
+//     return fb(a);
 // }
 
 // int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) {

@@ -5,7 +5,6 @@ from test_suite import *
 
 if __name__ == "__main__":
     tests = arithmetic_tests + \
-        mod_tests + \
         arithmetic_boolean_tests + \
         nary_arithmetic_tests + \
         bitwise_tests + \
@@ -16,19 +15,18 @@ if __name__ == "__main__":
         ite_tests + \
         shift_tests + \
         div_tests + \
-        array_tests + \
-        struct_tests + \
-        matrix_tests + \
-        ptr_tests + \
-        c_array_tests + \
-        c_misc_tests + \
-        biomatch_tests + \
-        kmeans_tests + \
-        kmeans_tests_2
+        mod_tests + \
+        array_tests
+    # struct_tests + \
+    # matrix_tests + \
+    # ptr_tests + \
+    # c_array_tests + \
+    # c_misc_tests + \
+    # biomatch_tests + \
+    # kmeans_tests + \
+    # kmeans_tests_2
     # db_tests
     # gauss_tests + \
-
-    tests = ts
 
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \

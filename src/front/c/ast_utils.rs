@@ -1,9 +1,9 @@
-use crate::front::c::types::Ty;
+use crate::front::c::CTermData;
 use crate::front::c::Expression::Identifier;
-use crate::front::c::Sort;
-use crate::front::c::Term;
+use crate::front::c::*;
 use lang_c::ast::*;
 use lang_c::span::Node;
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
 use crate::front::Mode;
@@ -115,7 +115,7 @@ pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
 
 pub fn fn_info_to_defs(
     fn_info: &FnInfo,
-    arg_terms: &Vec<Vec<Term>>, // arguments taken at call site
+    arg_map: &HashMap<String, CTerm>,
 ) -> (String, Vec<String>, Vec<Sort>, Vec<String>, Vec<Sort>) {
     let mut ret_names: Vec<String> = Vec::new();
     let mut ret_sorts: Vec<Sort> = Vec::new();
@@ -126,24 +126,20 @@ pub fn fn_info_to_defs(
             ret_sorts.push(fn_info.ret_ty.clone().sort());
         }
     };
-    assert!(fn_info.params.len() == arg_terms.len());
     let mut param_names: Vec<String> = Vec::new();
     let mut param_sorts: Vec<Sort> = Vec::new();
-    for (param, arg) in fn_info.params.iter().zip(arg_terms.iter()) {
-        let name = param.name.clone();
-        let ty = match &param.ty {
-            Ty::Ptr(n, t) => {
-                let new_ty =
-                    Sort::Array(Box::new(Sort::BitVector(*n)), Box::new(t.sort()), arg.len());
-                // Add pointers as return
-                ret_names.push(name.clone());
-                ret_sorts.push(new_ty.clone());
-                new_ty
-            }
-            _ => param.ty.sort(),
-        };
-        param_names.push(name);
-        param_sorts.push(ty.clone());
+
+    for param in fn_info.params.iter() {
+        let arg = arg_map.get(&param.name).unwrap();
+
+        let name = &param.name;
+        let sort = arg.term.type_().sort();
+        param_names.push(name.clone());
+        param_sorts.push(sort.clone());
+        if let Ty::Array(..) = arg.term.type_() {
+            ret_names.push(name.clone());
+            ret_sorts.push(sort.clone());
+        }
     }
     (
         fn_info.name.clone(),

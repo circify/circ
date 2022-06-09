@@ -61,7 +61,7 @@
 
 use crate::ir::term::{
     bv_lit, check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap,
-    TermSet, Value, AND,
+    Value, AND,
 };
 use std::collections::BTreeMap;
 

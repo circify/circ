@@ -30,10 +30,9 @@ function mpc_test_2  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "a+b"
 }
 
-# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
-# mpc_test_2 2 ./examples/C/mpc/playground.c
+mpc_test_2 2 ./examples/C/mpc/playground.c
 
-mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 
@@ -51,23 +50,23 @@ mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_less_than.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_less_equals.c
 
-# # # build nary arithmetic tests
+# # build nary arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/nary_arithmetic_tests/2pc_nary_arithmetic_add.c
 
-# # # build bitwise tests
+# # build bitwise tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_and.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_or.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_xor.c
 
-# # # build boolean tests
+# # build boolean tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_and.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_or.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_equals.c
 
-# # # build nary boolean tests
+# # build nary boolean tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.c
 
-# # # build const tests
+# # build const tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
 
@@ -76,7 +75,7 @@ mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
 
-# # # build shift tests
+# # build shift tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 

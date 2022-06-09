@@ -57,10 +57,11 @@ struct ToABY<'a> {
     path: &'a Path,
     lang: String,
     curr_comp: String,
-    inputs: TermSet,
+    inputs: Vec<Term>,
     cache: TermMap<EmbeddedTerm>,
     term_to_shares: TermMap<Vec<i32>>,
     share_cnt: i32,
+    bytecode_input: Vec<String>,
     bytecode_output: Vec<String>,
     share_map_output: Vec<String>,
 }
@@ -87,10 +88,11 @@ impl<'a> ToABY<'a> {
             path,
             lang: lang.to_string(),
             curr_comp: "".to_string(),
-            inputs: TermSet::new(),
+            inputs: Vec::new(),
             cache: TermMap::new(),
             term_to_shares: TermMap::new(),
             share_cnt: 0,
+            bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
             share_map_output: Vec::new(),
         }
@@ -183,16 +185,6 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    fn get_share_at(&mut self, t: &Term, i: usize) -> i32 {
-        match self.term_to_shares.get(t) {
-            Some(v) => {
-                assert!(i < v.len());
-                v[i]
-            }
-            None => panic!("Unknown share: {}", t),
-        }
-    }
-
     fn get_shares(&mut self, t: &Term) -> Vec<i32> {
         match self.term_to_shares.get(t) {
             Some(v) => v.clone(),
@@ -203,6 +195,7 @@ impl<'a> ToABY<'a> {
     fn get_sort_len(&mut self, s: &Sort) -> usize {
         let mut len = 0;
         len += match s {
+            Sort::Bool => 1,
             Sort::BitVector(_) => 1,
             Sort::Array(_, _, n) => *n,
             Sort::Tuple(sorts) => {
@@ -276,12 +269,12 @@ impl<'a> ToABY<'a> {
                             "3 1 {} {} {} {} {}\n",
                             term_name, vis, bitlen, share_cnt, op
                         );
-                        self.bytecode_output.insert(0, line);
+                        self.bytecode_input.push(line);
                     } else {
                         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
-                        self.bytecode_output.insert(0, line);
+                        self.bytecode_input.push(line);
                     }
-                    self.inputs.insert(t.clone());
+                    self.inputs.push(t.clone());
                 }
 
                 if !self.cache.contains_key(&t) {
@@ -409,12 +402,12 @@ impl<'a> ToABY<'a> {
                             "3 1 {} {} {} {} {}\n",
                             term_name, vis, bitlen, share_cnt, op
                         );
-                        self.bytecode_output.insert(0, line);
+                        self.bytecode_input.push(line);
                     } else {
                         let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
-                        self.bytecode_output.insert(0, line);
+                        self.bytecode_input.push(line);
                     }
-                    self.inputs.insert(t.clone());
+                    self.inputs.push(t.clone());
                 }
 
                 if !self.cache.contains_key(&t) {
@@ -598,9 +591,6 @@ impl<'a> ToABY<'a> {
 
     fn embed(&mut self, t: Term) {
         for c in PostOrderIter::new(t) {
-            println!("t: {}", c);
-            println!("in cache: {}", self.cache.contains_key(&c));
-
             if self.cache.contains_key(&c) {
                 continue;
             }
@@ -616,10 +606,6 @@ impl<'a> ToABY<'a> {
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
-            println!(
-                "self.bytecode.output: {}\n",
-                self.bytecode_output.last().unwrap()
-            );
         }
     }
 
@@ -646,10 +632,13 @@ impl<'a> ToABY<'a> {
 
             // write bytecode per function
             let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
+
             self.bytecode_output.append(&mut outputs);
-            write_lines_to_file(&bytecode_path, &self.bytecode_output);
+            self.bytecode_input.append(&mut self.bytecode_output);
+            write_lines_to_file(&bytecode_path, &self.bytecode_input);
 
             //reset for next function
+            self.bytecode_input.clear();
             self.bytecode_output.clear();
             self.inputs.clear();
         }

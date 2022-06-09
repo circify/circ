@@ -1,16 +1,8 @@
 ts = [
     [
-        "Add two numbers",
-        "2pc_add",
-        "./scripts/aby_tests/test_inputs/add.txt",
-    ],
-]
-
-new_tests = [
-    [
         "new",
         "playground",
-        "./scripts/aby_tests/test_inputs/add.txt",
+        "./scripts/aby_tests/test_inputs/test.txt",
     ],
 ]
 
