@@ -64,8 +64,8 @@ impl FrontEnd for C {
             // generate new context
             g.circ = Circify::new(Ct::new());
             let call = g.function_queue.pop().unwrap();
-            if let Op::Call(name, arg_names, arg_sorts, rets) = &call.op {
-                g.fn_call(name, arg_names, arg_sorts, rets);
+            if let Op::Call(name, arg_names, arg_sorts, ret_sorts) = &call.op {
+                g.fn_call(name, arg_names, arg_sorts, ret_sorts);
                 let comp = g.circ.consume().borrow().clone();
 
                 // println!("fn: {}", name);
@@ -842,7 +842,7 @@ impl CGen {
                         name.clone(),
                         arg_names.clone(),
                         arg_sorts.clone(),
-                        Sort::Tuple(ret_sorts.clone().into_boxed_slice()),
+                        ret_sorts.clone(),
                     ),
                     arg_terms.clone().into_iter().flatten().collect::<Vec<_>>(),
                 );
@@ -1201,7 +1201,7 @@ impl CGen {
         name: &String,
         arg_names: &Vec<String>,
         arg_sorts: &Vec<Sort>,
-        rets: &Sort,
+        ret_sorts: &Vec<Sort>,
     ) {
         debug!("Call: {}", name);
         println!("Call: {}", name);

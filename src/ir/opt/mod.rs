@@ -10,7 +10,7 @@ pub mod sha;
 pub mod tuple;
 mod visit;
 
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
 use super::term::*;
 
@@ -48,6 +48,10 @@ pub enum Opt {
 pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> Functions {
     for i in optimizations {
         let mut opt_fs: Functions = fs.clone();
+        if let Opt::InlineCalls = i {
+            link::link_all_function_calls(&mut opt_fs);
+            continue
+        }
         for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?} to {}", i, name);
             let now = Instant::now();
@@ -112,12 +116,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                         .collect();
                     inline::inline(&mut comp.outputs, &public_inputs);
                 }
-                Opt::InlineCalls => {
-                    let mut cache = link::Cache::new();
-                    for a in &mut comp.outputs {
-                        *a = link::link_function_calls(a.clone(), &mut cache, &opt_fs);
-                    }
-                }
+                Opt::InlineCalls => unreachable!(),
                 Opt::Tuple => {
                     tuple::eliminate_tuples(comp);
                 }

@@ -553,11 +553,11 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), vec![shares[*i]]);
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
             }
-            Op::Call(name, arg_names, _arg_sorts, ret) => {
+            Op::Call(name, arg_names, _arg_sorts, ret_sorts) => {
                 let shares = self.get_shares(&t);
                 let op = format!("CALL({})", name);
                 let num_args = arg_names.len();
-                let num_rets = self.get_sort_len(ret);
+                let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
 
                 // map argument shares
                 let mut arg_shares: Vec<i32> = Vec::new();

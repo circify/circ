@@ -33,7 +33,7 @@ impl RewritePass for Linearizer {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(super::arr_val_to_tup(v)))),
             Op::Var(_name, s) if super::sort_contains_array(s) => Some(super::array_to_tuple(orig)),
-            Op::Call(_name, _arg_names, arg_sorts, ret_sort) => {
+            Op::Call(_name, _arg_names, arg_sorts, ret_sorts) => {
                 let mut args = rewritten_children();
                 for (a, s) in args.iter_mut().zip(arg_sorts) {
                     if super::sort_contains_array(s) {
@@ -41,7 +41,7 @@ impl RewritePass for Linearizer {
                     }
                 }
                 let out = term(orig.op.clone(), args);
-                Some(if super::sort_contains_array(ret_sort) {
+                Some(if ret_sorts.iter().any(super::sort_contains_array) {
                     super::array_to_tuple(&out)
                 } else {
                     out

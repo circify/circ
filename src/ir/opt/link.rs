@@ -1,167 +1,263 @@
 //! Inline function call terms
 
-use std::collections::{BTreeMap, HashMap};
+use fxhash::FxHashMap as HashMap;
 
 use crate::ir::term::*;
+use crate::ir::opt::visit::RewritePass;
 
-/// Inline cache.
-#[derive(Default)]
-pub struct Cache(TermMap<Term>);
+/// A recursive inliner.
+struct Inliner<'f> {
+    /// Original source for functions
+    fs: &'f Functions,
+    /// Map from names to call-free computations
+    cache: HashMap<String, Computation>,
+}
 
-impl Cache {
-    /// Empty cache.
-    pub fn new() -> Self {
-        Cache(TermMap::new())
+/// Compute the term that corresponds to a function call.
+///
+/// ## Arguments
+///
+/// * `arg_names`: the argument names, in order
+/// * `arg_values`: the argument values, in the same order
+/// * `callee`: the called function
+///
+/// ## Returns
+///
+/// A (tuple) term that corresponds to the output on those inputs
+///
+/// ## Note
+///
+/// This function **does not** recursively inline.
+fn inline_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computation) -> Term {
+    let mut sub_map: TermMap<Term> = arg_names
+        .into_iter()
+        .zip(arg_values)
+        .map(|(n, v)| {
+            let s = callee.metadata.input_sort(n).clone();
+            (leaf_term(Op::Var(n.clone(), s)), v)
+        })
+        .collect();
+    term(
+        Op::Tuple,
+        callee
+            .outputs()
+            .iter()
+            .map(|o| extras::substitute_cache(o, &mut sub_map))
+            .collect(),
+    )
+}
+
+impl<'f> Inliner<'f> {
+    /// Ensure that a totally inlined version of `name` is in the cache.
+    fn inline_all(&mut self, name: &str) {
+        if !self.cache.contains_key(name) {
+            let mut c = self.fs.get_comp(name).unwrap().clone();
+            for t in c.terms_postorder() {
+                if let Op::Call(callee_name, ..) = &t.op {
+                    self.inline_all(callee_name);
+                }
+            }
+            self.traverse(&mut c);
+            let present = self.cache.insert(name.into(), c);
+            assert!(present.is_none());
+        }
     }
 }
 
-// TODO: this can fail if the function name contains '_'
-fn get_var_name(name: &String) -> String {
-    let new_name = name.to_string().replace('.', "_");
-    let n = new_name.split('_').collect::<Vec<&str>>();
-    match n.len() {
-        5 => n[3].to_string(),
-        6.. => {
-            let l = n.len() - 1;
-            format!("{}_{}", n[l - 2], n[l])
-        }
-        _ => {
-            panic!("Invalid variable name: {}", name);
+/// Rewrites a term, inlining function calls along the way.
+///
+/// Assumes that the callees are already inlined. Panics otherwise.
+impl<'f> RewritePass for Inliner<'f> {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        _computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        if let Op::Call(fn_name, arg_names, _, _) = &orig.op {
+            let callee = self.cache.get(fn_name).expect("missing inlined callee");
+            let term = inline_one(arg_names, rewritten_children(), callee);
+            Some(term)
+        } else {
+            None
         }
     }
 }
 
-fn match_arg(name: &String, params: &BTreeMap<String, Term>) -> Term {
-    let new_name = get_var_name(name);
-    params.get(&new_name).unwrap().clone()
+/// Inline all calls within a function set.
+pub fn link_all_function_calls(fs: &mut Functions) {
+    let mut inliner = Inliner {
+        fs,
+        cache: Default::default(),
+    };
+    for name in fs.computations.keys() {
+        inliner.inline_all(name);
+    }
+    *fs = Functions {
+        computations: inliner.cache.into_iter().collect(),
+    };
 }
 
-fn link(name: &str, params: BTreeMap<String, Term>, fs: &Functions) -> Vec<Term> {
-    let mut res: Vec<Term> = Vec::new();
-    let comp = fs.computations.get(name).unwrap();
-    for o in comp.outputs.iter() {
-        let mut cache = TermMap::new();
-        for t in PostOrderIter::new(o.clone()) {
-            match &t.op {
-                Op::Var(name, _) => {
-                    let ret = match_arg(name, &params);
-                    cache.insert(t.clone(), ret.clone());
-                }
-                _ => {
-                    let mut children = Vec::new();
-                    for c in &t.cs {
-                        if let Some(rewritten_c) = cache.get(c) {
-                            children.push(rewritten_c.clone());
-                        } else {
-                            children.push(c.clone());
-                        }
-                    }
-                    cache.insert(t.clone(), term(t.op.clone(), children));
-                }
-            }
-        }
-        res.push(cache.get(o).unwrap().clone());
-    }
-    res
-}
+#[cfg(test)]
+mod test {
+    use super::*;
 
-/// Traverse terms and link function calls
-pub fn link_function_calls(
-    term_: Term,
-    Cache(ref mut rewritten): &mut Cache,
-    fs: &Functions,
-) -> Term {
-    let mut call_cache: HashMap<Term, Vec<Term>> = HashMap::new();
-    for t in PostOrderIter::new(term_.clone()) {
-        let mut children = Vec::new();
-        for c in &t.cs {
-            if let Some(rewritten_c) = rewritten.get(c) {
-                children.push(rewritten_c.clone());
-            } else {
-                children.push(c.clone());
-            }
-        }
-        let entry = match &t.op {
-            Op::Field(index) => {
-                assert!(t.cs.len() > 0);
-                if let Op::Call(..) = &t.cs[0].op {
-                    if call_cache.contains_key(&t.cs[0]) {
-                        call_cache.get(&t.cs[0]).unwrap()[*index].clone()
-                    } else {
-                        panic!("Fields on a Call term should return");
-                    }
-                } else {
-                    term(t.op.clone(), children)
-                }
-            }
-            Op::Call(name, arg_names, arg_sorts, _) => {
-                println!("Inlining: {}", name);
-
-                // Check number of args
-                let num_args = arg_sorts.iter().fold(0, |sum, x| {
-                    sum + match x {
-                        Sort::Array(_, _, l) => *l,
-                        _ => 1,
-                    }
-                });
-                assert!(
-                    num_args == t.cs.len(),
-                    "Number of arguments mismatch. {}, {}",
-                    num_args,
-                    t.cs.len()
-                );
-
-                // Check arg types
-                let arg_types = arg_sorts
-                    .iter()
-                    .map(|x| match &x {
-                        Sort::Array(_, val_sort, l) => {
-                            let mut res: Vec<Sort> = Vec::new();
-                            for _ in 0..*l {
-                                res.push(*val_sort.clone());
-                            }
-                            res
-                        }
-                        _ => vec![x.clone()],
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>();
-
-                assert!(
-                    arg_types == t.cs.iter().map(|c| check(c)).collect::<Vec<Sort>>(),
-                    "Argument type mismatch"
-                );
-
-                let mut params: BTreeMap<String, Term> = BTreeMap::new();
-                let arg_keys = arg_names
-                    .iter()
-                    .zip(arg_sorts.iter())
-                    .map(|(n, x)| match &x {
-                        Sort::Array(_, _, l) => {
-                            let mut res: Vec<String> = Vec::new();
-                            for i in 0..*l {
-                                res.push(format!("{}_{}", n.clone(), i));
-                            }
-                            res
-                        }
-                        _ => vec![n.clone()],
-                    })
-                    .flatten();
-                for (n, c) in arg_keys.zip(t.cs.clone()) {
-                    params.insert(n.clone(), c.clone());
-                }
-                let res = link(name, params, fs);
-                call_cache.insert(t.clone(), res.clone());
-                res[0].clone()
-            }
-            _ => term(t.op.clone(), children),
-        };
-        rewritten.insert(t.clone(), entry);
+    #[test]
+    fn bool_arg_nonrec() {
+        let mut fs = text::parse_functions(
+            b"
+            (functions
+                (
+            (myxor
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (xor a b false false)
+                )
+            )
+            (main
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (and false ((field 0) ( (call myxor (a b) (bool bool) (bool)) a b )))
+                )
+            )
+            )
+            )",
+        );
+        let expected = text::parse_computation(
+            b"
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (and false ((field 0) (tuple (xor a b false false))))
+                )
+            ",
+        );
+        link_all_function_calls(&mut fs);
+        let c = fs.get_comp("main").unwrap().clone();
+        assert_eq!(c, expected);
     }
 
-    if let Some(t) = rewritten.get(&term_) {
-        t.clone()
-    } else {
-        panic!("Couldn't find rewritten binarized term: {}", term_);
+    #[test]
+    fn scalar_arg_nonrec() {
+        let mut fs = text::parse_functions(
+            b"
+            (functions
+                (
+            (myxor
+                (computation
+                    (metadata () ((a bool) (b (bv 4))) ())
+                    (bvxor (ite a #x0 #x1) b)
+                )
+            )
+            (main
+                (computation
+                    (metadata () ((c bool)) ())
+                    (bvand #xf ((field 0) ( (call myxor (a b) (bool (bv 4)) ((bv 4))) c #x4 )))
+                )
+            )
+            )
+            )",
+        );
+
+        let expected = text::parse_computation(
+            b"
+                (computation
+                    (metadata () ((c bool)) ())
+                    (bvand #xf ((field 0) (tuple (bvxor (ite c #x0 #x1) #x4))))
+                )
+            ",
+        );
+        link_all_function_calls(&mut fs);
+        let c = fs.get_comp("main").unwrap().clone();
+        assert_eq!(c, expected);
+    }
+
+    #[test]
+    fn nested_calls() {
+        let mut fs = text::parse_functions(
+            b"
+            (functions
+                (
+            (foo
+                (computation
+                    (metadata () ((a bool)) ())
+                    (not a)
+                )
+            )
+            (bar
+                (computation
+                    (metadata () ((a bool)) ())
+                    (xor ((field 0) ((call foo (a) (bool) (bool)) a)) true)
+                )
+            )
+            (main
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    ((field 0) ((call bar (a) (bool) (bool)) a))
+                )
+            )
+            )
+            )",
+        );
+
+        let expected = text::parse_computation(
+            b"
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    ((field 0) (tuple (xor ((field 0) (tuple (not a))) true)))
+                )
+            ",
+        );
+        link_all_function_calls(&mut fs);
+        let c = fs.get_comp("main").unwrap().clone();
+        assert_eq!(c, expected);
+    }
+
+    #[test]
+    fn multiple_calls() {
+        let mut fs = text::parse_functions(
+            b"
+            (functions
+                (
+            (foo
+                (computation
+                    (metadata () ((a bool)) ())
+                    (not a)
+                )
+            )
+            (bar
+                (computation
+                    (metadata () ((a bool)) ())
+                    (xor ((field 0) ((call foo (a) (bool) (bool)) a)) true)
+                )
+            )
+            (main
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (and
+                      ((field 0) ((call foo (a) (bool) (bool)) a))
+                      ((field 0) ((call foo (a) (bool) (bool)) b))
+                      ((field 0) ((call bar (a) (bool) (bool)) a))
+                    )
+                )
+            )
+            )
+            )",
+        );
+
+        let expected = text::parse_computation(
+            b"
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (and
+                    ((field 0) (tuple (not a)))
+                    ((field 0) (tuple (not b)))
+                    ((field 0) (tuple (xor ((field 0) (tuple (not a))) true)))
+                    )
+                )
+            ",
+        );
+        link_all_function_calls(&mut fs);
+        let c = fs.get_comp("main").unwrap().clone();
+        assert_eq!(c, expected);
     }
 }
