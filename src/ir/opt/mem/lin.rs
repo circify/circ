@@ -26,7 +26,7 @@ struct Linearizer;
 impl RewritePass for Linearizer {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
-        computation: &mut Computation,
+        _computation: &mut Computation,
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
