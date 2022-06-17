@@ -44,7 +44,7 @@ impl Expr2Smt<()> for Value {
     fn expr_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
         match self {
             Value::Bool(b) => write!(w, "{}", b)?,
-            Value::Field(_) => panic!("Can't give fields to SMT solver"),
+            Value::Field(f) => write!(w, "#f{}m{}", f.i(), f.modulus())?,
             Value::Int(i) => write!(w, "{}", i)?,
             Value::BitVector(b) => write!(w, "{}", b)?,
             Value::F32(f) => {
@@ -151,6 +151,18 @@ impl Expr2Smt<()> for TermData {
                 write!(w, "((_ tupSel {})", i)?;
                 true
             }
+            Op::PfNaryOp(PfNaryOp::Mul) => {
+                write!(w, "(ffmul")?;
+                true
+            }
+            Op::PfNaryOp(PfNaryOp::Add) => {
+                write!(w, "(ffadd")?;
+                true
+            }
+            Op::PfUnOp(PfUnOp::Neg) => {
+                write!(w, "(ffneg")?;
+                true
+            }
             o => panic!("Cannot give {} to SMT solver", o),
         };
         if s_expr_children {
@@ -181,7 +193,7 @@ impl Sort2Smt for Sort {
                 }
                 write!(w, ")")?;
             }
-            Sort::Field(_) => panic!("Can't give fields to SMT solver"),
+            Sort::Field(f) => write!(w, "(_ FiniteField {})", f.modulus())?,
         }
         Ok(())
     }
@@ -230,6 +242,18 @@ impl<'a, R: std::io::BufRead> IdentParser<String, Sort, &'a mut SmtParser<R>> fo
                 .unwrap();
             input.tag(")")?;
             Ok(Sort::BitVector(n))
+        } else if input.try_tag("(_ FiniteField")? {
+            let n = input
+                .try_int(|s, b| {
+                    if b {
+                        Ok(rug::Integer::from_str_radix(s, 10).unwrap())
+                    } else {
+                        Err("Non-positive finite field size")
+                    }
+                })?
+                .unwrap();
+            input.tag(")")?;
+            Ok(Sort::Field(circ_fields::FieldT::from(n)))
         } else {
             unimplemented!()
         }
@@ -244,7 +268,7 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
         input: &'a mut SmtParser<Br>,
         _: &String,
         _: &[(String, Sort)],
-        _: &Sort,
+        s: &Sort,
     ) -> SmtRes<Value> {
         let r = if let Some(b) = input.try_bool()? {
             Value::Bool(b)
@@ -264,6 +288,10 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
                     input.buff_rest()
                 )
             }
+        } else if let Sort::Field(f) = s {
+            let int_literal = input.get_sexpr()?;
+            let i = Integer::from_str_radix(int_literal, 10).unwrap();
+            Value::Field(f.new_v(i))
         } else {
             unimplemented!("Could not parse model suffix: {}", input.buff_rest())
         };
@@ -287,6 +315,24 @@ fn make_solver<P>(parser: P, models: bool, inc: bool) -> rsmt2::Solver<P> {
     }
     conf.set_incremental(inc);
     rsmt2::Solver::new(conf, parser).expect("Error creating SMT solver")
+}
+
+/// Write SMT2 the encodes this terms satisfiability to a file
+pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
+    for c in PostOrderIter::new(t.clone()) {
+        if let Op::Var(n, s) = &c.op {
+            write!(w, "(declare-const ").unwrap();
+            SmtSymDisp(n).sym_to_smt2(&mut w, ()).unwrap();
+            write!(w, " ").unwrap();
+            s.sort_to_smt2(&mut w).unwrap();
+            writeln!(w, ")").unwrap();
+        }
+    }
+    assert!(check(t) == Sort::Bool);
+    write!(w, "(assert\n\t").unwrap();
+    t.expr_to_smt2(&mut w, ()).unwrap();
+    writeln!(w, "\n)").unwrap();
+    writeln!(w, "(check-sat)").unwrap();
 }
 
 /// Check whether some term is satisfiable.
@@ -408,6 +454,55 @@ mod test {
     fn bv_is_sat() {
         let t = term![Op::Eq; bv_lit(0,4), leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
         assert!(check_sat(&t));
+    }
+
+    // ignored until FF support in cvc5 is upstreamed.
+    #[ignore]
+    #[test]
+    fn ff_is_sat() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (mod 5)) (b (mod 5)))
+            (and
+                (= (* a a) a)
+                (= (* b b) b)
+                (= a b)
+                (= a #f1m5)
+            )
+        )
+        ",
+        );
+        assert!(check_sat(&t));
+    }
+
+    // ignored until FF support in cvc5 is upstreamed.
+    #[ignore]
+    #[test]
+    fn ff_model() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (mod 5)) (b (mod 5)))
+            (and
+                (= (* a a) a)
+                (= (* b b) b)
+                (= a b)
+                (= a #f1m5)
+            )
+        )
+        ",
+        );
+        let field = circ_fields::FieldT::from(rug::Integer::from(5));
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Field(field.new_v(1)),),
+                    ("b".to_owned(), Value::Field(field.new_v(1)),),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
     }
 
     #[test]
