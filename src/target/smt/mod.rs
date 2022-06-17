@@ -317,6 +317,24 @@ fn make_solver<P>(parser: P, models: bool, inc: bool) -> rsmt2::Solver<P> {
     rsmt2::Solver::new(conf, parser).expect("Error creating SMT solver")
 }
 
+/// Write SMT2 the encodes this terms satisfiability to a file
+pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
+    for c in PostOrderIter::new(t.clone()) {
+        if let Op::Var(n, s) = &c.op {
+            write!(w, "(declare-const ").unwrap();
+            SmtSymDisp(n).sym_to_smt2(&mut w, ()).unwrap();
+            write!(w, " ").unwrap();
+            s.sort_to_smt2(&mut w).unwrap();
+            writeln!(w, ")").unwrap();
+        }
+    }
+    assert!(check(t) == Sort::Bool);
+    write!(w, "(assert\n\t").unwrap();
+    t.expr_to_smt2(&mut w, ()).unwrap();
+    writeln!(w, "\n)").unwrap();
+    writeln!(w, "(check-sat)").unwrap();
+}
+
 /// Check whether some term is satisfiable.
 pub fn check_sat(t: &Term) -> bool {
     let mut solver = make_solver((), false, false);
