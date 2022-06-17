@@ -65,6 +65,10 @@ zok = ["zokrates_parser", "zokrates_pest_ast"]
 name = "circ"
 
 [[example]]
+name = "zk"
+required-features = ["r1cs"]
+
+[[example]]
 name = "zxi"
 required-features = ["smt", "zok"]
 
