@@ -433,6 +433,19 @@ impl R1cs<String> {
             r1cs: self.clone(),
         }
     }
+
+    /// Get an IR term that represents this system.
+    pub fn lc_ir_term(&self, lc: &Lc) -> Term {
+        term(PF_ADD,
+            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), leaf_term(Op::Var(self.idxs_signals.get(i).unwrap().into(), Sort::Field(self.modulus.clone())))])).collect())
+    }
+
+    /// Get an IR term that represents this system.
+    pub fn ir_term(&self) -> Term {
+        term(AND,
+        self.constraints.iter().map(|(a, b, c)|
+            term![EQ; term![PF_ADD; self.lc_ir_term(a), self.lc_ir_term(b)], self.lc_ir_term(c)]).collect())
+    }
 }
 
 /// Relation-related data that a verifier needs to check a proof.
