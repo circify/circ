@@ -833,9 +833,6 @@ impl CGen {
                 // create call terms
                 let (name, arg_names, arg_sorts, ret_names, ret_sorts) =
                     fn_info_to_defs(&f, &args_map);
-                println!("fname: {}", fname);
-                println!("arg_names: {:#?}", arg_names);
-                println!("arg_sorts: {:#?}", arg_sorts);
 
                 let call_term = term(
                     Op::Call(
