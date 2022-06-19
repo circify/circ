@@ -59,6 +59,7 @@ fn sort_contains_array(s: &Sort) -> bool {
 
 /// Given a sort `s` which may contain array constructors, construct a new sort in which the arrays
 /// have been flattened to tuples.
+#[allow(dead_code)]
 fn array_to_tuple_sort(s: &Sort) -> Sort {
     match s {
         Sort::Tuple(ss) => Sort::Tuple(ss.iter().map(array_to_tuple_sort).collect()),
@@ -70,7 +71,7 @@ fn array_to_tuple_sort(s: &Sort) -> Sort {
 /// Given a term of tuples, re-shape into sort `s`.
 fn resort(t: &Term, s: &Sort) -> Term {
     match s {
-        Sort::Array(k, v, sz) => extras::tuple_or_array_elements(t).zip(k.elems_iter()).fold(
+        Sort::Array(k, v, _sz) => extras::tuple_or_array_elements(t).zip(k.elems_iter()).fold(
             s.default_term(),
             |acc, (t, i)| term![Op::Store; acc, i, resort(&t, v)],
         ),

@@ -175,7 +175,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 }
             }
         }
-        Op::Call(_, _, _, ret) => Ok(ret.clone()),
+        Op::Call(_, _, _, rets) => Ok(Sort::Tuple(rets.clone().into())),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }
@@ -392,14 +392,14 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             rec_check_raw_helper(&(*op.clone()), &new_a[..])
                 .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size))
         }
-        (Op::Call(_, _, ex_args, ret), act_args) => {
+        (Op::Call(_, _, ex_args, rets), act_args) => {
             if ex_args.len() != act_args.len() {
                 Err(TypeErrorReason::ExpectedArgs(ex_args.len(), act_args.len()))
             } else {
                 for (e, a) in ex_args.iter().zip(act_args) {
                     eq_or(e, a, "in function call")?;
                 }
-                Ok(ret.clone())
+                Ok(Sort::Tuple(rets.clone().into()))
             }
         }
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),

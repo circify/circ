@@ -11,24 +11,22 @@
 //!
 //! ## Pass 1: Identifying oblivious arrays
 //!
+//!
 //! We maintain a set of non-oblivious arrays, initially empty. We traverse the whole computation
-//! system, performing the following inferences:
+//! system, marking som arrays as non-oblivious. Only non-constant terms with a sort that contains
+//! an array can be non-oblivious.
 //!
-//!    * If `a[i]` for non-constant `i`, then `a` and `a[i]` are not oblivious;
-//!    * If `a[i]`, `a` and `a[i]`  are equi-oblivious
-//!    * If `a[i\v]` for non-constant `i`, then neither `a[i\v]` nor `a` are oblivious
-//!    * If `a[i\v]`, then `a[i\v]` and `a` are equi-oblivious
-//!    * If `ite(c,a,b)`, then `ite(c,a,b)`, `a`, and `b` are equi-oblivious
-//!    * If `a=b`, then `a` and `b` are equi-oblivious
-//!    * If any other term is array-valued, that array is non-oblivious. Including:
-//!        * variables
-//!        * function call outputs
-//!        * tuple fields
 //!
-//! This procedure is iterated to fixpoint.
+//! The following are *directly marked* as non-oblivious:
 //!
-//! Notice that we flag some *array* terms as non-oblivious, and we also flag their derived select
-//! terms as non-oblivious. This makes it easy to see which selects should be replaced later.
+//!    * Selects with non-constant indices
+//!    * Stores with non-constant indices
+//!    * Any term containing an array sort that is not a array of primitives
+//!    * Variables, call arguments, call outputs, and the computation outputs
+//!
+//! All terms propagate non-obliviousness to their children and recieve it from their children.
+//!
+//! Propagation is repeated to fixpoint.
 //!
 //! ### Sharing & Constant Arrays
 //!
@@ -69,130 +67,89 @@
 //!    * map array terms to tuple terms
 //!    * map array selections to tuple field gets
 //!
-//! In both cases we look at the non-oblivious array/select set to see whether to do the
-//! replacement.
-//!
+//! In both cases we look at the non-oblivious array set to see whether to do the replacement.
 
 use super::super::visit::*;
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
 
-use log::{debug, trace};
+use log::trace;
 
+fn is_prim_array(t: &Sort) -> bool {
+    if let Sort::Array(k, v, _) = t {
+        k.is_scalar() && v.is_scalar()
+    } else {
+        false
+    }
+}
+
+fn is_markable(t: &Term, s: &Sort) -> bool {
+    !t.is_const() && !s.is_scalar() && super::sort_contains_array(s)
+}
+
+#[derive(Default)]
 struct NonOblivComputer {
     not_obliv: TermSet,
 }
 
 impl NonOblivComputer {
     fn mark(&mut self, a: &Term) -> bool {
-        if !a.is_const() && self.not_obliv.insert(a.clone()) {
-            trace!("Not obliv: {}", a);
+        let s = check(a);
+        if is_markable(a, &s) && self.not_obliv.insert(a.clone()) {
+            trace!("Not obliv: {}", extras::Letified(a.clone()));
             true
         } else {
             false
         }
     }
 
-    fn bi_implicate(&mut self, a: &Term, b: &Term) -> bool {
-        if !a.is_const() && !b.is_const() {
-            match (self.not_obliv.contains(a), self.not_obliv.contains(b)) {
-                (false, true) => {
-                    self.not_obliv.insert(a.clone());
-                    true
-                }
-                (true, false) => {
-                    self.not_obliv.insert(b.clone());
-                    true
-                }
-                _ => false,
+    fn propagate(&mut self, a: &Term) -> bool {
+        if self.not_obliv.contains(a) || a.cs.iter().any(|c| self.not_obliv.contains(c)) {
+            let mut progress = false;
+            progress |= self.mark(a);
+            for c in &a.cs {
+                progress |= self.mark(c);
             }
+            progress
         } else {
             false
-        }
-    }
-
-    fn new() -> Self {
-        Self {
-            not_obliv: TermSet::new(),
         }
     }
 }
 
 impl ProgressAnalysisPass for NonOblivComputer {
     fn visit(&mut self, term: &Term) -> bool {
-        match &term.op {
-            Op::Store => {
-                let a = &term.cs[0];
-                let i = &term.cs[1];
-                let v = &term.cs[2];
-                let mut progress = false;
-                if let Sort::Array(..) = check(v) {
-                    // Imprecisely, mark v as non-obliv iff the array is.
-                    progress = self.bi_implicate(term, v) || progress;
-                }
-                if i.is_const() {
-                    progress = self.bi_implicate(term, a) || progress;
-                } else {
-                    progress = self.mark(a) || progress;
-                    progress = self.mark(term) || progress;
-                }
-                if let Sort::Array(..) = check(v) {
-                    // Imprecisely, mark v as non-obliv iff the array is.
-                    progress = self.bi_implicate(term, v) || progress;
-                }
-                progress
-            }
-            Op::Select => {
-                // Even though the selected value may not have array sort, we still flag it as
-                // non-oblivious so we know whether to replace it or not.
-                let a = &term.cs[0];
-                let i = &term.cs[1];
-                let mut progress = false;
-                if i.is_const() {
-                    // pass
-                } else {
-                    progress = self.mark(a) || progress;
-                    progress = self.mark(term) || progress;
-                }
-                progress = self.bi_implicate(term, a) || progress;
-                progress
-            }
-            Op::Ite => {
-                let t = &term.cs[1];
-                let f = &term.cs[2];
-                if let Sort::Array(..) = check(t) {
-                    let mut progress = self.bi_implicate(term, t);
-                    progress = self.bi_implicate(t, f) || progress;
-                    progress = self.bi_implicate(term, f) || progress;
-                    progress
-                } else {
-                    false
-                }
-            }
-            Op::Eq => {
-                let a = &term.cs[0];
-                let b = &term.cs[1];
-                if let Sort::Array(..) = check(a) {
-                    self.bi_implicate(a, b)
-                } else {
-                    false
-                }
-            }
-            // constants are oblivious
-            Op::Const(..) => false,
-            _ => match check(term) {
-                Sort::Array(..) => {
-                    // variables, fields, and function outputs are non-oblivious.
-                    debug_assert!(
-                        matches!(term.op, Op::Call(..) | Op::Var(..) | Op::Field(..)),
-                        "Unexpected array term {}",
-                        term
-                    );
-                    self.mark(term)
-                }
+        let sort = check(term);
+        let mut progress = false;
+
+        // First, we directly mark this term if
+        // (a) its sort contains an array and is not an array of primitives.
+        let do_mark = if !sort.is_scalar() && !is_prim_array(&sort) {
+            true
+        } else {
+            // (b) it is a select or store with a non-constant index OR a call
+            match &term.op {
+                Op::Store if !term.cs[1].is_const() => true,
+                Op::Select if !term.cs[1].is_const() => true,
+                Op::Var(..) => true,
+                Op::Call(..) => true,
                 _ => false,
-            },
+            }
+        };
+        if do_mark {
+            progress |= self.mark(term);
         }
+
+        // Now, we mark the children of calls
+        if let Op::Call(..) = &term.op {
+            for c in &term.cs {
+                progress |= self.mark(c);
+            }
+        }
+
+        // Finally, we propagate marks
+        progress |= self.propagate(term);
+        progress
     }
 }
 
@@ -202,7 +159,7 @@ struct Replacer {
 }
 
 impl Replacer {
-    fn should_replace(&self, a: &Term) -> bool {
+    fn is_obliv(&self, a: &Term) -> bool {
         !self.not_obliv.contains(a)
     }
 }
@@ -229,42 +186,29 @@ impl RewritePass for Replacer {
                 .map(super::term_arr_val_to_tup)
                 .collect()
         };
-        debug!("visiting {}", orig);
+        trace!("rewriting {}", extras::Letified(orig.clone()));
         match &orig.op {
-            Op::Select => {
-                // we mark the selected term as non-obliv...
-                if self.should_replace(orig) {
-                    let mut cs = get_cs();
-                    debug_assert_eq!(cs.len(), 2);
-                    let k_const = get_const(&cs.pop().unwrap());
-                    Some(term(Op::Field(k_const), cs))
-                } else {
-                    None
-                }
+            Op::Select if self.is_obliv(&orig.cs[0]) => {
+                trace!("  is oblivious");
+                let mut cs = get_cs();
+                debug_assert_eq!(cs.len(), 2);
+                let k_const = get_const(&cs.pop().unwrap());
+                Some(term(Op::Field(k_const), cs))
             }
-            Op::Store => {
-                if self.should_replace(orig) {
-                    let mut cs = get_cs();
-                    debug_assert_eq!(cs.len(), 3);
-                    let k_const = get_const(&cs.remove(1));
-                    Some(term(Op::Update(k_const), cs))
-                } else {
-                    None
-                }
+            Op::Store if self.is_obliv(orig) => {
+                trace!("  is oblivious");
+                let mut cs = get_cs();
+                debug_assert_eq!(cs.len(), 3);
+                let k_const = get_const(&cs.remove(1));
+                Some(term(Op::Update(k_const), cs))
             }
-            Op::Ite => {
-                if self.should_replace(orig) {
-                    Some(term(Op::Ite, get_cs()))
-                } else {
-                    None
-                }
+            Op::Ite if self.is_obliv(orig) => {
+                trace!("  is oblivious");
+                Some(term(Op::Ite, get_cs()))
             }
-            Op::Eq => {
-                if self.should_replace(&orig.cs[0]) {
-                    Some(term(Op::Eq, get_cs()))
-                } else {
-                    None
-                }
+            Op::Eq if self.is_obliv(&orig.cs[0]) => {
+                trace!("  is oblivious");
+                Some(term(Op::Eq, get_cs()))
             }
             _ => None,
         }
@@ -273,7 +217,10 @@ impl RewritePass for Replacer {
 
 /// Eliminate oblivious arrays. See module documentation.
 pub fn elim_obliv(t: &mut Computation) {
-    let mut prop_pass = NonOblivComputer::new();
+    let mut prop_pass = NonOblivComputer::default();
+    for o in t.outputs() {
+        prop_pass.mark(o);
+    }
     prop_pass.traverse(t);
     let mut replace_pass = Replacer {
         not_obliv: prop_pass.not_obliv,
@@ -281,7 +228,9 @@ pub fn elim_obliv(t: &mut Computation) {
     let initial_output_sorts: Vec<Sort> = t.outputs.iter().map(check).collect();
     <Replacer as RewritePass>::traverse(&mut replace_pass, t);
     for (o, s) in t.outputs.iter_mut().zip(initial_output_sorts) {
-        *o = super::resort(o, &s)
+        if check(o) != s {
+            *o = super::resort(o, &s)
+        }
     }
 }
 
@@ -402,7 +351,9 @@ mod test {
 
     #[test]
     fn ignore_vars() {
-        let before = text::parse_computation(b"
+        let _ = env_logger::builder().is_test(true).try_init();
+        let before = text::parse_computation(
+            b"
         (computation
           (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
           (bvadd
@@ -410,8 +361,10 @@ mod test {
             (select (store (#a (bv 8) #x00 4 ()) #x00 a) #x00)
             (select (store (#a (bv 8) #x01 5 ()) #x00 a) #x01)
           )
-        )");
-        let expected = text::parse_computation(b"
+        )",
+        );
+        let expected = text::parse_computation(
+            b"
         (computation
           (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
           (bvadd
@@ -419,7 +372,8 @@ mod test {
             ((field 0) ((update 0) (#t  #x00 #x00 #x00 #x00) a))
             ((field 1) ((update 0) (#t  #x01 #x01 #x01 #x01 #x01) a))
           )
-        )");
+        )",
+        );
         let mut after = before.clone();
         elim_obliv(&mut after);
         assert_eq!(after, expected);
@@ -427,35 +381,18 @@ mod test {
 
     #[test]
     fn preserve_output_type() {
-        let before = text::parse_computation(b"
+        let _ = env_logger::builder().is_test(true).try_init();
+        let before = text::parse_computation(
+            b"
         (computation
           (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
           (store
             (store (#a (bv 8) #x00 3 ()) #x01 (select A #x00))
             #x00 #x05
           )
-        )");
-        let expected = text::parse_computation(b"
-        (computation
-          (metadata () ((a (bv 8)) (A (array (bv 8) (bv 8) 3))) ())
-          (let ((tupout
-            ((update 0) 
-              ((update 1)
-                (#t #x00 #x00 #x00)
-                (select A #x00)
-              )
-              #x05
-            )
-            ))
-          (store
-            (store
-              (store (#a (bv 8) #x00 3 ()) #x00 ((field 0) tupout))
-              #x01 ((field 1) tupout)
-            )
-            #x02 ((field 2) tupout)
-          )
-          )
-        )");
+        )",
+        );
+        let expected = before.clone();
         let mut after = before.clone();
         elim_obliv(&mut after);
         assert_eq!(after, expected);
@@ -463,25 +400,67 @@ mod test {
 
     #[test]
     fn identity_fn() {
-        let before = text::parse_computation(b"
+        let _ = env_logger::builder().is_test(true).try_init();
+        let before = text::parse_computation(
+            b"
         (computation
           (metadata () ((A (array (bv 8) (bv 8) 3))) ())
           A
-        )");
-        let expected = text::parse_computation(b"
-        (computation
-          (metadata () ((A (array (bv 8) (bv 8) 3))) ())
-          (store
-            (store
-                (store
-                    (#a (bv 8) #x00 3 ( ))
-                    #x00 (select A #x00))
-                #x01 (select A #x01))
-            #x02 (select A #x02))
-        )");
+        )",
+        );
+        let expected = before.clone();
         let mut after = before.clone();
         elim_obliv(&mut after);
         assert_eq!(after, expected);
     }
 
+    #[test]
+    fn ignore_call_inputs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () () ())
+          ((call foo (a) ((array (bv 8) (bv 8) 4)) (bool)) (store (#a (bv 8) #x00 4 ()) #x00 #x01))
+        )",
+        );
+        let expected = before.clone();
+        let mut after = before.clone();
+        elim_obliv(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn ignore_call_outputs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () () ())
+          (select
+           ((field 0) ((call foo () () ((array (bv 8) (bv 8) 4))) ))
+           #x00)
+        )",
+        );
+        let expected = before.clone();
+        let mut after = before.clone();
+        elim_obliv(&mut after);
+        assert_eq!(after, expected);
+    }
+
+    #[test]
+    fn ignore_outputs() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let before = text::parse_computation(
+            b"
+        (computation
+          (metadata () () ())
+          (store (#a (bv 8) #x00 4 ()) #x00 #x01)
+        )",
+        );
+        let expected = before.clone();
+        let mut after = before.clone();
+        elim_obliv(&mut after);
+        assert_eq!(after, expected);
+    }
 }

@@ -141,8 +141,10 @@ pub enum Op {
     /// Map (operation)
     Map(Box<Op>),
 
-    /// Call a function (name, argument names, argument sorts, return sort)
-    Call(String, Vec<String>, Vec<Sort>, Sort),
+    /// Call a function (name, argument names, argument sorts, return sorts)
+    ///
+    /// Note that the type of this term is always a tuple.
+    Call(String, Vec<String>, Vec<Sort>, Vec<Sort>),
 }
 
 /// Boolean AND
@@ -298,7 +300,7 @@ impl Display for Op {
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
-            Op::Call(name, arg_names, arg_sorts, sort) => {
+            Op::Call(name, arg_names, arg_sorts, ret_sorts) => {
                 write!(f, "(call {} (", name)?;
                 for arg_name in arg_names {
                     write!(f, " {}", arg_name)?;
@@ -307,7 +309,11 @@ impl Display for Op {
                 for arg_sort in arg_sorts {
                     write!(f, " {}", arg_sort)?;
                 }
-                write!(f, ") {})", sort)
+                write!(f, ") (")?;
+                for ret_sort in ret_sorts {
+                    write!(f, " {}", ret_sort)?;
+                }
+                write!(f, "))")
             }
         }
     }
@@ -2020,8 +2026,8 @@ impl Functions {
     }
 
     /// Get the first computation by function name
-    pub fn get_comp(&self, name: String) -> Option<&Computation> {
-        self.computations.get(&name)
+    pub fn get_comp(&self, name: &str) -> Option<&Computation> {
+        self.computations.get(name)
     }
 
     /// Create a computation with a single entry function

@@ -46,7 +46,7 @@
 //!   * Operator `O`:
 //!     * Plain operators: (`bvmul`, `and`, ...)
 //!     * Composite operators: `(field N)`, `(update N)`, `(sext N)`, `(uext N)`, `(bit N)`, ...
-//!       * call operator: `(call X (X1 ... XN) (S1 ... SN) S)`
+//!       * call operator: `(call X (X1 ... XN) (S1 ... SN) (RS1 ... RSN))`
 
 use circ_fields::{FieldT, FieldV};
 
@@ -275,12 +275,12 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
-                [Leaf(Ident, b"call"), Leaf(Ident, name), arg_names, arg_sorts, sort] => {
+                [Leaf(Ident, b"call"), Leaf(Ident, name), arg_names, arg_sorts, ret_sorts] => {
                     let name = from_utf8(name).unwrap().to_owned();
                     let arg_names = self.string_list(arg_names);
                     let arg_sorts = self.sort_list(arg_sorts);
-                    let sort = self.sort(sort);
-                    Ok(Op::Call(name, arg_names, arg_sorts, sort))
+                    let ret_sorts = self.sort_list(ret_sorts);
+                    Ok(Op::Call(name, arg_names, arg_sorts, ret_sorts))
                 }
                 _ => todo!("Unparsed op: {}", tt),
             },
@@ -777,7 +777,7 @@ mod test {
         let t = parse_term(
             b"
             (declare ((a bool))
-                ( (call myxor (a b) (bool bool) bool) a a )
+                ((field 0) ( (call myxor (a b) (bool bool) (bool)) a a ))
             )",
         );
         assert_eq!(check(&t), Sort::Bool);
@@ -918,7 +918,7 @@ mod test {
             (main
                 (computation
                     (metadata () ((a bool) (b bool)) ())
-                    (and false ( (call myxor (a b) (bool bool) bool) a b ))
+                    (and false ((field 0) ( (call myxor (a b) (bool bool) (bool)) a b )))
                 )
             )
             )
