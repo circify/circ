@@ -346,11 +346,12 @@ array_tests = [
         "2pc_array_sum",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
-    [
-        "Array index test",
-        "2pc_array_index",
-        "./scripts/aby_tests/test_inputs/add.txt",
-    ],
+    # TODO: unsupported in ABY interpreter yet.
+    # [
+    #     "Array index test",
+    #     "2pc_array_index",
+    #     "./scripts/aby_tests/test_inputs/add.txt",
+    # ],
 ]
 
 c_array_tests = [

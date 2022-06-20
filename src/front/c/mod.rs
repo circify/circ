@@ -6,7 +6,7 @@ mod term;
 mod types;
 
 use super::{FrontEnd, Mode};
-use crate::circify::{CirCtx, Circify, Loc, Val};
+use crate::circify::{Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
 use crate::front::c::term::*;
 use crate::front::c::types::*;

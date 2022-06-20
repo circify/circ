@@ -16,7 +16,8 @@ if __name__ == "__main__":
         shift_tests + \
         div_tests + \
         mod_tests + \
-        array_tests
+        array_tests + \
+        function_tests
     # struct_tests + \
     # matrix_tests + \
     # ptr_tests + \

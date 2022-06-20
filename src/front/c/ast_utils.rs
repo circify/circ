@@ -1,4 +1,3 @@
-use crate::front::c::CTermData;
 use crate::front::c::Expression::Identifier;
 use crate::front::c::*;
 use lang_c::ast::*;

@@ -68,7 +68,7 @@ struct ToABY<'a> {
 
 impl Drop for ToABY<'_> {
     fn drop(&mut self) {
-        use std::mem::take;
+        // use std::mem::take;
         // drop everything that uses a Term
         // drop(take(&mut self.md));
         self.inputs.clear();

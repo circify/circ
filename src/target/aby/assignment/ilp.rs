@@ -86,7 +86,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 }
             }
             _ => {
-                if let Some(costs) = costs.ops.get(&t.op) {
+                if let Some(costs) = costs.get(&t.op) {
                     for (ty, cost) in costs {
                         let name = format!("t_{}_{}", i, ty.char());
                         let v = ilp.new_variable(variable().binary(), name.clone());
@@ -187,23 +187,15 @@ mod tests {
         // random checks from the file...
         assert_eq!(
             &1127.0,
-            c.ops.get(&BV_MUL).unwrap().get(&ShareType::Yao).unwrap()
+            c.get(&BV_MUL).unwrap().get(&ShareType::Yao).unwrap()
         );
         assert_eq!(
             &1731.0,
-            c.ops
-                .get(&BV_MUL)
-                .unwrap()
-                .get(&ShareType::Boolean)
-                .unwrap()
+            c.get(&BV_MUL).unwrap().get(&ShareType::Boolean).unwrap()
         );
         assert_eq!(
             &7.0,
-            c.ops
-                .get(&BV_XOR)
-                .unwrap()
-                .get(&ShareType::Boolean)
-                .unwrap()
+            c.get(&BV_XOR).unwrap().get(&ShareType::Boolean).unwrap()
         );
     }
 
