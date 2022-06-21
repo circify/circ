@@ -544,14 +544,42 @@ impl<'a> ToABY<'a> {
                         _ => todo!(),
                     }
                 }
-
-                // TODO: store sharing map
+            }
+            Op::Const(Value::Tuple(tup)) => {
+                let shares = self.get_shares(&t);
+                assert!(shares.len() == tup.len());
+                for (val, s) in tup.iter().zip(shares.iter()) {
+                    match val {
+                        Value::BitVector(b) => {
+                            let op = "CONS_bv";
+                            let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                            self.bytecode_output.push(line);
+                            self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+                        }
+                        _ => todo!(),
+                    }
+                }
             }
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
                 let shares = self.get_shares(&t.cs[0]);
                 self.term_to_shares.insert(t.clone(), vec![shares[*i]]);
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
+            }
+            Op::Update(i) => {
+                assert!(t.cs.len() == 2);
+                let mut tuple_shares = self.get_shares(&t.cs[0]);
+                let value_share = self.get_share(&t.cs[1]);
+
+                // assert the index is in bounds
+                assert!(*i < tuple_shares.len());
+
+                // update shares in tuple
+                tuple_shares[*i] = value_share;
+
+                // store shares
+                self.term_to_shares.insert(t.clone(), tuple_shares);
+                self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
             Op::Call(name, arg_names, _arg_sorts, ret_sorts) => {
                 let shares = self.get_shares(&t);
@@ -573,7 +601,10 @@ impl<'a> ToABY<'a> {
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
-            _ => panic!("Non-field in embed_scalar: {:?}", t),
+            _ => {
+                println!("op: {:#?}", t.op);
+                panic!("Non-field in embed_scalar: {:?}", t)
+            }
         }
     }
 
@@ -613,11 +644,8 @@ impl<'a> ToABY<'a> {
     fn lower(&mut self) {
         let computations = self.fs.computations.clone();
         for (name, comp) in computations.iter() {
-            println!("name: {}", name);
-
             let mut outputs: Vec<String> = Vec::new();
             for t in comp.outputs.iter() {
-                println!("outputs: {}", t);
                 self.curr_comp = name.to_string();
                 for t_ in PostOrderIter::new(t.clone()) {
                     self.embed(t_.clone());
@@ -681,65 +709,4 @@ pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
 
     let mut converter = ToABY::new(ir, s_map, path, lang);
     converter.convert();
-
-    // let s_map: SharingMap = match ss {
-    //     "b" => assign_all_boolean(&comp, cm),
-    //     "y" => assign_all_yao(&comp, cm),
-    //     "a+b" => assign_arithmetic_and_boolean(&comp, cm),
-    //     "a+y" => assign_arithmetic_and_yao(&comp, cm),
-    //     "greedy" => assign_greedy(&comp, cm),
-    //     #[cfg(feature = "lp")]
-    //     "lp" => assign(&comp, cm),
-    //     #[cfg(feature = "lp")]
-    //     "glp" => assign(&comp, cm),
-    //     _ => {
-    //         panic!("Unsupported sharing scheme: {}", ss);
-    //     }
-    // };
-
-    // let mut converter = ToABY::new(s_map, comp.metadata, path, lang);
-    // for t in comp.outputs {
-    //     println!("terms: {}", t);
-    //     converter.map_terms_to_shares(t.clone());
-    //     converter.write_mapping_file(t.clone());
-    //     converter.lower(t.clone());
-    // }
-
-    // for (fd, cs) in ir.functions.iter() {
-    //     println!("================================================");
-    //     println!("fn: {}", fd.name);
-    //     println!("================================================");
-    //     let Computation {
-    //         outputs: terms,
-    //         metadata: md,
-    //         ..
-    //     } = cs.clone();
-
-    //     for t in terms {
-    //         println!("terms: {}", t);
-    //     }
-
-    //     // let s_map: SharingMap = match ss {
-    //     "b" => assign_all_boolean(&cs, cm),
-    //     "y" => assign_all_yao(&cs, cm),
-    //     "a+b" => assign_arithmetic_and_boolean(&cs, cm),
-    //     "a+y" => assign_arithmetic_and_yao(&cs, cm),
-    //     "greedy" => assign_greedy(&cs, cm),
-    //     #[cfg(feature = "lp")]
-    //     "lp" => assign(&cs, cm),
-    //     #[cfg(feature = "lp")]
-    //     "glp" => assign(&cs, cm),
-    //     _ => {
-    //         panic!("Unsupported sharing scheme: {}", ss);
-    //     }
-    // };
-
-    // let mut converter = ToABY::new(s_map, md, path, lang);
-    // for t in terms {
-    //     // println!("terms: {}", t);
-    //     converter.map_terms_to_shares(t.clone());
-    //     converter.write_mapping_file(t.clone());
-    //     converter.lower(t.clone());
-    // }
-    // }
 }

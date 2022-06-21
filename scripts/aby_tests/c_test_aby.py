@@ -17,15 +17,15 @@ if __name__ == "__main__":
         div_tests + \
         mod_tests + \
         array_tests + \
-        function_tests
-    # struct_tests + \
-    # matrix_tests + \
-    # ptr_tests + \
-    # c_array_tests + \
-    # c_misc_tests + \
-    # biomatch_tests + \
-    # kmeans_tests + \
-    # kmeans_tests_2
+        c_array_tests + \
+        function_tests + \
+        struct_tests + \
+        matrix_tests + \
+        ptr_tests + \
+        c_misc_tests + \
+        biomatch_tests + \
+        kmeans_tests + \
+        kmeans_tests_2
     # db_tests
     # gauss_tests + \
 

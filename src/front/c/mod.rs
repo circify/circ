@@ -1201,7 +1201,6 @@ impl CGen {
         ret_sorts: &Vec<Sort>,
     ) {
         debug!("Call: {}", name);
-        println!("Call: {}", name);
 
         let mut arg_map: BTreeMap<String, Sort> = BTreeMap::new();
         for (n, s) in arg_names.iter().zip(arg_sorts.iter()) {

@@ -22,7 +22,7 @@ impl CTermData {
         match self {
             Self::Bool(_) => Ty::Bool,
             Self::Int(s, w, _) => Ty::Int(*s, *w),
-            Self::Array(t, id) => t.clone(),
+            Self::Array(t, _) => t.clone(),
             Self::StackPtr(t, _o, _) => t.clone(),
             Self::Struct(ty, _) => ty.clone(),
         }
@@ -36,15 +36,8 @@ impl CTermData {
                 CTermData::Int(_, _, t) => output.push(t.clone()),
                 CTermData::Array(t, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
-                    if let Ty::Array(l, _, _) = t {
+                    if let Ty::Array(_, _, _) = t {
                         output.push(ctx.mem.borrow_mut().term(alloc_id));
-                        // let selects: Vec<Term> = Vec::new();
-                        // for i in 0..*l {
-                        //     let offset = bv_lit(i, 32);
-                        //     let idx_term = inner_.mem.borrow_mut().load(alloc_id, offset);
-                        //     selects.push(idx_term);
-                        // }
-                        // output.push(t);
                     } else {
                         panic!("CTermData::Array does not hold Array type");
                     };

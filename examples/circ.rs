@@ -220,13 +220,6 @@ fn main() {
         }
     };
 
-    // for (name, comp) in cs.computations.iter() {
-    //     println!("pre opt functions: {}", name);
-    //     for t in &comp.outputs {
-    //         println!("pre opt function term: {}, {}", t, t.uid());
-    //     }
-    // }
-
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -234,27 +227,38 @@ fn main() {
         ),
         Mode::Mpc(_) => {
             let ignore = [BV_LSHR, BV_SHL];
+            // opt(
+            //     cs,
+            //     vec![
+            //         //Opt::ScalarizeVars,
+            //         Opt::Flatten,
+            //         Opt::Sha,
+            //         Opt::ConstantFold(Box::new(ignore.clone())),
+            //         Opt::Flatten,
+            //         // The function call abstraction creates tuples
+            //         Opt::Tuple,
+            //         Opt::Obliv,
+            //         // The obliv elim pass produces more tuples, that must be eliminated
+            //         Opt::Tuple,
+            //         Opt::LinearScan,
+            //         // The linear scan pass produces more tuples, that must be eliminated
+            //         Opt::Tuple,
+            //         Opt::ConstantFold(Box::new(ignore.clone())),
+            //         // // Inline Function Calls
+            //         // Opt::InlineCalls,
+            //         // Binarize nary terms
+            //         Opt::Binarize,
+            //     ],
+            // )
             opt(
                 cs,
                 vec![
-                    //Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
-                    // The function call abstraction creates tuples
                     Opt::Tuple,
                     Opt::Obliv,
-                    // The obliv elim pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
-                    Opt::LinearScan,
-                    // The linear scan pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
-                    Opt::ConstantFold(Box::new(ignore.clone())),
-                    // // Inline Function Calls
-                    // Opt::InlineCalls,
-                    // Binarize nary terms
-                    Opt::Binarize,
                 ],
             )
         }

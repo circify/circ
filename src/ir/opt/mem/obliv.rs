@@ -136,6 +136,7 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 _ => false,
             }
         };
+
         if do_mark {
             progress |= self.mark(term);
         }

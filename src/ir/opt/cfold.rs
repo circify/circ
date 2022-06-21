@@ -301,12 +301,6 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         cache.put(t.to_weak(), new_t.to_weak());
     }
 
-    // // pretty print hashmap
-    // println!("op_map: {:#?}", op_map.len());
-    // if op_map.len() > 1 {
-    //     println!("{:#?}", op_map);
-    // }
-
     cache
         .get(&node.to_weak())
         .and_then(|x| x.to_hconsed())

@@ -50,12 +50,16 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
         let mut opt_fs: Functions = fs.clone();
         if let Opt::InlineCalls = i {
             link::link_all_function_calls(&mut opt_fs);
-            continue
+            continue;
         }
         for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?} to {}", i, name);
             let now = Instant::now();
-            trace!("Before {:?}: {}", i, extras::Letified(term(Op::Tuple, comp.outputs().clone())));
+            trace!(
+                "Before {:?}: {}",
+                i,
+                extras::Letified(term(Op::Tuple, comp.outputs().clone()))
+            );
             match i.clone() {
                 Opt::ScalarizeVars => scalarize_vars::scalarize_inputs(comp),
                 Opt::ConstantFold(ignore) => {
@@ -63,15 +67,12 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     let _lock = super::term::COLLECT.read().unwrap();
                     let mut cache = TermCache::new(TERM_CACHE_LIMIT);
                     for a in &mut comp.outputs {
-                        let n = Instant::now();
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
-                        println!("{:#?}", n.elapsed());
                     }
-                    println!("cache size per term: {}", cache.len());
                 }
                 Opt::Sha => {
                     for a in &mut comp.outputs {
@@ -124,7 +125,11 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
             debug!("{:?} took {:#?}.\n", i, now.elapsed());
             debug!("After {:?}: {} outputs", i, comp.outputs.len());
             debug!("After {:?}: {} terms", i, comp.terms());
-            trace!("After {:?}: {}", i, extras::Letified(term(Op::Tuple, comp.outputs().clone())));
+            trace!(
+                "After {:?}: {}",
+                i,
+                extras::Letified(term(Op::Tuple, comp.outputs().clone()))
+            );
 
             opt_fs.insert(name.clone(), comp.clone());
         }
