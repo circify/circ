@@ -161,6 +161,7 @@ struct Replacer {
 
 impl Replacer {
     fn is_obliv(&self, a: &Term) -> bool {
+        println!("is obliv?");
         !self.not_obliv.contains(a)
     }
 }
@@ -168,7 +169,7 @@ impl Replacer {
 #[track_caller]
 fn get_const(t: &Term) -> usize {
     as_uint_constant(t)
-        .unwrap_or_else(|| panic!("non-const {}", t))
+        .unwrap_or_else(|| panic!("non-const: {}", t))
         .to_usize()
         .expect("oversize")
 }

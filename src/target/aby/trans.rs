@@ -7,6 +7,7 @@
 use rug::Integer;
 
 use crate::ir::opt::cfold::fold;
+use crate::ir::opt::tuple;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
@@ -506,14 +507,13 @@ impl<'a> ToABY<'a> {
                 assert!(t.cs.len() == 2);
                 let shares = self.get_shares(&t.cs[0]);
 
-                let idx: usize = if let Op::Const(v) = &t.cs[1].op {
-                    match v {
-                        Value::BitVector(b) => b.uint().to_usize().unwrap(),
-                        _ => todo!(),
-                    }
-                } else {
-                    todo!("Non-constant index into an array");
+                // Assume constant indexing
+                let idx = match &t.cs[1].op {
+                    Op::Const(Value::BitVector(bv)) => bv.uint().to_usize().unwrap().clone(),
+                    _ => panic!("non-const"),
                 };
+
+                assert!(idx < shares.len(), "idx: {}, shares: {}", idx, shares.len());
 
                 self.term_to_shares.insert(t.clone(), vec![shares[idx]]);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -525,14 +525,16 @@ impl<'a> ToABY<'a> {
     fn embed_scalar(&mut self, t: Term) {
         match &t.op {
             Op::Const(Value::Array(arr)) => {
-                for i in 0..arr.size {
+                let shares = self.get_shares(&t);
+                assert!(shares.len() == arr.size);
+
+                for (i, s) in shares.iter().enumerate() {
                     // TODO: sort of index might not be a 32-bit bitvector
                     let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
                     let v = match arr.map.get(&idx) {
                         Some(c) => c,
                         None => &*arr.default,
                     };
-                    let s = self.get_share(&t);
 
                     match v {
                         Value::BitVector(b) => {
@@ -560,10 +562,58 @@ impl<'a> ToABY<'a> {
                     }
                 }
             }
+            Op::Store => {
+                assert!(t.cs.len() == 3);
+                let mut array_shares = self.get_shares(&t.cs[0]);
+                let value_share = self.get_share(&t.cs[2]);
+
+                // Assume constant indexing
+                let idx = match &t.cs[1].op {
+                    Op::Const(Value::BitVector(bv)) => bv.uint().to_usize().unwrap().clone(),
+                    _ => panic!("non-const"),
+                };
+
+                array_shares[idx] = value_share;
+                self.term_to_shares.insert(t.clone(), array_shares);
+                self.cache.insert(t.clone(), EmbeddedTerm::Array);
+            }
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
                 let shares = self.get_shares(&t.cs[0]);
-                self.term_to_shares.insert(t.clone(), vec![shares[*i]]);
+
+                let tuple_sort = check(&t.cs[0]);
+                let (offset, len) = match tuple_sort {
+                    Sort::Tuple(t) => {
+                        assert!(*i < t.len());
+
+                        // find offset
+                        let mut offset = 0;
+                        for j in 0..*i {
+                            match t[j] {
+                                Sort::BitVector(_) => offset += 1,
+                                Sort::Bool => offset += 1,
+                                Sort::Array(_, _, size) => offset += size,
+                                _ => todo!(),
+                            }
+                        }
+
+                        // find len
+                        let len = match t[*i] {
+                            Sort::BitVector(_) => 1,
+                            Sort::Bool => 1,
+                            Sort::Array(_, _, size) => size,
+                            _ => todo!(),
+                        };
+
+                        (offset, len)
+                    }
+                    _ => panic!("Field op on non-tuple"),
+                };
+
+                // get ret slice
+                let field_shares = &shares[offset..offset + len];
+
+                self.term_to_shares.insert(t.clone(), field_shares.to_vec());
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
             }
             Op::Update(i) => {
@@ -590,7 +640,7 @@ impl<'a> ToABY<'a> {
                 // map argument shares
                 let mut arg_shares: Vec<i32> = Vec::new();
                 for c in t.cs.iter() {
-                    arg_shares.push(self.get_share(c));
+                    arg_shares.extend(self.get_shares(c));
                 }
                 let arg_shares_str: String =
                     arg_shares.iter().map(|&s| s.to_string() + " ").collect();
@@ -652,10 +702,11 @@ impl<'a> ToABY<'a> {
                 }
 
                 let op = "OUT";
-                let s = self.get_share(&t);
-                let line = format!("1 0 {} {}\n", s, op);
-
-                outputs.push(line);
+                let shares = self.get_shares(&t);
+                for s in shares {
+                    let line = format!("1 0 {} {}\n", s, op);
+                    outputs.push(line);
+                }
             }
 
             // write bytecode per function

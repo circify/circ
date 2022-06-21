@@ -3,7 +3,7 @@ use crate::ir::term::*;
 /// A rewriting pass.
 pub trait RewritePass {
     /// Visit (and possibly rewrite) a term.
-    /// Given the original term and a function to get its rewritten childen.
+    /// Given the original term and a function to get its rewritten children.
     /// Returns a term if a rewrite happens.
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
@@ -44,7 +44,7 @@ pub trait RewritePass {
     }
 }
 
-/// An analysis pass that repeated sweeps all terms, visiting them, untill a pass makes no more
+/// An analysis pass that repeated sweeps all terms, visiting them, until a pass makes no more
 /// progress.
 pub trait ProgressAnalysisPass {
     /// The visit function. Returns whether progress was made.
