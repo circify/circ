@@ -2,6 +2,7 @@
 
 pub mod trans;
 
+use crate::ir::term::*;
 use fxhash::FxHashMap as HashMap;
 pub(crate) use good_lp::{
     variable, Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver,
@@ -103,6 +104,28 @@ impl Ilp {
     }
 }
 
+/// Convert an ILP assignment to a bit-vector assignment.
+pub fn assignment_to_values(
+    assignment: &HashMap<String, f64>,
+    inputs: &HashMap<String, Sort>,
+) -> HashMap<String, Value> {
+    assignment
+        .iter()
+        .filter_map(|(name, v)| match inputs.get(name) {
+            Some(Sort::BitVector(n)) => Some((
+                name.clone(),
+                Value::BitVector(BitVector::new((v.round() as u64).into(), *n)),
+            )),
+            Some(s) => unimplemented!(
+                "Cannot reconstruct value of sort {} (var {}) from ILP output",
+                s,
+                name
+            ),
+            None => None,
+        })
+        .collect()
+}
+
 /// Why the ILP could not be solved
 #[derive(Debug)]
 pub enum IlpUnsat {
@@ -129,7 +152,7 @@ mod test {
         let solution = vars
             .maximise(a + b + c)
             .using(default_solver)
-            .with(a + b << 30.0)
+            .with((a + b) << 30.0)
             .solve()
             .unwrap();
         assert_eq!(solution.value(a), 1.0);
@@ -145,7 +168,7 @@ mod test {
         let solution = vars
             .maximise(a + b + c)
             .using(good_lp::solvers::lp_solvers::LpSolver(s))
-            .with(a + b << 30.0)
+            .with((a + b) << 30.0)
             .solve()
             .unwrap();
         assert_eq!(solution.value(a), 1.0);

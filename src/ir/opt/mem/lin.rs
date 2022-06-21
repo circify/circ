@@ -11,19 +11,12 @@ fn arr_val_to_tup(v: &Value) -> Value {
         Value::Array(Array {
             default, map, size, ..
         }) => Value::Tuple({
-            let mut vec: Vec<Value> = vec![arr_val_to_tup(default); *size];
+            let mut vec = vec![arr_val_to_tup(default); *size].into_boxed_slice();
             for (i, v) in map {
                 vec[i.as_usize().expect("non usize key")] = arr_val_to_tup(v);
             }
             vec
         }),
-        v => v.clone(),
-    }
-}
-
-fn arr_sort_to_tup(v: &Sort) -> Sort {
-    match v {
-        Sort::Array(_key, value, size) => Sort::Tuple(vec![arr_sort_to_tup(value); *size]),
         v => v.clone(),
     }
 }
@@ -37,16 +30,12 @@ impl RewritePass for Linearizer {
     ) -> Option<Term> {
         match &orig.op {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
-            Op::Var(name, sort @ Sort::Array(_k, _v, _size)) => {
-                let new_value = computation
-                    .values
-                    .as_ref()
-                    .map(|vs| arr_val_to_tup(vs.get(name).unwrap()));
-                let vis = computation.metadata.get_input_visibility(name);
-                let new_sort = arr_sort_to_tup(sort);
-                let new_var_info = vec![(name.clone(), new_sort.clone(), new_value, vis)];
-                computation.replace_input(orig.clone(), new_var_info);
-                Some(leaf_term(Op::Var(name.clone(), new_sort)))
+            Op::Var(name, Sort::Array(..)) => {
+                let precomp = extras::array_to_tuple(orig);
+                let new_name = format!("{}.tup", name);
+                let new_sort = check(&precomp);
+                computation.extend_precomputation(new_name.clone(), precomp);
+                Some(leaf_term(Op::Var(new_name, new_sort)))
             }
             Op::Select => {
                 let cs = rewritten_children();
@@ -95,9 +84,7 @@ pub fn linearize(c: &mut Computation) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ir::term::field::TEST_FIELD;
-    use rug::Integer;
-    use std::sync::Arc;
+    use crate::util::field::DFL_T;
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
@@ -110,15 +97,12 @@ mod test {
 
     fn count_ites(t: &Term) -> usize {
         PostOrderIter::new(t.clone())
-            .filter(|t| &t.op == &Op::Ite)
+            .filter(|t| t.op == Op::Ite)
             .count()
     }
 
     fn field_lit(u: usize) -> Term {
-        leaf_term(Op::Const(Value::Field(FieldElem::new(
-            Integer::from(u),
-            Arc::new(Integer::from(TEST_FIELD)),
-        ))))
+        leaf_term(Op::Const(Value::Field(DFL_T.new_v(u))))
     }
 
     #[test]
@@ -133,7 +117,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), bv_lit(2, 4), bv_lit(1, 4)]
+              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
             bv_lit(3, 4)
         ];
@@ -147,7 +131,7 @@ mod test {
     #[test]
     fn select_ite_stores_field() {
         let z = term![Op::Const(Value::Array(Array::new(
-            Sort::Field(Arc::new(Integer::from(TEST_FIELD))),
+            Sort::Field(DFL_T.clone()),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
             6
@@ -156,7 +140,7 @@ mod test {
             term![Op::Ite;
               leaf_term(Op::Const(Value::Bool(true))),
               term![Op::Store; z.clone(), field_lit(3), bv_lit(1, 4)],
-              term![Op::Store; z.clone(), field_lit(2), bv_lit(1, 4)]
+              term![Op::Store; z, field_lit(2), bv_lit(1, 4)]
             ],
             field_lit(3)
         ];

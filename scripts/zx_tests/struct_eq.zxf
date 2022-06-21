@@ -1,0 +1,18 @@
+struct Bar {
+    u8 d
+    u16 e
+}
+
+struct Foo {
+    u32[7] a
+    field b
+    u64 c
+    Bar d
+}
+
+def main() -> bool:
+    Bar w = Bar { d: 0, e: 0 }
+    Foo x = Foo { a: [7; 7], b: 1, c: 0, d: w }
+    assert(x != w)
+    assert(!(x == y))
+    return x == y || x != y

@@ -1,5 +1,6 @@
 //! Various data structures, etc.
 
+pub mod field;
 pub mod hc;
 pub mod once;
 

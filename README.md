@@ -4,9 +4,13 @@ CirC is a *compiler infrastructure* which supports compilation from
 high-level (stateful, uniform) languages to (state-free, non-uniform,
 existentially quantified) circuits.
 
-It's been used to compile {C, ZoKrates, Circom} to {SMT, R1CS}, but it
-probably also applies to any statically type high-level language and
-MPC/constant-time/ILP/FHE.
+It's been used to compile {C, ZoKrates, Circom} to {SMT, ILP, R1CS,
+MPC}, but it probably also applies to any statically type high-level
+language and constant-time/FHE.
+
+If you want to learn more about CirC, see our
+[paper](https://circ.zk.fyi) or
+[slides](https://cs.stanford.edu/~aozdemir/docs/circ.pdf).
 
 ## Requirements
 
@@ -67,18 +71,3 @@ and [cvc5](https://cvc5.github.io/) by setting the
 [RSMT2_CVC4_CMD](https://docs.rs/rsmt2/latest/rsmt2/conf/constant.CVC4_ENV_VAR.html)
 environmental variable to the SMT solver's invocation command (`cvc4` or
 `cvc5`).
-
-## Todo List
-
-- [ ] Intern variable names
-- [ ] Tweak log system to expect exact target match
-- [ ] C front-end
-- [ ] Tune R1CS optimizer
-   - [ ] Less hash maps
-   - [ ] Consider using ff/ark-ff instead of gmp
-   - [ ] Consider a lazy merging strategy
-- [ ] remove synchronization from term representation (or explore parallelism!)
-- [ ] More SMT solver support
-   - [ ] Parse cvc4 models
-- [ ] A more configurable term distribution (for fuzzing)
-- [ ] Add user-defined (aka opaque) operator to IR

@@ -1,10 +1,12 @@
 //! Bit-vector literal definition
 
 use rug::Integer;
+use serde::{Deserialize, Serialize};
 
 use std::fmt::{self, Display, Formatter};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Sub};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 /// A bit-vector constant
 pub struct BitVector {
     uint: Integer,
@@ -12,13 +14,19 @@ pub struct BitVector {
 }
 
 macro_rules! bv_arith_impl {
-    ($Trait:path, $fn:ident) => {
+    ($Trait:ident, $fn:ident) => {
         impl $Trait for BitVector {
             type Output = Self;
             fn $fn(self, other: Self) -> Self {
+                self.$fn(&other)
+            }
+        }
+        impl $Trait<&Self> for BitVector {
+            type Output = Self;
+            fn $fn(self, other: &Self) -> Self {
                 assert_eq!(self.width, other.width);
                 let r = BitVector {
-                    uint: (self.uint.$fn(other.uint)).keep_bits(self.width as u32),
+                    uint: (self.uint.$fn(&other.uint)).keep_bits(self.width as u32),
                     width: self.width,
                 };
                 r.check(std::stringify!($fn));
@@ -28,12 +36,12 @@ macro_rules! bv_arith_impl {
     };
 }
 
-bv_arith_impl!(std::ops::Add, add);
-bv_arith_impl!(std::ops::Sub, sub);
-bv_arith_impl!(std::ops::Mul, mul);
-bv_arith_impl!(std::ops::BitAnd, bitand);
-bv_arith_impl!(std::ops::BitOr, bitor);
-bv_arith_impl!(std::ops::BitXor, bitxor);
+bv_arith_impl!(Add, add);
+bv_arith_impl!(Sub, sub);
+bv_arith_impl!(Mul, mul);
+bv_arith_impl!(BitAnd, bitand);
+bv_arith_impl!(BitOr, bitor);
+bv_arith_impl!(BitXor, bitxor);
 
 /// SMT-semantics implementation of unsigned division (udiv).
 ///
@@ -80,9 +88,9 @@ impl std::ops::Rem<&BitVector> for BitVector {
     }
 }
 
-impl std::ops::Shl for BitVector {
+impl std::ops::Shl<&Self> for BitVector {
     type Output = Self;
-    fn shl(self, other: Self) -> Self {
+    fn shl(self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
         let r = BitVector {
             uint: (self.uint.shl(other.uint.to_u32().unwrap())).keep_bits(self.width as u32),
@@ -220,6 +228,26 @@ impl BitVector {
             uint: Integer::from(0),
             width: n,
         }
+    }
+    /// Parse the `#bBBBBB` SMT bit-vector constant format
+    pub fn from_bin_lit(lit: &[u8]) -> Option<BitVector> {
+        if lit.len() < 3 || &lit[..2] != b"#b" {
+            return None;
+        }
+        Some(BitVector {
+            uint: Integer::parse_radix(&lit[2..], 2).ok()?.into(),
+            width: lit.len() - 2,
+        })
+    }
+    /// Parse the `#xFF` SMT bit-vector constant format
+    pub fn from_hex_lit(lit: &[u8]) -> Option<BitVector> {
+        if lit.len() < 3 || &lit[..2] != b"#x" {
+            return None;
+        }
+        Some(BitVector {
+            uint: Integer::parse_radix(&lit[2..], 16).ok()?.into(),
+            width: 4 * (lit.len() - 2),
+        })
     }
 }
 

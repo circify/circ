@@ -8,4 +8,10 @@ __pycache__
 /pi
 /x
 /perf.data*
+/heaptrack.*
+/flamegraph.*
 /.gdb_history
+.features.txt
+.mode.txt
+scripts/aby_tests/tests
+/flamegraph*.svg
