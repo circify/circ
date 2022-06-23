@@ -46,10 +46,8 @@ impl Display for Letified {
         for t in PostOrderIter::new(self.0.clone()) {
             let letify = if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
                 true
-            } else if let Op::Const(Value::Array(..)) = &t.op {
-                true
             } else {
-                false
+                matches!(&t.op, Op::Const(Value::Array(..)))
             };
             if letify {
                 let name = format!("let_{}", let_ct);

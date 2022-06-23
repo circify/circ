@@ -144,6 +144,8 @@ impl ArrayGraph {
         let mut arrs = TermSet::default();
         let mut subsumed = TermSet::default();
         // We go parent->children to see conditional stores before their subsumed stores.
+        // clippy thinks this is needless, but we need it for the reverse iteration.
+        #[allow(clippy::needless_collect)]
         let terms: Vec<_> = c.terms_postorder().collect();
         for t in terms.into_iter().rev() {
             let mut is_c_store = false;
@@ -165,7 +167,7 @@ impl ArrayGraph {
             if !is_c_store && !subsumed.contains(&t) {
                 if let Sort::Array(..) = check(&t) {
                     for c in &t.cs {
-                        if let Sort::Array(..) = check(&c) {
+                        if let Sort::Array(..) = check(c) {
                             arrs.insert(t.clone());
                             ps.entry(c.clone()).or_insert_with(Vec::new).push(t.clone());
                             cs.entry(t.clone()).or_insert_with(Vec::new).push(c.clone());
@@ -453,40 +455,41 @@ mod test {
 
     #[test]
     fn two_rams_and_one_non_ram() {
-        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
-            Sort::BitVector(4),
-            &Sort::BitVector(3),
-            4,
-        ))));
-        let mut cs = Computation::default();
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let cs = text::parse_computation(
+            b"
+            (computation
+                (metadata () ((a bool)) ())
+                (let
+                    (
+                        ; connected component 0: simple store chain
+                        (c_array (#a (bv 4) #b000 4 ()))
+                        (store_0_1 (store c_array #x0 #b001))
+                        (store_0_2 (store store_0_1 #x1 #b001))
+                        (select_0 (select store_0_2 #x0))
 
-        // connected component 0: simple store chain
-        let store_0_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)];
-        let store_0_2 = term![Op::Store; store_0_1.clone(), bv_lit(1, 4), bv_lit(1, 3)];
-        let select_0 = term![Op::Select; store_0_2, bv_lit(0, 4)];
-        cs.outputs.push(select_0);
+                        ; connected component 1: conditional store chain
+                        (store_1_1 (ite a (store c_array #x0 #b010) c_array))
+                        (store_1_2 (ite a (store store_1_1 #x1 #b010) store_1_1))
+                        (select_1 (select store_1_2 #x0))
 
-        // connected component 1: conditional store chain
-        let store_1_1 = term![Op::Ite; a.clone(), term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(2, 3)], c_array.clone()];
-        let store_1_2 = term![Op::Ite; a.clone(), term![Op::Store; store_1_1.clone(), bv_lit(1, 4), bv_lit(2, 3)], store_1_1];
-        let select_1 = term![Op::Select; store_1_2, bv_lit(0, 4)];
-        cs.outputs.push(select_1);
-
-        // connected component 2: not a RAM
-        let store_2_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(3, 3)];
-        let store_2_2 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(3, 3)];
-        let ite = term![Op::Ite; bool_lit(true), store_2_1, store_2_2];
-        let select_2 = term![Op::Select; ite, bv_lit(0, 4)];
-        cs.outputs.push(select_2);
-        assert_eq!(3, cs.outputs.len());
+                        ; connected component 2: not a RAM
+                        (store_2_1 (ite a (store c_array #x0 #b011) c_array))
+                        (store_2_2 (ite a (store c_array #x0 #b011) c_array))
+                        (ite_ (ite true store_2_1 store_2_2))
+                        (select_2 (select ite_ #x0))
+                    )
+                    (bvand select_0 select_1 select_2)
+                )
+            )
+        ",
+        );
 
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
-        assert_eq!(3, cs2.outputs.len());
+        assert_eq!(1, cs2.outputs.len());
         assert_ne!(cs, cs2);
         assert_eq!(2, rams.len());
-        assert_eq!(cs.outputs[2], cs2.outputs[2]);
+        assert_eq!(cs.outputs[0].cs[2], cs2.outputs[0].cs[2]);
         assert_eq!(3, rams[0].accesses.len());
         assert_eq!(3, rams[1].accesses.len());
     }
@@ -507,7 +510,7 @@ mod test {
             &Sort::BitVector(4),
             16,
         ))));
-        let store_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), c_in_array];
+        let store_1 = term![Op::Store; c_array, bv_lit(0, 4), c_in_array];
         let select = term![Op::Select; term![Op::Select; store_1, bv_lit(0, 4)], bv_lit(0, 4)];
         let mut cs = Computation::default();
         cs.outputs.push(select);

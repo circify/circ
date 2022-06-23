@@ -525,7 +525,7 @@ impl<'src> IrInterp<'src> {
     /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
     fn metadata(&mut self, tt: &TokTree<'src>) -> (ComputationMetadata, Vec<Vec<u8>>) {
         if let List(tts) = tt {
-            if tts.len() == 0 || &tts[0] != &Leaf(Token::Ident, b"metadata") {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"metadata") {
                 panic!(
                     "Expected meta-data, but list did not start with 'metadata': {}",
                     tt
@@ -559,7 +559,7 @@ impl<'src> IrInterp<'src> {
     /// Parse a computation.
     pub fn computation(&mut self, tt: &TokTree<'src>) -> Computation {
         if let List(tts) = tt {
-            if tts.len() == 0 || &tts[0] != &Leaf(Token::Ident, b"computation") {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"computation") {
                 panic!(
                     "Expected computation, but list did not start with 'computation': {}",
                     tt
@@ -825,9 +825,9 @@ mod test {
             )",
         );
         assert_eq!(c.metadata.input_vis.len(), 3);
-        assert_eq!(c.metadata.is_input_public("a"), false);
-        assert_eq!(c.metadata.is_input_public("b"), true);
-        assert_eq!(c.metadata.is_input_public("A"), true);
+        assert!(!c.metadata.is_input_public("a"));
+        assert!(c.metadata.is_input_public("b"));
+        assert!(c.metadata.is_input_public("A"));
         assert_eq!(c.outputs().len(), 1);
         assert_eq!(check(&c.outputs()[0]), Sort::Bool);
         let s = serialize_computation(&c);

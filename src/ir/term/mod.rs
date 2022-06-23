@@ -1817,7 +1817,7 @@ impl ComputationMetadata {
             .iter()
             .map(|i| {
                 let vis = visibilities.get(i).map(|p| *party_ids.get(p).unwrap());
-                let term = inputs.remove(i).unwrap().clone();
+                let term = inputs.remove(i).unwrap();
                 (i.clone(), (term, vis))
             })
             .collect();
