@@ -10,7 +10,7 @@ use crate::ir::term::*;
 /// A "precomputation".
 ///
 /// Expresses a computation to be run in advance by a single party.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
     outputs: FxHashMap<String, Term>,

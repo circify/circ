@@ -320,17 +320,19 @@ mod test {
 
     #[test]
     fn non_ram() {
-        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
-            Sort::BitVector(4),
-            &Sort::BitVector(4),
-            4,
-        ))));
-        let store_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 4)];
-        let store_2 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(2, 4)];
-        let ite = term![Op::Ite; bool_lit(true), store_1, store_2];
-        let select = term![Op::Select; ite, bv_lit(0, 4)];
-        let mut cs = Computation::default();
-        cs.outputs.push(select);
+        let cs = text::parse_computation(b"
+            (computation
+                (metadata () () ())
+                (let
+                    (
+                        (c_array (#a (bv 4) #x0 4 ()))
+                        (store_1 (store c_array #x0 #x1))
+                        (store_2 (store c_array #x0 #x2))
+                    )
+                    (select (ite true store_1 store_2) #x0)
+                )
+            )
+        ");
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         assert_eq!(0, rams.len());
@@ -339,16 +341,19 @@ mod test {
 
     #[test]
     fn simple_store_chain() {
-        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
-            Sort::BitVector(4),
-            &Sort::BitVector(3),
-            4,
-        ))));
-        let store_1 = term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)];
-        let store_2 = term![Op::Store; store_1.clone(), bv_lit(1, 4), bv_lit(2, 3)];
-        let select = term![Op::Select; store_2, bv_lit(0, 4)];
-        let mut cs = Computation::default();
-        cs.outputs.push(select);
+        let cs = text::parse_computation(b"
+            (computation
+                (metadata () () ())
+                (let
+                    (
+                        (c_array (#a (bv 4) #b000 4 ()))
+                        (store_1 (store c_array #x0 #b001))
+                        (store_2 (store store_1 #x1 #b010))
+                    )
+                    (select store_2 #x0)
+                )
+            )
+        ");
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         assert_ne!(cs, cs2);
@@ -369,19 +374,22 @@ mod test {
 
     #[test]
     fn c_store_chain() {
-        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
-            Sort::BitVector(4),
-            &Sort::BitVector(3),
-            4,
-        ))));
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
-        let store_1 = term![Op::Ite; a.clone(), term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)], c_array];
-        let store_2 = term![Op::Ite; a.clone(), term![Op::Store; store_1.clone(), bv_lit(1, 4), bv_lit(1, 3)], store_1];
-        let select = term![Op::Select; store_2, bv_lit(0, 4)];
-        let mut cs = Computation::default();
-        cs.outputs.push(select);
+        let cs = text::parse_computation(b"
+            (computation
+                (metadata () ((a bool)) ())
+                (let
+                    (
+                        (c_array (#a (bv 4) #b000 4 ()))
+                        (store_1 (ite a (store c_array #x0 #b001) c_array))
+                        (store_2 (ite a (store store_1 #x1 #b001) store_1))
+                    )
+                    (select store_2 #x0)
+                )
+            )
+        ");
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
+        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
         assert_eq!(Sort::BitVector(4), rams[0].idx_sort);
@@ -400,19 +408,22 @@ mod test {
 
     #[test]
     fn mix_store_chain() {
-        let c_array = leaf_term(Op::Const(Value::Array(Array::default(
-            Sort::BitVector(4),
-            &Sort::BitVector(3),
-            4,
-        ))));
         let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
-        let store_1 = term![Op::Ite; a.clone(), term![Op::Store; c_array.clone(), bv_lit(0, 4), bv_lit(1, 3)], c_array];
-        let store_2 = term![Op::Store; store_1.clone(), bv_lit(1, 4), bv_lit(1, 3)];
-        let store_3 = term![Op::Ite; a.clone(), term![Op::Store; store_2.clone(), bv_lit(2, 4), bv_lit(1, 3)], store_2];
-        let store_4 = term![Op::Store; store_3.clone(), bv_lit(3, 4), bv_lit(1, 3)];
-        let select = term![Op::Select; store_4, bv_lit(0, 4)];
-        let mut cs = Computation::default();
-        cs.outputs.push(select);
+        let cs = text::parse_computation(b"
+            (computation
+                (metadata () ((a bool)) ())
+                (let
+                    (
+                        (c_array (#a (bv 4) #b000 4 ()))
+                        (store_1 (ite a (store c_array #x0 #b001) c_array))
+                        (store_2 (store store_1 #x1 #b011))
+                        (store_3 (ite a (store store_2 #x2 #b001) store_2))
+                        (store_4 (store store_3 #x3 #b011))
+                    )
+                    (select store_4 #x0)
+                )
+            )
+        ");
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         assert_ne!(cs, cs2);
