@@ -302,7 +302,7 @@ impl RewritePass for Extactor {
 ///   2. Builds a transcript for each RAM.
 ///
 /// A conditional store must have form (ite C (store A I V) I) to be detected.
-/// 
+///
 /// Limitations:
 /// * This pass doesn't handle shared stuff very well. If there are two
 ///   different RAMs with the same init sequence of instructions, this pass will
@@ -320,7 +320,8 @@ mod test {
 
     #[test]
     fn non_ram() {
-        let cs = text::parse_computation(b"
+        let cs = text::parse_computation(
+            b"
             (computation
                 (metadata () () ())
                 (let
@@ -332,7 +333,8 @@ mod test {
                     (select (ite true store_1 store_2) #x0)
                 )
             )
-        ");
+        ",
+        );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         assert_eq!(0, rams.len());
@@ -341,7 +343,8 @@ mod test {
 
     #[test]
     fn simple_store_chain() {
-        let cs = text::parse_computation(b"
+        let cs = text::parse_computation(
+            b"
             (computation
                 (metadata () () ())
                 (let
@@ -353,7 +356,8 @@ mod test {
                     (select store_2 #x0)
                 )
             )
-        ");
+        ",
+        );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         assert_ne!(cs, cs2);
@@ -374,7 +378,8 @@ mod test {
 
     #[test]
     fn c_store_chain() {
-        let cs = text::parse_computation(b"
+        let cs = text::parse_computation(
+            b"
             (computation
                 (metadata () ((a bool)) ())
                 (let
@@ -386,7 +391,8 @@ mod test {
                     (select store_2 #x0)
                 )
             )
-        ");
+        ",
+        );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
@@ -409,7 +415,8 @@ mod test {
     #[test]
     fn mix_store_chain() {
         let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
-        let cs = text::parse_computation(b"
+        let cs = text::parse_computation(
+            b"
             (computation
                 (metadata () ((a bool)) ())
                 (let
@@ -423,7 +430,8 @@ mod test {
                     (select store_4 #x0)
                 )
             )
-        ");
+        ",
+        );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
         assert_ne!(cs, cs2);
@@ -487,7 +495,11 @@ mod test {
     fn nested() {
         let c_array = leaf_term(Op::Const(Value::Array(Array::default(
             Sort::BitVector(4),
-            &Sort::Array(Box::new(Sort::BitVector(4)), Box::new(Sort::BitVector(4)), 16),
+            &Sort::Array(
+                Box::new(Sort::BitVector(4)),
+                Box::new(Sort::BitVector(4)),
+                16,
+            ),
             4,
         ))));
         let c_in_array = leaf_term(Op::Const(Value::Array(Array::default(

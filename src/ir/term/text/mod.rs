@@ -1,9 +1,9 @@
 //! Defines a textual serialization format for [Term]s.
 //!
 //! Includes a parser ([parse_term]) and serializer ([serialize_term]) for [Term]s.
-//! 
+//!
 //! Includes a parser ([parse_value_map]) and serializer ([serialize_value_map]) for value maps.
-//! 
+//!
 //! Includes a parser ([parse_computation]) and serializer ([serialize_computation]) for [Computation]s.
 //!
 //!
@@ -834,5 +834,4 @@ mod test {
         let c2 = parse_computation(s.as_bytes());
         assert_eq!(c, c2);
     }
-
 }
