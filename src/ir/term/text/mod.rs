@@ -45,7 +45,6 @@
 //!   * Operator `O`:
 //!     * Plain operators: (`bvmul`, `and`, ...)
 //!     * Composite operators: `(field N)`, `(update N)`, `(sext N)`, `(uext N)`, `(bit N)`, ...
-//!       * call operator: `(call X (X1 ... XN) (S1 ... SN) (RS1 ... RSN))`
 
 use circ_fields::{FieldT, FieldV};
 
@@ -702,20 +701,6 @@ mod test {
     fn bv() {
         let t = parse_term(b"(declare ((a (bv 5)) (b (bv 3))) (let ((c (bvand a a))) (bvxor (bvor (bvnot a) a) a ((sext 2) b))))");
         assert_eq!(check(&t), Sort::BitVector(5));
-    }
-
-    #[test]
-    fn call_roundtrip() {
-        let t = parse_term(
-            b"
-            (declare ((a bool))
-                ((field 0) ( (call myxor (a b) (bool bool) (bool)) a a ))
-            )",
-        );
-        assert_eq!(check(&t), Sort::Bool);
-        let s = serialize_term(&t);
-        let t2 = parse_term(s.as_bytes());
-        assert_eq!(t, t2);
     }
 
     #[test]
