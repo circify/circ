@@ -94,12 +94,18 @@ def test(features, extra_args):
     build(features)
 
     test_cmd = ["cargo", "test"]
+    test_cmd_release = ["cargo", "test", "--release"]
     cargo_features = filter_cargo_features(features)
     if cargo_features:
-        test_cmd = test_cmd + ["--features"] + cargo_features + ["--"] + extra_args
+        test_cmd += ["--features"] + cargo_features
+        test_cmd_release += ["--features"] + cargo_features
+    if len(extra_args) > 0:
+        test_cmd += ["--"] + extra_args
+        test_cmd_release += ["--"] + extra_args
+
     subprocess.run(test_cmd, check=True)
     if load_mode() == "release":
-        subprocess.run(test_cmd + ["--release"], check=True)
+        subprocess.run(test_cmd_release, check=True)
 
     if "r1cs" in features and "smt" in features:
         subprocess.run(["./scripts/test_datalog.zsh"], check=True)

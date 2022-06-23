@@ -1697,10 +1697,7 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
-/// Ciphertext/Plaintext identifier
-pub type EncStatus = bool;
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
@@ -1801,9 +1798,68 @@ impl ComputationMetadata {
             })
             .collect()
     }
+
+    /// From a list of parties, a list of inputs, and a list of visibilities,
+    /// create a [ComputationMetadata].
+    pub fn from_parts(
+        parties: Vec<String>,
+        mut inputs: FxHashMap<String, Term>,
+        visibilities: FxHashMap<String, String>,
+    ) -> Self {
+        let party_ids: FxHashMap<String, PartyId> = parties
+            .into_iter()
+            .enumerate()
+            .map(|(i, n)| (n, i as u8))
+            .collect();
+        let next_party_id = party_ids.len() as u8;
+        let computation_inputs: FxHashSet<String> = inputs.iter().map(|(i, _)| i.clone()).collect();
+        let input_vis = computation_inputs
+            .iter()
+            .map(|i| {
+                let vis = visibilities.get(i).map(|p| *party_ids.get(p).unwrap());
+                let term = inputs.remove(i).unwrap();
+                (i.clone(), (term, vis))
+            })
+            .collect();
+        ComputationMetadata {
+            party_ids,
+            next_party_id,
+            input_vis,
+            computation_inputs,
+        }
+    }
+
+    /// Remove an input
+    pub fn remove_var(&mut self, name: &str) {
+        self.input_vis.remove(name);
+        self.computation_inputs.remove(name);
+    }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+impl Display for ComputationMetadata {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "(metadata\n  (")?;
+        for id in 0..self.next_party_id {
+            let party = self.party_ids.iter().find(|(_, i)| **i == id).unwrap().0;
+            write!(f, " {}", party)?;
+        }
+        write!(f, ")\n  (")?;
+        for input in self.input_vis.keys() {
+            let sort = self.input_sort(input);
+            write!(f, " ({} {})", input, sort)?;
+        }
+        write!(f, ")\n  (")?;
+        for (input, (_, vis)) in &self.input_vis {
+            if let Some(id) = vis {
+                let party = self.party_ids.iter().find(|(_, i)| *i == id).unwrap();
+                write!(f, " ({} {})", input, party.0)?;
+            }
+        }
+        write!(f, ")\n)")
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
@@ -1866,6 +1922,11 @@ impl Computation {
         };
         let sort = check(&precomp);
         self.new_var(&new_input_var, sort, vis, Some(precomp));
+    }
+
+    /// Change the sort of a variables
+    pub fn remove_var(&mut self, var: &str) {
+        self.metadata.remove_var(var);
     }
 
     /// Assert `s` in the system.
