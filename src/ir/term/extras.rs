@@ -167,6 +167,17 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
     }
 }
 
+/// Assert that all variables in the term graph are declared in the metadata.
+#[cfg(test)]
+pub fn assert_all_vars_declared(c: &Computation) {
+    let vars: FxHashSet<String> = c.metadata.input_vis.iter().map(|p| p.0.clone()).collect();
+    for o in &c.outputs {
+        for v in free_variables(o.clone()) {
+            assert!(vars.contains(&v), "Variable {} is not declared", v);
+        }
+    }
+}
+
 /// Build a map from every term in the computation to its parents.
 ///
 /// Guarantees that every computation term is a key in the map. If there are no

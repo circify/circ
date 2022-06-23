@@ -64,10 +64,15 @@ impl Ram {
             init_val: *const_.default,
         }
     }
-    fn new_read(&mut self, idx: Term) -> Term {
+    fn new_read(&mut self, idx: Term, computation: &mut Computation, read_value: Term) -> Term {
         let val_name = format!("__ram_{}_{}", self.id, self.accesses.len());
         debug_assert_eq!(&check(&idx), &self.idx_sort);
-        let var = leaf_term(Op::Var(val_name, self.val_sort.clone()));
+        let var = computation.new_var(
+            &val_name,
+            check(&read_value),
+            Some(crate::ir::proof::PROVER_ID),
+            Some(read_value),
+        );
         self.accesses.push(Access::new_read(idx, var.clone()));
         var
     }
@@ -250,7 +255,7 @@ impl Extactor {
 impl RewritePass for Extactor {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
-        _computation: &mut Computation,
+        computation: &mut Computation,
         t: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
@@ -288,7 +293,7 @@ impl RewritePass for Extactor {
                 Op::Select if self.graph.is_ram(&t.cs[0]) => {
                     let ram_id = self.get_or_start(&t.cs[0]);
                     let ram = &mut self.rams[ram_id];
-                    let read_value = ram.new_read(t.cs[1].clone());
+                    let read_value = ram.new_read(t.cs[1].clone(), computation, t.clone());
                     self.read_terms.insert(t.clone(), read_value.clone());
                     Some(read_value)
                 }
@@ -339,6 +344,7 @@ mod test {
         );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
+        extras::assert_all_vars_declared(&cs2);
         assert_eq!(0, rams.len());
         assert_eq!(cs, cs2);
     }
@@ -362,6 +368,7 @@ mod test {
         );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
+        extras::assert_all_vars_declared(&cs2);
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
         assert_eq!(Sort::BitVector(4), rams[0].idx_sort);
@@ -376,6 +383,7 @@ mod test {
         assert_eq!(bv_lit(1, 3), rams[0].accesses[0].val);
         assert_eq!(bv_lit(2, 3), rams[0].accesses[1].val);
         assert!(rams[0].accesses[2].val.is_var());
+        dbg!(cs2);
     }
 
     #[test]
@@ -397,6 +405,7 @@ mod test {
         );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
+        extras::assert_all_vars_declared(&cs2);
         let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
@@ -436,6 +445,7 @@ mod test {
         );
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
+        extras::assert_all_vars_declared(&cs2);
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
         assert_eq!(Sort::BitVector(4), rams[0].idx_sort);
@@ -486,6 +496,7 @@ mod test {
 
         let mut cs2 = cs.clone();
         let rams = extract(&mut cs2);
+        extras::assert_all_vars_declared(&cs2);
         assert_eq!(1, cs2.outputs.len());
         assert_ne!(cs, cs2);
         assert_eq!(2, rams.len());
