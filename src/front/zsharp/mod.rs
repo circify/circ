@@ -706,6 +706,7 @@ impl<'ast> ZGen<'ast> {
                     let ret_var_val = self
                         .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
+
                     let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
                     let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
                     let to_assert = if assertions.is_empty() {
@@ -714,7 +715,7 @@ impl<'ast> ZGen<'ast> {
                         assertions.push(ret_eq);
                         term(AND, assertions)
                     };
-                    self.circ.borrow_mut().assert(to_assert);
+                    self.circ_assert(to_assert);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
@@ -1064,9 +1065,7 @@ impl<'ast> ZGen<'ast> {
         if IS_CNST {
             self.cvar_declare(name, ty)
         } else {
-            self.circ
-                .borrow_mut()
-                .declare_uninit(name, ty)
+            self.circ_declare_uninit(name, ty)
                 .map_err(|e| format!("{}", e))
         }
     }
@@ -1868,6 +1867,10 @@ impl<'ast> ZGen<'ast> {
 
     fn circ_declare_init(&self, name: String, ty: Ty, val: Val<T>) -> Result<Val<T>, CircError> {
         self.circ.borrow_mut().declare_init(name, ty, val)
+    }
+
+    fn circ_declare_uninit(&self, name: String, ty: &Ty) -> Result<(), CircError> {
+        self.circ.borrow_mut().declare_uninit(name, ty)
     }
 
     fn circ_get_value(&self, loc: Loc) -> Result<Val<T>, CircError> {
