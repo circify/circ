@@ -706,9 +706,17 @@ impl<'ast> ZGen<'ast> {
                     let ret_var_val = self
                         .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
+                    let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
+                    let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
+                    let to_assert = if assertions.is_empty() {
+                        ret_eq
+                    } else {
+                        assertions.push(ret_eq);
+                        term(AND, assertions)
+                    };
                     self.circ
                         .borrow_mut()
-                        .assert(eq(ret_val, ret_var_val).unwrap().term);
+                        .assert(to_assert);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
