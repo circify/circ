@@ -38,6 +38,7 @@ fn main() {
     let inputs = Inputs {
         file: options.zsharp_path,
         mode,
+        isolate_asserts: false,
     };
     let cs = ZSharpFE::interpret(inputs);
     cs.pretty(&mut std::io::stdout().lock())

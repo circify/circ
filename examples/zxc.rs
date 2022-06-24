@@ -92,6 +92,7 @@ fn main() {
         let inputs = zsharp::Inputs {
             file: options.path,
             mode: Mode::Proof,
+            isolate_asserts: false,
         };
         ZSharpFE::gen(inputs)
     };

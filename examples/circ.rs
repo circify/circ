@@ -80,6 +80,14 @@ struct FrontendOptions {
     /// Lint recursions that are allegedly primitive recursive (datalog)
     #[structopt(long)]
     lint_prim_rec: bool,
+
+    /// In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take
+    /// effect if that branch is active.
+    ///
+    /// See `--branch-isolation` in
+    /// [ZoKrates](https://zokrates.github.io/language/control_flow.html).
+    #[structopt(long)]
+    z_isolate_asserts: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -182,6 +190,7 @@ fn main() {
             let inputs = zsharp::Inputs {
                 file: options.path,
                 mode,
+                isolate_asserts: options.frontend.z_isolate_asserts,
             };
             ZSharpFE::gen(inputs)
         }
