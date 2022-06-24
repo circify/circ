@@ -32,6 +32,10 @@ pub struct Inputs {
     pub file: PathBuf,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
+    /// Whether to isolate assertions.
+    ///
+    /// That is, whether assertions in in-active if/then/else branches are disabled.
+    pub isolate_asserts: bool,
 }
 
 /// The Z# front-end. Implements [FrontEnd].
@@ -46,7 +50,7 @@ impl FrontEnd for ZSharpFE {
         );
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib());
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -65,7 +69,7 @@ impl ZSharpFE {
     pub fn interpret(i: Inputs) -> T {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib());
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -93,6 +97,8 @@ struct ZGen<'ast> {
     lhs_ty: RefCell<Option<Ty>>,
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
+    assertions: RefCell<Vec<Term>>,
+    isolate_asserts: bool,
 }
 
 impl<'ast> Drop for ZGen<'ast> {
@@ -138,6 +144,7 @@ impl<'ast> ZGen<'ast> {
         asts: HashMap<PathBuf, ast::File<'ast>>,
         mode: Mode,
         stdlib: &'ast parser::ZStdLib,
+        isolate_asserts: bool,
     ) -> Self {
         let this = Self {
             circ: RefCell::new(Circify::new(ZSharp::new())),
@@ -155,6 +162,8 @@ impl<'ast> ZGen<'ast> {
             lhs_ty: Default::default(),
             ret_ty_stack: Default::default(),
             gc_depth_estimate: Cell::new(2 * GC_INC),
+            assertions: Default::default(),
+            isolate_asserts,
         };
         this.circ
             .borrow()
@@ -697,9 +706,15 @@ impl<'ast> ZGen<'ast> {
                     let ret_var_val = self
                         .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
-                    self.circ
-                        .borrow_mut()
-                        .assert(eq(ret_val, ret_var_val).unwrap().term);
+                    let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
+                    let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
+                    let to_assert = if assertions.is_empty() {
+                        ret_eq
+                    } else {
+                        assertions.push(ret_eq);
+                        term(AND, assertions)
+                    };
+                    self.circ.borrow_mut().assert(to_assert);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
@@ -924,8 +939,13 @@ impl<'ast> ZGen<'ast> {
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),
                     _ => {
                         let c = self.expr_impl_::<false>(&u.first)?;
+                        let cbool = bool(c.clone())?;
+                        self.circ_enter_condition(cbool.clone());
                         let a = self.expr_impl_::<false>(&u.second)?;
+                        self.circ_exit_condition();
+                        self.circ_enter_condition(term![NOT; cbool]);
                         let b = self.expr_impl_::<false>(&u.third)?;
+                        self.circ_exit_condition();
                         cond(c, a, b)
                     }
                 }
@@ -1107,7 +1127,7 @@ impl<'ast> ZGen<'ast> {
                     )),
                     _ => {
                         let b = bool(self.expr_impl_::<false>(&e.expression)?)?;
-                        self.circ_assert(b);
+                        self.assert(b);
                         Ok(())
                     }
                 }
@@ -1787,10 +1807,30 @@ impl<'ast> ZGen<'ast> {
             .map(|m| (m.as_ref(), s_path))
     }
 
+    fn assert(&self, asrt: Term) {
+        debug_assert!(matches!(check(&asrt), Sort::Bool));
+        if self.isolate_asserts {
+            let path = self.circ_condition();
+            self.assertions
+                .borrow_mut()
+                .push(term![IMPLIES; path, asrt]);
+        } else {
+            self.assertions.borrow_mut().push(asrt);
+        }
+    }
+
     /*** circify wrapper functions (hides RefCell) ***/
 
-    fn circ_assert(&self, asrt: Term) {
-        self.circ.borrow_mut().assert(asrt)
+    fn circ_enter_condition(&self, cond: Term) {
+        self.circ.borrow_mut().enter_condition(cond).unwrap();
+    }
+
+    fn circ_exit_condition(&self) {
+        self.circ.borrow_mut().exit_condition()
+    }
+
+    fn circ_condition(&self) -> Term {
+        self.circ.borrow().condition()
     }
 
     fn circ_return_(&self, ret: Option<T>) -> Result<(), CircError> {

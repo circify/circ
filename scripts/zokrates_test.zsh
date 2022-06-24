@@ -34,6 +34,15 @@ function pf_test {
     rm -rf P V pi
 }
 
+# Test prove workflow with --z-isolate-asserts, given an example name
+function pf_test_isolate {
+    ex_name=$1
+    $BIN --z-isolate-asserts examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
+    rm -rf P V pi
+}
+
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOrderCheck.zok
@@ -48,6 +57,8 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zo
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
 
+pf_test assert
+pf_test_isolate isolate_assert
 pf_test 3_plus
 pf_test xor
 pf_test mul
