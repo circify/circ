@@ -714,9 +714,7 @@ impl<'ast> ZGen<'ast> {
                         assertions.push(ret_eq);
                         term(AND, assertions)
                     };
-                    self.circ
-                        .borrow_mut()
-                        .assert(to_assert);
+                    self.circ.borrow_mut().assert(to_assert);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
@@ -1813,7 +1811,9 @@ impl<'ast> ZGen<'ast> {
         debug_assert!(matches!(check(&asrt), Sort::Bool));
         if self.isolate_asserts {
             let path = self.circ_condition();
-            self.assertions.borrow_mut().push(term![IMPLIES; path, asrt]);
+            self.assertions
+                .borrow_mut()
+                .push(term![IMPLIES; path, asrt]);
         } else {
             self.assertions.borrow_mut().push(asrt);
         }
