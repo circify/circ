@@ -373,7 +373,11 @@ impl R1cs<String> {
         }
     }
 
-    fn pv_data(&self, cs: &Computation, is_ver: bool) -> (HashMap<String, Sort>, precomp::PreComp, Vec<String>) {
+    fn pv_data(
+        &self,
+        cs: &Computation,
+        is_ver: bool,
+    ) -> (HashMap<String, Sort>, precomp::PreComp, Vec<String>) {
         use crate::ir::proof::PROVER_ID;
         let party_id = if is_ver { None } else { Some(PROVER_ID) };
         let mut precompute = cs.precomputes.clone();

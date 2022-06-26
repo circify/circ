@@ -8,8 +8,8 @@ use super::{FrontEnd, Mode};
 use crate::circify::{CircError, Circify, Loc, Val};
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::proof::ConstraintMetadata;
-use crate::ir::term::*;
 use crate::ir::term::text::serialize_value_map;
+use crate::ir::term::*;
 use crate::util::field::DFL_T;
 
 use log::{debug, warn};
@@ -86,7 +86,10 @@ impl ZSharpFE {
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(asts, i.mode, loader.stdlib());
         g.visit_files();
-        let cm = g.constants.get(&i.file).expect("Error: top-level constants missing");
+        let cm = g
+            .constants
+            .get(&i.file)
+            .expect("Error: top-level constants missing");
         let const_map = cm
             .iter()
             .map(|(k, v)| (k.as_str(), v.1.term.as_value_opt().unwrap()))

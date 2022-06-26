@@ -663,7 +663,7 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
 /// Serialize an IR "value map": a map from strings to values.
 ///
 /// See [parse_value_map].
-pub fn serialize_value_map<K,V>(src: &HashMap<K, V>, modulus: Option<&FieldT>) -> String
+pub fn serialize_value_map<K, V>(src: &HashMap<K, V>, modulus: Option<&FieldT>) -> String
 where
     K: std::borrow::Borrow<str>,
     V: std::borrow::Borrow<Value>,
