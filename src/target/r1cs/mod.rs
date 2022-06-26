@@ -373,13 +373,14 @@ impl R1cs<String> {
         }
     }
 
-    /// Compute the verifier data for this R1CS relation, given a precomputation
-    /// that computes the variables that are relation inputs
-    pub fn verifier_data(&self, cs: &Computation) -> VerifierData {
+    fn pv_data(&self, cs: &Computation, is_ver: bool) -> (HashMap<String, Sort>, precomp::PreComp, Vec<String>) {
+        use crate::ir::proof::PROVER_ID;
+        let party_id = if is_ver { None } else { Some(PROVER_ID) };
         let mut precompute = cs.precomputes.clone();
-        self.extend_precomputation(&mut precompute, true);
-        let public_inputs = cs.metadata.get_inputs_for_party(None);
-        precompute.restrict_to_inputs(public_inputs);
+        self.extend_precomputation(&mut precompute, is_ver);
+        // for prover: we still need to remove the non-r1cs variables
+        let inputs = cs.metadata.get_inputs_for_party(party_id);
+        precompute.restrict_to_inputs(inputs);
         let pf_input_order: Vec<String> = (0..self.next_idx)
             .filter(|i| self.public_idxs.contains(i))
             .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
@@ -394,6 +395,13 @@ impl R1cs<String> {
                 precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
             }
         }
+        (precompute_inputs, precompute, pf_input_order)
+    }
+
+    /// Compute the verifier data for this R1CS relation, given a precomputation
+    /// that computes the variables that are relation inputs
+    pub fn verifier_data(&self, cs: &Computation) -> VerifierData {
+        let (precompute_inputs, precompute, pf_input_order) = self.pv_data(cs, true);
         VerifierData {
             precompute_inputs,
             precompute,
@@ -401,36 +409,17 @@ impl R1cs<String> {
         }
     }
 
-    /// Compute the verifier data for this R1CS relation, given a precomputation
+    /// Compute the prover data for this R1CS relation, given a precomputation
     /// that computes the variables that are relation inputs
-    pub fn prover_data(&self, cs: &Computation) -> ProverData {
-        let mut precompute = cs.precomputes.clone();
-        self.extend_precomputation(&mut precompute, false);
-        // we still need to remove the non-r1cs variables
-        use crate::ir::proof::PROVER_ID;
-        let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
-        precompute.restrict_to_inputs(all_inputs);
-        let pf_input_order: Vec<String> = (0..self.next_idx)
-            .filter(|i| self.public_idxs.contains(i))
-            .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
-            .collect();
-        let mut precompute_inputs = HashMap::default();
-        for input in &pf_input_order {
-            if let Some(output_term) = precompute.outputs().get(input) {
-                for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
-                    precompute_inputs.insert(v, s);
-                }
-            } else {
-                precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
-            }
-        }
+    pub fn prover_data(self, cs: &Computation) -> ProverData {
+        let (mut precompute_inputs, precompute, _) = self.pv_data(cs, false);
         for o in precompute.outputs().keys() {
             precompute_inputs.remove(o);
         }
         ProverData {
             precompute_inputs,
             precompute,
-            r1cs: self.clone(),
+            r1cs: self,
         }
     }
 
