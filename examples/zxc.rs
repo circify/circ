@@ -46,13 +46,15 @@ fn main() {
         p_file.push(".pdat");
         v_file.push(".vdat");
         let p_out = File::options()
+            .write(true)
             .create_new(true)
             .open(p_file)
-            .expect("Could not open outfile for writing");
+            .expect("Could not open prover outfile for writing");
         let v_out = File::options()
+            .write(true)
             .create_new(true)
             .open(v_file)
-            .expect("Could not open outfile for writing");
+            .expect("Could not open verifier outfile for writing");
         (p_out, v_out)
     };
 
