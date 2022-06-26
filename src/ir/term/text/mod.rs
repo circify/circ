@@ -663,13 +663,31 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
 /// Serialize an IR "value map": a map from strings to values.
 ///
 /// See [parse_value_map].
-pub fn serialize_value_map(src: &HashMap<String, Value>) -> String {
+pub fn serialize_value_map<K,V>(src: &HashMap<K, V>, modulus: Option<&FieldT>) -> String
+where
+    K: std::borrow::Borrow<str>,
+    V: std::borrow::Borrow<Value>,
+{
     let mut out = String::new();
-    writeln!(&mut out, "(let (").unwrap();
+
+    // write the modulus if provided
+    let indent = if let Some(fldt) = &modulus {
+        writeln!(&mut out, "(set_default_modulus {}", fldt.modulus()).unwrap();
+        "  "
+    } else {
+        ""
+    };
+
+    writeln!(&mut out, "{}(let (", indent).unwrap();
     for (var, val) in src {
-        writeln!(&mut out, "  ({} {})", var, val).unwrap();
+        writeln!(&mut out, "{}  ({} {})", indent, var.borrow(), val.borrow()).unwrap();
     }
-    writeln!(&mut out, ") true;ignored \n)").unwrap();
+    writeln!(&mut out, "{0}) true)", indent).unwrap();
+
+    if modulus.is_some() {
+        writeln!(&mut out, ")").unwrap();
+    }
+
     out
 }
 
