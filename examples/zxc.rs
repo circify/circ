@@ -20,7 +20,7 @@ struct Options {
     /// write JSON format if true, otherwise bincode
     json: bool,
 
-    #[structopt(short, long, default_value = "out.r1cs", parse(from_os_str))]
+    #[structopt(short, long, default_value = "out", parse(from_os_str))]
     /// output r1cs file
     outfile: PathBuf,
 
@@ -40,10 +40,21 @@ fn main() {
         .init();
     let options = Options::from_args();
     // open input file now so we don't waste a lot of time only to panic later
-    let mut outfile = File::options()
-        .create_new(true)
-        .open(options.outfile)
-        .expect("Could not open outfile for writing");
+    let (mut p_out, mut v_out) = {
+        let mut p_file = options.outfile.into_os_string();
+        let mut v_file = p_file.clone();
+        p_file.push(".pdat");
+        v_file.push(".vdat");
+        let p_out = File::options()
+            .create_new(true)
+            .open(p_file)
+            .expect("Could not open outfile for writing");
+        let v_out = File::options()
+            .create_new(true)
+            .open(v_file)
+            .expect("Could not open outfile for writing");
+        (p_out, v_out)
+    };
 
     let cs = {
         let inputs = zsharp::Inputs {
@@ -81,7 +92,7 @@ fn main() {
     println!("done.");
 
     println!("Converting to r1cs");
-    let (mut pd, _) = to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
+    let (mut pd, vd) = to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
     pd.r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         pd.r1cs
@@ -96,9 +107,11 @@ fn main() {
 
     print!("Writing outfile... ");
     if options.json {
-        serde_json::to_writer(&mut outfile, &pd).unwrap();
+        serde_json::to_writer(&mut p_out, &pd).unwrap();
+        serde_json::to_writer(&mut v_out, &vd).unwrap();
     } else {
-        bincode::serialize_into(&mut outfile, &pd).unwrap();
+        bincode::serialize_into(&mut p_out, &pd).unwrap();
+        bincode::serialize_into(&mut v_out, &vd).unwrap();
     }
     println!("done.");
 }
