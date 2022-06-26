@@ -1,8 +1,8 @@
 use circ::front::zsharp::{Inputs, ZSharpFE};
 use circ::front::Mode;
+use std::io::Write;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use std::io::Write;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]

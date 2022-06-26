@@ -6,7 +6,7 @@ use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "circ", about = "CirC: the circuit compiler")]
+#[structopt(name = "zk", about = "CirC: the circuit compiler")]
 struct Options {
     #[structopt(long, default_value = "P", parse(from_os_str))]
     prover_key: PathBuf,
@@ -18,7 +18,7 @@ struct Options {
     inputs: PathBuf,
     #[structopt(long)]
     action: ProofAction,
-    #[structopt(short,long)]
+    #[structopt(short, long)]
     dump_value_map: bool,
 }
 

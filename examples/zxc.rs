@@ -1,10 +1,10 @@
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
-use circ_fields::FieldT;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 use circ::util::field::DFL_T;
+use circ_fields::FieldT;
 use std::fs::File;
 use std::path::PathBuf;
 use structopt::StructOpt;
