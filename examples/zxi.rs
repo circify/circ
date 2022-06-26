@@ -1,8 +1,8 @@
 use circ::front::zsharp::{Inputs, ZSharpFE};
-
 use circ::front::Mode;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use std::io::Write;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -18,6 +18,10 @@ struct Options {
     /// Whether to maximize the output
     #[structopt(short, long)]
     maximize: bool,
+
+    /// Generate a value map from the input rather than interpreting
+    #[structopt(short, long)]
+    value_map: bool,
 }
 
 fn main() {
@@ -40,8 +44,13 @@ fn main() {
         mode,
         isolate_asserts: false,
     };
-    let cs = ZSharpFE::interpret(inputs);
-    cs.pretty(&mut std::io::stdout().lock())
-        .expect("error pretty-printing value");
-    println!();
+    if options.value_map {
+        let vm = ZSharpFE::value_map(inputs);
+        std::io::stdout().lock().write_all(vm.as_bytes()).unwrap();
+    } else {
+        let cs = ZSharpFE::interpret(inputs);
+        cs.pretty(&mut std::io::stdout().lock())
+            .expect("error pretty-printing value");
+        println!();
+    }
 }

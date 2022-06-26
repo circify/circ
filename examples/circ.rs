@@ -349,7 +349,7 @@ fn main() {
                 println!("  {}: {}", var, val.round() as u64);
             }
             let values = assignment_to_values(&vars, &inputs_and_sorts);
-            let values_as_str = serialize_value_map(&values);
+            let values_as_str = serialize_value_map(&values, None);
             std::fs::write("assignment.txt", values_as_str).unwrap();
         }
         #[cfg(not(feature = "lp"))]

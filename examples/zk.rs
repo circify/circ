@@ -18,6 +18,8 @@ struct Options {
     inputs: PathBuf,
     #[structopt(long)]
     action: ProofAction,
+    #[structopt(short,long)]
+    dump_value_map: bool,
 }
 
 arg_enum! {
@@ -35,6 +37,12 @@ fn main() {
         .init();
     let opts = Options::from_args();
     let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
+    if opts.dump_value_map {
+        for (k, v) in input_map {
+            println!("{}: {:?}", k, v);
+        }
+        return;
+    }
     match opts.action {
         ProofAction::Prove => {
             println!("Proving");

@@ -9,6 +9,7 @@ use crate::circify::{CircError, Circify, Loc, Val};
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
+use crate::ir::term::text::serialize_value_map;
 use crate::util::field::DFL_T;
 
 use log::{debug, warn};
@@ -77,6 +78,20 @@ impl ZSharpFE {
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
         g.const_entry_fn("main")
+    }
+
+    /// Execute the Z# front-end interpreter on the supplied file, output consts as a value map
+    pub fn value_map(i: Inputs) -> String {
+        let loader = parser::ZLoad::new();
+        let asts = loader.load(&i.file);
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib());
+        g.visit_files();
+        let cm = g.constants.get(&i.file).expect("Error: top-level constants missing");
+        let const_map = cm
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.1.term.as_value_opt().unwrap()))
+            .collect();
+        serialize_value_map(&const_map, Some(&DFL_T))
     }
 }
 
