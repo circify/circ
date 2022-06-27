@@ -1727,6 +1727,8 @@ pub struct ComputationMetadata {
     pub input_vis: FxHashMap<String, (Term, Option<PartyId>)>,
     /// The inputs for the computation itself (not the precomputation).
     pub computation_inputs: FxHashSet<String>,
+    /// The inputs for the computation itself (not the precomputation).
+    pub computation_arg_names: Vec<String>,
 }
 
 impl ComputationMetadata {
@@ -1748,7 +1750,8 @@ impl ComputationMetadata {
             self.input_vis.get(&input_name).unwrap()
         );
         self.input_vis.insert(input_name.clone(), (term, party));
-        self.computation_inputs.insert(input_name);
+        self.computation_inputs.insert(input_name.clone());
+        self.computation_arg_names.push(input_name);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
@@ -1818,6 +1821,11 @@ impl ComputationMetadata {
             .collect()
     }
 
+    /// Get all the inputs for the Computation
+    pub fn get_all_inputs(&self) -> Vec<String> {
+        self.computation_arg_names.clone()
+    }
+
     /// From a list of parties, a list of inputs, and a list of visibilities,
     /// create a [ComputationMetadata].
     pub fn from_parts(
@@ -1832,6 +1840,7 @@ impl ComputationMetadata {
             .collect();
         let next_party_id = party_ids.len() as u8;
         let computation_inputs: FxHashSet<String> = inputs.iter().map(|(i, _)| i.clone()).collect();
+        let computation_arg_names: Vec<String> = inputs.iter().map(|(i, _)| i.clone()).collect();
         let input_vis = computation_inputs
             .iter()
             .map(|i| {
@@ -1845,6 +1854,7 @@ impl ComputationMetadata {
             next_party_id,
             input_vis,
             computation_inputs,
+            computation_arg_names,
         }
     }
 

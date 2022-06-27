@@ -161,7 +161,6 @@ struct Replacer {
 
 impl Replacer {
     fn is_obliv(&self, a: &Term) -> bool {
-        println!("is obliv?");
         !self.not_obliv.contains(a)
     }
 }

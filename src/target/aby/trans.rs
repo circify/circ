@@ -7,7 +7,6 @@
 use rug::Integer;
 
 use crate::ir::opt::cfold::fold;
-use crate::ir::opt::tuple;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
@@ -58,13 +57,18 @@ struct ToABY<'a> {
     path: &'a Path,
     lang: String,
     curr_comp: String,
+    // Input mapping
     inputs: Vec<Term>,
+    // Term cache
     cache: TermMap<EmbeddedTerm>,
+    // Term to share id
     term_to_shares: TermMap<Vec<i32>>,
     share_cnt: i32,
+    // Outputs
     bytecode_input: Vec<String>,
     bytecode_output: Vec<String>,
     share_map_output: Vec<String>,
+    const_output: Vec<String>,
 }
 
 impl Drop for ToABY<'_> {
@@ -96,22 +100,25 @@ impl<'a> ToABY<'a> {
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
             share_map_output: Vec::new(),
+            const_output: Vec::new(),
         }
     }
 
     fn map_terms_to_shares(&mut self) {
         let computations = self.fs.computations.clone();
-        for (_, comp) in computations.iter() {
+        for (_name, comp) in computations.iter() {
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
-                    let sort: Sort = check(&t);
-                    let num_shares = self.get_sort_len(&sort);
-                    let mut shares: Vec<i32> = Vec::new();
-                    for _ in 0..num_shares {
-                        shares.push(self.share_cnt);
-                        self.share_cnt += 1;
+                    if !self.term_to_shares.contains_key(&t) {
+                        let sort: Sort = check(&t);
+                        let num_shares = self.get_sort_len(&sort);
+                        let mut shares: Vec<i32> = Vec::new();
+                        for _ in 0..num_shares {
+                            shares.push(self.share_cnt);
+                            self.share_cnt += 1;
+                        }
+                        self.term_to_shares.insert(t, shares);
                     }
-                    self.term_to_shares.insert(t, shares);
                 }
             }
         }
@@ -144,27 +151,30 @@ impl<'a> ToABY<'a> {
             .clone()
     }
 
-    fn get_var_name(t: &Term) -> String {
-        match &t.op {
-            Op::Var(name, _) => {
-                let new_name = name.to_string().replace('.', "_");
-                let n = new_name.split('_').collect::<Vec<&str>>();
-
-                match n.len() {
-                    1 => n[0].to_string(),
-                    2 => {
-                        format!("{}_{}", n[0], n[1])
-                    }
-                    5 => n[3].to_string(),
-                    6.. => {
-                        let l = n.len() - 1;
-                        format!("{}_{}", n[l - 2], n[l])
-                    }
-                    _ => {
-                        panic!("Invalid variable name: {}", name);
-                    }
-                }
+    fn get_var_name(name: &String) -> String {
+        let new_name = name.to_string().replace('.', "_");
+        let n = new_name.split('_').collect::<Vec<&str>>();
+        match n.len() {
+            1 => n[0].to_string(),
+            2 => {
+                format!("{}_{}", n[0], n[1])
             }
+            5 => n[3].to_string(),
+            6.. => {
+                let l = n.len() - 1;
+                let offset = n.iter().position(|&r| r == "lex0").unwrap();
+                let var_name = &n[offset + 1..=l - 2].to_vec().join("_");
+                format!("{}_{}", var_name, n[l])
+            }
+            _ => {
+                panic!("Invalid variable name: {}", name);
+            }
+        }
+    }
+
+    fn get_var_name_from_term(t: &Term) -> String {
+        match &t.op {
+            Op::Var(name, _) => ToABY::get_var_name(name),
             _ => panic!("Term {} is not of type Var", t),
         }
     }
@@ -259,7 +269,7 @@ impl<'a> ToABY<'a> {
             Op::Var(name, Sort::Bool) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
-                    let term_name = ToABY::get_var_name(&t);
+                    let term_name = ToABY::get_var_name_from_term(&t);
                     let vis = self.unwrap_vis(name);
                     let share_cnt = self.get_share(&t);
                     let op = "IN";
@@ -285,7 +295,7 @@ impl<'a> ToABY<'a> {
             Op::Const(Value::Bool(b)) => {
                 let op = "CONS_bool";
                 let line = format!("1 1 {} {} {}\n", *b as i32, s, op);
-                self.bytecode_output.push(line);
+                self.const_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bool);
             }
             Op::Eq => {
@@ -392,7 +402,7 @@ impl<'a> ToABY<'a> {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
-                    let term_name = ToABY::get_var_name(&t);
+                    let term_name = ToABY::get_var_name_from_term(&t);
                     let vis = self.unwrap_vis(name);
                     let share_cnt = self.get_share(&t);
                     let op = "IN";
@@ -418,7 +428,7 @@ impl<'a> ToABY<'a> {
             Op::Const(Value::BitVector(b)) => {
                 let op = "CONS_bv";
                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                self.bytecode_output.push(line);
+                self.const_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::Ite => {
@@ -500,6 +510,7 @@ impl<'a> ToABY<'a> {
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
                 let shares = self.get_shares(&t.cs[0]);
+                assert!(*i < shares.len());
                 self.term_to_shares.insert(t.clone(), vec![shares[*i]]);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
@@ -510,7 +521,7 @@ impl<'a> ToABY<'a> {
                 // Assume constant indexing
                 let idx = match &t.cs[1].op {
                     Op::Const(Value::BitVector(bv)) => bv.uint().to_usize().unwrap().clone(),
-                    _ => panic!("non-const"),
+                    _ => panic!("non-const: {}", t.cs[1].op),
                 };
 
                 assert!(idx < shares.len(), "idx: {}, shares: {}", idx, shares.len());
@@ -540,7 +551,7 @@ impl<'a> ToABY<'a> {
                         Value::BitVector(b) => {
                             let op = "CONS_bv";
                             let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                            self.bytecode_output.push(line);
+                            self.const_output.push(line);
                             self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                         }
                         _ => todo!(),
@@ -555,7 +566,7 @@ impl<'a> ToABY<'a> {
                         Value::BitVector(b) => {
                             let op = "CONS_bv";
                             let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                            self.bytecode_output.push(line);
+                            self.const_output.push(line);
                             self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                         }
                         _ => todo!(),
@@ -574,13 +585,12 @@ impl<'a> ToABY<'a> {
                 };
 
                 array_shares[idx] = value_share;
-                self.term_to_shares.insert(t.clone(), array_shares);
+                self.term_to_shares.insert(t.clone(), array_shares.clone());
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
             }
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
                 let shares = self.get_shares(&t.cs[0]);
-
                 let tuple_sort = check(&t.cs[0]);
                 let (offset, len) = match tuple_sort {
                     Sort::Tuple(t) => {
@@ -631,10 +641,10 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), tuple_shares);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
-            Op::Call(name, arg_names, _arg_sorts, ret_sorts) => {
+            Op::Call(name, _arg_names, arg_sorts, ret_sorts) => {
                 let shares = self.get_shares(&t);
                 let op = format!("CALL({})", name);
-                let num_args = arg_names.len();
+                let num_args: usize = arg_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
                 let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
 
                 // map argument shares
@@ -642,17 +652,16 @@ impl<'a> ToABY<'a> {
                 for c in t.cs.iter() {
                     arg_shares.extend(self.get_shares(c));
                 }
+
                 let arg_shares_str: String =
                     arg_shares.iter().map(|&s| s.to_string() + " ").collect();
 
-                // map return shares
                 let s: String = shares.iter().map(|&s| s.to_string() + " ").collect();
                 let line = format!("{} {} {}{}{}\n", num_args, num_rets, arg_shares_str, s, op);
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
             _ => {
-                println!("op: {:#?}", t.op);
                 panic!("Non-field in embed_scalar: {:?}", t)
             }
         }
@@ -703,6 +712,7 @@ impl<'a> ToABY<'a> {
 
                 let op = "OUT";
                 let shares = self.get_shares(&t);
+
                 for s in shares {
                     let line = format!("1 0 {} {}\n", s, op);
                     outputs.push(line);
@@ -712,8 +722,35 @@ impl<'a> ToABY<'a> {
             // write bytecode per function
             let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
 
+            // reorder inputs
+            let mut bytecode_input_map: HashMap<String, String> = HashMap::new();
+            for line in &self.bytecode_input {
+                let key = line.split(" ").collect::<Vec<&str>>()[2];
+                bytecode_input_map.insert(key.to_string(), line.to_string());
+            }
+            let input_order: Vec<String> = comp
+                .metadata
+                .get_all_inputs()
+                .iter()
+                .map(|x| ToABY::get_var_name(x))
+                .collect();
+            let inputs: Vec<String> = input_order
+                .iter()
+                .map(|x| {
+                    if bytecode_input_map.contains_key(x) {
+                        bytecode_input_map.get(x).unwrap().clone()
+                    } else {
+                        "".to_string()
+                    }
+                })
+                .filter(|x| !x.is_empty())
+                .collect::<Vec<String>>();
+            self.bytecode_input = inputs;
+
+            // concatenate output content
             self.bytecode_output.append(&mut outputs);
             self.bytecode_input.append(&mut self.bytecode_output);
+
             write_lines_to_file(&bytecode_path, &self.bytecode_input);
 
             //reset for next function
@@ -725,6 +762,10 @@ impl<'a> ToABY<'a> {
         // write share map
         let share_map_path = get_path(self.path, &self.lang, "share_map");
         write_lines_to_file(&share_map_path, &self.share_map_output);
+
+        // write const variables
+        let const_output_path = get_path(self.path, &self.lang, "const");
+        write_lines_to_file(&const_output_path, &self.const_output);
     }
 
     fn convert(&mut self) {

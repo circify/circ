@@ -448,7 +448,8 @@ impl CGen {
                 let vals = val.term.terms(self.circ.cir_ctx());
                 for (o, v) in vals.iter().enumerate() {
                     let updated_idx = term![BV_ADD; idx_term.clone(), bv_lit(o as i32, 32)];
-                    self.circ.store(i, updated_idx, v.clone());
+                    self.circ.store(i, updated_idx.clone(), v.clone());
+                    let t = self.circ.load(i, updated_idx);
                 }
                 if vals.len() > 1 {
                     Ok(cterm(CTermData::Array(ty, id)))
@@ -708,12 +709,14 @@ impl CGen {
                         let val = self.gen_expr(bin_op.rhs.node.clone());
                         self.gen_assign(loc, val)
                     }
-                    BinaryOperator::AssignPlus | BinaryOperator::AssignDivide => {
-                        let f = self.get_bin_op(bin_op.operator.node);
-                        let i = self.gen_expr(bin_op.lhs.node.clone());
+                    BinaryOperator::AssignPlus
+                    | BinaryOperator::AssignDivide
+                    | BinaryOperator::AssignMultiply => {
                         let rhs = self.gen_expr(bin_op.rhs.node);
+                        let lhs = self.gen_expr(bin_op.lhs.node.clone());
+                        let f = self.get_bin_op(bin_op.operator.node);
                         let loc = self.gen_lval(*bin_op.lhs);
-                        let val = f(i, rhs).unwrap();
+                        let val = f(lhs, rhs).unwrap();
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::Index => {
@@ -856,7 +859,7 @@ impl CGen {
                         let ct = args_map.get(ret_name).unwrap();
                         if let CTermData::Array(_, id) = ct.term {
                             self.circ
-                                .replace(id.unwrap(), term![Op::Field(i);call_term.clone()]);
+                                .replace(id.unwrap(), term![Op::Field(i); call_term.clone()]);
                         } else {
                             unimplemented!("This should only be handling ptrs to arrays");
                         }
@@ -1178,16 +1181,6 @@ impl CGen {
                         .outputs
                         .extend(ret_terms);
                 }
-                // Mode::Proof => {
-                //     let name = "return".to_owned();
-                //     let term = r.unwrap_term();
-                //     let r2 = self
-                //         .circ
-                //         .declare_input(name, ty, PROVER_VIS, None, false)
-                //         .unwrap();
-                //     self.circ.assert(eq(term, r2).unwrap().term.simple_term());
-                //     unimplemented!();
-                // }
                 _ => unimplemented!("Mode: {}", self.mode),
             }
         }

@@ -49,7 +49,7 @@ DT sum_tree(DT *data, int len, int stride) {
 // Counts how many non-zero values are in an array
 DT sum_gt_zero(DT *data, int len) {
 	DT tmp[len>>1];
-	for(int i = 0; i + 1 < len; i+=2) {
+	for(int i = 0; i + 1 < LEN_A*LEN_B; i+=2) {
 		tmp[i>>1] = (data[i]>0) + (data[i+1]>0);
 	}
 	return sum_tree(tmp, len>>1, 1);
@@ -65,7 +65,7 @@ DT sum_gt_zero(DT *data, int len) {
 DT mean_with_abort(DT *db, unsigned len) {
 	DT mean = 0;
 	int i;
-	for(i = 0; i < len && db[i] >= 0; i++) {
+	for(i = 0; i < LEN_A*LEN_B && db[i] >= 0; i++) {
 		mean += db[i];
 	}
 	if(i > 0) {
@@ -88,7 +88,7 @@ DT mean(DT *db, unsigned len) {
 DT variance(DT *db, unsigned len) {
 	DT exp = mean(db, len);
 	DT var[len];// = 0;
-	for(int i = 0; i < len; i++) {
+	for(int i = 0; i < LEN_A*LEN_B; i++) {
 		DT dist = db[i] - exp;
 		var[i] = dist * dist;
 		//var += dist;

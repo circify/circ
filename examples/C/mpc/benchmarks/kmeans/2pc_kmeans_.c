@@ -33,7 +33,7 @@ int min_with_aux(int *data, int *aux, int len, int stride) {
 	// 		if(data[i+stride] < data[i]) {
 	// 			data[i] = data[i+stride];
 	// 			aux[i] = aux[i+stride];
-	// 		}
+	// 		}std::cout
 	// 	}
 	// 	return min_with_aux(data, aux, len, stride<<1);
 	// }
@@ -57,7 +57,7 @@ int min_with_aux(int *data, int *aux, int len, int stride) {
 /**
  * Iteration loop unrolled and depth minimized by computing minimum over tree structure
  */ 
-void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_cluster, int *OUTPUT_count, int len_inner, int num_cluster) {
+void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_cluster, int *OUTPUT_count) {
 	int i,c;
 	int dist[NC];
 	int pos[NC];
@@ -71,14 +71,13 @@ void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_c
 	
 	// Compute nearest clusters for Data item i
 	for(i = 0; i < LEN_INNER; i++) {
-	  int dx = data_inner[i*D];
-	  int dy = data_inner[i*D+1];
-  
-	  for(c = 0; c < NC; c++) {
+		int dx = data_inner[i*D];
+		int dy = data_inner[i*D+1];
+		for(c = 0; c < NC; c++) {
 			pos[c]=c;
 			dist[c] = dist2(cluster[D*c], cluster[D*c+1], dx, dy);
 		}
-		bestMap_inner[i] = min_with_aux(dist, pos, num_cluster, 1);
+		bestMap_inner[i] = min_with_aux(dist, pos, NC, 1);
 		int cc = bestMap_inner[i];
 		OUTPUT_cluster[cc*D] += data_inner[i*D];
 		OUTPUT_cluster[cc*D+1] += data_inner[i*D+1];
@@ -125,7 +124,7 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 		// int count_inner[NC];
 		int count_inner[NC];
 		
-		// iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner, LEN_INNER, NC);
+		iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner);
 
 		// Depth: num_cluster Addition
 		for(c = 0; c < NC; c++) {

@@ -100,7 +100,7 @@ DT agg_mean_tree(DT *db, int len, int att) {
 
 DT agg_mean(DT *db, int len, int att) {
 	DT sum[len];
-	for(int i = 0; i < len; i++) {
+	for(int i = 0; i < LEN_A*LEN_B; i++) {
 		sum[i] = db[i*att+1] + db[i*att+2];
 	}
 	return mean_with_abort(sum, len);

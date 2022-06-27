@@ -120,9 +120,13 @@ impl CostModel {
 
     fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
         match op {
-            Op::Field(_) | Op::Update(..) | Op::Select | Op::Store | Op::Call(..) => {
-                Some(&self.zero)
-            }
+            Op::Var(..)
+            | Op::Const(..)
+            | Op::Field(_)
+            | Op::Update(..)
+            | Op::Select
+            | Op::Store
+            | Op::Call(..) => Some(&self.zero),
             _ => {
                 let op_name = match op.clone() {
                     // assume comparisions are unsigned
