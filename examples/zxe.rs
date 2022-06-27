@@ -1,6 +1,7 @@
-use circ::ir::term::text::parse_value_map;
+use circ::ir::term::text::{parse_value_map, serialize_value_map};
 use circ::target::r1cs::ProverData;
 use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -34,7 +35,9 @@ fn main() {
             .expect("Could not deserialize prover data as either json or bincode");
     println!("done.");
 
-    for (k, v) in prover_data.precompute.eval(&input_map) {
-        println!("{} : {:?}", k, v);
-    }
+    let eval_map = prover_data.precompute.eval(&input_map);
+    std::io::stdout()
+        .lock()
+        .write_all(serialize_value_map(&eval_map, Some(prover_data.r1cs.field_t())).as_bytes())
+        .unwrap();
 }

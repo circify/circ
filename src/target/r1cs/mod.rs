@@ -314,6 +314,11 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
         self.modulus.modulus()
     }
 
+    /// Get the field type for this constraint system
+    pub fn field_t(&self) -> &FieldT {
+        &self.modulus
+    }
+
     /// Access the raw constraints.
     pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
         &self.constraints
