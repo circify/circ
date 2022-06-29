@@ -777,20 +777,20 @@ impl CGen {
                         let val = f(i, one).unwrap();
                         self.gen_assign(loc, val)
                     }
-                    UnaryOperator::SizeOf => {
-                        let ty = match u_op.operand.node {
-                            Expression::Identifier(name) => {
-                                let n = name.node.name;
-                                match self.typedefs.get(&n) {
-                                    Some(ty) => ty.clone(),
-                                    None => panic!("Unknown type: {}", n),
-                                }
-                            }
-                            _ => unimplemented!("Unimplemented Sizeof: {:#?}", u_op.operand.node),
-                        };
-                        let _size = ty.num_bits();
-                        Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
-                    }
+                    // UnaryOperator::SizeOf => {
+                    //     let ty = match u_op.operand.node {
+                    //         Expression::Identifier(name) => {
+                    //             let n = name.node.name;
+                    //             match self.typedefs.get(&n) {
+                    //                 Some(ty) => ty.clone(),
+                    //                 None => panic!("Unknown type: {}", n),
+                    //             }
+                    //         }
+                    //         _ => unimplemented!("Unimplemented Sizeof: {:#?}", u_op.operand.node),
+                    //     };
+                    //     let _size = ty.num_bits();
+                    //     Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
+                    // }
                     _ => unimplemented!("UnaryOperator {:#?} hasn't been implemented", u_op),
                 }
             }
@@ -887,18 +887,18 @@ impl CGen {
                 let field = identifier.node.name;
                 self.field_select(&base, &field)
             }
-            Expression::SizeOf(s) => {
-                let ty = self.s_type_(s.node.specifiers.clone());
-                match ty {
-                    Some(t) => {
-                        let _size = t.num_bits();
-                        Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
-                    }
-                    None => {
-                        panic!("Cannot determine size of type: {:#?}", s);
-                    }
-                }
-            }
+            // Expression::SizeOf(s) => {
+            //     let ty = self.s_type_(s.node.specifiers.clone());
+            //     match ty {
+            //         Some(t) => {
+            //             let _size = t.num_bits();
+            //             Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
+            //         }
+            //         None => {
+            //             panic!("Cannot determine size of type: {:#?}", s);
+            //         }
+            //     }
+            // }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
         self.unwrap(res)

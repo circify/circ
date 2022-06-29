@@ -58,12 +58,9 @@ void solve_backtracking(DT *m, DT *b, DT *OUTPUT_res) {
 		DT tmp = 0;
 		for(int j = i+1; j < N; j++) {
 			tmp += fixedpt_mul(OUTPUT_res[j], m[i*N+j]);
-			//tmp += ((fixedptd)OUTPUT_res[j] * (fixedptd)m[i*N+j]) >> (fixedptd)FIXEDPOINT_FRACTION_BITS;
 		}
-		//OUTPUT_res[i] = fixedpt_div((b[i] - tmp), m[i*N+i]);
-		OUTPUT_res[i] = ((fixedptd)(b[i] - tmp) << (fixedptd)FIXEDPOINT_FRACTION_BITS) / (fixedptd)m[i*N+i];
+		OUTPUT_res[i] = fixedpt_div((b[i] - tmp), m[i*N+i]);
 	}	
-
 }
 
 void swap(DT* m, DT* v, DT* OUTPUT_m, DT* OUTPUT_v, int from, int to) {
@@ -120,17 +117,21 @@ void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
 		// Swap
 		DT m_tmp[N*N];
 		DT b_tmp[N];
-		// pivot_swap(m, b, m_tmp, b_tmp, i);
 
-		for (int i = 0; i < N*N*sizeof(DT); i++) {
-			m[i] = m_tmp[i];
+		// pivot_swap(m, b, m_tmp, b_tmp, i, N);
+		// memcpy(OUTPUT_m, m, sizeof(DT)*N*N);
+		for (int j = 0; j < N*N; j++) {
+			m_tmp[j] = m[j];
 		}
-		for (int i = 0; i < sizeof(DT)*N; i++) {
-			b[i] = b_tmp[i];
+		// memcpy(OUTPUT_b, b, sizeof(DT)*N);
+		for (int j = 0; j < N; j++) {
+			b_tmp[j] = b[j];
 		}
+		
 		for(int k=i+1; k < N; k++) {
 			if(m[k*N+i] > m[i*N+i]) {
-				// swap(m, b, OUTPUT_m, OUTPUT_b, i, k);
+				// swap(m, b, m_tmp, b_tmp, i, k);
+				
 				if(i!=k) {
 					// Iterate over columns)
 					for(int j = i; j < N; j++) {
@@ -142,30 +143,40 @@ void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
 					b[i] = b[k];
 					b[k] = tmp;
 				}
-				for (int i = 0; i < N*N*sizeof(DT); i++) {
-					m_tmp[i] = m[i];
+
+				// memcpy(OUTPUT_m, m, N*N*sizeof(DT));
+				for (int j = 0; j < N*N; j++) {
+					m_tmp[j] = m[j];
 				}
-				for (int i = 0; i < N*sizeof(DT); i++) {
-					b_tmp[i] = b[i];
+
+				// memcpy(OUTPUT_v, v, N*sizeof(DT));
+				for (int j = 0; j < N; j++) {
+					b_tmp[j] = b[j];
 				}
-				for (int i = 0; i < N*N*sizeof(DT); i++) {
-					m_tmp[i] = m[i];
+
+				// end swap
+
+				// memcpy(m, OUTPUT_m, sizeof(DT)*N*N);
+				for (int j = 0; j < N*N; j++) {
+					m[j] = m_tmp[j];
 				}
-				for (int i = 0; i < sizeof(DT)*N; i++) {
-					b_tmp[i] = b[i];
+				// memcpy(b, OUTPUT_b, sizeof(DT)*N);
+				for (int j = 0; j < N; j++) {
+					b[j] = b_tmp[j];
 				}
 			}
 		}
 
+		// memcpy(m, m_tmp, sizeof(DT)*N*N);
+		for (int j = 0; j < N*N; j++) {
+			m[j] = m_tmp[j];
+		}
+		// memcpy(b, b_tmp, sizeof(DT)*N);
+		for (int j = 0; j < N; j++) {
+			b[j] = b_tmp[j];
+		}
 
 
-		for (int i = 0; i < N*N*sizeof(DT); i++) {
-			m[i] = m_tmp[i];
-		}
-		for (int i = 0; i < sizeof(DT)*N; i++) {
-			b[i] = b_tmp[i];
-		}
-		
 		// Iterate over rows in remainder
 		for(int k=i+1; k < N; k++) {
 			// L.m[k*N+i] = a.m[k*N+i] / a.m[i*N+i]; // TODO need div-zero check
@@ -177,14 +188,15 @@ void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
 				//a.m[k*N+j] = a.m[k*N+j] - L.m[k*N+i] * a.m[i*N+j];
 				m[k*N+j] = m[k*N+j] - fixedpt_mul(L.m[k*N+i],m[i*N+j]);
 			}
-			//b.b[k] = b.b[k] - L.m[k*N+i] * b.b[i];
+			// b.b[k] = b.b[k] - L.m[k*N+i] * b.b[i];
 			b[k] = b[k] - fixedpt_mul(L.m[k*N+i],b[i]);
 		}	
 	}
+
 	// Output
 	solve_backtracking(m, b, OUTPUT_res);
 	
-	//return out;
+	// // return out;
 }
 
 int main(__attribute__((private(0))) int a[N*N], __attribute__((private(1))) int b[N]) {
@@ -196,7 +208,8 @@ int main(__attribute__((private(0))) int a[N*N], __attribute__((private(1))) int
 	for (int i = 0; i < N; i++) {
 		INPUT_B_b.b[i] = b[i];
 	}
+
 	Output OUTPUT_res;
 	gaussj_D(INPUT_A_m.m, INPUT_B_b.b, OUTPUT_res.res);
-	return OUTPUT_res.res[2];
+	return OUTPUT_res.res[0];
 }

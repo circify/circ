@@ -1,12 +1,12 @@
-//! Inline function call terms
+//! Link function call terms
 
 use fxhash::FxHashMap as HashMap;
 
-use crate::ir::term::*;
 use crate::ir::opt::visit::RewritePass;
+use crate::ir::term::*;
 
-/// A recursive inliner.
-struct Inliner<'f> {
+/// A recursive linker.
+struct Linker<'f> {
     /// Original source for functions
     fs: &'f Functions,
     /// Map from names to call-free computations
@@ -27,8 +27,8 @@ struct Inliner<'f> {
 ///
 /// ## Note
 ///
-/// This function **does not** recursively inline.
-fn inline_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computation) -> Term {
+/// This function **does not** recursively link.
+fn link_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computation) -> Term {
     let mut sub_map: TermMap<Term> = arg_names
         .into_iter()
         .zip(arg_values)
@@ -47,16 +47,17 @@ fn inline_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computati
     )
 }
 
-impl<'f> Inliner<'f> {
-    /// Ensure that a totally inlined version of `name` is in the cache.
-    fn inline_all(&mut self, name: &str) {
+impl<'f> Linker<'f> {
+    /// Ensure that a totally linked version of `name` is in the cache.
+    fn link_all(&mut self, name: &str) {
         if !self.cache.contains_key(name) {
             let mut c = self.fs.get_comp(name).unwrap().clone();
             for t in c.terms_postorder() {
                 if let Op::Call(callee_name, ..) = &t.op {
-                    self.inline_all(callee_name);
+                    self.link_all(callee_name);
                 }
             }
+
             self.traverse(&mut c);
             let present = self.cache.insert(name.into(), c);
             assert!(present.is_none());
@@ -67,7 +68,7 @@ impl<'f> Inliner<'f> {
 /// Rewrites a term, inlining function calls along the way.
 ///
 /// Assumes that the callees are already inlined. Panics otherwise.
-impl<'f> RewritePass for Inliner<'f> {
+impl<'f> RewritePass for Linker<'f> {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
         _computation: &mut Computation,
@@ -76,7 +77,7 @@ impl<'f> RewritePass for Inliner<'f> {
     ) -> Option<Term> {
         if let Op::Call(fn_name, arg_names, _, _) = &orig.op {
             let callee = self.cache.get(fn_name).expect("missing inlined callee");
-            let term = inline_one(arg_names, rewritten_children(), callee);
+            let term = link_one(arg_names, rewritten_children(), callee);
             Some(term)
         } else {
             None
@@ -84,17 +85,18 @@ impl<'f> RewritePass for Inliner<'f> {
     }
 }
 
-/// Inline all calls within a function set.
+/// Link all calls within a function set.
 pub fn link_all_function_calls(fs: &mut Functions) {
-    let mut inliner = Inliner {
+    let mut linker = Linker {
         fs,
         cache: Default::default(),
     };
     for name in fs.computations.keys() {
-        inliner.inline_all(name);
+        linker.link_all(name);
     }
+
     *fs = Functions {
-        computations: inliner.cache.into_iter().collect(),
+        computations: linker.cache.into_iter().collect(),
     };
 }
 

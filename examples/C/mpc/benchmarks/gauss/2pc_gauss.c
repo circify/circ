@@ -19,12 +19,6 @@ typedef struct
 	DT res[N];
 } Output;
 
-void memcpy(int* destination, int* source, int size) {
-	for (int i = 0; i < size; i++) {
-		destination[i] = source[i];
-	}
-}
-
 DT abs(DT val) {
 	if(val < 0) {
 		return -val;
@@ -69,7 +63,7 @@ void solve_backtracking(DT *m, DT *b, DT *OUTPUT_res) {
 void swap(DT* m, DT* v, DT* OUTPUT_m, DT* OUTPUT_v, int n, int from, int to) {
 	if(from!=to) {
 		// Iterate over columns)
-		for(int j = from; j < n; j++) {
+		for(int j = from; j < N; j++) {
 			DT tmp = m[from*n+j];
 			m[from*n+j] = m[to*n+j];
 			m[to*n+j] = tmp;
@@ -78,27 +72,41 @@ void swap(DT* m, DT* v, DT* OUTPUT_m, DT* OUTPUT_v, int n, int from, int to) {
 		v[from] = v[to];
 		v[to] = tmp;
 	}
-	memcpy(OUTPUT_m, m, N*N*sizeof(DT));
-	memcpy(OUTPUT_v, v, N*sizeof(DT));
+
+	for (int i = 0; i < N*N*sizeof(DT); i++) {
+		OUTPUT_m[i] =  m[i];
+	}
+	for (int i = 0; i < N*sizeof(DT); i++) {
+		OUTPUT_v[i] =  v[i];
+	}
 }
 
 /**
  * Performs the propagating swap for LU decomposition
  */
 void pivot_swap(DT *m, DT *b, DT *OUTPUT_m, DT *OUTPUT_b, int i, int n) {
-	memcpy(OUTPUT_m, m, sizeof(DT)*N*N);
-	memcpy(OUTPUT_b, b, sizeof(DT)*N);
-	for(int k=i+1; k < n; k++) {
-		if(m[k*n+i] > m[i*n+i]) {
-			swap(m, b, OUTPUT_m, OUTPUT_b, n, i, k);
-			memcpy(m, OUTPUT_m, sizeof(DT)*N*N);
-			memcpy(b, OUTPUT_b, sizeof(DT)*N);
-		}
+	for (int i = 0; i < N*N*sizeof(DT); i++) {
+		OUTPUT_m[i] =  m[i];
+	}
+	for (int i = 0; i < N*sizeof(DT); i++) {
+		OUTPUT_b[i] =  b[i];
+	}
+
+	for(int k=i+1; k < N; k++) {
+	// 	if(m[k*n+i] > m[i*n+i]) {
+	// 		swap(m, b, OUTPUT_m, OUTPUT_b, n, i, k);
+	// 		for (int i = 0; i < N*N*sizeof(DT); i++) {
+	// 			OUTPUT_m[i] =  m[i];
+	// 		}
+	// 		for (int i = 0; i < N*sizeof(DT); i++) {
+	// 			OUTPUT_b[i] =  b[i];
+	// 		}
+	// 	}
 	}
 }
 
 /**
- *  Guassian with propagating pivot for fix point computations
+ *  Gaussian with propagating pivot for fix point computations
  */
 void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
 	InputMatrix L;
@@ -109,8 +117,13 @@ void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
 		DT m_tmp[N*N];
 		DT b_tmp[N];
 		pivot_swap(m, b, m_tmp, b_tmp, i, N);
-		memcpy(m, m_tmp, sizeof(DT)*N*N);
-		memcpy(b, b_tmp, sizeof(DT)*N);
+
+		for (int i = 0; i < N*N*sizeof(DT); i++) {
+			m[i] =  m_tmp[i];
+		}
+		for (int i = 0; i < N*sizeof(DT); i++) {
+			b[i] =  b_tmp[i];
+		}
 		
 		// Iterate over rows in remainder
 		for(int k=i+1; k < N; k++) {

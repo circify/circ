@@ -38,8 +38,8 @@ pub enum Opt {
     FlattenAssertions,
     /// Find outputs like `(= variable term)`, and substitute out `variable`
     Inline,
-    /// Inline function calls
-    InlineCalls,
+    /// Link function calls
+    Link,
     /// Eliminate tuples
     Tuple,
 }
@@ -48,8 +48,9 @@ pub enum Opt {
 pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> Functions {
     for i in optimizations {
         let mut opt_fs: Functions = fs.clone();
-        if let Opt::InlineCalls = i {
+        if let Opt::Link = i {
             link::link_all_function_calls(&mut opt_fs);
+            fs = opt_fs;
             continue;
         }
         for (name, comp) in fs.computations.iter_mut() {
@@ -117,7 +118,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                         .collect();
                     inline::inline(&mut comp.outputs, &public_inputs);
                 }
-                Opt::InlineCalls => unreachable!(),
+                Opt::Link => unreachable!(),
                 Opt::Tuple => {
                     tuple::eliminate_tuples(comp);
                 }

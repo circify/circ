@@ -244,8 +244,9 @@ fn main() {
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
-                    // // Inline Function Calls
-                    // Opt::InlineCalls,
+                    // Inline Function Calls
+                    // Opt::Link,
+                    Opt::Tuple,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
@@ -258,7 +259,7 @@ fn main() {
                 Opt::Sha,
                 Opt::ConstantFold(Box::new([])),
                 Opt::Flatten,
-                Opt::InlineCalls,
+                Opt::Link,
                 // Now we can scalarize the entry interface
                 Opt::ScalarizeVars,
                 // Tuples must be eliminated before oblivious array elim

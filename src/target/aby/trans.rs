@@ -109,16 +109,14 @@ impl<'a> ToABY<'a> {
         for (_name, comp) in computations.iter() {
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
-                    if !self.term_to_shares.contains_key(&t) {
-                        let sort: Sort = check(&t);
-                        let num_shares = self.get_sort_len(&sort);
-                        let mut shares: Vec<i32> = Vec::new();
-                        for _ in 0..num_shares {
-                            shares.push(self.share_cnt);
-                            self.share_cnt += 1;
-                        }
-                        self.term_to_shares.insert(t, shares);
+                    let sort: Sort = check(&t);
+                    let num_shares = self.get_sort_len(&sort);
+                    let mut shares: Vec<i32> = Vec::new();
+                    for _ in 0..num_shares {
+                        shares.push(self.share_cnt);
+                        self.share_cnt += 1;
                     }
+                    self.term_to_shares.insert(t, shares);
                 }
             }
         }
@@ -154,17 +152,25 @@ impl<'a> ToABY<'a> {
     fn get_var_name(name: &String) -> String {
         let new_name = name.to_string().replace('.', "_");
         let n = new_name.split('_').collect::<Vec<&str>>();
-        match n.len() {
-            1 => n[0].to_string(),
+        let offset = n.iter().position(|&r| r == "lex0").unwrap();
+
+        let var_name = &n[offset + 1..];
+
+        match var_name.len() {
             2 => {
-                format!("{}_{}", n[0], n[1])
+                var_name[0].to_string()
+                // let l = n.len() - 1;
+                // let offset = n.iter().position(|&r| r == "lex0").unwrap();
+                // let var_name = &n[offset + 1..=l - 2].to_vec().join("_");
+                // format!("{}_{}", var_name, n[l])
             }
-            5 => n[3].to_string(),
-            6.. => {
-                let l = n.len() - 1;
-                let offset = n.iter().position(|&r| r == "lex0").unwrap();
-                let var_name = &n[offset + 1..=l - 2].to_vec().join("_");
-                format!("{}_{}", var_name, n[l])
+            3.. => {
+                let l = var_name.len();
+                format!(
+                    "{}_{}",
+                    &var_name[0..l - 2].to_vec().join("_"),
+                    var_name[l - 1]
+                )
             }
             _ => {
                 panic!("Invalid variable name: {}", name);
@@ -734,6 +740,7 @@ impl<'a> ToABY<'a> {
                 .iter()
                 .map(|x| ToABY::get_var_name(x))
                 .collect();
+
             let inputs: Vec<String> = input_order
                 .iter()
                 .map(|x| {
@@ -757,6 +764,7 @@ impl<'a> ToABY<'a> {
             self.bytecode_input.clear();
             self.bytecode_output.clear();
             self.inputs.clear();
+            self.cache.clear();
         }
 
         // write share map

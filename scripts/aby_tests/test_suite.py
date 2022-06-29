@@ -570,7 +570,7 @@ kmeans_tests_3 = [
 gauss_tests = [
     [
         "gauss",
-        "2pc_gauss",
+        "2pc_gauss_inline",
         "./scripts/aby_tests/test_inputs/gauss.txt",
     ],
 ]
