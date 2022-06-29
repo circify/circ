@@ -33,6 +33,56 @@ impl Access {
             is_write: guard,
         }
     }
+    fn universal_hash(&self, alpha: &Term, beta: &Term) -> Term {
+        let field = match check(alpha) {
+            Sort::Field(field) => field,
+            _ => panic!("Alpha value for universal hash isn't a field!"),
+        };
+        assert_eq!(
+            check(beta),
+            Sort::Field(field.clone()),
+            "Beta value for universal hash isn't the same sort as alpha!"
+        );
+
+        // universal hash of the value...handling tuples as necessary
+        let val_hash = match check(&self.val) {
+            Sort::Tuple(sorts) => {
+                let tuple_factors = sorts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| {
+                        let mut factors = vec![beta.clone(); i + 2];
+                        factors.push(cast_to_field(
+                            &term![Op::Field(i); self.val.clone()],
+                            &field,
+                        ));
+                        term![PF_NEG; term(PF_MUL, factors)]
+                    })
+                    .collect();
+                term(PF_ADD, tuple_factors)
+            }
+            _ => term![PF_MUL; cast_to_field(&self.val, &field), beta.clone(), beta.clone()],
+        };
+        //let vals = match self.val {
+        //    Sort::Field(_) => vec![access.val.clone()],
+        //    term![Op::UbvToPf(idx_field.clone()); access.val.clone()]
+        //}
+        term![PF_ADD;
+            alpha.clone(),
+            // TODO: ignoring is_write for now...
+            //term![PF_NEG; pf_lit(idx_field_typ.new_v::<bool>(access.is_write.get().as_bool_opt().unwrap()))],
+            term![PF_NEG; term![PF_MUL; self.idx.clone(), beta.clone()]],
+            term![PF_NEG; val_hash]
+        ]
+    }
+}
+
+fn cast_to_field(term: &Term, field: &circ_fields::FieldT) -> Term {
+    match check(term) {
+        Sort::Field(_) => term.clone(),
+        Sort::BitVector(_) => term![Op::UbvToPf(field.clone()); term.clone()],
+        _ => panic!("Cannot cast term of type {:?} to field!", check(term)),
+    }
 }
 
 #[derive(Debug)]
@@ -81,6 +131,72 @@ impl Ram {
         debug_assert_eq!(&check(&val), &self.val_sort);
         debug_assert_eq!(&check(&guard), &Sort::Bool);
         self.accesses.push(Access::new_write(idx, val, guard));
+    }
+    // TODO: Does this code organization make the most sense?
+    fn sorted_by_index(&self, computation: &mut Computation) -> Ram {
+        let idx_terms: Vec<Term> = self
+            .accesses
+            .iter()
+            .map(|access| access.idx.clone())
+            .collect();
+        // create array from idx->val to precompute correct values from sorted idxs
+        let empty_arr = leaf_term(Op::Const(Value::Array(Array::default(
+            self.idx_sort.clone(),
+            &self.val_sort,
+            self.accesses.len(),
+        ))));
+        let val_array_term = self.accesses.iter().fold(
+            empty_arr,
+            |arr, access| term![Op::Store; arr, access.idx.clone(), access.val.clone()],
+        );
+
+        // construct a term that ensures __ram_srows are a witness to the ordering
+        // constraints on __ram values
+        let mut sorted_accesses = Vec::new();
+        for i in 0..self.accesses.len() {
+            // create an input for each field
+            // TODO: create a check + stronger opt where we elide all writes
+            //       when we have a pattern of "all writes" -> "all reads",
+            //       where val is the value from the last write
+            //let is_write_name = format!("__ram_srow_{}_{}.is_write", ramid, i);
+            let idx_name = format!("__ram_srow_{}_{}.idx", self.id, i);
+            let val_name = format!("__ram_srow_{}_{}.val", self.id, i);
+            //let is_write = cs.new_var(
+            //    &is_write_name,
+            //    ram.idx_sort.clone(),
+            //    Some(crate::ir::proof::PROVER_ID),
+            //    None,
+            //);
+            let idx = computation.new_var(
+                &idx_name,
+                self.idx_sort.clone(),
+                Some(crate::ir::proof::PROVER_ID),
+                Some(term(Op::NthSmallest(i), idx_terms.clone())),
+            );
+            let val = computation.new_var(
+                &val_name,
+                self.val_sort.clone(),
+                Some(crate::ir::proof::PROVER_ID),
+                Some(
+                    term![Op::Select; val_array_term.clone(), term(Op::NthSmallest(i), idx_terms.clone())],
+                ),
+            );
+            let access = Access {
+                is_write: bool_lit(false),
+                idx,
+                val,
+            };
+            sorted_accesses.push(access);
+        }
+
+        Ram {
+            id: self.id,
+            init_val: self.init_val.clone(),
+            size: self.size,
+            accesses: sorted_accesses,
+            idx_sort: self.idx_sort.clone(),
+            val_sort: self.val_sort.clone(),
+        }
     }
 }
 
@@ -303,6 +419,119 @@ impl RewritePass for Extactor {
     }
 }
 
+struct Encoder {
+    rams: Vec<Ram>,
+}
+
+impl Encoder {
+    fn new(rams: Vec<Ram>) -> Encoder {
+        Encoder { rams }
+    }
+
+    fn construct_permutation_check(ram1: &Ram, ram2: &Ram, alpha: Term, beta: Term) -> Term {
+        // TODO: support non-field indices?
+        //       Just do a cast on permuation check, and have correct type
+        //       in sorted check
+
+        // construct a term to check the __ram_srow values are the same as the
+        // __ram values
+        let orig_sum_terms = ram1
+            .accesses
+            .iter()
+            .map(|access| access.universal_hash(&alpha, &beta))
+            .collect();
+        let orig_prod_term = term(PF_MUL, orig_sum_terms);
+
+        let perm_sum_terms = ram2
+            .accesses
+            .iter()
+            .map(|access| access.universal_hash(&alpha, &beta))
+            .collect();
+        let perm_prod_term = term(PF_MUL, perm_sum_terms);
+
+        term![EQ; orig_prod_term, perm_prod_term]
+    }
+
+    fn construct_sorted_check(sorted_ram: &Ram) -> Term {
+        // TODO: support non-field indices?
+        //       Just do a cast on permuation check, and have correct type
+        //       in sorted check
+        let idx_field = match &sorted_ram.idx_sort {
+            Sort::Field(field) => field,
+            _ => panic!("Cannot use RAM on non-field index type!"),
+        };
+
+        let mut check_terms = Vec::new();
+        for i in 1..sorted_ram.accesses.len() {
+            // if idx == idx' then v == v' else idx == idx' + 1
+            let check_term = term![
+                ITE;
+                term![
+                    EQ;
+                    sorted_ram.accesses[i].idx.clone(),
+                    sorted_ram.accesses[i - 1].idx.clone()
+                ],
+                term![
+                    Op::Eq;
+                    sorted_ram.accesses[i].val.clone(),
+                    sorted_ram.accesses[i - 1].val.clone()
+                ],
+                term![Op::Eq;
+                    sorted_ram.accesses[i].idx.clone(),
+                    term![PF_ADD; sorted_ram.accesses[i-1].idx.clone(), pf_lit(idx_field.new_v::<u32>(1))]
+                ]
+            ];
+            check_terms.push(check_term);
+        }
+        term(AND, check_terms)
+    }
+
+    fn encode(&self, computation: &mut Computation) {
+        if self.rams.len() < 2 {
+            return;
+        }
+        assert_eq!(
+            computation.outputs().len(),
+            1,
+            "Proofs using RAMs must have a single output!"
+        );
+        assert_eq!(
+            check(&computation.outputs()[0]),
+            Sort::Bool,
+            "Proofs using RAMs must have a boolean output!"
+        );
+
+        for ram in self.rams.iter() {
+            let sorted_ram = ram.sorted_by_index(computation);
+            // TODO: better error handling
+            // TODO: is there a cleaner way to get the field type?
+            let sorted_check = Encoder::construct_sorted_check(&sorted_ram);
+
+            // TODO: actually check that the sorts for ram1 and ram2 are equal...
+            // TODO: should this actually be verifier_id?
+            // TODO: assumes that idx_sort is a field
+            let alpha = computation.new_var(
+                &format!("__alpha_{}", ram.id),
+                ram.idx_sort.clone(),
+                Some(crate::ir::proof::PROVER_ID),
+                None,
+            );
+            let beta = computation.new_var(
+                &format!("__beta_{}", ram.id),
+                ram.idx_sort.clone(),
+                Some(crate::ir::proof::PROVER_ID),
+                None,
+            );
+
+            let permutation_check =
+                Encoder::construct_permutation_check(ram, &sorted_ram, alpha, beta);
+
+            computation.outputs[0] =
+                term![AND; sorted_check, permutation_check, computation.outputs()[0].clone()];
+        }
+    }
+}
+
 /// Find arrays which are RAMs (i.e., accessed with a linear sequences of
 /// selects, stores, and conditional stores) and
 ///   1. Replaces reads from these RAMs with new variables.
@@ -314,11 +543,21 @@ impl RewritePass for Extactor {
 /// * This pass doesn't handle shared stuff very well. If there are two
 ///   different RAMs with the same init sequence of instructions, this pass will
 ///   not extract **either**.
-#[allow(dead_code)]
 pub fn extract(c: &mut Computation) -> Vec<Ram> {
     let mut extractor = Extactor::new(c);
     extractor.traverse(c);
     extractor.rams
+}
+
+/// Encodes the given RAMs into the computation, by ensuring there exist
+/// a valid ordering of the RAM accesses
+///
+/// NOTE: This is currently broken for any ram that:
+///       1. doesn't do a single write, then only reads
+///       2. doesn't access every single element in the ram
+pub fn encode(c: &mut Computation, rams: Vec<Ram>) {
+    let encoder = Encoder::new(rams);
+    encoder.encode(c);
 }
 
 #[cfg(test)]

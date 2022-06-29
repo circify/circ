@@ -63,6 +63,9 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Update(_i) => vec![t.cs[0].clone()],
         Op::Map(_) => t.cs.clone(),
         Op::Call(_, _, _) => Vec::new(),
+        // TODO: for now, I'm assuming the type of all args will be the same
+        //       though I don't think anything enforces this...
+        Op::NthSmallest(_) => vec![t.cs[0].clone()],
     }
 }
 
@@ -176,6 +179,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             }
         }
         Op::Call(_, _, ret) => Ok(ret.clone()),
+        Op::NthSmallest(_) => Ok(get_ty(&t.cs[0]).clone()),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }
