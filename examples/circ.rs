@@ -250,6 +250,7 @@ fn main() {
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
+                Opt::RamExt,
                 Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,

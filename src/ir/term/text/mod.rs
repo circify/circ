@@ -132,6 +132,7 @@ fn parse_tok_tree(bytes: &[u8]) -> TokTree {
         stack.len() - 1
     );
     assert!(!stack[0].is_empty(), "Empty parse");
+    println!("got stack {:?}", stack[0]);
     assert!(stack[0].len() < 2, "Multiple top-level expressions");
     stack.pop().unwrap().pop().unwrap()
 }
@@ -273,6 +274,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
+                [Leaf(Ident, b"nthsmallest"), a] => Ok(Op::NthSmallest(self.usize(a))),
                 _ => todo!("Unparsed op: {}", tt),
             },
             _ => todo!("Unparsed op: {}", tt),

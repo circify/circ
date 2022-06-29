@@ -143,6 +143,10 @@ pub enum Op {
 
     /// Call a function (name, argument sorts, return sort)
     Call(String, Vec<Sort>, Sort),
+
+    /// Returns the nth smallest of its arguments
+    /// May only be used in precomputes
+    NthSmallest(usize),
 }
 
 /// Boolean AND
@@ -255,6 +259,7 @@ impl Op {
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
             Op::Call(_, args, _) => Some(args.len()),
+            Op::NthSmallest(_) => None
         }
     }
 }
@@ -299,6 +304,7 @@ impl Display for Op {
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
             Op::Call(name, _, _) => write!(f, "fn:{}", name),
+            Op::NthSmallest(i) => write!(f, "(nthsmallest {})", i),
         }
     }
 }
@@ -1570,6 +1576,13 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 res.map.insert(idxval, val);
             }
             Value::Array(res)
+        }
+        Op::NthSmallest(i) => {
+            let mut xs: Vec<Value> = c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect();
+            xs.sort();
+            let res = xs[*i].clone();
+            println!("got: {:?}", res);
+            res
         }
         o => unimplemented!("eval: {:?}", o),
     };

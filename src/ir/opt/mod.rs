@@ -37,6 +37,8 @@ pub enum Opt {
     Inline,
     /// Eliminate tuples
     Tuple,
+    /// Ram extraction
+    RamExt,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -104,6 +106,10 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -
             }
             Opt::Tuple => {
                 tuple::eliminate_tuples(&mut cs);
+            }
+            Opt::RamExt => {
+                let rams = mem::ram::extract(&mut cs);
+                mem::ram::encode(&mut cs, rams);
             }
         }
         debug!("After {:?}: {} outputs", i, cs.outputs.len());
