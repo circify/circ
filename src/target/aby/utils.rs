@@ -50,8 +50,8 @@ pub fn write_lines_to_file(path: &str, lines: &[String]) {
         .write(true)
         .append(true)
         .open(path)
-        .expect("Failed to open circuit_tmp file");
+        .expect(&format!("Failed to open file: {}", path));
 
     file.write_all(data.as_bytes())
-        .expect("Failed to write to circuit_tmp file");
+        .expect(&format!("Failed to write to file: {}", path));
 }

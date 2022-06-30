@@ -67,7 +67,6 @@ struct ToABY<'a> {
     // Outputs
     bytecode_input: Vec<String>,
     bytecode_output: Vec<String>,
-    share_map_output: Vec<String>,
     const_output: Vec<String>,
 }
 
@@ -99,7 +98,6 @@ impl<'a> ToABY<'a> {
             share_cnt: 0,
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
-            share_map_output: Vec::new(),
             const_output: Vec::new(),
         }
     }
@@ -124,20 +122,24 @@ impl<'a> ToABY<'a> {
 
     fn write_mapping_file(&mut self) {
         let computations = self.fs.computations.clone();
+        let mut share_map_output = Vec::new();
         for (name, comp) in computations.iter() {
+            let share_map = self.get_sharing_map(name);
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
-                    let share_map = self.get_sharing_map(name);
                     let share_type = share_map.get(&t).unwrap();
                     let share_str = share_type.char();
                     let shares = self.get_shares(&t);
                     for s in shares {
                         let line = format!("{} {}\n", s, share_str);
-                        self.share_map_output.push(line);
+                        share_map_output.push(line);
                     }
                 }
             }
         }
+
+        let share_map_path = get_path(self.path, &self.lang, "share_map");
+        write_lines_to_file(&share_map_path, &share_map_output);
     }
 
     fn get_md(&self) -> ComputationMetadata {
@@ -157,13 +159,7 @@ impl<'a> ToABY<'a> {
         let var_name = &n[offset + 1..];
 
         match var_name.len() {
-            2 => {
-                var_name[0].to_string()
-                // let l = n.len() - 1;
-                // let offset = n.iter().position(|&r| r == "lex0").unwrap();
-                // let var_name = &n[offset + 1..=l - 2].to_vec().join("_");
-                // format!("{}_{}", var_name, n[l])
-            }
+            2 => var_name[0].to_string(),
             3.. => {
                 let l = var_name.len();
                 format!(
@@ -767,10 +763,6 @@ impl<'a> ToABY<'a> {
             self.cache.clear();
         }
 
-        // write share map
-        let share_map_path = get_path(self.path, &self.lang, "share_map");
-        write_lines_to_file(&share_map_path, &self.share_map_output);
-
         // write const variables
         let const_output_path = get_path(self.path, &self.lang, "const");
         write_lines_to_file(&const_output_path, &self.const_output);
@@ -790,6 +782,7 @@ pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
 
     // TODO: change ILP to take in Functions instead of individual computations
     for (name, comp) in ir.computations.iter() {
+        println!("processing computation: {}", name);
         let assignments = match ss {
             "b" => assign_all_boolean(&comp, cm),
             "y" => assign_all_yao(&comp, cm),
