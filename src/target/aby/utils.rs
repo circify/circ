@@ -38,20 +38,26 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
     file_path
 }
 
-/// Write circuit output to temporary file
-pub fn write_lines_to_file(path: &str, lines: &[String]) {
+/// Write lines to a path 
+pub fn write_l(file: &mut fs::File, path: &str, lines: &[String]) {
+    let data = lines.join("");
+    file.write_all(data.as_bytes())
+        .expect(&format!("Failed to write to file: {}", path));
+}
+
+/// Write lines to a path 
+pub fn write_lines(path: &str, lines: &[String]) {
     if !Path::new(&path).exists() {
         fs::File::create(&path).expect(&*format!("Failed to create: {}", path));
     }
 
-    let data = lines.join("");
-
     let mut file = fs::OpenOptions::new()
         .write(true)
         .append(true)
-        .open(path)
+        .open(&path)
         .expect(&format!("Failed to open file: {}", path));
 
+    let data = lines.join("");
     file.write_all(data.as_bytes())
         .expect(&format!("Failed to write to file: {}", path));
 }

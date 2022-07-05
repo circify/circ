@@ -24,6 +24,7 @@ use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
 
 const PUBLIC: u8 = 2;
+const WRITE_SIZE: usize = 65536;
 
 #[derive(Clone)]
 enum EmbeddedTerm {
@@ -105,7 +106,8 @@ impl<'a> ToABY<'a> {
 
     fn map_to_shares(&mut self) {
         let computations = self.fs.computations.clone();
-        let mut share_map_output = Vec::new();
+        let share_map_path = get_path(self.path, &self.lang, "share_map");
+        let mut share_outputs = Vec::new();
         for (name, comp) in computations.iter() {
             let share_map = self.get_sharing_map(name);
             for t in comp.outputs.iter() {
@@ -124,13 +126,19 @@ impl<'a> ToABY<'a> {
                     let share_str = share_type.char();
                     for s in shares {
                         let line = format!("{} {}\n", s, share_str);
-                        share_map_output.push(line);
+                        share_outputs.push(line);
+                    }
+                    
+                    // buffered write
+                    if share_outputs.len() >= WRITE_SIZE {
+                        write_lines(&share_map_path, &share_outputs);
+                        share_outputs.clear();
                     }
                 }
             }
         }
-        let share_map_path = get_path(self.path, &self.lang, "share_map");
-        write_lines_to_file(&share_map_path, &share_map_output);
+        
+        write_lines(&share_map_path, &share_outputs);
 
         // clear share map
         self.s_map.clear();
@@ -690,18 +698,6 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    // /// Given term `t`, type-check `t` is of type Bv
-    // fn check_tuple(&self, t: &Term) {
-    //     match self
-    //         .cache
-    //         .get(t)
-    //         .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
-    //     {
-    //         EmbeddedTerm::Tuple => (),
-    //         _ => panic!("Non-tuple for {:?}", t),
-    //     }
-    // }
-
     fn embed(&mut self, t: Term) {
         for c in PostOrderIter::new(t) {
             if self.cache.contains_key(&c) {
@@ -777,20 +773,19 @@ impl<'a> ToABY<'a> {
             self.bytecode_output.append(&mut outputs);
             self.bytecode_input.append(&mut self.bytecode_output);
 
-            write_lines_to_file(&bytecode_path, &self.bytecode_input);
+            write_lines(&bytecode_path, &self.bytecode_input);
+            println!("Time: writing {}: {:?}", name, now.elapsed());
 
             //reset for next function
             self.bytecode_input.clear();
             self.bytecode_output.clear();
             self.inputs.clear();
             self.cache.clear();
-
-            println!("Time: writing {}: {:?}", name, now.elapsed());
         }
 
         // write const variables
         let const_output_path = get_path(self.path, &self.lang, "const");
-        write_lines_to_file(&const_output_path, &self.const_output);
+        write_lines(&const_output_path, &self.const_output);
     }
 
     fn convert(&mut self) {
