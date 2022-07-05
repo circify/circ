@@ -31,6 +31,20 @@ use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 use circ::target::r1cs::bellman::{gen_params, prove, verify};
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+
+#[cfg(feature = "marlin")]
+use circ::target::r1cs::marlin;
+#[cfg(feature = "marlin")]
+use ark_bls12_381::{Bls12_381, Fr as BlsFr};
+#[cfg(feature = "marlin")]
+use ark_poly_commit::marlin::marlin_pc::MarlinKZG10;
+#[cfg(feature = "marlin")]
+use ark_poly::univariate::DensePolynomial;
+#[cfg(feature = "marlin")]
+use ark_marlin::rng::FiatShamirRng;
+#[cfg(feature = "marlin")]
+use sha2::Sha256;
+
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
 use circ::util::field::DFL_T;
@@ -103,6 +117,8 @@ enum Backend {
         lc_elimination_thresh: usize,
         #[structopt(long, default_value = "count")]
         action: ProofAction,
+        #[structopt(long, default_value = "groth")]
+        proof_system: ProofSystem,
     },
     Smt {},
     Ilp {},
@@ -142,6 +158,14 @@ arg_enum! {
     enum ProofAction {
         Count,
         Setup,
+    }
+}
+
+arg_enum! {
+    #[derive(PartialEq, Debug)]
+    enum ProofSystem {
+        Groth,
+        Marlin,
     }
 }
 
@@ -281,6 +305,7 @@ fn main() {
             prover_key,
             verifier_key,
             lc_elimination_thresh,
+            proof_system,
             ..
         } => {
             println!("Converting to r1cs");
@@ -293,14 +318,32 @@ fn main() {
             match action {
                 ProofAction::Count => (),
                 ProofAction::Setup => {
-                    println!("Generating Parameters");
-                    gen_params::<Bls12, _, _>(
-                        prover_key,
-                        verifier_key,
-                        &prover_data,
-                        &verifier_data,
-                    )
-                    .unwrap();
+                    println!("Generating Parameters for proof system {}", proof_system);
+                    match proof_system {
+                        ProofSystem::Groth => {
+                            gen_params::<Bls12, _, _>(
+                                prover_key,
+                                verifier_key,
+                                &prover_data,
+                                &verifier_data,
+                            )
+                            .unwrap();
+                        },
+                        #[cfg(feature = "marlin")]
+                        ProofSystem::Marlin => {
+                            marlin::gen_params::<BlsFr, MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>, Sha256, _, _>(
+                                prover_key,
+                                verifier_key,
+                                &prover_data,
+                                &verifier_data,
+                            )
+                            .unwrap();
+                        },
+                        #[cfg(not(feature = "marlin"))]
+                        ProofSystem::Marlin => {
+                            panic!("Missing feature: marlin");
+                        },
+                    }
                 }
             }
         }
