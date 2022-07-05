@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::time::Instant;
+use std::fs;
+use std::io;
 
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
@@ -101,6 +103,22 @@ impl<'a> ToABY<'a> {
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
             const_output: Vec::new(),
+        }
+    }
+
+    fn write_const_output(&mut self) {
+        if self.const_output.len() >= WRITE_SIZE {
+            let const_output_path = get_path(self.path, &self.lang, "const");
+            write_lines(&const_output_path, &self.const_output);
+            self.const_output.clear();
+        }
+    }
+
+    fn write_bytecode_output(&mut self) {
+        if self.bytecode_output.len() >= WRITE_SIZE {
+            let bytecode_output_path = get_path(self.path, &self.lang, &format!("{}_bytecode_output", self.curr_comp));
+            write_lines(&bytecode_output_path, &self.bytecode_output);
+            self.bytecode_output.clear();
         }
     }
 
@@ -715,6 +733,9 @@ impl<'a> ToABY<'a> {
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
+
+            // self.write_bytecode_output();
+            // self.write_const_output();
         }
     }
 
@@ -736,12 +757,11 @@ impl<'a> ToABY<'a> {
                     outputs.push(line);
                 }
             }
+            // self.bytecode_output.append(&mut outputs);
+
             println!("Time: lowering {}: {:?}", name, now.elapsed());
 
             now = Instant::now();
-
-            // write bytecode per function
-            let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
 
             // reorder inputs
             let mut bytecode_input_map: HashMap<String, String> = HashMap::new();
@@ -768,6 +788,11 @@ impl<'a> ToABY<'a> {
                 .filter(|x| !x.is_empty())
                 .collect::<Vec<String>>();
             self.bytecode_input = inputs;
+            println!("Time: reordering inputs {}: {:?}", name, now.elapsed());
+
+            now = Instant::now();
+
+            let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
 
             // concatenate output content
             self.bytecode_output.append(&mut outputs);
@@ -775,6 +800,36 @@ impl<'a> ToABY<'a> {
 
             write_lines(&bytecode_path, &self.bytecode_input);
             println!("Time: writing {}: {:?}", name, now.elapsed());
+
+
+
+
+
+            // // write input bytecode
+            // let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
+            // write_lines(&bytecode_path, &self.bytecode_input);
+
+            // // write output bytecode
+            // let bytecode_output_path = get_path(self.path, &self.lang, &format!("{}_bytecode_output", name));
+            // write_lines(&bytecode_output_path, &self.bytecode_output);
+
+            // println!("Time: writing {}: {:?}", name, now.elapsed());
+
+            // // combine input and output bytecode files into a single file
+            // let mut bytecode = fs::OpenOptions::new()
+            //     .append(true)
+            //     .open(&bytecode_path)
+            //     .unwrap();
+            
+            // let mut bytecode_output = fs::OpenOptions::new()
+            //     .read(true)
+            //     .open(&bytecode_output_path)
+            //     .unwrap();
+
+            // io::copy(&mut bytecode_output, &mut bytecode).expect("Failed to merge bytecode files");
+
+            // // delete input and output bytecode files
+            // fs::remove_file(&bytecode_output_path).expect(&format!("Failed to remove bytecode output: {}", &bytecode_output_path));
 
             //reset for next function
             self.bytecode_input.clear();
@@ -784,8 +839,7 @@ impl<'a> ToABY<'a> {
         }
 
         // write const variables
-        let const_output_path = get_path(self.path, &self.lang, "const");
-        write_lines(&const_output_path, &self.const_output);
+        self.write_const_output();
     }
 
     fn convert(&mut self) {
