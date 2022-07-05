@@ -103,9 +103,11 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    fn map_terms_to_shares(&mut self) {
+    fn map_to_shares(&mut self) {
         let computations = self.fs.computations.clone();
-        for (_name, comp) in computations.iter() {
+        let mut share_map_output = Vec::new();
+        for (name, comp) in computations.iter() {
+            let share_map = self.get_sharing_map(name);
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
                     let sort: Sort = check(&t);
@@ -115,22 +117,11 @@ impl<'a> ToABY<'a> {
                         shares.push(self.share_cnt);
                         self.share_cnt += 1;
                     }
-                    self.term_to_shares.insert(t, shares);
-                }
-            }
-        }
-    }
+                    self.term_to_shares.insert(t.clone(), shares.clone());
 
-    fn write_mapping_file(&mut self) {
-        let computations = self.fs.computations.clone();
-        let mut share_map_output = Vec::new();
-        for (name, comp) in computations.iter() {
-            let share_map = self.get_sharing_map(name);
-            for t in comp.outputs.iter() {
-                for t in PostOrderIter::new(t.clone()) {
+                    // write sharing map
                     let share_type = share_map.get(&t).unwrap();
                     let share_str = share_type.char();
-                    let shares = self.get_shares(&t);
                     for s in shares {
                         let line = format!("{} {}\n", s, share_str);
                         share_map_output.push(line);
@@ -138,9 +129,11 @@ impl<'a> ToABY<'a> {
                 }
             }
         }
-
         let share_map_path = get_path(self.path, &self.lang, "share_map");
         write_lines_to_file(&share_map_path, &share_map_output);
+
+        // clear share map
+        self.s_map.clear();
     }
 
     fn get_md(&self) -> ComputationMetadata {
@@ -802,11 +795,8 @@ impl<'a> ToABY<'a> {
 
     fn convert(&mut self) {
         let mut now = Instant::now();
-        self.map_terms_to_shares();
+        self.map_to_shares();
         println!("Time: map terms to shares: {:?}", now.elapsed());
-        now = Instant::now();
-        self.write_mapping_file();
-        println!("Time: write mapping file: {:?}", now.elapsed());
         now = Instant::now();
         self.lower();
         println!("Time: lowering: {:?}", now.elapsed());

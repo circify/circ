@@ -1,57 +1,41 @@
 //! Binarize terms
 
+use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::*;
 
 /// Binarize cache.
 #[derive(Default)]
-pub struct Cache(TermMap<Term>);
 
-impl Cache {
-    /// Empty cache.
-    pub fn new() -> Self {
-        Cache(TermMap::new())
-    }
-}
+struct Binarizer;
 
-fn binarize(op: &Op, children: &[Term]) -> Term {
-    if children.is_empty() || children.len() == 1 {
-        term(op.clone(), children.to_vec())
-    } else {
-        children[2..].to_vec().iter().fold(
-            term![op.clone(); children[1].clone(), children[0].clone()],
-            |acc, x| term![op.clone(); x.clone(), acc],
-        )
-    }
-}
-
-/// Traverse `term`, binarize n-ary operators.
-pub fn binarize_nary_ops(term_: Term) -> Term {
-    let mut c = Cache::new();
-    binarize_nary_ops_cached(term_, &mut c)
-}
-/// Traverse `term`, binarize n-ary operators.
-pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache) -> Term {
-    for t in PostOrderIter::new(term_.clone()) {
-        let mut children = Vec::new();
-        for c in &t.cs {
-            if let Some(rewritten_c) = rewritten.get(c) {
-                children.push(rewritten_c.clone());
-            } else {
-                children.push(c.clone());
-            }
+impl RewritePass for Binarizer {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        _computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        let cs = rewritten_children();
+        match &orig.op {
+            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => {
+                if cs.is_empty() || cs.len() == 1 {
+                    Some(term(orig.op.clone().clone(), cs.to_vec()))
+                } else {
+                    Some(cs[2..].to_vec().iter().fold(
+                        term![orig.op.clone(); cs[1].clone(), cs[0].clone()],
+                        |acc, x| term![orig.op.clone(); x.clone(), acc],
+                    ))
+                }
+            },
+            _ => None
         }
-        let entry = match t.op {
-            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op, &children),
-            _ => term(t.op.clone(), children.clone()),
-        };
-        rewritten.insert(t, entry);
     }
+}
 
-    if let Some(t) = rewritten.get(&term_) {
-        t.clone()
-    } else {
-        panic!("Couldn't find rewritten binarized term: {}", term_);
-    }
+/// Binarize (expand) n-ary terms. 
+pub fn binarize(c: &mut Computation) {
+    let mut pass = Binarizer;
+    pass.traverse(c);
 }
 
 #[cfg(test)]
@@ -64,8 +48,8 @@ mod test {
         leaf_term(Op::Const(Value::Bool(b)))
     }
 
-    fn is_binary(t: Term) -> bool {
-        PostOrderIter::new(t).all(|c| match c.op {
+    fn is_binary(t: &Term) -> bool {
+        PostOrderIter::new(t.clone()).all(|c| match c.op {
             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => c.cs.len() <= 2,
             _ => true,
         })
@@ -73,13 +57,18 @@ mod test {
 
     #[quickcheck]
     fn binarize_random(ArbitraryTerm(t): ArbitraryTerm) -> bool {
-        is_binary(binarize_nary_ops(t))
+        let mut c = Computation::default();
+        c.outputs.push(t);
+        binarize(&mut c);
+        is_binary(&c.outputs[0])
     }
 
     #[quickcheck]
     fn binarize_semantics_random(ArbitraryTermEnv(t, vs): ArbitraryTermEnv) -> bool {
-        let tt = binarize_nary_ops(t.clone());
-        eval(&t, &vs) == eval(&tt, &vs)
+        let mut c = Computation::default();
+        c.outputs.push(t.clone());
+        binarize(&mut c);
+        eval(&t, &vs) == eval(&c.outputs[0], &vs)
     }
 
     #[test]
@@ -87,7 +76,10 @@ mod test {
         for o in vec![AND, OR, XOR] {
             let t = term![o.clone(); bool(true), term![o.clone(); bool(false), bool(true)]];
             let tt = term![o.clone(); bool(true), bool(false), bool(true)];
-            assert_eq!(t, binarize_nary_ops(tt));
+            let mut c = Computation::default();
+            c.outputs.push(tt);
+            binarize(&mut c);
+            assert_eq!(t, c.outputs[0]);
         }
     }
 
@@ -96,7 +88,10 @@ mod test {
         for o in vec![BV_AND, BV_OR, BV_XOR, BV_ADD, BV_MUL] {
             let t = term![o.clone(); bv_lit(3,5), term![o.clone(); bv_lit(3,5), bv_lit(3,5)]];
             let tt = term![o.clone(); bv_lit(3, 5), bv_lit(3, 5), bv_lit(3, 5)];
-            assert_eq!(t, binarize_nary_ops(tt));
+            let mut c = Computation::default();
+            c.outputs.push(tt);
+            binarize(&mut c);
+            assert_eq!(t, c.outputs[0]);
         }
     }
 }

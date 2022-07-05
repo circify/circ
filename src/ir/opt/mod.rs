@@ -109,10 +109,11 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     }
                 }
                 Opt::Binarize => {
-                    let mut cache = binarize::Cache::new();
-                    for a in &mut comp.outputs {
-                        *a = binarize::binarize_nary_ops_cached(a.clone(), &mut cache);
-                    }
+                    // let mut cache = binarize::Cache::new();
+                    // for a in &mut comp.outputs {
+                    //     *a = binarize::binarize_nary_ops_cached(a.clone(), &mut cache);
+                    // }
+                    binarize::binarize(comp);
                 }
                 Opt::Inline => {
                     let public_inputs = comp
