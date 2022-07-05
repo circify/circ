@@ -15,6 +15,7 @@ use crate::target::aby::utils::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
+use std::time::Instant;
 
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
@@ -518,18 +519,27 @@ impl<'a> ToABY<'a> {
             }
             Op::Select => {
                 assert!(t.cs.len() == 2);
-                let shares = self.get_shares(&t.cs[0]);
+                let array_shares = self.get_shares(&t.cs[0]);
 
-                // Assume constant indexing
-                let idx = match &t.cs[1].op {
-                    Op::Const(Value::BitVector(bv)) => bv.uint().to_usize().unwrap().clone(),
-                    _ => panic!("non-const: {}", t.cs[1].op),
-                };
+                if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                    let idx = bv.uint().to_usize().unwrap().clone();
+                    assert!(
+                        idx < array_shares.len(),
+                        "idx: {}, shares: {}",
+                        idx,
+                        array_shares.len()
+                    );
+                    self.term_to_shares
+                        .insert(t.clone(), vec![array_shares[idx]]);
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+                } else {
+                    // let idx_share = self.get_share(&t.cs[1]);
 
-                assert!(idx < shares.len(), "idx: {}, shares: {}", idx, shares.len());
+                    // for share in array_shares {
 
-                self.term_to_shares.insert(t.clone(), vec![shares[idx]]);
-                self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+                    // }
+                    panic!("non-const: sel")
+                }
             }
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
@@ -546,6 +556,7 @@ impl<'a> ToABY<'a> {
                     let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
                     let v = match arr.map.get(&idx) {
                         Some(c) => c,
+
                         None => &*arr.default,
                     };
 
@@ -575,20 +586,39 @@ impl<'a> ToABY<'a> {
                     }
                 }
             }
+            Op::Ite => {
+                let op = "MUX";
+                let shares = self.get_shares(&t);
+
+                let sel = self.get_share(&t.cs[0]);
+                let a = self.get_shares(&t.cs[1]);
+                let b = self.get_shares(&t.cs[2]);
+
+                // assert scalar_term share lens are equivalent 
+                assert!(shares.len() == a.len());
+                assert!(shares.len() == b.len());
+
+                for ((s_share, a_share), b_share) in shares.iter().zip(a.iter()).zip(b.iter()) {
+                    let line = format!("3 1 {} {} {} {} {}\n", sel, a_share, b_share, s_share, op);
+                    self.bytecode_output.push(line);
+                }    
+
+                self.cache.insert(t.clone(), EmbeddedTerm::Array);
+            }
             Op::Store => {
                 assert!(t.cs.len() == 3);
                 let mut array_shares = self.get_shares(&t.cs[0]);
                 let value_share = self.get_share(&t.cs[2]);
 
-                // Assume constant indexing
-                let idx = match &t.cs[1].op {
-                    Op::Const(Value::BitVector(bv)) => bv.uint().to_usize().unwrap().clone(),
-                    _ => panic!("non-const"),
-                };
-
-                array_shares[idx] = value_share;
-                self.term_to_shares.insert(t.clone(), array_shares.clone());
-                self.cache.insert(t.clone(), EmbeddedTerm::Array);
+                if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                    // constant indexing
+                    let idx = bv.uint().to_usize().unwrap().clone();
+                    array_shares[idx] = value_share;
+                    self.term_to_shares.insert(t.clone(), array_shares.clone());
+                    self.cache.insert(t.clone(), EmbeddedTerm::Array);
+                } else {
+                    panic!("non-const: store")
+                }
             }
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
@@ -601,21 +631,11 @@ impl<'a> ToABY<'a> {
                         // find offset
                         let mut offset = 0;
                         for j in 0..*i {
-                            match t[j] {
-                                Sort::BitVector(_) => offset += 1,
-                                Sort::Bool => offset += 1,
-                                Sort::Array(_, _, size) => offset += size,
-                                _ => todo!(),
-                            }
+                            offset += self.get_sort_len(&t[j]);
                         }
 
                         // find len
-                        let len = match t[*i] {
-                            Sort::BitVector(_) => 1,
-                            Sort::Bool => 1,
-                            Sort::Array(_, _, size) => size,
-                            _ => todo!(),
-                        };
+                        let len = self.get_sort_len(&t[*i]);
 
                         (offset, len)
                     }
@@ -643,6 +663,14 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), tuple_shares);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
+            Op::Tuple => {
+                let mut shares: Vec<i32> = Vec::new();
+                for c in t.cs.iter() {
+                    shares.append(&mut self.get_shares(c));
+                }
+                self.term_to_shares.insert(t.clone(), shares);
+                self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
+            }
             Op::Call(name, _arg_names, arg_sorts, ret_sorts) => {
                 let shares = self.get_shares(&t);
                 let op = format!("CALL({})", name);
@@ -664,7 +692,7 @@ impl<'a> ToABY<'a> {
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
             _ => {
-                panic!("Non-field in embed_scalar: {:?}", t)
+                panic!("Non-field in embed_scalar: {}", t.op)
             }
         }
     }
@@ -706,11 +734,10 @@ impl<'a> ToABY<'a> {
         let computations = self.fs.computations.clone();
         for (name, comp) in computations.iter() {
             let mut outputs: Vec<String> = Vec::new();
+            let mut now = Instant::now();
             for t in comp.outputs.iter() {
                 self.curr_comp = name.to_string();
-                for t_ in PostOrderIter::new(t.clone()) {
-                    self.embed(t_.clone());
-                }
+                self.embed(t.clone());
 
                 let op = "OUT";
                 let shares = self.get_shares(&t);
@@ -720,6 +747,9 @@ impl<'a> ToABY<'a> {
                     outputs.push(line);
                 }
             }
+            println!("Time: lowering {}: {:?}", name, now.elapsed());
+
+            now = Instant::now();
 
             // write bytecode per function
             let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
@@ -761,6 +791,8 @@ impl<'a> ToABY<'a> {
             self.bytecode_output.clear();
             self.inputs.clear();
             self.cache.clear();
+
+            println!("Time: writing {}: {:?}", name, now.elapsed());
         }
 
         // write const variables
@@ -769,9 +801,15 @@ impl<'a> ToABY<'a> {
     }
 
     fn convert(&mut self) {
+        let mut now = Instant::now();
         self.map_terms_to_shares();
+        println!("Time: map terms to shares: {:?}", now.elapsed());
+        now = Instant::now();
         self.write_mapping_file();
+        println!("Time: write mapping file: {:?}", now.elapsed());
+        now = Instant::now();
         self.lower();
+        println!("Time: lowering: {:?}", now.elapsed());
     }
 }
 

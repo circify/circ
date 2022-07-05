@@ -47,15 +47,19 @@ pub enum Opt {
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
 pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> Functions {
     for i in optimizations {
+        let now = Instant::now();
+
         let mut opt_fs: Functions = fs.clone();
         if let Opt::Link = i {
             link::link_all_function_calls(&mut opt_fs);
             fs = opt_fs;
+
+            println!("Time: {:?}: {:?}", i, now.elapsed());
+
             continue;
         }
         for (name, comp) in fs.computations.iter_mut() {
             debug!("Applying: {:?} to {}", i, name);
-            let now = Instant::now();
             trace!(
                 "Before {:?}: {}",
                 i,
@@ -132,6 +136,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                 extras::Letified(term(Op::Tuple, comp.outputs().clone()))
             );
 
+            println!("Time: {:?}: {:?}", i, now.elapsed());
             opt_fs.insert(name.clone(), comp.clone());
         }
         fs = opt_fs;

@@ -124,6 +124,7 @@ impl CostModel {
             | Op::Const(..)
             | Op::Field(_)
             | Op::Update(..)
+            | Op::Tuple
             | Op::Select
             | Op::Store
             | Op::Call(..) => Some(&self.zero),

@@ -29,9 +29,15 @@ void decomposed_relu(DT *in, DT *OUTPUT_res, int len_outer, int len_inner) {
 	DT copy[len_inner];
 	DT im_res[len_inner];
 	for(int i = 0; i < len_outer; i++) {
-		memcpy(copy, in+i*len_inner, len_inner*sizeof(DT));
+		// memcpy(copy, in+i*len_inner, len_inner*sizeof(DT));
+		for (int j = 0; j < len_inner; j++) {
+			copy[j] = (in+i*len_inner)[j];
+		}
 		relu_map(in, im_res, len_inner);
-		memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
+		// memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
+		for (int j = 0; j < len_inner; j++) {
+			(OUTPUT_res+i*len_inner)[j] = im_res[j];
+		}
 	}
 }
 
@@ -62,11 +68,17 @@ void max_pooling_outputs(DT *vals, DT *OUTPUT_res, int outputs, int cols, int ro
 	for(int o = 0; o < outputs; o++) {
 		int size = cols*rows; 
 		DT input_layer[size]; // We copy data, because compiler is unable to slice array efficiently
-		memcpy(input_layer, vals+o*size, size * sizeof(DT));
+		// memcpy(input_layer, vals+o*size, size * sizeof(DT));
+		for (int i = 0; i < size; i++) {
+			input_layer[i] = (vals+o*size)[i];
+		}
 		int output_size = cols/2*rows/2;
 		DT res_layer[output_size];
 		max_pooling(input_layer, res_layer, cols, rows);
-		memcpy(OUTPUT_res+o*output_size, res_layer, output_size * sizeof(DT));
+		// memcpy(OUTPUT_res+o*output_size, res_layer, output_size * sizeof(DT));
+		for (int i = 0; i < output_size; i++) {
+			(OUTPUT_res+o*output_size)[i] = (res_layer)[i];
+		}
 	}
 }
 
@@ -95,10 +107,17 @@ DT mmulT_unrolled_inner(DT* a, DT* b, int common) {
 void mmulT_unrolled(DT* a, DT* b, DT *OUTPUT_res, int cols_a, int cols_b, int common) {
 	for(int i = 0; i < cols_a; i++) {
 		DT aRow[common];
-		memcpy(aRow, a+i*common, common*sizeof(DT));
+		// memcpy(aRow, a+i*common, common*sizeof(DT));
+		for (int k = 0; k < common; k++) {
+			aRow[k] = (a+i*common)[k];
+		}
+
 		for(int j = 0; j < cols_b; j++) {
 			DT bRow[common];
-			memcpy(bRow, b+j*common, common*sizeof(DT));
+			// memcpy(bRow, b+j*common, common*sizeof(DT));
+			for (int k = 0; k < common; k++) {
+				bRow[k] = (b+j*common)[k];
+			}
 			OUTPUT_res[i*cols_b+j] = mmulT_unrolled_inner(aRow, bRow, common);
 		}
 	}
@@ -135,9 +154,16 @@ void convolution_naive_outputs(DT *image, DT* kernels, DT* OUTPUT_layer, int ima
 	for(int o = 0; o < output_size; o++) {
 		DT kernel[kernel_size];
 		DT res[conv_width*conv_width];
-		memcpy(kernel, kernels+ o*kernel_size, kernel_size * sizeof(DT));
+		// memcpy(kernel, kernels+ o*kernel_size, kernel_size * sizeof(DT));
+		for (int i = 0; i < kernel_size; i++) {
+			kernel[i] = (kernels+ o*kernel_size)[i];
+		}
+
 		convolution_naive(image, kernel, res, image_width, window_size, stride, conv_width);
-		memcpy(OUTPUT_layer + o*(conv_width*conv_width), res, conv_width*conv_width * sizeof(DT));
+		// memcpy(OUTPUT_layer + o*(conv_width*conv_width), res, conv_width*conv_width * sizeof(DT));
+		for (int i = 0; i < conv_width*conv_width; i++) {
+			(OUTPUT_layer + o*(conv_width*conv_width))[i] = res[i];
+		}
 	}
 }
 
@@ -221,11 +247,21 @@ int main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1)))
 		DT convolution_layer_tmp_2[OUTPUT_CHANNELS * SIZE_CONVOLUTION_2]; // 16 * (8*8)
 		DT image[IMAGE_WIDTH_2*IMAGE_WIDTH_2]; // 12*12=144
 		DT kernels[SIZE_ALL_KERNELS_2];
-		memcpy(kernels, INPUT_B.kernelsL2, SIZE_ALL_KERNELS_2*sizeof(DT));
-		memcpy(image, pooling_layer+o*IMAGE_WIDTH_2*IMAGE_WIDTH_2, IMAGE_WIDTH_2*IMAGE_WIDTH_2*sizeof(DT));
+		// memcpy(kernels, INPUT_B.kernelsL2, SIZE_ALL_KERNELS_2*sizeof(DT));
+		for (int i = 0; i < SIZE_ALL_KERNELS_2; i++) {
+			kernels[i] = INPUT_B.kernelsL2[i];
+		}
+		// memcpy(image, pooling_layer+o*IMAGE_WIDTH_2*IMAGE_WIDTH_2, IMAGE_WIDTH_2*IMAGE_WIDTH_2*sizeof(DT));
+		for (int i = 0; i < IMAGE_WIDTH_2*IMAGE_WIDTH_2; i++) {
+			image[i] = (pooling_layer+o*IMAGE_WIDTH_2*IMAGE_WIDTH_2)[i];
+		}
+
 		convolution_naive_outputs(image, kernels, convolution_layer_tmp, IMAGE_WIDTH_2, WINDOW_WIDTH, OUTPUT_CHANNELS, STRIDE, IMAGE_CROP_2);
 		sum(convolution_layer_tmp_2, convolution_layer_2, convolution_layer_tmp, OUTPUT_CHANNELS * SIZE_CONVOLUTION_2);
-		memcpy(convolution_layer_2, convolution_layer_tmp_2, OUTPUT_CHANNELS * SIZE_CONVOLUTION_2);
+		// memcpy(convolution_layer_2, convolution_layer_tmp_2, OUTPUT_CHANNELS * SIZE_CONVOLUTION_2);
+		for (int i = 0; i < OUTPUT_CHANNELS * SIZE_CONVOLUTION_2; i++) {
+			convolution_layer_2[i] = convolution_layer_tmp_2[i];
+		}
 	}
 	
 	decomposed_relu(convolution_layer_2, convolution_relu_2, OUTPUT_CHANNELS, SIZE_CONVOLUTION_2);

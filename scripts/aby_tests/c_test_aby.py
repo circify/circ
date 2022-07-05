@@ -29,7 +29,7 @@ if __name__ == "__main__":
     # kmeans_tests + \
     # db_tests
     # gauss_tests + \
-    tests = gauss_tests
+    tests = kmeans_tests_2
 
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \

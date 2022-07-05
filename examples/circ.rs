@@ -44,6 +44,7 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
@@ -163,6 +164,8 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
+    let mut now = Instant::now();
+
     env_logger::Builder::from_default_env()
         .format_level(false)
         .format_timestamp(None)
@@ -220,6 +223,8 @@ fn main() {
         }
     };
 
+    println!("Time: Frontend: {:?}", now.elapsed());
+
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -236,17 +241,17 @@ fn main() {
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
                     // The function call abstraction creates tuples
-                    Opt::Tuple,
+                    // Opt::Tuple,
                     Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
+                    // Opt::Tuple,
                     Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
-                    Opt::ConstantFold(Box::new(ignore.clone())),
+                    // Opt::Tuple,
+                    // Opt::ConstantFold(Box::new(ignore.clone())),
                     // Inline Function Calls
                     // Opt::Link,
-                    Opt::Tuple,
+                    // Opt::Tuple,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
