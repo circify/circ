@@ -24,7 +24,6 @@ use super::assignment::assign_all_yao;
 use super::assignment::assign_arithmetic_and_boolean;
 use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
-use super::assignment::ShareType;
 
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
@@ -62,7 +61,6 @@ struct ToABY<'a> {
     path: &'a Path,
     lang: String,
     curr_comp: String,
-    curr_s_map: TermMap<ShareType>,
     // Input mapping
     inputs: Vec<Term>,
     // Term cache
@@ -74,7 +72,6 @@ struct ToABY<'a> {
     bytecode_input: Vec<String>,
     bytecode_output: Vec<String>,
     const_output: Vec<String>,
-    share_output: Vec<String>,
 }
 
 impl Drop for ToABY<'_> {
@@ -99,7 +96,6 @@ impl<'a> ToABY<'a> {
             path,
             lang: lang.to_string(),
             curr_comp: "".to_string(),
-            curr_s_map: TermMap::new(),
             inputs: Vec::new(),
             cache: TermMap::new(),
             term_to_shares: TermMap::new(),
@@ -107,7 +103,14 @@ impl<'a> ToABY<'a> {
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
             const_output: Vec::new(),
-            share_output: Vec::new(),
+        }
+    }
+
+    fn write_const_output(&mut self, flush: bool) {
+        if flush || self.const_output.len() >= WRITE_SIZE {
+            let const_output_path = get_path(self.path, &self.lang, "const");
+            write_lines(&const_output_path, &self.const_output);
+            self.const_output.clear();
         }
     }
 
@@ -121,44 +124,6 @@ impl<'a> ToABY<'a> {
             write_lines(&bytecode_output_path, &self.bytecode_output);
             self.bytecode_output.clear();
         }
-    }
-
-    fn write_const_output(&mut self, flush: bool) {
-        if flush || self.const_output.len() >= WRITE_SIZE {
-            let const_output_path = get_path(self.path, &self.lang, "const");
-            write_lines(&const_output_path, &self.const_output);
-            self.const_output.clear();
-        }
-    }
-
-    fn write_share_output(&mut self, flush: bool) {
-        if flush || self.share_output.len() >= WRITE_SIZE {
-            let share_output_path = get_path(self.path, &self.lang, "share_map");
-            write_lines(&share_output_path, &self.share_output);
-            self.share_output.clear();
-        }
-    }
-
-    fn create_share(&mut self, t: &Term) {
-        // create share for term
-        let sort: Sort = check(t);
-        let num_shares = self.get_sort_len(&sort);
-        let mut shares: Vec<i32> = Vec::new();
-        for _ in 0..num_shares {
-            shares.push(self.share_cnt);
-            self.share_cnt += 1;
-        }
-        self.term_to_shares.insert(t.clone(), shares.clone());
-
-        // sharing map
-        let share_type = self.curr_s_map.get(&t).unwrap();
-        let share_str = share_type.char();
-        for s in shares {
-            let line = format!("{} {}\n", s, share_str);
-            self.share_output.push(line);
-        }
-
-        self.write_share_output(false);
     }
 
     fn map_to_shares(&mut self) {
@@ -759,12 +724,9 @@ impl<'a> ToABY<'a> {
 
     fn embed(&mut self, t: Term) {
         for c in PostOrderIter::new(t) {
-            self.create_share(&c);
-
             if self.cache.contains_key(&c) {
                 continue;
             }
-
             match check(&c) {
                 Sort::Bool => {
                     self.embed_bool(c);
@@ -781,8 +743,6 @@ impl<'a> ToABY<'a> {
             self.write_bytecode_output(false);
             self.write_const_output(false);
         }
-
-        self.write_share_output(true);
     }
 
     /// Given a term `t`, lower `t` to ABY Circuits
@@ -791,10 +751,8 @@ impl<'a> ToABY<'a> {
         for (name, comp) in computations.iter() {
             let mut outputs: Vec<String> = Vec::new();
             let mut now = Instant::now();
-
-            self.curr_comp = name.to_string();
-            self.curr_s_map = self.s_map.get(&self.curr_comp).unwrap().clone();
             for t in comp.outputs.iter() {
+                self.curr_comp = name.to_string();
                 self.embed(t.clone());
 
                 let op = "OUT";
@@ -805,11 +763,6 @@ impl<'a> ToABY<'a> {
                     outputs.push(line);
                 }
             }
-
-            // Garbage collect share_map
-            self.s_map.remove(name);
-
-            // Append output shares to bytecode_output
             self.bytecode_output.append(&mut outputs);
 
             println!("Time: lowering {}: {:?}", name, now.elapsed());
@@ -887,10 +840,10 @@ impl<'a> ToABY<'a> {
     }
 
     fn convert(&mut self) {
-        let now = Instant::now();
-        // self.map_to_shares();
-        // println!("Time: map terms to shares: {:?}", now.elapsed());
-        // now = Instant::now();
+        let mut now = Instant::now();
+        self.map_to_shares();
+        println!("Time: map terms to shares: {:?}", now.elapsed());
+        now = Instant::now();
         self.lower();
         println!("Time: lowering: {:?}", now.elapsed());
     }
