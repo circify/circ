@@ -850,7 +850,18 @@ impl<'a> ToABY<'a> {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
+pub fn to_aby(
+    ir: Functions,
+    path: &Path,
+    lang: &str,
+    cm: &str,
+    ss: &str,
+    #[allow(unused_variables)] np: &usize,
+    #[allow(unused_variables)] ml: &usize,
+    #[allow(unused_variables)] mss: &usize,
+    #[allow(unused_variables)] hyper: &usize,
+    #[allow(unused_variables)] imbalance: &usize,
+) {
     // Protocal Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
