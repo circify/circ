@@ -73,11 +73,20 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
         FxHashMap::default();
     let mut ilp = Ilp::new();
 
+    let mut cnt = 0;
     // build variables for all term assignments
     for (t, i) in terms.iter() {
         let mut vars = vec![];
+        // println!("op: {}",&t.op);
         match &t.op {
-            Op::Var(..) | Op::Const(_) => {
+            Op::Var(..) 
+            | Op::Const(_)
+            | Op::Field(_)
+            | Op::Update(..)
+            | Op::Tuple
+            | Op::Select
+            | Op::Store
+            | Op::Call(..) => {
                 for ty in &SHARE_TYPES {
                     let name = format!("t_{}_{}", i, ty.char());
                     let v = ilp.new_variable(variable().binary(), name.clone());
@@ -104,7 +113,9 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 .fold((0.0).into(), |acc: Expression, v| acc + v)
                 >> 1.0,
         );
+        // cnt += 1;
     }
+    // println!("num of op: {}",cnt);
 
     // build variables for all conversions assignments
     for (def, use_) in &def_uses {
