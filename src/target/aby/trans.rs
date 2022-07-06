@@ -131,6 +131,7 @@ impl<'a> ToABY<'a> {
         let share_map_path = get_path(self.path, &self.lang, "share_map");
         let mut share_outputs = Vec::new();
         for (name, comp) in computations.iter() {
+            println!("mapping {} to shares", name);
             let share_map = self.get_sharing_map(name);
             for t in comp.outputs.iter() {
                 for t in PostOrderIter::new(t.clone()) {
@@ -158,6 +159,7 @@ impl<'a> ToABY<'a> {
                     }
                 }
             }
+            self.s_map.remove(name);
         }
 
         write_lines(&share_map_path, &share_outputs);
