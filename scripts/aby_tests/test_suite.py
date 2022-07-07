@@ -18,7 +18,7 @@ arithmetic_tests = [
         "./scripts/aby_tests/test_inputs/sub_1.txt",
     ],
     [
-        "Subtract two numbers, negative -1 == 4294967295 because u32",
+        "Subtract two numbers, negative",
         "2pc_sub",
         "./scripts/aby_tests/test_inputs/sub_2.txt",
     ],

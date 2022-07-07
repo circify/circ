@@ -22,14 +22,14 @@ if __name__ == "__main__":
         struct_tests + \
         matrix_tests + \
         ptr_tests + \
-        c_misc_tests + \
-        biomatch_tests + \
-        kmeans_tests_2
+        c_misc_tests
+    # biomatch_tests + \
+    # kmeans_tests_2
 
     # kmeans_tests + \
     # db_tests
     # gauss_tests + \
-    tests = kmeans_tests_2
+    # tests = kmeans_tests_2
 
     # TODO: add support for return value - int promotion
     # unsigned_arithmetic_tests + \
