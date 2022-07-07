@@ -131,32 +131,30 @@ impl<'a> ToABY<'a> {
         let share_map_path = get_path(self.path, &self.lang, "share_map");
         let mut share_outputs = Vec::new();
         for (name, comp) in computations.iter() {
-            println!("mapping {} to shares", name);
+            println!("mapping {} to shares, total terms: {}", name, comp.terms());
             let share_map = self.get_sharing_map(name);
-            for t in comp.outputs.iter() {
-                for t in PostOrderIter::new(t.clone()) {
-                    let sort: Sort = check(&t);
-                    let num_shares = self.get_sort_len(&sort);
-                    let mut shares: Vec<i32> = Vec::new();
-                    for _ in 0..num_shares {
-                        shares.push(self.share_cnt);
-                        self.share_cnt += 1;
-                    }
-                    self.term_to_shares.insert(t.clone(), shares.clone());
+            for t in comp.terms_postorder() {
+                let sort: Sort = check(&t);
+                let num_shares = self.get_sort_len(&sort);
+                let mut shares: Vec<i32> = Vec::new();
+                for _ in 0..num_shares {
+                    shares.push(self.share_cnt);
+                    self.share_cnt += 1;
+                }
+                self.term_to_shares.insert(t.clone(), shares.clone());
 
-                    // write sharing map
-                    let share_type = share_map.get(&t).unwrap();
-                    let share_str = share_type.char();
-                    for s in shares {
-                        let line = format!("{} {}\n", s, share_str);
-                        share_outputs.push(line);
-                    }
+                // write sharing map
+                let share_type = share_map.get(&t).unwrap();
+                let share_str = share_type.char();
+                for s in shares {
+                    let line = format!("{} {}\n", s, share_str);
+                    share_outputs.push(line);
+                }
 
-                    // buffered write
-                    if share_outputs.len() >= WRITE_SIZE {
-                        write_lines(&share_map_path, &share_outputs);
-                        share_outputs.clear();
-                    }
+                // buffered write
+                if share_outputs.len() >= WRITE_SIZE {
+                    write_lines(&share_map_path, &share_outputs);
+                    share_outputs.clear();
                 }
             }
             self.s_map.remove(name);

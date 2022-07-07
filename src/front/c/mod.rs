@@ -524,9 +524,22 @@ impl CGen {
                             CLoc::Idx(Box::new(base), idx)
                         } else {
                             CLoc::Idx(Box::new(loc), idx)
-                        }
+                        }   
                     }
-                    _ => unimplemented!("Invalid left hand value"),
+                    BinaryOperator::Plus => {
+                        // get location
+                        let loc = self.gen_lval(*bin_op.lhs.clone());
+
+                        // get offset
+                        let offset = self.gen_expr(bin_op.rhs.node.clone());
+
+                        // TODO: if lhs is a stack_ptr, need to add offset to stack_ptr offset.
+
+                        CLoc::Idx(Box::new(loc), offset)
+                    }
+                    _ => {
+                        unimplemented!("Invalid left hand value")
+                    }
                 }
             }
             Expression::Member(node) => {
