@@ -127,38 +127,57 @@ impl<'a> ToABY<'a> {
     }
 
     fn map_to_shares(&mut self) {
+        let mut now = Instant::now();
         let computations = self.fs.computations.clone();
+        println!("Time: cloning computations: {:?}", now.elapsed());
+
+        let mut term_to_share_time: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut write_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut create_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut format_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut add_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+
         let share_map_path = get_path(self.path, &self.lang, "share_map");
-        let mut share_outputs = Vec::new();
+        let mut share_outputs = Vec::with_capacity(WRITE_SIZE * 2);
         for (name, comp) in computations.iter() {
-            println!("mapping {} to shares", name);
+            println!("mapping {} to shares, total terms: {}", name, comp.terms());
             let share_map = self.get_sharing_map(name);
-            for t in comp.outputs.iter() {
-                for t in PostOrderIter::new(t.clone()) {
-                    let sort: Sort = check(&t);
-                    let num_shares = self.get_sort_len(&sort);
-                    let mut shares: Vec<i32> = Vec::new();
-                    for _ in 0..num_shares {
-                        shares.push(self.share_cnt);
-                        self.share_cnt += 1;
-                    }
-                    self.term_to_shares.insert(t.clone(), shares.clone());
+            for t in comp.terms_postorder() {
+                now = Instant::now();
+                let sort: Sort = check(&t);
+                let num_shares = self.get_sort_len(&sort) as i32;
+                let shares: Vec<i32> = (0..num_shares)
+                    .map(|x| x + self.share_cnt)
+                    .collect::<Vec<i32>>();
+                self.share_cnt += num_shares;
+                self.term_to_shares.insert(t.clone(), shares.clone());
+                term_to_share_time += now.elapsed();
 
-                    // write sharing map
-                    let share_type = share_map.get(&t).unwrap();
-                    let share_str = share_type.char();
-                    for s in shares {
-                        let line = format!("{} {}\n", s, share_str);
-                        share_outputs.push(line);
-                    }
+                now = Instant::now();
+                // write sharing map
+                let share_type = share_map.get(&t).unwrap();
+                let share_str = share_type.char();
+                create_line_time += now.elapsed();
 
-                    // buffered write
-                    if share_outputs.len() >= WRITE_SIZE {
-                        write_lines(&share_map_path, &share_outputs);
-                        share_outputs.clear();
-                    }
+                for s in shares {
+                    now = Instant::now();
+                    let line = format!("{} {}\n", s, share_str);
+                    format_line_time += now.elapsed();
+
+                    now = Instant::now();
+                    share_outputs.push(line);
+                    add_line_time += now.elapsed();
                 }
+
+                now = Instant::now();
+                // buffered write
+                if share_outputs.len() >= WRITE_SIZE {
+                    write_lines(&share_map_path, &share_outputs);
+                    share_outputs.clear();
+                }
+                write_line_time += now.elapsed();
             }
+
             self.s_map.remove(name);
         }
 
@@ -166,6 +185,12 @@ impl<'a> ToABY<'a> {
 
         // clear share map
         self.s_map.clear();
+
+        println!("term to share time: {:?}", term_to_share_time);
+        println!("create time: {:?}", create_line_time);
+        println!("format time: {:?}", format_line_time);
+        println!("add time: {:?}", add_line_time);
+        println!("write time: {:?}", write_line_time);
     }
 
     fn get_md(&self) -> ComputationMetadata {
