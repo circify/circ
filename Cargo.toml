@@ -42,8 +42,8 @@ itertools = "0.10"
 petgraph = "0.6"
 paste = "1.0"
 im = "15"
-ark-marlin = { path = "../marlin", optional = true }
-ark-relations = { path = "../snark/relations", optional = true }
+ark-marlin = { path = "third_party/ark/marlin", optional = true }
+ark-relations = { path = "third_party/ark/snark/relations", optional = true }
 ark-ff = { version = "0.3.0", optional = true }
 ark-poly-commit = { version = "0.3.0", optional = true }
 ark-poly = { version = "0.3.0", optional = true }
