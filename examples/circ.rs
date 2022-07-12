@@ -33,15 +33,17 @@ use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 
 #[cfg(feature = "marlin")]
-use circ::target::r1cs::marlin;
-#[cfg(feature = "marlin")]
 use ark_bls12_381::{Bls12_381, Fr as BlsFr};
 #[cfg(feature = "marlin")]
-use ark_poly_commit::marlin::marlin_pc::MarlinKZG10;
+use ark_marlin::SimpleHashFiatShamirRng;
 #[cfg(feature = "marlin")]
 use ark_poly::univariate::DensePolynomial;
 #[cfg(feature = "marlin")]
-use ark_marlin::rng::FiatShamirRng;
+use ark_poly_commit::marlin::marlin_pc::MarlinKZG10;
+#[cfg(feature = "marlin")]
+use circ::target::r1cs::marlin;
+#[cfg(feature = "marlin")]
+use rand_chacha::ChaChaRng;
 #[cfg(feature = "marlin")]
 use sha2::Sha256;
 
@@ -274,13 +276,14 @@ fn main() {
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
-                Opt::RamExt,
                 Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold(Box::new([])),
                 Opt::Flatten,
                 Opt::Inline,
+                Opt::Tuple,
+                Opt::RamExt,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
                 Opt::ConstantFold(Box::new([])),
@@ -328,21 +331,24 @@ fn main() {
                                 &verifier_data,
                             )
                             .unwrap();
-                        },
+                        }
                         #[cfg(feature = "marlin")]
                         ProofSystem::Marlin => {
-                            marlin::gen_params::<BlsFr, MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>, Sha256, _, _>(
-                                prover_key,
-                                verifier_key,
-                                &prover_data,
-                                &verifier_data,
+                            marlin::gen_params::<
+                                BlsFr,
+                                MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>,
+                                SimpleHashFiatShamirRng<Sha256, ChaChaRng>,
+                                _,
+                                _,
+                            >(
+                                prover_key, verifier_key, &prover_data, &verifier_data
                             )
                             .unwrap();
-                        },
+                        }
                         #[cfg(not(feature = "marlin"))]
                         ProofSystem::Marlin => {
                             panic!("Missing feature: marlin");
-                        },
+                        }
                     }
                 }
             }

@@ -136,18 +136,15 @@ dependencies = [
 [[package]]
 name = "ark-marlin"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caa8510faa8e64f0a6841ee4b58efe2d56f7a80d86fa0ce9891bbb3aa20166d9"
 dependencies = [
  "ark-ff",
  "ark-poly",
  "ark-poly-commit",
- "ark-relations",
+ "ark-relations 0.3.0",
  "ark-serialize",
  "ark-std",
  "derivative",
  "digest 0.9.0",
- "rand_chacha",
  "rayon",
 ]
 
@@ -160,7 +157,7 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-r1cs-std",
- "ark-relations",
+ "ark-relations 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ark-std",
  "derivative",
  "num-bigint 0.4.3",
@@ -193,7 +190,7 @@ dependencies = [
  "ark-ff",
  "ark-nonnative-field",
  "ark-poly",
- "ark-relations",
+ "ark-relations 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ark-serialize",
  "ark-std",
  "derivative",
@@ -210,12 +207,22 @@ checksum = "22e8fdacb1931f238a0d866ced1e916a49d36de832fd8b83dc916b718ae72893"
 dependencies = [
  "ark-ec",
  "ark-ff",
- "ark-relations",
+ "ark-relations 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ark-std",
  "derivative",
  "num-bigint 0.4.3",
  "num-traits",
  "tracing",
+]
+
+[[package]]
+name = "ark-relations"
+version = "0.3.0"
+dependencies = [
+ "ark-ff",
+ "ark-std",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -464,7 +471,7 @@ dependencies = [
  "ark-marlin",
  "ark-poly",
  "ark-poly-commit",
- "ark-relations",
+ "ark-relations 0.3.0",
  "ark-serialize",
  "bellman",
  "bincode",
@@ -496,6 +503,7 @@ dependencies = [
  "quickcheck",
  "quickcheck_macros",
  "rand",
+ "rand_chacha",
  "rsmt2",
  "rug",
  "serde",

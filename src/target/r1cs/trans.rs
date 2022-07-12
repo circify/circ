@@ -69,6 +69,10 @@ impl ToR1cs {
     ///
     /// `comp` is a term that computes the value.
     fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, public: bool) -> TermLc {
+        // max_epoch analysis on comp
+        // epoch number with signal
+        // output is defining the computation the prover runs as a precompute
+        // 
         let n = format!("{}_n{}", ctx, self.next_idx);
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));

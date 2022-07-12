@@ -13,6 +13,8 @@ use std::fmt::{self, Display, Formatter};
 
 /// The prover visibility
 pub const PROVER_VIS: Option<PartyId> = Some(proof::PROVER_ID);
+/// The verifier visibility
+pub const VERIFIER_VIS: Option<PartyId> = Some(proof::VERIFIER_ID);
 /// Public visibility
 pub const PUBLIC_VIS: Option<PartyId> = None;
 

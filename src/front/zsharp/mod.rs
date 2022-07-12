@@ -6,7 +6,7 @@ pub mod zvisit;
 
 use super::{FrontEnd, Mode};
 use crate::circify::{CircError, Circify, Loc, Val};
-use crate::front::{PROVER_VIS, PUBLIC_VIS};
+use crate::front::{PROVER_VIS, VERIFIER_VIS, PUBLIC_VIS};
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 use crate::util::field::DFL_T;
@@ -679,8 +679,8 @@ impl<'ast> ZGen<'ast> {
         for p in f.parameters.iter() {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
-            let vis = self.interpret_visibility(&p.visibility);
-            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false);
+            let (vis, epoch) = self.interpret_visibility(&p.visibility);
+            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, epoch, None, false);
             self.unwrap(r, &p.span);
         }
         for s in &f.statements {
@@ -704,7 +704,7 @@ impl<'ast> ZGen<'ast> {
                     let name = "return".to_owned();
                     let ret_val = r.unwrap_term();
                     let ret_var_val = self
-                        .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
+                        .circ_declare_input(name, ty, PUBLIC_VIS, 0, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
                     let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
                     let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
@@ -753,21 +753,33 @@ impl<'ast> ZGen<'ast> {
             }
         }
     }
-    fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> Option<PartyId> {
+    fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> (Option<PartyId>, Epoch) {
         match visibility {
-            None | Some(ast::Visibility::Public(_)) => PUBLIC_VIS,
+            None | Some(ast::Visibility::Public(_)) => (PUBLIC_VIS, 0),
             Some(ast::Visibility::Private(private)) => match self.mode {
                 Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
-                        self.err(
-                            format!(
-                                "Party number found, but we're generating a {} circuit",
-                                self.mode
-                            ),
-                            &private.span,
-                        );
+                        //self.err(
+                        //    format!(
+                        //        "Party number found, but we're generating a {} circuit",
+                        //        self.mode
+                        //    ),
+                        //    &private.span,
+                        //);
+                        let num_str = private.number.as_ref().unwrap();
+                        use std::convert::TryInto;
+                        let num: u8 = num_str.try_into().unwrap_or_else(|e| self.err(e, &private.span));
+                        let epoch = private.epoch.as_ref().map(|e| e.try_into()).unwrap_or(Ok(0u8)).unwrap();
+                        if num == 0 {
+                            (PROVER_VIS, epoch)
+                        } else if num == 1 {
+                            (VERIFIER_VIS, epoch)
+                        } else {
+                            self.err(format!("Bad party number: {}, can only be 0 or 1 for proofs!", num), &private.span);
+                        }
+                    } else {
+                        (PROVER_VIS, 0)
                     }
-                    PROVER_VIS
                 }
                 Mode::Mpc(n_parties) => {
                     let num_str = private
@@ -780,7 +792,7 @@ impl<'ast> ZGen<'ast> {
                             self.err(format!("Bad party number: {}", e), &private.span)
                         });
                     if num_val <= n_parties {
-                        Some(num_val - 1)
+                        (Some(num_val - 1), 0)
                     } else {
                         self.err(
                             format!(
@@ -1858,12 +1870,13 @@ impl<'ast> ZGen<'ast> {
         name: String,
         ty: &Ty,
         vis: Option<PartyId>,
+        epoch: u8,
         precomputed_value: Option<T>,
         mangle_name: bool,
     ) -> Result<T, CircError> {
         self.circ
             .borrow_mut()
-            .declare_input(name, ty, vis, precomputed_value, mangle_name)
+            .declare_input(name, ty, vis, epoch, precomputed_value, mangle_name)
     }
 
     fn circ_declare_init(&self, name: String, ty: Ty, val: Val<T>) -> Result<Val<T>, CircError> {

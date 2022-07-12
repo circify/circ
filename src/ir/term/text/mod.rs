@@ -505,7 +505,7 @@ impl<'src> IrInterp<'src> {
 
     fn visibility_list(&self, tt: &TokTree<'src>) -> Vec<(String, String)> {
         if let List(tts) = tt {
-            tts.iter()
+            let res = tts.iter()
                 .map(|tti| match tti {
                     List(ls) => match &ls[..] {
                         [Leaf(Token::Ident, var), Leaf(Token::Ident, party)] => {
@@ -517,7 +517,9 @@ impl<'src> IrInterp<'src> {
                     },
                     _ => panic!("Expected visibility pair, found {}", tti),
                 })
-                .collect()
+                .collect();
+            println!("Got {:?}", res);
+            res
         } else {
             panic!("Expected visibility list, found: {}", tt)
         }
@@ -525,6 +527,7 @@ impl<'src> IrInterp<'src> {
 
     /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
     fn metadata(&mut self, tt: &TokTree<'src>) -> (ComputationMetadata, Vec<Vec<u8>>) {
+        println!("IN META");
         if let List(tts) = tt {
             if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"metadata") {
                 panic!(
@@ -541,6 +544,7 @@ impl<'src> IrInterp<'src> {
                         .map(|i| (from_utf8(i).unwrap().into(), self.get_binding(i).clone()))
                         .collect();
                     let visibilities = self.visibility_list(viss);
+                    println!("VIS: {:?}", visibilities);
                     (
                         ComputationMetadata::from_parts(
                             parties,

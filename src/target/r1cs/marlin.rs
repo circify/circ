@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use ark_ff::fields::PrimeField;
-use ark_marlin::{IndexProverKey, IndexVerifierKey, Marlin, Proof};
+use ark_marlin::{IndexProverKey, IndexVerifierKey, Marlin, Proof, rng::FiatShamirRng};
 use ark_poly::polynomial::univariate::DensePolynomial;
 use ark_poly_commit::PolynomialCommitment;
 use ark_relations::{
@@ -80,6 +80,8 @@ fn lc_to_ark<F: Field>(vars: &HashMap<usize, Variable>, lc: &Lc) -> LinearCombin
 ///
 /// Optionally contains a variable value map. This must be populated to use the
 /// bellman prover.
+/// OVERHAUL VLAUE MAP -> no longer makes sense
+/// Value => closure?
 pub struct SynthInput<'a>(&'a R1cs<String>, &'a Option<FxHashMap<String, Value>>);
 
 impl<'a, F: Field> ConstraintSynthesizer<F> for SynthInput<'a> {
@@ -124,10 +126,13 @@ impl<'a, F: Field> ConstraintSynthesizer<F> for SynthInput<'a> {
                     let public = self.0.public_idxs.contains(&i);
                     debug!("var: {}, public: {}", s, public);
                     let v = if public {
+                        // add epoch number
                         cs.new_input_variable(val_f)?
                     } else {
                         cs.new_witness_variable(val_f)?
                     };
+                    //// 
+                    //cs.new_verifier_challenge(name? epoch_num)
                     vars.insert(i, v);
                 } else {
                     debug!("drop dead var: {}", s);
@@ -159,7 +164,7 @@ impl<'a, F: Field> ConstraintSynthesizer<F> for SynthInput<'a> {
 pub fn gen_params<
     F: PrimeField,
     PC: PolynomialCommitment<F, DensePolynomial<F>>,
-    D: Digest,
+    FS: FiatShamirRng,
     P1: AsRef<Path>,
     P2: AsRef<Path>,
 >(
@@ -169,14 +174,15 @@ pub fn gen_params<
     v_data: &VerifierData,
 ) -> Result<(), Box<dyn Error>> {
     let rng = &mut rand::thread_rng();
-    let srs = Marlin::<F, PC, D>::universal_setup(
-        p_data.r1cs.constraints.len() + p_data.r1cs.idxs_signals.len(),
+    let srs = Marlin::<F, PC, FS>::universal_setup(
+        // TODO: without *2 this doesn't work for some reason... fix
+        p_data.r1cs.constraints.len() * 2,
         p_data.r1cs.idxs_signals.len(),
         count_non_zeros(&p_data.r1cs.constraints),
         rng,
     )
     .unwrap();
-    let (pk, vk) = Marlin::<F, PC, D>::index(&srs, SynthInput(&p_data.r1cs, &None)).unwrap();
+    let (pk, vk) = Marlin::<F, PC, FS>::index(&srs, SynthInput(&p_data.r1cs, &None)).unwrap();
     write_prover_key_and_data(pk_path, &pk, p_data)?;
     write_verifier_key_and_data(vk_path, &vk, v_data)?;
     Ok(())
@@ -248,7 +254,7 @@ fn read_verifier_key_and_data<
 pub fn prove<
     F: PrimeField,
     PC: PolynomialCommitment<F, DensePolynomial<F>>,
-    D: Digest,
+    FS: FiatShamirRng,
     P1: AsRef<Path>,
     P2: AsRef<Path>,
 >(
@@ -272,7 +278,7 @@ pub fn prove<
     let new_map = prover_data.precompute.eval(inputs_map);
     prover_data.r1cs.check_all(&new_map);
     let pf =
-        Marlin::<F, PC, D>::prove(&pk, SynthInput(&prover_data.r1cs, &Some(new_map)), rng).unwrap();
+        Marlin::<F, PC, FS>::prove(&pk, SynthInput(&prover_data.r1cs, &Some(new_map)), rng).unwrap();
     let mut pf_file = File::create(pf_path)?;
     pf.serialize(&mut pf_file)?;
     Ok(())
@@ -286,7 +292,7 @@ pub fn prove<
 pub fn verify<
     F: PrimeField,
     PC: PolynomialCommitment<F, DensePolynomial<F>>,
-    D: Digest,
+    FS: FiatShamirRng,
     P1: AsRef<Path>,
     P2: AsRef<Path>,
 >(
@@ -301,6 +307,6 @@ pub fn verify<
     let inputs_as_ff: Vec<F> = inputs.into_iter().map(int_to_ff).collect();
     let mut pf_file = File::open(pf_path).unwrap();
     let pf = Proof::deserialize(&mut pf_file).unwrap();
-    Marlin::<F, PC, D>::verify(&vk, &inputs_as_ff, &pf, rng).unwrap();
+    Marlin::<F, PC, FS>::verify(&vk, &inputs_as_ff, &pf, rng).unwrap();
     Ok(())
 }

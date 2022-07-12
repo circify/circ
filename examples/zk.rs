@@ -14,9 +14,11 @@ use ark_poly_commit::marlin::marlin_pc::MarlinKZG10;
 #[cfg(feature = "marlin")]
 use ark_poly::univariate::DensePolynomial;
 #[cfg(feature = "marlin")]
-use ark_marlin::rng::FiatShamirRng;
+use ark_marlin::SimpleHashFiatShamirRng;
 #[cfg(feature = "marlin")]
 use sha2::Sha256;
+#[cfg(feature = "marlin")]
+use rand_chacha::ChaChaRng;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -67,7 +69,7 @@ fn main() {
                 },
                 #[cfg(feature = "marlin")]
                 ProofSystem::Marlin => {
-                    marlin::prove::<BlsFr, MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>, Sha256, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
+                    marlin::prove::<BlsFr, MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>, SimpleHashFiatShamirRng<Sha256, ChaChaRng>, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
                 }
                 #[cfg(not(feature = "marlin"))]
                 ProofSystem::Marlin => {
@@ -83,7 +85,7 @@ fn main() {
                 },
                 #[cfg(feature = "marlin")]
                 ProofSystem::Marlin => {
-                    marlin::verify::<BlsFr, MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>, Sha256, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
+                    marlin::verify::<BlsFr, MarlinKZG10<Bls12_381, DensePolynomial<BlsFr>>, SimpleHashFiatShamirRng<Sha256, ChaChaRng>, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
                 }
                 #[cfg(not(feature = "marlin"))]
                 ProofSystem::Marlin => {

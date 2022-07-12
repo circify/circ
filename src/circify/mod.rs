@@ -354,6 +354,7 @@ pub trait Embeddable {
         ty: &Self::Ty,
         name: String,
         visibility: Option<PartyId>,
+        epoch: Epoch,
         precompute: Option<Self::T>,
     ) -> Self::T;
 
@@ -473,6 +474,7 @@ impl<E: Embeddable> Circify<E> {
         nice_name: VarName,
         ty: &E::Ty,
         visibility: Option<PartyId>,
+        epoch: Epoch,
         precomputed_value: Option<E::T>,
         mangle_name: bool,
     ) -> Result<E::T> {
@@ -484,7 +486,7 @@ impl<E: Embeddable> Circify<E> {
         };
         let t = self
             .e
-            .declare_input(&mut self.cir_ctx, ty, name, visibility, precomputed_value);
+            .declare_input(&mut self.cir_ctx, ty, name, visibility, epoch, precomputed_value);
         assert!(self.vals.insert(ssa_name, Val::Term(t.clone())).is_none());
         Ok(t)
     }
@@ -916,6 +918,7 @@ mod test {
                 ty: &Self::Ty,
                 name: String,
                 visibility: Option<PartyId>,
+                epoch: Epoch,
                 precompute: Option<Self::T>,
             ) -> Self::T {
                 match ty {
@@ -940,6 +943,7 @@ mod test {
                                 &**a,
                                 format!("{}.0", name),
                                 visibility,
+                                epoch,
                                 p_1,
                             )),
                             Box::new(self.declare_input(
@@ -947,6 +951,7 @@ mod test {
                                 &**b,
                                 format!("{}.1", name),
                                 visibility,
+                                epoch,
                                 p_2,
                             )),
                         )

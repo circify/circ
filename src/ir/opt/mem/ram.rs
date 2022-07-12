@@ -33,48 +33,75 @@ impl Access {
             is_write: guard,
         }
     }
-    fn universal_hash(&self, alpha: &Term, beta: &Term) -> Term {
-        let field = match check(alpha) {
-            Sort::Field(field) => field,
-            _ => panic!("Alpha value for universal hash isn't a field!"),
-        };
-        assert_eq!(
-            check(beta),
-            Sort::Field(field.clone()),
-            "Beta value for universal hash isn't the same sort as alpha!"
-        );
+}
 
-        // universal hash of the value...handling tuples as necessary
-        let val_hash = match check(&self.val) {
+fn multiset_hash(terms: impl IntoIterator<Item = Term>, alpha: &Term) -> Term {
+    let field = match check(alpha) {
+        Sort::Field(field) => field,
+        _ => panic!("Alpha value for universal hash isn't a field!"),
+    };
+
+    let factors = terms
+        .into_iter()
+        .map(|t| {
+            // construct (alpha - t) for each term
+            assert_eq!(
+                check(&t),
+                Sort::Field(field.clone()),
+                "Term in multiset hash doesn't have correct field type!"
+            );
+            term![PF_ADD; alpha.clone(), term![PF_NEG; t.clone()]]
+        })
+        .collect();
+
+    term(PF_MUL, factors)
+}
+
+/// Constructs a term representing the unviersal hash of all terms passed in.
+/// Tuples and Arrays are handled recursively
+fn universal_hash(terms: impl IntoIterator<Item = Term>, beta: &Term) -> Term {
+    let field = match check(beta) {
+        Sort::Field(field) => field,
+        _ => panic!("Beta value for universal hash isn't a field!"),
+    };
+
+    // TODO: is extending the iterator here better?
+    let mut stack: Vec<Term> = terms.into_iter().collect();
+    let mut results: Vec<Term> = Vec::new();
+    let mut factor_index = 0;
+    while !stack.is_empty() {
+        let curr_term = stack.pop().unwrap();
+        match check(&curr_term) {
             Sort::Tuple(sorts) => {
-                let tuple_factors = sorts
-                    .iter()
-                    .enumerate()
-                    .map(|(i, _)| {
-                        let mut factors = vec![beta.clone(); i + 2];
-                        factors.push(cast_to_field(
-                            &term![Op::Field(i); self.val.clone()],
-                            &field,
-                        ));
-                        term![PF_NEG; term(PF_MUL, factors)]
-                    })
-                    .collect();
-                term(PF_ADD, tuple_factors)
+                stack.extend((0..sorts.len()).map(|i| term![Op::Field(i); curr_term.clone()]));
             }
-            _ => term![PF_MUL; cast_to_field(&self.val, &field), beta.clone(), beta.clone()],
-        };
-        //let vals = match self.val {
-        //    Sort::Field(_) => vec![access.val.clone()],
-        //    term![Op::UbvToPf(idx_field.clone()); access.val.clone()]
-        //}
-        term![PF_ADD;
-            alpha.clone(),
-            // TODO: ignoring is_write for now...
-            //term![PF_NEG; pf_lit(idx_field_typ.new_v::<bool>(access.is_write.get().as_bool_opt().unwrap()))],
-            term![PF_NEG; term![PF_MUL; self.idx.clone(), beta.clone()]],
-            term![PF_NEG; val_hash]
-        ]
+            Sort::Array(k, _, n) => {
+                stack.extend((0..n).map(|i| {
+                    let idx = match k.as_ref() {
+                        Sort::Field(field_typ) => Value::Field(field_typ.new_v(i)),
+                        Sort::BitVector(width) => {
+                            Value::BitVector(BitVector::new(rug::Integer::from(i), *width))
+                        }
+                        _ => panic!("RAM: We don't support arrays with indices other than Field or Bitvector"),
+                    };
+                    term![Op::Select; curr_term.clone(), term![Op::Const(idx)]]
+                }));
+            }
+            _ => {
+                //let mut factors = vec![beta.clone(); factor_index];
+                if factor_index != 0 {
+                    let beta_power = term(PF_MUL, vec![beta.clone(); factor_index]);
+                    results.push(term![PF_MUL; beta_power, cast_to_field(&curr_term, &field)]);
+                } else {
+                    results.push(cast_to_field(&curr_term, &field));
+                }
+                //factors.push(cast_to_field(&curr_term, &field));
+                factor_index += 1;
+            }
+        }
     }
+    //println!("Universal hash factors: {:?}", results);
+    term(PF_ADD, results)
 }
 
 fn cast_to_field(term: &Term, field: &circ_fields::FieldT) -> Term {
@@ -121,6 +148,7 @@ impl Ram {
             &val_name,
             check(&read_value),
             Some(crate::ir::proof::PROVER_ID),
+            0, // TODO: correct?
             Some(read_value),
         );
         self.accesses.push(Access::new_read(idx, var.clone()));
@@ -171,12 +199,14 @@ impl Ram {
                 &idx_name,
                 self.idx_sort.clone(),
                 Some(crate::ir::proof::PROVER_ID),
+                0, // TODO
                 Some(term(Op::NthSmallest(i), idx_terms.clone())),
             );
             let val = computation.new_var(
                 &val_name,
                 self.val_sort.clone(),
                 Some(crate::ir::proof::PROVER_ID),
+                0, // TODO
                 Some(
                     term![Op::Select; val_array_term.clone(), term(Op::NthSmallest(i), idx_terms.clone())],
                 ),
@@ -435,21 +465,21 @@ impl Encoder {
 
         // construct a term to check the __ram_srow values are the same as the
         // __ram values
-        let orig_sum_terms = ram1
-            .accesses
-            .iter()
-            .map(|access| access.universal_hash(&alpha, &beta))
-            .collect();
-        let orig_prod_term = term(PF_MUL, orig_sum_terms);
+        let orig_ms_hash = multiset_hash(
+            ram1.accesses
+                .iter()
+                .map(|access| universal_hash(vec![access.idx.clone(), access.val.clone()], &beta)),
+            &alpha,
+        );
 
-        let perm_sum_terms = ram2
-            .accesses
-            .iter()
-            .map(|access| access.universal_hash(&alpha, &beta))
-            .collect();
-        let perm_prod_term = term(PF_MUL, perm_sum_terms);
+        let perm_ms_hash = multiset_hash(
+            ram2.accesses
+                .iter()
+                .map(|access| universal_hash(vec![access.idx.clone(), access.val.clone()], &beta)),
+            &alpha,
+        );
 
-        term![EQ; orig_prod_term, perm_prod_term]
+        term![EQ; orig_ms_hash, perm_ms_hash]
     }
 
     fn construct_sorted_check(sorted_ram: &Ram) -> Term {
@@ -486,7 +516,7 @@ impl Encoder {
         term(AND, check_terms)
     }
 
-    fn encode(&self, computation: &mut Computation) {
+    fn encode(&mut self, computation: &mut Computation) {
         if self.rams.len() < 2 {
             return;
         }
@@ -501,33 +531,44 @@ impl Encoder {
             "Proofs using RAMs must have a boolean output!"
         );
 
+        // remove ram writes
+        // TODO: This ONLY works for read-only rams.
+        for ram in self.rams.iter_mut() {
+            while eval(&ram.accesses[0].is_write, &fxhash::FxHashMap::default()).as_bool() {
+                ram.accesses.remove(0);
+            }
+        }
+
+        // TODO: actually check that the sorts for ram1 and ram2 are equal...
+        // TODO: should this actually be verifier_id?
+        // TODO: assumes that idx_sort is a field
+        let alpha = computation.new_var(
+            &format!("__alpha"),
+            self.rams[0].idx_sort.clone(),
+            Some(crate::ir::proof::PROVER_ID),
+            0, // TODO
+            None,
+        );
+        let beta = computation.new_var(
+            &format!("__beta"),
+            self.rams[0].idx_sort.clone(),
+            Some(crate::ir::proof::PROVER_ID),
+            0, // TODO
+            None,
+        );
+
         for ram in self.rams.iter() {
             let sorted_ram = ram.sorted_by_index(computation);
             // TODO: better error handling
             // TODO: is there a cleaner way to get the field type?
             let sorted_check = Encoder::construct_sorted_check(&sorted_ram);
 
-            // TODO: actually check that the sorts for ram1 and ram2 are equal...
-            // TODO: should this actually be verifier_id?
-            // TODO: assumes that idx_sort is a field
-            let alpha = computation.new_var(
-                &format!("__alpha_{}", ram.id),
-                ram.idx_sort.clone(),
-                Some(crate::ir::proof::PROVER_ID),
-                None,
-            );
-            let beta = computation.new_var(
-                &format!("__beta_{}", ram.id),
-                ram.idx_sort.clone(),
-                Some(crate::ir::proof::PROVER_ID),
-                None,
-            );
-
             let permutation_check =
-                Encoder::construct_permutation_check(ram, &sorted_ram, alpha, beta);
+                Encoder::construct_permutation_check(ram, &sorted_ram, alpha.clone(), beta.clone());
 
             computation.outputs[0] =
                 term![AND; sorted_check, permutation_check, computation.outputs()[0].clone()];
+            //println!("ram check: {}", Letified(computation.outputs[0].clone()));
         }
     }
 }
@@ -544,8 +585,23 @@ impl Encoder {
 ///   different RAMs with the same init sequence of instructions, this pass will
 ///   not extract **either**.
 pub fn extract(c: &mut Computation) -> Vec<Ram> {
+    //println!(
+    //    "Got computation: {}",
+    //    Letified(term(Op::Tuple, c.outputs.clone()))
+    //);
     let mut extractor = Extactor::new(c);
     extractor.traverse(c);
+    println!("found {:?} rams", extractor.rams.len());
+    for ram in &extractor.rams {
+        println!("------------");
+        println!("ram id: {:?}, len: {:?}", ram.id, ram.accesses.len());
+        for access in ram.accesses.iter().take(3) {
+            println!("{:?}", access);
+        }
+        //println!("{:?}", ram.accesses[4]);
+        //println!("{:?}", ram.accesses[5]);
+        //println!("{:?}", ram.accesses[6]);
+    }
     extractor.rams
 }
 
@@ -556,7 +612,7 @@ pub fn extract(c: &mut Computation) -> Vec<Ram> {
 ///       1. doesn't do a single write, then only reads
 ///       2. doesn't access every single element in the ram
 pub fn encode(c: &mut Computation, rams: Vec<Ram>) {
-    let encoder = Encoder::new(rams);
+    let mut encoder = Encoder::new(rams);
     encoder.encode(c);
 }
 

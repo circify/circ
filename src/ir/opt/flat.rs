@@ -3,6 +3,7 @@
 use crate::ir::term::*;
 use std::rc::Rc;
 
+#[derive(Clone)]
 enum Entry {
     Term(Rc<Term>),
     NaryTerm(Op, L<Term>, Option<Term>),
@@ -74,9 +75,11 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
     // what does a term rewrite to?
     let mut stack = vec![(term_.clone(), false)];
 
+    let mut term_equals = TermSet::new();
+
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if rewritten.contains_key(&t) {
+        if rewritten.contains_key(&t) || term_equals.contains(&t) {
             continue;
         }
         if !children_pushed {
@@ -89,18 +92,23 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(PfNaryOp::Add) => {
                 let mut children = Vec::new();
                 for c in &t.cs {
-                    match rewritten.get_mut(c).unwrap() {
-                        Entry::Term(t) => {
-                            children.push(Rc::new(PersistentConcatList::Leaf(t.clone())))
-                        }
-                        Entry::NaryTerm(o, ts, _)
-                            if &t.op == o && parent_counts.get(c).unwrap_or(&0) <= &1 =>
-                        {
-                            children.push(ts.clone());
-                        }
-                        e => {
-                            children
-                                .push(Rc::new(PersistentConcatList::Leaf(Rc::new(e.as_term()))));
+                    if term_equals.contains(c) {
+                        children.push(Rc::new(PersistentConcatList::Leaf(Rc::new(c.clone()))))
+                    } else {
+                        match rewritten.get_mut(c).unwrap() {
+                            Entry::Term(t) => {
+                                children.push(Rc::new(PersistentConcatList::Leaf(t.clone())))
+                            }
+                            Entry::NaryTerm(o, ts, _)
+                                if &t.op == o && parent_counts.get(c).unwrap_or(&0) <= &1 =>
+                            {
+                                children.push(ts.clone());
+                            }
+                            e => {
+                                children.push(Rc::new(PersistentConcatList::Leaf(Rc::new(
+                                    e.as_term(),
+                                ))));
+                            }
                         }
                     }
                 }
@@ -113,13 +121,27 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
             _ => Entry::Term(Rc::new(term(
                 t.op.clone(),
                 t.cs.iter()
-                    .map(|c| rewritten.get_mut(c).unwrap().as_term())
+                    .map(|c| {
+                        if term_equals.contains(c) {
+                            c.clone()
+                        } else {
+                            rewritten.get_mut(c).unwrap().as_term()
+                        }
+                    })
                     .collect(),
             ))),
         };
-        rewritten.insert(t, entry);
+        if t == entry.clone().as_term() {
+            term_equals.insert(t);
+        } else {
+            rewritten.insert(t, entry);
+        }
     }
-    rewritten.get_mut(&term_).unwrap().as_term()
+    if term_equals.contains(&term_) {
+        term_
+    } else {
+        rewritten.get_mut(&term_).unwrap().as_term()
+    }
 }
 
 #[cfg(test)]

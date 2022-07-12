@@ -909,6 +909,7 @@ impl Embeddable for ZSharp {
         ty: &Self::Ty,
         name: String,
         visibility: Option<PartyId>,
+        epoch: Epoch,
         precompute: Option<T>,
     ) -> Self::T {
         match ty {
@@ -918,6 +919,7 @@ impl Embeddable for ZSharp {
                     &name,
                     Sort::Bool,
                     visibility,
+                    epoch,
                     precompute.map(|p| p.term),
                 ),
             ),
@@ -927,6 +929,7 @@ impl Embeddable for ZSharp {
                     &name,
                     Sort::Field(DFL_T.clone()),
                     visibility,
+                    epoch,
                     precompute.map(|p| p.term),
                 ),
             ),
@@ -936,6 +939,7 @@ impl Embeddable for ZSharp {
                     &name,
                     Sort::BitVector(*w),
                     visibility,
+                    epoch,
                     precompute.map(|p| p.term),
                 ),
             ),
@@ -948,7 +952,7 @@ impl Embeddable for ZSharp {
                 debug_assert_eq!(*n, ps.len());
                 array(
                     ps.into_iter().enumerate().map(|(i, p)| {
-                        self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, p)
+                        self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, epoch, p)
                     }),
                 )
                 .unwrap()
@@ -964,6 +968,7 @@ impl Embeddable for ZSharp {
                                 f_ty,
                                 field_name(&name, f_name),
                                 visibility,
+                                epoch,
                                 precompute.as_ref().map(|_| unimplemented!("precomputations for declared inputs that are Z# structures")),
                             ),
                         )

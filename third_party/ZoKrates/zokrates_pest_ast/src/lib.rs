@@ -354,12 +354,48 @@ mod ast {
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::epoch_num))]
+    pub struct EpochNumber<'ast> {
+        #[pest_ast(outer(with(span_into_str)))]
+        pub value: String,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    use std::convert::TryFrom;
+    impl TryFrom<&EpochNumber<'_>> for u8 {
+        type Error = String;
+
+        fn try_from(num: &EpochNumber<'_>) -> Result<Self, Self::Error> {
+            let num_val = (&num.value[1..num.value.len() - 1])
+                .parse::<u8>()
+                .or_else(|e| {
+                    Err(format!("Bad party number: {}", e))
+                });
+            num_val
+        }
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::vis_private_num))]
     pub struct PrivateNumber<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
         pub value: String,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
+    }
+
+    impl TryFrom<&PrivateNumber<'_>> for u8 {
+        type Error = String;
+
+        fn try_from(num: &PrivateNumber<'_>) -> Result<Self, Self::Error> {
+            let num_val = (&num.value[1..num.value.len() - 1])
+                .parse::<u8>()
+                .or_else(|e| {
+                    Err(format!("Bad party number: {}", e))
+                });
+            num_val
+        }
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
@@ -370,6 +406,7 @@ mod ast {
     #[pest_ast(rule(Rule::vis_private))]
     pub struct PrivateVisibility<'ast> {
         pub number: Option<PrivateNumber<'ast>>,
+        pub epoch: Option<EpochNumber<'ast>>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }

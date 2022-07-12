@@ -126,7 +126,7 @@ impl<'ast> Gen<'ast> {
             let (ty, public) = self.ty(&d.ty);
             let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
             self.circ
-                .declare_input(d.ident.value.into(), &ty, vis, None, false)?;
+                .declare_input(d.ident.value.into(), &ty, vis, 0, None, false)?;
         }
         let r = self.rule_cases(rule)?;
         self.exit_function(name);
@@ -146,7 +146,7 @@ impl<'ast> Gen<'ast> {
             for d in &decls.declarations {
                 let (ty, _public) = self.ty(&d.ty);
                 self.circ
-                    .declare_input(d.ident.value.into(), &ty, PROVER_VIS, None, true)?;
+                    .declare_input(d.ident.value.into(), &ty, PROVER_VIS, 0, None, true)?;
             }
         }
         c.exprs.iter().try_fold(term::bool_lit(true), |x, y| {
@@ -316,7 +316,7 @@ impl<'ast> Gen<'ast> {
                 let (ty, public) = self.ty(&d.ty);
                 let vis = if public { PUBLIC_VIS } else { PROVER_VIS };
                 self.circ
-                    .declare_input(d.ident.value.into(), &ty, vis, None, false)?;
+                    .declare_input(d.ident.value.into(), &ty, vis, 0, None, false)?;
             }
             let mut bug_in_rule_if_any = Vec::new();
             for cond in &rule.conds {
@@ -327,7 +327,7 @@ impl<'ast> Gen<'ast> {
                     for d in &decls.declarations {
                         let (ty, _public) = self.ty(&d.ty);
                         self.circ
-                            .declare_input(d.ident.value.into(), &ty, None, None, true)?;
+                            .declare_input(d.ident.value.into(), &ty, None, 0, None, true)?;
                     }
                 }
                 let mut bad_recursion = Vec::new();
