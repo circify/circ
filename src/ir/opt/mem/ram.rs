@@ -396,6 +396,17 @@ impl Extactor {
                 .unwrap_or_else(|| panic!("No RAM for term {}", extras::Letified(t.clone()))),
         }
     }
+
+    fn rewrite_indices(&mut self) {
+        for ram in &mut self.rams {
+            for access in &mut ram.accesses {
+                if self.read_terms.contains_key(&access.idx) {
+                    let _ram_var = self.read_terms.get(&access.idx).unwrap();
+                    access.idx = _ram_var.clone();
+                }
+            }
+        }
+    }
 }
 
 impl RewritePass for Extactor {
@@ -557,6 +568,8 @@ impl Encoder {
             None,
         );
 
+        let mut checks = vec![];
+        checks.push(computation.outputs()[0].clone());
         for ram in self.rams.iter() {
             let sorted_ram = ram.sorted_by_index(computation);
             // TODO: better error handling
@@ -566,10 +579,10 @@ impl Encoder {
             let permutation_check =
                 Encoder::construct_permutation_check(ram, &sorted_ram, alpha.clone(), beta.clone());
 
-            computation.outputs[0] =
-                term![AND; sorted_check, permutation_check, computation.outputs()[0].clone()];
-            //println!("ram check: {}", Letified(computation.outputs[0].clone()));
+            checks.push(sorted_check);
+            checks.push(permutation_check);
         }
+        computation.outputs[0] = term(AND, checks);
     }
 }
 
@@ -585,19 +598,16 @@ impl Encoder {
 ///   different RAMs with the same init sequence of instructions, this pass will
 ///   not extract **either**.
 pub fn extract(c: &mut Computation) -> Vec<Ram> {
-    //println!(
-    //    "Got computation: {}",
-    //    Letified(term(Op::Tuple, c.outputs.clone()))
-    //);
     let mut extractor = Extactor::new(c);
     extractor.traverse(c);
+    extractor.rewrite_indices();
     println!("found {:?} rams", extractor.rams.len());
     for ram in &extractor.rams {
         println!("------------");
         println!("ram id: {:?}, len: {:?}", ram.id, ram.accesses.len());
-        for access in ram.accesses.iter().take(3) {
-            println!("{:?}", access);
-        }
+        //for access in ram.accesses.iter() {
+        //    println!("{:?}", access);
+        //}
         //println!("{:?}", ram.accesses[4]);
         //println!("{:?}", ram.accesses[5]);
         //println!("{:?}", ram.accesses[6]);
@@ -612,8 +622,12 @@ pub fn extract(c: &mut Computation) -> Vec<Ram> {
 ///       1. doesn't do a single write, then only reads
 ///       2. doesn't access every single element in the ram
 pub fn encode(c: &mut Computation, rams: Vec<Ram>) {
+    //println!("Pre-opt terms: {}", c.outputs[0].get().count_terms());
+    //println!("got {}", c.outputs[0].get());
     let mut encoder = Encoder::new(rams);
     encoder.encode(c);
+    //println!("got {}", c.outputs[0].get());
+    //println!("Opt-done terms: {}", c.outputs[0].get().count_terms());
 }
 
 #[cfg(test)]
