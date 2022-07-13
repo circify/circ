@@ -2,8 +2,8 @@
  * Example on how to merge two data sets and to perform various analyses
  */
 
-#define LEN_A 10
-#define LEN_B 10
+#define LEN_A 4
+#define LEN_B 4
 
 #define ATT_A 2 //Number of attributes
 #define ATT_B 2
@@ -56,32 +56,6 @@ int cross_join_trivial(DT *OUTPUT_db, DT *a, DT *b) {
 	return id_out;
 }
 
-
-/*int join(DT *OUTPUT_db, DT *a, DT *b, int len_a, int len_b, int att_a, int att_b) {
-	int id_a = 0;
-	int id_b = 0;
-	int id_out = 0;
-	int att_out = att_a + att_b - 1;
-	for(int i = 0; i < len_a + len_b && id_a < len_a && id_b < len_b; i++) {
-		if(a[id_a] == b[id_b]) { // Compare first element
-			OUTPUT_db[id_out*att_out] = a[id_a*att_a];
-			OUTPUT_db[id_out*att_out+1] = a[id_a*att_a+1];
-			OUTPUT_db[id_out*att_out+2] = b[id_b*att_b+1];
-			//memcpy(OUTPUT_db + id_out * att_out, a+id_x*att_a, att_a);
-			//memcpy(OUTPUT_db + id_out * att_out + att_a, a+id_x*att_a, att_a);
-			id_a++;
-			id_b++;
-			id_out++;
-		} else if (id_a > id_b) {
-			id_b++;
-		} else {
-			id_a++;
-		}
-	}
-	return id_out;
-} */
-
-
 DT agg_mean_tree(DT *db, int len, int att) {
 	DT sum[LEN_A*LEN_B];
 	for(int i = 0; i < LEN_A*LEN_B; i++) {
@@ -122,12 +96,12 @@ int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(
 	// merge databases
 	res.joined = cross_join(db, INPUT_A.db, INPUT_B.db);
 	
-	if(res.joined >= LEN_A*LEN_B) { // Limits the last element
-		res.joined = LEN_A*LEN_B-1;
-	}
-	db[LEN_A*LEN_B*ATT] = res.joined;
-	res.analysis1 = agg_mean_tree(db, LEN_A*LEN_B, ATT);
-	res.analysis2 = res.analysis1;
-	// res.analysis2 = variance(db, LEN_A*LEN_B);
+	// if(res.joined >= LEN_A*LEN_B) { // Limits the last element
+	// 	res.joined = LEN_A*LEN_B-1;
+	// }
+	// db[LEN_A*LEN_B*ATT] = res.joined;
+	// res.analysis1 = agg_mean_tree(db, LEN_A*LEN_B, ATT);
+	// res.analysis2 = res.analysis1;
+	// // res.analysis2 = variance(db, LEN_A*LEN_B);
 	return res.joined + res.analysis1 + res.analysis2;
 } 

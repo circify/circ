@@ -143,6 +143,12 @@ impl<'a> ToABY<'a> {
             println!("mapping {} to shares, total terms: {}", name, comp.terms());
             let share_map = self.get_sharing_map(name);
             for t in comp.terms_postorder() {
+                match t.op {
+                    // these cases are handled dynamically by updating the base array share
+                    Op::Field(..) | Op::Update(..) | Op::Select | Op::Store | Op::Tuple => continue,
+                    _ => {}
+                }
+
                 now = Instant::now();
                 let sort: Sort = check(&t);
                 let num_shares = self.get_sort_len(&sort) as i32;
@@ -458,9 +464,9 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed_bv(&mut self, t: Term) {
-        let s = self.get_share(&t);
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
+                let s = self.get_share(&t);
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name_from_term(&t);
@@ -487,12 +493,14 @@ impl<'a> ToABY<'a> {
                 }
             }
             Op::Const(Value::BitVector(b)) => {
+                let s = self.get_share(&t);
                 let op = "CONS_bv";
                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
                 self.const_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::Ite => {
+                let s = self.get_share(&t);
                 let op = "MUX";
 
                 self.check_bool(&t.cs[0]);
@@ -509,6 +517,7 @@ impl<'a> ToABY<'a> {
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::BvNaryOp(o) => {
+                let s = self.get_share(&t);
                 let op = match o {
                     BvNaryOp::Xor => "XOR",
                     BvNaryOp::Or => "OR",
@@ -529,6 +538,7 @@ impl<'a> ToABY<'a> {
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::BvBinOp(o) => {
+                let s = self.get_share(&t);
                 let op = match o {
                     BvBinOp::Sub => "SUB",
                     BvBinOp::Udiv => "DIV",
@@ -587,6 +597,7 @@ impl<'a> ToABY<'a> {
                         idx,
                         array_shares.len()
                     );
+
                     self.term_to_shares
                         .insert(t.clone(), vec![array_shares[idx]]);
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -660,13 +671,15 @@ impl<'a> ToABY<'a> {
             }
             Op::Store => {
                 assert!(t.cs.len() == 3);
-                let mut array_shares = self.get_shares(&t.cs[0]);
+                let mut array_shares = self.get_shares(&t.cs[0]).clone();
                 let value_share = self.get_share(&t.cs[2]);
 
                 if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                     // constant indexing
                     let idx = bv.uint().to_usize().unwrap().clone();
+
                     array_shares[idx] = value_share;
+
                     self.term_to_shares.insert(t.clone(), array_shares.clone());
                     self.cache.insert(t.clone(), EmbeddedTerm::Array);
                 } else {
