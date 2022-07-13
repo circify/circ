@@ -72,6 +72,7 @@ struct ToABY<'a> {
     bytecode_input: Vec<String>,
     bytecode_output: Vec<String>,
     const_output: Vec<String>,
+    share_output: Vec<String>,
 }
 
 impl Drop for ToABY<'_> {
@@ -103,6 +104,7 @@ impl<'a> ToABY<'a> {
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
             const_output: Vec::new(),
+            share_output: Vec::new(),
         }
     }
 
@@ -123,6 +125,14 @@ impl<'a> ToABY<'a> {
             );
             write_lines(&bytecode_output_path, &self.bytecode_output);
             self.bytecode_output.clear();
+        }
+    }
+
+    fn write_share_output(&mut self, flush: bool) {
+        if flush || self.share_output.len() >= WRITE_SIZE {
+            let share_output_path = get_path(self.path, &self.lang, "share_map");
+            write_lines(&share_output_path, &self.share_output);
+            self.share_output.clear();
         }
     }
 
@@ -245,20 +255,61 @@ impl<'a> ToABY<'a> {
         }
     }
 
+    fn write_share(&mut self, t: &Term, s: i32) {
+        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+        let share_type = s_map.get(&t).unwrap().char();
+        let line = format!("{} {}\n", s, share_type);
+        self.share_output.push(line);
+    }
+
+    fn write_shares(&mut self, t: &Term, shares: &Vec<i32>) {
+        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+        let share_type = s_map.get(&t).unwrap().char();
+        for s in shares {
+            let line = format!("{} {}\n", s, share_type);
+            self.share_output.push(line);
+        }
+    }
+
     fn get_share(&mut self, t: &Term) -> i32 {
         match self.term_to_shares.get(t) {
             Some(v) => {
                 assert!(v.len() == 1);
                 v[0]
             }
-            None => panic!("Unknown share: {}", t),
+            None => {
+                let s = self.share_cnt;
+                self.term_to_shares.insert(t.clone(), [s].to_vec());
+                self.share_cnt += 1;
+
+                // Write share
+                self.write_share(t, s);
+
+                // return share id
+                s
+            }
         }
     }
 
     fn get_shares(&mut self, t: &Term) -> Vec<i32> {
         match self.term_to_shares.get(t) {
             Some(v) => v.clone(),
-            None => panic!("Unknown share: {}", t),
+            None => {
+                let sort = check(t);
+                let num_shares = self.get_sort_len(&sort) as i32;
+
+                let shares: Vec<i32> = (0..num_shares)
+                    .map(|x| x + self.share_cnt)
+                    .collect::<Vec<i32>>();
+                self.term_to_shares.insert(t.clone(), shares.clone());
+
+                // Write shares
+                self.write_shares(t, &shares);
+
+                self.share_cnt += num_shares;
+
+                shares
+            }
         }
     }
 
@@ -804,6 +855,7 @@ impl<'a> ToABY<'a> {
 
             self.write_bytecode_output(false);
             self.write_const_output(false);
+            self.write_share_output(false);
         }
     }
 
@@ -898,14 +950,17 @@ impl<'a> ToABY<'a> {
             self.cache.clear();
         }
 
-        // write const variables
+        // write remaining const variables
         self.write_const_output(true);
+
+        // write remaining shares
+        self.write_share_output(true);
     }
 
     fn convert(&mut self) {
         let mut now = Instant::now();
-        self.map_to_shares();
-        println!("Time: map terms to shares: {:?}", now.elapsed());
+        // self.map_to_shares();
+        // println!("Time: map terms to shares: {:?}", now.elapsed());
         now = Instant::now();
         self.lower();
         println!("Time: lowering: {:?}", now.elapsed());
