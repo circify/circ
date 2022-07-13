@@ -531,26 +531,26 @@ zok_misc_tests = [
 ]
 
 biomatch_tests = [
-    # [
-    #     "biomatch - 1",
-    #     "2pc_biomatch",
-    #     "./scripts/aby_tests/test_inputs/biomatch_1.txt",
-    # ],
-    # [
-    #     "biomatch - 2",
-    #     "2pc_biomatch",
-    #     "./scripts/aby_tests/test_inputs/biomatch_2.txt",
-    # ],
+    [
+        "biomatch - 1",
+        "2pc_biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+    ],
+    [
+        "biomatch - 2",
+        "2pc_biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    ],
     [
         "biomatch - 3",
         "biomatch",
         "./scripts/aby_tests/test_inputs/biomatch_1.txt",
     ],
-    # [
-    #     "biomatch - 4",
-    #     "biomatch",
-    #     "./scripts/aby_tests/test_inputs/biomatch_2.txt",
-    # ],
+    [
+        "biomatch - 4",
+        "biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    ],
 ]
 
 kmeans_tests = [

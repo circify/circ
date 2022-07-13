@@ -256,6 +256,14 @@ impl<'a> ToABY<'a> {
         }
     }
 
+    fn rewirable(&self, s: &Sort) -> bool {
+        match s {
+            Sort::Array(..) => true,
+            Sort::Bool | Sort::BitVector(..) | Sort::Tuple(..) => false,
+            _ => todo!(),
+        }
+    }
+
     fn get_sort_len(&mut self, s: &Sort) -> usize {
         let mut len = 0;
         len += match s {
@@ -583,11 +591,6 @@ impl<'a> ToABY<'a> {
                         .insert(t.clone(), vec![array_shares[idx]]);
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                 } else {
-                    // let idx_share = self.get_share(&t.cs[1]);
-
-                    // for share in array_shares {
-
-                    // }
                     panic!("non-const: sel")
                 }
             }
@@ -726,18 +729,39 @@ impl<'a> ToABY<'a> {
                 let op = format!("CALL({})", name);
                 let num_args: usize = arg_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
                 let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-
                 // map argument shares
-                let mut arg_shares: Vec<i32> = Vec::new();
+                // define rewireable shares with "r"
+                let mut arg_shares: Vec<String> = Vec::new();
                 for c in t.cs.iter() {
-                    arg_shares.extend(self.get_shares(c));
+                    let sort = check(c);
+                    if self.rewirable(&sort) {
+                        arg_shares.extend(self.get_shares(c).iter().map(|&s| s.to_string()))
+                    } else {
+                        arg_shares.extend(self.get_shares(c).iter().map(|&s| s.to_string()))
+                    }
                 }
 
-                let arg_shares_str: String =
-                    arg_shares.iter().map(|&s| s.to_string() + " ").collect();
+                let mut ret_shares: Vec<String> = Vec::new();
+                let mut idx = 0;
+                for sort in ret_sorts {
+                    let len = self.get_sort_len(sort);
+                    assert!(idx + len <= shares.len());
+                    if self.rewirable(sort) {
+                        ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
+                    } else {
+                        ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
+                    }
+                    idx += len;
+                }
 
-                let s: String = shares.iter().map(|&s| s.to_string() + " ").collect();
-                let line = format!("{} {} {}{}{}\n", num_args, num_rets, arg_shares_str, s, op);
+                let line = format!(
+                    "{} {} {} {} {}\n",
+                    num_args,
+                    num_rets,
+                    arg_shares.join(" "),
+                    ret_shares.join(" "),
+                    op
+                );
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
@@ -813,7 +837,8 @@ impl<'a> ToABY<'a> {
                     if bytecode_input_map.contains_key(x) {
                         bytecode_input_map.get(x).unwrap().clone()
                     } else {
-                        "".to_string()
+                        // Unused in gate -- ignored in ABY interpreter but used for maintaining rewiring order
+                        format!("1 0 {} {}\n", x, "IN")
                     }
                 })
                 .filter(|x| !x.is_empty())

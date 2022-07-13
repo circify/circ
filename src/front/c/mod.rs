@@ -524,7 +524,7 @@ impl CGen {
                             CLoc::Idx(Box::new(base), idx)
                         } else {
                             CLoc::Idx(Box::new(loc), idx)
-                        }   
+                        }
                     }
                     BinaryOperator::Plus => {
                         // get location
@@ -900,18 +900,6 @@ impl CGen {
                 let field = identifier.node.name;
                 self.field_select(&base, &field)
             }
-            // Expression::SizeOf(s) => {
-            //     let ty = self.s_type_(s.node.specifiers.clone());
-            //     match ty {
-            //         Some(t) => {
-            //             let _size = t.num_bits();
-            //             Ok(cterm(CTermData::Int(true, 32, bv_lit(1, 32))))
-            //         }
-            //         None => {
-            //             panic!("Cannot determine size of type: {:#?}", s);
-            //         }
-            //     }
-            // }
             _ => unimplemented!("Expr {:#?} hasn't been implemented", expr),
         };
         self.unwrap(res)
