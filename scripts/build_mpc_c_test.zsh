@@ -127,8 +127,8 @@ mpc_test_2 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
 # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
 mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
 # # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
-# # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss.c
 # # mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
 
 

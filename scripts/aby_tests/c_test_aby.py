@@ -24,7 +24,8 @@ if __name__ == "__main__":
         ptr_tests + \
         c_misc_tests + \
         biomatch_tests + \
-        kmeans_tests_2
+        kmeans_tests_2 + \
+        gauss_tests 
 
     # tests = biomatch_tests
 
