@@ -102,6 +102,7 @@ mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_ptr_add.c
 
 # build ptr tests
 mpc_test 2 ./examples/C/mpc/unit_tests/ptr_tests/2pc_ptr_add.c
+mpc_test 2 ./examples/C/mpc/unit_tests/ptr_tests/2pc_ptr_arith.c
 
 # build misc tests
 mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c

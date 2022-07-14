@@ -440,6 +440,11 @@ ptr_tests = [
         "2pc_ptr_add",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
+    [
+        "Ptr arith",
+        "2pc_ptr_arith",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ],
 ]
 
 shift_tests = [
