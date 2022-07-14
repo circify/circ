@@ -39,13 +39,6 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
 }
 
 /// Write lines to a path
-pub fn write_l(file: &mut fs::File, path: &str, lines: &[String]) {
-    let data = lines.join("");
-    file.write_all(data.as_bytes())
-        .expect(&format!("Failed to write to file: {}", path));
-}
-
-/// Write lines to a path
 pub fn write_lines(path: &str, lines: &[String]) {
     if !Path::new(&path).exists() {
         fs::File::create(&path).expect(&*format!("Failed to create: {}", path));

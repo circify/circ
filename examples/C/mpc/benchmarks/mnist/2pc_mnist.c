@@ -168,7 +168,7 @@ void convolution_naive_outputs(DT *image, DT* kernels, DT* OUTPUT_layer, int ima
 }
 
 // Parameters taken from the paper
-#define IMAGE_WIDTH 20
+#define IMAGE_WIDTH 16
 #define WINDOW_WIDTH 5
 #define STRIDE 1
 #define OUTPUT_CHANNELS 16
@@ -195,19 +195,22 @@ void convolution_naive_outputs(DT *image, DT* kernels, DT* OUTPUT_layer, int ima
 
 DT mmulT_unrolled_inner_2(DT* a, DT* b) { 
 	DT sum = 0;
-	
-	int j = 0;
-	// Add the first as groups of eight
-	for (int i = 0; i+8 < FULLY_CONNECTED_WIDTH; i+=8) {
-		sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
-		j += 8;
-	}
-	if(j+4<=FULLY_CONNECTED_WIDTH) {
-		sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
-		j+=4;
-	}
-	for(int i = j; j < FULLY_CONNECTED_WIDTH; j++) {
-		sum += a[j] * b[j];
+
+	// int j = 0;
+	// // Add the first as groups of eight
+	// for (int i = 0; i+8 < FULLY_CONNECTED_WIDTH; i+=8) {
+	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
+	// 	j += 8;
+	// }
+	// if (j+4 < FULLY_CONNECTED_WIDTH) {
+	// 	sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
+	// 	j+=4;
+	// }
+	// for(int i = j; j < FULLY_CONNECTED_WIDTH; j++) {
+	// 	sum += a[j] * b[j];
+	// }
+	for(int i = 0; i < FULLY_CONNECTED_WIDTH; i++) {
+		sum += a[i] * b[i];
 	}
 
 	return sum;
@@ -242,7 +245,7 @@ DT mmulT_unrolled_inner_1(DT* a, DT* b) {
 		sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
 		j += 8;
 	}
-	if(j+4<=MAX_POOLING_SIZE_2) {
+	if(j+4< MAX_POOLING_SIZE_2) {
 		sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
 		j+=4;
 	}
@@ -551,7 +554,6 @@ int main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1)))
 	DT pooling_layer[MAX_POOLING_SIZE_1]; // Size is 16 * 12 *12
 	max_pooling_outputs_1(convolution_relu, pooling_layer);	
 	
-	
 	DT convolution_layer_2[OUTPUT_CHANNELS * SIZE_CONVOLUTION_2]; // 16 * (8*8)
 	DT convolution_relu_2[OUTPUT_CHANNELS * SIZE_CONVOLUTION_2]; // 16 * (8*8)
 	// DT_memset(convolution_layer_2, OUTPUT_CHANNELS * SIZE_CONVOLUTION_2, 0);
@@ -592,7 +594,6 @@ int main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1)))
 	//DT_memset(pooling_layer_2, MAX_POOLING_SIZE_2, 2);
 	mmulT_unrolled_1(INPUT_B.kernelsFC1, pooling_layer_2, fc_layer);
 
-	
 	// // RELU (8)
 	// DT fc_relu[FULLY_CONNECTED_WIDTH];
 	// decomposed_relu_3(fc_layer, fc_relu);

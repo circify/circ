@@ -136,6 +136,7 @@ impl<'a> ToABY<'a> {
         let mut create_line_time: std::time::Duration = std::time::Duration::new(0, 0);
         let mut format_line_time: std::time::Duration = std::time::Duration::new(0, 0);
         let mut add_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut count = 0;
 
         let share_map_path = get_path(self.path, &self.lang, "share_map");
         let mut share_outputs = Vec::with_capacity(WRITE_SIZE * 2);
@@ -162,6 +163,7 @@ impl<'a> ToABY<'a> {
                 for s in shares {
                     now = Instant::now();
                     let line = format!("{} {}\n", s, share_str);
+                    count += 1;
                     format_line_time += now.elapsed();
 
                     now = Instant::now();
@@ -169,19 +171,21 @@ impl<'a> ToABY<'a> {
                     add_line_time += now.elapsed();
                 }
 
-                now = Instant::now();
                 // buffered write
                 if share_outputs.len() >= WRITE_SIZE {
+                    now = Instant::now();
                     write_lines(&share_map_path, &share_outputs);
                     share_outputs.clear();
+                    write_line_time += now.elapsed();
                 }
-                write_line_time += now.elapsed();
             }
 
             self.s_map.remove(name);
         }
 
+        now = Instant::now();
         write_lines(&share_map_path, &share_outputs);
+        write_line_time += now.elapsed();
 
         // clear share map
         self.s_map.clear();
@@ -191,6 +195,7 @@ impl<'a> ToABY<'a> {
         println!("format time: {:?}", format_line_time);
         println!("add time: {:?}", add_line_time);
         println!("write time: {:?}", write_line_time);
+        println!("count: {:?}", count);
     }
 
     fn get_md(&self) -> ComputationMetadata {
@@ -868,7 +873,6 @@ impl<'a> ToABY<'a> {
         let mut now = Instant::now();
         self.map_to_shares();
         println!("Time: map terms to shares: {:?}", now.elapsed());
-        todo!();
         now = Instant::now();
         self.lower();
         println!("Time: lowering: {:?}", now.elapsed());
