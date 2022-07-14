@@ -110,7 +110,7 @@ impl<'a> ToABY<'a> {
 
     fn write_const_output(&mut self, flush: bool) {
         if flush || self.const_output.len() >= WRITE_SIZE {
-            let const_output_path = get_path(self.path, &self.lang, "const");
+            let const_output_path = get_path(self.path, &self.lang, "const", false);
             write_lines(&const_output_path, &self.const_output);
             self.const_output.clear();
         }
@@ -122,6 +122,7 @@ impl<'a> ToABY<'a> {
                 self.path,
                 &self.lang,
                 &format!("{}_bytecode_output", self.curr_comp),
+                false,
             );
             write_lines(&bytecode_output_path, &self.bytecode_output);
             self.bytecode_output.clear();
@@ -130,84 +131,84 @@ impl<'a> ToABY<'a> {
 
     fn write_share_output(&mut self, flush: bool) {
         if flush || self.share_output.len() >= WRITE_SIZE {
-            let share_output_path = get_path(self.path, &self.lang, "share_map");
+            let share_output_path = get_path(self.path, &self.lang, "share_map", false);
             write_lines(&share_output_path, &self.share_output);
             self.share_output.clear();
         }
     }
 
-    fn map_to_shares(&mut self) {
-        let mut now = Instant::now();
-        let computations = self.fs.computations.clone();
-        println!("Time: cloning computations: {:?}", now.elapsed());
+    // fn map_to_shares(&mut self) {
+    //     let mut now = Instant::now();
+    //     let computations = self.fs.computations.clone();
+    //     println!("Time: cloning computations: {:?}", now.elapsed());
 
-        let mut term_to_share_time: std::time::Duration = std::time::Duration::new(0, 0);
-        let mut write_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-        let mut create_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-        let mut format_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-        let mut add_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut term_to_share_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut write_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut create_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut format_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut add_line_time: std::time::Duration = std::time::Duration::new(0, 0);
 
-        let share_map_path = get_path(self.path, &self.lang, "share_map");
-        let mut share_outputs = Vec::with_capacity(WRITE_SIZE * 2);
-        for (name, comp) in computations.iter() {
-            println!("mapping {} to shares, total terms: {}", name, comp.terms());
-            let share_map = self.get_sharing_map(name);
-            for t in comp.terms_postorder() {
-                match t.op {
-                    // these cases are handled dynamically by updating the base array share
-                    Op::Field(..) | Op::Update(..) | Op::Select | Op::Store | Op::Tuple => continue,
-                    _ => {}
-                }
+    //     let share_map_path = get_path(self.path, &self.lang, "share_map");
+    //     let mut share_outputs = Vec::with_capacity(WRITE_SIZE * 2);
+    //     for (name, comp) in computations.iter() {
+    //         println!("mapping {} to shares, total terms: {}", name, comp.terms());
+    //         let share_map = self.get_sharing_map(name);
+    //         for t in comp.terms_postorder() {
+    //             match t.op {
+    //                 // these cases are handled dynamically by updating the base array share
+    //                 Op::Field(..) | Op::Update(..) | Op::Select | Op::Store | Op::Tuple => continue,
+    //                 _ => {}
+    //             }
 
-                now = Instant::now();
-                let sort: Sort = check(&t);
-                let num_shares = self.get_sort_len(&sort) as i32;
-                let shares: Vec<i32> = (0..num_shares)
-                    .map(|x| x + self.share_cnt)
-                    .collect::<Vec<i32>>();
-                self.share_cnt += num_shares;
-                self.term_to_shares.insert(t.clone(), shares.clone());
-                term_to_share_time += now.elapsed();
+    //             now = Instant::now();
+    //             let sort: Sort = check(&t);
+    //             let num_shares = self.get_sort_len(&sort) as i32;
+    //             let shares: Vec<i32> = (0..num_shares)
+    //                 .map(|x| x + self.share_cnt)
+    //                 .collect::<Vec<i32>>();
+    //             self.share_cnt += num_shares;
+    //             self.term_to_shares.insert(t.clone(), shares.clone());
+    //             term_to_share_time += now.elapsed();
 
-                now = Instant::now();
-                // write sharing map
-                let share_type = share_map.get(&t).unwrap();
-                let share_str = share_type.char();
-                create_line_time += now.elapsed();
+    //             now = Instant::now();
+    //             // write sharing map
+    //             let share_type = share_map.get(&t).unwrap();
+    //             let share_str = share_type.char();
+    //             create_line_time += now.elapsed();
 
-                for s in shares {
-                    now = Instant::now();
-                    let line = format!("{} {}\n", s, share_str);
-                    format_line_time += now.elapsed();
+    //             for s in shares {
+    //                 now = Instant::now();
+    //                 let line = format!("{} {}\n", s, share_str);
+    //                 format_line_time += now.elapsed();
 
-                    now = Instant::now();
-                    share_outputs.push(line);
-                    add_line_time += now.elapsed();
-                }
+    //                 now = Instant::now();
+    //                 share_outputs.push(line);
+    //                 add_line_time += now.elapsed();
+    //             }
 
-                now = Instant::now();
-                // buffered write
-                if share_outputs.len() >= WRITE_SIZE {
-                    write_lines(&share_map_path, &share_outputs);
-                    share_outputs.clear();
-                }
-                write_line_time += now.elapsed();
-            }
+    //             now = Instant::now();
+    //             // buffered write
+    //             if share_outputs.len() >= WRITE_SIZE {
+    //                 write_lines(&share_map_path, &share_outputs);
+    //                 share_outputs.clear();
+    //             }
+    //             write_line_time += now.elapsed();
+    //         }
 
-            self.s_map.remove(name);
-        }
+    //         self.s_map.remove(name);
+    //     }
 
-        write_lines(&share_map_path, &share_outputs);
+    //     write_lines(&share_map_path, &share_outputs);
 
-        // clear share map
-        self.s_map.clear();
+    //     // clear share map
+    //     self.s_map.clear();
 
-        println!("term to share time: {:?}", term_to_share_time);
-        println!("create time: {:?}", create_line_time);
-        println!("format time: {:?}", format_line_time);
-        println!("add time: {:?}", add_line_time);
-        println!("write time: {:?}", write_line_time);
-    }
+    //     println!("term to share time: {:?}", term_to_share_time);
+    //     println!("create time: {:?}", create_line_time);
+    //     println!("format time: {:?}", format_line_time);
+    //     println!("add time: {:?}", add_line_time);
+    //     println!("write time: {:?}", write_line_time);
+    // }
 
     fn get_md(&self) -> ComputationMetadata {
         self.fs
@@ -862,9 +863,23 @@ impl<'a> ToABY<'a> {
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self) {
         let computations = self.fs.computations.clone();
+
+        // create output files
+        get_path(self.path, &self.lang, "const", true);
+        get_path(self.path, &self.lang, "share_map", true);
+
         for (name, comp) in computations.iter() {
             let mut outputs: Vec<String> = Vec::new();
             let mut now = Instant::now();
+
+            // create paths
+            get_path(
+                self.path,
+                &self.lang,
+                &format!("{}_bytecode_output", name),
+                true,
+            );
+
             for t in comp.outputs.iter() {
                 self.curr_comp = name.to_string();
                 self.embed(t.clone());
@@ -914,13 +929,19 @@ impl<'a> ToABY<'a> {
             now = Instant::now();
 
             // write input bytecode
-            let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
+            let bytecode_path =
+                get_path(self.path, &self.lang, &format!("{}_bytecode", name), true);
             write_lines(&bytecode_path, &self.bytecode_input);
 
             // write output bytecode
-            let bytecode_output_path =
-                get_path(self.path, &self.lang, &format!("{}_bytecode_output", name));
+            let bytecode_output_path = get_path(
+                self.path,
+                &self.lang,
+                &format!("{}_bytecode_output", name),
+                false,
+            );
             write_lines(&bytecode_output_path, &self.bytecode_output);
+            println!("writing to bytecode output");
 
             println!("Time: writing {}: {:?}", name, now.elapsed());
 
