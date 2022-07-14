@@ -941,7 +941,6 @@ impl<'a> ToABY<'a> {
                 false,
             );
             write_lines(&bytecode_output_path, &self.bytecode_output);
-            println!("writing to bytecode output");
 
             println!("Time: writing {}: {:?}", name, now.elapsed());
 
