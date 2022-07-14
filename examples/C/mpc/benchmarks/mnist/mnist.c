@@ -196,21 +196,18 @@ void convolution_naive_outputs(DT *image, DT* kernels, DT* OUTPUT_layer, int ima
 DT mmulT_unrolled_inner_2(DT* a, DT* b) { 
 	DT sum = 0;
 
-	// int j = 0;
-	// // Add the first as groups of eight
-	// for (int i = 0; i+8 < FULLY_CONNECTED_WIDTH; i+=8) {
-	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
-	// 	j += 8;
-	// }
-	// if (j+4 < FULLY_CONNECTED_WIDTH) {
-	// 	sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
-	// 	j+=4;
-	// }
-	// for(int i = j; j < FULLY_CONNECTED_WIDTH; j++) {
-	// 	sum += a[j] * b[j];
-	// }
-	for(int i = 0; i < FULLY_CONNECTED_WIDTH; i++) {
-		sum += a[i] * b[i];
+	int j = 0;
+	// Add the first as groups of eight
+	for (int i = 0; i+8 < FULLY_CONNECTED_WIDTH; i+=8) {
+		sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
+		j += 8;
+	}
+	if (j+4 < FULLY_CONNECTED_WIDTH) {
+		sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
+		j+=4;
+	}
+	for(int i = j; j < FULLY_CONNECTED_WIDTH; j++) {
+		sum += a[j] * b[j];
 	}
 
 	return sum;
@@ -239,22 +236,18 @@ void mmulT_unrolled_2(DT* a, DT* b, DT *OUTPUT_res) {
 DT mmulT_unrolled_inner_1(DT* a, DT* b) { 
 	DT sum = 0;
 	
-	// int j = 0;
-	// // Add the first as groups of eight
-	// for (int i = 0; i+8 < MAX_POOLING_SIZE_2; i+=8) {
-	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
-	// 	j += 8;
-	// }
-	// if(j+4< MAX_POOLING_SIZE_2) {
-	// 	sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
-	// 	j+=4;
-	// }
-	// for(int i = j; j < MAX_POOLING_SIZE_2; j++) {
-	// 	sum += a[j] * b[j];
-	// }
-
-	for(int i = 0; i < MAX_POOLING_SIZE_2; i++) {
-		sum += a[i] * b[i];
+	int j = 0;
+	// Add the first as groups of eight
+	for (int i = 0; i+8 < MAX_POOLING_SIZE_2; i+=8) {
+		sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
+		j += 8;
+	}
+	if(j+4< MAX_POOLING_SIZE_2) {
+		sum += a[j+0]*b[j+0] + a[j+1]*b[j+1] + a[j+2]*b[j+2] + a[j+3]*b[j+3];
+		j+=4;
+	}
+	for(int i = j; j < MAX_POOLING_SIZE_2; j++) {
+		sum += a[j] * b[j];
 	}
 
 	return sum;
@@ -433,46 +426,41 @@ void decomposed_relu_3(DT *in, DT *OUTPUT_res) {
 	}
 }
 
-void relu_map_2(DT *in, DT *OUTPUT_res) {
-	for(int i = 0; i < SIZE_CONVOLUTION_2; i++) {
-		OUTPUT_res[i] = relu(in[i]);
-	}
-}
 
 void decomposed_relu_2(DT *in, DT *OUTPUT_res) {
-	DT copy[SIZE_CONVOLUTION_2];
-	DT im_res[SIZE_CONVOLUTION_2];
-	for(int i = 0; i < OUTPUT_CHANNELS; i++) {
+	DT copy[OUTPUT_CHANNELS];
+	DT im_res[OUTPUT_CHANNELS];
+	for(int i = 0; i < SIZE_CONVOLUTION_2; i++) {
 		// memcpy(copy, in+i*len_inner, len_inner*sizeof(DT));
-		for (int j = 0; j < SIZE_CONVOLUTION_2; j++) {
-			copy[j] = (in+i*SIZE_CONVOLUTION_2)[j];
+		for (int j = 0; j < OUTPUT_CHANNELS; j++) {
+			copy[j] = (in+i*OUTPUT_CHANNELS)[j];
 		}
-		relu_map_2(in, im_res);
+		relu_map_1(in, im_res);
 		// memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
-		for (int j = 0; j < SIZE_CONVOLUTION_2; j++) {
-			(OUTPUT_res+i*SIZE_CONVOLUTION_2)[j] = im_res[j];
+		for (int j = 0; j < OUTPUT_CHANNELS; j++) {
+			(OUTPUT_res+i*OUTPUT_CHANNELS)[j] = im_res[j];
 		}
 	}
 }
 
 void relu_map_1(DT *in, DT *OUTPUT_res) {
-	for(int i = 0; i < SIZE_CONVOLUTION_1; i++) {
+	for(int i = 0; i < OUTPUT_CHANNELS; i++) {
 		OUTPUT_res[i] = relu(in[i]);
 	}
 }
 
 void decomposed_relu_1(DT *in, DT *OUTPUT_res) {
-	DT copy[SIZE_CONVOLUTION_1];
-	DT im_res[SIZE_CONVOLUTION_1];
-	for(int i = 0; i < OUTPUT_CHANNELS; i++) {
+	DT copy[OUTPUT_CHANNELS];
+	DT im_res[OUTPUT_CHANNELS];
+	for(int i = 0; i < SIZE_CONVOLUTION_1; i++) {
 		// memcpy(copy, in+i*len_inner, len_inner*sizeof(DT));
-		for (int j = 0; j < SIZE_CONVOLUTION_1; j++) {
-			copy[j] = (in+i*SIZE_CONVOLUTION_1)[j];
+		for (int j = 0; j < OUTPUT_CHANNELS; j++) {
+			copy[j] = (in+i*OUTPUT_CHANNELS)[j];
 		}
 		relu_map_1(in, im_res);
 		// memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
-		for (int j = 0; j < SIZE_CONVOLUTION_1; j++) {
-			(OUTPUT_res+i*SIZE_CONVOLUTION_1)[j] = im_res[j];
+		for (int j = 0; j < OUTPUT_CHANNELS; j++) {
+			(OUTPUT_res+i*OUTPUT_CHANNELS)[j] = im_res[j];
 		}
 	}
 }
@@ -544,22 +532,8 @@ void sum(DT *OUTPUT_agg, DT* agg, DT *add, int len) {
 	}
 }
 
-int main(
-	__attribute__((private(0))) DT image[IMAGE_WIDTH * IMAGE_WIDTH], 
-	__attribute__((private(1))) DT kernelsL1[OUTPUT_CHANNELS * WINDOW_WIDTH * WINDOW_WIDTH], 
-	__attribute__((private(1))) DT kernelsL2[OUTPUT_CHANNELS * SIZE_KERNELS_2], 
-	__attribute__((private(1))) DT kernelsFC1[FULLY_CONNECTED_WIDTH * MAX_POOLING_SIZE_2], 
-	__attribute__((private(1))) DT kernelsFC2[FINAL_OUTPUT_CHANNELS * FULLY_CONNECTED_WIDTH])
+int main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1))) InputB INPUT_B)
 {
-	InputA INPUT_A;
-	INPUT_A.image = image;
-
-	InputB INPUT_B;
-	INPUT_B.kernelsL1 = kernelsL1;
-	INPUT_B.kernelsL2 = kernelsL2;
-	INPUT_B.kernelsFC1 = kernelsFC1;
-	INPUT_B.kernelsFC2 = kernelsFC2;
-
 	DT convolution_layer[OUTPUT_CHANNELS * SIZE_CONVOLUTION_1];
 	DT convolution_relu[OUTPUT_CHANNELS * SIZE_CONVOLUTION_1];
 
@@ -626,12 +600,11 @@ int main(
 
 	mmulT_unrolled_2(INPUT_B.kernelsFC2, fc_layer, output.final_layer);
 
-	// return output;
+	int sum = 0;
+	for (int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
+		sum += output.final_layer[i];
+	}
 
-	// int sum = 0;
-	// for (int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
-	// 	sum += output.final_layer[i];
-	// }
-	// return sum;
-	return output.final_layer[0];
+	// return output;
+	return sum;
 }

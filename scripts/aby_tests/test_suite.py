@@ -18,7 +18,7 @@ arithmetic_tests = [
         "./scripts/aby_tests/test_inputs/sub_1.txt",
     ],
     [
-        "Subtract two numbers, negative -1 == 4294967295 because u32",
+        "Subtract two numbers, negative",
         "2pc_sub",
         "./scripts/aby_tests/test_inputs/sub_2.txt",
     ],
@@ -539,6 +539,16 @@ biomatch_tests = [
     [
         "biomatch - 2",
         "2pc_biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    ],
+    [
+        "biomatch - 3",
+        "biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+    ],
+    [
+        "biomatch - 4",
+        "biomatch",
         "./scripts/aby_tests/test_inputs/biomatch_2.txt",
     ],
 ]

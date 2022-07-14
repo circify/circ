@@ -244,7 +244,7 @@ fn main() {
                     Opt::Tuple,
                     Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
                     // Opt::Tuple,

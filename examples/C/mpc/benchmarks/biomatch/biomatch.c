@@ -1,4 +1,4 @@
-#define N 4
+#define N 256
 #define K 4 // currently fixed, do not change
 
 #define INNER 64
@@ -32,7 +32,7 @@ void match_decomposed(int *db, int *OUTPUT_matches, int len, int *sample) {
   }
 }
 
-int main( __attribute__((private(0))) int db[16], __attribute__((private(1))) int sample[4])
+int main( __attribute__((private(0))) int db[1024], __attribute__((private(1))) int sample[4])
 {
     //int matches[4];
     int matches[N];
