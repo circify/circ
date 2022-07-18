@@ -596,6 +596,16 @@ db_tests = [
         "db_join",
         "./scripts/aby_tests/test_inputs/db_join.txt",
     ],
+    [
+        "db join",
+        "db_join2",
+        "./scripts/aby_tests/test_inputs/join2.txt",
+    ],
+    [
+        "db join",
+        "db_merge",
+        "./scripts/aby_tests/test_inputs/merge.txt",
+    ],
 ]
 
 benchmark_tests = [
