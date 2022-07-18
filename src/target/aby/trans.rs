@@ -995,7 +995,7 @@ pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
 
     // TODO: change ILP to take in Functions instead of individual computations
     for (name, comp) in ir.computations.iter() {
-        println!("processing computation: {}", name);
+        println!("processing assignments: {}", name);
         let assignments = match ss {
             "b" => assign_all_boolean(&comp, cm),
             "y" => assign_all_yao(&comp, cm),

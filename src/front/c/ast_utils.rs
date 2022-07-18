@@ -130,7 +130,6 @@ pub fn fn_info_to_defs(
 
     for param in fn_info.params.iter() {
         let arg = arg_map.get(&param.name).unwrap();
-
         let name = &param.name;
         let sort = arg.term.type_().sort();
         param_names.push(name.clone());

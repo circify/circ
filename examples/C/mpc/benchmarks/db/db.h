@@ -62,7 +62,7 @@ DT sum_gt_zero(DT *data, int len) {
 }*/
 
 
-DT mean_with_abort(DT *db, unsigned len) {
+DT mean_with_abort(DT *db, int len) {
 	DT mean = 0;
 	int i;
 	for(i = 0; i < LEN_A*LEN_B && db[i] >= 0; i++) {
@@ -76,7 +76,7 @@ DT mean_with_abort(DT *db, unsigned len) {
 }
 
 
-DT mean(DT *db, unsigned len) {
+DT mean(DT *db, int len) {
 	//DT mean = 0;
 	/*for(int i = 0; i < len; i++) {
 		mean += db[i];
@@ -85,7 +85,7 @@ DT mean(DT *db, unsigned len) {
 	return mean/len;
 }
 
-DT variance(DT *db, unsigned len) {
+DT variance(DT *db, int len) {
 	DT exp = mean(db, len);
 	DT var[len];// = 0;
 	for(int i = 0; i < LEN_A*LEN_B; i++) {
