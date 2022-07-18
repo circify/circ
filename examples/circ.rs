@@ -276,14 +276,13 @@ fn main() {
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
+                Opt::RamExt,
                 Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold(Box::new([])),
                 Opt::Flatten,
                 Opt::Inline,
-                Opt::Tuple,
-                Opt::RamExt,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
                 Opt::ConstantFold(Box::new([])),

@@ -340,7 +340,6 @@ impl ArrayGraph {
                 .collect();
             while let Some(t) = stack.pop() {
                 if !t.is_const() && !non_ram.contains(&t) {
-                    debug!("Non-RAM: {}", Letified(t.clone()));
                     non_ram.insert(t.clone());
                     for t in ps.get(&t).into_iter().flatten() {
                         stack.push(t.clone());
@@ -359,6 +358,15 @@ impl ArrayGraph {
     }
     fn is_ram(&self, t: &Term) -> bool {
         !t.is_const() && self.array_terms.contains(t) && !self.non_ram.contains(t)
+    }
+    fn is_ram_read(&self, t: &Term) -> bool {
+        match t.op {
+            Op::Field(idx) => {
+                // recursively check if the field of t is a ram
+                self.is_ram_read(&t.cs[0].get().cs[idx])
+            }
+            _ => !t.is_const() && self.array_terms.contains(t) && !self.non_ram.contains(t),
+        }
     }
 }
 
@@ -390,6 +398,7 @@ impl Extactor {
                 self.rams.push(Ram::new(id, a.clone()));
                 id
             }
+            Op::Field(idx) => self.get_or_start(&t.cs[0].get().cs[*idx]),
             _ => *self
                 .term_ram
                 .get(t)
@@ -398,14 +407,32 @@ impl Extactor {
     }
 
     fn rewrite_indices(&mut self) {
-        for ram in &mut self.rams {
+        // TODO: try to optimize this?
+        let mut cache = TermMap::new();
+        let mut rams: Vec<Ram> = self.rams.drain(0..).collect();
+        for ram in &mut rams {
             for access in &mut ram.accesses {
-                if self.read_terms.contains_key(&access.idx) {
-                    let _ram_var = self.read_terms.get(&access.idx).unwrap();
-                    access.idx = _ram_var.clone();
-                }
+                access.idx = self.rewrite_index_term(access.idx.clone(), &mut cache);
             }
         }
+        self.rams = rams;
+    }
+
+    /// Rewrite a single index term recursivly. Uses the cache if we have already
+    /// seen this term before
+    fn rewrite_index_term(&self, t: Term, cache: &mut TermMap<Term>) -> Term {
+        if self.read_terms.contains_key(&t) {
+            return self.read_terms.get(&t).unwrap().clone();
+        }
+
+        // rewrite all children
+        let mut rewritten_children = Vec::new();
+        for c in &t.get().cs {
+            rewritten_children.push(self.rewrite_index_term(c.clone(), cache));
+        }
+        let res = term(t.get().op.clone(), rewritten_children);
+        cache.insert(t, res.clone());
+        res
     }
 }
 
@@ -447,7 +474,10 @@ impl RewritePass for Extactor {
         } else {
             match &t.op {
                 // Rewrite select's whose array is a RAM term
-                Op::Select if self.graph.is_ram(&t.cs[0]) => {
+                Op::Select if self.graph.is_ram_read(&t.cs[0]) => {
+                    if let Op::Field(_) = t.op {
+                        println!("Field op in ram!: {:?}", t);
+                    }
                     let ram_id = self.get_or_start(&t.cs[0]);
                     let ram = &mut self.rams[ram_id];
                     let read_value = ram.new_read(t.cs[1].clone(), computation, t.clone());
@@ -545,10 +575,20 @@ impl Encoder {
         // remove ram writes
         // TODO: This ONLY works for read-only rams.
         for ram in self.rams.iter_mut() {
-            while eval(&ram.accesses[0].is_write, &fxhash::FxHashMap::default()).as_bool() {
+            while !ram.accesses.is_empty()
+                && eval(&ram.accesses[0].is_write, &fxhash::FxHashMap::default()).as_bool()
+            {
                 ram.accesses.remove(0);
             }
         }
+
+        // remove rams that are empty
+        // TODO: maybe throw a warning here?
+        self.rams = self
+            .rams
+            .drain(0..)
+            .filter(|ram| !ram.accesses.is_empty())
+            .collect();
 
         // TODO: actually check that the sorts for ram1 and ram2 are equal...
         // TODO: should this actually be verifier_id?
