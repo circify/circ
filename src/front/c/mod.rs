@@ -53,9 +53,9 @@ impl FrontEnd for C {
 
         // println!("fn: {}", "main");
         // let Computation { outputs, .. } = main_comp.clone();
-        // for t in outputs {
-        //     println!("term: {}", t);
-        //     println!("");
+
+        // for t in main_comp.terms_postorder() {
+        //     println!("t: {}", t);
         // }
 
         fs.insert("main".to_string(), main_comp);
@@ -107,7 +107,7 @@ pub struct IndexTerm {
     pub indices: Vec<CTerm>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum CLoc {
     Var(Loc),
     Member(Box<CLoc>, String),
@@ -513,15 +513,28 @@ impl CGen {
                         // get location
                         let loc = self.gen_lval(*bin_op.lhs.clone());
 
-                        // get offset
+                        // get base offset
                         let index = self.gen_index(expr.node.clone());
                         let offset = self.index_offset(&index);
-                        let idx = cterm(CTermData::Int(true, 32, offset));
+                        let idx = cterm(CTermData::Int(true, 32, offset.clone()));
 
-                        if let Expression::BinaryOperator(_) = bin_op.lhs.node {
-                            // Matrix case
-                            let base = self.base_loc(loc);
-                            CLoc::Idx(Box::new(base), idx)
+                        if let Expression::BinaryOperator(op) = &bin_op.lhs.node {
+                            if let BinaryOperator::Index = &op.node.operator.node {
+                                // Matrix case
+                                let base = self.base_loc(loc);
+                                CLoc::Idx(Box::new(base), idx)
+                            } else {
+                                // Ptr Arithmetic case
+                                let idx = if let CLoc::Idx(l, o) = &loc {
+                                    let new_offset =
+                                        term![BV_ADD; o.term.term(self.circ.cir_ctx()), offset];
+                                    cterm(CTermData::Int(true, 32, new_offset))
+                                } else {
+                                    idx
+                                };
+                                let base = self.base_loc(loc);
+                                CLoc::Idx(Box::new(base), idx)
+                            }
                         } else {
                             CLoc::Idx(Box::new(loc), idx)
                         }
@@ -532,8 +545,6 @@ impl CGen {
 
                         // get offset
                         let offset = self.gen_expr(bin_op.rhs.node.clone());
-
-                        // TODO: if lhs is a stack_ptr, need to add offset to stack_ptr offset.
 
                         CLoc::Idx(Box::new(loc), offset)
                     }
