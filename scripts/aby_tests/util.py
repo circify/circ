@@ -22,7 +22,7 @@ def get_result(file_path):
             for line in lines:
                 l = line.split()
                 if l and l[0] == "res":
-                    return l[1]
+                    return l[1:]
             raise RuntimeError("Unable to find result: "+file_path)
     else:
         raise RuntimeError("Unable to open file: "+file_path)
@@ -62,7 +62,11 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
 
         assert server_out == client_out, "server out != client out\nserver_out: " + \
             server_out+"\nclient_out: "+client_out
-        assert server_out == expected, "server_out: "+server_out+"\nexpected: "+expected
+
+        # convert server_out to list
+        server_out_l = server_out.split()
+
+        assert server_out_l == expected, "server_out: "+server_out+"\nexpected: "+expected
         return True, ""
     except Exception as e:
         # print("Exception: ", e)

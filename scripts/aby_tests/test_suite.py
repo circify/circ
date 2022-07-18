@@ -1,8 +1,8 @@
 ts = [
     [
-        "new",
-        "playground",
-        "./scripts/aby_tests/test_inputs/test.txt",
+        "Return struct",
+        "ret_struct",
+        "./scripts/aby_tests/test_inputs/ret_struct.txt",
     ],
 ]
 
@@ -413,6 +413,11 @@ struct_tests = [
         "Struct array add",
         "2pc_struct_array_add",
         "./scripts/aby_tests/test_inputs/add.txt",
+    ],
+    [
+        "Return struct",
+        "ret_struct",
+        "./scripts/aby_tests/test_inputs/ret_struct.txt",
     ],
 ]
 
