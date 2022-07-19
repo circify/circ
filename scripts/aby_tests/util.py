@@ -39,10 +39,8 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
     print(" ".join(server_cmd))
 
     try:
-        print("start server")
         server_proc = Popen(" ".join(server_cmd),
                             shell=True, stdout=PIPE, stderr=PIPE)
-        print("start client")
         client_proc = Popen(" ".join(client_cmd),
                             shell=True, stdout=PIPE, stderr=PIPE)
 
