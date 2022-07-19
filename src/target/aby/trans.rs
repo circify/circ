@@ -55,6 +55,30 @@ impl fmt::Display for EmbeddedTerm {
     }
 }
 
+static mut dur_const_arr: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_const_arr: usize = 0;
+
+static mut dur_const_tuple: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_const_tuple: usize = 0;
+
+static mut dur_ite: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_ite: usize = 0;
+
+static mut dur_store: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_store: usize = 0;
+
+static mut dur_field: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_field: usize = 0;
+
+static mut dur_update: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_update: usize = 0;
+
+static mut dur_tuple: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_tuple: usize = 0;
+
+static mut dur_call: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_call: usize = 0;
+
 struct ToABY<'a> {
     fs: Functions,
     s_map: HashMap<String, SharingMap>,
@@ -272,6 +296,7 @@ impl<'a> ToABY<'a> {
         }
     }
 
+    // TODO: Rust ENTRY api on maps 
     fn get_share(&mut self, t: &Term) -> i32 {
         match self.term_to_shares.get(t) {
             Some(v) => {
@@ -661,6 +686,7 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed_scalar(&mut self, t: Term) {
+        let now = Instant::now();
         match &t.op {
             Op::Const(Value::Array(arr)) => {
                 let shares = self.get_shares(&t);
@@ -685,6 +711,11 @@ impl<'a> ToABY<'a> {
                         _ => todo!(),
                     }
                 }
+
+                unsafe {
+                    num_const_arr += 1;
+                    dur_const_arr += now.elapsed();
+                };
             }
             Op::Const(Value::Tuple(tup)) => {
                 let shares = self.get_shares(&t);
@@ -700,6 +731,11 @@ impl<'a> ToABY<'a> {
                         _ => todo!(),
                     }
                 }
+
+                unsafe {
+                    num_const_tuple += 1;
+                    dur_const_tuple += now.elapsed();
+                };
             }
             Op::Ite => {
                 let op = "MUX";
@@ -713,12 +749,17 @@ impl<'a> ToABY<'a> {
                 assert!(shares.len() == a.len());
                 assert!(shares.len() == b.len());
 
-                for ((s_share, a_share), b_share) in shares.iter().zip(a.iter()).zip(b.iter()) {
-                    let line = format!("3 1 {} {} {} {} {}\n", sel, a_share, b_share, s_share, op);
+                for i in 0..shares.len() {
+                    let line = format!("3 1 {} {} {} {} {}\n", sel, a[i], b[i], shares[i], op);
                     self.bytecode_output.push(line);
                 }
 
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
+
+                unsafe {
+                    num_ite += 1;
+                    dur_ite += now.elapsed();
+                };
             }
             Op::Store => {
                 assert!(t.cs.len() == 3);
@@ -736,6 +777,11 @@ impl<'a> ToABY<'a> {
                 } else {
                     panic!("non-const: store")
                 }
+
+                unsafe {
+                    num_store += 1;
+                    dur_store += now.elapsed();
+                };
             }
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
@@ -764,6 +810,11 @@ impl<'a> ToABY<'a> {
 
                 self.term_to_shares.insert(t.clone(), field_shares.to_vec());
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
+
+                unsafe {
+                    num_field += 1;
+                    dur_field += now.elapsed();
+                };
             }
             Op::Update(i) => {
                 assert!(t.cs.len() == 2);
@@ -779,6 +830,11 @@ impl<'a> ToABY<'a> {
                 // store shares
                 self.term_to_shares.insert(t.clone(), tuple_shares);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
+
+                unsafe {
+                    num_update += 1;
+                    dur_update += now.elapsed();
+                };
             }
             Op::Tuple => {
                 let mut shares: Vec<i32> = Vec::new();
@@ -787,6 +843,11 @@ impl<'a> ToABY<'a> {
                 }
                 self.term_to_shares.insert(t.clone(), shares);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
+
+                unsafe {
+                    num_tuple += 1;
+                    dur_tuple += now.elapsed();
+                };
             }
             Op::Call(name, _arg_names, arg_sorts, ret_sorts) => {
                 let shares = self.get_shares(&t);
@@ -828,6 +889,11 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
+
+                unsafe {
+                    num_call += 1;
+                    dur_call += now.elapsed();
+                };
             }
             _ => {
                 panic!("Non-field in embed_scalar: {}", t.op)
@@ -836,26 +902,125 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed(&mut self, t: Term) {
+        let mut num_bool = 0;
+        let mut num_bv = 0;
+        let mut num_scalar = 0;
+
+        let mut dur_bool: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut dur_bv: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut dur_scalar: std::time::Duration = std::time::Duration::new(0, 0);
+
+        unsafe {
+            dur_const_arr = std::time::Duration::new(0, 0);
+            num_const_arr = 0;
+
+            dur_const_tuple = std::time::Duration::new(0, 0);
+            num_const_tuple = 0;
+
+            dur_ite = std::time::Duration::new(0, 0);
+            num_ite = 0;
+
+            dur_store = std::time::Duration::new(0, 0);
+            num_store = 0;
+
+            dur_field = std::time::Duration::new(0, 0);
+            num_field = 0;
+
+            dur_update = std::time::Duration::new(0, 0);
+            num_update = 0;
+
+            dur_tuple = std::time::Duration::new(0, 0);
+            num_tuple = 0;
+
+            dur_call = std::time::Duration::new(0, 0);
+            num_call = 0;
+        }
+
+        let mut write_time: std::time::Duration = std::time::Duration::new(0, 0);
+
         for c in PostOrderIter::new(t) {
             if self.cache.contains_key(&c) {
                 continue;
             }
+
+            let b_now = Instant::now(); // check for tuples are long
             match check(&c) {
                 Sort::Bool => {
+                    let now = Instant::now();
                     self.embed_bool(c);
+                    num_bool += 1;
+                    dur_bool += now.elapsed();
                 }
                 Sort::BitVector(_) => {
+                    let now = Instant::now();
                     self.embed_bv(c);
+                    num_bv += 1;
+                    dur_bv += now.elapsed();
                 }
                 Sort::Array(..) | Sort::Tuple(_) => {
+                    let now = Instant::now();
                     self.embed_scalar(c);
+                    num_scalar += 1;
+                    dur_scalar += now.elapsed();
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
 
+            let now = Instant::now();
             self.write_bytecode_output(false);
             self.write_const_output(false);
             self.write_share_output(false);
+            write_time += now.elapsed();
+        }
+
+        println!("bool: {}, bv: {}, scalar: {}", num_bool, num_bv, num_scalar);
+        println!(
+            "times: bool: {:?}, bv: {:?}, scalar: {:?}",
+            dur_bool, dur_bv, dur_scalar
+        );
+        println!("write time: {:?}", write_time);
+
+        if num_bool > 0 && num_bv > 0 && num_scalar > 0 {
+            println!(
+                "norm_times: bool: {:?}, bv: {:?}, scalar: {:?}\n",
+                dur_bool / num_bool,
+                dur_bv / num_bv,
+                dur_scalar / num_scalar
+            );
+        }
+
+        unsafe {
+            println!("================================");
+            println!("const_arr: {}, const_tuple: {}, ite: {}, store: {}, field: {}, update: {}, tuple: {}, call: {}", num_const_arr, num_const_tuple, num_ite, num_store, num_field, num_update, num_tuple, num_call);
+            println!("times: const_arr: {:?}, const_tuple: {:?}, ite: {:?}, store: {:?}, field: {:?}, update: {:?}, tuple: {:?}, call: {:?}", dur_const_arr, dur_const_tuple, dur_ite, dur_store, dur_field, dur_update, dur_tuple, dur_call);
+            if num_const_arr > 0 {
+                println!("norm_const_arr: {:?}", dur_const_arr / num_const_arr as u32);
+            }
+            if num_const_tuple > 0 {
+                println!(
+                    "norm_const_tuple: {:?}",
+                    dur_const_tuple / num_const_tuple as u32
+                );
+            }
+            if num_ite > 0 {
+                println!("norm_ite: {:?}", dur_ite / num_ite as u32);
+            }
+            if num_store > 0 {
+                println!("norm_store: {:?}", dur_store / num_store as u32);
+            }
+            if num_field > 0 {
+                println!("norm_field: {:?}", dur_field / num_field as u32);
+            }
+            if num_update > 0 {
+                println!("norm_update: {:?}", dur_update / num_update as u32);
+            }
+            if num_tuple > 0 {
+                println!("norm_tuple: {:?}", dur_tuple / num_tuple as u32);
+            }
+            if num_call > 0 {
+                println!("norm_call: {:?}", dur_call / num_call as u32);
+            }
+            println!("================================\n")
         }
     }
 
@@ -871,6 +1036,9 @@ impl<'a> ToABY<'a> {
             let mut outputs: Vec<String> = Vec::new();
             let mut now = Instant::now();
 
+            // set current computation
+            self.curr_comp = name.to_string();
+
             // create paths
             get_path(
                 self.path,
@@ -879,10 +1047,9 @@ impl<'a> ToABY<'a> {
                 true,
             );
 
-            println!("starting: {}", name);
+            println!("starting: {}, {}", name, comp.terms());
 
             for t in comp.outputs.iter() {
-                self.curr_comp = name.to_string();
                 self.embed(t.clone());
 
                 let op = "OUT";
