@@ -8,6 +8,9 @@
 #define LEN_OUTER 10
 #define LEN_INNER (LEN/LEN_OUTER)
 
+
+typedef int coord_t;
+
 struct input_a{
 	int dataA[D*NA];
 };
@@ -16,9 +19,11 @@ struct input_b {
 	int dataB[D*NA];
 };
 
-struct output {
-	int cluster[D*NC];
-};
+typedef struct
+{
+	coord_t cluster[D*NC];
+} Output;
+
 
 int dist2(int x1, int y1, int x2, int y2) {
   return (x1-x2) * (x1-x2) + (y1 - y2) * (y1 - y2);
@@ -179,7 +184,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 }
 
 
-int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
+Output main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
 {
     // init data
     int data[LEN * D];
@@ -193,13 +198,8 @@ int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int 
         data[i + offset] = b[i];
     }
 
-    struct output output;
+    Output output;
     kmeans(data, output.cluster);
    
-    int sum = 0;
-    for (int i = 0; i < D * NC; i++)
-    {
-        sum += output.cluster[i];
-    }
-    return sum;
+    return output;
 }

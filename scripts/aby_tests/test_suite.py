@@ -602,23 +602,23 @@ db_tests = [
         "./scripts/aby_tests/test_inputs/db_join.txt",
     ],
     [
-        "db join",
+        "db join 2",
         "db_join2",
         "./scripts/aby_tests/test_inputs/join2.txt",
     ],
     [
-        "db join",
+        "db merge",
         "db_merge",
         "./scripts/aby_tests/test_inputs/merge.txt",
     ],
 ]
 
-benchmark_tests = [
+mnist_tests = [
     [
-        "biomatch - 1",
-        "2pc_biomatch",
-        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
-    ],
+        "mnist 16x16",
+        "mnist",
+        "./scripts/aby_tests/test_inputs/mnist_16.txt",
+    ]
 ]
 
 # ilp_benchmark_tests = [

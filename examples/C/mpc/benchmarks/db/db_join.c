@@ -80,7 +80,7 @@ DT agg_mean(DT *db, int len, int att) {
 	return mean_with_abort(sum, len);
 }
 
-int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(1))) int b[LEN_B*ATT_B]) {
+Output main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(1))) int b[LEN_B*ATT_B]) {
 	Output res;
     InputA INPUT_A;
     for (int i = 0; i < LEN_A*ATT_A; i++) {
@@ -103,5 +103,5 @@ int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(
 	res.analysis1 = agg_mean_tree(db, LEN_A*LEN_B, ATT);
 	res.analysis2 = res.analysis1;
 	// res.analysis2 = variance(db, LEN_A*LEN_B);
-	return res.joined + res.analysis1 + res.analysis2;
+	return res;
 } 

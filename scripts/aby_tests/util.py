@@ -39,13 +39,15 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
     print(" ".join(server_cmd))
 
     try:
+        print("start server")
         server_proc = Popen(" ".join(server_cmd),
                             shell=True, stdout=PIPE, stderr=PIPE)
+        print("start client")
         client_proc = Popen(" ".join(client_cmd),
                             shell=True, stdout=PIPE, stderr=PIPE)
 
-        server_out, server_err = server_proc.communicate(timeout=300)
-        client_out, client_err = client_proc.communicate(timeout=300)
+        server_out, server_err = server_proc.communicate(timeout=30)
+        client_out, client_err = client_proc.communicate(timeout=30)
 
         if server_err:
             raise RuntimeError(
@@ -64,12 +66,12 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
             server_out+"\nclient_out: "+client_out
 
         # convert server_out to list
-        server_out_l = server_out.split()
+        server_out_l = server_out.split("\n")
 
-        assert server_out_l == expected, "server_out: "+server_out+"\nexpected: "+expected
+        assert server_out_l == expected, "server_out: " + \
+            str(server_out_l)+"\nexpected: "+str(expected)
         return True, ""
     except Exception as e:
-        # print("Exception: ", e)
         return False, e
 
 

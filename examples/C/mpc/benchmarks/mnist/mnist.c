@@ -545,7 +545,7 @@ void sum(DT *OUTPUT_agg, DT* agg, DT *add, int len) {
 	}
 }
 
-int main(
+Output main(
 	__attribute__((private(0))) DT image[IMAGE_WIDTH * IMAGE_WIDTH], 
 	__attribute__((private(1))) DT kernelsL1[OUTPUT_CHANNELS * WINDOW_WIDTH * WINDOW_WIDTH], 
 	__attribute__((private(1))) DT kernelsL2[OUTPUT_CHANNELS * SIZE_KERNELS_2], 
@@ -627,12 +627,5 @@ int main(
 
 	mmulT_unrolled_2(INPUT_B.kernelsFC2, fc_layer, output.final_layer);
 
-	// return output;
-
-	// int sum = 0;
-	// for (int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
-	// 	sum += output.final_layer[i];
-	// }
-	// return sum;
-	return output.final_layer[1];
+	return output;
 }

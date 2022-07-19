@@ -45,7 +45,7 @@ DT variance_(DT *db) {
 	return res / LEN;
 }
 
-int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(1))) int b[LEN_B*ATT_B]) {
+Output main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(1))) int b[LEN_B*ATT_B]) {
     Output res;
     InputA INPUT_A;
     for (int i = 0; i < LEN_A*ATT_A; i++) {
@@ -67,6 +67,6 @@ int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(
 	// res.analysis2 = variance(db, LEN);
     res.analysis2 = variance_(db);
 
-	return res.analysis1 + res.analysis2; 
+	return res;
 }
 

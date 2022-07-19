@@ -160,7 +160,7 @@ DT agg_mean_decomposed(DT *db) {
 	}
 }
 
-int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(1))) int b[LEN_B*ATT_B]) {
+Output main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(1))) int b[LEN_B*ATT_B]) {
 	Output res;
     InputA INPUT_A;
     for (int i = 0; i < LEN_A*ATT_A; i++) {
@@ -185,5 +185,5 @@ int main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((private(
 	// res.analysis2 = agg_variance_decomposed(db, LEN_A*LEN_B, ATT);
     res.analysis2 = agg_variance_decomposed(db);
 	//res.analysis2 = variance(db, LEN_A*LEN_B);
-	return res.joined + res.analysis1 + res.analysis2;
+	return res;
 } 
