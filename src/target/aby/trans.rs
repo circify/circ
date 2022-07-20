@@ -1005,7 +1005,6 @@ pub fn to_aby(
 ) {
 
     // TODO: change ILP to take in Functions instead of individual computations
-<<<<<<< HEAD
     let s_map = match ss{
         "gglp" => inline_all_and_assign_glp(&ir, cm),
         _ =>{
@@ -1028,22 +1027,6 @@ pub fn to_aby(
                     }
                 };
                 s_map.insert(name.to_string(), assignments);
-=======
-    for (name, comp) in ir.computations.iter() {
-        println!("processing assignments: {}", name);
-        let assignments = match ss {
-            "b" => assign_all_boolean(&comp, cm),
-            "y" => assign_all_yao(&comp, cm),
-            "a+b" => assign_arithmetic_and_boolean(&comp, cm),
-            "a+y" => assign_arithmetic_and_yao(&comp, cm),
-            "greedy" => assign_greedy(&comp, cm),
-            #[cfg(feature = "lp")]
-            "lp" => assign(&comp, cm),
-            #[cfg(feature = "lp")]
-            "glp" => assign(&comp, cm),
-            _ => {
-                panic!("Unsupported sharing scheme: {}", ss);
->>>>>>> 5e5c39fb3750c784c66846cc8be078dab0a9d1d5
             }
             s_map
         }
