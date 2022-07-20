@@ -18,7 +18,7 @@ arithmetic_tests = [
         "./scripts/aby_tests/test_inputs/sub_1.txt",
     ],
     [
-        "Subtract two numbers, negative -1 == 4294967295 because u32",
+        "Subtract two numbers, negative",
         "2pc_sub",
         "./scripts/aby_tests/test_inputs/sub_2.txt",
     ],
@@ -440,6 +440,11 @@ ptr_tests = [
         "2pc_ptr_add",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
+    [
+        "Ptr arith",
+        "2pc_ptr_arith",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ],
 ]
 
 shift_tests = [
@@ -541,6 +546,16 @@ biomatch_tests = [
         "2pc_biomatch",
         "./scripts/aby_tests/test_inputs/biomatch_2.txt",
     ],
+    [
+        "biomatch - 3",
+        "biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
+    ],
+    [
+        "biomatch - 4",
+        "biomatch",
+        "./scripts/aby_tests/test_inputs/biomatch_2.txt",
+    ],
 ]
 
 kmeans_tests = [
@@ -580,6 +595,16 @@ db_tests = [
         "db join",
         "db_join",
         "./scripts/aby_tests/test_inputs/db_join.txt",
+    ],
+    [
+        "db join",
+        "db_join2",
+        "./scripts/aby_tests/test_inputs/join2.txt",
+    ],
+    [
+        "db join",
+        "db_merge",
+        "./scripts/aby_tests/test_inputs/merge.txt",
     ],
 ]
 

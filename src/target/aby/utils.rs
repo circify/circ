@@ -1,8 +1,8 @@
 //! Utility functions to write compiler output to ABY
 
 use std::env;
-use std::fs;
-use std::io::prelude::*;
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 
 /// Get ABY source directory
@@ -15,7 +15,7 @@ pub fn get_aby_source() -> String {
 }
 
 /// Given Path `path` and String denominator `lang`, return the filename of the path
-pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
+pub fn get_path(path: &Path, lang: &str, t: &str, create: bool) -> String {
     let filename = Path::new(&path.iter().last().unwrap())
         .file_stem()
         .unwrap()
@@ -31,28 +31,19 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
     };
 
     let file_path = format!("{}/{}_{}.txt", dir_path, name, t);
-    match fs::File::create(&file_path) {
-        Err(why) => panic!("couldn't create {}: {}", file_path, why),
-        Ok(file) => file,
-    };
+    if create {
+        match File::create(&file_path) {
+            Err(why) => panic!("couldn't create {}: {}", file_path, why),
+            Ok(file) => file,
+        };
+    }
     file_path
 }
 
-/// Write lines to a path 
-pub fn write_l(file: &mut fs::File, path: &str, lines: &[String]) {
-    let data = lines.join("");
-    file.write_all(data.as_bytes())
-        .expect(&format!("Failed to write to file: {}", path));
-}
-
-/// Write lines to a path 
+/// Write lines to a path
 pub fn write_lines(path: &str, lines: &[String]) {
-    if !Path::new(&path).exists() {
-        fs::File::create(&path).expect(&*format!("Failed to create: {}", path));
-    }
-
-    let mut file = fs::OpenOptions::new()
-        .write(true)
+    let mut file = OpenOptions::new()
+        .create(true)
         .append(true)
         .open(&path)
         .expect(&format!("Failed to open file: {}", path));

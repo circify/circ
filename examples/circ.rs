@@ -258,7 +258,7 @@ fn main() {
                     Opt::Tuple,
                     Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
+                    // Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     // Inline Function Calls
                     // Opt::Link,

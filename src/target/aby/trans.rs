@@ -74,6 +74,7 @@ struct ToABY<'a> {
     bytecode_input: Vec<String>,
     bytecode_output: Vec<String>,
     const_output: Vec<String>,
+    share_output: Vec<String>,
 }
 
 impl Drop for ToABY<'_> {
@@ -105,12 +106,13 @@ impl<'a> ToABY<'a> {
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
             const_output: Vec::new(),
+            share_output: Vec::new(),
         }
     }
 
     fn write_const_output(&mut self, flush: bool) {
         if flush || self.const_output.len() >= WRITE_SIZE {
-            let const_output_path = get_path(self.path, &self.lang, "const");
+            let const_output_path = get_path(self.path, &self.lang, "const", false);
             write_lines(&const_output_path, &self.const_output);
             self.const_output.clear();
         }
@@ -122,53 +124,93 @@ impl<'a> ToABY<'a> {
                 self.path,
                 &self.lang,
                 &format!("{}_bytecode_output", self.curr_comp),
+                false,
             );
             write_lines(&bytecode_output_path, &self.bytecode_output);
             self.bytecode_output.clear();
         }
     }
 
-    fn map_to_shares(&mut self) {
-        let computations = self.fs.computations.clone();
-        let share_map_path = get_path(self.path, &self.lang, "share_map");
-        let mut share_outputs = Vec::new();
-        for (name, comp) in computations.iter() {
-            println!("mapping {} to shares", name);
-            let share_map = self.get_sharing_map(name);
-            for t in comp.outputs.iter() {
-                for t in PostOrderIter::new(t.clone()) {
-                    let sort: Sort = check(&t);
-                    let num_shares = self.get_sort_len(&sort);
-                    let mut shares: Vec<i32> = Vec::new();
-                    for _ in 0..num_shares {
-                        shares.push(self.share_cnt);
-                        self.share_cnt += 1;
-                    }
-                    self.term_to_shares.insert(t.clone(), shares.clone());
-
-                    // write sharing map
-                    let share_type = share_map.get(&t).unwrap();
-                    let share_str = share_type.char();
-                    for s in shares {
-                        let line = format!("{} {}\n", s, share_str);
-                        share_outputs.push(line);
-                    }
-
-                    // buffered write
-                    if share_outputs.len() >= WRITE_SIZE {
-                        write_lines(&share_map_path, &share_outputs);
-                        share_outputs.clear();
-                    }
-                }
-            }
-            self.s_map.remove(name);
+    fn write_share_output(&mut self, flush: bool) {
+        if flush || self.share_output.len() >= WRITE_SIZE {
+            let share_output_path = get_path(self.path, &self.lang, "share_map", false);
+            write_lines(&share_output_path, &self.share_output);
+            self.share_output.clear();
         }
-
-        write_lines(&share_map_path, &share_outputs);
-
-        // clear share map
-        self.s_map.clear();
     }
+
+    // fn map_to_shares(&mut self) {
+    //     let mut now = Instant::now();
+    //     let computations = self.fs.computations.clone();
+    //     println!("Time: cloning computations: {:?}", now.elapsed());
+
+    //     let mut term_to_share_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut write_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut create_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut format_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+    //     let mut add_line_time: std::time::Duration = std::time::Duration::new(0, 0);
+
+    //     let share_map_path = get_path(self.path, &self.lang, "share_map");
+    //     let mut share_outputs = Vec::with_capacity(WRITE_SIZE * 2);
+    //     for (name, comp) in computations.iter() {
+    //         println!("mapping {} to shares, total terms: {}", name, comp.terms());
+    //         let share_map = self.get_sharing_map(name);
+    //         for t in comp.terms_postorder() {
+    //             match t.op {
+    //                 // these cases are handled dynamically by updating the base array share
+    //                 Op::Field(..) | Op::Update(..) | Op::Select | Op::Store | Op::Tuple => continue,
+    //                 _ => {}
+    //             }
+
+    //             now = Instant::now();
+    //             let sort: Sort = check(&t);
+    //             let num_shares = self.get_sort_len(&sort) as i32;
+    //             let shares: Vec<i32> = (0..num_shares)
+    //                 .map(|x| x + self.share_cnt)
+    //                 .collect::<Vec<i32>>();
+    //             self.share_cnt += num_shares;
+    //             self.term_to_shares.insert(t.clone(), shares.clone());
+    //             term_to_share_time += now.elapsed();
+
+    //             now = Instant::now();
+    //             // write sharing map
+    //             let share_type = share_map.get(&t).unwrap();
+    //             let share_str = share_type.char();
+    //             create_line_time += now.elapsed();
+
+    //             for s in shares {
+    //                 now = Instant::now();
+    //                 let line = format!("{} {}\n", s, share_str);
+    //                 format_line_time += now.elapsed();
+
+    //                 now = Instant::now();
+    //                 share_outputs.push(line);
+    //                 add_line_time += now.elapsed();
+    //             }
+
+    //             now = Instant::now();
+    //             // buffered write
+    //             if share_outputs.len() >= WRITE_SIZE {
+    //                 write_lines(&share_map_path, &share_outputs);
+    //                 share_outputs.clear();
+    //             }
+    //             write_line_time += now.elapsed();
+    //         }
+
+    //         self.s_map.remove(name);
+    //     }
+
+    //     write_lines(&share_map_path, &share_outputs);
+
+    //     // clear share map
+    //     self.s_map.clear();
+
+    //     println!("term to share time: {:?}", term_to_share_time);
+    //     println!("create time: {:?}", create_line_time);
+    //     println!("format time: {:?}", format_line_time);
+    //     println!("add time: {:?}", add_line_time);
+    //     println!("write time: {:?}", write_line_time);
+    // }
 
     fn get_md(&self) -> ComputationMetadata {
         self.fs
@@ -216,20 +258,68 @@ impl<'a> ToABY<'a> {
         }
     }
 
+    fn write_share(&mut self, t: &Term, s: i32) {
+        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+        let share_type = s_map.get(&t).unwrap().char();
+        let line = format!("{} {}\n", s, share_type);
+        self.share_output.push(line);
+    }
+
+    fn write_shares(&mut self, t: &Term, shares: &Vec<i32>) {
+        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+        let share_type = s_map.get(&t).unwrap().char();
+        for s in shares {
+            let line = format!("{} {}\n", s, share_type);
+            self.share_output.push(line);
+        }
+    }
+
     fn get_share(&mut self, t: &Term) -> i32 {
         match self.term_to_shares.get(t) {
             Some(v) => {
                 assert!(v.len() == 1);
                 v[0]
             }
-            None => panic!("Unknown share: {}", t),
+            None => {
+                let s = self.share_cnt;
+                self.term_to_shares.insert(t.clone(), [s].to_vec());
+                self.share_cnt += 1;
+
+                // Write share
+                self.write_share(t, s);
+
+                s
+            }
         }
     }
 
     fn get_shares(&mut self, t: &Term) -> Vec<i32> {
         match self.term_to_shares.get(t) {
             Some(v) => v.clone(),
-            None => panic!("Unknown share: {}", t),
+            None => {
+                let sort = check(t);
+                let num_shares = self.get_sort_len(&sort) as i32;
+
+                let shares: Vec<i32> = (0..num_shares)
+                    .map(|x| x + self.share_cnt)
+                    .collect::<Vec<i32>>();
+                self.term_to_shares.insert(t.clone(), shares.clone());
+
+                // Write shares
+                self.write_shares(t, &shares);
+
+                self.share_cnt += num_shares;
+
+                shares
+            }
+        }
+    }
+
+    fn rewirable(&self, s: &Sort) -> bool {
+        match s {
+            Sort::Array(..) => true,
+            Sort::Bool | Sort::BitVector(..) | Sort::Tuple(..) => false,
+            _ => todo!(),
         }
     }
 
@@ -427,9 +517,9 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed_bv(&mut self, t: Term) {
-        let s = self.get_share(&t);
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
+                let s = self.get_share(&t);
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name_from_term(&t);
@@ -456,12 +546,14 @@ impl<'a> ToABY<'a> {
                 }
             }
             Op::Const(Value::BitVector(b)) => {
+                let s = self.get_share(&t);
                 let op = "CONS_bv";
                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
                 self.const_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::Ite => {
+                let s = self.get_share(&t);
                 let op = "MUX";
 
                 self.check_bool(&t.cs[0]);
@@ -478,6 +570,7 @@ impl<'a> ToABY<'a> {
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::BvNaryOp(o) => {
+                let s = self.get_share(&t);
                 let op = match o {
                     BvNaryOp::Xor => "XOR",
                     BvNaryOp::Or => "OR",
@@ -498,6 +591,7 @@ impl<'a> ToABY<'a> {
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::BvBinOp(o) => {
+                let s = self.get_share(&t);
                 let op = match o {
                     BvBinOp::Sub => "SUB",
                     BvBinOp::Udiv => "DIV",
@@ -556,15 +650,11 @@ impl<'a> ToABY<'a> {
                         idx,
                         array_shares.len()
                     );
+
                     self.term_to_shares
                         .insert(t.clone(), vec![array_shares[idx]]);
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                 } else {
-                    // let idx_share = self.get_share(&t.cs[1]);
-
-                    // for share in array_shares {
-
-                    // }
                     panic!("non-const: sel")
                 }
             }
@@ -634,13 +724,15 @@ impl<'a> ToABY<'a> {
             }
             Op::Store => {
                 assert!(t.cs.len() == 3);
-                let mut array_shares = self.get_shares(&t.cs[0]);
+                let mut array_shares = self.get_shares(&t.cs[0]).clone();
                 let value_share = self.get_share(&t.cs[2]);
 
                 if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                     // constant indexing
                     let idx = bv.uint().to_usize().unwrap().clone();
+
                     array_shares[idx] = value_share;
+
                     self.term_to_shares.insert(t.clone(), array_shares.clone());
                     self.cache.insert(t.clone(), EmbeddedTerm::Array);
                 } else {
@@ -703,18 +795,39 @@ impl<'a> ToABY<'a> {
                 let op = format!("CALL({})", name);
                 let num_args: usize = arg_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
                 let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-
                 // map argument shares
-                let mut arg_shares: Vec<i32> = Vec::new();
+                // define rewireable shares with "r"
+                let mut arg_shares: Vec<String> = Vec::new();
                 for c in t.cs.iter() {
-                    arg_shares.extend(self.get_shares(c));
+                    let sort = check(c);
+                    if self.rewirable(&sort) {
+                        arg_shares.extend(self.get_shares(c).iter().map(|&s| s.to_string()))
+                    } else {
+                        arg_shares.extend(self.get_shares(c).iter().map(|&s| s.to_string()))
+                    }
                 }
 
-                let arg_shares_str: String =
-                    arg_shares.iter().map(|&s| s.to_string() + " ").collect();
+                let mut ret_shares: Vec<String> = Vec::new();
+                let mut idx = 0;
+                for sort in ret_sorts {
+                    let len = self.get_sort_len(sort);
+                    assert!(idx + len <= shares.len());
+                    if self.rewirable(sort) {
+                        ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
+                    } else {
+                        ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
+                    }
+                    idx += len;
+                }
 
-                let s: String = shares.iter().map(|&s| s.to_string() + " ").collect();
-                let line = format!("{} {} {}{}{}\n", num_args, num_rets, arg_shares_str, s, op);
+                let line = format!(
+                    "{} {} {} {} {}\n",
+                    num_args,
+                    num_rets,
+                    arg_shares.join(" "),
+                    ret_shares.join(" "),
+                    op
+                );
                 self.bytecode_output.push(line);
                 self.cache.insert(t.clone(), EmbeddedTerm::Tuple);
             }
@@ -744,15 +857,32 @@ impl<'a> ToABY<'a> {
 
             self.write_bytecode_output(false);
             self.write_const_output(false);
+            self.write_share_output(false);
         }
     }
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self) {
         let computations = self.fs.computations.clone();
+
+        // create output files
+        get_path(self.path, &self.lang, "const", true);
+        get_path(self.path, &self.lang, "share_map", true);
+
         for (name, comp) in computations.iter() {
             let mut outputs: Vec<String> = Vec::new();
             let mut now = Instant::now();
+
+            // create paths
+            get_path(
+                self.path,
+                &self.lang,
+                &format!("{}_bytecode_output", name),
+                true,
+            );
+
+            println!("starting: {}", name);
+
             for t in comp.outputs.iter() {
                 self.curr_comp = name.to_string();
                 self.embed(t.clone());
@@ -790,7 +920,8 @@ impl<'a> ToABY<'a> {
                     if bytecode_input_map.contains_key(x) {
                         bytecode_input_map.get(x).unwrap().clone()
                     } else {
-                        "".to_string()
+                        // Unused in gate -- ignored in ABY interpreter but used for maintaining rewiring order
+                        format!("1 0 {} {}\n", x, "IN")
                     }
                 })
                 .filter(|x| !x.is_empty())
@@ -801,12 +932,17 @@ impl<'a> ToABY<'a> {
             now = Instant::now();
 
             // write input bytecode
-            let bytecode_path = get_path(self.path, &self.lang, &format!("{}_bytecode", name));
+            let bytecode_path =
+                get_path(self.path, &self.lang, &format!("{}_bytecode", name), true);
             write_lines(&bytecode_path, &self.bytecode_input);
 
             // write output bytecode
-            let bytecode_output_path =
-                get_path(self.path, &self.lang, &format!("{}_bytecode_output", name));
+            let bytecode_output_path = get_path(
+                self.path,
+                &self.lang,
+                &format!("{}_bytecode_output", name),
+                false,
+            );
             write_lines(&bytecode_output_path, &self.bytecode_output);
 
             println!("Time: writing {}: {:?}", name, now.elapsed());
@@ -837,14 +973,17 @@ impl<'a> ToABY<'a> {
             self.cache.clear();
         }
 
-        // write const variables
+        // write remaining const variables
         self.write_const_output(true);
+
+        // write remaining shares
+        self.write_share_output(true);
     }
 
     fn convert(&mut self) {
         let mut now = Instant::now();
-        self.map_to_shares();
-        println!("Time: map terms to shares: {:?}", now.elapsed());
+        // self.map_to_shares();
+        // println!("Time: map terms to shares: {:?}", now.elapsed());
         now = Instant::now();
         self.lower();
         println!("Time: lowering: {:?}", now.elapsed());
@@ -866,6 +1005,7 @@ pub fn to_aby(
 ) {
 
     // TODO: change ILP to take in Functions instead of individual computations
+<<<<<<< HEAD
     let s_map = match ss{
         "gglp" => inline_all_and_assign_glp(&ir, cm),
         _ =>{
@@ -888,6 +1028,22 @@ pub fn to_aby(
                     }
                 };
                 s_map.insert(name.to_string(), assignments);
+=======
+    for (name, comp) in ir.computations.iter() {
+        println!("processing assignments: {}", name);
+        let assignments = match ss {
+            "b" => assign_all_boolean(&comp, cm),
+            "y" => assign_all_yao(&comp, cm),
+            "a+b" => assign_arithmetic_and_boolean(&comp, cm),
+            "a+y" => assign_arithmetic_and_yao(&comp, cm),
+            "greedy" => assign_greedy(&comp, cm),
+            #[cfg(feature = "lp")]
+            "lp" => assign(&comp, cm),
+            #[cfg(feature = "lp")]
+            "glp" => assign(&comp, cm),
+            _ => {
+                panic!("Unsupported sharing scheme: {}", ss);
+>>>>>>> 5e5c39fb3750c784c66846cc8be078dab0a9d1d5
             }
             s_map
         }
