@@ -123,7 +123,8 @@ mpc_test_bool 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
 mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join.c
 mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join2.c
 mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-mpc_test_bool 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/mnist/mnist.c # bool-only runs out of memory
+mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist.c # using greedy a+b instead
 
 # # build hycc benchmarks
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
