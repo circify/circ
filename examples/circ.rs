@@ -241,7 +241,7 @@ fn main() {
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
                     // The function call abstraction creates tuples
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     // Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
                     // Opt::Tuple,

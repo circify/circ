@@ -346,16 +346,16 @@ array_tests = [
         "2pc_array_sum",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
-    # [
-    #     "Array index test",
-    #     "2pc_array_index",
-    #     "./scripts/aby_tests/test_inputs/add.txt",
-    # ],
-    # [
-    #     "Array index test 2",
-    #     "2pc_array_index_2",
-    #     "./scripts/aby_tests/test_inputs/index.txt",
-    # ],
+    [
+        "Array index test",
+        "2pc_array_index",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ],
+    [
+        "Array index test 2",
+        "2pc_array_index_2",
+        "./scripts/aby_tests/test_inputs/index.txt",
+    ],
 ]
 
 c_array_tests = [

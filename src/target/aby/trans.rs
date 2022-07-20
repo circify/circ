@@ -606,7 +606,21 @@ impl<'a> ToABY<'a> {
                         .insert(t.clone(), vec![array_shares[idx]]);
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                 } else {
-                    panic!("non-const: sel")
+                    let op = "SELECT";
+                    let num_inputs = array_shares.len() + 1;
+                    let index_share = self.get_share(&t.cs[1]);
+                    let output = self.get_share(&t);
+                    let line = format!(
+                        "{} 1 {} {} {} {}\n",
+                        num_inputs,
+                        self.shares_to_string(array_shares),
+                        index_share,
+                        output,
+                        op
+                    );
+                    self.bytecode_output.push(line);
+                    self.term_to_shares.insert(t.clone(), vec![output]);
+                    self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                 }
             }
             _ => panic!("Non-field in embed_bv: {:?}", t),
