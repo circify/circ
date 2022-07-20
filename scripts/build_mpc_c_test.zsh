@@ -30,6 +30,7 @@ function mpc_test_2  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "a+b"
 }
 
+
 mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 
 # # build mpc arithmetic tests
@@ -97,7 +98,6 @@ mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_add.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_array_add.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/ret_struct.c
-
 
 # # build matrix tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_add.c

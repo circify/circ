@@ -22,12 +22,15 @@ if __name__ == "__main__":
         struct_tests + \
         matrix_tests + \
         ptr_tests + \
-        c_misc_tests + \
-        biomatch_tests + \
-        kmeans_tests_2 + \
-        gauss_tests + \
-        db_tests + \
-        mnist_tests
+        c_misc_tests
+    # biomatch_tests + \
+    # kmeans_tests_2 + \
+    # gauss_tests + \
+    # db_tests + \
+    # mnist_tests
+
+    # tests = ts
+    # tests = arithmetic_tests
 
     # TODO: add support unsigned + int promotion
     # unsigned_arithmetic_tests + \

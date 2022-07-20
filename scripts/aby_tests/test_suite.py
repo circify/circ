@@ -1,8 +1,8 @@
 ts = [
     [
-        "Return struct",
-        "ret_struct",
-        "./scripts/aby_tests/test_inputs/ret_struct.txt",
+        "Array index test",
+        "2pc_array_index",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ],
 ]
 

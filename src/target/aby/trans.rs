@@ -161,78 +161,13 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    // fn map_to_shares(&mut self) {
-    //     let mut now = Instant::now();
-    //     let computations = self.fs.computations.clone();
-    //     println!("Time: cloning computations: {:?}", now.elapsed());
-
-    //     let mut term_to_share_time: std::time::Duration = std::time::Duration::new(0, 0);
-    //     let mut write_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-    //     let mut create_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-    //     let mut format_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-    //     let mut add_line_time: std::time::Duration = std::time::Duration::new(0, 0);
-
-    //     let share_map_path = get_path(self.path, &self.lang, "share_map");
-    //     let mut share_outputs = Vec::with_capacity(WRITE_SIZE * 2);
-    //     for (name, comp) in computations.iter() {
-    //         println!("mapping {} to shares, total terms: {}", name, comp.terms());
-    //         let share_map = self.get_sharing_map(name);
-    //         for t in comp.terms_postorder() {
-    //             match t.op {
-    //                 // these cases are handled dynamically by updating the base array share
-    //                 Op::Field(..) | Op::Update(..) | Op::Select | Op::Store | Op::Tuple => continue,
-    //                 _ => {}
-    //             }
-
-    //             now = Instant::now();
-    //             let sort: Sort = check(&t);
-    //             let num_shares = self.get_sort_len(&sort) as i32;
-    //             let shares: Vec<i32> = (0..num_shares)
-    //                 .map(|x| x + self.share_cnt)
-    //                 .collect::<Vec<i32>>();
-    //             self.share_cnt += num_shares;
-    //             self.term_to_shares.insert(t.clone(), shares.clone());
-    //             term_to_share_time += now.elapsed();
-
-    //             now = Instant::now();
-    //             // write sharing map
-    //             let share_type = share_map.get(&t).unwrap();
-    //             let share_str = share_type.char();
-    //             create_line_time += now.elapsed();
-
-    //             for s in shares {
-    //                 now = Instant::now();
-    //                 let line = format!("{} {}\n", s, share_str);
-    //                 format_line_time += now.elapsed();
-
-    //                 now = Instant::now();
-    //                 share_outputs.push(line);
-    //                 add_line_time += now.elapsed();
-    //             }
-
-    //             now = Instant::now();
-    //             // buffered write
-    //             if share_outputs.len() >= WRITE_SIZE {
-    //                 write_lines(&share_map_path, &share_outputs);
-    //                 share_outputs.clear();
-    //             }
-    //             write_line_time += now.elapsed();
-    //         }
-
-    //         self.s_map.remove(name);
-    //     }
-
-    //     write_lines(&share_map_path, &share_outputs);
-
-    //     // clear share map
-    //     self.s_map.clear();
-
-    //     println!("term to share time: {:?}", term_to_share_time);
-    //     println!("create time: {:?}", create_line_time);
-    //     println!("format time: {:?}", format_line_time);
-    //     println!("add time: {:?}", add_line_time);
-    //     println!("write time: {:?}", write_line_time);
-    // }
+    fn shares_to_string(&self, shares: Vec<i32>) -> String {
+        shares
+            .iter()
+            .map(|&i| i.to_string())
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
 
     fn get_md(&self) -> ComputationMetadata {
         self.fs
@@ -296,7 +231,7 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    // TODO: Rust ENTRY api on maps 
+    // TODO: Rust ENTRY api on maps
     fn get_share(&mut self, t: &Term) -> i32 {
         match self.term_to_shares.get(t) {
             Some(v) => {
@@ -414,18 +349,15 @@ impl<'a> ToABY<'a> {
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name_from_term(&t);
                     let vis = self.unwrap_vis(name);
-                    let share_cnt = self.get_share(&t);
+                    let s = self.get_share(&t);
                     let op = "IN";
 
                     if vis == PUBLIC {
                         let bitlen = 1;
-                        let line = format!(
-                            "3 1 {} {} {} {} {}\n",
-                            term_name, vis, bitlen, share_cnt, op
-                        );
+                        let line = format!("3 1 {} {} {} {} {}\n", term_name, vis, bitlen, s, op);
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
+                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, s, op);
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -542,23 +474,19 @@ impl<'a> ToABY<'a> {
     fn embed_bv(&mut self, t: Term) {
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
-                let s = self.get_share(&t);
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name_from_term(&t);
                     let vis = self.unwrap_vis(name);
-                    let share_cnt = self.get_share(&t);
+                    let s = self.get_share(&t);
                     let op = "IN";
 
                     if vis == PUBLIC {
                         let bitlen = 32;
-                        let line = format!(
-                            "3 1 {} {} {} {} {}\n",
-                            term_name, vis, bitlen, share_cnt, op
-                        );
+                        let line = format!("3 1 {} {} {} {} {}\n", term_name, vis, bitlen, s, op);
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, share_cnt, op);
+                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, s, op);
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -749,10 +677,21 @@ impl<'a> ToABY<'a> {
                 assert!(shares.len() == a.len());
                 assert!(shares.len() == b.len());
 
-                for i in 0..shares.len() {
-                    let line = format!("3 1 {} {} {} {} {}\n", sel, a[i], b[i], shares[i], op);
-                    self.bytecode_output.push(line);
-                }
+                let num_inputs = 1 + shares.len() * 2;
+                let num_outputs = shares.len();
+
+                let line = format!(
+                    "{} {} {} {} {} {} {}\n",
+                    num_inputs,
+                    num_outputs,
+                    sel,
+                    self.shares_to_string(a),
+                    self.shares_to_string(b),
+                    self.shares_to_string(shares),
+                    op
+                );
+
+                self.bytecode_output.push(line);
 
                 self.cache.insert(t.clone(), EmbeddedTerm::Array);
 
@@ -775,7 +714,23 @@ impl<'a> ToABY<'a> {
                     self.term_to_shares.insert(t.clone(), array_shares.clone());
                     self.cache.insert(t.clone(), EmbeddedTerm::Array);
                 } else {
-                    panic!("non-const: store")
+                    let op = "STORE";
+                    let num_inputs = array_shares.len() + 2;
+                    let outputs = self.get_shares(&t);
+                    let num_outputs = outputs.len();
+                    let index_share = self.get_share(&t.cs[1]);
+                    let line = format!(
+                        "{} {} {} {} {} {} {}\n",
+                        num_inputs,
+                        num_outputs,
+                        self.shares_to_string(array_shares),
+                        index_share,
+                        value_share,
+                        self.shares_to_string(outputs),
+                        op
+                    );
+
+                    self.bytecode_output.push(line);
                 }
 
                 unsafe {
