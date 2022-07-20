@@ -589,6 +589,21 @@ benchmark_tests = [
         "2pc_biomatch",
         "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
     ],
+    [
+        "biomatch - 2",
+        "2pc_biomatch_",
+        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    ],
+    # [
+    #     "kmeans - 1",
+    #     "2pc_kmeans_",
+    #     "./scripts/aby_tests/test_inputs/kmeans.txt",
+    # ],
+    # [
+    #     "kmeans - 1",
+    #     "2pc_kmeans",
+    #     "./scripts/aby_tests/test_inputs/kmeans.txt",
+    # ],
 ]
 
 # ilp_benchmark_tests = [

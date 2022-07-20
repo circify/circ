@@ -1775,6 +1775,8 @@ impl ComputationMetadata {
     }
     /// What sort is this input?
     pub fn input_sort(&self, input_name: &str) -> Sort {
+        println!("input sort checking {}", input_name);
+        println!("{:?}", self.input_vis.keys());
         check(&self.input_vis.get(input_name).unwrap().0)
     }
     /// Get all public inputs to the computation itself.
@@ -1999,6 +2001,16 @@ impl Computation {
         terms.pop();
         terms.into_iter()
     }
+
+    /// convert Computation to ComputationSubgraph
+    pub fn to_cs(&self) -> ComputationSubgraph{
+        let mut cs = ComputationSubgraph::new();
+        for t in self.terms_postorder(){
+            cs.insert_node(&t);
+        }
+        cs.insert_edges();
+        cs
+    }
 }
 
 // #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
@@ -2052,6 +2064,73 @@ impl Functions {
         self.computations
             .get(ENTRY_NAME)
             .unwrap_or_else(|| panic!("No entry function: {}", ENTRY_NAME))
+    }
+}
+
+/// A graph representation of a Computation
+#[derive(Clone)]
+pub struct ComputationSubgraph {
+    /// List of terms in subgraph
+    pub nodes: TermSet,
+    /// Adjacency list of edges in subgraph
+    pub edges: TermMap<TermSet>,
+    /// Output leaf nodes
+    pub outs: TermSet,
+    /// Input leaf nodes
+    pub ins: TermSet,
+}
+
+impl Default for ComputationSubgraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ComputationSubgraph {
+    /// default constructor
+    pub fn new() -> Self {
+        Self {
+            nodes: TermSet::new(),
+            edges: TermMap::new(),
+            outs: TermSet::new(),
+            ins: TermSet::new(),
+        }
+    }
+
+    /// Insert nodes into ComputationSubgraph
+    pub fn insert_node(&mut self, node: &Term) {
+        if !self.nodes.contains(node) {
+            self.nodes.insert(node.clone());
+        }
+    }
+
+    /// Insert edges based on nodes in the subgraph
+    pub fn insert_edges(&mut self) {
+        let mut defs: FxHashSet<Term> = FxHashSet::default();
+        for t in self.nodes.iter() {
+            self.edges.insert(t.clone(), TermSet::new());
+            let mut flag = true;
+            for c in t.cs.iter() {
+                if self.nodes.contains(c) {
+                    self.edges.get_mut(t).unwrap().insert(c.clone());
+                    defs.insert(c.clone());
+                    flag = false;
+                }
+            }
+            if flag {
+                self.ins.insert(t.clone());
+            }
+        }
+
+        // Find the leaf node in each subgraph
+        // TODO: defs.difference(&_uses) ?
+        for t in self.nodes.iter() {
+            if !defs.contains(t) {
+                self.outs.insert(t.clone());
+            }
+        }
+        // println!("LOG: Input nodes of partition: {}", self.ins.len());
+        // println!("LOG: Output nodes of partition: {}", self.outs.len());
     }
 }
 

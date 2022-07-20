@@ -19,6 +19,8 @@ use std::io;
 use std::path::Path;
 use std::time::Instant;
 
+use crate::target::graph::trans::inline_all_and_assign_glp;
+
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
 use super::assignment::assign_arithmetic_and_boolean;
@@ -862,28 +864,35 @@ pub fn to_aby(
     #[allow(unused_variables)] hyper: &usize,
     #[allow(unused_variables)] imbalance: &usize,
 ) {
-    // Protocal Assignments
-    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
     // TODO: change ILP to take in Functions instead of individual computations
-    for (name, comp) in ir.computations.iter() {
-        println!("processing computation: {}", name);
-        let assignments = match ss {
-            "b" => assign_all_boolean(&comp, cm),
-            "y" => assign_all_yao(&comp, cm),
-            "a+b" => assign_arithmetic_and_boolean(&comp, cm),
-            "a+y" => assign_arithmetic_and_yao(&comp, cm),
-            "greedy" => assign_greedy(&comp, cm),
-            #[cfg(feature = "lp")]
-            "lp" => assign(&comp, cm),
-            #[cfg(feature = "lp")]
-            "glp" => assign(&comp, cm),
-            _ => {
-                panic!("Unsupported sharing scheme: {}", ss);
+    let s_map = match ss{
+        "gglp" => inline_all_and_assign_glp(&ir, cm),
+        _ =>{
+            // Protocal Assignments
+            let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+            for (name, comp) in ir.computations.iter() {
+                println!("processing computation: {}", name);
+                let assignments = match ss {
+                    "b" => assign_all_boolean(&comp, cm),
+                    "y" => assign_all_yao(&comp, cm),
+                    "a+b" => assign_arithmetic_and_boolean(&comp, cm),
+                    "a+y" => assign_arithmetic_and_yao(&comp, cm),
+                    "greedy" => assign_greedy(&comp, cm),
+                    #[cfg(feature = "lp")]
+                    "lp" => assign(&(comp.to_cs()), cm),
+                    #[cfg(feature = "lp")]
+                    "glp" => assign(&comp.to_cs(), cm),
+                    _ => {
+                        panic!("Unsupported sharing scheme: {}", ss);
+                    }
+                };
+                s_map.insert(name.to_string(), assignments);
             }
-        };
-        s_map.insert(name.to_string(), assignments);
-    }
+            s_map
+        }
+    };
+    
 
     let mut converter = ToABY::new(ir, s_map, path, lang);
     converter.convert();

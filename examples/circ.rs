@@ -246,7 +246,7 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    // Opt::ScalarizeVars,
+                    Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
@@ -255,14 +255,14 @@ fn main() {
                     Opt::Tuple,
                     Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
-                    // Opt::Tuple,
-                    // Opt::ConstantFold(Box::new(ignore.clone())),
+                    Opt::Tuple,
+                    Opt::ConstantFold(Box::new(ignore.clone())),
                     // Inline Function Calls
                     // Opt::Link,
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
@@ -295,12 +295,12 @@ fn main() {
     };
     println!("Done with IR optimization");
 
-    for (name, c) in &cs.computations {
-        println!("name: {}", name);
-        for t in c.terms_postorder() {
-            println!("t: {}", t);
-        }
-    }
+    // for (name, c) in &cs.computations {
+    //     println!("name: {}", name);
+    //     for t in c.terms_postorder() {
+    //         println!("t: {}", t);
+    //     }
+    // }
 
     match options.backend {
         #[cfg(feature = "r1cs")]
