@@ -144,6 +144,10 @@ impl GraphWriter {
                 Op::Ite
                 | Op::Not
                 | Op::Eq
+                | Op::Store
+                | Op::Select
+                | Op::Tuple
+                | Op::Field(_)
                 | Op::BvBinOp(_)
                 | Op::BvNaryOp(_)
                 | Op::BvBinPred(_)
@@ -159,7 +163,7 @@ impl GraphWriter {
                         }
                     }
                 }
-                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", t, t.op),
+                _ => unimplemented!("Haven't  implemented conversion of {:#?}", t.op),
             }
         }
         self.term_to_id.clone()

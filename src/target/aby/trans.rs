@@ -19,7 +19,8 @@ use std::io;
 use std::path::Path;
 use std::time::Instant;
 
-use crate::target::graph::trans::inline_all_and_assign_glp;
+#[cfg(feature = "lp")]
+use crate::target::graph::trans::*;
 
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
@@ -1143,8 +1144,15 @@ pub fn to_aby(
     // TODO: change ILP to take in Functions instead of individual computations
     
     match ss{
+        #[cfg(feature = "lp")]
         "gglp" => {
             let (fs, s_map) = inline_all_and_assign_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.convert();
+        }
+        #[cfg(feature = "lp")]
+        "lp+mut" => {
+            let (fs, s_map) = partition_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.convert();
         }

@@ -71,7 +71,7 @@ fn mutate_partitions_mp_step(
     mut_smaps
 }
 
-fn get_global_assignments(cs: &Computation, term_to_part: &HashMap<Term, usize>, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
+fn get_global_assignments(cs: &Computation, term_to_part: &TermMap<usize>, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
     let mut global_smap: SharingMap = SharingMap::new();
 
     let Computation { outputs, .. } = cs.clone();
@@ -93,7 +93,7 @@ fn get_global_assignments(cs: &Computation, term_to_part: &HashMap<Term, usize>,
 }
 
 
-pub fn get_share_map_with_mutation(cs: &Computation, cm: &str, partitions: &HashMap<usize, ComputationSubgraph>, term_to_part: &HashMap<Term, usize>,  mut_level: &usize, mut_step_size: &usize) -> SharingMap{
+pub fn get_share_map_with_mutation(cs: &Computation, cm: &str, partitions: &HashMap<usize, ComputationSubgraph>, term_to_part: &TermMap<usize>,  mut_level: &usize, mut_step_size: &usize) -> SharingMap{
     let mutation_smaps = mutate_partitions_mp_step(partitions, cm, mut_level.clone(), mut_step_size.clone());
     let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, cm);
     get_global_assignments(cs, term_to_part, &selected_mut_maps)

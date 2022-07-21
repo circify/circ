@@ -36,6 +36,13 @@ function mpc_test_3 {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "gglp"
 }
 
+
+function mpc_test_4 {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "lp+mut"
+}
+
 function mpc_test_bool  {
     parties=$1
     cpath=$2
@@ -44,8 +51,8 @@ function mpc_test_bool  {
 
 
 # mpc_test_3 2 ./examples/C/mpc/playground.c
-# mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
-mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
+mpc_test_4 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
