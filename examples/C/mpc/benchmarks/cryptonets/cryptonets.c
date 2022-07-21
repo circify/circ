@@ -1,10 +1,10 @@
 // Parameters taken from the paper
-#define IMAGE_WIDTH 28 // 28
+#define IMAGE_WIDTH 16 // 28
 #define WINDOW_WIDTH 5
 #define STRIDE 2
 #define OUTPUT_CHANNELS 5 // 5
 
-#define IMAGE_CROP 13 // 13 with padding
+#define IMAGE_CROP 5 // 13 with padding
 #define SIZE_CONVOLUTION (IMAGE_CROP * IMAGE_CROP) // 169
 
 #define FULLY_CONNECTED_WIDTH 100 // (7, 9)
@@ -19,7 +19,6 @@ DT relu(DT val) {
 		return 0;
 	}
 }
-
 
 DT activate_sqr(DT val) {
 	DT res = val*val;
@@ -162,25 +161,67 @@ typedef struct
 	DT final_layer[FINAL_OUTPUT_CHANNELS];
 } Output;
 
+
+DT mmulT_unrolled_inner_2(DT* a, DT* b) { 
+	DT sum = 0;
+	// int i = 0;
+	// // Add the first as groups of eight
+	// for (i=0; i+8< OUTPUT_CHANNELS * SIZE_CONVOLUTION; i+=8) {
+	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
+	// }
+	// if(i+4<OUTPUT_CHANNELS * SIZE_CONVOLUTION) {
+	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3];
+	// 	i+=4;
+	// }
+	// for(i=0; i < OUTPUT_CHANNELS * SIZE_CONVOLUTION; i++) {
+	// 	sum += a[i] * b[i];
+	// }
+	
+	for(int k = 0; k < FULLY_CONNECTED_WIDTH; k++) {
+		sum += a[k] * b[k];
+	}
+	return sum;
+}
+
+
+void mmulT_unrolled_2(DT* a, DT* b, DT *OUTPUT_res) {
+	for(int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
+		DT aRow[FULLY_CONNECTED_WIDTH];
+		// memcpy(aRow, a+i*common, common*sizeof(DT));
+        for (int k = 0; k < FULLY_CONNECTED_WIDTH; k++) {
+            aRow[k] = (a+i*FULLY_CONNECTED_WIDTH)[k];
+        }
+
+		for(int j = 0; j < 1; j++) {
+			DT bRow[FULLY_CONNECTED_WIDTH];
+			// memcpy(bRow, b+j*common, common*sizeof(DT));
+            for (int k = 0; k < FULLY_CONNECTED_WIDTH; k++) {
+                bRow[k] = (b+j*FULLY_CONNECTED_WIDTH)[k];
+            }
+			OUTPUT_res[i*1+j] = mmulT_unrolled_inner_2(aRow, bRow);
+		}
+	}
+}
+
+
 DT mmulT_unrolled_inner_1(DT* a, DT* b) { 
 	DT sum = 0;
+	// int i = 0;
+	// // Add the first as groups of eight
+	// for (i=0; i+8< OUTPUT_CHANNELS * SIZE_CONVOLUTION; i+=8) {
+	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
+	// }
+	// if(i+4<OUTPUT_CHANNELS * SIZE_CONVOLUTION) {
+	// 	sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3];
+	// 	i+=4;
+	// }
+	// for(i=0; i < OUTPUT_CHANNELS * SIZE_CONVOLUTION; i++) {
+	// 	sum += a[i] * b[i];
+	// }
 	
-	int i = 0;
-	// Add the first as groups of eight
-	for (i=0; i+8< OUTPUT_CHANNELS * SIZE_CONVOLUTION; i+=8) {
-		sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3] + a[i+4]*b[i+4] + a[i+5]*b[i+5] + a[i+6]*b[i+6] + a[i+7]*b[i+7];
-	}
-	if(i+4<OUTPUT_CHANNELS * SIZE_CONVOLUTION) {
-		sum += a[i+0]*b[i+0] + a[i+1]*b[i+1] + a[i+2]*b[i+2] + a[i+3]*b[i+3];
-		i+=4;
-	}
-	for(i=0; i < OUTPUT_CHANNELS * SIZE_CONVOLUTION; i++) {
-		sum += a[i] * b[i];
-	}
-	
-	/*for(int k = 0; k < common; k++) {
+	for(int k = 0; k < OUTPUT_CHANNELS * SIZE_CONVOLUTION; k++) {
 		sum += a[k] * b[k];
-	}*/
+	}
 	return sum;
 }
 
@@ -243,7 +284,7 @@ void convolution_naive_outputs_1(DT *image, DT* kernels, DT* OUTPUT_layer) {
 }
 
 
-int main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1))) InputB INPUT_B)
+Output main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1))) InputB INPUT_B)
 {
 	Output OUTPUT_classify;		
 	
@@ -278,25 +319,20 @@ int main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1)))
     mmulT_unrolled_1(INPUT_B.pool_layer, convolution_layer, im_layer);
 
 
-	// // Activation Function (4)
-	// for(int i = 0; i < FULLY_CONNECTED_WIDTH; i++) {
-	// 	im_layer[i] = activate_sqr(im_layer[i]);
-	// }
-
-	// // Fully Connected (5)
-	// DT final_layer[FINAL_OUTPUT_CHANNELS];
-	// mmulT_unrolled(INPUT_B.fc, im_layer, final_layer, FINAL_OUTPUT_CHANNELS, 1, FULLY_CONNECTED_WIDTH);
-	
-	// for(int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
-	// 	OUTPUT_classify.final_layer[i] = final_layer[i];
-	// }
-
-    int sum = 0;
-	for (int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
-		sum += OUTPUT_classify.final_layer[i];
+	// Activation Function (4)
+	for(int i = 0; i < FULLY_CONNECTED_WIDTH; i++) {
+		im_layer[i] = activate_sqr(im_layer[i]);
 	}
 
-	// return OUTPUT_classify;
-    return sum;
+	// Fully Connected (5)
+	DT final_layer[FINAL_OUTPUT_CHANNELS];
+	// mmulT_unrolled(INPUT_B.fc, im_layer, final_layer, FINAL_OUTPUT_CHANNELS, 1, FULLY_CONNECTED_WIDTH);
+	mmulT_unrolled_2(INPUT_B.fc, im_layer, final_layer);
+
+	for(int i = 0; i < FINAL_OUTPUT_CHANNELS; i++) {
+		OUTPUT_classify.final_layer[i] = final_layer[i];
+	}
+
+    return OUTPUT_classify;
 }
 
