@@ -27,7 +27,8 @@ if __name__ == "__main__":
         kmeans_tests_2 + \
         gauss_tests + \
         db_tests + \
-        mnist_tests
+        mnist_tests + \
+        cryptonets_tests
 
     # TODO: add support unsigned + int promotion
     # unsigned_arithmetic_tests + \
