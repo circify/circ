@@ -172,13 +172,8 @@ impl<'a> ToABY<'a> {
             .join(" ")
     }
 
-    fn get_md(&self) -> ComputationMetadata {
-        self.fs
-            .computations
-            .get(&self.curr_comp)
-            .unwrap()
-            .metadata
-            .clone()
+    fn get_md(&self) -> &ComputationMetadata {
+        &self.fs.computations.get(&self.curr_comp).unwrap().metadata
     }
 
     fn get_var_name(name: &String) -> String {

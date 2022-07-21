@@ -236,6 +236,7 @@ fn main() {
 
     println!("Time: Frontend: {:?}", now.elapsed());
 
+    now = Instant::now();
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -293,6 +294,7 @@ fn main() {
             ],
         ),
     };
+    println!("Time: Opt: {:?}", now.elapsed());
     println!("Done with IR optimization");
 
     // for (name, c) in &cs.computations {

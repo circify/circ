@@ -8,6 +8,7 @@ use crate::target::aby::assignment::ilp::assign;
 use crate::target::graph::utils::mutation::*;
 use crate::target::aby::assignment::SharingMap;
 
+use std::time::Instant;
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
