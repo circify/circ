@@ -1775,9 +1775,36 @@ impl ComputationMetadata {
     }
     /// What sort is this input?
     pub fn input_sort(&self, input_name: &str) -> Sort {
-        println!("input sort checking {}", input_name);
-        println!("{:?}", self.input_vis.keys());
         check(&self.input_vis.get(input_name).unwrap().0)
+    }
+    /// TODO: HACK! nice name to ssa name
+    pub fn input_ssa_name_from_nice_name(&self, input_name: &str) -> Vec<(String, usize)> {
+        let mut ssa_names: Vec<(String, usize)> = Vec::new();
+        for k in self.input_vis.keys() {
+            let new_name = k.to_string().replace('.', "_");
+            let n = new_name.split('_').collect::<Vec<&str>>();
+            let offset = n.iter().position(|&r| r == "lex0").unwrap();
+            let var_name = &n[offset + 1..];
+            let (nice_name, index) = match var_name.len() {
+                2 => (var_name[0].to_string(), 0),
+                3.. => {
+                    let l = var_name.len();
+                    (var_name[0..l - 2].to_vec().join("_").to_string(), var_name[l - 1].parse::<usize>().unwrap())
+                }
+                _ => {
+                    panic!("Invalid variable name: {:?}", var_name);
+                }
+            };
+
+            if nice_name == input_name {
+                ssa_names.push((k.to_string(), index));
+            }
+        }
+        if ssa_names.is_empty(){
+            println!("ssa-keys: {:?}", self.input_vis.keys());
+            panic!("ssa-name not found for nice name: {}", input_name);
+        }
+        ssa_names
     }
     /// Get all public inputs to the computation itself.
     ///
@@ -2003,9 +2030,9 @@ impl Computation {
     }
 
     /// convert Computation to ComputationSubgraph
-    pub fn to_cs(&self) -> ComputationSubgraph{
+    pub fn to_cs(&self) -> ComputationSubgraph {
         let mut cs = ComputationSubgraph::new();
-        for t in self.terms_postorder(){
+        for t in self.terms_postorder() {
             cs.insert_node(&t);
         }
         cs.insert_edges();

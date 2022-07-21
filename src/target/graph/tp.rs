@@ -85,6 +85,7 @@ impl TrivialPartition{
         rewritten_children: F,
     ) -> Option<Term> {
         if let Op::Call(fn_name, arg_names, _, _) = &orig.op {
+            // println!("Rewritten children: {:?}", rewritten_children());
             let callee = self.comp_history.get(fn_name).expect("missing inlined callee");
             let term = link_one(arg_names, rewritten_children(), callee);
             Some(term)

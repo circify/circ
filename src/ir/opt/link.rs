@@ -29,14 +29,23 @@ struct Linker<'f> {
 ///
 /// This function **does not** recursively link.
 pub fn link_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computation) -> Term {
-    let mut sub_map: TermMap<Term> = arg_names
-        .into_iter()
-        .zip(arg_values)
-        .map(|(n, v)| {
-            let s = callee.metadata.input_sort(n).clone();
-            (leaf_term(Op::Var(n.clone(), s)), v)
-        })
-        .collect();
+    // println!("arg_names: {:?}", arg_names);
+    // println!("arg_terms: {:?}", arg_values);
+    let mut sub_map: TermMap<Term> = TermMap::new();
+    assert_eq!(arg_names.len(), arg_values.len());
+    for (n, v) in arg_names.into_iter().zip(arg_values) {
+        let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
+        // println!("{:?}", ssa_names);
+        if ssa_names.len() == 1{
+            let s = callee.metadata.input_sort(&ssa_names[0].0).clone();
+            sub_map.insert(leaf_term(Op::Var(ssa_names[0].0.clone(), s)), v);
+        } else{
+            for (s_name, index) in ssa_names {
+                let s = callee.metadata.input_sort(&s_name).clone();
+                sub_map.insert(leaf_term(Op::Var(s_name, s)), term![Op::Select; v.clone(), bv_lit(index, 32)]);
+            } 
+        }
+    }
     term(
         Op::Tuple,
         callee

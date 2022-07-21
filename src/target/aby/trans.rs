@@ -1005,8 +1005,13 @@ pub fn to_aby(
 ) {
 
     // TODO: change ILP to take in Functions instead of individual computations
-    let s_map = match ss{
-        "gglp" => inline_all_and_assign_glp(&ir, cm),
+    
+    match ss{
+        "gglp" => {
+            let (fs, s_map) = inline_all_and_assign_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.convert();
+        }
         _ =>{
             // Protocal Assignments
             let mut s_map: HashMap<String, SharingMap> = HashMap::new();
@@ -1028,11 +1033,9 @@ pub fn to_aby(
                 };
                 s_map.insert(name.to_string(), assignments);
             }
-            s_map
+            let mut converter = ToABY::new(ir, s_map, path, lang);
+            converter.convert();
         }
     };
-    
 
-    let mut converter = ToABY::new(ir, s_map, path, lang);
-    converter.convert();
 }

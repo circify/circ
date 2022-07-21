@@ -609,16 +609,16 @@ db_tests = [
 ]
 
 benchmark_tests = [
-    [
-        "biomatch - 1",
-        "2pc_biomatch",
-        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
-    ],
-    [
-        "biomatch - 2",
-        "2pc_biomatch_",
-        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
-    ],
+    # [
+    #     "biomatch - 1",
+    #     "2pc_biomatch",
+    #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    # ],
+    # [
+    #     "biomatch - 2",
+    #     "2pc_biomatch_",
+    #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    # ],
     # [
     #     "kmeans - 1",
     #     "2pc_kmeans_",
