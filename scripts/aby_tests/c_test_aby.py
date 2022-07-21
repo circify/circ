@@ -29,8 +29,6 @@ if __name__ == "__main__":
         db_tests + \
         mnist_tests
 
-    tests = kmeans_tests_2
-
     # TODO: add support unsigned + int promotion
     # unsigned_arithmetic_tests + \
 
