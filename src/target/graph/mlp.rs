@@ -32,19 +32,23 @@ impl CoarsenMap{
             coarsen_level: 0,
             num_nodes_per_level: Vec::new(),
         };
+        g.num_nodes_per_level.push(0);
         g
     }
 
     /// add a node to current coarsen map
+    /// Nodes added by this function are not coarsened
     fn add_node_to_coarsen_map(&mut self, t: &Term){
+        self.num_nodes_per_level[0] += 1;
         self.num_nodes += 1;
-        let node_id = self.num_nodes;
+        let node_id = self.num_nodes_per_level[0];
         let v = vec![node_id];
         self.coarsen_map.insert(t.clone(), v);
     }
 
-    /// merge an existed coarsen map
+    /// merge callee's coarsen map to caller's
     fn merge_coarsen_map(&mut self, g: &CoarsenMap, sub_map: &TermMap<Term>){
+        // extend the coarsen level if needed
         if g.coarsen_level > self.coarsen_level{
             for _ in self.coarsen_level..g.coarsen_level{
                 self.num_nodes_per_level.push(self.num_nodes);
@@ -52,10 +56,17 @@ impl CoarsenMap{
             self.coarsen_level = g.coarsen_level;
         }
 
+        // merge the map into 
         for (t, v) in g.coarsen_map.iter(){
             let new_t = sub_map.get(t).unwrap();
             let new_v: Vec<usize> = (0..v.len()).map(|i| v[i] + self.num_nodes_per_level[i]).collect();
             self.coarsen_map.insert(new_t.clone(), new_v);
+            self.num_nodes += 1;
+        }
+
+        // update the number of nodes of each level
+        for i in 0..g.coarsen_level{
+            self.num_nodes_per_level[i] += g.num_nodes_per_level[i];
         }
     }
 }
@@ -131,7 +142,7 @@ impl MultiLevelPartition{
 
         let mut gw: GraphWriter = GraphWriter::new(self.hyper_mode);
         gw.build_from_tm(cs, &t_map, num_nodes);
-        let coarsen_graph_path = format!("{}.{}.coarsen.graph", self.path, fname);
+        let coarsen_graph_path = format!("{}.{}.coarsen{}.graph", self.path, fname, cm.coarsen_level);
         gw.write(&coarsen_graph_path);
         let num_parts = num_nodes / self.num_coarsen_node;
         let partition = self.partitioner.do_partition(&coarsen_graph_path, &num_parts);
@@ -244,7 +255,7 @@ impl MultiLevelPartition{
     }
 
 
-    pub fn run(&mut self, fname: &String, path: &String, num_parts: usize) -> TermMap<usize>{
+    pub fn run(&mut self, fname: &String, path: &String, num_parts: usize) -> (Computation, TermMap<usize>){
         // Coarsening
         self.multilevel_coarsen(fname);
 
@@ -265,7 +276,7 @@ impl MultiLevelPartition{
         let partition = self.partitioner.do_partition(&part_graph_path, &num_parts);
 
         // Uncoarsening
-        self.multilevel_uncoarsen(fname, &partition, num_parts)
+        (self.comp_history.get(fname).unwrap().clone(),self.multilevel_uncoarsen(fname, &partition, num_parts))
     }
 
 

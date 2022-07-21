@@ -1156,6 +1156,12 @@ pub fn to_aby(
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.convert();
         }
+        // #[cfg(feature = "lp")]
+        // "mlp+mut" => {
+        //     let (fs, s_map) = mlp_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
+        //     let mut converter = ToABY::new(fs, s_map, path, lang);
+        //     converter.convert();
+        // }
         _ =>{
             // Protocal Assignments
             let mut s_map: HashMap<String, SharingMap> = HashMap::new();

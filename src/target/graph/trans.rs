@@ -1,6 +1,7 @@
 use crate::ir::term::*;
 
 use crate::target::graph::tp::*;
+use crate::target::graph::mlp::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 #[cfg(feature = "lp")]
@@ -32,6 +33,61 @@ fn get_graph_path(path: &Path, lang: &str, hyper_mode: bool) -> String {
 }
 
 
+// #[cfg(feature = "lp")]
+// /// inline all function into main
+// pub fn partition_with_mut(
+//     fs: &Functions, 
+//     cm: &str,
+//     path: &Path,
+//     lang: &str,
+//     num_parts: &usize,
+//     hyper_mode: bool,
+//     ml: &usize,
+//     mss: &usize,
+//     imbalance: &usize,
+// ) -> (Functions, HashMap<String, SharingMap>){
+//     let mut mlp = MultiLevelPartition::new(
+//         fs,
+//         20000000,
+//         10,
+//         path,
+//         0, 
+//         imbalance.clone(), 
+//         false
+//     );
+//     let main = "main";
+//     let graph_path = get_graph_path(path, lang, hyper_mode);
+//     let (c, partition) = mlp.run(&main.to_string(), &graph_path, *num_parts);
+
+//     // Construct ComputationSubgraphs
+//     let mut tmp_css: HashMap<usize, ComputationSubgraph> = HashMap::new();
+//     let mut css: HashMap<usize, ComputationSubgraph> = HashMap::new();
+
+//     for part_id in 0..*num_parts{
+//         tmp_css.insert(part_id, ComputationSubgraph::new());
+//     }
+
+//     for (t, part_id) in partition.iter(){
+//         if let Some(subgraph) = tmp_css.get_mut(&part_id) {
+//             subgraph.insert_node(t);
+//         } else {
+//             panic!("Subgraph not found for index: {}", num_parts);
+//         }
+//     }
+
+//     for (part_id, mut cs) in tmp_css.into_iter(){
+//         cs.insert_edges();
+//         css.insert(part_id, cs.clone());
+//     }
+
+//     let assignment = get_share_map_with_mutation(&c, cm, &css, &partition, ml, mss);
+//     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+//     s_map.insert(main.to_string(), assignment);
+//     let mut fs = Functions::new();
+//     fs.insert(main.to_string(), c);
+//     (fs, s_map)    
+// }
+
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn partition_with_mut(
@@ -45,10 +101,14 @@ pub fn partition_with_mut(
     mss: &usize,
     imbalance: &usize,
 ) -> (Functions, HashMap<String, SharingMap>){
-    let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), false);
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
     let main = "main";
     let graph_path = get_graph_path(path, lang, hyper_mode);
     let (c, partition) = tp.run(&main.to_string(), &graph_path, *num_parts);
+
+    println!("Time: Partition: {:?}", now.elapsed());
+    now = Instant::now();
 
     // Construct ComputationSubgraphs
     let mut tmp_css: HashMap<usize, ComputationSubgraph> = HashMap::new();
@@ -70,14 +130,18 @@ pub fn partition_with_mut(
         cs.insert_edges();
         css.insert(part_id, cs.clone());
     }
+    println!("Time: To Subgraph: {:?}", now.elapsed());
 
+    now = Instant::now();
     let assignment = get_share_map_with_mutation(&c, cm, &css, &partition, ml, mss);
+    println!("Time: ILP : {:?}", now.elapsed());
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);
     let mut fs = Functions::new();
     fs.insert(main.to_string(), c);
     (fs, s_map)    
 }
+
 
 #[cfg(feature = "lp")]
 /// inline all function into main

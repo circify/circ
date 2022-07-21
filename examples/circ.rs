@@ -117,7 +117,7 @@ enum Backend {
         // partition params
         #[structopt(long, default_value = "1", name = "graph_type")]
         graph_type: usize,
-        #[structopt(long, default_value = "15", name = "imbalance")]
+        #[structopt(long, default_value = "3", name = "imbalance")]
         imbalance: usize,
     },
 }

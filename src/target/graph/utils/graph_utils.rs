@@ -78,6 +78,10 @@ impl GraphWriter {
                 Op::Ite
                 | Op::Not
                 | Op::Eq
+                | Op::Store
+                | Op::Select
+                | Op::Tuple
+                | Op::Field(_)
                 | Op::BvBinOp(_)
                 | Op::BvNaryOp(_)
                 | Op::BvBinPred(_)
@@ -85,11 +89,13 @@ impl GraphWriter {
                     let t_id = coarse_map_get(coarsen_map, &t, level);
                     for cs in t.cs.iter() {
                         let cs_id = coarse_map_get(coarsen_map, &cs, level);
-                        if self.hyper_mode{
-                            self.insert_hyper_edge(&cs_id, &t_id);
-                        } else {
-                            self.insert_edge(&cs_id, &t_id);
-                            self.insert_edge(&t_id, &cs_id);
+                        if cs_id != t_id{
+                            if self.hyper_mode{
+                                self.insert_hyper_edge(&cs_id, &t_id);
+                            } else {
+                                self.insert_edge(&cs_id, &t_id);
+                                self.insert_edge(&t_id, &cs_id);
+                            }
                         }
                     }
                 }
@@ -105,6 +111,10 @@ impl GraphWriter {
                 Op::Ite
                 | Op::Not
                 | Op::Eq
+                | Op::Store
+                | Op::Select
+                | Op::Tuple
+                | Op::Field(_)
                 | Op::BvBinOp(_)
                 | Op::BvNaryOp(_)
                 | Op::BvBinPred(_)
@@ -112,11 +122,13 @@ impl GraphWriter {
                     let t_id = tm.get(&t).unwrap();
                     for cs in t.cs.iter() {
                         let cs_id = tm.get(&cs).unwrap();
-                        if self.hyper_mode{
-                            self.insert_hyper_edge(&cs_id, &t_id);
-                        } else {
-                            self.insert_edge(&cs_id, &t_id);
-                            self.insert_edge(&t_id, &cs_id);
+                        if cs_id != t_id{
+                            if self.hyper_mode{
+                                self.insert_hyper_edge(&cs_id, &t_id);
+                            } else {
+                                self.insert_edge(&cs_id, &t_id);
+                                self.insert_edge(&t_id, &cs_id);
+                            }
                         }
                     }
                 }
@@ -155,11 +167,13 @@ impl GraphWriter {
                     let t_id = self.get_tid_or_assign(&t);
                     for cs in t.cs.iter() {
                         let cs_id = self.get_tid_or_assign(&cs);
-                        if self.hyper_mode{
-                            self.insert_hyper_edge(&cs_id, &t_id);
-                        } else {
-                            self.insert_edge(&cs_id, &t_id);
-                            self.insert_edge(&t_id, &cs_id);
+                        if cs_id != t_id{
+                            if self.hyper_mode{
+                                self.insert_hyper_edge(&cs_id, &t_id);
+                            } else {
+                                self.insert_edge(&cs_id, &t_id);
+                                self.insert_edge(&t_id, &cs_id);
+                            }
                         }
                     }
                 }
