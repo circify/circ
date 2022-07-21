@@ -4,5 +4,5 @@ from util import run_tests
 from test_suite import *
 
 if __name__ == "__main__":
-    tests = ts
+    tests = benchmark_tests
     run_tests('c', tests)

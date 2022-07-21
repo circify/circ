@@ -1,8 +1,8 @@
 ts = [
     [
-        "new",
-        "playground",
-        "./scripts/aby_tests/test_inputs/test.txt",
+        "Array index test",
+        "2pc_array_index",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ],
 ]
 
@@ -346,12 +346,16 @@ array_tests = [
         "2pc_array_sum",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
-    # TODO: unsupported in ABY interpreter yet.
-    # [
-    #     "Array index test",
-    #     "2pc_array_index",
-    #     "./scripts/aby_tests/test_inputs/add.txt",
-    # ],
+    [
+        "Array index test",
+        "2pc_array_index",
+        "./scripts/aby_tests/test_inputs/add.txt",
+    ],
+    [
+        "Array index test 2",
+        "2pc_array_index_2",
+        "./scripts/aby_tests/test_inputs/index.txt",
+    ],
 ]
 
 c_array_tests = [
@@ -413,6 +417,11 @@ struct_tests = [
         "Struct array add",
         "2pc_struct_array_add",
         "./scripts/aby_tests/test_inputs/add.txt",
+    ],
+    [
+        "Return struct",
+        "ret_struct",
+        "./scripts/aby_tests/test_inputs/ret_struct.txt",
     ],
 ]
 
@@ -597,12 +606,12 @@ db_tests = [
         "./scripts/aby_tests/test_inputs/db_join.txt",
     ],
     [
-        "db join",
+        "db join 2",
         "db_join2",
         "./scripts/aby_tests/test_inputs/join2.txt",
     ],
     [
-        "db join",
+        "db merge",
         "db_merge",
         "./scripts/aby_tests/test_inputs/merge.txt",
     ],
@@ -614,11 +623,11 @@ benchmark_tests = [
     #     "2pc_biomatch",
     #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
     # ],
-    # [
-    #     "biomatch - 2",
-    #     "2pc_biomatch_",
-    #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
-    # ],
+    [
+        "biomatch - 2",
+        "2pc_biomatch_",
+        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    ],
     # [
     #     "kmeans - 1",
     #     "2pc_kmeans_",
@@ -629,6 +638,13 @@ benchmark_tests = [
     #     "2pc_kmeans",
     #     "./scripts/aby_tests/test_inputs/kmeans.txt",
     # ],
+]
+mnist_tests = [
+    [
+        "mnist 16x16",
+        "mnist",
+        "./scripts/aby_tests/test_inputs/mnist_16.txt",
+    ]
 ]
 
 # ilp_benchmark_tests = [

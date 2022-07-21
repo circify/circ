@@ -113,7 +113,7 @@ fn build_ilp(c: &ComputationSubgraph, costs: &CostModel) -> SharingMap {
     // build variables for all term assignments
     for (t, i) in terms.iter() {
         let mut vars = vec![];
-        println!("op: {}",&t.op);
+        // println!("op: {}",&t.op);
         match &t.op {
             Op::Var(..) | Op::Const(_) => {
                 for ty in &SHARE_TYPES {
@@ -468,7 +468,7 @@ pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
                 cost = cost + 0.0;
             }
             _ => {
-                println!("op: {}", t.op);
+                // println!("op: {}", t.op);
                 cost = cost + costs.get(&t.op).unwrap().get(to_ty).unwrap();
             }
         }

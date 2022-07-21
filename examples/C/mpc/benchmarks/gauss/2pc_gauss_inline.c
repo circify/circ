@@ -199,7 +199,7 @@ void gaussj_D(DT *m, DT *b, DT *OUTPUT_res) {
 	// // return out;
 }
 
-int main(__attribute__((private(0))) int a[N*N], __attribute__((private(1))) int b[N]) {
+Output main(__attribute__((private(0))) int a[N*N], __attribute__((private(1))) int b[N]) {
 	InputMatrix INPUT_A_m;
 	InputVector INPUT_B_b;
 	for (int i = 0; i < N * N; i++) {
@@ -211,5 +211,5 @@ int main(__attribute__((private(0))) int a[N*N], __attribute__((private(1))) int
 
 	Output OUTPUT_res;
 	gaussj_D(INPUT_A_m.m, INPUT_B_b.b, OUTPUT_res.res);
-	return OUTPUT_res.res[0];
+	return OUTPUT_res;
 }

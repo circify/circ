@@ -36,15 +36,22 @@ function mpc_test_3 {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "gglp"
 }
 
+function mpc_test_bool  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "b"
+}
+
+
 # mpc_test_3 2 ./examples/C/mpc/playground.c
-mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
+# mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/2pc_mnist.c
+# mpc_test_3 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
 
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
 
@@ -57,7 +64,6 @@ mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
-
 # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
@@ -106,8 +112,8 @@ mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 
 # # build array tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
-# # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
-# # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index_2.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_index_2.c
 
 # # build circ/compiler array tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array.c
@@ -122,6 +128,7 @@ mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 # # build struct tests 
 # mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_add.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_array_add.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/ret_struct.c
 
 # # build matrix tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_add.c
@@ -136,17 +143,28 @@ mpc_test_3 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
+# # build hycc benchmarks bool-only
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+
 # # build hycc benchmarks
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
-# # # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
-# # # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join2.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-# # # # # mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+
+# # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
+# # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
 
 # # ilp benchmarks
 # # mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_1.c

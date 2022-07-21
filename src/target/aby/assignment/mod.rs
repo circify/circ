@@ -47,6 +47,9 @@ pub struct CostModel {
 
     /// Zero costs
     zero: FxHashMap<ShareType, f64>,
+
+    /// Zero bool
+    zero_bool: FxHashMap<ShareType, f64>,
 }
 
 impl CostModel {
@@ -58,10 +61,14 @@ impl CostModel {
         zero.insert(ShareType::Arithmetic, 0.0);
         zero.insert(ShareType::Boolean, 0.0);
         zero.insert(ShareType::Yao, 0.0);
+
+        let mut zero_bool: FxHashMap<ShareType, f64> = FxHashMap::default();
+        zero_bool.insert(ShareType::Boolean, 0.0);
         CostModel {
             conversions,
             ops,
-            zero: zero,
+            zero,
+            zero_bool,
         }
     }
 
@@ -125,9 +132,8 @@ impl CostModel {
             | Op::Field(_)
             | Op::Update(..)
             | Op::Tuple
-            | Op::Select
-            | Op::Store
             | Op::Call(..) => Some(&self.zero),
+            Op::Select | Op::Store => Some(&self.zero_bool),
             _ => {
                 let op_name = match op.clone() {
                     // assume comparisions are unsigned
