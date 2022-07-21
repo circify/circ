@@ -284,9 +284,21 @@ void convolution_naive_outputs_1(DT *image, DT* kernels, DT* OUTPUT_layer) {
 }
 
 
-Output main(__attribute__((private(0))) InputA INPUT_A, __attribute__((private(1))) InputB INPUT_B)
+Output main(
+	__attribute__((private(0))) int image[IMAGE_WIDTH*IMAGE_WIDTH], 
+	__attribute__((private(1))) int kernelsL1[OUTPUT_CHANNELS * WINDOW_WIDTH * WINDOW_WIDTH], 
+	__attribute__((private(1))) int pool_layer[FULLY_CONNECTED_WIDTH * SIZE_CONVOLUTION * OUTPUT_CHANNELS],
+	__attribute__((private(1))) int fc[FINAL_OUTPUT_CHANNELS * FULLY_CONNECTED_WIDTH])
 {
-	Output OUTPUT_classify;		
+	Output OUTPUT_classify;	
+
+	InputA INPUT_A;
+	INPUT_A.image = image;
+
+	InputB INPUT_B;
+	INPUT_B.kernelsL1 = kernelsL1;
+	INPUT_B.pool_layer = pool_layer;
+	INPUT_B.fc = fc;	
 	
 	// Two lines of padding 
 	int padded_width = IMAGE_WIDTH+2;

@@ -647,6 +647,14 @@ mnist_tests = [
     ]
 ]
 
+cryptonets_tests = [
+    [
+        "cryptonets 16x16",
+        "cryptonets",
+        "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
+    ]
+]
+
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",
