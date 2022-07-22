@@ -444,7 +444,7 @@ impl R1cs<String> {
     pub fn ir_term(&self) -> Term {
         term(AND,
         self.constraints.iter().map(|(a, b, c)|
-            term![EQ; term![PF_ADD; self.lc_ir_term(a), self.lc_ir_term(b)], self.lc_ir_term(c)]).collect())
+            term![EQ; term![PF_MUL; self.lc_ir_term(a), self.lc_ir_term(b)], self.lc_ir_term(c)]).collect())
     }
 }
 
