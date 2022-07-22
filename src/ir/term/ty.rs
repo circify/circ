@@ -406,6 +406,30 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(ret.clone())
             }
         }
+        (Op::NthSmallest(i), a) => {
+            if *i < a.len() {
+                let first = a
+                    .iter()
+                    .next()
+                    .ok_or_else(|| TypeErrorReason::EmptyNary("nthsmallest".to_string()))?;
+                for x in a {
+                    if first != x {
+                        return Err(TypeErrorReason::NotEqual(
+                            (*first).clone(),
+                            (*x).clone(),
+                            "nthsmallest",
+                        ));
+                    }
+                }
+                Ok((*first).clone())
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "nthsmallest {} in with args of len {}",
+                    i,
+                    a.len()
+                )))
+            }
+        }
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
     }
 }
