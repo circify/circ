@@ -1126,7 +1126,7 @@ impl<'a> ToABY<'a> {
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
     // Call site similarity
-    // call_site_similarity(&ir);
+    call_site_similarity(&ir);
 
     // Protocal Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();

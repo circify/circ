@@ -5,7 +5,7 @@ use crate::ir::term::*;
 use std::collections::HashMap;
 
 /// Determine if call sites are similar based on input and output arguments to the call site
-pub fn call_site_similarity(fs: &Functions) {
+pub fn call_site_similarity(fs: &Functions) -> Vec<Vec<Term>> {
     // Return a TermMap of (call) --> id for which calls are similar
     // Maybe return a vector of vector of terms
 
@@ -61,21 +61,24 @@ pub fn call_site_similarity(fs: &Functions) {
 
     // Clean input and output terms
     let mut call_sites: HashMap<(Vec<Op>, Vec<Op>), Vec<Term>> = HashMap::new();
-    
 
     for (c, (i, o)) in call_term_map {
-        println!("function: {}", c);
-        println!(
-            "inputs: {:?}",
-            i.iter().map(|x| x.op.clone()).collect::<Vec<Op>>()
-        );
-        println!(
-            "outputs: {:?}\n",
-            o.iter().map(|x| x.op.clone()).collect::<Vec<Op>>()
-        );
+        let input_ops = i.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
+        let mut output_ops = o.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
+        output_ops.sort();
+
+        let key = (input_ops, output_ops);
+
+        // longest prefix matching?
+
+        // edit distance?
+
+        if call_sites.contains_key(&key) {
+            call_sites.get_mut(&key).unwrap().push(c);
+        } else {
+            call_sites.insert(key, vec![c]);
+        }
     }
-    todo!();
 
-
-    // return call_sites values 
+    return call_sites.into_values().collect::<Vec<_>>();
 }

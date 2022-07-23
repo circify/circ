@@ -319,6 +319,18 @@ impl Display for Op {
     }
 }
 
+impl Ord for Op {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cmp(&other)
+    }
+}
+
+impl PartialOrd for Op {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Boolean n-ary operator
 pub enum BoolNaryOp {
@@ -2000,17 +2012,6 @@ impl Computation {
         terms.into_iter()
     }
 }
-
-// #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
-// /// A function definition.
-// pub struct FuncDef {
-//     /// Name of function
-//     pub name: String,
-//     /// Type signature of function parameters
-//     pub params: BTreeMap<String, Sort>,
-//     /// Return type of function
-//     pub ret_ty: Vec<Sort>,
-// }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 /// A map of IR computations.
