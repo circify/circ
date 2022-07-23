@@ -25,6 +25,8 @@ use super::assignment::assign_arithmetic_and_boolean;
 use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
 
+use super::call_site_similarity::call_site_similarity;
+
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
 
@@ -597,6 +599,8 @@ impl<'a> ToABY<'a> {
                         array_shares.len()
                     );
 
+                    println!("array select: {}", array_shares[idx]);
+
                     self.term_to_shares
                         .insert(t.clone(), vec![array_shares[idx]]);
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -1121,6 +1125,9 @@ impl<'a> ToABY<'a> {
 
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
+    // Call site similarity
+    // call_site_similarity(&ir);
+
     // Protocal Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 

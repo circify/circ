@@ -633,6 +633,14 @@ cryptonets_tests = [
     ]
 ]
 
+histogram_tests = [
+    [
+        "histogram",
+        "histogram",
+        "./scripts/aby_tests/test_inputs/histogram.txt",
+    ]
+]
+
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",
