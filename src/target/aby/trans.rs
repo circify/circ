@@ -13,6 +13,7 @@ use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -100,6 +101,8 @@ struct ToABY<'a> {
     bytecode_output: Vec<String>,
     const_output: Vec<String>,
     share_output: Vec<String>,
+    const_map: HashMap<(Integer, char), i32>,
+    written_const_set: HashSet<i32>
 }
 
 impl Drop for ToABY<'_> {
@@ -132,6 +135,8 @@ impl<'a> ToABY<'a> {
             bytecode_output: Vec::new(),
             const_output: Vec::new(),
             share_output: Vec::new(),
+            const_map: HashMap::new(),
+            written_const_set: HashSet::new(),
         }
     }
 
@@ -237,14 +242,39 @@ impl<'a> ToABY<'a> {
                 v[0]
             }
             None => {
-                let s = self.share_cnt;
-                self.term_to_shares.insert(t.clone(), [s].to_vec());
-                self.share_cnt += 1;
+                match &t.op {
+                    Op::Const(Value::BitVector(b)) => {
+                        let sort = check(t);
+                        let bi = b.as_sint();
+                        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+                        let share_type = s_map.get(&t).unwrap().char();
+                        let key = (bi, share_type);
+                        if self.const_map.contains_key(&key) {
+                            let s = self.const_map.get(&key).unwrap().clone();
+                            self.term_to_shares.insert(t.clone(), [s].to_vec());
+                            s
+                        } else{
+                            let s = self.share_cnt;
+                            self.term_to_shares.insert(t.clone(), [s].to_vec());
+                            self.share_cnt += 1;
+                            self.const_map.insert(key, s);
+                            // Write share
+                            self.write_share(t, s);
 
-                // Write share
-                self.write_share(t, s);
+                            s
+                        }
+                    }
+                    _ => {
+                        let s = self.share_cnt;
+                        self.term_to_shares.insert(t.clone(), [s].to_vec());
+                        self.share_cnt += 1;
 
-                s
+                        // Write share
+                        self.write_share(t, s);
+
+                        s
+                    }
+                }
             }
         }
     }
@@ -253,20 +283,93 @@ impl<'a> ToABY<'a> {
         match self.term_to_shares.get(t) {
             Some(v) => v.clone(),
             None => {
-                let sort = check(t);
-                let num_shares = self.get_sort_len(&sort) as i32;
+                match &t.op {
+                    Op::Const(Value::Array(arr)) =>{
+                        let sort = check(t);
+                        let num_shares = self.get_sort_len(&sort) as i32;
+                        let mut shares: Vec<i32> = Vec::new();
+                        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+                        let share_type = s_map.get(&t).unwrap().char();
+                        for i in 0..num_shares{
+                            let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
+                            let v = match arr.map.get(&idx) {
+                                Some(c) => c,
+        
+                                None => &*arr.default,
+                            };
+        
+                            match v {
+                                Value::BitVector(b) => {
+                                    let bi = b.as_sint();
+                                    let key = (bi, share_type);
+                                    if self.const_map.contains_key(&key) {
+                                        let s = self.const_map.get(&key).unwrap().clone();
+                                        shares.push(s);
+                                    } else{
+                                        let s = self.share_cnt;
+                                        self.share_cnt += 1;
+                                        self.const_map.insert(key, s);
+                                        shares.push(s);
+                                    }
+                                }
+                                _ => todo!(),
+                            }
+                        }
+                        self.term_to_shares.insert(t.clone(), shares.clone());
 
-                let shares: Vec<i32> = (0..num_shares)
-                    .map(|x| x + self.share_cnt)
-                    .collect::<Vec<i32>>();
-                self.term_to_shares.insert(t.clone(), shares.clone());
+                        // Write shares
+                        self.write_shares(t, &shares);
 
-                // Write shares
-                self.write_shares(t, &shares);
+                        shares
+                    }
+                    Op::Const(Value::Tuple(tup)) => {
+                        check(t);
+                        let mut shares: Vec<i32> = Vec::new();
+                        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+                        let share_type = s_map.get(&t).unwrap().char();
+                        for val in tup.iter() {
+                            match val {
+                                Value::BitVector(b) => {
+                                    let bi = b.as_sint();
+                                    let key = (bi, share_type);
+                                    if self.const_map.contains_key(&key) {
+                                        let s = self.const_map.get(&key).unwrap().clone();
+                                        shares.push(s);
+                                    } else{
+                                        let s = self.share_cnt;
+                                        self.share_cnt += 1;
+                                        self.const_map.insert(key, s);
+                                        shares.push(s);
+                                    }
+                                }
+                                _ => todo!(),
+                            }
+                        }
+                        self.term_to_shares.insert(t.clone(), shares.clone());
 
-                self.share_cnt += num_shares;
+                        // Write shares
+                        self.write_shares(t, &shares);
 
-                shares
+                        shares
+                    }
+                    _ =>{
+                        let sort = check(t);
+                        let num_shares = self.get_sort_len(&sort) as i32;
+
+                        let shares: Vec<i32> = (0..num_shares)
+                            .map(|x| x + self.share_cnt)
+                            .collect::<Vec<i32>>();
+                        self.term_to_shares.insert(t.clone(), shares.clone());
+
+                        // Write shares
+                        self.write_shares(t, &shares);
+
+                        self.share_cnt += num_shares;
+
+                        shares
+                    }
+                }
+                
             }
         }
     }
@@ -496,9 +599,12 @@ impl<'a> ToABY<'a> {
             }
             Op::Const(Value::BitVector(b)) => {
                 let s = self.get_share(&t);
-                let op = "CONS_bv";
-                let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                self.const_output.push(line);
+                if !self.written_const_set.contains(&s){
+                    self.written_const_set.insert(s);
+                    let op = "CONS_bv";
+                    let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                    self.const_output.push(line);
+                }
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::Ite => {
@@ -643,9 +749,12 @@ impl<'a> ToABY<'a> {
 
                     match v {
                         Value::BitVector(b) => {
-                            let op = "CONS_bv";
-                            let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                            self.const_output.push(line);
+                            if !self.written_const_set.contains(s){
+                                self.written_const_set.insert(*s);
+                                let op = "CONS_bv";
+                                let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                                self.const_output.push(line);
+                            }
                             self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                         }
                         _ => todo!(),
@@ -663,9 +772,12 @@ impl<'a> ToABY<'a> {
                 for (val, s) in tup.iter().zip(shares.iter()) {
                     match val {
                         Value::BitVector(b) => {
-                            let op = "CONS_bv";
-                            let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                            self.const_output.push(line);
+                            if !self.written_const_set.contains(s){
+                                self.written_const_set.insert(*s);
+                                let op = "CONS_bv";
+                                let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                                self.const_output.push(line);
+                            }
                             self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                         }
                         _ => todo!(),
@@ -994,6 +1106,13 @@ impl<'a> ToABY<'a> {
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self) {
         let computations = self.fs.computations.clone();
+
+        // for (name, c) in computations.iter() {
+        //     println!("name: {}", name);
+        //     for t in c.terms_postorder() {
+        //         println!("t: {}", t);
+        //     }
+        // }
 
         // create output files
         get_path(self.path, &self.lang, "const", true);

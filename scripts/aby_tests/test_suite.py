@@ -623,21 +623,41 @@ benchmark_tests = [
     #     "2pc_biomatch",
     #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
     # ],
-    [
-        "biomatch - 2",
-        "2pc_biomatch_",
-        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
-    ],
+    # [
+    #     "biomatch - 2",
+    #     "2pc_biomatch_",
+    #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    # ],
     # [
     #     "kmeans - 1",
     #     "2pc_kmeans_",
     #     "./scripts/aby_tests/test_inputs/kmeans.txt",
     # ],
     # [
+    #     "gauss",
+    #     "2pc_gauss_inline",
+    #     "./scripts/aby_tests/test_inputs/gauss.txt",
+    # ],
+    # [
     #     "kmeans - 1",
     #     "2pc_kmeans",
     #     "./scripts/aby_tests/test_inputs/kmeans.txt",
     # ],
+    # [
+    #     "mnist 16x16",
+    #     "mnist",
+    #     "./scripts/aby_tests/test_inputs/mnist_16.txt",
+    # ]
+    [
+        "histogram",
+        "2pc_histogram",
+        "./scripts/aby_tests/test_inputs/histogram.txt",
+    ],   
+    # [
+    #     "cryptonets 16x16",
+    #     "cryptonets",
+    #     "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
+    # ]
 ]
 mnist_tests = [
     [
@@ -645,6 +665,7 @@ mnist_tests = [
         "mnist",
         "./scripts/aby_tests/test_inputs/mnist_16.txt",
     ]
+    
 ]
 
 cryptonets_tests = [
@@ -652,6 +673,14 @@ cryptonets_tests = [
         "cryptonets 16x16",
         "cryptonets",
         "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
+    ]
+]
+
+pg_tests = [
+    [
+        "playground",
+        "playground",
+        "./scripts/aby_tests/test_inputs/playground.txt",
     ]
 ]
 

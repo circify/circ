@@ -55,18 +55,32 @@ function mpc_test_bool  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "b"
 }
 
+function mpc_test_yao  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "y"
+}
+
+function mpc_test_6  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "a+y"
+}
+
 
 # mpc_test_3 2 ./examples/C/mpc/playground.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/db/db_join2.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
-# mpc_test_4 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test_3 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 
-mpc_test_4 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_4 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+
+mpc_test_4 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
 
 # mpc_test_5 2 ./examples/C/mpc/benchmarks/mnist/mnist28.c
 

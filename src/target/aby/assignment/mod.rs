@@ -58,9 +58,9 @@ impl CostModel {
         ops: FxHashMap<String, FxHashMap<ShareType, f64>>,
     ) -> CostModel {
         let mut zero: FxHashMap<ShareType, f64> = FxHashMap::default();
-        zero.insert(ShareType::Arithmetic, 0.0);
-        zero.insert(ShareType::Boolean, 0.0);
-        zero.insert(ShareType::Yao, 0.0);
+        zero.insert(ShareType::Arithmetic, 0.01);
+        zero.insert(ShareType::Boolean, 0.02);
+        zero.insert(ShareType::Yao, 0.03);
 
         let mut zero_bool: FxHashMap<ShareType, f64> = FxHashMap::default();
         zero_bool.insert(ShareType::Boolean, 0.0);
@@ -128,12 +128,14 @@ impl CostModel {
     fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
         match op {
             Op::Var(..)
-            | Op::Const(..)
             | Op::Field(_)
             | Op::Update(..)
             | Op::Tuple
-            | Op::Call(..) => Some(&self.zero),
-            Op::Select | Op::Store => Some(&self.zero_bool),
+            | Op::Select
+            | Op::Store 
+            | Op::Call(..)
+            | Op::Const(..)=> Some(&self.zero),
+            // Op::Select | Op::Store => Some(&self.zero_bool),
             _ => {
                 let op_name = match op.clone() {
                     // assume comparisions are unsigned
