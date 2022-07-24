@@ -68,7 +68,7 @@ function mpc_test_6  {
 }
 
 
-# mpc_test_3 2 ./examples/C/mpc/playground.c
+mpc_test_3 2 ./examples/C/mpc/playground.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/db/db_join2.c
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
@@ -80,7 +80,7 @@ function mpc_test_6  {
 
 # mpc_test_4 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
 
-mpc_test_4 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
+# mpc_test_3 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
 
 # mpc_test_5 2 ./examples/C/mpc/benchmarks/mnist/mnist28.c
 

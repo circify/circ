@@ -85,7 +85,7 @@ def run_tests(lang: str, tests: List[dict]):
     """
     print(f"Running ABY tests for {lang} frontend")
     failed_test_descs = []
-    num_retries = 3
+    num_retries = 1
 
     for test in tqdm(tests, leave=False):
         assert len(

@@ -32,6 +32,116 @@ use super::assignment::assign_greedy;
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
 
+pub struct PostOrderIter_v2 {
+    // (cs stacked, term)
+    stack: Vec<(bool, Term)>,
+    visited: TermSet,
+}
+
+impl PostOrderIter_v2 {
+    /// Make an iterator over the descendents of `root`.
+    pub fn new(root: Term) -> Self {
+        Self {
+            stack: vec![(false, root)],
+            visited: TermSet::new(),
+        }
+    }
+}
+
+impl std::iter::Iterator for PostOrderIter_v2 {
+    type Item = Term;
+    fn next(&mut self) -> Option<Term> {
+        while let Some((children_pushed, t)) = self.stack.last() {
+            if self.visited.contains(t) {
+                self.stack.pop();
+            } else if !children_pushed {
+                // for cs in t.cs.iter(){
+                //     // if let Op::Const(Value::BitVector(b)) = &cs.op {
+                //     //     let bi = b.as_sint();
+                //     //     if bi == 99{
+                //     //         println!("haha: {}", t);
+                //     //     }
+                //     // }
+                // }
+                if let Op::Select = t.op{
+                    if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
+                        self.stack.last_mut().unwrap().0 = true;
+                        let last = self.stack.last().unwrap().1.clone();
+                        self.stack.push((false, last.cs[0].clone()));
+                        continue;
+                    }
+                } else if let Op::Store = t.op{
+                    if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
+                        self.stack.last_mut().unwrap().0 = true;
+                        let last = self.stack.last().unwrap().1.clone();
+                        self.stack.push((false, last.cs[0].clone()));
+                        self.stack.push((false, last.cs[2].clone()));
+                        continue;
+                    }
+                }
+                self.stack.last_mut().unwrap().0 = true;
+                let last = self.stack.last().unwrap().1.clone();
+                self.stack
+                    .extend(last.cs.iter().map(|c| (false, c.clone())));
+            } else {
+                break;
+            }
+        }
+        self.stack.pop().map(|(_, t)| {
+            self.visited.insert(t.clone());
+            t
+        })
+        // while let Some((children_pushed, t)) = self.stack.pop() {
+        //     if self.visited.contains(&t) {
+        //         continue;
+        //     } else if !children_pushed {
+        //         // if let Op::Select = t.op{
+        //         //     if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
+        //         //         self.stack.push((true, t.clone()));
+        //         //         self.stack.push((false, t.cs[0].clone()));
+        //         //         continue;
+        //         //     }
+        //         // }
+        //         self.stack.push((true, t.clone()));
+        //         self.stack
+        //             .extend(t.cs.iter().map(|c| (false, c.clone())));
+        //     } else {
+        //         break;
+        //     }
+        // }
+        // self.stack.pop().map(|(_, t)| {
+        //     self.visited.insert(t.clone());
+        //     t
+        // })
+    }
+}
+
+// impl std::iter::Iterator for PostOrderIter_v2 {
+//     type Item = Term;
+//     fn next(&mut self) -> Option<Term> {
+//         while let Some(t) = self.stack.pop() {
+//             if !self.visited.contains(&t) {
+//                 if self.children_added.insert(t.clone()) {
+//                     self.stack.push(t.clone());
+//                     if let Op::Select = t.op{
+//                         if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
+//                             self.stack.push(t.cs[0].clone());
+//                             continue;
+//                         }
+//                     }
+//                     self.stack.extend(t.cs.iter().cloned());
+//                 }
+//             } else {
+//                 break;
+//             }
+//         }
+//         self.stack.pop().map(|t| {
+//             self.visited.insert(t.clone());
+//             t
+//         })
+//     }
+// }
+
 #[derive(Clone)]
 enum EmbeddedTerm {
     Bool,
@@ -219,18 +329,22 @@ impl<'a> ToABY<'a> {
     }
 
     fn write_share(&mut self, t: &Term, s: i32) {
-        let s_map = self.s_map.get(&self.curr_comp).unwrap();
-        let share_type = s_map.get(&t).unwrap().char();
-        let line = format!("{} {}\n", s, share_type);
-        self.share_output.push(line);
+        if !self.written_const_set.contains(&s){
+            let s_map = self.s_map.get(&self.curr_comp).unwrap();
+            let share_type = s_map.get(&t).unwrap().char();
+            let line = format!("{} {}\n", s, share_type);
+            self.share_output.push(line);
+        }
     }
 
     fn write_shares(&mut self, t: &Term, shares: &Vec<i32>) {
         let s_map = self.s_map.get(&self.curr_comp).unwrap();
         let share_type = s_map.get(&t).unwrap().char();
         for s in shares {
-            let line = format!("{} {}\n", s, share_type);
-            self.share_output.push(line);
+            if !self.written_const_set.contains(s){
+                let line = format!("{} {}\n", s, share_type);
+                self.share_output.push(line);
+            }
         }
     }
 
@@ -271,6 +385,9 @@ impl<'a> ToABY<'a> {
 
                         // Write share
                         self.write_share(t, s);
+                        if s == 16{
+                            println!("#######: {}", t);
+                        }
 
                         s
                     }
@@ -603,6 +720,9 @@ impl<'a> ToABY<'a> {
                     self.written_const_set.insert(s);
                     let op = "CONS_bv";
                     let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                    if b.as_sint() == 99{
+                        println!("GOtcha: {}", t);
+                    }
                     self.const_output.push(line);
                 }
                 self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -753,6 +873,9 @@ impl<'a> ToABY<'a> {
                                 self.written_const_set.insert(*s);
                                 let op = "CONS_bv";
                                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                                if b.as_sint() == 99{
+                                    println!("GOtcha2: {}", t);
+                                }
                                 self.const_output.push(line);
                             }
                             self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -776,6 +899,9 @@ impl<'a> ToABY<'a> {
                                 self.written_const_set.insert(*s);
                                 let op = "CONS_bv";
                                 let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                                if b.as_sint() == 99{
+                                    println!("GOtcha3: {}", t);
+                                }
                                 self.const_output.push(line);
                             }
                             self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -1017,7 +1143,7 @@ impl<'a> ToABY<'a> {
 
         let mut write_time: std::time::Duration = std::time::Duration::new(0, 0);
 
-        for c in PostOrderIter::new(t) {
+        for c in PostOrderIter_v2::new(t) {
             if self.cache.contains_key(&c) {
                 continue;
             }

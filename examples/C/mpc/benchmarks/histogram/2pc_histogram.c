@@ -1,67 +1,10 @@
 #define LEN  32
-#define NUM_REVIEWERS 100
-#define NUM_RATINGS 100
+#define NUM_REVIEWERS 1
+#define NUM_RATINGS 1
 #define INTERVALS 2
 #define NUM_BUCKETS (INTERVALS * 5) - 1
 #define TOTAL_REV (NUM_REVIEWERS * NUM_RATINGS)
 
-
-/* returns val/mod, integer division */
-// int quot(int val, int mod) {
-//     if (mod == 0){
-//         return val;
-//     } else{
-//         int rem = val % mod;
-//         return (val - rem) / mod;
-//     }
-// }
-
-int map(int sumRatings) {
-
-    int bucket = NUM_RATINGS+1;
-
-    int val = sumRatings;
-    int mod = NUM_RATINGS;
-
-    int absReview = val / mod;
-    int fraction = val % mod;
-    // int absReview = 2;
-    // int fraction = 3;
-
-    int m = INTERVALS * (absReview - 1);
-    int num = fraction * INTERVALS;
-    for (int j = 0; j < INTERVALS; j++) {
-        int low = j * NUM_RATINGS;
-        int high = (j + 1) * NUM_RATINGS;
-        int cond1;
-        if(low <= num) {
-            cond1 = 1;
-        }
-        else {
-            cond1 = 0;
-        }
-        int cond2;
-        if(high > num) {
-            cond2 = 1;
-        }
-        else {
-            cond2 = 0;
-        }
-        int cond = cond1 + cond2;
-        
-        int newBucket;
-        if(cond == 2) {
-            newBucket = m + j;
-        }
-        else {
-            newBucket = bucket;
-        }
-        
-        bucket = newBucket;
-    }
-
-    return bucket;
-}
 
 int main(__attribute__((private(0))) int reviews[TOTAL_REV], __attribute__((private(1))) int offset)
 {
@@ -74,7 +17,7 @@ int main(__attribute__((private(0))) int reviews[TOTAL_REV], __attribute__((priv
         for (int j = 0; j < NUM_RATINGS; j++) {
             sum = sum + reviews[i*NUM_RATINGS + j];
         }
-        int bucket = map(sum);
+        int bucket = sum;
         for (int j = 0; j < NUM_BUCKETS; j++) {
             int temp;
             if (j == bucket) {
@@ -92,66 +35,3 @@ int main(__attribute__((private(0))) int reviews[TOTAL_REV], __attribute__((priv
     }
     return sum_all;
 }
-
-
-// int map(int sumRatings) {
-
-//     // int bucket = NUM_RATINGS+1;
-
-//     // int val = sumRatings;
-//     // int mod = NUM_RATINGS;
-
-//     // int absReview = val / mod;
-//     // int fraction = val % mod;
-//     // int absReview = 2;
-//     // int fraction = 3;
-//     // int absReview = sumRatings;
-//     // int fraction = sumRatings;
-
-//     int m = INTERVALS * (sumRatings - 1);
-//     int num = sumRatings * INTERVALS;
-//     // for (int j = 0; j < INTERVALS; j++) {
-//     //     int low = j * NUM_RATINGS;
-//     //     int high = (j + 1) * NUM_RATINGS;
-//     //     int cond1;
-//     //     if(low <= num) {
-//     //         cond1 = 1;
-//     //     }
-//     //     else {
-//     //         cond1 = 0;
-//     //     }
-//     //     int cond2;
-//     //     if(high > num) {
-//     //         cond2 = 1;
-//     //     }
-//     //     else {
-//     //         cond2 = 0;
-//     //     }
-//     //     int cond = cond1 + cond2;
-        
-//     //     int newBucket;
-//     //     if(cond == 2) {
-//     //         newBucket = m + j;
-//     //     }
-//     //     else {
-//     //         newBucket = bucket;
-//     //     }
-        
-//     //     bucket = newBucket;
-//     // }
-
-//     return m + num;
-// }
-
-// int main(__attribute__((private(0))) int reviews[TOTAL_REV], __attribute__((private(1))) int offset)
-// {
-//     int sum_all = offset;
-//     for (int i = 0; i < NUM_REVIEWERS; i++) {
-//         int sum = reviews[i*NUM_RATINGS];
-//         int sum2 = reviews[0];
-//         int bucket = sum2*sum;
-//         sum_all += bucket;
-//     }
-
-//     return sum_all;
-// }
