@@ -599,8 +599,6 @@ impl<'a> ToABY<'a> {
                         array_shares.len()
                     );
 
-                    println!("array select: {}", array_shares[idx]);
-
                     self.term_to_shares
                         .insert(t.clone(), vec![array_shares[idx]]);
                     self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -630,28 +628,45 @@ impl<'a> ToABY<'a> {
         let now = Instant::now();
         match &t.op {
             Op::Const(Value::Array(arr)) => {
-                let shares = self.get_shares(&t);
-                assert!(shares.len() == arr.size);
+                // let shares = self.get_shares(&t);
+                // assert!(shares.len() == arr.size);
 
-                for (i, s) in shares.iter().enumerate() {
+                let mut shares: Vec<i32> = Vec::new();
+
+                for i in 0..arr.size {
                     // TODO: sort of index might not be a 32-bit bitvector
                     let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
                     let v = match arr.map.get(&idx) {
                         Some(c) => c,
-
                         None => &*arr.default,
                     };
 
-                    match v {
-                        Value::BitVector(b) => {
-                            let op = "CONS_bv";
-                            let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                            self.const_output.push(line);
-                            self.cache.insert(t.clone(), EmbeddedTerm::Bv);
+                    // TODO: sort of value might not be a 32-bit bitvector
+                    println!("value: {}", v);
+                    let v_term = leaf_term(Op::Const(v.clone()));
+                    if self.term_to_shares.contains_key(&v_term) {
+                        // existing const
+                        let s = self.get_share(&v_term);
+                        println!("share: {}", s);
+                        shares.push(s);
+                    } else {
+                        // new const
+                        println!("NEW CONST");
+                        let s = self.get_share(&v_term);
+                        match v {
+                            Value::BitVector(b) => {
+                                let op = "CONS_bv";
+                                let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
+                                self.const_output.push(line);
+                            }
+                            _ => todo!(),
                         }
-                        _ => todo!(),
+                        shares.push(s);
                     }
                 }
+
+                assert!(shares.len() == arr.size);
+                self.term_to_shares.insert(t.clone(), shares);
 
                 unsafe {
                     num_const_arr += 1;
@@ -667,7 +682,6 @@ impl<'a> ToABY<'a> {
                             let op = "CONS_bv";
                             let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
                             self.const_output.push(line);
-                            self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                         }
                         _ => todo!(),
                     }
@@ -1126,7 +1140,9 @@ impl<'a> ToABY<'a> {
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
     // Call site similarity
-    call_site_similarity(&ir);
+    // println!("call site");
+    // call_site_similarity(&ir);
+    // println!("end call site");
 
     // Protocal Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
