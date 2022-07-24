@@ -5,7 +5,6 @@ use crate::ir::term::*;
 
 /// Binarize cache.
 #[derive(Default)]
-
 struct Binarizer;
 
 impl RewritePass for Binarizer {
@@ -26,13 +25,13 @@ impl RewritePass for Binarizer {
                         |acc, x| term![orig.op.clone(); x.clone(), acc],
                     ))
                 }
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 }
 
-/// Binarize (expand) n-ary terms. 
+/// Binarize (expand) n-ary terms.
 pub fn binarize(c: &mut Computation) {
     let mut pass = Binarizer;
     pass.traverse(c);

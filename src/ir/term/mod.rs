@@ -1295,7 +1295,7 @@ impl Value {
             *b
         } else {
             panic!("Not a bool: {}", self)
-        }
+    }
     }
     #[track_caller]
     /// Get the underlying bit-vector constant, or panic!

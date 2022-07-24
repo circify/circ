@@ -36,7 +36,7 @@ function mpc_test_bool  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "b"
 }
 
-# mpc_test 2 ./examples/C/mpc/playground.c
+mpc_test 2 ./examples/C/mpc/playground.c
 
 # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
@@ -129,7 +129,7 @@ function mpc_test_bool  {
 # mpc_test 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 
 # # build OPA benchmarks
-mpc_test_2 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
 
 
 
