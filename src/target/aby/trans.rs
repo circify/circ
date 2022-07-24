@@ -364,18 +364,23 @@ impl<'a> ToABY<'a> {
                 self.const_output.push(line);
             }
             Op::Ite => {
-                let s = self.get_share(&t);
                 let op = "MUX";
-
                 let sel = self.get_share(&t.cs[0]);
                 let a = self.get_share(&t.cs[1]);
                 let b = self.get_share(&t.cs[2]);
 
-                let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s, op);
-                self.bytecode_output.push(line);
+                let key = (t.op.clone(), vec![sel, a, b]);
+                if self.cache.contains_key(&key) {
+                    let s = self.cache.get(&key).unwrap().clone();
+                    self.term_to_shares.insert(t.clone(), s);
+                } else {
+                    let s = self.get_shares(&t);
+                    self.cache.insert(key, s.clone());
+                    let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s[0], op);
+                    self.bytecode_output.push(line);
+                };
             }
             Op::BvNaryOp(o) => {
-                let s = self.get_share(&t);
                 let op = match o {
                     BvNaryOp::Xor => "XOR",
                     BvNaryOp::Or => "OR",
@@ -383,17 +388,21 @@ impl<'a> ToABY<'a> {
                     BvNaryOp::Add => "ADD",
                     BvNaryOp::Mul => "MUL",
                 };
-
                 let a = self.get_share(&t.cs[0]);
                 let b = self.get_share(&t.cs[1]);
 
-                let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                self.bytecode_output.push(line);
-
-                self.term_to_shares.insert(t.clone(), vec![s]); // new??
+                let key = (t.op.clone(), vec![a, b]);
+                if self.cache.contains_key(&key) {
+                    let s = self.cache.get(&key).unwrap().clone();
+                    self.term_to_shares.insert(t.clone(), s);
+                } else {
+                    let s = self.get_shares(&t);
+                    self.cache.insert(key, s.clone());
+                    let line = format!("2 1 {} {} {} {}\n", a, b, s[0], op);
+                    self.bytecode_output.push(line);
+                };
             }
             Op::BvBinOp(o) => {
-                let s = self.get_share(&t);
                 let op = match o {
                     BvBinOp::Sub => "SUB",
                     BvBinOp::Udiv => "DIV",
@@ -408,8 +417,16 @@ impl<'a> ToABY<'a> {
                         let a = self.get_share(&t.cs[0]);
                         let b = self.get_share(&t.cs[1]);
 
-                        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                        self.bytecode_output.push(line);
+                        let key = (t.op.clone(), vec![a, b]);
+                        if self.cache.contains_key(&key) {
+                            let s = self.cache.get(&key).unwrap().clone();
+                            self.term_to_shares.insert(t, s);
+                        } else {
+                            let s = self.get_shares(&t);
+                            self.cache.insert(key, s.clone());
+                            let line = format!("2 1 {} {} {} {}\n", a, b, s[0], op);
+                            self.bytecode_output.push(line);
+                        };
                     }
                     BvBinOp::Shl | BvBinOp::Lshr => {
                         let a = self.get_share(&t.cs[0]);
@@ -417,8 +434,17 @@ impl<'a> ToABY<'a> {
                         let const_shift_amount =
                             const_shift_amount_term.as_bv_opt().unwrap().uint();
 
-                        let line = format!("2 1 {} {} {} {}\n", a, const_shift_amount, s, op);
-                        self.bytecode_output.push(line);
+                        let key = (t.op.clone(), vec![a, const_shift_amount.to_i32().unwrap()]);
+                        if self.cache.contains_key(&key) {
+                            let s = self.cache.get(&key).unwrap().clone();
+                            self.term_to_shares.insert(t, s);
+                        } else {
+                            let s = self.get_shares(&t);
+                            self.cache.insert(key, s.clone());
+                            let line =
+                                format!("2 1 {} {} {} {}\n", a, const_shift_amount, s[0], op);
+                            self.bytecode_output.push(line);
+                        };
                     }
                     _ => panic!("Binop not supported: {}", o),
                 };
