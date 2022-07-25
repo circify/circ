@@ -161,6 +161,29 @@ impl<'a> ToABY<'a> {
     }
 
     // TODO: Rust ENTRY api on maps
+    fn get_new_share(&mut self, t: &Term, p: &Term) -> i32 {
+        match self.term_to_shares.get(t) {
+            Some(v) => {
+                assert!(v.len() == 1);
+                v[0]
+            }
+            None => {
+                let s = self.share_cnt;
+                self.term_to_shares.insert(t.clone(), [s].to_vec());
+                self.share_cnt += 1;
+
+                // Write share
+                let s_map = self.s_map.get(&self.curr_comp).unwrap();
+                let share_type = s_map.get(&p).unwrap().char();
+                let line = format!("{} {}\n", s, share_type);
+                self.share_output.push(line);
+
+                s
+            }
+        }
+    }
+
+    // TODO: Rust ENTRY api on maps
     fn get_share(&mut self, t: &Term) -> i32 {
         match self.term_to_shares.get(t) {
             Some(v) => {
@@ -237,12 +260,20 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed_eq(&mut self, t: &Term) {
-        let s = self.get_share(t);
+        let op = "EQ";
         let a = self.get_share(&t.cs[0]);
         let b = self.get_share(&t.cs[1]);
-        let op = "EQ";
-        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-        self.bytecode_output.push(line);
+
+        let key = (t.op.clone(), vec![a, b]);
+        if self.cache.contains_key(&key) {
+            let s = self.cache.get(&key).unwrap().clone();
+            self.term_to_shares.insert(t.clone(), s);
+        } else {
+            let s = self.get_shares(t);
+            self.cache.insert(key, s.clone());
+            let line = format!("2 1 {} {} {} {}\n", a, b, s[0], op);
+            self.bytecode_output.push(line);
+        };
     }
 
     fn embed_bool(&mut self, t: Term) {
@@ -277,20 +308,35 @@ impl<'a> ToABY<'a> {
             }
             Op::Ite => {
                 let op = "MUX";
-
                 let sel = self.get_share(&t.cs[0]);
                 let a = self.get_share(&t.cs[1]);
                 let b = self.get_share(&t.cs[2]);
 
-                let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s, op);
-                self.bytecode_output.push(line);
+                let key = (t.op.clone(), vec![a, b]);
+                if self.cache.contains_key(&key) {
+                    let s = self.cache.get(&key).unwrap().clone();
+                    self.term_to_shares.insert(t.clone(), s);
+                } else {
+                    let s = self.get_shares(&t);
+                    self.cache.insert(key, s.clone());
+                    let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s[0], op);
+                    self.bytecode_output.push(line);
+                };
             }
             Op::Not => {
                 let op = "NOT";
-
                 let a = self.get_share(&t.cs[0]);
-                let line = format!("1 1 {} {} {}\n", a, s, op);
-                self.bytecode_output.push(line);
+
+                let key = (t.op.clone(), vec![a]);
+                if self.cache.contains_key(&key) {
+                    let s = self.cache.get(&key).unwrap().clone();
+                    self.term_to_shares.insert(t.clone(), s);
+                } else {
+                    let s = self.get_shares(&t);
+                    self.cache.insert(key, s.clone());
+                    let line = format!("1 1 {} {} {}\n", a, s[0], op);
+                    self.bytecode_output.push(line);
+                };
             }
             Op::BoolNaryOp(o) => {
                 if t.cs.len() == 1 {
@@ -314,8 +360,17 @@ impl<'a> ToABY<'a> {
 
                     let a = self.get_share(&t.cs[0]);
                     let b = self.get_share(&t.cs[1]);
-                    let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                    self.bytecode_output.push(line);
+
+                    let key = (t.op.clone(), vec![a, b]);
+                    if self.cache.contains_key(&key) {
+                        let s = self.cache.get(&key).unwrap().clone();
+                        self.term_to_shares.insert(t.clone(), s);
+                    } else {
+                        let s = self.get_shares(&t);
+                        self.cache.insert(key, s.clone());
+                        let line = format!("2 1 {} {} {} {}\n", a, b, s[0], op);
+                        self.bytecode_output.push(line);
+                    };
                 }
             }
             Op::BvBinPred(o) => {
@@ -329,8 +384,17 @@ impl<'a> ToABY<'a> {
 
                 let a = self.get_share(&t.cs[0]);
                 let b = self.get_share(&t.cs[1]);
-                let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                self.bytecode_output.push(line);
+
+                let key = (t.op.clone(), vec![a, b]);
+                if self.cache.contains_key(&key) {
+                    let s = self.cache.get(&key).unwrap().clone();
+                    self.term_to_shares.insert(t.clone(), s);
+                } else {
+                    let s = self.get_shares(&t);
+                    self.cache.insert(key, s.clone());
+                    let line = format!("2 1 {} {} {} {}\n", a, b, s[0], op);
+                    self.bytecode_output.push(line);
+                };
             }
             _ => panic!("Non-field in embed_bool: {}", t),
         }
@@ -491,12 +555,9 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    fn embed_scalar(&mut self, t: Term) {
+    fn embed_nonscalar(&mut self, t: Term) {
         match &t.op {
             Op::Const(Value::Array(arr)) => {
-                // let shares = self.get_shares(&t);
-                // assert!(shares.len() == arr.size);
-
                 let mut shares: Vec<i32> = Vec::new();
 
                 for i in 0..arr.size {
@@ -515,7 +576,7 @@ impl<'a> ToABY<'a> {
                         shares.push(s);
                     } else {
                         // new const
-                        let s = self.get_share(&v_term);
+                        let s = self.get_new_share(&v_term, &t);
                         match v {
                             Value::BitVector(b) => {
                                 let op = "CONS_bv";
@@ -581,9 +642,7 @@ impl<'a> ToABY<'a> {
                 if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                     // constant indexing
                     let idx = bv.uint().to_usize().unwrap().clone();
-
                     array_shares[idx] = value_share;
-
                     self.term_to_shares.insert(t.clone(), array_shares.clone());
                 } else {
                     let op = "STORE";
@@ -694,7 +753,7 @@ impl<'a> ToABY<'a> {
                 self.bytecode_output.push(line);
             }
             _ => {
-                panic!("Non-field in embed_scalar: {}", t.op)
+                panic!("Non-field in embed_nonscalar: {}", t.op)
             }
         }
     }
@@ -713,7 +772,7 @@ impl<'a> ToABY<'a> {
                     self.embed_bv(c);
                 }
                 Sort::Array(..) | Sort::Tuple(_) => {
-                    self.embed_scalar(c);
+                    self.embed_nonscalar(c);
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }

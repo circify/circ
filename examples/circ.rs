@@ -284,12 +284,12 @@ fn main() {
     };
     println!("Done with IR optimization");
 
-    for (name, c) in &cs.computations {
-        println!("name: {}", name);
-        for t in c.terms_postorder() {
-            println!("t: {}", t.op);
-        }
-    }
+    // for (name, c) in &cs.computations {
+    //     println!("name: {}", name);
+    //     for t in c.terms_postorder() {
+    //         println!("t: {}", t.op);
+    //     }
+    // }
 
     match options.backend {
         #[cfg(feature = "r1cs")]
