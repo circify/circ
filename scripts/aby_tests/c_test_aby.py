@@ -28,7 +28,10 @@ if __name__ == "__main__":
         gauss_tests + \
         db_tests + \
         mnist_tests + \
-        cryptonets_tests
+        cryptonets_tests + \
+        histogram_tests
+
+    tests = histogram_tests
 
     tests = biomatch_tests
 

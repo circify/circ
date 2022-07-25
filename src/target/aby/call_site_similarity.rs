@@ -1,0 +1,84 @@
+//! Call Site Similarity
+
+use crate::ir::term::*;
+
+use std::collections::HashMap;
+
+/// Determine if call sites are similar based on input and output arguments to the call site
+pub fn call_site_similarity(fs: &Functions) -> Vec<Vec<Term>> {
+    // Return a TermMap of (call) --> id for which calls are similar
+    // Maybe return a vector of vector of terms
+
+    // Map of Vec<input: Vec<Term>, output: Vec<Term>> --> Vec<Call Term>
+
+    //  map call Term -> (input: Vec<Term>, output: Vec<Term>)
+    let mut call_term_map: TermMap<(Vec<Term>, Vec<Term>)> = TermMap::new();
+
+    // map field(i) Term to parent call Term
+    let mut field_of_calls: TermMap<Term> = TermMap::new();
+
+    for (_name, comp) in &fs.computations {
+        for t in comp.terms_postorder() {
+            // see if the call term was used as an argument in another term
+            for c in &t.cs {
+                if call_term_map.contains_key(c) {
+                    field_of_calls.insert(t.clone(), c.clone());
+                }
+                if field_of_calls.contains_key(c) {
+                    let call_term = field_of_calls.get(c).unwrap();
+                    call_term_map.get_mut(call_term).unwrap().1.push(t.clone());
+                }
+            }
+            match &t.op {
+                Op::Call(..) => {
+                    let input: Vec<Term> = t.cs.clone();
+                    let output: Vec<Term> = Vec::new();
+                    call_term_map.insert(t.clone(), (input, output));
+                }
+                _ => {
+                    // do nothing
+                }
+            }
+        }
+
+        // For each call term
+        // Get a list of inputs and output terms based on mutation step size
+        // Store input terms into a data structure (vec?)
+        // Store output terms into a data structure (vec?)
+        // Order terms by operator
+
+        // Create key: Vec<input: Vec<Term>, output: Vec<Term>>
+        // SORT OUTPUT TERMS
+
+        // loop through existing call terms:
+        // longest prefix matching (edit distance?)
+
+        // if match:
+        // append to vec
+        // if no match:
+        // add as new entry
+    }
+
+    // Clean input and output terms
+    let mut call_sites: HashMap<(Vec<Op>, Vec<Op>), Vec<Term>> = HashMap::new();
+
+    for (c, (i, o)) in call_term_map {
+        let input_ops = i.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
+        let mut output_ops = o.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
+        output_ops.sort();
+
+        let key = (input_ops, output_ops);
+
+        // longest prefix matching?
+
+        // edit distance?
+
+        if call_sites.contains_key(&key) {
+            call_sites.get_mut(&key).unwrap().push(c);
+        } else {
+            call_sites.insert(key, vec![c]);
+        }
+    }
+
+    return call_sites.into_values().collect::<Vec<_>>();
+}

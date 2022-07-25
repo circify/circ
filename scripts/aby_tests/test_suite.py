@@ -683,6 +683,21 @@ pg_tests = [
         "./scripts/aby_tests/test_inputs/playground.txt",
     ]
 ]
+histogram_tests = [
+    [
+        "histogram",
+        "histogram",
+        "./scripts/aby_tests/test_inputs/histogram.txt",
+    ]
+]
+
+pc_histogram_tests = [
+    [
+        "2pc_histogram",
+        "2pc_histogram",
+        "./scripts/aby_tests/test_inputs/2pc_histogram.txt",
+    ]
+]
 
 # ilp_benchmark_tests = [
 #     [
