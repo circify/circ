@@ -31,7 +31,7 @@ if __name__ == "__main__":
         cryptonets_tests + \
         histogram_tests
 
-    tests = histogram_tests
+    tests = ts
 
     tests = biomatch_tests
 

@@ -1,8 +1,8 @@
 ts = [
     [
-        "Array index test",
-        "2pc_array_index",
-        "./scripts/aby_tests/test_inputs/add.txt",
+        "Multiply two numbers - 1",
+        "2pc_mult",
+        "./scripts/aby_tests/test_inputs/mult_1.txt",
     ],
 ]
 
