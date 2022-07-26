@@ -122,6 +122,11 @@ pub enum Op {
     /// Takes the modulus.
     UbvToPf(FieldT),
 
+    /// Integer n-ary operator
+    IntNaryOp(IntNaryOp),
+    /// Integer comparison operator
+    IntBinPred(IntBinPred),
+
     /// Binary operator, with arguments (array, index).
     ///
     /// Gets the value at index in array.
@@ -213,6 +218,18 @@ pub const PF_RECIP: Op = Op::PfUnOp(PfUnOp::Recip);
 pub const PF_ADD: Op = Op::PfNaryOp(PfNaryOp::Add);
 /// prime-field multiplication
 pub const PF_MUL: Op = Op::PfNaryOp(PfNaryOp::Mul);
+/// integer addition
+pub const INT_ADD: Op = Op::IntNaryOp(IntNaryOp::Add);
+/// integer multiplication
+pub const INT_MUL: Op = Op::IntNaryOp(IntNaryOp::Mul);
+/// integer less than
+pub const INT_LT: Op = Op::IntBinPred(IntBinPred::Lt);
+/// integer less than or equal
+pub const INT_LE: Op = Op::IntBinPred(IntBinPred::Le);
+/// integer greater than
+pub const INT_GT: Op = Op::IntBinPred(IntBinPred::Gt);
+/// integer greater than or equal
+pub const INT_GE: Op = Op::IntBinPred(IntBinPred::Ge);
 
 impl Op {
     /// Number of arguments for this operator. `None` if n-ary.
@@ -247,6 +264,8 @@ impl Op {
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
+            Op::IntNaryOp(_) => None,
+            Op::IntBinPred(_) => Some(2),
             Op::UbvToPf(_) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
@@ -291,6 +310,8 @@ impl Display for Op {
             Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
             Op::PfUnOp(a) => write!(f, "{}", a),
             Op::PfNaryOp(a) => write!(f, "{}", a),
+            Op::IntNaryOp(a) => write!(f, "{}", a),
+            Op::IntBinPred(a) => write!(f, "{}", a),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
@@ -585,6 +606,48 @@ impl Display for PfUnOp {
         match self {
             PfUnOp::Neg => write!(f, "-"),
             PfUnOp::Recip => write!(f, "pfrecip"),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Integer n-ary operator
+pub enum IntNaryOp {
+    /// Finite field (+)
+    Add,
+    /// Finite field (*)
+    Mul,
+}
+
+impl Display for IntNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            IntNaryOp::Add => write!(f, "intadd"),
+            IntNaryOp::Mul => write!(f, "intmul"),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+/// Integer binary predicate. See [Op::Eq] for equality.
+pub enum IntBinPred {
+    /// Integer (<)
+    Lt,
+    /// Integer (>)
+    Gt,
+    /// Integer (<=)
+    Le,
+    /// Integer (>=)
+    Ge,
+}
+
+impl Display for IntBinPred {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            IntBinPred::Lt => write!(f, "<"),
+            IntBinPred::Gt => write!(f, ">"),
+            IntBinPred::Le => write!(f, "<="),
+            IntBinPred::Ge => write!(f, ">="),
         }
     }
 }
@@ -1279,6 +1342,15 @@ impl Value {
         }
     }
     #[track_caller]
+    /// Get the underlying bit-vector constant, or panic!
+    pub fn as_int(&self) -> &Integer {
+        if let Value::Int(b) = self {
+            b
+        } else {
+            panic!("Not a bit-vec: {}", self)
+        }
+    }
+    #[track_caller]
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf(&self) -> &FieldV {
         if let Value::Field(b) = self {
@@ -1507,6 +1579,27 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 match o {
                     PfNaryOp::Add => std::ops::Add::add,
                     PfNaryOp::Mul => std::ops::Mul::mul,
+                },
+            )
+        }),
+        Op::IntBinPred(o) => Value::Bool({
+            let a = vs.get(&c.cs[0]).unwrap().as_int();
+            let b = vs.get(&c.cs[1]).unwrap().as_int();
+            match o {
+                IntBinPred::Ge => a >= b,
+                IntBinPred::Gt => a > b,
+                IntBinPred::Le => a <= b,
+                IntBinPred::Lt => a < b,
+            }
+        }),
+        Op::IntNaryOp(o) => Value::Int({
+            let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_int().clone());
+            let f = xs.next().unwrap();
+            xs.fold(
+                f,
+                match o {
+                    IntNaryOp::Add => std::ops::Add::add,
+                    IntNaryOp::Mul => std::ops::Mul::mul,
                 },
             )
         }),

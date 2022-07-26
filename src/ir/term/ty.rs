@@ -55,6 +55,8 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::FpToFp(_) => Vec::new(),
         Op::PfUnOp(_) => vec![t.cs[0].clone()],
         Op::PfNaryOp(_) => vec![t.cs[0].clone()],
+        Op::IntNaryOp(_) => Vec::new(),
+        Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
         Op::Select => vec![t.cs[0].clone()],
         Op::Store => vec![t.cs[0].clone()],
@@ -122,6 +124,8 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::FpToFp(32) => Ok(Sort::F32),
         Op::PfUnOp(_) => Ok(get_ty(&t.cs[0]).clone()),
         Op::PfNaryOp(_) => Ok(get_ty(&t.cs[0]).clone()),
+        Op::IntNaryOp(_) => Ok(Sort::Int),
+        Op::IntBinPred(_) => Ok(Sort::Bool),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
         Op::Select => array_or(get_ty(&t.cs[0]), "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs[0]).clone()),
@@ -329,6 +333,15 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         }
         (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
+        (Op::IntNaryOp(_), a) => {
+            let ctx = "int nary op";
+            all_eq_or(a.iter().cloned(), ctx)
+                .and_then(|t| int_or(t, ctx))
+                .map(|a| a.clone())
+        }
+        (Op::IntBinPred(_), &[a, b]) => int_or(a, "int bin pred")
+            .and_then(|_| int_or(b, "int bin pred"))
+            .map(|_| Sort::Bool),
         (Op::Select, &[Sort::Array(k, v, _), a]) => eq_or(k, a, "select").map(|_| (**v).clone()),
         (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
             .and_then(|_| eq_or(v, b, "store"))
@@ -465,12 +478,14 @@ pub struct TypeError {
 pub enum TypeErrorReason {
     /// Two sorts should be equal
     NotEqual(Sort, Sort, &'static str),
-    /// A sort should be a boolean
+    /// A sort should be boolean
     ExpectedBool(Sort, &'static str),
     /// A sort should be a floating-point
     ExpectedFp(Sort, &'static str),
     /// A sort should be a bit-vector
     ExpectedBv(Sort, &'static str),
+    /// A sort should be integer
+    ExpectedInt(Sort, &'static str),
     /// A sort should be a prime field
     ExpectedPf(Sort, &'static str),
     /// A sort should be an array
@@ -492,6 +507,14 @@ fn bv_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason
         Ok(a)
     } else {
         Err(TypeErrorReason::ExpectedBv(a.clone(), ctx))
+    }
+}
+
+fn int_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReason> {
+    if let Sort::Int = a {
+        Ok(a)
+    } else {
+        Err(TypeErrorReason::ExpectedInt(a.clone(), ctx))
     }
 }
 
