@@ -161,7 +161,6 @@ typedef struct
 	DT final_layer[FINAL_OUTPUT_CHANNELS];
 } Output;
 
-
 DT mmulT_unrolled_inner_2(DT* a, DT* b) { 
 	DT sum = 0;
 	// int i = 0;
@@ -176,7 +175,6 @@ DT mmulT_unrolled_inner_2(DT* a, DT* b) {
 	// for(i=0; i < OUTPUT_CHANNELS * SIZE_CONVOLUTION; i++) {
 	// 	sum += a[i] * b[i];
 	// }
-	
 	for(int k = 0; k < FULLY_CONNECTED_WIDTH; k++) {
 		sum += a[k] * b[k];
 	}
@@ -318,8 +316,7 @@ Output main(
 	// Convolution (1)
 	DT convolution_layer[OUTPUT_CHANNELS * SIZE_CONVOLUTION];
 	convolution_naive_outputs_1(convolution_input, INPUT_B.kernelsL1, convolution_layer);
-	
-	
+		
 	// Activation Function (2)
 	for(int i = 0; i < OUTPUT_CHANNELS * SIZE_CONVOLUTION; i++) {
 		convolution_layer[i] = activate_sqr(convolution_layer[i]);
@@ -329,7 +326,6 @@ Output main(
 	DT im_layer[FULLY_CONNECTED_WIDTH];	
 	// mmulT_unrolled(INPUT_B.pool_layer, convolution_layer, im_layer, FULLY_CONNECTED_WIDTH, 1, OUTPUT_CHANNELS * SIZE_CONVOLUTION);
     mmulT_unrolled_1(INPUT_B.pool_layer, convolution_layer, im_layer);
-
 
 	// Activation Function (4)
 	for(int i = 0; i < FULLY_CONNECTED_WIDTH; i++) {
@@ -347,4 +343,6 @@ Output main(
 
     return OUTPUT_classify;
 }
+
+
 

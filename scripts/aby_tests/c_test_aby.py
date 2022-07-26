@@ -31,6 +31,8 @@ if __name__ == "__main__":
         cryptonets_tests + \
         histogram_tests
 
+    tests = ts
+
     # TODO: add support unsigned + int promotion
     # unsigned_arithmetic_tests + \
 

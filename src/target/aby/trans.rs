@@ -555,7 +555,7 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    fn embed_nonscalar(&mut self, t: Term) {
+    fn embed_vector(&mut self, t: Term) {
         match &t.op {
             Op::Const(Value::Array(arr)) => {
                 let mut shares: Vec<i32> = Vec::new();
@@ -667,6 +667,7 @@ impl<'a> ToABY<'a> {
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
                 let shares = self.get_shares(&t.cs[0]);
+
                 let tuple_sort = check(&t.cs[0]);
                 let (offset, len) = match tuple_sort {
                     Sort::Tuple(t) => {
@@ -717,8 +718,6 @@ impl<'a> ToABY<'a> {
                 let op = format!("CALL({})", name);
                 let num_args: usize = arg_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
                 let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-                // map argument shares
-                // define rewireable shares with "r"
                 let mut arg_shares: Vec<String> = Vec::new();
                 for c in t.cs.iter() {
                     let sort = check(c);
@@ -753,7 +752,7 @@ impl<'a> ToABY<'a> {
                 self.bytecode_output.push(line);
             }
             _ => {
-                panic!("Non-field in embed_nonscalar: {}", t.op)
+                panic!("Non-field in embed_vector: {}", t.op)
             }
         }
     }
@@ -772,7 +771,7 @@ impl<'a> ToABY<'a> {
                     self.embed_bv(c);
                 }
                 Sort::Array(..) | Sort::Tuple(_) => {
-                    self.embed_nonscalar(c);
+                    self.embed_vector(c);
                 }
                 e => panic!("Unsupported sort in embed: {:?}", e),
             }
