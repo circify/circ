@@ -6,6 +6,8 @@
 
 use rug::Integer;
 
+use fxhash::FxHashSet;
+
 use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
@@ -74,7 +76,7 @@ impl std::iter::Iterator for PostOrderIter_v2 {
                 } else if let Op::Store = t.op{
                     if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
                         self.stack.last_mut().unwrap().0 = true;
-                        let last = self.stack.last().unwrap().1.clone();
+                        let last = self.stack.last().unwrap().1.clone(); 
                         self.stack.push((false, last.cs[0].clone()));
                         self.stack.push((false, last.cs[2].clone()));
                         continue;
@@ -212,6 +214,7 @@ struct ToABY<'a> {
     bytecode_output: Vec<String>,
     const_output: Vec<String>,
     share_output: Vec<String>,
+    term_share_output: Vec<String>,
     const_map: HashMap<(Integer, char), i32>,
     written_const_set: HashSet<i32>
 }
@@ -245,6 +248,7 @@ impl<'a> ToABY<'a> {
             bytecode_output: Vec::new(),
             const_output: Vec::new(),
             share_output: Vec::new(),
+            term_share_output: Vec::new(),
             const_map: HashMap::new(),
             written_const_set: HashSet::new(),
         }
@@ -276,6 +280,9 @@ impl<'a> ToABY<'a> {
             let share_output_path = get_path(self.path, &self.lang, "share_map", false);
             write_lines(&share_output_path, &self.share_output);
             self.share_output.clear();
+            let term_share_output_path = get_path(self.path, &self.lang, "term_share_map", false);
+            write_lines(&term_share_output_path, &self.term_share_output);
+            self.term_share_output.clear();
         }
     }
 
@@ -320,6 +327,8 @@ impl<'a> ToABY<'a> {
             let share_type = s_map.get(&t).unwrap().char();
             let line = format!("{} {}\n", s, share_type);
             self.share_output.push(line);
+            let line2 = format!("{} {}\n", t.op, share_type);
+            self.term_share_output.push(line2);
         }
     }
 
@@ -330,6 +339,8 @@ impl<'a> ToABY<'a> {
             if !self.written_const_set.contains(s){
                 let line = format!("{} {}\n", s, share_type);
                 self.share_output.push(line);
+                let line2 = format!("{} {}\n", t.op, share_type);
+                self.term_share_output.push(line2);
             }
         }
     }
@@ -1201,6 +1212,12 @@ pub fn to_aby(
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
+        #[cfg(feature = "lp")]
+        "smart_glp" => {
+            let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         // #[cfg(feature = "lp")]
         // "mlp+mut" => {
         //     let (fs, s_map) = mlp_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
@@ -1233,4 +1250,140 @@ pub fn to_aby(
         }
     };
 
+}
+
+fn get_sort_len(s: &Sort) -> usize {
+    let mut len = 0;
+    len += match s {
+        Sort::Bool => 1,
+        Sort::BitVector(_) => 1,
+        Sort::Array(_, _, n) => *n,
+        Sort::Tuple(sorts) => {
+            let mut inner_len = 0;
+            for inner_s in sorts.iter() {
+                inner_len += get_sort_len(inner_s);
+            }
+            inner_len
+        }
+        _ => panic!("Sort is not supported: {:#?}", s),
+    };
+    len
+}
+
+pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>){
+    let mut term_to_terms: TermMap<Vec<Term>> = TermMap::new();
+    let mut def_uses: FxHashSet<(Term, Term)> = FxHashSet::default();
+    let mut const_terms: TermSet = TermSet::new();
+    let mut good_terms: TermSet = TermSet::new();
+    for out in c.outputs.iter() {
+        for t in PostOrderIter_v2::new(out.clone()) {
+            match &t.op{
+                Op::Const(Value::Tuple(tup)) => {
+                    let mut terms: Vec<Term> = Vec::new();
+                    for val in tup.iter() {
+                        terms.push(leaf_term(Op::Const(val.clone())));
+                        const_terms.insert(leaf_term(Op::Const(val.clone())));
+                        good_terms.insert(leaf_term(Op::Const(val.clone())));
+                    }
+                    term_to_terms.insert(t.clone(), terms);
+                }
+                Op::Tuple => {
+                    let mut terms: Vec<Term> = Vec::new();
+                    for c in t.cs.iter() {
+                        terms.extend(term_to_terms.get(&c).unwrap().clone());
+                    }
+                    term_to_terms.insert(t.clone(), terms);
+                }
+                Op::Field(i) => {
+                    let terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
+                    term_to_terms.insert(t.clone(), vec![terms[*i].clone()]);
+                }
+                Op::Update(i) => {
+                    let mut tuple_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
+                    let value_terms = term_to_terms.get(&t.cs[1]).unwrap().clone();
+                    tuple_terms[*i] = value_terms[0].clone();
+                    term_to_terms.insert(t.clone(), tuple_terms);
+                }
+                Op::Const(Value::Array(arr)) => {
+                    let mut terms: Vec<Term> = Vec::new();
+                    let sort = check(&t);
+                    if let Sort::Array(_, _, n) = sort{
+                        let n = n as i32;
+                        for i in 0..n{
+                            let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
+                            let v = match arr.map.get(&idx) {
+                                Some(c) => c,
+                                None => &*arr.default,
+                            };
+                            terms.push(leaf_term(Op::Const(v.clone())));
+                            const_terms.insert(leaf_term(Op::Const(v.clone())));
+                            good_terms.insert(leaf_term(Op::Const(v.clone())));
+                        }
+                    } else{
+                        todo!("Const array sort not array????")
+                    }
+                    term_to_terms.insert(t.clone(), terms);
+                }
+                Op::Store => {
+                    let mut array_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
+                    let value_terms = term_to_terms.get(&t.cs[2]).unwrap().clone();
+                    if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                        // constant indexing
+                        let idx = bv.uint().to_usize().unwrap().clone();
+                        array_terms[idx] = value_terms[0].clone();
+                        term_to_terms.insert(t.clone(), array_terms);
+                    }
+                    // secret indexing?
+                }
+                Op::Select => {
+                    let array_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
+                    if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                        // constant indexing
+                        let idx = bv.uint().to_usize().unwrap().clone();
+                        term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
+                    }
+                }
+                // noy sure if we should include call in def uses...
+                // Op::Call(..) => {
+                //     term_to_terms.insert(t.clone(), vec![t.clone()]);
+                // }
+                // _ =>{
+                //     for c in t.cs.iter(){
+                //         if let Op::Call(..) = t.op{
+                //             continue;
+                //         } else{
+                //             let terms = term_to_terms.get(c).unwrap();
+                //             assert_eq!(terms.len(), 1);
+                //             def_uses.insert((t.clone(), terms[0].clone()));
+                //         }
+                //     }
+                //     term_to_terms.insert(t.clone(), vec![t.clone()]);
+                // }
+                Op::Call(_, _, _, ret_sorts) => {
+                    // Use call term itself as the placeholder
+                    // Call term will be ignore by the ilp solver later
+                    let mut ret_terms: Vec<Term> = Vec::new();
+                    let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                    for _ in 0..num_rets{
+                        ret_terms.push(t.clone());
+                    }
+                    term_to_terms.insert(t.clone(), ret_terms);
+                }
+                _ =>{
+                    for c in t.cs.iter(){
+                        if let Op::Call(..) = t.op{
+                            continue;
+                        } else{
+                            let terms = term_to_terms.get(c).unwrap();
+                            assert_eq!(terms.len(), 1);
+                            def_uses.insert((t.clone(), terms[0].clone()));
+                        }
+                    }
+                    term_to_terms.insert(t.clone(), vec![t.clone()]);
+                    good_terms.insert(t.clone());
+                }
+            }
+        }
+    }
+    (good_terms, def_uses)
 }

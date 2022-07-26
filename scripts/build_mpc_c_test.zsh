@@ -66,6 +66,12 @@ function mpc_test_6  {
     cpath=$2
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "a+y"
 }
+
+function mpc_test_7  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_glp"
+}
 # mpc_test 2 ./examples/C/mpc/playground.c
 
 # # build mpc arithmetic tests
@@ -159,7 +165,7 @@ function mpc_test_6  {
 # mpc_test 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 
 # # build OPA benchmarks
-mpc_test_4 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
+mpc_test_7 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
 
 
 # mpc_test_3 2 ./examples/C/mpc/playground.c

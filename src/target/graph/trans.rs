@@ -5,8 +5,12 @@ use crate::target::graph::mlp::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 #[cfg(feature = "lp")]
+use crate::target::aby::assignment::ilp::smart_global_assign;
+#[cfg(feature = "lp")]
 use crate::target::graph::utils::mutation::*;
 use crate::target::aby::assignment::SharingMap;
+
+use crate::target::aby::trans::construct_def_uses;
 
 use std::time::Instant;
 use std::collections::HashMap;
@@ -146,7 +150,7 @@ pub fn partition_with_mut(
 
 #[cfg(feature = "lp")]
 /// inline all function into main
-pub fn inline_all_and_assign_glp(
+pub fn  inline_all_and_assign_glp(
     fs: &Functions, 
     cm: &str
 ) -> (Functions, HashMap<String, SharingMap>){
@@ -161,6 +165,32 @@ pub fn inline_all_and_assign_glp(
 
     let cs = c.to_cs();
     let assignment = assign(&cs, cm);
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)
+}
+
+#[cfg(feature = "lp")]
+/// inline all function into main
+pub fn  inline_all_and_assign_smart_glp(
+    fs: &Functions, 
+    cm: &str
+) -> (Functions, HashMap<String, SharingMap>){
+    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let main = "main";
+    let c = tp.inline_all(&main.to_string());
+
+    // println!("Terms after inline all.");
+    // for t in c.terms_postorder() {
+    //     println!("t: {}", t);
+    // }
+
+    let cs = c.to_cs();
+    let (terms, def_uses) = construct_def_uses(&c);
+
+    let assignment = smart_global_assign(&terms, &def_uses, cm);
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);
     let mut fs = Functions::new();

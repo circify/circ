@@ -58,9 +58,9 @@ impl CostModel {
         ops: FxHashMap<String, FxHashMap<ShareType, f64>>,
     ) -> CostModel {
         let mut zero: FxHashMap<ShareType, f64> = FxHashMap::default();
-        zero.insert(ShareType::Arithmetic, 0.01);
-        zero.insert(ShareType::Boolean, 0.02);
-        zero.insert(ShareType::Yao, 0.03);
+        zero.insert(ShareType::Arithmetic, 0.0);
+        zero.insert(ShareType::Boolean, 0.0);
+        zero.insert(ShareType::Yao, 0.0);
 
         let mut zero_bool: FxHashMap<ShareType, f64> = FxHashMap::default();
         zero_bool.insert(ShareType::Boolean, 0.0);
