@@ -81,6 +81,7 @@ struct FrontendOptions {
     #[structopt(long)]
     lint_prim_rec: bool,
 
+    #[cfg(feature = "zok")]
     /// In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take
     /// effect if that branch is active.
     ///
