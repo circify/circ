@@ -45,7 +45,8 @@ impl Expr2Smt<()> for Value {
         match self {
             Value::Bool(b) => write!(w, "{}", b)?,
             Value::Field(f) => write!(w, "#f{}m{}", f.i(), f.modulus())?,
-            Value::Int(i) => write!(w, "{}", i)?,
+            Value::Int(i) if i >= &Integer::new() => write!(w, "{}", i)?,
+            Value::Int(i) => write!(w, "(- 0 {})", *i.as_neg())?,
             Value::BitVector(b) => write!(w, "{}", b)?,
             Value::F32(f) => {
                 let (sign, exp, mant) = f.decompose_raw();
@@ -163,6 +164,18 @@ impl Expr2Smt<()> for TermData {
                 write!(w, "(ffneg")?;
                 true
             }
+            Op::IntNaryOp(IntNaryOp::Mul) => {
+                write!(w, "(*")?;
+                true
+            }
+            Op::IntNaryOp(IntNaryOp::Add) => {
+                write!(w, "(+")?;
+                true
+            }
+            Op::IntBinPred(o) => {
+                write!(w, "({}", o)?;
+                true
+            }
             o => panic!("Cannot give {} to SMT solver", o),
         };
         if s_expr_children {
@@ -230,6 +243,8 @@ impl<'a, R: std::io::BufRead> IdentParser<String, Sort, &'a mut SmtParser<R>> fo
     fn parse_type(self, input: &'a mut SmtParser<R>) -> SmtRes<Sort> {
         if input.try_tag("Bool")? {
             Ok(Sort::Bool)
+        } else if input.try_tag("Int")? {
+            Ok(Sort::Int)
         } else if input.try_tag("(_ BitVec")? {
             let n = input
                 .try_int(|s, b| {
@@ -292,6 +307,10 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
             let int_literal = input.get_sexpr()?;
             let i = Integer::from_str_radix(int_literal, 10).unwrap();
             Value::Field(f.new_v(i))
+        } else if let Sort::Int = s {
+            let int_literal = input.get_sexpr()?;
+            let i = Integer::from_str_radix(int_literal, 10).unwrap();
+            Value::Int(i)
         } else {
             unimplemented!("Could not parse model suffix: {}", input.buff_rest())
         };
@@ -584,5 +603,146 @@ mod test {
             .assert(&*term![Op::Not; term![Op::Eq; t, leaf_term(Op::Const(val))]])
             .unwrap();
         solver.check_sat().unwrap()
+    }
+
+    #[test]
+    fn int_model() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (b int))
+            (and
+                (or (= (intadd a b) 1)
+                    (= (intadd a b) 0))
+                (< a 1)
+                (> 1 b)
+                (>= a 0)
+                (<= 0 b)
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Int(0.into())),
+                    ("b".to_owned(), Value::Int(0.into())),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn int_no_model() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (b int))
+            (and
+                (or (= (intadd a b) 1)
+                    (= (intadd a b) 1))
+                (< a 1)
+                (> 1 b)
+                (>= a 0)
+                (<= 0 b)
+            )
+        )
+        ",
+        );
+        assert_eq!(find_model(&t), None)
+    }
+
+    #[test]
+    fn int_model_nia() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (b int))
+            (and
+                (= (intmul a a) b)
+                (= (intmul b b) a)
+                (not (= a 0))
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Int(1.into())),
+                    ("b".to_owned(), Value::Int(1.into())),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn int_model_div() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (q int) (r int))
+            (and
+                (= a (intadd (intmul q 5) r))
+                (>= r 0)
+                (< r 5)
+                (= (intadd a (intmul -1 r)) 10)
+                (>= a 14)
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Int(14.into())),
+                    ("r".to_owned(), Value::Int(4.into())),
+                    ("q".to_owned(), Value::Int(2.into())),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn bv_model_div() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (bv 8)) (q (bv 8)) (r (bv 8)))
+            (and
+                (= a (bvadd (bvmul q #x05) r))
+                (bvuge r #x00)
+                (bvult r #x05)
+                (= (bvsub a r) #x0a)
+                (bvuge a #x0e)
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    (
+                        "a".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(14), 8))
+                    ),
+                    (
+                        "r".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(4), 8))
+                    ),
+                    (
+                        "q".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(2), 8))
+                    ),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
     }
 }
