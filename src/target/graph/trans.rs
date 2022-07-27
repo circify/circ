@@ -178,6 +178,7 @@ pub fn  inline_all_and_assign_smart_glp(
     fs: &Functions, 
     cm: &str
 ) -> (Functions, HashMap<String, SharingMap>){
+    let mut now = Instant::now();
     let mut tp = TrivialPartition::new(fs, 0, 0, false);
     let main = "main";
     let c = tp.inline_all(&main.to_string());
@@ -189,8 +190,12 @@ pub fn  inline_all_and_assign_smart_glp(
 
     let cs = c.to_cs();
     let (terms, def_uses) = construct_def_uses(&c);
+    println!("Time: Inline and construction def uses: {:?}", now.elapsed());
 
+    now = Instant::now();
     let assignment = smart_global_assign(&terms, &def_uses, cm);
+    println!("Time: ILP: {:?}", now.elapsed());
+
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);
     let mut fs = Functions::new();

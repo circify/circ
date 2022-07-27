@@ -4,5 +4,5 @@ from util import run_tests
 from test_suite import *
 
 if __name__ == "__main__":
-    tests = cryptonets_tests
+    tests = kmeans_tests_2
     run_tests('c', tests)

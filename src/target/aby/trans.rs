@@ -30,6 +30,8 @@ use super::assignment::assign_arithmetic_and_boolean;
 use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
 
+use std::time::Instant;
+
 // use super::call_site_similarity::call_site_similarity;
 
 const PUBLIC: u8 = 2;
@@ -1126,6 +1128,8 @@ impl<'a> ToABY<'a> {
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self) {
+        let now = Instant::now();
+
         let computations = self.fs.computations.clone();
 
         // for (name, c) in computations.iter() {
@@ -1239,6 +1243,7 @@ impl<'a> ToABY<'a> {
 
         // write remaining shares
         self.write_share_output(true);
+        println!("Time: Lower: {:?}", now.elapsed());
     }
 }
 
@@ -1257,7 +1262,8 @@ pub fn to_aby(
 ) {
 
     // TODO: change ILP to take in Functions instead of individual computations
-    
+
+
     match ss{
         #[cfg(feature = "lp")]
         "gglp" => {
@@ -1412,19 +1418,32 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                         // println!("Store the {} value on a  {} size array.",idx , array_terms.len());
                         array_terms[idx] = value_terms[0].clone();
                         term_to_terms.insert(t.clone(), array_terms);
+                    } else{
+                        for idx in 0..array_terms.len(){
+                            def_uses.insert((array_terms[idx].clone(), t.clone()));
+                            array_terms[idx] = t.clone();
+                        }
+                        def_uses.insert((value_terms[0].clone(), t.clone()));
+                        term_to_terms.insert(t.clone(), array_terms);
+                        good_terms.insert(t.clone());
                     }
-                    // secret indexing?
                 }
                 Op::Select => {
                     let array_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
                     if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                         // constant indexing
                         let idx = bv.uint().to_usize().unwrap().clone();
-                        if array_terms.len() == 1 && idx == 323 {
-                            println!("op: {:?}", t.cs[0].op);
-                            println!("op: {:?}", t.cs[0].cs[0].op);
+                        if array_terms.len() == 1 && idx == 1 {
+                            println!("dad op: {:?}", t.cs[0].op);
+                            println!("grandpa op: {:?}", t.cs[0].cs[0].op);
                         }
                         term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
+                    } else{
+                        for idx in 0..array_terms.len(){
+                            def_uses.insert((array_terms[idx].clone(), t.clone()));
+                        }
+                        term_to_terms.insert(t.clone(), vec![t.clone()]);
+                        good_terms.insert(t.clone());
                     }
                 }
                 // noy sure if we should include call in def uses...
@@ -1453,11 +1472,47 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                     }
                     term_to_terms.insert(t.clone(), ret_terms);
                 }
+                Op::Ite =>{
+                    // bool exp
+                    
+                    if let Op::Store = t.cs[1].op{
+                        // assert_eq!(t.cs[2].op, Op::Store);
+                        let mut cond_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
+                        assert_eq!(cond_terms.len(), 1);
+                        def_uses.insert((cond_terms[0].clone(), t.clone()));
+                        // true branch
+                        let mut t_terms = term_to_terms.get(&t.cs[1]).unwrap().clone();
+                        // false branch
+                        let f_terms = term_to_terms.get(&t.cs[2]).unwrap().clone();
+                        assert_eq!(t_terms.len(), f_terms.len());
+                        for idx in 0..t_terms.len(){
+                            def_uses.insert((t_terms[idx].clone(), t.clone()));
+                            def_uses.insert((f_terms[idx].clone(), t.clone()));
+                            t_terms[idx] = t.clone();
+                        }
+                        term_to_terms.insert(t.clone(), t_terms);
+                    } else{
+                        for c in t.cs.iter(){
+                            if let Op::Call(..) = t.op{
+                                continue;
+                            } else{
+                                println!("op: {}", c.op);
+                                let terms = term_to_terms.get(c).unwrap();
+                                assert_eq!(terms.len(), 1);
+                                def_uses.insert((terms[0].clone(), t.clone()));
+                            }
+                        }
+                        term_to_terms.insert(t.clone(), vec![t.clone()]);
+                    }
+                    good_terms.insert(t.clone());
+                }
                 _ =>{
+                    println!("cur op: {}", t.op);
                     for c in t.cs.iter(){
                         if let Op::Call(..) = t.op{
                             continue;
                         } else{
+                            println!("op: {}", c.op);
                             let terms = term_to_terms.get(c).unwrap();
                             assert_eq!(terms.len(), 1);
                             def_uses.insert((terms[0].clone(), t.clone()));
