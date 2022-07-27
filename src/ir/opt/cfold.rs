@@ -218,6 +218,19 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
+            Op::IntNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::IntBinPred(p) => {
+                if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
+                    Some(leaf_term(Op::Const(Value::Bool(match p {
+                        IntBinPred::Ge => a >= b,
+                        IntBinPred::Gt => a > b,
+                        IntBinPred::Le => a <= b,
+                        IntBinPred::Lt => a < b,
+                    }))))
+                } else {
+                    None
+                }
+            }
             Op::UbvToPf(fty) => get(0)
                 .as_bv_opt()
                 .map(|bv| leaf_term(Op::Const(Value::Field(fty.new_v(bv.uint()))))),
@@ -532,6 +545,43 @@ impl NaryFlat<FieldV> for PfNaryOp {
     }
 }
 
+impl NaryFlat<Integer> for IntNaryOp {
+    fn as_const(t: Term) -> Result<Integer, Term> {
+        match &t.op {
+            Op::Const(Value::Int(b)) => Ok(b.clone()),
+            _ => Err(t),
+        }
+    }
+    fn combine(self, mut children: Vec<Term>, mut consts: Vec<Integer>) -> Term {
+        match self {
+            IntNaryOp::Add => {
+                if let Some(c) = consts.pop() {
+                    let c = consts.into_iter().fold(c, std::ops::Add::add);
+                    if c != Integer::new() || children.is_empty() {
+                        children.push(leaf_term(Op::Const(Value::Int(c))));
+                    }
+                }
+                safe_nary(INT_ADD, children)
+            }
+            IntNaryOp::Mul => {
+                if let Some(c) = consts.pop() {
+                    let c = consts.into_iter().fold(c, std::ops::Mul::mul);
+                    if c == Integer::new() || children.is_empty() {
+                        leaf_term(Op::Const(Value::Int(c)))
+                    } else {
+                        if c != Integer::from(1u8) {
+                            children.push(leaf_term(Op::Const(Value::Int(c))));
+                        }
+                        safe_nary(INT_MUL, children)
+                    }
+                } else {
+                    safe_nary(INT_MUL, children)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -591,6 +641,48 @@ mod test {
             fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![Op::BvUext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
+    }
+
+    #[test]
+    fn int_add_constants() {
+        let before = text::parse_term(b"(intadd 5 6 10 -4)");
+        let ex_after = text::parse_term(b"17");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_add_vars() {
+        let before = text::parse_term(b"(declare ((a int)) (intadd a 5 6 10 -4))");
+        let ex_after = text::parse_term(b"(declare ((a int)) (intadd a 17))");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_add_vars_zero() {
+        let before = text::parse_term(b"(declare ((a int)) (intadd a -5 -6 10 1))");
+        let ex_after = text::parse_term(b"(declare ((a int)) a)");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_mul_vars() {
+        let before = text::parse_term(b"(declare ((a int)) (intmul a 1 2 4))");
+        let ex_after = text::parse_term(b"(declare ((a int)) (intmul a 8))");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_mul_vars_one() {
+        let before = text::parse_term(b"(declare ((a int)) (intmul a 1 1))");
+        let ex_after = text::parse_term(b"(declare ((a int)) a)");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_mul_vars_zero() {
+        let before = text::parse_term(b"(declare ((a int)) (intmul a 1 1 0))");
+        let ex_after = text::parse_term(b"(declare ((a int)) 0)");
+        assert_eq!(fold(&before, &[]), ex_after);
     }
 }
 
