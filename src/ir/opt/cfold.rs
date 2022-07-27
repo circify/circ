@@ -557,7 +557,7 @@ impl NaryFlat<Integer> for IntNaryOp {
             IntNaryOp::Add => {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Add::add);
-                    if c != Integer::new() || children.is_empty() {
+                    if c != 0u8 || children.is_empty() {
                         children.push(leaf_term(Op::Const(Value::Int(c))));
                     }
                 }
@@ -566,10 +566,10 @@ impl NaryFlat<Integer> for IntNaryOp {
             IntNaryOp::Mul => {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Mul::mul);
-                    if c == Integer::new() || children.is_empty() {
+                    if c == 0u8 || children.is_empty() {
                         leaf_term(Op::Const(Value::Int(c)))
                     } else {
-                        if c != Integer::from(1u8) {
+                        if c != 1u8 {
                             children.push(leaf_term(Op::Const(Value::Int(c))));
                         }
                         safe_nary(INT_MUL, children)
