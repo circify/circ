@@ -19,10 +19,9 @@ struct input_b {
 	int dataB[D*NA];
 };
 
-typedef struct
-{
-	coord_t cluster[D*NC];
-} Output;
+struct output {
+	int cluster[D*NC];
+};
 
 
 int dist2(int x1, int y1, int x2, int y2) {
@@ -184,7 +183,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 }
 
 
-Output main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
+int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
 {
     // init data
     int data[LEN * D];
@@ -198,8 +197,13 @@ Output main(__attribute__((private(0))) int a[20], __attribute__((private(1))) i
         data[i + offset] = b[i];
     }
 
-    Output output;
+    struct output output;
     kmeans(data, output.cluster);
    
-    return output;
+    int sum = 0;
+    for (int i = 0; i < D * NC; i++)
+    {
+        sum += output.cluster[i];
+    }
+    return sum;
 }

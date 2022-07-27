@@ -16,6 +16,8 @@ pub enum ShareType {
     Boolean,
     /// Yao sharing (one party holds `k_a`, `k_b`, other knows the `{k_a, k_b} <-> {0, 1}` mapping)
     Yao,
+    ///
+    None,
 }
 
 /// List of share types.
@@ -28,6 +30,7 @@ impl ShareType {
             ShareType::Arithmetic => 'a',
             ShareType::Boolean => 'b',
             ShareType::Yao => 'y',
+            ShareType::None => 'n',
         }
     }
 }

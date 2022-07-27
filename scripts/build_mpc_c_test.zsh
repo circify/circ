@@ -79,4 +79,6 @@ function mpc_test_7  {
 
 # mpc_test_7 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 
-mpc_test_7 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test_7 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+
+mpc_test_7 2 ./examples/C/mpc/benchmarks/mnist/mnist.c

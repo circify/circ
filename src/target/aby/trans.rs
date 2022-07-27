@@ -585,7 +585,7 @@ impl<'a> ToABY<'a> {
             }
             Op::Const(Value::Bool(b)) => {
                 let op = "CONS_bool";
-                let line = format!("1 1 {} {} {}\n", *b as i32, s, op);
+                let line = format!("2 1 {} 1 {} {}\n", *b as i32, s, op);
                 self.const_output.push(line);
             }
             Op::Eq => {
@@ -710,11 +710,8 @@ impl<'a> ToABY<'a> {
                 let s = self.get_share(&t);
                 if !self.written_const_set.contains(&s){
                     self.written_const_set.insert(s);
-                    let op = "CONS_bv";
-                    let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                    if b.as_sint() == 99{
-                        println!("GOtcha: {}", t);
-                    }
+                    let op = "CONS";
+                    let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
                     self.const_output.push(line);
                 }
                 // self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -877,11 +874,8 @@ impl<'a> ToABY<'a> {
                             Value::BitVector(b) => {
                                 if !self.written_const_set.contains(&s){
                                     self.written_const_set.insert(s);
-                                    let op = "CONS_bv";
-                                    let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                                    if b.as_sint() == 99{
-                                        println!("GOtcha2: {}", t);
-                                    }
+                                    let op = "CONS";
+                                    let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
                                     self.const_output.push(line);
                                 }
                                 // self.cache.insert(t.clone(), EmbeddedTerm::Bv);
@@ -903,11 +897,8 @@ impl<'a> ToABY<'a> {
                         Value::BitVector(b) => {
                             if !self.written_const_set.contains(s){
                                 self.written_const_set.insert(*s);
-                                let op = "CONS_bv";
-                                let line = format!("1 1 {} {} {}\n", b.as_sint(), s, op);
-                                if b.as_sint() == 99{
-                                    println!("GOtcha3: {}", t);
-                                }
+                                let op = "CONS";
+                                let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
                                 self.const_output.push(line);
                             }
                         }
@@ -1496,7 +1487,7 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                             if let Op::Call(..) = t.op{
                                 continue;
                             } else{
-                                println!("op: {}", c.op);
+                                // println!("op: {}", c.op);
                                 let terms = term_to_terms.get(c).unwrap();
                                 assert_eq!(terms.len(), 1);
                                 def_uses.insert((terms[0].clone(), t.clone()));
@@ -1507,12 +1498,12 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                     good_terms.insert(t.clone());
                 }
                 _ =>{
-                    println!("cur op: {}", t.op);
+                    // println!("cur op: {}", t.op);
                     for c in t.cs.iter(){
                         if let Op::Call(..) = t.op{
                             continue;
                         } else{
-                            println!("op: {}", c.op);
+                            // println!("op: {}", c.op);
                             let terms = term_to_terms.get(c).unwrap();
                             assert_eq!(terms.len(), 1);
                             def_uses.insert((terms[0].clone(), t.clone()));

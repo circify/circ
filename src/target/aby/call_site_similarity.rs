@@ -61,12 +61,9 @@ pub fn call_site_similarity(fs: &Functions) -> Vec<Vec<Term>> {
 
     // Clean input and output terms
     let mut call_sites: HashMap<(Vec<Op>, Vec<Op>), Vec<Term>> = HashMap::new();
-
     for (c, (i, o)) in call_term_map {
         let input_ops = i.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
-        let mut output_ops = o.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
-        output_ops.sort();
-
+        let output_ops = o.iter().map(|x| x.op.clone()).collect::<Vec<Op>>();
         let key = (input_ops, output_ops);
 
         // longest prefix matching?

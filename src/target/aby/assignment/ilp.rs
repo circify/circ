@@ -157,7 +157,7 @@ fn build_smart_ilp(term_set: TermSet, def_uses: &FxHashSet<(Term,Term)>, costs: 
 
     // build variables for all conversions assignments
     for (def, use_) in def_uses {
-        println!("def op: {}", def.op);
+        // println!("def op: {}", def.op);
         let def_i = terms.get(def).unwrap();
         for from_ty in &SHARE_TYPES {
             for to_ty in &SHARE_TYPES {
