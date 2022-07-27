@@ -405,9 +405,6 @@ impl<'a> ToABY<'a> {
 
                         // Write share
                         self.write_share(t, s);
-                        if s == 16{
-                            println!("#######: {}", t);
-                        }
 
                         s
                     }
@@ -869,7 +866,11 @@ impl<'a> ToABY<'a> {
                         shares.push(s);
                     } else {
                         // new const
-                        let s = self.get_new_share(&v_term, &t);
+                        let s_map = self.s_map.get(&self.curr_comp).unwrap();
+                        if !s_map.contains_key(&v_term){
+                            continue;
+                        }
+                        let s = self.get_share(&v_term);
                         match v {
                             Value::BitVector(b) => {
                                 if !self.written_const_set.contains(&s){
@@ -1353,8 +1354,27 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                     term_to_terms.insert(t.clone(), terms);
                 }
                 Op::Field(i) => {
-                    let terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
-                    term_to_terms.insert(t.clone(), vec![terms[*i].clone()]);
+                    let tuple_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
+
+                    let tuple_sort = check(&t.cs[0]);
+                    let (offset, len) = match tuple_sort {
+                        Sort::Tuple(t) => {
+                            assert!(*i < t.len());
+                            // find offset
+                            let mut offset = 0;
+                            for j in 0..*i {
+                                offset += get_sort_len(&t[j]);
+                            }
+                            // find len
+                            let len = get_sort_len(&t[*i]);
+
+                            (offset, len)
+                        }
+                        _ => panic!("Field op on non-tuple"),
+                    };
+                    // get ret slice
+                    let field_terms = &tuple_terms[offset..offset + len];
+                    term_to_terms.insert(t.clone(), field_terms.to_vec());
                 }
                 Op::Update(i) => {
                     let mut tuple_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
@@ -1366,6 +1386,7 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                     let mut terms: Vec<Term> = Vec::new();
                     let sort = check(&t);
                     if let Sort::Array(_, _, n) = sort{
+                        println!("Create a {} size array.", n);
                         let n = n as i32;
                         for i in 0..n{
                             let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
@@ -1388,6 +1409,7 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                     if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                         // constant indexing
                         let idx = bv.uint().to_usize().unwrap().clone();
+                        // println!("Store the {} value on a  {} size array.",idx , array_terms.len());
                         array_terms[idx] = value_terms[0].clone();
                         term_to_terms.insert(t.clone(), array_terms);
                     }
@@ -1398,6 +1420,10 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                     if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                         // constant indexing
                         let idx = bv.uint().to_usize().unwrap().clone();
+                        if array_terms.len() == 1 && idx == 323 {
+                            println!("op: {:?}", t.cs[0].op);
+                            println!("op: {:?}", t.cs[0].cs[0].op);
+                        }
                         term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
                     }
                 }
@@ -1434,7 +1460,7 @@ pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>)
                         } else{
                             let terms = term_to_terms.get(c).unwrap();
                             assert_eq!(terms.len(), 1);
-                            def_uses.insert((t.clone(), terms[0].clone()));
+                            def_uses.insert((terms[0].clone(), t.clone()));
                         }
                     }
                     term_to_terms.insert(t.clone(), vec![t.clone()]);

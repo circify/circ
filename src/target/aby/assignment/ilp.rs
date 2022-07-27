@@ -177,7 +177,7 @@ fn build_smart_ilp(term_set: TermSet, def_uses: &FxHashSet<(Term,Term)>, costs: 
         }
     }
 
-    let def_uses: FxHashMap<Term, Vec<Term>> = {
+    let def_uses_map: FxHashMap<Term, Vec<Term>> = {
         let mut t = FxHashMap::default();
         for (d, u) in def_uses {
             t.entry(d.clone()).or_insert_with(Vec::new).push(u.clone());
@@ -185,7 +185,7 @@ fn build_smart_ilp(term_set: TermSet, def_uses: &FxHashSet<(Term,Term)>, costs: 
         t
     };
 
-    for (def, uses) in def_uses {
+    for (def, uses) in def_uses_map.iter() {
         for use_ in uses {
             for from_ty in &SHARE_TYPES {
                 for to_ty in &SHARE_TYPES {
@@ -216,6 +216,11 @@ fn build_smart_ilp(term_set: TermSet, def_uses: &FxHashSet<(Term,Term)>, costs: 
     for ((term, ty), (_, _, var_name)) in &term_vars {
         if solution.get(var_name).unwrap() == &1.0 {
             assignment.insert(term.clone(), *ty);
+            // if *ty == ShareType::Boolean{
+            //     println!("Assign to boolean! : {}", term.op);
+            //     let uses = def_uses_map.get(term).unwrap();
+            //     println!("Number of uses: {}", uses.len());
+            // }
         }
     }
     assignment

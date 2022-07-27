@@ -73,5 +73,8 @@ function mpc_test_7  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_glp"
 }
 
-# # build OPA benchmarks
-mpc_test_7 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
+# mpc_test_7 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
+
+# mpc_test_7 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+
+mpc_test_7 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
