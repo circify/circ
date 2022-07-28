@@ -13,5 +13,3 @@ git clone https://github.com/edwjchen/ABY.git
 cd ABY && git checkout functions && mkdir build && cd build
 cmake .. -DABY_BUILD_EXE=On -DCMAKE_BUILD_TYPE=Release
 make 
-
-cd ~/circ 

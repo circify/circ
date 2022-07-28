@@ -109,28 +109,64 @@ def setup_instances(num):
         instance.public_dns_name for instance in running_instances]
 
     pool = multiprocessing.Pool(len(running_instance_ips))
-    pool.map(worker, running_instance_ips)
+    pool.map(setup_worker, running_instance_ips)
 
 
-def worker(ip):
+def setup_worker(ip):
     print("Setting up", ip)
     key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
     client.connect(hostname=ip, username="ubuntu", pkey=key)
+
     stdin, stdout, stderr = client.exec_command(
-        "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && ./circ/aws_benchmark/setup.sh")
+        "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
     stdin.flush()
 
     if stdout.channel.recv_exit_status():
-        print(ip, " failed clone")
+        print(ip, " failed setup")
 
     client.close()
 
 
-create_instances(2)
-setup_instances(2)
+def run_benchmarks(num):
+    assert(num == 2)
+    running_instances = list(ec2_resource.instances.filter(
+        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]))
+    if len(running_instances) < num:
+        print("Not all instances are up yet!")
+        return
+
+    running_instance_ips = [
+        instance.public_dns_name for instance in running_instances]
+    running_instance_private_ips = [
+        running_instances[0].private_ip_address for _ in running_instances]
+    roles = [0, 1]
+    pool = multiprocessing.Pool(len(running_instance_ips))
+    pool.map(setup_worker, running_instance_ips,
+             running_instance_private_ips, roles)
+
+
+def benchmark_worker(ip, connect_ip, role):
+    print("Running benchmark", ip)
+    key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(hostname=ip, username="ubuntu", pkey=key)
+
+    stdin, stdout, stderr = client.exec_command(
+        "cd ~ && chmod 700 ./circ/aws_benchmark/benchmark.sh && ./circ/aws_benchmark/benchmark.sh {} {} > benchmark.log".format(connect_ip, role))
+    stdin.flush()
+
+    if stdout.channel.recv_exit_status():
+        print(ip, " failed running benchmark")
+
+    client.close()
+
+
+# create_instances(2)
+# setup_instances(2)
+run_benchmarks(2)
 
 
 # stop_instances(4)
