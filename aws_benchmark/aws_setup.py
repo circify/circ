@@ -186,23 +186,25 @@ def logs():
         instance.public_dns_name for instance in running_instances]
 
     for dns_name in running_instance_ips:
+        if not os.path.exists("./logs/"):
+            os.mkdir("./logs/")
         if not os.path.exists("./logs/"+dns_name):
             os.mkdir("./logs/"+dns_name)
 
-    subprocess.call("scp -o StrictHostKeyChecking=no -i the-key-to-her-heart.pem ubuntu@" +
-                    dns_name+":~/*.log ./logs/"+dns_name, shell=True)
+        subprocess.call("scp -o StrictHostKeyChecking=no -i the-key-to-her-heart.pem ubuntu@" +
+                        dns_name+":~/*.log ./logs/"+dns_name, shell=True)
 
-    key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    client.connect(hostname=dns_name, username="ubuntu", pkey=key)
-    _, stdout, _ = client.exec_command(
-        "rm -rf ./*.log")
+        client.connect(hostname=dns_name, username="ubuntu", pkey=key)
+        _, stdout, _ = client.exec_command(
+            "rm -rf ./*.log")
 
-    if stdout.channel.recv_exit_status():
-        print(dns_name, " failed to remove logs.")
-    client.close()
+        if stdout.channel.recv_exit_status():
+            print(dns_name, " failed to remove logs.")
+        client.close()
 
 
 if __name__ == "__main__":
