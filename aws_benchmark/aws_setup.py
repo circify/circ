@@ -88,6 +88,15 @@ def get_stats():
         Filters=[{"Name": "instance-state-name", "Values": ["stopping"]}])))
     print(json.dumps(stats, indent=4))
 
+    print(list(ec2_resource.instances.filter(
+        Filters=[{"Name": "instance-state-name", "Values": ["running"]}])))
+
+    instances = list(ec2_resource.instances.filter(
+        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]))
+
+    for i in instances:
+        print(i.private_ip_address)
+
 
 def setup_instances(num):
     running_instances = list(ec2_resource.instances.filter(
@@ -109,29 +118,28 @@ def worker(ip):
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    client.connect(hostname=ip, username="root", pkey=key)
-    # stdin, stdout, stderr = client.exec_command(
-    #     "rm -rf agario > /dev/null; git clone https://github.com/edwjchen/agario.git; export GOPATH=/home/ubuntu/agario; export PATH=$PATH:/usr/local/go/bin:/home/ubuntu/.local/bin; source .bashrc; bash agario/src/setup/setup.sh")
-    # stdin.flush()
-
+    client.connect(hostname=ip, username="ubuntu", pkey=key)
     stdin, stdout, stderr = client.exec_command(
-        "echo \"hello world!\"")
-
+        "rm -rf agario > /dev/null; git clone https://github.com/edwjchen/agario.git; export GOPATH=/home/ubuntu/agario; export PATH=$PATH:/usr/local/go/bin:/home/ubuntu/.local/bin; source .bashrc; bash agario/src/setup/setup.sh")
     stdin.flush()
+
+    _stdin, stdout, _stderr = client.exec_command(
+        "echo \"hello world!\"")
     if stdout.channel.recv_exit_status():
         print(ip, " failed clone")
 
     client.close()
 
 
-create_instances(1)
-# get_stats()
+create_instances(2)
 
-
-# setup_instances(1)
-# stop_instances(1)
-# terminate_instances(1)
+# setup_instances(2)
+# stop_instances(2)
+# terminate_instances(2)
 
 # get_stats()
 
 # setup_instances(1)
+
+# stop_instances(2)
+# terminate_instances(2)
