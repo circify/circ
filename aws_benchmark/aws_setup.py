@@ -120,11 +120,9 @@ def worker(ip):
 
     client.connect(hostname=ip, username="ubuntu", pkey=key)
     stdin, stdout, stderr = client.exec_command(
-        "rm -rf agario > /dev/null; git clone https://github.com/edwjchen/agario.git; export GOPATH=/home/ubuntu/agario; export PATH=$PATH:/usr/local/go/bin:/home/ubuntu/.local/bin; source .bashrc; bash agario/src/setup/setup.sh")
+        "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && ./circ/aws_benchmark/setup.sh")
     stdin.flush()
 
-    _stdin, stdout, _stderr = client.exec_command(
-        "echo \"hello world!\"")
     if stdout.channel.recv_exit_status():
         print(ip, " failed clone")
 
@@ -132,10 +130,11 @@ def worker(ip):
 
 
 create_instances(2)
+setup_instances(2)
 
-# setup_instances(2)
-# stop_instances(2)
-# terminate_instances(2)
+
+# stop_instances(4)
+# terminate_instances(4)
 
 # get_stats()
 
