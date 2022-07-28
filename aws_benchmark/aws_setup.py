@@ -1,22 +1,10 @@
-# run wait_start then
-# run setup first, then run refresh to update all nodes with the new config file
-
 import boto3
 import json
 import os
 import multiprocessing
 import paramiko
-
-# parser = argparse.ArgumentParser(description="This program autocreates, starts, and stop Amazon EC2 Instancess.")
-# parser.add_argument("-create", default=0, help="Number of new instances to create")
-# parser.add_argument("-start", default=0, help="Number of new instances to start")
-# parser.add_argument("-stop", default=0, help="Number of new instances to stop")
-# parser.add_argument("-terminate", default=0, help="Number of new instances to terminate")
-# parser.add_argument("-stats", default=False, help="Number of new instances to terminate")
-# parser.add_argument("-run", default=True, help="Command to run on running instances")
-# parser.add_argument("-setup", default=False, help="Setup instances")
-# parser.add_argument("-hostname", default=False, help="Print all hostnames of running instances")
-# parser.add_argument("-verify", default=False, help="verify setup")
+import subprocess
+import sys
 
 ec2_resource = boto3.resource("ec2",
                               aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
@@ -74,7 +62,7 @@ def terminate_instances(num):
     print("Terminated {} instances".format(count))
 
 
-def get_stats():
+def stats():
     stats = {}
     stats["total"] = len(list(ec2_resource.instances.filter(Filters=[
                          {"Name": "instance-state-name", "Values": ["running", "stopped", "pending", "stopping"]}])))
@@ -88,14 +76,15 @@ def get_stats():
         Filters=[{"Name": "instance-state-name", "Values": ["stopping"]}])))
     print(json.dumps(stats, indent=4))
 
-    print(list(ec2_resource.instances.filter(
-        Filters=[{"Name": "instance-state-name", "Values": ["running"]}])))
 
-    instances = list(ec2_resource.instances.filter(
+def hosts():
+    running_instances = list(ec2_resource.instances.filter(
         Filters=[{"Name": "instance-state-name", "Values": ["running"]}]))
+    running_instance_ips = [
+        instance.public_dns_name for instance in running_instances]
 
-    for i in instances:
-        print(i.private_ip_address)
+    for ip in running_instance_ips:
+        print("ssh -i \"the-key-to-her-heart.pem\" ubuntu@{}".format(ip))
 
 
 def setup_instances(num):
@@ -119,13 +108,14 @@ def setup_worker(ip):
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(hostname=ip, username="ubuntu", pkey=key)
 
-    stdin, stdout, stderr = client.exec_command(
-        "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
-    stdin.flush()
-
+    _, stdout, _ = client.exec_command("cd ~/ABY")
     if stdout.channel.recv_exit_status():
-        print(ip, " failed setup")
+        _, stdout, _ = client.exec_command(
+            "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
+        if stdout.channel.recv_exit_status():
+            print(ip, " failed setup")
 
+    print("Set up:", ip)
     client.close()
 
 
@@ -143,20 +133,20 @@ def run_benchmarks(num):
         running_instances[0].private_ip_address for _ in running_instances]
     roles = [0, 1]
     pool = multiprocessing.Pool(len(running_instance_ips))
-    pool.map(setup_worker, running_instance_ips,
-             running_instance_private_ips, roles)
+    pool.starmap(benchmark_worker,  zip(running_instance_ips,
+                                        running_instance_private_ips, roles))
 
 
 def benchmark_worker(ip, connect_ip, role):
-    print("Running benchmark", ip)
+    print("Running benchmark:\nip: {}\nconnect: {}\nrole: {}\n".format(
+        ip, connect_ip, role))
     key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(hostname=ip, username="ubuntu", pkey=key)
 
-    stdin, stdout, stderr = client.exec_command(
+    _, stdout, _ = client.exec_command(
         "cd ~ && chmod 700 ./circ/aws_benchmark/benchmark.sh && ./circ/aws_benchmark/benchmark.sh {} {} > benchmark.log".format(connect_ip, role))
-    stdin.flush()
 
     if stdout.channel.recv_exit_status():
         print(ip, " failed running benchmark")
@@ -164,17 +154,98 @@ def benchmark_worker(ip, connect_ip, role):
     client.close()
 
 
-# create_instances(2)
-# setup_instances(2)
-run_benchmarks(2)
+def refresh_instances():
+    running_instances = list(ec2_resource.instances.filter(
+        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]))
+    running_instance_ips = [
+        instance.public_dns_name for instance in running_instances]
+    pool = multiprocessing.Pool(len(running_instance_ips))
+    pool.map(refresh_worker, running_instance_ips)
 
 
-# stop_instances(4)
-# terminate_instances(4)
+def refresh_worker(ip):
+    print("Refreshing: {}".format(ip))
+    key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(hostname=ip, username="ubuntu", pkey=key)
 
-# get_stats()
+    _, stdout, _ = client.exec_command(
+        "cd ~/ABY && git pull && cd ~/ABY/build && make && cd ~/circ && git pull")
 
-# setup_instances(1)
+    if stdout.channel.recv_exit_status():
+        print(ip, " failed running benchmark")
 
-# stop_instances(2)
-# terminate_instances(2)
+    client.close()
+
+
+def logs():
+    running_instances = list(ec2_resource.instances.filter(
+        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]))
+    running_instance_ips = [
+        instance.public_dns_name for instance in running_instances]
+
+    for dns_name in running_instance_ips:
+        if not os.path.exists("./logs/"+dns_name):
+            os.mkdir("./logs/"+dns_name)
+
+    subprocess.call("scp -o StrictHostKeyChecking=no -i the-key-to-her-heart.pem ubuntu@" +
+                    dns_name+":~/*.log ./logs/"+dns_name, shell=True)
+
+    key = paramiko.RSAKey.from_private_key_file("the-key-to-her-heart.pem")
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    client.connect(hostname=dns_name, username="ubuntu", pkey=key)
+    _, stdout, _ = client.exec_command(
+        "rm -rf ./*.log")
+
+    if stdout.channel.recv_exit_status():
+        print(dns_name, " failed to remove logs.")
+    client.close()
+
+
+if __name__ == "__main__":
+    last_cmd = ""
+    while True:
+        cmds = input("> ").split(" ")
+        cmd_type = cmds[0]
+
+        # press enter to redo
+        if cmd_type == "" and last_cmd != "":
+            cmd_type = last_cmd
+        else:
+            last_cmd = cmd_type
+
+        if cmd_type == "help":
+            print("Not again... oh well here you go\n")
+            print("EC2: \tcreate start stop terminate stats")
+            print("Setup: \tsetup refresh")
+            print("Run: \tbenchmark")
+            print("Logs: \tlogs")
+            print("Misc: \tstats hosts")
+            print("Quit: \tquit q")
+        elif cmd_type == "create":
+            create_instances(2)
+        elif cmd_type == "start":
+            start_instances(2)
+        elif cmd_type == "setup":
+            setup_instances(2)
+        elif cmd_type == "benchmark":
+            run_benchmarks(2)
+        elif cmd_type == "stop":
+            stop_instances(2)
+        elif cmd_type == "terminate":
+            terminate_instances(2)
+        elif cmd_type == "stats":
+            stats()
+        elif cmd_type == "hosts":
+            hosts()
+        elif cmd_type == "refresh":
+            refresh_instances()
+        elif cmd_type == "logs":
+            logs()
+        elif cmd_type in ["quit", "q", "exit"]:
+            sys.exit(0)
+        else:
+            print("unlucky, not a cmd")
