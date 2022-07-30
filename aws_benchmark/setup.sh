@@ -6,10 +6,25 @@ sudo apt-get install -y libgmp-dev
 sudo apt-get install -y libssl-dev
 sudo apt-get install -y libboost-all-dev
 sudo apt-get install -y ufw
+sudo apt-get install -y libwww-perl
+sudo apt-get install -y flex
+sudo apt-get install -y bison
 sudo ufw allow 7766
 
-git clone https://github.com/edwjchen/ABY.git
+#build ABY
+cd ~
+if [[ ! -z "~/ABY" ]]; then 
+    git clone https://github.com/edwjchen/ABY.git
+    cd ~/ABY && git checkout functions && mkdir build && cd build
+    cmake .. -DABY_BUILD_EXE=On -DCMAKE_BUILD_TYPE=Release
+    make 
+fi
 
-cd ABY && git checkout functions && mkdir build && cd build
-cmake .. -DABY_BUILD_EXE=On -DCMAKE_BUILD_TYPE=Release
-make 
+#build HyCC
+cd ~
+if [[ ! -z "~/HyCC" ]]; then 
+    git clone https://gitlab.com/edwjchen/HyCC.git
+    cd ~/HyCC
+    make minisat2-download
+    make
+fi

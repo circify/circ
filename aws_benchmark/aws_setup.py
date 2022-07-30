@@ -108,15 +108,25 @@ def setup_worker(ip):
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(hostname=ip, username="ubuntu", pkey=key)
 
-    _, stdout, _ = client.exec_command("cd ~/ABY")
+    _, stdout, _ = client.exec_command("cd ~/circ")
     if stdout.channel.recv_exit_status():
         _, stdout, _ = client.exec_command(
             "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
         if stdout.channel.recv_exit_status():
             print(ip, " failed setup")
+    else:
+        _, stdout, _ = client.exec_command(
+            "cd ~/circ && git checkout mpc_aws && cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
+        if stdout.channel.recv_exit_status():
+            print(ip, " failed setup 2")
 
     print("Set up:", ip)
     client.close()
+
+
+def compile_benchmarks(num):
+    # TODO
+    pass
 
 
 def run_benchmarks(num):
@@ -223,7 +233,8 @@ if __name__ == "__main__":
             print("Not again... oh well here you go\n")
             print("EC2: \tcreate start stop terminate stats")
             print("Setup: \tsetup refresh")
-            print("Run: \tbenchmark")
+            print("Build: \tbuild")
+            print("Run: \trun")
             print("Logs: \tlogs")
             print("Misc: \tstats hosts")
             print("Quit: \tquit q")
@@ -233,7 +244,7 @@ if __name__ == "__main__":
             start_instances(2)
         elif cmd_type == "setup":
             setup_instances(2)
-        elif cmd_type == "benchmark":
+        elif cmd_type == "run":
             run_benchmarks(2)
         elif cmd_type == "stop":
             stop_instances(2)
