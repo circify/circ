@@ -356,6 +356,11 @@ array_tests = [
         "2pc_array_index_2",
         "./scripts/aby_tests/test_inputs/index.txt",
     ],
+    [
+        "Array index test 3",
+        "2pc_array_index_3",
+        "./scripts/aby_tests/test_inputs/index.txt",
+    ],
 ]
 
 c_array_tests = [
