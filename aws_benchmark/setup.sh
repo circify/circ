@@ -9,6 +9,8 @@ sudo apt-get install -y ufw
 sudo apt-get install -y libwww-perl
 sudo apt-get install -y flex
 sudo apt-get install -y bison
+sudo apt-get install -y default-jre
+sudo apt-get install -y default-jdk
 sudo ufw allow 7766
 
 #build ABY
