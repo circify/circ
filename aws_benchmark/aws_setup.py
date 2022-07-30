@@ -181,7 +181,7 @@ def refresh_worker(ip):
     client.connect(hostname=ip, username="ubuntu", pkey=key)
 
     _, stdout, _ = client.exec_command(
-        "cd ~/ABY && git pull && cd ~/ABY/build && make && cd ~/circ && git pull")
+        "cd ~/ABY && git pull && cd ~/ABY/build && make && cd ~/circ && git pull && cd ~/HyCC && git pull && make")
 
     if stdout.channel.recv_exit_status():
         print(ip, " failed to refresh")
