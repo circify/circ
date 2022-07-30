@@ -111,12 +111,12 @@ def setup_worker(ip):
     _, stdout, _ = client.exec_command("cd ~/circ")
     if stdout.channel.recv_exit_status():
         _, stdout, _ = client.exec_command(
-            "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
+            "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && ./circ/aws_benchmark/setup.sh")
         if stdout.channel.recv_exit_status():
             print(ip, " failed setup")
     else:
         _, stdout, _ = client.exec_command(
-            "cd ~ && chmod 700 ./circ/aws_benchmark/setup.sh && ./circ/aws_benchmark/setup.sh")
+            "cd ~ && ./circ/aws_benchmark/setup.sh")
         if stdout.channel.recv_exit_status():
             print(ip, " failed setup 2")
 
@@ -184,7 +184,7 @@ def refresh_worker(ip):
         "cd ~/ABY && git pull && cd ~/ABY/build && make && cd ~/circ && git pull")
 
     if stdout.channel.recv_exit_status():
-        print(ip, " failed running benchmark")
+        print(ip, " failed to refresh")
 
     client.close()
 
