@@ -7,6 +7,7 @@ use crate::ir::opt::link::link_one;
 
 use crate::target::graph::utils::graph_utils::*;
 use crate::target::graph::utils::part::*;
+use crate::target::aby::assignment::def_uses::*;
 
 use std::collections::HashMap;
 
@@ -101,7 +102,9 @@ impl TrivialPartition{
     pub fn run(&mut self, fname: &String, path: &String, num_parts: usize) -> (Computation, TermMap<usize>){
         let mut part_map = TermMap::new();
         self.traverse(fname);
-        let t_map = self.gwriter.build_from_cs(self.comp_history.get(fname).unwrap());
+        let c = self.comp_history.get(fname).unwrap();
+        let dug = DefUsesGraph::new(&c);
+        let t_map = self.gwriter.build_from_dug(&dug);
         self.gwriter.write(path);
         let partition = self.partitioner.do_partition(path, &num_parts);
         for (t, tid) in t_map.iter(){

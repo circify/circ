@@ -7,6 +7,8 @@ use std::{env::var, fs::File, path::Path};
 #[cfg(feature = "lp")]
 pub mod ilp;
 
+pub mod def_uses;
+
 /// The sharing scheme used for an operation
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ShareType {

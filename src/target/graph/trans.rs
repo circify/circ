@@ -12,6 +12,8 @@ use crate::target::aby::assignment::SharingMap;
 
 use crate::target::aby::trans::construct_def_uses;
 
+use crate::target::aby::assignment::def_uses::*;
+
 use std::time::Instant;
 use std::collections::HashMap;
 use std::path::Path;
@@ -139,6 +141,64 @@ pub fn partition_with_mut(
 
     now = Instant::now();
     let assignment = get_share_map_with_mutation(&c, cm, &css, &partition, ml, mss);
+    println!("Time: ILP : {:?}", now.elapsed());
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)    
+}
+
+
+#[cfg(feature = "lp")]
+/// inline all function into main
+pub fn partition_with_mut_smart(
+    fs: &Functions, 
+    cm: &str,
+    path: &Path,
+    lang: &str,
+    num_parts: &usize,
+    hyper_mode: bool,
+    ml: &usize,
+    mss: &usize,
+    imbalance: &usize,
+) -> (Functions, HashMap<String, SharingMap>){
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
+    let main = "main";
+    let graph_path = get_graph_path(path, lang, hyper_mode);
+    let (c, partition) = tp.run(&main.to_string(), &graph_path, *num_parts);
+
+    let d: DefUsesGraph = DefUsesGraph::new(&c);
+
+    println!("Time: Partition: {:?}", now.elapsed());
+    now = Instant::now();
+
+    // Construct DefUsesSubGraph
+    let mut tmp_dusg: HashMap<usize, DefUsesSubGraph> = HashMap::new();
+    let mut dusg: HashMap<usize, DefUsesSubGraph> = HashMap::new();
+
+    for part_id in 0..*num_parts{
+        tmp_dusg.insert(part_id, DefUsesSubGraph::new());
+    }
+
+    for t in d.good_terms.iter(){
+        let part_id = partition.get(t).unwrap();
+        if let Some(du) = tmp_dusg.get_mut(&part_id) {
+            du.insert_node(t);
+        } else {
+            panic!("Subgraph not found for index: {}", num_parts);
+        }
+    }
+
+    for (part_id, mut du) in tmp_dusg.into_iter(){
+        du.insert_edges(&d);
+        dusg.insert(part_id, du.clone());
+    }
+    println!("Time: To Subgraph: {:?}", now.elapsed());
+
+    now = Instant::now();
+    let assignment = get_share_map_with_mutation_smart(&d, cm, &dusg, &partition, ml, mss);
     println!("Time: ILP : {:?}", now.elapsed());
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);

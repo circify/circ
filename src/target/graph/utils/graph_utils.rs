@@ -6,6 +6,7 @@
 //! 
 
 use crate::ir::term::*;
+use crate::target::aby::assignment::def_uses::*;
 
 use std::collections::HashMap;
 use std::fs;
@@ -173,6 +174,42 @@ impl GraphWriter {
                             } else {
                                 self.insert_edge(&cs_id, &t_id);
                                 self.insert_edge(&t_id, &cs_id);
+                            }
+                        }
+                    }
+                }
+                _ => unimplemented!("Haven't  implemented conversion of {:#?}", t.op),
+            }
+        }
+        self.term_to_id.clone()
+    }
+
+    pub fn build_from_dug(&mut self, dug: &DefUsesGraph) -> HashMap<Term, usize>{
+        for t in dug.good_terms.iter() {
+            match &t.op {
+                Op::Var(_, _) | Op::Const(_) => {
+                    self.get_tid_or_assign(&t);
+                }
+                Op::Ite
+                | Op::Not
+                | Op::Eq
+                | Op::Store
+                | Op::Select
+                | Op::Tuple
+                | Op::Field(_)
+                | Op::BvBinOp(_)
+                | Op::BvNaryOp(_)
+                | Op::BvBinPred(_)
+                | Op::BoolNaryOp(_) => {
+                    let t_id = self.get_tid_or_assign(&t);
+                    for def in dug.use_defs.get(t).unwrap().iter() {
+                        let def_id = self.get_tid_or_assign(&def);
+                        if def_id != t_id{
+                            if self.hyper_mode{
+                                self.insert_hyper_edge(&def_id, &t_id);
+                            } else {
+                                self.insert_edge(&def_id, &t_id);
+                                self.insert_edge(&t_id, &def_id);
                             }
                         }
                     }

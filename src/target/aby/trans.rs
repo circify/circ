@@ -13,6 +13,7 @@ use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
+use crate::target::aby::assignment::def_uses::PostOrderIter_v2;
 use crate::target::aby::utils::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -36,116 +37,6 @@ use std::time::Instant;
 
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
-
-pub struct PostOrderIter_v2 {
-    // (cs stacked, term)
-    stack: Vec<(bool, Term)>,
-    visited: TermSet,
-}
-
-impl PostOrderIter_v2 {
-    /// Make an iterator over the descendents of `root`.
-    pub fn new(root: Term) -> Self {
-        Self {
-            stack: vec![(false, root)],
-            visited: TermSet::new(),
-        }
-    }
-}
-
-impl std::iter::Iterator for PostOrderIter_v2 {
-    type Item = Term;
-    fn next(&mut self) -> Option<Term> {
-        while let Some((children_pushed, t)) = self.stack.last() {
-            if self.visited.contains(t) {
-                self.stack.pop();
-            } else if !children_pushed {
-                // for cs in t.cs.iter(){
-                //     // if let Op::Const(Value::BitVector(b)) = &cs.op {
-                //     //     let bi = b.as_sint();
-                //     //     if bi == 99{
-                //     //         println!("haha: {}", t);
-                //     //     }
-                //     // }
-                // }
-                if let Op::Select = t.op{
-                    if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
-                        self.stack.last_mut().unwrap().0 = true;
-                        let last = self.stack.last().unwrap().1.clone();
-                        self.stack.push((false, last.cs[0].clone()));
-                        continue;
-                    }
-                } else if let Op::Store = t.op{
-                    if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
-                        self.stack.last_mut().unwrap().0 = true;
-                        let last = self.stack.last().unwrap().1.clone(); 
-                        self.stack.push((false, last.cs[0].clone()));
-                        self.stack.push((false, last.cs[2].clone()));
-                        continue;
-                    }
-                }
-                self.stack.last_mut().unwrap().0 = true;
-                let last = self.stack.last().unwrap().1.clone();
-                self.stack
-                    .extend(last.cs.iter().map(|c| (false, c.clone())));
-            } else {
-                break;
-            }
-        }
-        self.stack.pop().map(|(_, t)| {
-            self.visited.insert(t.clone());
-            t
-        })
-        // while let Some((children_pushed, t)) = self.stack.pop() {
-        //     if self.visited.contains(&t) {
-        //         continue;
-        //     } else if !children_pushed {
-        //         // if let Op::Select = t.op{
-        //         //     if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
-        //         //         self.stack.push((true, t.clone()));
-        //         //         self.stack.push((false, t.cs[0].clone()));
-        //         //         continue;
-        //         //     }
-        //         // }
-        //         self.stack.push((true, t.clone()));
-        //         self.stack
-        //             .extend(t.cs.iter().map(|c| (false, c.clone())));
-        //     } else {
-        //         break;
-        //     }
-        // }
-        // self.stack.pop().map(|(_, t)| {
-        //     self.visited.insert(t.clone());
-        //     t
-        // })
-    }
-}
-
-// impl std::iter::Iterator for PostOrderIter_v2 {
-//     type Item = Term;
-//     fn next(&mut self) -> Option<Term> {
-//         while let Some(t) = self.stack.pop() {
-//             if !self.visited.contains(&t) {
-//                 if self.children_added.insert(t.clone()) {
-//                     self.stack.push(t.clone());
-//                     if let Op::Select = t.op{
-//                         if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
-//                             self.stack.push(t.cs[0].clone());
-//                             continue;
-//                         }
-//                     }
-//                     self.stack.extend(t.cs.iter().cloned());
-//                 }
-//             } else {
-//                 break;
-//             }
-//         }
-//         self.stack.pop().map(|t| {
-//             self.visited.insert(t.clone());
-//             t
-//         })
-//     }
-// }
 
 #[derive(Clone)]
 enum EmbeddedTerm {
@@ -1271,6 +1162,12 @@ pub fn to_aby(
         #[cfg(feature = "lp")]
         "smart_glp" => {
             let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "smart_lp" => {
+            let (fs, s_map) = partition_with_mut_smart(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
