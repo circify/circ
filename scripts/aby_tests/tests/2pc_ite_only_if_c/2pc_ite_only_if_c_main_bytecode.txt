@@ -1,0 +1,7 @@
+2 1 a 0 3 IN
+2 1 b 1 6 IN
+3 1 sel 2 1 4 IN
+3 1 4 3 2 5 MUX
+1 1 4 7 NOT
+3 1 7 6 5 8 MUX
+1 0 8 OUT

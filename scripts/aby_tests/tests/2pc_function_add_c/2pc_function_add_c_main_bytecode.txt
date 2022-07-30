@@ -1,0 +1,8 @@
+2 1 a 0 7 IN
+2 1 b 1 6 IN
+2 1 7 6 8 CALL(add)
+2 1 8 0 9 FIELD
+2 1 7 6 10 CALL(add2)
+2 1 10 0 11 FIELD
+2 1 11 9 12 ADD
+1 0 12 OUT
