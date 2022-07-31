@@ -99,7 +99,7 @@ impl TrivialPartition{
         self.comp_history.get(fname).unwrap().clone()
     }
 
-    pub fn run(&mut self, fname: &String, path: &String, num_parts: usize) -> (Computation, TermMap<usize>){
+    pub fn run(&mut self, fname: &String, path: &String, num_parts: usize) -> (Computation, DefUsesGraph ,TermMap<usize>){
         let mut part_map = TermMap::new();
         self.traverse(fname);
         let c = self.comp_history.get(fname).unwrap();
@@ -110,7 +110,7 @@ impl TrivialPartition{
         for (t, tid) in t_map.iter(){
             part_map.insert(t.clone(), *partition.get(tid).unwrap());
         }
-        (self.comp_history.get(fname).unwrap().clone(), part_map)
+        (self.comp_history.get(fname).unwrap().clone(), dug, part_map)
     }
 
 }

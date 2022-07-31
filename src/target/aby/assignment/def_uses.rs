@@ -13,6 +13,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::time::Instant;
 
 pub struct PostOrderIter_v2 {
     // (cs stacked, term)
@@ -184,6 +185,7 @@ pub struct DefUsesGraph {
 
 impl DefUsesGraph {
     pub fn new(c: &Computation) -> Self{
+        let mut now = Instant::now();
         let mut dug = Self {
             term_to_terms: TermMap::new(),
             def_use: FxHashSet::default(),
@@ -195,6 +197,7 @@ impl DefUsesGraph {
         dug.construct_def_use(c);
         dug.construct_def_uses();
         dug.construct_use_defs();
+        println!("Time: Def Use Graph: {:?}", now.elapsed());
         dug
     }
 
@@ -251,7 +254,7 @@ impl DefUsesGraph {
                         let mut terms: Vec<Term> = Vec::new();
                         let sort = check(&t);
                         if let Sort::Array(_, _, n) = sort{
-                            println!("Create a {} size array.", n);
+                            // println!("Create a {} size array.", n);
                             let n = n as i32;
                             for i in 0..n{
                                 let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));

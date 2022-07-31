@@ -112,7 +112,7 @@ pub fn partition_with_mut(
     let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
     let main = "main";
     let graph_path = get_graph_path(path, lang, hyper_mode);
-    let (c, partition) = tp.run(&main.to_string(), &graph_path, *num_parts);
+    let (c, d, partition) = tp.run(&main.to_string(), &graph_path, *num_parts);
 
     println!("Time: Partition: {:?}", now.elapsed());
     now = Instant::now();
@@ -167,9 +167,7 @@ pub fn partition_with_mut_smart(
     let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
     let main = "main";
     let graph_path = get_graph_path(path, lang, hyper_mode);
-    let (c, partition) = tp.run(&main.to_string(), &graph_path, *num_parts);
-
-    let d: DefUsesGraph = DefUsesGraph::new(&c);
+    let (c, d, partition) = tp.run(&main.to_string(), &graph_path, *num_parts);
 
     println!("Time: Partition: {:?}", now.elapsed());
     now = Instant::now();

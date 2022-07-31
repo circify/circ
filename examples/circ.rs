@@ -263,7 +263,7 @@ fn main() {
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     // Inline Function Calls
                     // Opt::Link,
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],

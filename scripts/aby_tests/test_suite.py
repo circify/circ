@@ -356,6 +356,11 @@ array_tests = [
         "2pc_array_index_2",
         "./scripts/aby_tests/test_inputs/index.txt",
     ],
+    [
+        "Array index test 3",
+        "2pc_array_index_3",
+        "./scripts/aby_tests/test_inputs/index.txt",
+    ],
 ]
 
 c_array_tests = [
@@ -481,21 +486,21 @@ shift_tests = [
 
 
 div_tests = [
-    [
-        "Divide a by 1",
-        "2pc_div",
-        "./scripts/aby_tests/test_inputs/div_1.txt",
-    ],
-    [
-        "Divide a by b - 1",
-        "2pc_div",
-        "./scripts/aby_tests/test_inputs/div_2.txt",
-    ],
-    [
-        "Divide a by b - 2",
-        "2pc_div",
-        "./scripts/aby_tests/test_inputs/div_3.txt",
-    ],
+    # [
+    #     "Divide a by 1",
+    #     "2pc_div",
+    #     "./scripts/aby_tests/test_inputs/div_1.txt",
+    # ],
+    # [
+    #     "Divide a by b - 1",
+    #     "2pc_div",
+    #     "./scripts/aby_tests/test_inputs/div_2.txt",
+    # ],
+    # [
+    #     "Divide a by b - 2",
+    #     "2pc_div",
+    #     "./scripts/aby_tests/test_inputs/div_3.txt",
+    # ],
     [
         "Divide a by b - 3",
         "2pc_div",

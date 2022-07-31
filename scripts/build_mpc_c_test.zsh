@@ -87,7 +87,7 @@ function mpc_test_9  {
 
 # mpc_test_7 2 ./examples/C/mpc/benchmarks/histogram/2pc_histogram.c
 
-mpc_test_7 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+# mpc_test_7 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 
 # mpc_test_8 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch_.c
 
@@ -98,4 +98,7 @@ mpc_test_7 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 # mpc_test_9 2 ./examples/C/mpc/benchmarks/mnist/mnist28.c
 
 # mpc_test_9 2 ./examples/C/mpc/benchmarks/db/db_join.c
+
+# build div tests
+mpc_test_3 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
 
