@@ -5,6 +5,10 @@ import multiprocessing
 import paramiko
 import subprocess
 import sys
+import time
+
+# instance_type = "t2.micro"
+instance_type = "c5.large"
 
 ec2_resource = boto3.resource("ec2",
                               aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
@@ -14,7 +18,7 @@ ec2_resource = boto3.resource("ec2",
 
 def create_instances(num):
     instances = ec2_resource.create_instances(ImageId="ami-05b63781e32145c7f",
-                                              InstanceType="t2.micro",
+                                              InstanceType=instance_type,
                                               KeyName="the-key-to-her-heart",
                                               MinCount=1,
                                               MaxCount=num,
@@ -156,7 +160,7 @@ def benchmark_worker(ip, connect_ip, role):
     client.connect(hostname=ip, username="ubuntu", pkey=key)
 
     _, stdout, _ = client.exec_command(
-        "cd ~ && chmod 700 ./circ/aws_benchmark/benchmark.sh && ./circ/aws_benchmark/benchmark.sh {} {} > benchmark.log".format(connect_ip, role))
+        "cd ~ && ./circ/aws_benchmark/benchmark.sh {} {} > benchmark.log".format(connect_ip, role))
 
     if stdout.channel.recv_exit_status():
         print(ip, " failed running benchmark")
@@ -243,7 +247,9 @@ if __name__ == "__main__":
         elif cmd_type == "start":
             start_instances(2)
         elif cmd_type == "setup":
+            print("=== will stop instances after setup ===")
             setup_instances(2)
+            stop_instances(2)
         elif cmd_type == "run":
             run_benchmarks(2)
         elif cmd_type == "stop":
