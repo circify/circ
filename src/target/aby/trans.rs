@@ -1,4 +1,4 @@
-//! Lowering IR to ABY DSL
+//! Lowering IR to ABY bytecode
 //! [EzPC Compiler](https://github.com/mpc-msri/EzPC/&blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/ABY_example/common/ezpc.h)
 
 //! Inv gates need to typecast circuit object to boolean circuit
@@ -230,14 +230,6 @@ impl<'a> ToABY<'a> {
         self.share_output.push(line);
     }
 
-    // fn write_shares(&mut self, t: &Term, shares: &Vec<i32>) {
-    //     let share_type = self.get_term_share_type(t).char();
-    //     for s in shares {
-    //         let line = format!("{} {}\n", s, share_type);
-    //         self.share_output.insert(line);
-    //     }
-    // }
-
     // TODO: Rust ENTRY api on maps
     fn get_share(&mut self, t: &Term, to_share_type: ShareType) -> i32 {
         if t.is_const() && check(t).is_scalar() {
@@ -258,40 +250,6 @@ impl<'a> ToABY<'a> {
             }
         }
     }
-
-    // fn get_shares(&mut self, t: &Term, to_share_type: ShareType) -> Vec<i32> {
-    //     if t.is_const() && check(t).is_scalar() {
-    //         vec![self.output_const_share(t, to_share_type)]
-    //     } else {
-    //         match self.term_to_shares.get(t) {
-    //             Some(v) => v.clone(),
-    //             None => {
-    //                 let sort = check(t);
-    //                 let num_shares = self.get_sort_len(&sort) as i32;
-
-    //                 let shares: Vec<i32> = (0..num_shares)
-    //                     .map(|x| x + self.share_cnt)
-    //                     .collect::<Vec<i32>>();
-    //                 self.term_to_shares.insert(t.clone(), shares.clone());
-
-    //                 // Write shares
-    //                 self.write_shares(t, &shares);
-
-    //                 self.share_cnt += num_shares;
-
-    //                 shares
-    //             }
-    //         }
-    //     }
-    // }
-
-    // fn rewirable(&self, s: &Sort) -> bool {
-    //     match s {
-    //         Sort::Array(..) => true,
-    //         Sort::Bool | Sort::BitVector(..) | Sort::Tuple(..) => false,
-    //         _ => todo!(),
-    //     }
-    // }
 
     fn get_sort_len(&mut self, s: &Sort) -> usize {
         let mut len = 0;
@@ -601,34 +559,6 @@ impl<'a> ToABY<'a> {
                 };
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), select_share);
-
-                // if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
-                //     let idx = bv.uint().to_usize().unwrap().clone();
-                //     assert!(
-                //         idx < array_shares.len(),
-                //         "idx: {}, shares: {}",
-                //         idx,
-                //         array_shares.len()
-                //     );
-
-                //     self.term_to_shares
-                //         .insert(t.clone(), vec![array_shares[idx]]);
-                // } else {
-                //     let op = "SELECT";
-                //     let num_inputs = array_shares.len() + 1;
-                //     let index_share = self.get_share(&t.cs[1], to_share_type);
-                //     let output = self.get_share(&t, to_share_type);
-                //     let line = format!(
-                //         "{} 1 {} {} {} {}\n",
-                //         num_inputs,
-                //         self.shares_to_string(array_shares),
-                //         index_share,
-                //         output,
-                //         op
-                //     );
-                //     self.bytecode_output.push(line);
-                //     self.term_to_shares.insert(t.clone(), vec![output]);
-                // }
             }
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
@@ -718,34 +648,6 @@ impl<'a> ToABY<'a> {
                 let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, mux_share, op);
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), mux_share);
-
-                // let op = "MUX";
-
-                // let shares = self.get_shares(&t, to_share_type);
-
-                // let sel = self.get_share(&t.cs[0], to_share_type);
-                // let a = self.get_shares(&t.cs[1], to_share_type);
-                // let b = self.get_shares(&t.cs[2], to_share_type);
-
-                // // assert scalar_term share lens are equivalent
-                // assert!(shares.len() == a.len());
-                // assert!(shares.len() == b.len());
-
-                // let num_inputs = 1 + shares.len() * 2;
-                // let num_outputs = shares.len();
-
-                // let line = format!(
-                //     "{} {} {} {} {} {} {}\n",
-                //     num_inputs,
-                //     num_outputs,
-                //     sel,
-                //     self.shares_to_string(a),
-                //     self.shares_to_string(b),
-                //     self.shares_to_string(shares),
-                //     op
-                // );
-
-                // self.bytecode_output.push(line);
             }
             Op::Store => {
                 assert!(t.cs.len() == 3);
@@ -774,31 +676,6 @@ impl<'a> ToABY<'a> {
                 };
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), store_share);
-
-                // if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
-                //     // constant indexing
-                //     let idx = bv.uint().to_usize().unwrap().clone();
-                //     array_shares[idx] = value_share;
-                //     self.term_to_shares.insert(t.clone(), array_shares.clone());
-                // } else {
-                //     let op = "STORE";
-                //     let num_inputs = array_shares.len() + 2;
-                //     let outputs = self.get_shares(&t, to_share_type);
-                //     let num_outputs = outputs.len();
-                //     let index_share = self.get_share(&t.cs[1], to_share_type);
-                //     let line = format!(
-                //         "{} {} {} {} {} {} {}\n",
-                //         num_inputs,
-                //         num_outputs,
-                //         self.shares_to_string(array_shares),
-                //         index_share,
-                //         value_share,
-                //         self.shares_to_string(outputs),
-                //         op
-                //     );
-
-                //     self.bytecode_output.push(line);
-                // }
             }
             Op::Field(i) => {
                 assert!(t.cs.len() == 1);
@@ -834,30 +711,6 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), field_share);
-
-                // let tuple_sort = check(&t.cs[0]);
-                // let (offset, len) = match tuple_sort {
-                //     Sort::Tuple(t) => {
-                //         assert!(*i < t.len());
-
-                //         // find offset
-                //         let mut offset = 0;
-                //         for j in 0..*i {
-                //             offset += self.get_sort_len(&t[j]);
-                //         }
-
-                //         // find len
-                //         let len = self.get_sort_len(&t[*i]);
-
-                //         (offset, len)
-                //     }
-                //     _ => panic!("Field op on non-tuple"),
-                // };
-
-                // // get ret slice
-                // let field_shares = &shares[offset..offset + len];
-
-                // self.term_to_shares.insert(t.clone(), field_shares.to_vec());
             }
             Op::Update(i) => {
                 assert!(t.cs.len() == 2);
@@ -873,18 +726,6 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), update_share);
-
-                // let mut tuple_shares = self.get_shares(&t.cs[0], to_share_type);
-                // let value_share = self.get_share(&t.cs[1], to_share_type);
-
-                // // assert the index is in bounds
-                // assert!(*i < tuple_shares.len());
-
-                // // update shares in tuple
-                // tuple_shares[*i] = value_share;
-
-                // // store shares
-                // self.term_to_shares.insert(t.clone(), tuple_shares);
             }
             Op::Tuple => {
                 let tuple_share = self.get_share(&t, to_share_type);
@@ -904,14 +745,8 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), tuple_share);
-
-                // let mut shares: Vec<i32> = Vec::new();
-                // for c in t.cs.iter() {
-                //     shares.append(&mut self.get_shares(c, to_share_type));
-                // }
-                // self.term_to_shares.insert(t.clone(), shares);
             }
-            Op::Call(name, _arg_names, _arg_sorts, ret_sorts) => {
+            Op::Call(name, ..) => {
                 let call_share = self.get_share(&t, to_share_type);
                 let op = format!("CALL({})", name);
 
@@ -929,51 +764,6 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), call_share);
-
-                // let shares = self.get_shares(&t, to_share_type);
-                // let op = format!("CALL({})", name);
-                // let num_args: usize = arg_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-                // let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-                // let mut arg_shares: Vec<String> = Vec::new();
-                // for c in t.cs.iter() {
-                //     let sort = check(c);
-                //     if self.rewirable(&sort) {
-                //         arg_shares.extend(
-                //             self.get_shares(c, to_share_type)
-                //                 .iter()
-                //                 .map(|&s| s.to_string()),
-                //         )
-                //     } else {
-                //         arg_shares.extend(
-                //             self.get_shares(c, to_share_type)
-                //                 .iter()
-                //                 .map(|&s| s.to_string()),
-                //         )
-                //     }
-                // }
-
-                // let mut ret_shares: Vec<String> = Vec::new();
-                // let mut idx = 0;
-                // for sort in ret_sorts {
-                //     let len = self.get_sort_len(sort);
-                //     assert!(idx + len <= shares.len());
-                //     if self.rewirable(sort) {
-                //         ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
-                //     } else {
-                //         ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
-                //     }
-                //     idx += len;
-                // }
-
-                // let line = format!(
-                //     "{} {} {} {} {}\n",
-                //     num_args,
-                //     num_rets,
-                //     arg_shares.join(" "),
-                //     ret_shares.join(" "),
-                //     op
-                // );
-                // self.bytecode_output.push(line);
             }
             _ => {
                 panic!("Non-field in embed_vector: {}", t.op)
@@ -1026,8 +816,6 @@ impl<'a> ToABY<'a> {
                 &format!("{}_bytecode_output", name),
                 true,
             );
-
-            println!("starting: {}, {}", name, comp.terms());
 
             for t in comp.outputs.iter() {
                 self.embed(t.clone());
@@ -1117,16 +905,14 @@ impl<'a> ToABY<'a> {
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
     // Call site similarity
-    println!("call site");
     call_site_similarity(&ir);
-    println!("end call site");
 
     // Protocal Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
     // TODO: change ILP to take in Functions instead of individual computations
     for (name, comp) in ir.computations.iter() {
-        println!("processing assignments: {}", name);
+        let now = std::time::Instant::now();
         let assignments = match ss {
             "b" => assign_all_boolean(&comp, cm),
             "y" => assign_all_yao(&comp, cm),
@@ -1141,6 +927,8 @@ pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
                 panic!("Unsupported sharing scheme: {}", ss);
             }
         };
+        #[cfg(feature = "bench")]
+        println!("LOG: Assigment: {:?}", now.elapsed());
         s_map.insert(name.to_string(), assignments);
     }
 

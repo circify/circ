@@ -60,6 +60,7 @@ lp = ["good_lp", "lp-solvers"]
 r1cs = ["bellman"]
 smt = ["rsmt2"]
 zok = ["zokrates_parser", "zokrates_pest_ast"]
+bench = []
 
 [[example]]
 name = "circ"

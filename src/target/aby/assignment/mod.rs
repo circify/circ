@@ -53,6 +53,7 @@ pub struct CostModel {
 }
 
 impl CostModel {
+    /// Cost model constructor
     pub fn new(
         conversions: FxHashMap<(ShareType, ShareType), f64>,
         ops: FxHashMap<String, FxHashMap<ShareType, f64>>,

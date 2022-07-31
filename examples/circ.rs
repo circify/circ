@@ -79,10 +79,12 @@ struct FrontendOptions {
     value_threshold: Option<u64>,
 
     /// How many recursions to allow (datalog)
+    #[cfg(all(feature = "smt", feature = "zok"))]
     #[structopt(short, long, name = "N", default_value = "5")]
     rec_limit: usize,
 
     /// Lint recursions that are allegedly primitive recursive (datalog)
+    #[cfg(all(feature = "smt", feature = "zok"))]
     #[structopt(long)]
     lint_prim_rec: bool,
 }
@@ -164,6 +166,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
+    let start = Instant::now();
     let mut now = Instant::now();
 
     env_logger::Builder::from_default_env()
@@ -173,6 +176,25 @@ fn main() {
     let options = Options::from_args();
     let path_buf = options.path.clone();
     println!("{:?}", options);
+
+    #[cfg(feature = "bench")]
+    {
+        println!(
+            "LOG: Test: {}",
+            options.path.as_path().display().to_string()
+        );
+        match &options.backend {
+            Backend::Mpc {
+                cost_model,
+                selection_scheme,
+            } => {
+                println!("LOG: CostModel: {}", cost_model);
+                println!("LOG: SelectionScheme: {}", selection_scheme);
+            }
+            _ => {}
+        }
+    }
+
     let mode = match options.backend {
         Backend::R1cs { .. } => match options.frontend.value_threshold {
             Some(t) => Mode::ProofOfHighValue(t),
@@ -223,8 +245,10 @@ fn main() {
         }
     };
 
-    println!("Time: Frontend: {:?}", now.elapsed());
+    #[cfg(feature = "bench")]
+    println!("LOG: Frontend: {:?}", now.elapsed());
 
+    now = Instant::now();
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -282,6 +306,9 @@ fn main() {
             ],
         ),
     };
+    #[cfg(feature = "bench")]
+    println!("LOG: Optimizations: {:#?}", now.elapsed());
+
     println!("Done with IR optimization");
 
     // for (name, c) in &cs.computations {
@@ -291,6 +318,7 @@ fn main() {
     //     }
     // }
 
+    now = Instant::now();
     match options.backend {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
@@ -392,5 +420,11 @@ fn main() {
         Backend::Smt { .. } => {
             panic!("Missing feature: smt");
         }
+    }
+
+    #[cfg(feature = "bench")]
+    {
+        println!("LOG: Lowering: {:#?}", now.elapsed());
+        println!("LOG: Compile: {:#?}", start.elapsed());
     }
 }

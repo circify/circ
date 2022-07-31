@@ -64,8 +64,8 @@ impl FrontEnd for C {
             // generate new context
             g.circ = Circify::new(Ct::new());
             let call = g.function_queue.pop().unwrap();
-            if let Op::Call(name, arg_names, arg_sorts, ret_sorts) = &call.op {
-                g.fn_call(name, arg_names, arg_sorts, ret_sorts);
+            if let Op::Call(name, arg_names, arg_sorts, _ret_sorts) = &call.op {
+                g.fn_call(name, arg_names, arg_sorts);
                 let comp = g.circ.consume().borrow().clone();
 
                 // println!("fn: {}", name);
@@ -449,7 +449,6 @@ impl CGen {
                 for (o, v) in vals.iter().enumerate() {
                     let updated_idx = term![BV_ADD; idx_term.clone(), bv_lit(o as i32, 32)];
                     self.circ.store(i, updated_idx.clone(), v.clone());
-                    let t = self.circ.load(i, updated_idx);
                 }
                 if vals.len() > 1 {
                     Ok(cterm(CTermData::Array(ty, id)))
@@ -525,7 +524,7 @@ impl CGen {
                                 CLoc::Idx(Box::new(base), idx)
                             } else {
                                 // Ptr Arithmetic case
-                                let idx = if let CLoc::Idx(l, o) = &loc {
+                                let idx = if let CLoc::Idx(_, o) = &loc {
                                     let new_offset =
                                         term![BV_ADD; o.term.term(self.circ.cir_ctx()), offset];
                                     cterm(CTermData::Int(true, 32, new_offset))
@@ -879,7 +878,7 @@ impl CGen {
 
                 // Rewiring
                 for (i, (ret_name, sort)) in ret_names.iter().zip(ret_sorts.iter()).enumerate() {
-                    if let Sort::Array(_, _, l) = sort {
+                    if let Sort::Array(..) = sort {
                         let ct = args_map.get(ret_name).unwrap();
                         if let CTermData::Array(_, id) = ct.term {
                             self.circ
@@ -1198,13 +1197,7 @@ impl CGen {
         }
     }
 
-    fn fn_call(
-        &mut self,
-        name: &String,
-        arg_names: &Vec<String>,
-        arg_sorts: &Vec<Sort>,
-        ret_sorts: &Vec<Sort>,
-    ) {
+    fn fn_call(&mut self, name: &String, arg_names: &Vec<String>, arg_sorts: &Vec<Sort>) {
         debug!("Call: {}", name);
 
         let mut arg_map: BTreeMap<String, Sort> = BTreeMap::new();

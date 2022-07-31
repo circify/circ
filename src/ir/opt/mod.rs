@@ -53,9 +53,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
         if let Opt::Link = i {
             link::link_all_function_calls(&mut opt_fs);
             fs = opt_fs;
-
-            println!("Time: {:?}: {:?}", i, now.elapsed());
-
             continue;
         }
         for (name, comp) in fs.computations.iter_mut() {
@@ -109,10 +106,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                     }
                 }
                 Opt::Binarize => {
-                    // let mut cache = binarize::Cache::new();
-                    // for a in &mut comp.outputs {
-                    //     *a = binarize::binarize_nary_ops_cached(a.clone(), &mut cache);
-                    // }
                     binarize::binarize(comp);
                 }
                 Opt::Inline => {
@@ -136,8 +129,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                 i,
                 extras::Letified(term(Op::Tuple, comp.outputs().clone()))
             );
-
-            println!("Time: {:?}: {:?}", i, now.elapsed());
             opt_fs.insert(name.clone(), comp.clone());
         }
         fs = opt_fs;

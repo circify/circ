@@ -343,15 +343,6 @@ fn wrap_bin_arith(
             term: CTermData::StackPtr(ty, fu(offset, y), aid),
             udef: false,
         }),
-        (CTermData::Array(ty, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
-            term: CTermData::StackPtr(ty, fu(bv_lit(0, 32), y), aid),
-            udef: false,
-        }),
-        (CTermData::StackPtr(ty, offset, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
-            term: CTermData::StackPtr(ty, fu(offset, y), aid),
-            udef: false,
-        }),
-
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
 }
