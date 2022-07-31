@@ -911,7 +911,7 @@ impl<'a> ToABY<'a> {
                 // }
                 // self.term_to_shares.insert(t.clone(), shares);
             }
-            Op::Call(name, _arg_names, _arg_sorts, ret_sorts) => {
+            Op::Call(name, ..) => {
                 let call_share = self.get_share(&t, to_share_type);
                 let op = format!("CALL({})", name);
 
@@ -929,51 +929,6 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), call_share);
-
-                // let shares = self.get_shares(&t, to_share_type);
-                // let op = format!("CALL({})", name);
-                // let num_args: usize = arg_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-                // let num_rets: usize = ret_sorts.iter().map(|ret| self.get_sort_len(ret)).sum();
-                // let mut arg_shares: Vec<String> = Vec::new();
-                // for c in t.cs.iter() {
-                //     let sort = check(c);
-                //     if self.rewirable(&sort) {
-                //         arg_shares.extend(
-                //             self.get_shares(c, to_share_type)
-                //                 .iter()
-                //                 .map(|&s| s.to_string()),
-                //         )
-                //     } else {
-                //         arg_shares.extend(
-                //             self.get_shares(c, to_share_type)
-                //                 .iter()
-                //                 .map(|&s| s.to_string()),
-                //         )
-                //     }
-                // }
-
-                // let mut ret_shares: Vec<String> = Vec::new();
-                // let mut idx = 0;
-                // for sort in ret_sorts {
-                //     let len = self.get_sort_len(sort);
-                //     assert!(idx + len <= shares.len());
-                //     if self.rewirable(sort) {
-                //         ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
-                //     } else {
-                //         ret_shares.extend(shares[idx..(idx + len)].iter().map(|&s| s.to_string()))
-                //     }
-                //     idx += len;
-                // }
-
-                // let line = format!(
-                //     "{} {} {} {} {}\n",
-                //     num_args,
-                //     num_rets,
-                //     arg_shares.join(" "),
-                //     ret_shares.join(" "),
-                //     op
-                // );
-                // self.bytecode_output.push(line);
             }
             _ => {
                 panic!("Non-field in embed_vector: {}", t.op)
@@ -1026,8 +981,6 @@ impl<'a> ToABY<'a> {
                 &format!("{}_bytecode_output", name),
                 true,
             );
-
-            println!("starting: {}, {}", name, comp.terms());
 
             for t in comp.outputs.iter() {
                 self.embed(t.clone());
@@ -1117,16 +1070,13 @@ impl<'a> ToABY<'a> {
 /// Convert this (IR) `ir` to ABY.
 pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
     // Call site similarity
-    println!("call site");
     call_site_similarity(&ir);
-    println!("end call site");
 
     // Protocal Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
     // TODO: change ILP to take in Functions instead of individual computations
     for (name, comp) in ir.computations.iter() {
-        println!("processing assignments: {}", name);
         let assignments = match ss {
             "b" => assign_all_boolean(&comp, cm),
             "y" => assign_all_yao(&comp, cm),

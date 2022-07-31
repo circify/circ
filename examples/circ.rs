@@ -79,10 +79,12 @@ struct FrontendOptions {
     value_threshold: Option<u64>,
 
     /// How many recursions to allow (datalog)
+    #[cfg(all(feature = "smt", feature = "zok"))]
     #[structopt(short, long, name = "N", default_value = "5")]
     rec_limit: usize,
 
     /// Lint recursions that are allegedly primitive recursive (datalog)
+    #[cfg(all(feature = "smt", feature = "zok"))]
     #[structopt(long)]
     lint_prim_rec: bool,
 }
@@ -164,7 +166,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
-    let mut now = Instant::now();
+    let now = Instant::now();
 
     env_logger::Builder::from_default_env()
         .format_level(false)
