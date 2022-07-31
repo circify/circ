@@ -115,7 +115,7 @@ def setup_worker(ip):
     _, stdout, _ = client.exec_command("cd ~/circ")
     if stdout.channel.recv_exit_status():
         _, stdout, _ = client.exec_command(
-            "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && cd ~ && ./circ/aws_benchmark/setup.sh")
+            "cd ~ && git clone https://github.com/circify/circ.git && cd ~/circ && git checkout mpc_aws && python3 driver.py -F aby c lp bench && python3 driver.py -c && cd ~ && ./circ/aws_benchmark/setup.sh")
         if stdout.channel.recv_exit_status():
             print(ip, " failed setup")
     else:
