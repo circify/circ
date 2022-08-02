@@ -1,10 +1,10 @@
 // Parameters taken from the paper
-#define IMAGE_WIDTH 16 // 28
+#define IMAGE_WIDTH 28 // 28
 #define WINDOW_WIDTH 5
 #define STRIDE 2
 #define OUTPUT_CHANNELS 5 // 5
 
-#define IMAGE_CROP 5 // 13 with padding
+#define IMAGE_CROP 13 // 13 with padding
 #define SIZE_CONVOLUTION (IMAGE_CROP * IMAGE_CROP) // 169
 
 #define FULLY_CONNECTED_WIDTH 100 // (7, 9)
