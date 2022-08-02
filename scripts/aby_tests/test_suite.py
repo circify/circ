@@ -625,7 +625,7 @@ db_tests = [
 mnist_tests = [
     [
         "mnist 16x16",
-        "mnist",
+        "mnist_16",
         "./scripts/aby_tests/test_inputs/mnist_16.txt",
     ]
 ]
@@ -633,7 +633,7 @@ mnist_tests = [
 cryptonets_tests = [
     [
         "cryptonets 16x16",
-        "cryptonets",
+        "cryptonets_16",
         "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
     ]
 ]

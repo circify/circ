@@ -16,3 +16,4 @@ __pycache__
 /flamegraph*.svg
 .vscode/
 *.pem
+scripts/aby_tests/tests
