@@ -153,15 +153,15 @@ impl Expr2Smt<()> for TermData {
                 true
             }
             Op::PfNaryOp(PfNaryOp::Mul) => {
-                write!(w, "(ffmul")?;
+                write!(w, "(ff.mul")?;
                 true
             }
             Op::PfNaryOp(PfNaryOp::Add) => {
-                write!(w, "(ffadd")?;
+                write!(w, "(ff.add")?;
                 true
             }
             Op::PfUnOp(PfUnOp::Neg) => {
-                write!(w, "(ffneg")?;
+                write!(w, "(ff.neg")?;
                 true
             }
             Op::IntNaryOp(IntNaryOp::Mul) => {
