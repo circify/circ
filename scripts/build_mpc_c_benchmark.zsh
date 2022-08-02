@@ -26,4 +26,16 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model $cm --selection-scheme $ss
 }
 
-mpc_test 2 ./examples/C/mpc/benchmarks/2pc_biomatch.c $1 $2
+# build hycc benchmarks
+mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join2.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/db/db_merge.c $1 $2
+mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist.c $1 $2
+mpc_test_2 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c $1 $2
+
+# build OPA benchmarks
+mpc_test_2 2 ./examples/C/mpc/benchmarks/histogram/histogram.c $1 $2
