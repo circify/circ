@@ -168,7 +168,7 @@ void convolution_naive_outputs(DT *image, DT* kernels, DT* OUTPUT_layer, int ima
 }
 
 // Parameters taken from the paper
-#define IMAGE_WIDTH 28
+#define IMAGE_WIDTH 16
 #define WINDOW_WIDTH 5
 #define STRIDE 1
 #define OUTPUT_CHANNELS 16
