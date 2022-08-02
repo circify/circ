@@ -646,55 +646,6 @@ histogram_tests = [
     ]
 ]
 
-
-benchmark_tests = [
-    [
-        "biomatch",
-        "biomatch",
-        "./scripts/aby_tests/test_inputs/biomatch_1.txt",
-    ],
-    [
-        "kmeans",
-        "2pc_kmeans_",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
-    ],
-    [
-        "gauss",
-        "2pc_gauss_inline",
-        "./scripts/aby_tests/test_inputs/gauss.txt",
-    ],
-    [
-        "db join",
-        "db_join",
-        "./scripts/aby_tests/test_inputs/db_join.txt",
-    ],
-    [
-        "db join 2",
-        "db_join2",
-        "./scripts/aby_tests/test_inputs/join2.txt",
-    ],
-    [
-        "db merge",
-        "db_merge",
-        "./scripts/aby_tests/test_inputs/merge.txt",
-    ],
-    [
-        "mnist 28x28",
-        "mnist",
-        "./scripts/aby_tests/test_inputs/mnist_28.txt",
-    ]
-    [
-        "cryptonets 28x28",
-        "cryptonets",
-        "./scripts/aby_tests/test_inputs/cryptonets_28.txt",
-    ]
-    [
-        "histogram",
-        "histogram",
-        "./scripts/aby_tests/test_inputs/histogram.txt",
-    ]
-]
-
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",
