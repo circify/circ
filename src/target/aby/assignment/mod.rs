@@ -242,17 +242,22 @@ pub fn assign_arithmetic_and_yao(c: &Computation, cm: &str) -> SharingMap {
                 (
                     term.clone(),
                     if let Some(costs) = cost_model.get(&term.op) {
-                        let mut min_ty: ShareType = ShareType::Yao;
-                        let mut min_cost: f64 = costs[&min_ty];
-                        for ty in &[ShareType::Arithmetic] {
-                            if let Some(c) = costs.get(ty) {
-                                if *c < min_cost {
-                                    min_ty = *ty;
-                                    min_cost = *c;
+                        match &term.op {
+                            Op::Select | Op::Store => ShareType::Yao,
+                            _ => {
+                                let mut min_ty: ShareType = ShareType::Yao;
+                                let mut min_cost: f64 = costs[&min_ty];
+                                for ty in &[ShareType::Arithmetic] {
+                                    if let Some(c) = costs.get(ty) {
+                                        if *c < min_cost {
+                                            min_ty = *ty;
+                                            min_cost = *c;
+                                        }
+                                    }
                                 }
+                                min_ty
                             }
                         }
-                        min_ty
                     } else {
                         ShareType::Yao
                     },
@@ -272,17 +277,22 @@ pub fn assign_greedy(c: &Computation, cm: &str) -> SharingMap {
                 (
                     term.clone(),
                     if let Some(costs) = cost_model.get(&term.op) {
-                        let mut min_ty: ShareType = ShareType::Yao;
-                        let mut min_cost: f64 = costs[&min_ty];
-                        for ty in &[ShareType::Arithmetic, ShareType::Boolean] {
-                            if let Some(c) = costs.get(ty) {
-                                if *c < min_cost {
-                                    min_ty = *ty;
-                                    min_cost = *c;
+                        match &term.op {
+                            Op::Select | Op::Store => ShareType::Yao,
+                            _ => {
+                                let mut min_ty: ShareType = ShareType::Yao;
+                                let mut min_cost: f64 = costs[&min_ty];
+                                for ty in &[ShareType::Arithmetic, ShareType::Boolean] {
+                                    if let Some(c) = costs.get(ty) {
+                                        if *c < min_cost {
+                                            min_ty = *ty;
+                                            min_cost = *c;
+                                        }
+                                    }
                                 }
+                                min_ty
                             }
                         }
-                        min_ty
                     } else {
                         ShareType::Boolean
                     },

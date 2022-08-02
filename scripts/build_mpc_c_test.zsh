@@ -36,8 +36,15 @@ function mpc_test_bool  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "b"
 }
 
+<<<<<<< HEAD
 # build mpc arithmetic tests
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
+=======
+mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+
+# # build mpc arithmetic tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
+>>>>>>> function_calls
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult_add_pub.c
@@ -114,6 +121,36 @@ mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
 
 # # build misc tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
+<<<<<<< HEAD
+=======
+# mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
+
+# # build hycc benchmarks
+# mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+
+# # build OPA benchmarks
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
+
+
+
+# # build hycc benchmarks bool-only
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+# mpc_test_bool 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+>>>>>>> function_calls
 
 # # build hycc benchmarks
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c

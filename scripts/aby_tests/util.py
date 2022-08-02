@@ -1,6 +1,5 @@
 import os
 from subprocess import Popen, PIPE
-import sys
 from typing import List
 from tqdm import tqdm
 
@@ -36,7 +35,7 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + \
         server_cmd[0] + ", " + client_cmd[0]
 
-    # print(" ".join(server_cmd))
+    print(" ".join(server_cmd))
     try:
         server_proc = Popen(" ".join(server_cmd),
                             shell=True, stdout=PIPE, stderr=PIPE)
