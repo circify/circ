@@ -177,24 +177,6 @@ fn main() {
     let path_buf = options.path.clone();
     println!("{:?}", options);
 
-    #[cfg(feature = "bench")]
-    {
-        println!(
-            "LOG: Test: {}",
-            options.path.as_path().display().to_string()
-        );
-        match &options.backend {
-            Backend::Mpc {
-                cost_model,
-                selection_scheme,
-            } => {
-                println!("LOG: CostModel: {}", cost_model);
-                println!("LOG: SelectionScheme: {}", selection_scheme);
-            }
-            _ => {}
-        }
-    }
-
     let mode = match options.backend {
         Backend::R1cs { .. } => match options.frontend.value_threshold {
             Some(t) => Mode::ProofOfHighValue(t),
