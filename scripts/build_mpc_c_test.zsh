@@ -36,7 +36,7 @@ function mpc_test_bool  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "b"
 }
 
-mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
 
 # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
@@ -143,6 +143,10 @@ mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
 # mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_join2.c
 # mpc_test_bool 2 ./examples/C/mpc/benchmarks/db/db_merge.c
 # mpc_test_bool 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
+# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
+
+
 
 
 # # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c

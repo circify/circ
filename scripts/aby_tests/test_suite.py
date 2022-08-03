@@ -1,8 +1,8 @@
 ts = [
     [
-        "mnist decomp main",
-        "mnist_decomp_main",
-        "./scripts/aby_tests/test_inputs/mnist_decomp_main.txt",
+        "mnist decomp convolution",
+        "mnist_decomp_convolution",
+        "./scripts/aby_tests/test_inputs/mnist_decomp_convolution.txt",
     ]
 ]
 
