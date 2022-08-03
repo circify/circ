@@ -19,6 +19,7 @@ DT relu(DT val) {
 		return 0;
 	}
 }
+
 void relu_map(DT *in, DT *OUTPUT_res, int len) {
 	for(int i = 0; i < len; i++) {
 		OUTPUT_res[i] = relu(in[i]);

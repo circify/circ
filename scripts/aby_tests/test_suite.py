@@ -1,9 +1,9 @@
 ts = [
     [
-        "Multiply two numbers - 1",
-        "2pc_mult",
-        "./scripts/aby_tests/test_inputs/mult_1.txt",
-    ],
+        "mnist decomp main",
+        "mnist",
+        "./scripts/aby_tests/test_inputs/mnist_decomp_main.txt",
+    ]
 ]
 
 arithmetic_tests = [
