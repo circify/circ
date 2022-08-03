@@ -1,7 +1,7 @@
 ts = [
     [
         "mnist decomp main",
-        "mnist",
+        "mnist_decomp_main",
         "./scripts/aby_tests/test_inputs/mnist_decomp_main.txt",
     ]
 ]
