@@ -907,7 +907,7 @@ pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
     // Call site similarity
     call_site_similarity(&ir);
 
-    // Protocal Assignments
+    // Protocol Assignments
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
     // TODO: change ILP to take in Functions instead of individual computations
@@ -928,7 +928,7 @@ pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
             }
         };
         #[cfg(feature = "bench")]
-        println!("LOG: Assigment: {:?}", now.elapsed());
+        println!("LOG: Assignment {}: {:?}", name, now.elapsed());
         s_map.insert(name.to_string(), assignments);
     }
 
