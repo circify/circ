@@ -13,7 +13,7 @@ __pycache__
 /.gdb_history
 .features.txt
 .mode.txt
-scripts/aby_tests/tests
 /flamegraph*.svg
 .vscode/
 *.pem
+./scripts/aby_tests/tests/*

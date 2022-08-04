@@ -1,0 +1,6 @@
+3 1 a 2 32 8 IN
+3 1 b 2 32 7 IN
+2 1 8 7 9 CALL(fixedpt_mul_inner)
+2 1 9 0 10 FIELD
+2 1 10 8 11 LSHR
+1 0 11 OUT

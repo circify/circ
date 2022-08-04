@@ -176,7 +176,6 @@ fn main() {
     let options = Options::from_args();
     let path_buf = options.path.clone();
     println!("{:?}", options);
-
     let mode = match options.backend {
         Backend::R1cs { .. } => match options.frontend.value_threshold {
             Some(t) => Mode::ProofOfHighValue(t),
