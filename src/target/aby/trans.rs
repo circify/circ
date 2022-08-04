@@ -6,16 +6,24 @@
 
 use rug::Integer;
 
+use fxhash::FxHashSet;
+
 use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
+use crate::target::aby::assignment::def_uses::PostOrderIterV2;
 use crate::target::aby::utils::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
+
+#[cfg(feature = "lp")]
+use crate::target::graph::trans::*;
 
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
@@ -24,10 +32,63 @@ use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
 use super::assignment::ShareType;
 
-use super::call_site_similarity::call_site_similarity;
+use std::time::Instant;
+
+// use super::call_site_similarity::call_site_similarity;
 
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
+
+#[derive(Clone)]
+enum EmbeddedTerm {
+    Bool,
+    Bv,
+    Array,
+    Tuple,
+}
+
+impl fmt::Display for EmbeddedTerm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EmbeddedTerm::Bool => {
+                write!(f, "bool")
+            }
+            EmbeddedTerm::Bv => {
+                write!(f, "bv")
+            }
+            EmbeddedTerm::Array => {
+                write!(f, "array")
+            }
+            EmbeddedTerm::Tuple => {
+                write!(f, "tuple")
+            }
+        }
+    }
+}
+
+static mut dur_const_arr: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_const_arr: usize = 0;
+
+static mut dur_const_tuple: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_const_tuple: usize = 0;
+
+static mut dur_ite: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_ite: usize = 0;
+
+static mut dur_store: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_store: usize = 0;
+
+static mut dur_field: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_field: usize = 0;
+
+static mut dur_update: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_update: usize = 0;
+
+static mut dur_tuple: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_tuple: usize = 0;
+
+static mut dur_call: std::time::Duration = std::time::Duration::new(0, 0);
+static mut num_call: usize = 0;
 
 struct ToABY<'a> {
     fs: Functions,
@@ -162,7 +223,11 @@ impl<'a> ToABY<'a> {
 
     fn get_term_share_type(&self, t: &Term) -> ShareType {
         let s_map = self.s_map.get(&self.curr_comp).unwrap();
-        *s_map.get(&t).unwrap()
+        if let Some(s) = s_map.get(&t){
+            *s
+        } else{
+            ShareType::None
+        }
     }
 
     fn insert_const(&mut self, t: &Term) {
@@ -232,8 +297,13 @@ impl<'a> ToABY<'a> {
 
     // TODO: Rust ENTRY api on maps
     fn get_share(&mut self, t: &Term, to_share_type: ShareType) -> i32 {
+        // println!("t: {}", t.op);
         if t.is_const() && check(t).is_scalar() {
-            self.output_const_share(t, to_share_type)
+            let cons_to_share_type = self.get_term_share_type(t);
+            if cons_to_share_type == ShareType::None{
+                todo!("Should not happen?");
+            }
+            self.output_const_share(t, cons_to_share_type)
         } else {
             match self.term_to_shares.get(t) {
                 Some(v) => *v,
@@ -242,10 +312,10 @@ impl<'a> ToABY<'a> {
                     self.term_to_shares.insert(t.clone(), s);
                     self.share_cnt += 1;
 
-                    // Write share
-                    self.write_share(t, s);
+                        // Write share
+                        self.write_share(t, s);
 
-                    s
+                        s
                 }
             }
         }
@@ -580,14 +650,15 @@ impl<'a> ToABY<'a> {
 
                     // TODO: sort of value might not be a 32-bit bitvector
                     let v_term = leaf_term(Op::Const(v.clone()));
+                    let cons_to_share_type = self.get_term_share_type(&v_term);
                     if self.const_cache.contains_key(&v_term) {
                         // existing const
-                        let s = self.get_share(&v_term, to_share_type);
+                        let s = self.get_share(&v_term, cons_to_share_type);
                         shares.push(s);
                     } else {
                         // new const
                         self.insert_const(&v_term);
-                        let s = self.get_share(&v_term, to_share_type);
+                        let s = self.get_share(&v_term, cons_to_share_type);
                         shares.push(s);
                     }
                 }
@@ -611,14 +682,15 @@ impl<'a> ToABY<'a> {
                     match val {
                         Value::BitVector(b) => {
                             let v_term: Term = bv_lit(b.as_sint(), 32);
+                            let cons_to_share_type = self.get_term_share_type(&v_term);
                             if self.const_cache.contains_key(&v_term) {
                                 // existing const
-                                let s = self.get_share(&v_term, to_share_type);
+                                let s = self.get_share(&v_term, cons_to_share_type);
                                 shares.push(s);
                             } else {
                                 // new const
                                 self.insert_const(&v_term);
-                                let s = self.get_share(&v_term, to_share_type);
+                                let s = self.get_share(&v_term, cons_to_share_type);
                                 shares.push(s);
                             }
                         }
@@ -772,7 +844,43 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed(&mut self, t: Term) {
-        for c in PostOrderIter::new(t) {
+        let mut num_bool = 0;
+        let mut num_bv = 0;
+        let mut num_scalar = 0;
+
+        let mut dur_bool: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut dur_bv: std::time::Duration = std::time::Duration::new(0, 0);
+        let mut dur_scalar: std::time::Duration = std::time::Duration::new(0, 0);
+
+        unsafe {
+            dur_const_arr = std::time::Duration::new(0, 0);
+            num_const_arr = 0;
+
+            dur_const_tuple = std::time::Duration::new(0, 0);
+            num_const_tuple = 0;
+
+            dur_ite = std::time::Duration::new(0, 0);
+            num_ite = 0;
+
+            dur_store = std::time::Duration::new(0, 0);
+            num_store = 0;
+
+            dur_field = std::time::Duration::new(0, 0);
+            num_field = 0;
+
+            dur_update = std::time::Duration::new(0, 0);
+            num_update = 0;
+
+            dur_tuple = std::time::Duration::new(0, 0);
+            num_tuple = 0;
+
+            dur_call = std::time::Duration::new(0, 0);
+            num_call = 0;
+        }
+
+        let mut write_time: std::time::Duration = std::time::Duration::new(0, 0);
+
+        for c in PostOrderIterV2::new(t) {
             if self.term_to_shares.contains_key(&c) {
                 continue;
             }
@@ -797,7 +905,16 @@ impl<'a> ToABY<'a> {
 
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self) {
+        let now = Instant::now();
+
         let computations = self.fs.computations.clone();
+
+        // for (name, c) in computations.iter() {
+        //     println!("name: {}", name);
+        //     for t in c.terms_postorder() {
+        //         println!("t: {}", t);
+        //     }
+        // }
 
         // create output files
         get_path(self.path, &self.lang, "const", true);
@@ -819,7 +936,7 @@ impl<'a> ToABY<'a> {
 
             for t in comp.outputs.iter() {
                 self.embed(t.clone());
-
+                println!("out op: {}", t.op);
                 let op = "OUT";
                 let to_share_type = self.get_term_share_type(&t);
                 let share = self.get_share(&t, to_share_type);
@@ -899,39 +1016,81 @@ impl<'a> ToABY<'a> {
 
         // write remaining shares
         self.write_share_output(true);
+        println!("Time: Lower: {:?}", now.elapsed());
     }
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Functions, path: &Path, lang: &str, cm: &str, ss: &str) {
-    // Call site similarity
-    call_site_similarity(&ir);
-
-    // Protocol Assignments
-    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+pub fn to_aby(
+    ir: Functions,
+    path: &Path,
+    lang: &str,
+    cm: &str,
+    ss: &str,
+    #[allow(unused_variables)] np: &usize,
+    #[allow(unused_variables)] ml: &usize,
+    #[allow(unused_variables)] mss: &usize,
+    #[allow(unused_variables)] hyper: &usize,
+    #[allow(unused_variables)] imbalance: &usize,
+) {
 
     // TODO: change ILP to take in Functions instead of individual computations
-    for (name, comp) in ir.computations.iter() {
-        let now = std::time::Instant::now();
-        let assignments = match ss {
-            "b" => assign_all_boolean(&comp, cm),
-            "y" => assign_all_yao(&comp, cm),
-            "a+b" => assign_arithmetic_and_boolean(&comp, cm),
-            "a+y" => assign_arithmetic_and_yao(&comp, cm),
-            "greedy" => assign_greedy(&comp, cm),
-            #[cfg(feature = "lp")]
-            "lp" => assign(&comp, cm),
-            #[cfg(feature = "lp")]
-            "glp" => assign(&comp, cm),
-            _ => {
-                panic!("Unsupported sharing scheme: {}", ss);
-            }
-        };
-        #[cfg(feature = "bench")]
-        println!("LOG: Assignment {}: {:?}", name, now.elapsed());
-        s_map.insert(name.to_string(), assignments);
-    }
 
-    let mut converter = ToABY::new(ir, s_map, path, lang);
-    converter.lower();
+    match ss{
+        #[cfg(feature = "lp")]
+        "gglp" => {
+            let (fs, s_map) = inline_all_and_assign_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "lp+mut" => {
+            let (fs, s_map) = partition_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "smart_glp" => {
+            let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "smart_lp" => {
+            let (fs, s_map) = partition_with_mut_smart(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        // #[cfg(feature = "lp")]
+        // "mlp+mut" => {
+        //     let (fs, s_map) = mlp_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
+        //     let mut converter = ToABY::new(fs, s_map, path, lang);
+        //     converter.lower();
+        // }
+        _ =>{
+            // Protocal Assignments
+            let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+            for (name, comp) in ir.computations.iter() {
+                println!("processing computation: {}", name);
+                let assignments = match ss {
+                    "b" => assign_all_boolean(&comp, cm),
+                    "y" => assign_all_yao(&comp, cm),
+                    "a+b" => assign_arithmetic_and_boolean(&comp, cm),
+                    "a+y" => assign_arithmetic_and_yao(&comp, cm),
+                    "greedy" => assign_greedy(&comp, cm),
+                    #[cfg(feature = "lp")]
+                    "lp" => assign(&(comp.to_cs()), cm),
+                    #[cfg(feature = "lp")]
+                    "glp" => assign(&comp.to_cs(), cm),
+                    _ => {
+                        panic!("Unsupported sharing scheme: {}", ss);
+                    }
+                };
+                s_map.insert(name.to_string(), assignments);
+            }
+            let mut converter = ToABY::new(ir, s_map, path, lang);
+            converter.lower();
+        }
+    };
+
 }

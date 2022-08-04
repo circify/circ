@@ -28,15 +28,24 @@ struct Linker<'f> {
 /// ## Note
 ///
 /// This function **does not** recursively link.
-fn link_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computation) -> Term {
-    let mut sub_map: TermMap<Term> = arg_names
-        .into_iter()
-        .zip(arg_values)
-        .map(|(n, v)| {
-            let s = callee.metadata.input_sort(n).clone();
-            (leaf_term(Op::Var(n.clone(), s)), v)
-        })
-        .collect();
+pub fn link_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computation) -> Term {
+    // println!("arg_names: {:?}", arg_names);
+    // println!("arg_terms: {:?}", arg_values);
+    let mut sub_map: TermMap<Term> = TermMap::new();
+    assert_eq!(arg_names.len(), arg_values.len());
+    for (n, v) in arg_names.into_iter().zip(arg_values) {
+        let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
+        // println!("{:?}", ssa_names);
+        if ssa_names.len() == 1{
+            let s = callee.metadata.input_sort(&ssa_names[0].0).clone();
+            sub_map.insert(leaf_term(Op::Var(ssa_names[0].0.clone(), s)), v);
+        } else{
+            for (s_name, index) in ssa_names {
+                let s = callee.metadata.input_sort(&s_name).clone();
+                sub_map.insert(leaf_term(Op::Var(s_name, s)), term![Op::Select; v.clone(), bv_lit(index, 32)]);
+            } 
+        }
+    }
     term(
         Op::Tuple,
         callee
@@ -260,6 +269,63 @@ mod test {
         );
         link_all_function_calls(&mut fs);
         let c = fs.get_comp("main").unwrap().clone();
+        assert_eq!(c, expected);
+    }
+
+    #[test]
+    fn term_hconsed() {
+        let mut fs = text::parse_functions(
+            b"
+            (functions
+                (
+            (myxor
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (xor a b false false)
+                )
+            )
+            (main
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (and false ((field 0) ( (call myxor (a b) (bool bool) (bool)) a b )))
+                )
+            )
+            )
+            )",
+        );
+        let expected = text::parse_computation(
+            b"
+                (computation
+                    (metadata () ((a bool) (b bool)) ())
+                    (and false ((field 0) (tuple (xor a b false false))))
+                )
+            ",
+        );
+
+        let comp = fs.get_comp("main").unwrap();
+        let mut cache: std::collections::HashMap<Term, usize> = std::collections::HashMap::new();
+        for t in comp.outputs.iter() {
+            cache.insert(t.clone(), 1);
+        }
+        for t in comp.outputs.iter() {
+            let get_children = || -> Vec<Term> {
+                t.cs
+                    .iter()
+                    .cloned()
+                    .collect()
+            };
+            if cache.contains_key(&term(t.op.clone(), get_children())){
+                println!("Got you1!!!!!");
+            }
+            
+        }
+        link_all_function_calls(&mut fs);
+        let c = fs.get_comp("main").unwrap().clone();
+        for t in c.outputs.iter() {
+            if cache.contains_key(t){
+                println!("Got you2!!!!!");
+            }
+        }
         assert_eq!(c, expected);
     }
 }

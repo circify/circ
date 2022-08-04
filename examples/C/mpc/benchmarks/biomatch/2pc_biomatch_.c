@@ -1,7 +1,7 @@
-#define N 64
+#define N 256
 #define K 4 // currently fixed, do not change
 
-#define INNER 16
+#define INNER 64
 #define OUTER (N/64)
 
 

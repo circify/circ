@@ -30,6 +30,6 @@ fn main() {
         metadata: ComputationMetadata::default(),
         precomputes: Default::default(),
     };
-    let _assignment = ilp::assign(&cs, "hycc");
+    let _assignment = ilp::assign(&cs.to_cs(), "hycc");
     //dbg!(&assignment);
 }

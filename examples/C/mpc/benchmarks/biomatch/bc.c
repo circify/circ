@@ -1,7 +1,9 @@
-#define N 64
+#include "stdio.h"
+
+#define N 256
 #define K 4 // currently fixed, do not change
 
-#define INNER 16
+#define INNER 64
 #define OUTER (N/64)
 
 
@@ -32,13 +34,23 @@ void match_decomposed(int *db, int *OUTPUT_matches, int len, int *sample) {
   }
 }
 
-int main( __attribute__((private(0))) int db[1024], __attribute__((private(1))) int sample[4])
+int main()
 {
+    int db[1024];
+    int sample[4];
+
+    for(int i = 0; i < 1024; i++){
+        db[i] = i + 9;
+        if(i < 4){
+            sample[i] = i;
+        }
+    }
     //int matches[4];
     int matches[N];
 
     match_decomposed(db, matches, N, sample);
     // Compute minimum
     int best_match = min(matches, N);
+    printf("%d", best_match);
     return best_match;
 }

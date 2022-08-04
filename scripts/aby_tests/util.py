@@ -11,7 +11,7 @@ def rename_test(name: str, lang: str) -> str:
 
 def build_cmd(name: str, test_file: str, role: int) -> List[str]:
     path = f"./scripts/aby_tests/tests/{name}"
-    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-m", "mpc", "-f", path, "-t", test_file, "-r", str(role)]
+    return ["/home/ubuntu/clive/lotsofcirc/func/ABY/build/bin/aby_interpreter", "-m", "mpc", "-f", path, "-t", test_file, "-r", str(role)]
 
 
 def get_result(file_path):
@@ -54,6 +54,9 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
 
         server_out = server_out.decode("utf-8").strip()
         client_out = client_out.decode("utf-8").strip()
+        
+        print(server_out)
+        print(client_out)
 
         server_out = clean_output(server_out)
         client_out = clean_output(client_out)
@@ -80,7 +83,7 @@ def run_tests(lang: str, tests: List[dict]):
     """
     print(f"Running ABY tests for {lang} frontend")
     failed_test_descs = []
-    num_retries = 2
+    num_retries = 1
 
     for test in tqdm(tests, leave=False):
         assert len(

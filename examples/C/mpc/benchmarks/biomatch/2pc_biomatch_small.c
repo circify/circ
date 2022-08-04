@@ -1,8 +1,8 @@
-#define N 64
+#define N 4
 #define K 4 // currently fixed, do not change
 
-#define INNER 16
-#define OUTER (N/64)
+#define INNER 4
+#define OUTER (N/4)
 
 
 int match_fix(int x1, int x2,int x3, int x4, int y1, int y2, int y3, int y4) {
@@ -32,7 +32,7 @@ void match_decomposed(int *db, int *OUTPUT_matches, int len, int *sample) {
   }
 }
 
-int main( __attribute__((private(0))) int db[1024], __attribute__((private(1))) int sample[4])
+int main( __attribute__((private(0))) int db[16], __attribute__((private(1))) int sample[4])
 {
     //int matches[4];
     int matches[N];

@@ -478,21 +478,21 @@ shift_tests = [
 
 
 div_tests = [
-    [
-        "Divide a by 1",
-        "2pc_div",
-        "./scripts/aby_tests/test_inputs/div_1.txt",
-    ],
-    [
-        "Divide a by b - 1",
-        "2pc_div",
-        "./scripts/aby_tests/test_inputs/div_2.txt",
-    ],
-    [
-        "Divide a by b - 2",
-        "2pc_div",
-        "./scripts/aby_tests/test_inputs/div_3.txt",
-    ],
+    # [
+    #     "Divide a by 1",
+    #     "2pc_div",
+    #     "./scripts/aby_tests/test_inputs/div_1.txt",
+    # ],
+    # [
+    #     "Divide a by b - 1",
+    #     "2pc_div",
+    #     "./scripts/aby_tests/test_inputs/div_2.txt",
+    # ],
+    # [
+    #     "Divide a by b - 2",
+    #     "2pc_div",
+    #     "./scripts/aby_tests/test_inputs/div_3.txt",
+    # ],
     [
         "Divide a by b - 3",
         "2pc_div",
@@ -602,18 +602,60 @@ db_tests = [
         "db_join",
         "./scripts/aby_tests/test_inputs/db_join.txt",
     ],
-    [
-        "db join 2",
-        "db_join2",
-        "./scripts/aby_tests/test_inputs/join2.txt",
-    ],
-    [
-        "db merge",
-        "db_merge",
-        "./scripts/aby_tests/test_inputs/merge.txt",
-    ],
+    # [
+    #     "db join 2",
+    #     "db_join2",
+    #     "./scripts/aby_tests/test_inputs/join2.txt",
+    # ],
+    # [
+    #     "db merge",
+    #     "db_merge",
+    #     "./scripts/aby_tests/test_inputs/merge.txt",
+    # ],
 ]
 
+benchmark_tests = [
+    # [
+    #     "biomatch - 1",
+    #     "2pc_biomatch",
+    #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    # ],
+    [
+        "biomatch - 2",
+        "2pc_biomatch_",
+        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    ],
+    # [
+    #     "kmeans - 1",
+    #     "2pc_kmeans_",
+    #     "./scripts/aby_tests/test_inputs/kmeans.txt",
+    # ],
+    # [
+    #     "gauss",
+    #     "2pc_gauss_inline",
+    #     "./scripts/aby_tests/test_inputs/gauss.txt",
+    # ],
+    # [
+    #     "kmeans - 1",
+    #     "2pc_kmeans",
+    #     "./scripts/aby_tests/test_inputs/kmeans.txt",
+    # ],
+    # [
+    #     "mnist 16x16",
+    #     "mnist",
+    #     "./scripts/aby_tests/test_inputs/mnist_16.txt",
+    # ]
+    # [
+    #     "histogram",
+    #     "2pc_histogram",
+    #     "./scripts/aby_tests/test_inputs/histogram.txt",
+    # ],   
+    # [
+    #     "cryptonets 16x16",
+    #     "cryptonets",
+    #     "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
+    # ]
+]
 mnist_tests = [
     [
         "mnist 16x16",
@@ -640,11 +682,26 @@ cryptonets_tests = [
     ]
 ]
 
+pg_tests = [
+    [
+        "playground",
+        "playground",
+        "./scripts/aby_tests/test_inputs/playground.txt",
+    ]
+]
 histogram_tests = [
     [
         "histogram",
         "histogram",
         "./scripts/aby_tests/test_inputs/histogram.txt",
+    ]
+]
+
+pc_histogram_tests = [
+    [
+        "2pc_histogram",
+        "2pc_histogram",
+        "./scripts/aby_tests/test_inputs/2pc_histogram.txt",
     ]
 ]
 

@@ -1777,6 +1777,35 @@ impl ComputationMetadata {
     pub fn input_sort(&self, input_name: &str) -> Sort {
         check(&self.input_vis.get(input_name).unwrap().0)
     }
+    /// TODO: HACK! nice name to ssa name
+    pub fn input_ssa_name_from_nice_name(&self, input_name: &str) -> Vec<(String, usize)> {
+        let mut ssa_names: Vec<(String, usize)> = Vec::new();
+        for k in self.input_vis.keys() {
+            let new_name = k.to_string().replace('.', "_");
+            let n = new_name.split('_').collect::<Vec<&str>>();
+            let offset = n.iter().position(|&r| r == "lex0").unwrap();
+            let var_name = &n[offset + 1..];
+            let (nice_name, index) = match var_name.len() {
+                2 => (var_name[0].to_string(), 0),
+                3.. => {
+                    let l = var_name.len();
+                    (var_name[0..l - 2].to_vec().join("_").to_string(), var_name[l - 1].parse::<usize>().unwrap())
+                }
+                _ => {
+                    panic!("Invalid variable name: {:?}", var_name);
+                }
+            };
+
+            if nice_name == input_name {
+                ssa_names.push((k.to_string(), index));
+            }
+        }
+        if ssa_names.is_empty(){
+            println!("ssa-keys: {:?}", self.input_vis.keys());
+            panic!("ssa-name not found for nice name: {}", input_name);
+        }
+        ssa_names
+    }
     /// Get all public inputs to the computation itself.
     ///
     /// Excludes pre-computation inputs
@@ -1999,6 +2028,16 @@ impl Computation {
         terms.pop();
         terms.into_iter()
     }
+
+    /// convert Computation to ComputationSubgraph
+    pub fn to_cs(&self) -> ComputationSubgraph {
+        let mut cs = ComputationSubgraph::new();
+        for t in self.terms_postorder() {
+            cs.insert_node(&t);
+        }
+        cs.insert_edges();
+        cs
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -2041,6 +2080,73 @@ impl Functions {
         self.computations
             .get(ENTRY_NAME)
             .unwrap_or_else(|| panic!("No entry function: {}", ENTRY_NAME))
+    }
+}
+
+/// A graph representation of a Computation
+#[derive(Clone)]
+pub struct ComputationSubgraph {
+    /// List of terms in subgraph
+    pub nodes: TermSet,
+    /// Adjacency list of edges in subgraph
+    pub edges: TermMap<TermSet>,
+    /// Output leaf nodes
+    pub outs: TermSet,
+    /// Input leaf nodes
+    pub ins: TermSet,
+}
+
+impl Default for ComputationSubgraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ComputationSubgraph {
+    /// default constructor
+    pub fn new() -> Self {
+        Self {
+            nodes: TermSet::new(),
+            edges: TermMap::new(),
+            outs: TermSet::new(),
+            ins: TermSet::new(),
+        }
+    }
+
+    /// Insert nodes into ComputationSubgraph
+    pub fn insert_node(&mut self, node: &Term) {
+        if !self.nodes.contains(node) {
+            self.nodes.insert(node.clone());
+        }
+    }
+
+    /// Insert edges based on nodes in the subgraph
+    pub fn insert_edges(&mut self) {
+        let mut defs: FxHashSet<Term> = FxHashSet::default();
+        for t in self.nodes.iter() {
+            self.edges.insert(t.clone(), TermSet::new());
+            let mut flag = true;
+            for c in t.cs.iter() {
+                if self.nodes.contains(c) {
+                    self.edges.get_mut(t).unwrap().insert(c.clone());
+                    defs.insert(c.clone());
+                    flag = false;
+                }
+            }
+            if flag {
+                self.ins.insert(t.clone());
+            }
+        }
+
+        // Find the leaf node in each subgraph
+        // TODO: defs.difference(&_uses) ?
+        for t in self.nodes.iter() {
+            if !defs.contains(t) {
+                self.outs.insert(t.clone());
+            }
+        }
+        // println!("LOG: Input nodes of partition: {}", self.ins.len());
+        // println!("LOG: Output nodes of partition: {}", self.outs.len());
     }
 }
 

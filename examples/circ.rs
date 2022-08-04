@@ -110,6 +110,17 @@ enum Backend {
         cost_model: String,
         #[structopt(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
+        #[structopt(long, default_value = "8", name = "num_parts")]
+        num_parts: usize,
+        #[structopt(long, default_value = "4", name = "mut_level")]
+        mut_level: usize,
+        #[structopt(long, default_value = "1", name = "mut_step_size")]
+        mut_step_size: usize,
+        // partition params
+        #[structopt(long, default_value = "1", name = "graph_type")]
+        graph_type: usize,
+        #[structopt(long, default_value = "3", name = "imbalance")]
+        imbalance: usize,
     },
 }
 
@@ -240,7 +251,7 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    //Opt::ScalarizeVars,
+                    // Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
@@ -256,7 +267,7 @@ fn main() {
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     // Inline Function Calls
                     // Opt::Link,
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
@@ -339,6 +350,11 @@ fn main() {
         Backend::Mpc {
             cost_model,
             selection_scheme,
+            num_parts,
+            mut_level,
+            mut_step_size,
+            graph_type,
+            imbalance
         } => {
             println!("Converting to aby");
             let lang_str = match language {
@@ -348,7 +364,18 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             println!("Selection scheme: {}", selection_scheme);
-            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
+            to_aby(
+                cs,
+                &path_buf,
+                &lang_str,
+                &cost_model,
+                &selection_scheme,
+                &num_parts,
+                &mut_level,
+                &mut_step_size,
+                &graph_type,
+                &imbalance,
+            );
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
