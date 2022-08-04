@@ -1,17 +1,10 @@
 use crate::ir::term::*;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
-// use std::collections::VecDeque;
-use std::env::var;
-use std::fs;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::thread;
 use std::time::Instant;
 
 pub struct Partitioner {

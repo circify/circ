@@ -44,6 +44,7 @@ fn coarse_map_get(cm: &HashMap<Term, Vec<usize>>, t: &Term ,level: usize) -> usi
     *(v.get(level).unwrap_or_else(|| v.last().unwrap()))
 }
 
+/// 
 pub struct GraphWriter{
     num_nodes: usize,
     num_edges: usize,

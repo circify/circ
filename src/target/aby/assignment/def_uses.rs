@@ -3,25 +3,18 @@ use rug::Integer;
 use fxhash::FxHashSet;
 use fxhash::FxHashMap;
 
-use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
-use crate::target::aby::assignment::SharingMap;
-use crate::target::aby::utils::*;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fmt;
-use std::fs;
-use std::io;
-use std::path::Path;
+
 use std::time::Instant;
 
-pub struct PostOrderIter_v2 {
+/// A post order iterater that skip the const index of select/store
+pub struct PostOrderIterV2 {
     // (cs stacked, term)
     stack: Vec<(bool, Term)>,
     visited: TermSet,
 }
 
-impl PostOrderIter_v2 {
+impl PostOrderIterV2 {
     /// Make an iterator over the descendents of `root`.
     pub fn new(root: Term) -> Self {
         Self {
@@ -31,7 +24,7 @@ impl PostOrderIter_v2 {
     }
 }
 
-impl std::iter::Iterator for PostOrderIter_v2 {
+impl std::iter::Iterator for PostOrderIterV2 {
     type Item = Term;
     fn next(&mut self) -> Option<Term> {
         while let Some((children_pushed, t)) = self.stack.last() {
@@ -88,6 +81,7 @@ fn get_sort_len(s: &Sort) -> usize {
 }
 
 #[derive(Clone)]
+/// A structure that maps the actual terms inside of array and tuple
 pub struct DefUsesSubGraph{
     /// List of terms in subgraph
     pub nodes: TermSet,
@@ -115,7 +109,7 @@ impl DefUsesSubGraph{
         }
     }
 
-    /// Insert nodes into ComputationSubgraph
+    /// Insert nodes into DefUseSubGraph
     pub fn insert_node(&mut self, node: &Term) {
         if !self.nodes.contains(node) {
             self.nodes.insert(node.clone());
@@ -155,6 +149,7 @@ impl DefUsesSubGraph{
     }
 }
 
+/// Extend current dug to outer n level
 pub fn extend_dusg(dusg: &DefUsesSubGraph, dug: &DefUsesGraph, n: usize) -> DefUsesSubGraph{
     let mut old_g: DefUsesSubGraph = dusg.clone();
     let mut new_g: DefUsesSubGraph = DefUsesSubGraph::new();
@@ -174,6 +169,7 @@ pub fn extend_dusg(dusg: &DefUsesSubGraph, dug: &DefUsesGraph, n: usize) -> DefU
     old_g
 }
 
+/// Def Use Graph for a computation
 pub struct DefUsesGraph {
     pub term_to_terms: TermMap<Vec<Term>>,
     pub def_use: FxHashSet<(Term, Term)>,
@@ -181,6 +177,8 @@ pub struct DefUsesGraph {
     pub use_defs: FxHashMap<Term, FxHashSet<Term>>,
     pub const_terms: TermSet,
     pub good_terms: TermSet,
+    pub call_args: TermMap<Vec<FxHashSet<Op>>>,
+    pub call_rets: TermMap<Vec<FxHashSet<Op>>>,
 }
 
 impl DefUsesGraph {
@@ -193,17 +191,36 @@ impl DefUsesGraph {
             use_defs: FxHashMap::default(),
             const_terms: TermSet::new(),
             good_terms: TermSet::new(),
+            call_args: TermMap::new(),
+            call_rets: TermMap::new(),
         };
         dug.construct_def_use(c);
-        dug.construct_def_uses();
-        dug.construct_use_defs();
+        dug.construct_mapping();
+        println!("Time: Def Use Graph: {:?}", now.elapsed());
+        dug
+    }
+
+    pub fn for_call_site(c: &Computation) -> Self{
+        let mut now = Instant::now();
+        let mut dug = Self {
+            term_to_terms: TermMap::new(),
+            def_use: FxHashSet::default(),
+            def_uses: FxHashMap::default(),
+            use_defs: FxHashMap::default(),
+            const_terms: TermSet::new(),
+            good_terms: TermSet::new(),
+            call_args: TermMap::new(),
+            call_rets: TermMap::new(),
+        };
+        dug.construct_def_use(c);
+        dug.construct_mapping();
         println!("Time: Def Use Graph: {:?}", now.elapsed());
         dug
     }
 
     fn construct_def_use(&mut self, c: &Computation){
         for out in c.outputs.iter() {
-            for t in PostOrderIter_v2::new(out.clone()) {
+            for t in PostOrderIterV2::new(out.clone()) {
                 match &t.op{
                     Op::Const(Value::Tuple(tup)) => {
                         let mut terms: Vec<Term> = Vec::new();
@@ -308,35 +325,30 @@ impl DefUsesGraph {
                             self.add_term(&t);
                         }
                     }
-                    // noy sure if we should include call in def uses...
-                    // Op::Call(..) => {
-                    //     term_to_terms.insert(t.clone(), vec![t.clone()]);
-                    // }
-                    // _ =>{
-                    //     for c in t.cs.iter(){
-                    //         if let Op::Call(..) = t.op{
-                    //             continue;
-                    //         } else{
-                    //             let terms = term_to_terms.get(c).unwrap();
-                    //             assert_eq!(terms.len(), 1);
-                    //             def_use.insert((t.clone(), terms[0].clone()));
-                    //         }
-                    //     }
-                    //     term_to_terms.insert(t.clone(), vec![t.clone()]);
-                    // }
                     Op::Call(_, _, _, ret_sorts) => {
                         // Use call term itself as the placeholder
                         // Call term will be ignore by the ilp solver later
                         let mut ret_terms: Vec<Term> = Vec::new();
                         let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                        let mut args: Vec<FxHashSet<Op>> = Vec::new();
+                        let mut rets: Vec<FxHashSet<Op>> = Vec::new();
+                        for c in t.cs.iter(){
+                            let arg_terms = self.term_to_terms.get(c).unwrap();
+                            let mut arg_set: FxHashSet<Op> = FxHashSet::default();
+                            for arg in arg_terms.iter(){
+                                arg_set.insert(arg.op.clone());
+                            }
+                            args.push(arg_set);
+                        }
                         for _ in 0..num_rets{
+                            rets.push(FxHashSet::default());
                             ret_terms.push(t.clone());
                         }
                         self.term_to_terms.insert(t.clone(), ret_terms);
+                        self.call_args.insert(t.clone(), args);
+                        self.call_rets.insert(t.clone(), rets);
                     }
                     Op::Ite =>{
-                        // bool exp
-                        
                         if let Op::Store = t.cs[1].op{
                             // assert_eq!(t.cs[2].op, Op::Store);
                             let cond_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
@@ -358,7 +370,6 @@ impl DefUsesGraph {
                                 if let Op::Call(..) = t.op{
                                     continue;
                                 } else{
-                                    // println!("op: {}", c.op);
                                     let terms = self.term_to_terms.get(c).unwrap();
                                     assert_eq!(terms.len(), 1);
                                     self.def_use.insert((terms[0].clone(), t.clone()));
@@ -369,12 +380,10 @@ impl DefUsesGraph {
                         self.add_term(&t);
                     }
                     _ =>{
-                        // println!("cur op: {}", t.op);
                         for c in t.cs.iter(){
                             if let Op::Call(..) = t.op{
                                 continue;
                             } else{
-                                // println!("op: {}", c.op);
                                 let terms = self.term_to_terms.get(c).unwrap();
                                 assert_eq!(terms.len(), 1);
                                 self.def_use.insert((terms[0].clone(), t.clone()));
@@ -385,10 +394,18 @@ impl DefUsesGraph {
                     }
                 }
             }
+            // This is for the case when out term is not a good term, we still need it.
+            // if !self.good_terms.contains(out){
+            //     let this_terms = self.term_to_terms.get(out).unwrap();
+            //     for t in this_terms.iter(){
+            //         self.def_use.insert((t.clone(), out.clone()));
+            //     }
+            //     self.add_term(&out);
+            // }
         }
     }
 
-    fn construct_def_uses(&mut self){
+    fn construct_mapping(&mut self){
         for (def, _use) in self.def_use.iter(){
             if self.def_uses.contains_key(def){
                 self.def_uses.get_mut(def).unwrap().insert(_use.clone());
@@ -397,11 +414,6 @@ impl DefUsesGraph {
                 uses.insert(_use.clone());
                 self.def_uses.insert(def.clone(), uses);
             }
-        }
-    }
-
-    fn construct_use_defs(&mut self){
-        for (def, _use) in self.def_use.iter(){
             if self.use_defs.contains_key(_use){
                 self.use_defs.get_mut(_use).unwrap().insert(def.clone());
             } else {

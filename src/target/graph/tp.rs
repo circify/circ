@@ -95,8 +95,10 @@ impl TrivialPartition{
         }
     }
 
-    pub fn inline_all(&mut self, fname: &String) -> Computation{
-        self.comp_history.get(fname).unwrap().clone()
+    pub fn inline_all(&mut self, fname: &String) -> (Computation, DefUsesGraph){
+        let c = self.comp_history.get(fname).unwrap().clone();
+        let dug = DefUsesGraph::new(&c);
+        (c, dug)
     }
 
     pub fn run(&mut self, fname: &String, path: &String, num_parts: usize) -> (Computation, DefUsesGraph ,TermMap<usize>){

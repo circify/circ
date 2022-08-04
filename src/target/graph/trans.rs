@@ -8,15 +8,15 @@ use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::smart_global_assign;
 #[cfg(feature = "lp")]
 use crate::target::graph::utils::mutation::*;
-use crate::target::aby::assignment::SharingMap;
 
-use crate::target::aby::trans::construct_def_uses;
+use crate::target::aby::assignment::SharingMap;
 
 use crate::target::aby::assignment::def_uses::*;
 
-use std::time::Instant;
-use std::collections::HashMap;
 use std::path::Path;
+use std::collections::HashMap;
+use std::time::Instant;
+
 use std::fs;
 
 
@@ -214,7 +214,7 @@ pub fn  inline_all_and_assign_glp(
 ) -> (Functions, HashMap<String, SharingMap>){
     let mut tp = TrivialPartition::new(fs, 0, 0, false);
     let main = "main";
-    let c = tp.inline_all(&main.to_string());
+    let (c, dug) = tp.inline_all(&main.to_string());
 
     // println!("Terms after inline all.");
     // for t in c.terms_postorder() {
@@ -239,19 +239,12 @@ pub fn  inline_all_and_assign_smart_glp(
     let mut now = Instant::now();
     let mut tp = TrivialPartition::new(fs, 0, 0, false);
     let main = "main";
-    let c = tp.inline_all(&main.to_string());
+    let (c, dug) = tp.inline_all(&main.to_string());
 
-    // println!("Terms after inline all.");
-    // for t in c.terms_postorder() {
-    //     println!("t: {}", t);
-    // }
-
-    let cs = c.to_cs();
-    let (terms, def_uses) = construct_def_uses(&c);
     println!("Time: Inline and construction def uses: {:?}", now.elapsed());
 
     now = Instant::now();
-    let assignment = smart_global_assign(&terms, &def_uses, cm);
+    let assignment = smart_global_assign(&dug.good_terms, &dug.def_use, cm);
     println!("Time: ILP: {:?}", now.elapsed());
 
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();

@@ -126,14 +126,16 @@ impl CostModel {
     fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
         match op {
             Op::Var(..)
-            | Op::Field(_)
-            | Op::Update(..)
-            | Op::Tuple
             // | Op::Select
             // | Op::Store 
             | Op::Call(..)
             | Op::Const(..)=> {
                 todo!("Op get cost: Should not reach here.");
+            }
+            Op::Field(_)
+            | Op::Update(..)
+            | Op::Tuple =>{
+                Some(&self.zero)
             }
             Op::Select => {
                 let op_name = "select";

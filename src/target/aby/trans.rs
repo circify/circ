@@ -13,7 +13,7 @@ use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
-use crate::target::aby::assignment::def_uses::PostOrderIter_v2;
+use crate::target::aby::assignment::def_uses::PostOrderIterV2;
 use crate::target::aby::utils::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -821,12 +821,6 @@ impl<'a> ToABY<'a> {
                 );
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), tuple_share);
-
-                // let mut shares: Vec<i32> = Vec::new();
-                // for c in t.cs.iter() {
-                //     shares.append(&mut self.get_shares(c, to_share_type));
-                // }
-                // self.term_to_shares.insert(t.clone(), shares);
             }
             Op::Call(name, _arg_names, _arg_sorts, ret_sorts) => {
                 let call_share = self.get_share(&t, to_share_type);
@@ -890,7 +884,7 @@ impl<'a> ToABY<'a> {
 
         let mut write_time: std::time::Duration = std::time::Duration::new(0, 0);
 
-        for c in PostOrderIter_v2::new(t) {
+        for c in PostOrderIterV2::new(t) {
             if self.term_to_shares.contains_key(&c) {
                 continue;
             }
@@ -948,7 +942,7 @@ impl<'a> ToABY<'a> {
 
             for t in comp.outputs.iter() {
                 self.embed(t.clone());
-
+                println!("out op: {}", t.op);
                 let op = "OUT";
                 let to_share_type = self.get_term_share_type(&t);
                 let share = self.get_share(&t, to_share_type);
@@ -1106,214 +1100,4 @@ pub fn to_aby(
         }
     };
 
-}
-
-fn get_sort_len(s: &Sort) -> usize {
-    let mut len = 0;
-    len += match s {
-        Sort::Bool => 1,
-        Sort::BitVector(_) => 1,
-        Sort::Array(_, _, n) => *n,
-        Sort::Tuple(sorts) => {
-            let mut inner_len = 0;
-            for inner_s in sorts.iter() {
-                inner_len += get_sort_len(inner_s);
-            }
-            inner_len
-        }
-        _ => panic!("Sort is not supported: {:#?}", s),
-    };
-    len
-}
-
-pub fn construct_def_uses(c: &Computation) -> (TermSet, FxHashSet<(Term, Term)>){
-    let mut term_to_terms: TermMap<Vec<Term>> = TermMap::new();
-    let mut def_uses: FxHashSet<(Term, Term)> = FxHashSet::default();
-    let mut const_terms: TermSet = TermSet::new();
-    let mut good_terms: TermSet = TermSet::new();
-    for out in c.outputs.iter() {
-        for t in PostOrderIter_v2::new(out.clone()) {
-            match &t.op{
-                Op::Const(Value::Tuple(tup)) => {
-                    let mut terms: Vec<Term> = Vec::new();
-                    for val in tup.iter() {
-                        terms.push(leaf_term(Op::Const(val.clone())));
-                        const_terms.insert(leaf_term(Op::Const(val.clone())));
-                        good_terms.insert(leaf_term(Op::Const(val.clone())));
-                    }
-                    term_to_terms.insert(t.clone(), terms);
-                }
-                Op::Tuple => {
-                    let mut terms: Vec<Term> = Vec::new();
-                    for c in t.cs.iter() {
-                        terms.extend(term_to_terms.get(&c).unwrap().clone());
-                    }
-                    term_to_terms.insert(t.clone(), terms);
-                }
-                Op::Field(i) => {
-                    let tuple_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
-
-                    let tuple_sort = check(&t.cs[0]);
-                    let (offset, len) = match tuple_sort {
-                        Sort::Tuple(t) => {
-                            assert!(*i < t.len());
-                            // find offset
-                            let mut offset = 0;
-                            for j in 0..*i {
-                                offset += get_sort_len(&t[j]);
-                            }
-                            // find len
-                            let len = get_sort_len(&t[*i]);
-
-                            (offset, len)
-                        }
-                        _ => panic!("Field op on non-tuple"),
-                    };
-                    // get ret slice
-                    let field_terms = &tuple_terms[offset..offset + len];
-                    term_to_terms.insert(t.clone(), field_terms.to_vec());
-                }
-                Op::Update(i) => {
-                    let mut tuple_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
-                    let value_terms = term_to_terms.get(&t.cs[1]).unwrap().clone();
-                    tuple_terms[*i] = value_terms[0].clone();
-                    term_to_terms.insert(t.clone(), tuple_terms);
-                }
-                Op::Const(Value::Array(arr)) => {
-                    let mut terms: Vec<Term> = Vec::new();
-                    let sort = check(&t);
-                    if let Sort::Array(_, _, n) = sort{
-                        println!("Create a {} size array.", n);
-                        let n = n as i32;
-                        for i in 0..n{
-                            let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
-                            let v = match arr.map.get(&idx) {
-                                Some(c) => c,
-                                None => &*arr.default,
-                            };
-                            terms.push(leaf_term(Op::Const(v.clone())));
-                            const_terms.insert(leaf_term(Op::Const(v.clone())));
-                            good_terms.insert(leaf_term(Op::Const(v.clone())));
-                        }
-                    } else{
-                        todo!("Const array sort not array????")
-                    }
-                    term_to_terms.insert(t.clone(), terms);
-                }
-                Op::Store => {
-                    let mut array_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
-                    let value_terms = term_to_terms.get(&t.cs[2]).unwrap().clone();
-                    if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
-                        // constant indexing
-                        let idx = bv.uint().to_usize().unwrap().clone();
-                        // println!("Store the {} value on a  {} size array.",idx , array_terms.len());
-                        array_terms[idx] = value_terms[0].clone();
-                        term_to_terms.insert(t.clone(), array_terms);
-                    } else{
-                        for idx in 0..array_terms.len(){
-                            def_uses.insert((array_terms[idx].clone(), t.clone()));
-                            array_terms[idx] = t.clone();
-                        }
-                        def_uses.insert((value_terms[0].clone(), t.clone()));
-                        term_to_terms.insert(t.clone(), array_terms);
-                        good_terms.insert(t.clone());
-                    }
-                }
-                Op::Select => {
-                    let array_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
-                    if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
-                        // constant indexing
-                        let idx = bv.uint().to_usize().unwrap().clone();
-                        if array_terms.len() == 1 && idx == 1 {
-                            println!("dad op: {:?}", t.cs[0].op);
-                            println!("grandpa op: {:?}", t.cs[0].cs[0].op);
-                        }
-                        term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
-                    } else{
-                        for idx in 0..array_terms.len(){
-                            def_uses.insert((array_terms[idx].clone(), t.clone()));
-                        }
-                        term_to_terms.insert(t.clone(), vec![t.clone()]);
-                        good_terms.insert(t.clone());
-                    }
-                }
-                // noy sure if we should include call in def uses...
-                // Op::Call(..) => {
-                //     term_to_terms.insert(t.clone(), vec![t.clone()]);
-                // }
-                // _ =>{
-                //     for c in t.cs.iter(){
-                //         if let Op::Call(..) = t.op{
-                //             continue;
-                //         } else{
-                //             let terms = term_to_terms.get(c).unwrap();
-                //             assert_eq!(terms.len(), 1);
-                //             def_uses.insert((t.clone(), terms[0].clone()));
-                //         }
-                //     }
-                //     term_to_terms.insert(t.clone(), vec![t.clone()]);
-                // }
-                Op::Call(_, _, _, ret_sorts) => {
-                    // Use call term itself as the placeholder
-                    // Call term will be ignore by the ilp solver later
-                    let mut ret_terms: Vec<Term> = Vec::new();
-                    let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
-                    for _ in 0..num_rets{
-                        ret_terms.push(t.clone());
-                    }
-                    term_to_terms.insert(t.clone(), ret_terms);
-                }
-                Op::Ite =>{
-                    // bool exp
-                    
-                    if let Op::Store = t.cs[1].op{
-                        // assert_eq!(t.cs[2].op, Op::Store);
-                        let mut cond_terms = term_to_terms.get(&t.cs[0]).unwrap().clone();
-                        assert_eq!(cond_terms.len(), 1);
-                        def_uses.insert((cond_terms[0].clone(), t.clone()));
-                        // true branch
-                        let mut t_terms = term_to_terms.get(&t.cs[1]).unwrap().clone();
-                        // false branch
-                        let f_terms = term_to_terms.get(&t.cs[2]).unwrap().clone();
-                        assert_eq!(t_terms.len(), f_terms.len());
-                        for idx in 0..t_terms.len(){
-                            def_uses.insert((t_terms[idx].clone(), t.clone()));
-                            def_uses.insert((f_terms[idx].clone(), t.clone()));
-                            t_terms[idx] = t.clone();
-                        }
-                        term_to_terms.insert(t.clone(), t_terms);
-                    } else{
-                        for c in t.cs.iter(){
-                            if let Op::Call(..) = t.op{
-                                continue;
-                            } else{
-                                // println!("op: {}", c.op);
-                                let terms = term_to_terms.get(c).unwrap();
-                                assert_eq!(terms.len(), 1);
-                                def_uses.insert((terms[0].clone(), t.clone()));
-                            }
-                        }
-                        term_to_terms.insert(t.clone(), vec![t.clone()]);
-                    }
-                    good_terms.insert(t.clone());
-                }
-                _ =>{
-                    // println!("cur op: {}", t.op);
-                    for c in t.cs.iter(){
-                        if let Op::Call(..) = t.op{
-                            continue;
-                        } else{
-                            // println!("op: {}", c.op);
-                            let terms = term_to_terms.get(c).unwrap();
-                            assert_eq!(terms.len(), 1);
-                            def_uses.insert((terms[0].clone(), t.clone()));
-                        }
-                    }
-                    term_to_terms.insert(t.clone(), vec![t.clone()]);
-                    good_terms.insert(t.clone());
-                }
-            }
-        }
-    }
-    (good_terms, def_uses)
 }

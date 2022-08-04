@@ -628,11 +628,11 @@ benchmark_tests = [
     #     "2pc_biomatch",
     #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
     # ],
-    # [
-    #     "biomatch - 2",
-    #     "2pc_biomatch_",
-    #     "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
-    # ],
+    [
+        "biomatch - 2",
+        "2pc_biomatch_",
+        "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
+    ],
     # [
     #     "kmeans - 1",
     #     "2pc_kmeans_",
@@ -653,11 +653,11 @@ benchmark_tests = [
     #     "mnist",
     #     "./scripts/aby_tests/test_inputs/mnist_16.txt",
     # ]
-    [
-        "histogram",
-        "2pc_histogram",
-        "./scripts/aby_tests/test_inputs/histogram.txt",
-    ],   
+    # [
+    #     "histogram",
+    #     "2pc_histogram",
+    #     "./scripts/aby_tests/test_inputs/histogram.txt",
+    # ],   
     # [
     #     "cryptonets 16x16",
     #     "cryptonets",
