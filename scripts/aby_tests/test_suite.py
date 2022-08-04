@@ -1,11 +1,3 @@
-ts = [
-    [
-        "mnist decomp convolution",
-        "mnist_decomp_convolution",
-        "./scripts/aby_tests/test_inputs/mnist_decomp_convolution.txt",
-    ]
-]
-
 arithmetic_tests = [
     [
         "Add two numbers",
@@ -625,15 +617,25 @@ db_tests = [
 mnist_tests = [
     [
         "mnist 16x16",
-        "mnist",
+        "mnist_16",
         "./scripts/aby_tests/test_inputs/mnist_16.txt",
+    ],
+    [
+        "mnist decomp main 16",
+        "mnist_decomp_main_16",
+        "./scripts/aby_tests/test_inputs/mnist_decomp_main_16.txt",
+    ],
+    [
+        "mnist decomp convolution",
+        "mnist_decomp_convolution",
+        "./scripts/aby_tests/test_inputs/mnist_decomp_convolution.txt",
     ]
 ]
 
 cryptonets_tests = [
     [
         "cryptonets 16x16",
-        "cryptonets",
+        "cryptonets_16",
         "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
     ]
 ]
