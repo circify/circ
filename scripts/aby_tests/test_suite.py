@@ -597,21 +597,21 @@ gauss_tests = [
 ]
 
 db_tests = [
-    [
-        "db join",
-        "db_join",
-        "./scripts/aby_tests/test_inputs/db_join.txt",
-    ],
+    # [
+    #     "db join",
+    #     "db_join",
+    #     "./scripts/aby_tests/test_inputs/db_join_50.txt",
+    # ],
     # [
     #     "db join 2",
     #     "db_join2",
     #     "./scripts/aby_tests/test_inputs/join2.txt",
     # ],
-    # [
-    #     "db merge",
-    #     "db_merge",
-    #     "./scripts/aby_tests/test_inputs/merge.txt",
-    # ],
+    [
+        "db merge",
+        "db_merge",
+        "./scripts/aby_tests/test_inputs/merge.txt",
+    ],
 ]
 
 benchmark_tests = [
@@ -625,16 +625,16 @@ benchmark_tests = [
         "2pc_biomatch_",
         "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
     ],
-    # [
-    #     "kmeans - 1",
-    #     "2pc_kmeans_",
-    #     "./scripts/aby_tests/test_inputs/kmeans.txt",
-    # ],
-    # [
-    #     "gauss",
-    #     "2pc_gauss_inline",
-    #     "./scripts/aby_tests/test_inputs/gauss.txt",
-    # ],
+    [
+        "kmeans - 1",
+        "2pc_kmeans_",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],
+    [
+        "gauss",
+        "2pc_gauss_inline",
+        "./scripts/aby_tests/test_inputs/gauss.txt",
+    ],
     # [
     #     "kmeans - 1",
     #     "2pc_kmeans",
@@ -662,16 +662,16 @@ mnist_tests = [
         "mnist_16",
         "./scripts/aby_tests/test_inputs/mnist_16.txt",
     ],
-    [
-        "mnist decomp main 16",
-        "mnist_decomp_main_16",
-        "./scripts/aby_tests/test_inputs/mnist_decomp_main_16.txt",
-    ],
-    [
-        "mnist decomp convolution",
-        "mnist_decomp_convolution",
-        "./scripts/aby_tests/test_inputs/mnist_decomp_convolution.txt",
-    ]
+    # [
+    #     "mnist decomp main 16",
+    #     "mnist_decomp_main_16",
+    #     "./scripts/aby_tests/test_inputs/mnist_decomp_main_16.txt",
+    # ],
+    # [
+    #     "mnist decomp convolution",
+    #     "mnist_decomp_convolution",
+    #     "./scripts/aby_tests/test_inputs/mnist_decomp_convolution.txt",
+    # ]
 ]
 
 cryptonets_tests = [

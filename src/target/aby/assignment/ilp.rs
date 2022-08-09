@@ -78,7 +78,7 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
     while smap.len() == 0 {
         // A hack for empty result during multi-threading
         // Simply retry until get a non-empty result
-        if cnt > 5{
+        if cnt > 5 {
             panic!("MT BUG: Dead loop.")
         }
         smap = build_ilp(c, &costs);
@@ -97,7 +97,11 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
 }
 
 /// Uses an ILP to assign and abandon the outer assignments
-pub fn assign_mut_smart(dusg: &DefUsesSubGraph, cm: &str, dusg_ref: &DefUsesSubGraph) -> SharingMap {
+pub fn assign_mut_smart(
+    dusg: &DefUsesSubGraph,
+    cm: &str,
+    dusg_ref: &DefUsesSubGraph,
+) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
@@ -115,7 +119,7 @@ pub fn assign_mut_smart(dusg: &DefUsesSubGraph, cm: &str, dusg_ref: &DefUsesSubG
     while smap.len() == 0 {
         // A hack for empty result during multi-threading
         // Simply retry until get a non-empty result
-        if cnt > 5{
+        if cnt > 5 {
             panic!("MT BUG: Dead loop.")
         }
         smap = build_smart_ilp(dusg.nodes.clone(), &dusg.def_use, &costs);
@@ -134,7 +138,11 @@ pub fn assign_mut_smart(dusg: &DefUsesSubGraph, cm: &str, dusg_ref: &DefUsesSubG
 }
 
 /// Uses an ILP to assign...
-pub fn smart_global_assign(terms: &TermSet, def_uses: &FxHashSet<(Term,Term)>, cm: &str) -> SharingMap {
+pub fn smart_global_assign(
+    terms: &TermSet,
+    def_uses: &FxHashSet<(Term, Term)>,
+    cm: &str,
+) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
@@ -150,10 +158,16 @@ pub fn smart_global_assign(terms: &TermSet, def_uses: &FxHashSet<(Term,Term)>, c
     build_smart_ilp(terms.clone(), def_uses, &costs)
 }
 
-
-fn build_smart_ilp(term_set: TermSet, def_uses: &FxHashSet<(Term,Term)>, costs: &CostModel) -> SharingMap {
-    let terms: FxHashMap<Term, usize> =
-        term_set.into_iter().enumerate().map(|(i, t)| (t, i)).collect();
+fn build_smart_ilp(
+    term_set: TermSet,
+    def_uses: &FxHashSet<(Term, Term)>,
+    costs: &CostModel,
+) -> SharingMap {
+    let terms: FxHashMap<Term, usize> = term_set
+        .into_iter()
+        .enumerate()
+        .map(|(i, t)| (t, i))
+        .collect();
     let mut term_vars: FxHashMap<(Term, ShareType), (Variable, f64, String)> = FxHashMap::default();
     let mut conv_vars: FxHashMap<(Term, ShareType, ShareType), (Variable, f64)> =
         FxHashMap::default();
@@ -230,69 +244,84 @@ fn build_smart_ilp(term_set: TermSet, def_uses: &FxHashSet<(Term,Term)>, costs: 
         for use_ in uses {
             for from_ty in &SHARE_TYPES {
                 for to_ty in &SHARE_TYPES {
-                    let ilp_version = false;
-                    if ilp_version{
+                    let ilp_version = true;
+                    if ilp_version {
                         conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                             term_vars.get(&(def.clone(), *from_ty)).map(|t_from| {
                                 // c[term i from pi to pi'] >= t[term j with pi'] + t[term i with pi] - 1
-                                term_vars
-                                    .get(&(use_.clone(), *to_ty))
-                                    .map(|t_to| ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0)))
+                                term_vars.get(&(use_.clone(), *to_ty)).map(|t_to| {
+                                    ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0))
+                                })
                             })
                         });
-                    } else{
+                    } else {
                         // hardcoding here
                         // a2b > y2b
                         // y2a > b2a
                         // a2y > b2y
-                        if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Boolean{
+                        if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Boolean {
                             let cheap_ty = ShareType::Yao;
                             conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 term_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     term_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
                                         term_vars.get(&(def.clone(), cheap_ty)).map(|d_ch| {
-                                            term_vars
-                                                .get(&(use_.clone(), *to_ty))
-                                                .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0 - d_ch.0)))
+                                            term_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                                ilp.new_constraint(
+                                                    c.0 >> (d_from.0 + u_to.0
+                                                        - 1.0
+                                                        - d_to.0
+                                                        - d_ch.0),
+                                                )
+                                            })
                                         })
                                     })
                                 })
                             });
-                        } else if *from_ty == ShareType::Yao && *to_ty == ShareType::Arithmetic{
+                        } else if *from_ty == ShareType::Yao && *to_ty == ShareType::Arithmetic {
                             let cheap_ty = ShareType::Boolean;
                             conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 term_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     term_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
                                         term_vars.get(&(def.clone(), cheap_ty)).map(|d_ch| {
-                                            term_vars
-                                                .get(&(use_.clone(), *to_ty))
-                                                .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0 - d_ch.0)))
+                                            term_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                                ilp.new_constraint(
+                                                    c.0 >> (d_from.0 + u_to.0
+                                                        - 1.0
+                                                        - d_to.0
+                                                        - d_ch.0),
+                                                )
+                                            })
                                         })
                                     })
                                 })
                             });
-
-                        } else if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Yao{
+                        } else if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Yao {
                             let cheap_ty = ShareType::Boolean;
                             conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 term_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     term_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
                                         term_vars.get(&(def.clone(), cheap_ty)).map(|d_ch| {
-                                            term_vars
-                                                .get(&(use_.clone(), *to_ty))
-                                                .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0 - d_ch.0)))
+                                            term_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                                ilp.new_constraint(
+                                                    c.0 >> (d_from.0 + u_to.0
+                                                        - 1.0
+                                                        - d_to.0
+                                                        - d_ch.0),
+                                                )
+                                            })
                                         })
                                     })
                                 })
                             });
-
-                        } else{
+                        } else {
                             conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 term_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     term_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
-                                    term_vars
-                                        .get(&(use_.clone(), *to_ty))
-                                        .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0)))
+                                        term_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                            ilp.new_constraint(
+                                                c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0),
+                                            )
+                                        })
                                     })
                                 })
                             });
@@ -908,75 +937,90 @@ fn build_comb_ilp_smart(
         for use_ in uses {
             for from_ty in &SHARE_TYPES {
                 for to_ty in &SHARE_TYPES {
-                    let ilp_version = false;
-                    if ilp_version{
+                    let ilp_version = true;
+                    if ilp_version {
                         e_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                             v_vars.get(&(def.clone(), *from_ty)).map(|t_from| {
                                 // c[term i from pi to pi'] >= t[term j with pi'] + t[term i with pi] - 1
-                                v_vars
-                                    .get(&(use_.clone(), *to_ty))
-                                    .map(|t_to| ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0)))
+                                v_vars.get(&(use_.clone(), *to_ty)).map(|t_to| {
+                                    ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0))
+                                })
                             })
                         });
-                    } else{
+                    } else {
                         // hardcoding here
                         // a2b > y2b
                         // y2a > b2a
                         // a2y > b2y
-                        if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Boolean{
+                        if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Boolean {
                             let cheap_ty = ShareType::Yao;
                             e_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 v_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     v_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
                                         v_vars.get(&(def.clone(), cheap_ty)).map(|d_ch| {
-                                            v_vars
-                                                .get(&(use_.clone(), *to_ty))
-                                                .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0 - d_ch.0)))
+                                            v_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                                ilp.new_constraint(
+                                                    c.0 >> (d_from.0 + u_to.0
+                                                        - 1.0
+                                                        - d_to.0
+                                                        - d_ch.0),
+                                                )
+                                            })
                                         })
                                     })
                                 })
                             });
-                        } else if *from_ty == ShareType::Yao && *to_ty == ShareType::Arithmetic{
+                        } else if *from_ty == ShareType::Yao && *to_ty == ShareType::Arithmetic {
                             let cheap_ty = ShareType::Boolean;
                             e_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 v_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     v_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
                                         v_vars.get(&(def.clone(), cheap_ty)).map(|d_ch| {
-                                            v_vars
-                                                .get(&(use_.clone(), *to_ty))
-                                                .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0 - d_ch.0)))
+                                            v_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                                ilp.new_constraint(
+                                                    c.0 >> (d_from.0 + u_to.0
+                                                        - 1.0
+                                                        - d_to.0
+                                                        - d_ch.0),
+                                                )
+                                            })
                                         })
                                     })
                                 })
                             });
-
-                        } else if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Yao{
+                        } else if *from_ty == ShareType::Arithmetic && *to_ty == ShareType::Yao {
                             let cheap_ty = ShareType::Boolean;
                             e_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 v_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     v_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
                                         v_vars.get(&(def.clone(), cheap_ty)).map(|d_ch| {
-                                            v_vars
-                                                .get(&(use_.clone(), *to_ty))
-                                                .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0 - d_ch.0)))
+                                            v_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                                ilp.new_constraint(
+                                                    c.0 >> (d_from.0 + u_to.0
+                                                        - 1.0
+                                                        - d_to.0
+                                                        - d_ch.0),
+                                                )
+                                            })
                                         })
                                     })
                                 })
                             });
-
-                        } else{
+                        } else {
                             e_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                                 v_vars.get(&(def.clone(), *from_ty)).map(|d_from| {
                                     v_vars.get(&(def.clone(), *to_ty)).map(|d_to| {
-                                        v_vars
-                                        .get(&(use_.clone(), *to_ty))
-                                        .map(|u_to| ilp.new_constraint(c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0)))
+                                        v_vars.get(&(use_.clone(), *to_ty)).map(|u_to| {
+                                            ilp.new_constraint(
+                                                c.0 >> (d_from.0 + u_to.0 - 1.0 - d_to.0),
+                                            )
+                                        })
                                     })
                                 })
                             });
                         }
+                    }
                 }
-            }
             }
         }
     }
@@ -1012,7 +1056,12 @@ pub fn calculate_cost_smart(smap: &SharingMap, costs: &CostModel, dusg: &DefUses
     let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
     for (t, to_ty) in smap {
         match &t.op {
-            Op::Var(..) | Op::Const(_) | Op::BvConcat | Op::BvExtract(..) | Op::BoolToBv | Op::BvBit(_) => {
+            Op::Var(..)
+            | Op::Const(_)
+            | Op::BvConcat
+            | Op::BvExtract(..)
+            | Op::BoolToBv
+            | Op::BvBit(_) => {
                 cost = cost + 0.0;
             }
             _ => {
@@ -1041,7 +1090,12 @@ pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
     let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
     for (t, to_ty) in smap {
         match &t.op {
-            Op::Var(..) | Op::Const(_) | Op::BvConcat | Op::BvExtract(..) | Op::BoolToBv | Op::BvBit(_) => {
+            Op::Var(..)
+            | Op::Const(_)
+            | Op::BvConcat
+            | Op::BvExtract(..)
+            | Op::BoolToBv
+            | Op::BvBit(_) => {
                 cost = cost + 0.0;
             }
             _ => {
@@ -1068,7 +1122,12 @@ pub fn calculate_node_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
     let mut cost: f64 = 0.0;
     for (t, to_ty) in smap {
         match &t.op {
-            Op::Var(..) | Op::Const(_) | Op::BvConcat | Op::BvExtract(..) | Op::BoolToBv | Op::BvBit(_) => {
+            Op::Var(..)
+            | Op::Const(_)
+            | Op::BvConcat
+            | Op::BvExtract(..)
+            | Op::BoolToBv
+            | Op::BvBit(_) => {
                 cost = cost + 0.0;
             }
             _ => {
@@ -1116,19 +1175,11 @@ mod tests {
         );
         assert_eq!(
             &1731.0,
-            c
-                .get(&BV_MUL)
-                .unwrap()
-                .get(&ShareType::Boolean)
-                .unwrap()
+            c.get(&BV_MUL).unwrap().get(&ShareType::Boolean).unwrap()
         );
         assert_eq!(
             &7.0,
-            c
-                .get(&BV_XOR)
-                .unwrap()
-                .get(&ShareType::Boolean)
-                .unwrap()
+            c.get(&BV_XOR).unwrap().get(&ShareType::Boolean).unwrap()
         );
     }
 

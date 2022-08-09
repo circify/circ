@@ -1789,7 +1789,11 @@ impl ComputationMetadata {
                 2 => (var_name[0].to_string(), 0),
                 3.. => {
                     let l = var_name.len();
-                    (var_name[0..l - 2].to_vec().join("_").to_string(), var_name[l - 1].parse::<usize>().unwrap())
+                    // println!("var: {:?}", var_name);
+                    (
+                        var_name[0..l - 2].to_vec().join("_").to_string(),
+                        var_name[l - 1].parse::<usize>().unwrap(),
+                    )
                 }
                 _ => {
                     panic!("Invalid variable name: {:?}", var_name);
@@ -1800,7 +1804,7 @@ impl ComputationMetadata {
                 ssa_names.push((k.to_string(), index));
             }
         }
-        if ssa_names.is_empty(){
+        if ssa_names.is_empty() {
             println!("ssa-keys: {:?}", self.input_vis.keys());
             panic!("ssa-name not found for nice name: {}", input_name);
         }

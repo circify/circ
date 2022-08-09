@@ -110,8 +110,8 @@ enum Backend {
         cost_model: String,
         #[structopt(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
-        #[structopt(long, default_value = "8", name = "num_parts")]
-        num_parts: usize,
+        #[structopt(long, default_value = "4000", name = "part_size")]
+        part_size: usize,
         #[structopt(long, default_value = "4", name = "mut_level")]
         mut_level: usize,
         #[structopt(long, default_value = "1", name = "mut_step_size")]
@@ -310,6 +310,8 @@ fn main() {
     //     }
     // }
 
+    // todo!("hello");
+
     now = Instant::now();
     match options.backend {
         #[cfg(feature = "r1cs")]
@@ -350,11 +352,11 @@ fn main() {
         Backend::Mpc {
             cost_model,
             selection_scheme,
-            num_parts,
+            part_size,
             mut_level,
             mut_step_size,
             graph_type,
-            imbalance
+            imbalance,
         } => {
             println!("Converting to aby");
             let lang_str = match language {
@@ -370,7 +372,7 @@ fn main() {
                 &lang_str,
                 &cost_model,
                 &selection_scheme,
-                &num_parts,
+                &part_size,
                 &mut_level,
                 &mut_step_size,
                 &graph_type,

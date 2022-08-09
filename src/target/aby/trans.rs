@@ -34,7 +34,7 @@ use super::assignment::ShareType;
 
 use std::time::Instant;
 
-// use super::call_site_similarity::call_site_similarity;
+use super::call_site_similarity::call_site_similarity;
 
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
@@ -312,10 +312,10 @@ impl<'a> ToABY<'a> {
                     self.term_to_shares.insert(t.clone(), s);
                     self.share_cnt += 1;
 
-                        // Write share
-                        self.write_share(t, s);
+                    // Write share
+                    self.write_share(t, s);
 
-                        s
+                    s
                 }
             }
         }
@@ -921,6 +921,7 @@ impl<'a> ToABY<'a> {
         get_path(self.path, &self.lang, "share_map", true);
 
         for (name, comp) in computations.iter() {
+            println!("function name: {}", name);
             let mut outputs: Vec<String> = Vec::new();
 
             // set current computation
@@ -936,9 +937,13 @@ impl<'a> ToABY<'a> {
 
             for t in comp.outputs.iter() {
                 self.embed(t.clone());
-                println!("out op: {}", t.op);
+                // println!("out op: {}", t.op);
                 let op = "OUT";
-                let to_share_type = self.get_term_share_type(&t);
+                let mut to_share_type = self.get_term_share_type(&t);
+                // HACK
+                if to_share_type == ShareType::None{
+                    to_share_type = ShareType::Yao;
+                }
                 let share = self.get_share(&t, to_share_type);
                 let line = format!("1 0 {} {}\n", share, op);
                 outputs.push(line);
@@ -1027,7 +1032,7 @@ pub fn to_aby(
     lang: &str,
     cm: &str,
     ss: &str,
-    #[allow(unused_variables)] np: &usize,
+    #[allow(unused_variables)] ps: &usize,
     #[allow(unused_variables)] ml: &usize,
     #[allow(unused_variables)] mss: &usize,
     #[allow(unused_variables)] hyper: &usize,
@@ -1035,8 +1040,17 @@ pub fn to_aby(
 ) {
 
     // TODO: change ILP to take in Functions instead of individual computations
-
+    // call_site_similarity(&ir);
+    // todo!("Hello");
+    
     match ss{
+        #[cfg(feature = "lp")]
+        "css" => {
+            let (fs, dugs) = call_site_similarity(&ir);
+            let s_map = css_partition_with_mut_smart(&fs, &dugs, cm, path, lang, ps, *hyper==1, ml, mss, imbalance);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         #[cfg(feature = "lp")]
         "gglp" => {
             let (fs, s_map) = inline_all_and_assign_glp(&ir, cm);
@@ -1045,7 +1059,7 @@ pub fn to_aby(
         }
         #[cfg(feature = "lp")]
         "lp+mut" => {
-            let (fs, s_map) = partition_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
+            let (fs, s_map) = partition_with_mut(&ir, cm, path, lang, ps, *hyper==1, ml, mss, imbalance);
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
@@ -1057,7 +1071,7 @@ pub fn to_aby(
         }
         #[cfg(feature = "lp")]
         "smart_lp" => {
-            let (fs, s_map) = partition_with_mut_smart(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
+            let (fs, s_map) = partition_with_mut_smart(&ir, cm, path, lang, ps, *hyper==1, ml, mss, imbalance);
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }

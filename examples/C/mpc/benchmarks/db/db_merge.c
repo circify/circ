@@ -9,7 +9,7 @@
 
 #include "db.h"
 
-void merge(DT *OUTPUT_db, DT *a, DT *b, unsigned len_a, unsigned len_b) {
+void merge(DT *OUTPUT_db, DT *a, DT *b) {
 	// memcpy(OUTPUT_db, a, len_a * sizeof(DT));
     for (int i = 0; i < LEN_A; i++) {
         OUTPUT_db[i] = a[i];
@@ -58,7 +58,7 @@ Output main(__attribute__((private(0))) int a[LEN_A*ATT_A], __attribute__((priva
 
     DT db[LEN];
     // merge databases
-	merge(db, INPUT_A.db, INPUT_B.db, LEN_A, LEN_B);
+	merge(db, INPUT_A.db, INPUT_B.db);
 	// compute? histogram, correlation or
 	
 	res.joined = LEN;

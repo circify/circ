@@ -2,8 +2,8 @@
 //! This input format can be found in [Jostle User Guide](https://chriswalshaw.co.uk/jostle/jostle-exe.pdf)
 //!
 //!
-//! 
-//! 
+//!
+//!
 
 use crate::ir::term::*;
 use crate::target::aby::assignment::def_uses::*;
@@ -28,7 +28,6 @@ struct Edges<T> {
     vec: Vec<T>,
 }
 
-
 impl<T: PartialEq> Edges<T> {
     fn add(&mut self, item: T) -> bool {
         if !self.vec.contains(&item) {
@@ -39,13 +38,13 @@ impl<T: PartialEq> Edges<T> {
     }
 }
 
-fn coarse_map_get(cm: &HashMap<Term, Vec<usize>>, t: &Term ,level: usize) -> usize{
+fn coarse_map_get(cm: &HashMap<Term, Vec<usize>>, t: &Term, level: usize) -> usize {
     let v = cm.get(t).unwrap();
     *(v.get(level).unwrap_or_else(|| v.last().unwrap()))
 }
 
-/// 
-pub struct GraphWriter{
+///
+pub struct GraphWriter {
     num_nodes: usize,
     num_edges: usize,
     num_hyper_edges: usize,
@@ -58,7 +57,7 @@ pub struct GraphWriter{
 }
 
 impl GraphWriter {
-    pub fn new(hyper_mode: bool) -> Self{
+    pub fn new(hyper_mode: bool) -> Self {
         let gw = Self {
             num_nodes: 0,
             num_edges: 0,
@@ -73,7 +72,13 @@ impl GraphWriter {
         gw
     }
 
-    pub fn build(&mut self, cs: &Computation, coarsen_map: &HashMap<Term, Vec<usize>>, level: usize, num_nodes: usize){
+    pub fn build(
+        &mut self,
+        cs: &Computation,
+        coarsen_map: &HashMap<Term, Vec<usize>>,
+        level: usize,
+        num_nodes: usize,
+    ) {
         self.num_nodes = num_nodes;
         for t in cs.terms_postorder() {
             match &t.op {
@@ -91,8 +96,8 @@ impl GraphWriter {
                     let t_id = coarse_map_get(coarsen_map, &t, level);
                     for cs in t.cs.iter() {
                         let cs_id = coarse_map_get(coarsen_map, &cs, level);
-                        if cs_id != t_id{
-                            if self.hyper_mode{
+                        if cs_id != t_id {
+                            if self.hyper_mode {
                                 self.insert_hyper_edge(&cs_id, &t_id);
                             } else {
                                 self.insert_edge(&cs_id, &t_id);
@@ -106,7 +111,7 @@ impl GraphWriter {
         }
     }
 
-    pub fn build_from_tm(&mut self, cs: &Computation, tm: &TermMap<usize>, num_nodes: usize){
+    pub fn build_from_tm(&mut self, cs: &Computation, tm: &TermMap<usize>, num_nodes: usize) {
         self.num_nodes = num_nodes;
         for t in cs.terms_postorder() {
             match &t.op {
@@ -124,8 +129,8 @@ impl GraphWriter {
                     let t_id = tm.get(&t).unwrap();
                     for cs in t.cs.iter() {
                         let cs_id = tm.get(&cs).unwrap();
-                        if cs_id != t_id{
-                            if self.hyper_mode{
+                        if cs_id != t_id {
+                            if self.hyper_mode {
                                 self.insert_hyper_edge(&cs_id, &t_id);
                             } else {
                                 self.insert_edge(&cs_id, &t_id);
@@ -139,17 +144,17 @@ impl GraphWriter {
         }
     }
 
-    fn get_tid_or_assign(&mut self, t: &Term) -> usize{
-        if self.term_to_id.contains_key(t){
+    fn get_tid_or_assign(&mut self, t: &Term) -> usize {
+        if self.term_to_id.contains_key(t) {
             return *(self.term_to_id.get(t).unwrap());
-        } else{
+        } else {
             self.num_nodes += 1;
             self.term_to_id.insert(t.clone(), self.num_nodes);
             return self.num_nodes;
         }
     }
 
-    pub fn build_from_cs(&mut self, cs: &Computation) -> HashMap<Term, usize>{
+    pub fn build_from_cs(&mut self, cs: &Computation) -> HashMap<Term, usize> {
         for t in cs.terms_postorder() {
             match &t.op {
                 Op::Var(_, _) | Op::Const(_) => {
@@ -169,8 +174,8 @@ impl GraphWriter {
                     let t_id = self.get_tid_or_assign(&t);
                     for cs in t.cs.iter() {
                         let cs_id = self.get_tid_or_assign(&cs);
-                        if cs_id != t_id{
-                            if self.hyper_mode{
+                        if cs_id != t_id {
+                            if self.hyper_mode {
                                 self.insert_hyper_edge(&cs_id, &t_id);
                             } else {
                                 self.insert_edge(&cs_id, &t_id);
@@ -185,7 +190,7 @@ impl GraphWriter {
         self.term_to_id.clone()
     }
 
-    pub fn build_from_dug(&mut self, dug: &DefUsesGraph) -> HashMap<Term, usize>{
+    pub fn build_from_dug(&mut self, dug: &DefUsesGraph) -> HashMap<Term, usize> {
         for t in dug.good_terms.iter() {
             match &t.op {
                 Op::Var(_, _) | Op::Const(_) => {
@@ -205,8 +210,8 @@ impl GraphWriter {
                     let t_id = self.get_tid_or_assign(&t);
                     for def in dug.use_defs.get(t).unwrap().iter() {
                         let def_id = self.get_tid_or_assign(&def);
-                        if def_id != t_id{
-                            if self.hyper_mode{
+                        if def_id != t_id {
+                            if self.hyper_mode {
                                 self.insert_hyper_edge(&def_id, &t_id);
                             } else {
                                 self.insert_edge(&def_id, &t_id);
@@ -221,20 +226,18 @@ impl GraphWriter {
         self.term_to_id.clone()
     }
 
-    pub fn write(&mut self, path: &String){
-        if self.hyper_mode{
+    pub fn write(&mut self, path: &String) {
+        if self.hyper_mode {
             self.write_hyper_graph(path);
-        } else{
+        } else {
             self.write_graph(path);
         }
     }
 
     // Insert edge into PartitionGraph
     fn insert_edge(&mut self, from: &usize, to: &usize) {
-
         if !self.edges.contains_key(&from) {
-            self.edges
-                .insert(from.clone(), Edges { vec: Vec::new() });
+            self.edges.insert(from.clone(), Edges { vec: Vec::new() });
         }
         let added = self.edges.get_mut(&from).unwrap().add(*to);
         if added {
@@ -244,22 +247,26 @@ impl GraphWriter {
 
     // Insert hyper edge into PartitionGraph
     fn insert_hyper_edge(&mut self, from: &usize, to: &usize) {
-
-        // Assume each node will only have one output 
+        // Assume each node will only have one output
         // TODO: fix this?
         if !self.node_to_hyper_edge.contains_key(from) {
             self.num_hyper_edges += 1;
 
-            let new_hyper_edge = HyperEdge {idx: self.num_hyper_edges};
+            let new_hyper_edge = HyperEdge {
+                idx: self.num_hyper_edges,
+            };
             self.node_to_hyper_edge
                 .insert(from.clone(), new_hyper_edge.clone());
 
             self.hyper_edges
                 .insert(new_hyper_edge.clone(), Edges { vec: Vec::new() });
             // Add from node itself
-            self.hyper_edges.get_mut(&new_hyper_edge).unwrap().add(*from);
+            self.hyper_edges
+                .get_mut(&new_hyper_edge)
+                .unwrap()
+                .add(*from);
             self.hyper_edges.get_mut(&new_hyper_edge).unwrap().add(*to);
-        } else{
+        } else {
             let hyper_edge = self.node_to_hyper_edge.get(&from).unwrap();
             self.hyper_edges.get_mut(&hyper_edge).unwrap().add(*to);
         }
@@ -283,7 +290,7 @@ impl GraphWriter {
 
         // for Nodes 1..N, write their neighbors
         for i in 0..(self.num_nodes) {
-            let id = i+1;
+            let id = i + 1;
 
             match self.edges.get(&id) {
                 Some(edges) => {
@@ -352,8 +359,7 @@ impl GraphWriter {
     }
 }
 
-
-pub fn write_partition(path: &String, partition: &HashMap<usize, usize>){
+pub fn write_partition(path: &String, partition: &HashMap<usize, usize>) {
     if !Path::new(path).exists() {
         println!("partition_path: {}", path);
         fs::File::create(path).expect("Failed to create hyper graph file");
@@ -366,7 +372,6 @@ pub fn write_partition(path: &String, partition: &HashMap<usize, usize>){
 
     // for Nodes 1..N, write their neighbors
     for i in 0..partition.keys().len() {
-
         let line = format!("{}\n", partition.get(&i).unwrap());
         file.write_all(line.as_bytes())
             .expect("Failed to write to graph file");

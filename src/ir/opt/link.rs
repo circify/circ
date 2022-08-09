@@ -36,14 +36,17 @@ pub fn link_one(arg_names: &Vec<String>, arg_values: Vec<Term>, callee: &Computa
     for (n, v) in arg_names.into_iter().zip(arg_values) {
         let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
         // println!("{:?}", ssa_names);
-        if ssa_names.len() == 1{
+        if ssa_names.len() == 1 {
             let s = callee.metadata.input_sort(&ssa_names[0].0).clone();
             sub_map.insert(leaf_term(Op::Var(ssa_names[0].0.clone(), s)), v);
-        } else{
+        } else {
             for (s_name, index) in ssa_names {
                 let s = callee.metadata.input_sort(&s_name).clone();
-                sub_map.insert(leaf_term(Op::Var(s_name, s)), term![Op::Select; v.clone(), bv_lit(index, 32)]);
-            } 
+                sub_map.insert(
+                    leaf_term(Op::Var(s_name, s)),
+                    term![Op::Select; v.clone(), bv_lit(index, 32)],
+                );
+            }
         }
     }
     term(
@@ -308,21 +311,15 @@ mod test {
             cache.insert(t.clone(), 1);
         }
         for t in comp.outputs.iter() {
-            let get_children = || -> Vec<Term> {
-                t.cs
-                    .iter()
-                    .cloned()
-                    .collect()
-            };
-            if cache.contains_key(&term(t.op.clone(), get_children())){
+            let get_children = || -> Vec<Term> { t.cs.iter().cloned().collect() };
+            if cache.contains_key(&term(t.op.clone(), get_children())) {
                 println!("Got you1!!!!!");
             }
-            
         }
         link_all_function_calls(&mut fs);
         let c = fs.get_comp("main").unwrap().clone();
         for t in c.outputs.iter() {
-            if cache.contains_key(t){
+            if cache.contains_key(t) {
                 println!("Got you2!!!!!");
             }
         }

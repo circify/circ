@@ -17,7 +17,6 @@ use crate::target::aby::assignment::def_uses::*;
 
 use std::thread;
 
-
 fn get_outer_n(cs: &ComputationSubgraph, n: usize) -> ComputationSubgraph {
     let mut last_cs = cs.clone();
     for _ in 0..n {
@@ -38,7 +37,7 @@ fn get_outer_n(cs: &ComputationSubgraph, n: usize) -> ComputationSubgraph {
 
 /// Mutations with multi threading
 fn mutate_partitions_mp_step(
-    cs: &HashMap<usize, ComputationSubgraph>, 
+    cs: &HashMap<usize, ComputationSubgraph>,
     cm: &str,
     outer_level: usize,
     step: usize,
@@ -66,7 +65,9 @@ fn mutate_partitions_mp_step(
         let j = j.clone();
         let c = c.clone();
         let c_ref = c_ref.clone();
-        children.push(thread::spawn(move || (i, j, assign_mut(&c, &costm, &c_ref))));
+        children.push(thread::spawn(move || {
+            (i, j, assign_mut(&c, &costm, &c_ref))
+        }));
     }
 
     for child in children {
@@ -79,7 +80,7 @@ fn mutate_partitions_mp_step(
 /// Mutations with multi threading
 fn mutate_partitions_mp_step_smart(
     dug: &DefUsesGraph,
-    dusg: &HashMap<usize, DefUsesSubGraph>, 
+    dusg: &HashMap<usize, DefUsesSubGraph>,
     cm: &str,
     outer_level: usize,
     step: usize,
@@ -87,8 +88,7 @@ fn mutate_partitions_mp_step_smart(
     // TODO: merge and stop
     let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
 
-    let mut mut_sets: HashMap<(usize, usize), (DefUsesSubGraph, DefUsesSubGraph)> =
-        HashMap::new();
+    let mut mut_sets: HashMap<(usize, usize), (DefUsesSubGraph, DefUsesSubGraph)> = HashMap::new();
 
     for (i, du) in dusg.iter() {
         mut_smaps.insert(*i, HashMap::new());
@@ -107,7 +107,9 @@ fn mutate_partitions_mp_step_smart(
         let j = j.clone();
         let du = du.clone();
         let du_ref = du_ref.clone();
-        children.push(thread::spawn(move || (i, j, assign_mut_smart(&du, &costm, &du_ref))));
+        children.push(thread::spawn(move || {
+            (i, j, assign_mut_smart(&du, &costm, &du_ref))
+        }));
     }
 
     for child in children {
@@ -117,7 +119,11 @@ fn mutate_partitions_mp_step_smart(
     mut_smaps
 }
 
-fn get_global_assignments(cs: &Computation, term_to_part: &TermMap<usize>, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
+fn get_global_assignments(
+    cs: &Computation,
+    term_to_part: &TermMap<usize>,
+    local_smaps: &HashMap<usize, SharingMap>,
+) -> SharingMap {
     let mut global_smap: SharingMap = SharingMap::new();
 
     let Computation { outputs, .. } = cs.clone();
@@ -138,7 +144,11 @@ fn get_global_assignments(cs: &Computation, term_to_part: &TermMap<usize>, local
     global_smap
 }
 
-fn get_global_assignments_smart(dug: &DefUsesGraph, term_to_part: &TermMap<usize>, local_smaps: &HashMap<usize, SharingMap>) -> SharingMap {
+fn get_global_assignments_smart(
+    dug: &DefUsesGraph,
+    term_to_part: &TermMap<usize>,
+    local_smaps: &HashMap<usize, SharingMap>,
+) -> SharingMap {
     let mut global_smap: SharingMap = SharingMap::new();
     for t in dug.good_terms.iter() {
         // get term partition assignment
@@ -153,15 +163,35 @@ fn get_global_assignments_smart(dug: &DefUsesGraph, term_to_part: &TermMap<usize
     global_smap
 }
 
-
-pub fn get_share_map_with_mutation(cs: &Computation, cm: &str, partitions: &HashMap<usize, ComputationSubgraph>, term_to_part: &TermMap<usize>,  mut_level: &usize, mut_step_size: &usize) -> SharingMap{
-    let mutation_smaps = mutate_partitions_mp_step(partitions, cm, mut_level.clone(), mut_step_size.clone());
+pub fn get_share_map_with_mutation(
+    cs: &Computation,
+    cm: &str,
+    partitions: &HashMap<usize, ComputationSubgraph>,
+    term_to_part: &TermMap<usize>,
+    mut_level: &usize,
+    mut_step_size: &usize,
+) -> SharingMap {
+    let mutation_smaps =
+        mutate_partitions_mp_step(partitions, cm, mut_level.clone(), mut_step_size.clone());
     let selected_mut_maps = comb_selection(&mutation_smaps, &partitions, cm);
     get_global_assignments(cs, term_to_part, &selected_mut_maps)
 }
 
-pub fn get_share_map_with_mutation_smart(dug: &DefUsesGraph, cm: &str, partitions: &HashMap<usize, DefUsesSubGraph>, term_to_part: &TermMap<usize>,  mut_level: &usize, mut_step_size: &usize) -> SharingMap{
-    let mutation_smaps = mutate_partitions_mp_step_smart(dug, partitions, cm, mut_level.clone(), mut_step_size.clone());
+pub fn get_share_map_with_mutation_smart(
+    dug: &DefUsesGraph,
+    cm: &str,
+    partitions: &HashMap<usize, DefUsesSubGraph>,
+    term_to_part: &TermMap<usize>,
+    mut_level: &usize,
+    mut_step_size: &usize,
+) -> SharingMap {
+    let mutation_smaps = mutate_partitions_mp_step_smart(
+        dug,
+        partitions,
+        cm,
+        mut_level.clone(),
+        mut_step_size.clone(),
+    );
     let selected_mut_maps = comb_selection_smart(dug, &mutation_smaps, &partitions, cm);
     get_global_assignments_smart(dug, term_to_part, &selected_mut_maps)
 }

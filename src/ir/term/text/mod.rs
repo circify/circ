@@ -1,9 +1,9 @@
 //! Defines a textual serialization format for [Term]s.
 //!
 //! Includes a parser ([parse_term]) and serializer ([serialize_term]) for [Term]s.
-//! 
+//!
 //! Includes a parser ([parse_value_map]) and serializer ([serialize_value_map]) for value maps.
-//! 
+//!
 //! Includes a parser ([parse_computation]) and serializer ([serialize_computation]) for [Computation]s.
 //!
 //!
@@ -751,7 +751,6 @@ pub fn serialize_functions(fns: &Functions) -> String {
     writeln!(&mut out, "\n))").unwrap();
     out
 }
-
 
 #[cfg(test)]
 mod test {
