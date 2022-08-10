@@ -290,7 +290,6 @@ fn main() {
     };
     #[cfg(feature = "bench")]
     println!("LOG: Optimizations: {:#?}", now.elapsed());
-
     println!("Done with IR optimization");
 
     // for (name, c) in &cs.computations {

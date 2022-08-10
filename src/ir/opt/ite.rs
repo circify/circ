@@ -1,6 +1,5 @@
 //! Rewrite ITE terms
 
-use crate::ir::opt::cfold::fold;
 use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::*;
 
@@ -25,9 +24,7 @@ impl RewritePass for IteRewriter {
                     Op::Ite => {
                         let child_sel = f.cs[0].clone();
                         let child_t = f.cs[1].clone();
-                        if sel
-                            == term![AND; term![Op::Not; child_sel.clone()], term![Op::Not; child_sel.clone()]]
-                        {
+                        if sel == term![Op::Not; child_sel.clone()] {
                             Some(term![Op::Ite; child_sel, child_t, t])
                         } else {
                             None

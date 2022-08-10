@@ -5,7 +5,7 @@ use crate::ir::term::*;
 use circ_fields::FieldV;
 use lazy_static::lazy_static;
 use rug::Integer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::DerefMut;
 use std::sync::RwLock;
 
@@ -110,7 +110,38 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 Some(bv) => cbool(bv.bit(*i)),
                 _ => None,
             },
-            Op::BoolNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::BoolNaryOp(o) => match o {
+                BoolNaryOp::Xor | BoolNaryOp::Or => {
+                    Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c))))
+                }
+                BoolNaryOp::And => {
+                    let children = o.clone().flatten(t.cs.iter().map(|c| c_get(c)));
+                    let mut dedup_children: HashSet<Term> = HashSet::new();
+                    for t in children.cs.iter() {
+                        dedup_children.insert(t.clone());
+                    }
+                    let mut flag = true;
+                    for a in dedup_children.iter() {
+                        for b in dedup_children.iter() {
+                            if term![Op::Not; a.clone()] == *b {
+                                flag = false;
+                            }
+                        }
+                    }
+                    let dedup_children = dedup_children.into_iter().collect::<Vec<_>>().clone();
+                    if !flag {
+                        Some(bool_lit(false))
+                    } else if AND == children.op {
+                        if dedup_children.len() == 1 {
+                            Some(dedup_children[0].clone())
+                        } else {
+                            Some(term(AND, dedup_children.clone()))
+                        }
+                    } else {
+                        Some(children)
+                    }
+                }
+            },
             Op::Eq => {
                 let c0 = get(0);
                 let c1 = get(1);

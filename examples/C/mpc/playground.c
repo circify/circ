@@ -1,7 +1,20 @@
 int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) { 
+    // if (a < b) {
+    //     return 1;
+    // } else {
+    //     return 2;
+    // }
     if (a < b) {
-        return 1;
+        if (a < b) {
+            return 1;
+        } else {
+            return 2;
+        }
     } else {
-        return 2;
+        if (a < b) {
+            return 1;
+        } else {
+            return 2;
+        }
     }
 }
