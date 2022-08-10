@@ -648,6 +648,23 @@ histogram_tests = [
     ]
 ]
 
+gcd_tests = [
+    [
+        "gcd",
+        "gcd",
+        "./scripts/aby_tests/test_inputs/gcd.txt",
+    ]
+]
+
+psi_tests = [
+    [
+        "psi",
+        "psi",
+        "./scripts/aby_tests/test_inputs/psi.txt",
+    ]
+]
+
+
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",

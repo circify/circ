@@ -133,7 +133,8 @@ mod test {
 
     #[test]
     fn select_ite_stores() {
-        let before = text::parse_computation(b"
+        let before = text::parse_computation(
+            b"
         (computation
           (metadata () () ())
           (let ((z (#a (bv 4) #x0 6 ())))

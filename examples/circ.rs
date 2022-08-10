@@ -295,7 +295,7 @@ fn main() {
     // for (name, c) in &cs.computations {
     //     println!("name: {}", name);
     //     for t in c.terms_postorder() {
-    //         println!("t: {}", t.op);
+    //         println!("t: {}", t);
     //     }
     // }
 
