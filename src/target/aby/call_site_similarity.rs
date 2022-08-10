@@ -71,84 +71,194 @@ impl CallSite {
     }
 }
 
-/// Determine if call sites are similar based on input and output arguments to the call site
-pub fn call_site_similarity(fs: &Functions) -> (Functions, HashMap<String, DefUsesGraph>) {
-    let mut call_sites: HashMap<(String, Vec<usize>, Vec<usize>), CallSite> = HashMap::new();
-    let mut func_to_cs: HashMap<String, HashMap<usize, CallSite>> = HashMap::new();
 
-    let mut dup_per_func: HashMap<String, usize> = HashMap::new();
+pub struct CallSiteSimilarity{
+    fs: Functions,
+    dugs: HashMap<String, DefUsesGraph>,
+    visited: HashSet<String>,
+    call_sites: HashMap<(String, Vec<usize>, Vec<usize>), CallSite>,
+    callee_caller: HashSet<(String, String)>,
+    func_to_cs: HashMap<String, HashMap<usize, CallSite>>,
+    dup_per_func: HashMap<String, usize>,
 
-    // Mapping of callee-caller pair
-    let mut callee_caller: HashSet<(String, String)> = HashSet::new();
-    // Functions that have more than one call site
-    let mut duplicated_f: HashSet<String> = HashSet::new();
-    // Functions that need to be rewrote for calling to duplicated f
-    // If a callee is duplicated, the caller need to be rewrote
-    let mut rewriting_f: HashSet<String> = HashSet::new();
+}
 
-    // Iterate all the comp and retrieve call site info
-    for (caller, comp) in fs.computations.iter() {
-        let mut dug = DefUsesGraph::for_call_site(comp);
-        let cs: Vec<(
-            String,
-            Vec<usize>,
-            Vec<Vec<Term>>,
-            Vec<usize>,
-            Vec<Vec<Term>>,
-            Term,
-        )> = dug.get_call_site();
-        // dugs.insert(caller.clone(), dug.clone());
-        for (callee, args, args_t, rets, rets_t, t) in cs.iter() {
-            let key: (String, Vec<usize>, Vec<usize>) =
-                (callee.clone(), args.clone(), rets.clone());
-            if call_sites.contains_key(&key) {
-                call_sites.get_mut(&key).unwrap().insert(t);
-            } else {
-                // Use the first context
-                if let Op::Call(_, arg_names, _, _) = &t.op {
-                    let cs = CallSite::new(caller, callee, args_t, arg_names, rets_t, t, &dug);
-                    call_sites.insert(key, cs);
+impl CallSiteSimilarity{
+    pub fn new(fs: &Functions) -> Self{
+        let mut css = Self{
+            fs: fs.clone(),
+            dugs: HashMap::new(),
+            visited: HashSet::new(),
+            call_sites: HashMap::new(),
+            callee_caller: HashSet::new(),
+            func_to_cs: HashMap::new(),
+            dup_per_func: HashMap::new(),
+        };
+        css
+    }
+
+    fn traverse(&mut self, fname: &String){
+        if !self.visited.contains(fname){
+            let c = self.fs.get_comp(fname).unwrap().clone();
+            for t in c.terms_postorder() {
+                if let Op::Call(callee, ..) = &t.op {
+                    self.traverse(callee);
                 }
             }
-            // recording callee-caller
-            callee_caller.insert((callee.clone(), caller.clone()));
-        }
-        dup_per_func.insert(caller.clone(), 0);
-        func_to_cs.insert(caller.clone(), HashMap::new());
-        // // HACK: for main func:
-        // if caller == "main"{
-        //     new_dugs.get_mut(caller).unwrap().insert(0, dug.clone());
-        // }
-    }
-
-    let mut call_map: TermMap<usize> = TermMap::new();
-
-    // Generating duplicate set
-    for (key, cs) in call_sites.iter() {
-        let call_id: usize = dup_per_func.get(&key.0).unwrap().clone();
-
-        if call_id > 0 {
-            // indicate this function need to be rewrote
-            duplicated_f.insert(key.0.clone());
-        }
-
-        for t in cs.calls.iter() {
-            call_map.insert(t.clone(), call_id);
-        }
-        dup_per_func.insert(key.0.clone(), call_id + 1);
-        let id_to_cs = func_to_cs.get_mut(&key.0).unwrap();
-        id_to_cs.insert(call_id, cs.clone());
-    }
-
-    // Generating rewriting set
-    for (callee, caller) in callee_caller.iter() {
-        if duplicated_f.contains(callee) {
-            rewriting_f.insert(caller.clone());
+            println!("Building dug for {}", fname);
+            let mut dug = DefUsesGraph::for_call_site(&c, &self.dugs);
+            dug.gen_in_out(&c);
+            let cs: Vec<(
+                String,
+                Vec<usize>,
+                Vec<Vec<Term>>,
+                Vec<usize>,
+                Vec<Vec<Term>>,
+                Term,
+            )> = dug.get_call_site();
+            for (callee, args, args_t, rets, rets_t, t) in cs.iter() {
+                let key: (String, Vec<usize>, Vec<usize>) =
+                    (callee.clone(), args.clone(), rets.clone());
+                if self.call_sites.contains_key(&key) {
+                    self.call_sites.get_mut(&key).unwrap().insert(t);
+                } else {
+                    // Use the first context
+                    if let Op::Call(_, arg_names, _, _) = &t.op {
+                        let cs = CallSite::new(fname, callee, args_t, arg_names, rets_t, t, &dug);
+                        self.call_sites.insert(key, cs);
+                    }
+                }
+                // recording callee-caller
+                self.callee_caller.insert((callee.clone(), fname.clone()));
+            }
+            self.dugs.insert(fname.clone(), dug);
+            self.dup_per_func.insert(fname.clone(), 0);
+            self.func_to_cs.insert(fname.clone(), HashMap::new());
         }
     }
 
-    remap(fs, &rewriting_f, &duplicated_f, &call_map, &func_to_cs)
+    pub fn call_site_similarity_smart(&mut self) -> (Functions, HashMap<String, DefUsesGraph>) {
+        let main = "main".to_string();
+        self.traverse(&main);
+        // todo!("Testing");
+
+        // Functions that have more than one call site
+        let mut duplicated_f: HashSet<String> = HashSet::new();
+        // Functions that need to be rewrote for calling to duplicated f
+        // If a callee is duplicated, the caller need to be rewrote
+        let mut rewriting_f: HashSet<String> = HashSet::new();
+        let mut call_map: TermMap<usize> = TermMap::new();
+
+        // Generating duplicate set
+        for (key, cs) in self.call_sites.iter() {
+            let call_id: usize = self.dup_per_func.get(&key.0).unwrap().clone();
+
+            if call_id > 0 {
+                // indicate this function need to be rewrote
+                duplicated_f.insert(key.0.clone());
+            }
+
+            for t in cs.calls.iter() {
+                call_map.insert(t.clone(), call_id);
+            }
+            self.dup_per_func.insert(key.0.clone(), call_id + 1);
+            let id_to_cs = self.func_to_cs.get_mut(&key.0).unwrap();
+            id_to_cs.insert(call_id, cs.clone());
+            // println!("CS: {:?}: {}", key, cs.calls.len());
+        }
+
+        // todo!("Testing");
+
+        // Generating rewriting set
+        for (callee, caller) in self.callee_caller.iter() {
+            if duplicated_f.contains(callee) {
+                rewriting_f.insert(caller.clone());
+            }
+        }
+
+        remap(&self.fs, &rewriting_f, &duplicated_f, &call_map, &self.func_to_cs)
+    }
 }
+
+
+// /// Determine if call sites are similar based on input and output arguments to the call site
+// pub fn call_site_similarity(fs: &Functions) -> (Functions, HashMap<String, DefUsesGraph>) {
+//     let mut call_sites: HashMap<(String, Vec<usize>, Vec<usize>), CallSite> = HashMap::new();
+//     let mut func_to_cs: HashMap<String, HashMap<usize, CallSite>> = HashMap::new();
+
+//     let mut dup_per_func: HashMap<String, usize> = HashMap::new();
+
+//     // Mapping of callee-caller pair
+//     let mut callee_caller: HashSet<(String, String)> = HashSet::new();
+//     // Functions that have more than one call site
+//     let mut duplicated_f: HashSet<String> = HashSet::new();
+//     // Functions that need to be rewrote for calling to duplicated f
+//     // If a callee is duplicated, the caller need to be rewrote
+//     let mut rewriting_f: HashSet<String> = HashSet::new();
+
+//     // Iterate all the comp and retrieve call site info
+//     for (caller, comp) in fs.computations.iter() {
+//         let mut dug = DefUsesGraph::for_call_site(comp);
+//         let cs: Vec<(
+//             String,
+//             Vec<usize>,
+//             Vec<Vec<Term>>,
+//             Vec<usize>,
+//             Vec<Vec<Term>>,
+//             Term,
+//         )> = dug.get_call_site();
+//         // dugs.insert(caller.clone(), dug.clone());
+//         for (callee, args, args_t, rets, rets_t, t) in cs.iter() {
+//             let key: (String, Vec<usize>, Vec<usize>) =
+//                 (callee.clone(), args.clone(), rets.clone());
+//             if call_sites.contains_key(&key) {
+//                 call_sites.get_mut(&key).unwrap().insert(t);
+//             } else {
+//                 // Use the first context
+//                 if let Op::Call(_, arg_names, _, _) = &t.op {
+//                     let cs = CallSite::new(caller, callee, args_t, arg_names, rets_t, t, &dug);
+//                     call_sites.insert(key, cs);
+//                 }
+//             }
+//             // recording callee-caller
+//             callee_caller.insert((callee.clone(), caller.clone()));
+//         }
+//         dup_per_func.insert(caller.clone(), 0);
+//         func_to_cs.insert(caller.clone(), HashMap::new());
+//         // // HACK: for main func:
+//         // if caller == "main"{
+//         //     new_dugs.get_mut(caller).unwrap().insert(0, dug.clone());
+//         // }
+//     }
+
+//     let mut call_map: TermMap<usize> = TermMap::new();
+
+//     // Generating duplicate set
+//     for (key, cs) in call_sites.iter() {
+//         let call_id: usize = dup_per_func.get(&key.0).unwrap().clone();
+
+//         if call_id > 0 {
+//             // indicate this function need to be rewrote
+//             duplicated_f.insert(key.0.clone());
+//         }
+
+//         for t in cs.calls.iter() {
+//             call_map.insert(t.clone(), call_id);
+//         }
+//         dup_per_func.insert(key.0.clone(), call_id + 1);
+//         let id_to_cs = func_to_cs.get_mut(&key.0).unwrap();
+//         id_to_cs.insert(call_id, cs.clone());
+//     }
+
+//     // Generating rewriting set
+//     for (callee, caller) in callee_caller.iter() {
+//         if duplicated_f.contains(callee) {
+//             rewriting_f.insert(caller.clone());
+//         }
+//     }
+
+//     remap(fs, &rewriting_f, &duplicated_f, &call_map, &func_to_cs)
+// }
 
 /// Rewriting the call term to new call
 fn rewrite_call(c: &mut Computation, call_map: &TermMap<usize>, duplicate_set: &HashSet<String>) {
@@ -244,6 +354,20 @@ fn rewrite_var(c: &mut Computation, fname: &String, cid: &usize) {
         .collect();
 }
 
+fn traverse(fs: &Functions, fname: &String, dugs: &mut HashMap<String, DefUsesGraph>){
+    if !dugs.contains_key(fname){
+        let c = fs.get_comp(fname).unwrap().clone();
+        for t in c.terms_postorder() {
+            if let Op::Call(callee, ..) = &t.op {
+                traverse(fs, callee, dugs);
+            }
+        }
+        let mut dug = DefUsesGraph::for_call_site(&c, dugs);
+        dug.gen_in_out(&c);
+        dugs.insert(fname.clone(), dug);
+    }
+}
+
 fn remap(
     fs: &Functions,
     rewriting_set: &HashSet<String>,
@@ -253,6 +377,7 @@ fn remap(
 ) -> (Functions, HashMap<String, DefUsesGraph>) {
     let mut n_fs = Functions::new();
     let mut n_dugs: HashMap<String, DefUsesGraph> = HashMap::new();
+    let mut context_map: HashMap<String, CallSite> = HashMap::new();
     for (fname, comp) in fs.computations.iter() {
         let mut ncomp: Computation = comp.clone();
         let id_to_cs = func_to_cs.get(fname).unwrap();
@@ -270,32 +395,93 @@ fn remap(
                     precomputes: ncomp.precomputes.clone(),
                 };
                 rewrite_var(&mut dup_comp, fname, cid);
-                let mut dug = DefUsesGraph::new(&dup_comp);
-                dug.insert_context(
-                    &cs.arg_names,
-                    &cs.args,
-                    &cs.rets,
-                    &cs.caller_dug,
-                    &dup_comp,
-                    4,
-                );
                 n_fs.insert(new_n.clone(), dup_comp);
-                n_dugs.insert(new_n.clone(), dug);
+                context_map.insert(new_n, cs.clone());
             }
         } else {
-            let mut dug = DefUsesGraph::new(&ncomp);
-            // println!("fname {}", fname);
-            // Main function might not have any call site info
-            if let Some(cs) = id_to_cs.get(&0) {
-                dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, &ncomp, 4);
-            }
             n_fs.insert(fname.clone(), ncomp);
-            n_dugs.insert(fname.clone(), dug.clone());
         }
     }
+    let main = "main".to_string();
+    traverse(&n_fs, &main, &mut n_dugs);
 
+    for (fname, cs) in context_map.iter(){
+        let mut dug = n_dugs.get_mut(fname).unwrap();
+        let comp = n_fs.get_comp(fname).unwrap();
+        dug.insert_context(
+            &cs.arg_names,
+            &cs.args,
+            &cs.rets,
+            &cs.caller_dug,
+            comp,
+            1,
+        );
+    }
+
+    // HASKSKKKKK
+    // let mut fck_fs = Functions::new();
+    // let main = "relu_map_3".to_string();
+    // let main_comp = n_fs.get_comp(&main).unwrap().clone();
+    // fck_fs.insert(main, main_comp);
+
+    // Contrusct the dugs after wards
+    // Check graph
+    
     (n_fs, n_dugs)
 }
+
+// fn remap(
+//     fs: &Functions,
+//     rewriting_set: &HashSet<String>,
+//     duplicate_set: &HashSet<String>,
+//     call_map: &TermMap<usize>,
+//     func_to_cs: &HashMap<String, HashMap<usize, CallSite>>,
+// ) -> (Functions, HashMap<String, DefUsesGraph>) {
+//     let mut n_fs = Functions::new();
+//     let mut n_dugs: HashMap<String, DefUsesGraph> = HashMap::new();
+//     for (fname, comp) in fs.computations.iter() {
+//         let mut ncomp: Computation = comp.clone();
+//         let id_to_cs = func_to_cs.get(fname).unwrap();
+
+//         if rewriting_set.contains(fname) {
+//             rewrite_call(&mut ncomp, call_map, duplicate_set);
+//         }
+
+//         if duplicate_set.contains(fname) {
+//             for (cid, cs) in id_to_cs.iter() {
+//                 let new_n: String = format_dup_call(fname, cid);
+//                 let mut dup_comp: Computation = Computation{
+//                     outputs: ncomp.outputs().clone(),
+//                     metadata: rewrite_metadata(&ncomp.metadata, fname, &new_n),
+//                     precomputes: ncomp.precomputes.clone(),
+//                 };
+//                 rewrite_var(&mut dup_comp, fname, cid);
+//                 let mut dug = DefUsesGraph::new(&dup_comp);
+//                 dug.insert_context(
+//                     &cs.arg_names,
+//                     &cs.args,
+//                     &cs.rets,
+//                     &cs.caller_dug,
+//                     &dup_comp,
+//                     1,
+//                 );
+//                 n_fs.insert(new_n.clone(), dup_comp);
+//                 n_dugs.insert(new_n.clone(), dug);
+//             }
+//         } else {
+//             let mut dug = DefUsesGraph::new(&ncomp);
+//             // println!("fname {}", fname);
+//             // Main function might not have any call site info
+//             if let Some(cs) = id_to_cs.get(&0) {
+//                 dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, &ncomp, 4);
+//             }
+//             n_fs.insert(fname.clone(), ncomp);
+//             n_dugs.insert(fname.clone(), dug.clone());
+//         }
+//     }
+
+//     (n_fs, n_dugs)
+// }
 
 fn format_dup_call(fname: &String, cid: &usize) -> String {
     format!("{}_circ_v_{}", fname, cid).clone()

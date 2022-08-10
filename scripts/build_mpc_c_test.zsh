@@ -21,13 +21,13 @@ esac
 function mpc_test {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --part-size 1000 --mut-level 1 --mut-step-size 1 --graph-type 0
 }
 
 function mpc_test_css {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "css" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "css" --part-size 300000 --mut-level 4 --mut-step-size 1 --graph-type 0
 }
 
 function mpc_test_2  {
@@ -82,7 +82,7 @@ function mpc_test_7  {
 function mpc_test_8  {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --num-parts 12 --mut-level 4 --mut-step-size 1 --graph-type 1
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --num-parts 48 --mut-level 1 --mut-step-size 1 --graph-type 1
 }
 
 function mpc_test_9  {
@@ -184,10 +184,10 @@ function mpc_test_9  {
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
-# mpc_test_css 2 ./examples/C/mpc/benchmarks/db/db_join.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/db/db_join2.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_16.c
+mpc_test_css 2 ./examples/C/mpc/benchmarks/mnist/mnist_16.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main_16.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
 # mpc_test_css 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets_16.c

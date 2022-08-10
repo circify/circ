@@ -165,6 +165,20 @@ pub fn css_partition_with_mut_smart(
     let mut now = Instant::now();
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
+    // let main = "mmulT_unrolled_1".to_string();
+    // let main_dug = dugs.get(&main).unwrap();
+    // for (d, u) in main_dug.def_use.iter(){
+    //     println!("Def: {}, Use: {}", d.op, u.op);
+    // }
+    // for t in main_dug.good_terms.iter(){
+    //     println!("Good Term: {}", t);
+    // }
+    // let assignment = smart_global_assign(&main_dug.good_terms, &main_dug.def_use, cm);
+    // for (t, s) in assignment.iter(){
+    //     println!("Op: {}, share: {}", t.op, s.char());
+    // }
+    // todo!("Testing");
+
     for (fname, comp) in fs.computations.iter() {
         println!("Partitioning: {}", fname);
         let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
@@ -210,16 +224,23 @@ pub fn css_partition_with_mut_smart(
 
             println!("Time: ILP : {:?}", now.elapsed());
         }
+        
         // HACK: Assign sharetype to out gate
-        for out in comp.outputs.iter() {
-            if !assignment.contains_key(&out) {
-                let ref_t = d.term_to_terms.get(&out).unwrap().get(0).unwrap().clone().0;
-                println!("ref_t: op {} ", ref_t.op);
-                // Parent is a call term
-                let s_type = assignment.get(&ref_t).unwrap_or(&ShareType::Arithmetic).clone();
-                assignment.insert(out.clone(), s_type);
-            }
-        }
+        // for out in comp.outputs.iter() {
+        //     if !assignment.contains_key(&out) {
+        //         let ref_t = d.term_to_terms.get(&out).unwrap().get(0).unwrap().clone().0;
+        //         // println!("ref_t: op {} ", ref_t.op);
+        //         // Parent is a call term
+        //         let s_type = assignment.get(&ref_t).unwrap_or(&ShareType::Yao).clone();
+        //         assignment.insert(out.clone(), s_type);
+        //         // println!(" op assigned: {}, {}", out.op, s_type.char());
+        //     } 
+        //     // println!(" OUT op: {}, {}", out.op, assignment.get(out).unwrap().char());
+        // }
+
+        // for (t, s) in assignment.iter(){
+        //     println!("Op: {}, share: {}", t.op, s.char());
+        // }
         s_map.insert(fname.clone(), assignment);
     }
 
@@ -264,7 +285,7 @@ pub fn partition_with_mut_smart(
         }
 
         for t in d.good_terms.iter() {
-            println!("op: {}", t.op);
+            // println!("op: {}", t.op);
             let part_id = partition.get(t).unwrap();
             if let Some(du) = tmp_dusg.get_mut(&part_id) {
                 du.insert_node(t);

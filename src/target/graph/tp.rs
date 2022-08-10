@@ -26,9 +26,9 @@ impl TrivialPartition {
             fs: fs.clone(),
             comp_history: HashMap::new(),
         };
-        for fname in fs.computations.keys() {
-            tp.traverse(fname);
-        }
+        // for fname in fs.computations.keys() {
+        //     tp.traverse(fname);
+        // }
         tp
     }
 
@@ -99,6 +99,9 @@ impl TrivialPartition {
     }
 
     pub fn inline_all(&mut self, fname: &String) -> (Computation, DefUsesGraph) {
+        for fname in self.fs.computations.clone().keys() {
+            self.traverse(fname);
+        }
         let c = self.comp_history.get(fname).unwrap().clone();
         let dug = DefUsesGraph::new(&c);
         (c, dug)

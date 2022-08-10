@@ -301,7 +301,7 @@ void convolution_naive_2(DT *image, DT* kernel, DT* OUTPUT_layer)
 					tmp += kernel[convPos] * image[(y*STRIDE + wy) * IMAGE_WIDTH_2 + (x*STRIDE + wx)];
 				}				
 			}
-			OUTPUT_layer[oPos] = tmp;
+			OUTPUT_layer[oPos] = tmp; 
 		}
 	}
 }
