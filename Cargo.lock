@@ -330,7 +330,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d4d15b4d7c661692f07a2a268f4b255c2a41777d2bf5470ce329011c11d9c5"
 dependencies = [
  "coin_cbc_sys",
- "lazy_static",
 ]
 
 [[package]]
@@ -596,8 +595,7 @@ dependencies = [
 [[package]]
 name = "good_lp"
 version = "1.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b51d78cbb7b734379eea7f811ddb33b2b13defefa1dab50068d7bc7f781a3056"
+source = "git+https://github.com/Clive2312/good_lp.git#11f60cb1087c0bfc7e2db36cf520db53ee775aef"
 dependencies = [
  "coin_cbc",
  "fnv",

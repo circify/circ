@@ -4,12 +4,13 @@ from os import path
 # Gloable variables
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
-valid_features = {"aby", "c", "lp", "r1cs", "smt", "zok"}
-cargo_features = {"c", "lp", "r1cs", "smt", "zok"}
+valid_features = {"aby", "bench", "c", "lp", "r1cs", "smt", "zok"}
+cargo_features = {"bench", "c", "lp", "r1cs", "smt", "zok"}
 
 # Environment variables
-ABY_SOURCE="./../ABY"
-EZPC_SOURCE="./../EZPC"
+ABY_SOURCE = "./../ABY"
+EZPC_SOURCE = "./../EZPC"
+
 
 def set_env(features):
     for f in features:
@@ -19,10 +20,12 @@ def set_env(features):
             if not os.getenv("EZPC_SOURCE"):
                 os.environ["EZPC_SOURCE"] = EZPC_SOURCE
 
+
 def save_mode(mode):
     """ Save mode to file """
     with open(mode_path, 'w') as f:
         f.write(mode)
+
 
 def load_mode():
     """ Load mode from file """
@@ -32,11 +35,13 @@ def load_mode():
     else:
         return ""
 
+
 def save_features(features):
     """ Save features to file """
     with open(feature_path, 'w') as f:
         feature_str = "\n".join(features)
         f.write(feature_str)
+
 
 def load_features():
     """ Load features from file """
@@ -46,6 +51,7 @@ def load_features():
             return set(features)
     else:
         return set()
+
 
 def filter_cargo_features(features):
     """ Filter feature list to cargo-specific features """

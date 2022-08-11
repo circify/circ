@@ -79,10 +79,12 @@ struct FrontendOptions {
     value_threshold: Option<u64>,
 
     /// How many recursions to allow (datalog)
+    #[cfg(all(feature = "smt", feature = "zok"))]
     #[structopt(short, long, name = "N", default_value = "5")]
     rec_limit: usize,
 
     /// Lint recursions that are allegedly primitive recursive (datalog)
+    #[cfg(all(feature = "smt", feature = "zok"))]
     #[structopt(long)]
     lint_prim_rec: bool,
 }
@@ -108,6 +110,17 @@ enum Backend {
         cost_model: String,
         #[structopt(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
+        #[structopt(long, default_value = "4000", name = "part_size")]
+        part_size: usize,
+        #[structopt(long, default_value = "4", name = "mut_level")]
+        mut_level: usize,
+        #[structopt(long, default_value = "1", name = "mut_step_size")]
+        mut_step_size: usize,
+        // partition params
+        #[structopt(long, default_value = "1", name = "graph_type")]
+        graph_type: usize,
+        #[structopt(long, default_value = "3", name = "imbalance")]
+        imbalance: usize,
     },
 }
 
@@ -164,6 +177,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
+    let start = Instant::now();
     let mut now = Instant::now();
 
     env_logger::Builder::from_default_env()
@@ -223,8 +237,10 @@ fn main() {
         }
     };
 
-    println!("Time: Frontend: {:?}", now.elapsed());
+    #[cfg(feature = "bench")]
+    println!("LOG: Frontend: {:?}", now.elapsed());
 
+    now = Instant::now();
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -235,7 +251,7 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    //Opt::ScalarizeVars,
+                    // Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
@@ -249,9 +265,10 @@ fn main() {
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
+                    Opt::Ite,
                     // Inline Function Calls
                     // Opt::Link,
-                    // Opt::Tuple,
+                    Opt::Tuple,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],
@@ -282,15 +299,20 @@ fn main() {
             ],
         ),
     };
+    #[cfg(feature = "bench")]
+    println!("LOG: Optimizations: {:#?}", now.elapsed());
     println!("Done with IR optimization");
 
     // for (name, c) in &cs.computations {
     //     println!("name: {}", name);
     //     for t in c.terms_postorder() {
-    //         println!("t: {}", t.op);
+    //         println!("t: {}", t);
     //     }
     // }
 
+    // todo!("hello");
+
+    now = Instant::now();
     match options.backend {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
@@ -330,6 +352,11 @@ fn main() {
         Backend::Mpc {
             cost_model,
             selection_scheme,
+            part_size,
+            mut_level,
+            mut_step_size,
+            graph_type,
+            imbalance,
         } => {
             println!("Converting to aby");
             let lang_str = match language {
@@ -339,7 +366,18 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             println!("Selection scheme: {}", selection_scheme);
-            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
+            to_aby(
+                cs,
+                &path_buf,
+                &lang_str,
+                &cost_model,
+                &selection_scheme,
+                &part_size,
+                &mut_level,
+                &mut_step_size,
+                &graph_type,
+                &imbalance,
+            );
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
@@ -392,5 +430,11 @@ fn main() {
         Backend::Smt { .. } => {
             panic!("Missing feature: smt");
         }
+    }
+
+    #[cfg(feature = "bench")]
+    {
+        println!("LOG: Lowering: {:#?}", now.elapsed());
+        println!("LOG: Compile: {:#?}", start.elapsed());
     }
 }

@@ -7,6 +7,8 @@ use std::{env::var, fs::File, path::Path};
 #[cfg(feature = "lp")]
 pub mod ilp;
 
+pub mod def_uses;
+
 /// The sharing scheme used for an operation
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ShareType {
@@ -16,6 +18,8 @@ pub enum ShareType {
     Boolean,
     /// Yao sharing (one party holds `k_a`, `k_b`, other knows the `{k_a, k_b} <-> {0, 1}` mapping)
     Yao,
+    ///
+    None,
 }
 
 /// List of share types.
@@ -28,6 +32,7 @@ impl ShareType {
             ShareType::Arithmetic => 'a',
             ShareType::Boolean => 'b',
             ShareType::Yao => 'y',
+            ShareType::None => 'n',
         }
     }
 }
@@ -47,12 +52,10 @@ pub struct CostModel {
 
     /// Zero costs
     zero: FxHashMap<ShareType, f64>,
-
-    /// Zero bool
-    zero_bool: FxHashMap<ShareType, f64>,
 }
 
 impl CostModel {
+    /// Cost model constructor
     pub fn new(
         conversions: FxHashMap<(ShareType, ShareType), f64>,
         ops: FxHashMap<String, FxHashMap<ShareType, f64>>,
@@ -61,14 +64,10 @@ impl CostModel {
         zero.insert(ShareType::Arithmetic, 0.0);
         zero.insert(ShareType::Boolean, 0.0);
         zero.insert(ShareType::Yao, 0.0);
-
-        let mut zero_bool: FxHashMap<ShareType, f64> = FxHashMap::default();
-        zero_bool.insert(ShareType::Boolean, 0.0);
         CostModel {
             conversions,
             ops,
             zero,
-            zero_bool,
         }
     }
 
@@ -128,12 +127,25 @@ impl CostModel {
     fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
         match op {
             Op::Var(..)
-            | Op::Const(..)
-            | Op::Field(_)
+            // | Op::Select
+            // | Op::Store 
+            | Op::Call(..)
+            | Op::Const(..)=> {
+                todo!("Op get cost: Should not reach here: {}", op);
+            }
+            Op::Field(_)
             | Op::Update(..)
-            | Op::Tuple
-            | Op::Call(..) => Some(&self.zero),
-            Op::Select | Op::Store => Some(&self.zero_bool),
+            | Op::Tuple =>{
+                Some(&self.zero)
+            }
+            Op::Select => {
+                let op_name = "select";
+                self.ops.get(op_name)
+            }
+            Op::Store => {
+                let op_name = "store";
+                self.ops.get(op_name)
+            }
             _ => {
                 let op_name = match op.clone() {
                     // assume comparisions are unsigned
@@ -241,17 +253,22 @@ pub fn assign_arithmetic_and_yao(c: &Computation, cm: &str) -> SharingMap {
                 (
                     term.clone(),
                     if let Some(costs) = cost_model.get(&term.op) {
-                        let mut min_ty: ShareType = ShareType::Yao;
-                        let mut min_cost: f64 = costs[&min_ty];
-                        for ty in &[ShareType::Arithmetic] {
-                            if let Some(c) = costs.get(ty) {
-                                if *c < min_cost {
-                                    min_ty = *ty;
-                                    min_cost = *c;
+                        match &term.op {
+                            Op::Select | Op::Store => ShareType::Yao,
+                            _ => {
+                                let mut min_ty: ShareType = ShareType::Yao;
+                                let mut min_cost: f64 = costs[&min_ty];
+                                for ty in &[ShareType::Arithmetic] {
+                                    if let Some(c) = costs.get(ty) {
+                                        if *c < min_cost {
+                                            min_ty = *ty;
+                                            min_cost = *c;
+                                        }
+                                    }
                                 }
+                                min_ty
                             }
                         }
-                        min_ty
                     } else {
                         ShareType::Yao
                     },
@@ -271,17 +288,22 @@ pub fn assign_greedy(c: &Computation, cm: &str) -> SharingMap {
                 (
                     term.clone(),
                     if let Some(costs) = cost_model.get(&term.op) {
-                        let mut min_ty: ShareType = ShareType::Yao;
-                        let mut min_cost: f64 = costs[&min_ty];
-                        for ty in &[ShareType::Arithmetic, ShareType::Boolean] {
-                            if let Some(c) = costs.get(ty) {
-                                if *c < min_cost {
-                                    min_ty = *ty;
-                                    min_cost = *c;
+                        match &term.op {
+                            Op::Select | Op::Store => ShareType::Yao,
+                            _ => {
+                                let mut min_ty: ShareType = ShareType::Yao;
+                                let mut min_cost: f64 = costs[&min_ty];
+                                for ty in &[ShareType::Arithmetic, ShareType::Boolean] {
+                                    if let Some(c) = costs.get(ty) {
+                                        if *c < min_cost {
+                                            min_ty = *ty;
+                                            min_cost = *c;
+                                        }
+                                    }
                                 }
+                                min_ty
                             }
                         }
-                        min_ty
                     } else {
                         ShareType::Boolean
                     },

@@ -43,7 +43,12 @@ fn array_to_tuple(t: &Term) -> Term {
                 .map(|c| array_to_tuple(&c))
                 .collect(),
         ),
-        Sort::Tuple(..) => term(Op::Tuple, extras::tuple_elements(t).map(|c| array_to_tuple(&c)).collect()),
+        Sort::Tuple(..) => term(
+            Op::Tuple,
+            extras::tuple_elements(t)
+                .map(|c| array_to_tuple(&c))
+                .collect(),
+        ),
         _ => t.clone(),
     }
 }

@@ -2,8 +2,8 @@
  * Example on how to merge two data sets and to perform various analyses
  */
 
-#define LEN_A 5
-#define LEN_B 5
+#define LEN_A 50
+#define LEN_B 50
 
 #define ATT_A 2 //Number of attributes
 #define ATT_B 2
@@ -11,13 +11,13 @@
 #include "db.h"
 
 int cross_join(DT *OUTPUT_db, DT *a, DT *b) {
-	int id_a = 0;
-	int id_b = 0;
+	// int id_a = 0;
+	// int id_b = 0;
 	int id_out = 0;
 	
-	for(int i = 0; i < LEN_A*LEN_B*ATT+1; i++) {
-		OUTPUT_db[i] = 0;//-1;
-	}
+	// for(int i = 0; i < LEN_A*LEN_B*ATT+1; i++) {
+	// 	OUTPUT_db[i] = 0;//-1;
+	// }
 	
 	for(int i = 0; i < LEN_A; i++) {
 		for(int j = 0; j < LEN_B; j++) {
