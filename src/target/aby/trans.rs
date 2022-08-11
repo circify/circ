@@ -111,7 +111,7 @@ struct ToABY<'a> {
     share_output: Vec<String>,
     term_share_output: Vec<String>,
     const_map: HashMap<(Integer, char), i32>,
-    written_const_set: HashSet<i32>
+    written_const_set: HashSet<i32>,
 }
 
 impl Drop for ToABY<'_> {
@@ -218,24 +218,22 @@ impl<'a> ToABY<'a> {
 
     fn get_term_share_type(&self, t: &Term) -> ShareType {
         let s_map = self.s_map.get(&self.curr_comp).unwrap();
-        if let Some(s) = s_map.get(&t){
+        if let Some(s) = s_map.get(&t) {
             *s
-        } else{
+        } else {
             ShareType::None
         }
     }
 
     fn write_share(&mut self, t: &Term, s: i32) {
-        if !self.written_const_set.contains(&s){
+        if !self.written_const_set.contains(&s) {
             let share_type = self.get_term_share_type(t).char();
             let line = format!("{} {}\n", s, share_type);
             self.share_output.push(line);
-            match t.op{
-                Op::Var(..)
-                | Op::Call(..) =>{}
-                _ =>{
+            match t.op {
+                Op::Var(..) | Op::Call(..) => {}
+                _ => {
                     let line2 = format!("{} {}\n", t.op, share_type);
-                    
                 }
             }
         }
@@ -244,7 +242,7 @@ impl<'a> ToABY<'a> {
     fn write_shares(&mut self, t: &Term, shares: &Vec<i32>) {
         let share_type = self.get_term_share_type(t).char();
         for s in shares {
-            if !self.written_const_set.contains(s){
+            if !self.written_const_set.contains(s) {
                 let line = format!("{} {}\n", s, share_type);
                 self.share_output.push(line);
                 let line2 = format!("{} {}\n", t.op, share_type);
@@ -293,7 +291,7 @@ impl<'a> ToABY<'a> {
                             let s = self.const_map.get(&key).unwrap().clone();
                             self.term_to_shares.insert(t.clone(), [s].to_vec());
                             s
-                        } else{
+                        } else {
                             let s = self.share_cnt;
                             self.term_to_shares.insert(t.clone(), [s].to_vec());
                             self.share_cnt += 1;
@@ -324,19 +322,19 @@ impl<'a> ToABY<'a> {
             Some(v) => v.clone(),
             None => {
                 match &t.op {
-                    Op::Const(Value::Array(arr)) =>{
+                    Op::Const(Value::Array(arr)) => {
                         let sort = check(t);
                         let num_shares = self.get_sort_len(&sort) as i32;
                         let mut shares: Vec<i32> = Vec::new();
                         let share_type = self.get_term_share_type(t).char();
-                        for i in 0..num_shares{
+                        for i in 0..num_shares {
                             let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
                             let v = match arr.map.get(&idx) {
                                 Some(c) => c,
-        
+
                                 None => &*arr.default,
                             };
-        
+
                             match v {
                                 Value::BitVector(b) => {
                                     let bi = b.as_sint();
@@ -344,7 +342,7 @@ impl<'a> ToABY<'a> {
                                     if self.const_map.contains_key(&key) {
                                         let s = self.const_map.get(&key).unwrap().clone();
                                         shares.push(s);
-                                    } else{
+                                    } else {
                                         let s = self.share_cnt;
                                         self.share_cnt += 1;
                                         self.const_map.insert(key, s);
@@ -373,7 +371,7 @@ impl<'a> ToABY<'a> {
                                     if self.const_map.contains_key(&key) {
                                         let s = self.const_map.get(&key).unwrap().clone();
                                         shares.push(s);
-                                    } else{
+                                    } else {
                                         let s = self.share_cnt;
                                         self.share_cnt += 1;
                                         self.const_map.insert(key, s);
@@ -390,7 +388,7 @@ impl<'a> ToABY<'a> {
 
                         shares
                     }
-                    _ =>{
+                    _ => {
                         let sort = check(t);
                         let num_shares = self.get_sort_len(&sort) as i32;
 
@@ -407,7 +405,6 @@ impl<'a> ToABY<'a> {
                         shares
                     }
                 }
-                
             }
         }
     }
@@ -591,7 +588,7 @@ impl<'a> ToABY<'a> {
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.input_vis.contains_key(name){
+                if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&name);
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t);
@@ -610,7 +607,7 @@ impl<'a> ToABY<'a> {
             }
             Op::Const(Value::BitVector(b)) => {
                 let s = self.get_share(&t);
-                if !self.written_const_set.contains(&s){
+                if !self.written_const_set.contains(&s) {
                     self.written_const_set.insert(s);
                     let op = "CONS";
                     let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
@@ -768,13 +765,13 @@ impl<'a> ToABY<'a> {
                     } else {
                         // new const
                         let s_map = self.s_map.get(&self.curr_comp).unwrap();
-                        if !s_map.contains_key(&v_term){
+                        if !s_map.contains_key(&v_term) {
                             continue;
                         }
                         let s = self.get_share(&v_term);
                         match v {
                             Value::BitVector(b) => {
-                                if !self.written_const_set.contains(&s){
+                                if !self.written_const_set.contains(&s) {
                                     self.written_const_set.insert(s);
                                     let op = "CONS";
                                     let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
@@ -797,7 +794,7 @@ impl<'a> ToABY<'a> {
                 for (val, s) in tup.iter().zip(shares.iter()) {
                     match val {
                         Value::BitVector(b) => {
-                            if !self.written_const_set.contains(s){
+                            if !self.written_const_set.contains(s) {
                                 self.written_const_set.insert(*s);
                                 let op = "CONS";
                                 let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);

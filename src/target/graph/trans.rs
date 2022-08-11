@@ -224,7 +224,7 @@ pub fn css_partition_with_mut_smart(
 
             println!("Time: ILP : {:?}", now.elapsed());
         }
-        
+
         // HACK: Assign sharetype to out gate
         // for out in comp.outputs.iter() {
         //     if !assignment.contains_key(&out) {
@@ -234,7 +234,7 @@ pub fn css_partition_with_mut_smart(
         //         let s_type = assignment.get(&ref_t).unwrap_or(&ShareType::Yao).clone();
         //         assignment.insert(out.clone(), s_type);
         //         // println!(" op assigned: {}, {}", out.op, s_type.char());
-        //     } 
+        //     }
         //     // println!(" OUT op: {}, {}", out.op, assignment.get(out).unwrap().char());
         // }
 
