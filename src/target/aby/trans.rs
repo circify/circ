@@ -1189,12 +1189,12 @@ pub fn to_aby(
         //     let mut converter = ToABY::new(fs, s_map, path, lang);
         //     converter.lower();
         // }
-        // #[cfg(feature = "lp")]
-        // "smart_glp" => {
-        //     let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
-        //     let mut converter = ToABY::new(fs, s_map, path, lang);
-        //     converter.lower();
-        // }
+        #[cfg(feature = "lp")]
+        "smart_glp" => {
+            let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         #[cfg(feature = "lp")]
         "smart_lp" => {
             let (fs, s_map) =
