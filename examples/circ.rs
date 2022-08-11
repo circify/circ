@@ -265,6 +265,7 @@ fn main() {
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
+                    Opt::Ite,
                     // Inline Function Calls
                     // Opt::Link,
                     Opt::Tuple,
@@ -300,13 +301,12 @@ fn main() {
     };
     #[cfg(feature = "bench")]
     println!("LOG: Optimizations: {:#?}", now.elapsed());
-
     println!("Done with IR optimization");
 
     // for (name, c) in &cs.computations {
     //     println!("name: {}", name);
     //     for t in c.terms_postorder() {
-    //         println!("t: {}", t.op);
+    //         println!("t: {}", t);
     //     }
     // }
 

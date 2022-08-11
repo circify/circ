@@ -29,7 +29,9 @@ if __name__ == "__main__":
         db_tests + \
         mnist_tests + \
         cryptonets_tests + \
-        histogram_tests
+        histogram_tests + \
+        gcd_tests + \
+        psi_tests
 
     # tests = ts
 

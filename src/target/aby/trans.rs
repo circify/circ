@@ -93,7 +93,6 @@ static mut num_call: usize = 0;
 
 struct ToABY<'a> {
     fs: Functions,
-    dugs: HashMap<String, DefUsesGraph>,
     s_map: HashMap<String, SharingMap>,
     path: &'a Path,
     lang: String,
@@ -129,10 +128,9 @@ impl Drop for ToABY<'_> {
 }
 
 impl<'a> ToABY<'a> {
-    fn new(fs: Functions, dugs: HashMap<String, DefUsesGraph>, s_map: HashMap<String, SharingMap>, path: &'a Path, lang: &str) -> Self {
+    fn new(fs: Functions, s_map: HashMap<String, SharingMap>, path: &'a Path, lang: &str) -> Self {
         Self {
             fs,
-            dugs,
             s_map,
             path,
             lang: lang.to_string(),
@@ -470,7 +468,7 @@ impl<'a> ToABY<'a> {
         match &t.op {
             Op::Var(name, Sort::Bool) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.input_vis.contains_key(name) && self.is_in_dug(&t){
+                if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
                     let term_name = ToABY::get_var_name(&name);
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t);
@@ -593,7 +591,7 @@ impl<'a> ToABY<'a> {
         match &t.op {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.input_vis.contains_key(name) && self.is_in_dug(&t) {
+                if !self.inputs.contains(&t) && md.input_vis.contains_key(name){
                     let term_name = ToABY::get_var_name(&name);
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t);
@@ -1020,15 +1018,6 @@ impl<'a> ToABY<'a> {
         }
     }
 
-    fn is_in_dug(&mut self, t: &Term) -> bool{
-        let dug = self.dugs.get(&self.curr_comp).unwrap();
-        if dug.used_terms.contains(t){
-            true
-        } else{
-            false
-        }
-    }
-
     /// Given a term `t`, lower `t` to ABY Circuits
     fn lower(&mut self) {
         let now = Instant::now();
@@ -1184,7 +1173,7 @@ pub fn to_aby(
                 mss,
                 imbalance,
             );
-            let mut converter = ToABY::new(fs, dugs, s_map, path, lang);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
         // #[cfg(feature = "lp")]
@@ -1206,13 +1195,13 @@ pub fn to_aby(
         //     let mut converter = ToABY::new(fs, s_map, path, lang);
         //     converter.lower();
         // }
-        // #[cfg(feature = "lp")]
-        // "smart_lp" => {
-        //     let (fs, s_map) =
-        //         partition_with_mut_smart(&ir, cm, path, lang, ps, *hyper == 1, ml, mss, imbalance);
-        //     let mut converter = ToABY::new(fs, s_map, path, lang);
-        //     converter.lower();
-        // }
+        #[cfg(feature = "lp")]
+        "smart_lp" => {
+            let (fs, s_map) =
+                partition_with_mut_smart(&ir, cm, path, lang, ps, *hyper == 1, ml, mss, imbalance);
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         // #[cfg(feature = "lp")]
         // "mlp+mut" => {
         //     let (fs, s_map) = mlp_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);
@@ -1240,7 +1229,7 @@ pub fn to_aby(
                 };
                 s_map.insert(name.to_string(), assignments);
             }
-            let mut converter = ToABY::new(ir, HashMap::new() , s_map, path, lang);
+            let mut converter = ToABY::new(ir, s_map, path, lang);
             converter.lower();
         }
     };

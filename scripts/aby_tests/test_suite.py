@@ -597,16 +597,16 @@ gauss_tests = [
 ]
 
 db_tests = [
-    [
-        "db join",
-        "db_join",
-        "./scripts/aby_tests/test_inputs/db_join_50.txt",
-    ],
     # [
-    #     "db join 2",
-    #     "db_join2",
-    #     "./scripts/aby_tests/test_inputs/join2.txt",
+    #     "db join",
+    #     "db_join",
+    #     "./scripts/aby_tests/test_inputs/db_join_50.txt",
     # ],
+    [
+        "db join 2",
+        "db_join2",
+        "./scripts/aby_tests/test_inputs/join2.txt",
+    ],
     # [
     #     "db merge",
     #     "db_merge",
@@ -625,16 +625,16 @@ benchmark_tests = [
         "2pc_biomatch_",
         "./scripts/aby_tests/test_inputs/biomatch_benchmark_1.txt",
     ],
-    # [
-    #     "kmeans - 1",
-    #     "2pc_kmeans_",
-    #     "./scripts/aby_tests/test_inputs/kmeans.txt",
-    # ],
-    # [
-    #     "gauss",
-    #     "2pc_gauss_inline",
-    #     "./scripts/aby_tests/test_inputs/gauss.txt",
-    # ],
+    [
+        "kmeans - 1",
+        "2pc_kmeans_",
+        "./scripts/aby_tests/test_inputs/kmeans.txt",
+    ],
+    [
+        "gauss",
+        "2pc_gauss_inline",
+        "./scripts/aby_tests/test_inputs/gauss.txt",
+    ],
     # [
     #     "kmeans - 1",
     #     "2pc_kmeans",
@@ -704,6 +704,23 @@ pc_histogram_tests = [
         "./scripts/aby_tests/test_inputs/2pc_histogram.txt",
     ]
 ]
+
+gcd_tests = [
+    [
+        "gcd",
+        "gcd",
+        "./scripts/aby_tests/test_inputs/gcd.txt",
+    ]
+]
+
+psi_tests = [
+    [
+        "psi",
+        "psi",
+        "./scripts/aby_tests/test_inputs/psi.txt",
+    ]
+]
+
 
 # ilp_benchmark_tests = [
 #     [
