@@ -66,31 +66,6 @@ impl fmt::Display for EmbeddedTerm {
         }
     }
 }
-
-static mut dur_const_arr: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_const_arr: usize = 0;
-
-static mut dur_const_tuple: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_const_tuple: usize = 0;
-
-static mut dur_ite: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_ite: usize = 0;
-
-static mut dur_store: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_store: usize = 0;
-
-static mut dur_field: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_field: usize = 0;
-
-static mut dur_update: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_update: usize = 0;
-
-static mut dur_tuple: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_tuple: usize = 0;
-
-static mut dur_call: std::time::Duration = std::time::Duration::new(0, 0);
-static mut num_call: usize = 0;
-
 struct ToABY<'a> {
     fs: Functions,
     s_map: HashMap<String, SharingMap>,
@@ -483,7 +458,7 @@ impl<'a> ToABY<'a> {
                 }
             }
             Op::Const(Value::Bool(b)) => {
-                let op = "CONS_bool";
+                let op = "CONS";
                 let line = format!("2 1 {} 1 {} {}\n", *b as i32, s, op);
                 self.const_output.push(line);
             }
@@ -957,42 +932,6 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed(&mut self, t: Term) {
-        let mut num_bool = 0;
-        let mut num_bv = 0;
-        let mut num_scalar = 0;
-
-        let mut dur_bool: std::time::Duration = std::time::Duration::new(0, 0);
-        let mut dur_bv: std::time::Duration = std::time::Duration::new(0, 0);
-        let mut dur_scalar: std::time::Duration = std::time::Duration::new(0, 0);
-
-        unsafe {
-            dur_const_arr = std::time::Duration::new(0, 0);
-            num_const_arr = 0;
-
-            dur_const_tuple = std::time::Duration::new(0, 0);
-            num_const_tuple = 0;
-
-            dur_ite = std::time::Duration::new(0, 0);
-            num_ite = 0;
-
-            dur_store = std::time::Duration::new(0, 0);
-            num_store = 0;
-
-            dur_field = std::time::Duration::new(0, 0);
-            num_field = 0;
-
-            dur_update = std::time::Duration::new(0, 0);
-            num_update = 0;
-
-            dur_tuple = std::time::Duration::new(0, 0);
-            num_tuple = 0;
-
-            dur_call = std::time::Duration::new(0, 0);
-            num_call = 0;
-        }
-
-        let mut write_time: std::time::Duration = std::time::Duration::new(0, 0);
-
         for c in PostOrderIterV2::new(t) {
             if self.term_to_shares.contains_key(&c) {
                 continue;

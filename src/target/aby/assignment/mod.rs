@@ -131,7 +131,8 @@ impl CostModel {
             // | Op::Store 
             | Op::Call(..)
             | Op::Const(..)=> {
-                todo!("Op get cost: Should not reach here: {}", op);
+                // todo!("Op get cost: Should not reach here: {}", op);
+                None
             }
             Op::Field(_)
             | Op::Update(..)
@@ -222,7 +223,7 @@ pub fn assign_arithmetic_and_boolean(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.get(&term.op) {
+                    if let Some(costs) = cost_model.get(&term.op){
                         let mut min_ty: ShareType = ShareType::Boolean;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic] {
