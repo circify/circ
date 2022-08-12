@@ -132,6 +132,10 @@ impl Expr2Smt<()> for TermData {
                 write!(w, "({}", self.op)?;
                 true
             }
+            Op::BvUext(s) => {
+                write!(w, "((_ zero_extend {})", s)?;
+                true
+            }
             Op::Const(c) => {
                 write!(w, "{}", SmtDisp(c))?;
                 false
@@ -737,6 +741,30 @@ mod test {
                     ),
                     (
                         "q".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(2), 8))
+                    ),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn bv_model_uext() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (bv 8)))
+            (= a ((uext 6) #b10))
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    (
+                        "a".to_owned(),
                         Value::BitVector(BitVector::new(Integer::from(2), 8))
                     ),
                 ]
