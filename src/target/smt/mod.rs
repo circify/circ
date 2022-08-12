@@ -762,12 +762,10 @@ mod test {
         assert_eq!(
             find_model(&t),
             Some(
-                vec![
-                    (
-                        "a".to_owned(),
-                        Value::BitVector(BitVector::new(Integer::from(2), 8))
-                    ),
-                ]
+                vec![(
+                    "a".to_owned(),
+                    Value::BitVector(BitVector::new(Integer::from(2), 8))
+                ),]
                 .into_iter()
                 .collect()
             )
