@@ -1092,6 +1092,7 @@ pub fn to_aby(
     // call_site_similarity(&ir);
     // todo!("Hello");
 
+    let now = Instant::now();
     match ss {
         #[cfg(feature = "lp")]
         "css" => {
@@ -1109,6 +1110,7 @@ pub fn to_aby(
                 mss,
                 imbalance,
             );
+            println!("LOG: Assignment time: {:?}", now.elapsed());
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
@@ -1125,16 +1127,18 @@ pub fn to_aby(
         //     let mut converter = ToABY::new(fs, s_map, path, lang);
         //     converter.lower();
         // }
-        // #[cfg(feature = "lp")]
-        // "smart_glp" => {
-        //     let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
-        //     let mut converter = ToABY::new(fs, s_map, path, lang);
-        //     converter.lower();
-        // }
+        #[cfg(feature = "lp")]
+        "smart_glp" => {
+            let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         #[cfg(feature = "lp")]
         "smart_lp" => {
             let (fs, s_map) =
                 partition_with_mut_smart(&ir, cm, path, lang, ps, *hyper == 1, ml, mss, imbalance);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
@@ -1165,6 +1169,7 @@ pub fn to_aby(
                 };
                 s_map.insert(name.to_string(), assignments);
             }
+            println!("LOG: Assignment time: {:?}", now.elapsed());
             let mut converter = ToABY::new(ir, s_map, path, lang);
             converter.lower();
         }
