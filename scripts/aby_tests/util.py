@@ -11,7 +11,7 @@ def rename_test(name: str, lang: str) -> str:
 
 def build_cmd(name: str, test_file: str, role: int) -> List[str]:
     path = f"./scripts/aby_tests/tests/{name}"
-    return ["/home/ubuntu/clive/lotsofcirc/func/ABY/build/bin/aby_interpreter", "-m", "mpc", "-f", path, "-t", test_file, "-r", str(role)]
+    return ["../ABY/build/bin/aby_interpreter", "-m", "mpc", "-f", path, "-t", test_file, "-r", str(role)]
 
 
 def get_result(file_path):

@@ -71,8 +71,7 @@ impl CallSite {
     }
 }
 
-
-pub struct CallSiteSimilarity{
+pub struct CallSiteSimilarity {
     fs: Functions,
     dugs: HashMap<String, DefUsesGraph>,
     visited: HashSet<String>,
@@ -80,12 +79,11 @@ pub struct CallSiteSimilarity{
     callee_caller: HashSet<(String, String)>,
     func_to_cs: HashMap<String, HashMap<usize, CallSite>>,
     dup_per_func: HashMap<String, usize>,
-
 }
 
-impl CallSiteSimilarity{
-    pub fn new(fs: &Functions) -> Self{
-        let mut css = Self{
+impl CallSiteSimilarity {
+    pub fn new(fs: &Functions) -> Self {
+        let mut css = Self {
             fs: fs.clone(),
             dugs: HashMap::new(),
             visited: HashSet::new(),
@@ -97,8 +95,8 @@ impl CallSiteSimilarity{
         css
     }
 
-    fn traverse(&mut self, fname: &String){
-        if !self.visited.contains(fname){
+    fn traverse(&mut self, fname: &String) {
+        if !self.visited.contains(fname) {
             let c = self.fs.get_comp(fname).unwrap().clone();
             for t in c.terms_postorder() {
                 if let Op::Call(callee, ..) = &t.op {
@@ -176,10 +174,15 @@ impl CallSiteSimilarity{
             }
         }
 
-        remap(&self.fs, &rewriting_f, &duplicated_f, &call_map, &self.func_to_cs)
+        remap(
+            &self.fs,
+            &rewriting_f,
+            &duplicated_f,
+            &call_map,
+            &self.func_to_cs,
+        )
     }
 }
-
 
 // /// Determine if call sites are similar based on input and output arguments to the call site
 // pub fn call_site_similarity(fs: &Functions) -> (Functions, HashMap<String, DefUsesGraph>) {
@@ -354,8 +357,8 @@ fn rewrite_var(c: &mut Computation, fname: &String, cid: &usize) {
         .collect();
 }
 
-fn traverse(fs: &Functions, fname: &String, dugs: &mut HashMap<String, DefUsesGraph>){
-    if !dugs.contains_key(fname){
+fn traverse(fs: &Functions, fname: &String, dugs: &mut HashMap<String, DefUsesGraph>) {
+    if !dugs.contains_key(fname) {
         let c = fs.get_comp(fname).unwrap().clone();
         for t in c.terms_postorder() {
             if let Op::Call(callee, ..) = &t.op {
@@ -389,7 +392,7 @@ fn remap(
         if duplicate_set.contains(fname) {
             for (cid, cs) in id_to_cs.iter() {
                 let new_n: String = format_dup_call(fname, cid);
-                let mut dup_comp: Computation = Computation{
+                let mut dup_comp: Computation = Computation {
                     outputs: ncomp.outputs().clone(),
                     metadata: rewrite_metadata(&ncomp.metadata, fname, &new_n),
                     precomputes: ncomp.precomputes.clone(),
@@ -405,17 +408,10 @@ fn remap(
     let main = "main".to_string();
     traverse(&n_fs, &main, &mut n_dugs);
 
-    for (fname, cs) in context_map.iter(){
+    for (fname, cs) in context_map.iter() {
         let mut dug = n_dugs.get_mut(fname).unwrap();
         let comp = n_fs.get_comp(fname).unwrap();
-        dug.insert_context(
-            &cs.arg_names,
-            &cs.args,
-            &cs.rets,
-            &cs.caller_dug,
-            comp,
-            1,
-        );
+        dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, comp, 1);
     }
 
     // HASKSKKKKK
@@ -426,7 +422,7 @@ fn remap(
 
     // Contrusct the dugs after wards
     // Check graph
-    
+
     (n_fs, n_dugs)
 }
 
@@ -487,25 +483,28 @@ fn format_dup_call(fname: &String, cid: &usize) -> String {
     format!("{}_circ_v_{}", fname, cid).clone()
 }
 
-fn rewrite_metadata(md: &ComputationMetadata, fname: &String, n_fname: &String) -> ComputationMetadata {
-
+fn rewrite_metadata(
+    md: &ComputationMetadata,
+    fname: &String,
+    n_fname: &String,
+) -> ComputationMetadata {
     let mut input_vis: FxHashMap<String, (Term, Option<PartyId>)> = FxHashMap::default();
     let mut computation_inputs: FxHashSet<String> = FxHashSet::default();
     let mut computation_arg_names: Vec<String> = Vec::new();
 
-    for (s, tu) in md.input_vis.iter(){
+    for (s, tu) in md.input_vis.iter() {
         let s = s.clone();
         let new_s = s.replace(fname, n_fname);
         input_vis.insert(new_s, tu.clone());
     }
 
-    for s in md.computation_inputs.iter(){
+    for s in md.computation_inputs.iter() {
         let s = s.clone();
         let new_s = s.replace(fname, n_fname);
         computation_inputs.insert(new_s);
     }
 
-    for s in md.computation_arg_names.iter(){
+    for s in md.computation_arg_names.iter() {
         let s = s.clone();
         let new_s = s.replace(fname, n_fname);
         computation_arg_names.push(new_s);

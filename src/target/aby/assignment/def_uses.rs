@@ -249,7 +249,11 @@ impl DefUsesGraph {
         dug
     }
 
-    fn construct_def_use_with_dugs(&mut self, c: &Computation, dugs: &HashMap<String, DefUsesGraph>) {
+    fn construct_def_use_with_dugs(
+        &mut self,
+        c: &Computation,
+        dugs: &HashMap<String, DefUsesGraph>,
+    ) {
         for out in c.outputs.iter() {
             for t in PostOrderIterV2::new(out.clone()) {
                 match &t.op {
@@ -374,11 +378,11 @@ impl DefUsesGraph {
 
                         // args -> call's in
                         let mut arg_id = 0;
-                        for arg in t.cs.clone().iter(){
+                        for arg in t.cs.clone().iter() {
                             let defs = self.term_to_terms.get(&arg).unwrap().clone();
-                            for (d, _) in defs.iter(){
+                            for (d, _) in defs.iter() {
                                 let uses = context_args.get(arg_id).unwrap();
-                                for u in uses.iter(){
+                                for u in uses.iter() {
                                     // println!("DEF USE: {}, {}", d.op, u.op);
                                     self.def_use.insert((d.clone(), u.clone()));
                                     self.add_term(u);
@@ -406,14 +410,18 @@ impl DefUsesGraph {
 
                         let mut idx = 0;
                         // println!("{:?}", context_rets);
-                        let ret_terms: Vec<(Term, usize)> = context_rets.into_iter().flatten().map(|t| {
-                            self.add_term(&t);
-                            let tu = (t, idx);
-                            idx+= 1;
-                            tu
-                        }).collect();
+                        let ret_terms: Vec<(Term, usize)> = context_rets
+                            .into_iter()
+                            .flatten()
+                            .map(|t| {
+                                self.add_term(&t);
+                                let tu = (t, idx);
+                                idx += 1;
+                                tu
+                            })
+                            .collect();
 
-                        for ret_t in ret_terms.iter(){
+                        for ret_t in ret_terms.iter() {
                             self.call_rets_to_term.insert(ret_t.clone(), t.clone());
                         }
 
@@ -744,18 +752,17 @@ impl DefUsesGraph {
         }
     }
 
-    pub fn gen_in_out(&mut self, c: &Computation){
-        for n in c.metadata.computation_arg_names.iter(){
+    pub fn gen_in_out(&mut self, c: &Computation) {
+        for n in c.metadata.computation_arg_names.iter() {
             // n is already a ssa name here
             let s = c.metadata.input_sort(n).clone();
             let t = leaf_term(Op::Var(n.clone(), s));
-            if  let Some(uses) = self.def_uses.get(&t){
+            if let Some(uses) = self.def_uses.get(&t) {
                 self.self_ins.push(uses.clone());
-            } else{
+            } else {
                 // This argument is not being used at all!
                 self.self_ins.push(FxHashSet::default());
             }
-            
         }
     }
 

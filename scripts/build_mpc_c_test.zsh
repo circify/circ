@@ -174,14 +174,14 @@ mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
 mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
 # build hycc benchmarks
-mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
-mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
-mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
-mpc_test 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
-mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
-mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join2.c
-mpc_test 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_16.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_16.c
 mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main_16.c
 mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
 mpc_test_2 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets_16.c
