@@ -132,6 +132,7 @@ impl CallSiteSimilarity {
             self.dugs.insert(fname.clone(), dug);
             self.dup_per_func.insert(fname.clone(), 0);
             self.func_to_cs.insert(fname.clone(), HashMap::new());
+            self.visited.insert(fname.clone());
         }
     }
 

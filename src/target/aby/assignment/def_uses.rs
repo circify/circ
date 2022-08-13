@@ -7,7 +7,67 @@ use crate::ir::term::*;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::time::Instant;
+use std::time::Duration;
+
+
+
+
+/// A post order iterater that skip the const index of select/store
+pub struct PostOrderIterV3 {
+    // (cs stacked, term)
+    stack: Vec<(bool, Term)>,
+    visited: TermSet,
+}
+
+impl PostOrderIterV3 {
+    /// Make an iterator over the descendents of `root`.
+    pub fn new(roots: Vec<Term>) -> Self {
+        Self {
+            stack: roots.into_iter().map(|t| (false, t)).collect(),
+            visited: TermSet::new(),
+        }
+    }
+}
+
+impl std::iter::Iterator for PostOrderIterV3 {
+    type Item = Term;
+    fn next(&mut self) -> Option<Term> {
+        while let Some((children_pushed, t)) = self.stack.last() {
+            if self.visited.contains(t) {
+                self.stack.pop();
+            } else if !children_pushed {
+                if let Op::Select = t.op {
+                    if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
+                        self.stack.last_mut().unwrap().0 = true;
+                        let last = self.stack.last().unwrap().1.clone();
+                        self.stack.push((false, last.cs[0].clone()));
+                        continue;
+                    }
+                } else if let Op::Store = t.op {
+                    if let Op::Const(Value::BitVector(_)) = &t.cs[1].op {
+                        self.stack.last_mut().unwrap().0 = true;
+                        let last = self.stack.last().unwrap().1.clone();
+                        self.stack.push((false, last.cs[0].clone()));
+                        self.stack.push((false, last.cs[2].clone()));
+                        continue;
+                    }
+                }
+                self.stack.last_mut().unwrap().0 = true;
+                let last = self.stack.last().unwrap().1.clone();
+                self.stack
+                    .extend(last.cs.iter().map(|c| (false, c.clone())));
+            } else {
+                break;
+            }
+        }
+        self.stack.pop().map(|(_, t)| {
+            self.visited.insert(t.clone());
+            t
+        })
+    }
+}
 
 /// A post order iterater that skip the const index of select/store
 pub struct PostOrderIterV2 {
@@ -174,17 +234,19 @@ pub fn extend_dusg(dusg: &DefUsesSubGraph, dug: &DefUsesGraph, n: usize) -> DefU
     old_g
 }
 
-/// Def Use Graph for a computation
+
 #[derive(Clone)]
+/// Def Use Graph for a computation
 pub struct DefUsesGraph {
-    pub term_to_terms: TermMap<Vec<(Term, usize)>>,
     // pub term_to_terms_idx: TermMap<Vec<(Term, usize)>>,
+    // term_to_terms: TermMap<Vec<(Term, usize)>>,
+    // term_to_id: TermMap<usize>,
+    // id_to_term: HashMap<usize, Term>,
     pub def_use: FxHashSet<(Term, Term)>,
     pub def_uses: FxHashMap<Term, FxHashSet<Term>>,
     pub use_defs: FxHashMap<Term, FxHashSet<Term>>,
     pub const_terms: TermSet,
     pub good_terms: TermSet,
-    pub used_terms: TermSet,
     pub call_args: TermMap<Vec<FxHashSet<usize>>>,
     pub call_rets: TermMap<Vec<FxHashSet<usize>>>,
     pub call_args_terms: TermMap<Vec<Vec<Term>>>,
@@ -193,20 +255,23 @@ pub struct DefUsesGraph {
     pub self_ins: Vec<FxHashSet<Term>>,
     pub self_outs: Vec<Vec<Term>>,
     pub call_rets_to_term: HashMap<(Term, usize), Term>,
+    n_ref: TermMap<usize>,
+    cache_t: Term,
+    cache_terms: Vec<(Term, usize)>,
+    cache_flag: bool,
 }
 
 impl DefUsesGraph {
     pub fn new(c: &Computation) -> Self {
         let mut now = Instant::now();
         let mut dug = Self {
-            term_to_terms: TermMap::new(),
             // term_to_terms_idx: TermMap::new(),
+            // term_to_terms: TermMap::new(),
             def_use: FxHashSet::default(),
             def_uses: FxHashMap::default(),
             use_defs: FxHashMap::default(),
             const_terms: TermSet::new(),
             good_terms: TermSet::new(),
-            used_terms: TermSet::new(),
             call_args: TermMap::new(),
             call_rets: TermMap::new(),
             call_args_terms: TermMap::new(),
@@ -215,7 +280,12 @@ impl DefUsesGraph {
             self_ins: Vec::new(),
             self_outs: Vec::new(),
             call_rets_to_term: HashMap::new(),
+            n_ref: TermMap::new(),
+            cache_t: leaf_term(Op::Eq),
+            cache_terms: Vec::new(),
+            cache_flag: false,
         };
+        println!("Entering Def Use Graph:");
         dug.construct_def_use(c);
         dug.construct_mapping();
         println!("Time: Def Use Graph: {:?}", now.elapsed());
@@ -225,14 +295,13 @@ impl DefUsesGraph {
     pub fn for_call_site(c: &Computation, dugs: &HashMap<String, DefUsesGraph>) -> Self {
         let mut now = Instant::now();
         let mut dug = Self {
-            term_to_terms: TermMap::new(),
             // term_to_terms_idx: TermMap::new(),
+            // term_to_terms: TermMap::new(),
             def_use: FxHashSet::default(),
             def_uses: FxHashMap::default(),
             use_defs: FxHashMap::default(),
             const_terms: TermSet::new(),
             good_terms: TermSet::new(),
-            used_terms: TermSet::new(),
             call_args: TermMap::new(),
             call_rets: TermMap::new(),
             call_args_terms: TermMap::new(),
@@ -241,12 +310,64 @@ impl DefUsesGraph {
             self_ins: Vec::new(),
             self_outs: Vec::new(),
             call_rets_to_term: HashMap::new(),
+            n_ref: TermMap::new(),
+            cache_t: leaf_term(Op::Eq),
+            cache_terms: Vec::new(),
+            cache_flag: false,
         };
         dug.construct_def_use_with_dugs(c, dugs);
         // moved this after insert context
-        dug.construct_mapping();
         println!("Time: Def Use Graph: {:?}", now.elapsed());
+        now = Instant::now();
+        dug.construct_mapping();
+        println!("Time: Def Use Graph mapping: {:?}", now.elapsed());
         dug
+    }
+
+    // Cnt # of refs for each term
+    fn construct_n_ref(&mut self, c: &Computation){
+        for t in PostOrderIterV3::new(c.outputs.clone()) {
+            for arg in t.cs.iter(){
+                *self.n_ref.entry(arg.clone()).or_insert(0) += 1;
+            } 
+        }
+        for out in c.outputs.iter() {
+            *self.n_ref.entry(out.clone()).or_insert(0) += 1;
+        }
+    }
+
+    fn get_and_de_ref(&mut self, term_to_terms: &mut TermMap<Vec<(Term, usize)>>, t: &Term) -> Vec<(Term, usize)>{
+        let cnt = self.n_ref.get_mut(t).unwrap();
+        *cnt -= 1;
+        if *cnt == 0{
+            term_to_terms.remove(t).unwrap()
+        } else{
+            term_to_terms.get(t).unwrap().clone()
+        }
+        // if t.clone() == self.cache_t{
+        //     if *cnt == 1{
+        //         self.cache_flag = false;
+        //     }
+        //     self.cache_terms.clone()
+        // } else{
+        //     self.term_to_terms.get(t).unwrap().clone()
+        // }
+        // term_to_terms.get(t).clone().unwrap_or_else(||{
+        //     if cnt == 1{
+        //         self.cache_flag = false;
+        //     }
+        //     &self.cache_terms
+        // }).clone()
+    }
+
+    fn lazy_insert(&mut self, term_to_terms: &mut TermMap<Vec<(Term, usize)>>, t: Term, terms: Vec<(Term, usize)>){
+        term_to_terms.insert(t.clone(), terms.clone());
+        // if self.cache_flag{
+        //     term_to_terms.insert(self.cache_t.clone(), self.cache_terms.clone());
+        // }
+        // self.cache_t = t;
+        // self.cache_terms = terms;
+        // self.cache_flag = true;
     }
 
     fn construct_def_use_with_dugs(
@@ -254,27 +375,60 @@ impl DefUsesGraph {
         c: &Computation,
         dugs: &HashMap<String, DefUsesGraph>,
     ) {
-        for out in c.outputs.iter() {
-            for t in PostOrderIterV2::new(out.clone()) {
+        // let mut t_const = Duration::ZERO;
+        // let mut t_field = Duration::ZERO;
+        // let mut t_tuple = Duration::ZERO;
+        // let mut t_update = Duration::ZERO;
+        // let mut t_store = Duration::ZERO;
+        // let mut t_select1 = Duration::ZERO;
+        // let mut t_select2 = Duration::ZERO;
+        // let mut t_select3 = Duration::ZERO;
+        // let mut t_call = Duration::ZERO;
+        // let mut t_ite = Duration::ZERO;
+        // let mut t_other = Duration::ZERO;
+
+        // let mut n_const = 0;
+        // let mut n_field = 0;
+        // let mut n_tuple = 0;
+        // let mut n_update =0;
+        // let mut n_store = 0;
+        // let mut n_select =0;
+        // let mut n_call = 0;
+        // let mut n_ite = 0;
+        // let mut n_other = 0;
+
+        // let mut now = Instant::now();
+        self.construct_n_ref(c);
+        // println!("Construct n_ref time: {:?}", now.elapsed());
+        // let for_now = Instant::now();
+        let mut term_to_terms: TermMap<Vec<(Term, usize)>> = TermMap::new();
+            for t in PostOrderIterV3::new(c.outputs().clone()) {
                 match &t.op {
                     Op::Const(Value::Tuple(tup)) => {
+                        // now = Instant::now();
                         let mut terms: Vec<(Term, usize)> = Vec::new();
                         for val in tup.iter() {
                             terms.push((leaf_term(Op::Const(val.clone())), 0));
                             self.const_terms.insert(leaf_term(Op::Const(val.clone())));
                             self.add_term(&leaf_term(Op::Const(val.clone())));
                         }
-                        self.term_to_terms.insert(t.clone(), terms);
+                        term_to_terms.insert(t.clone(), terms);
+                        // t_const += now.elapsed();
+                        // n_const +=1;
                     }
                     Op::Tuple => {
+                        // now = Instant::now();
                         let mut terms: Vec<(Term, usize)> = Vec::new();
                         for c in t.cs.iter() {
-                            terms.extend(self.term_to_terms.get(&c).unwrap().clone());
+                            terms.extend(self.get_and_de_ref(&mut term_to_terms, &c));
                         }
-                        self.term_to_terms.insert(t.clone(), terms);
+                        term_to_terms.insert(t.clone(), terms);
+                        // t_tuple += now.elapsed();
+                        // n_tuple +=1;
                     }
                     Op::Field(i) => {
-                        let tuple_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
+                        // now = Instant::now();
+                        let tuple_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
                         // println!("field child: {}", t.cs[0].op);
                         let tuple_sort = check(&t.cs[0]);
                         let (offset, len) = match tuple_sort {
@@ -294,15 +448,21 @@ impl DefUsesGraph {
                         };
                         // get ret slice
                         let field_terms = &tuple_terms[offset..offset + len];
-                        self.term_to_terms.insert(t.clone(), field_terms.to_vec());
+                        term_to_terms.insert(t.clone(), field_terms.to_vec());
+                        // t_field += now.elapsed();
+                        // n_field +=1;
                     }
                     Op::Update(i) => {
-                        let mut tuple_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
-                        let value_terms = self.term_to_terms.get(&t.cs[1]).unwrap().clone();
+                        // now = Instant::now();
+                        let mut tuple_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
+                        let value_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                         tuple_terms[*i] = value_terms[0].clone();
-                        self.term_to_terms.insert(t.clone(), tuple_terms);
+                        term_to_terms.insert(t.clone(), tuple_terms);
+                        // t_update += now.elapsed();
+                        // n_update +=1;
                     }
                     Op::Const(Value::Array(arr)) => {
+                        // now = Instant::now();
                         let mut terms: Vec<(Term, usize)> = Vec::new();
                         let sort = check(&t);
                         if let Sort::Array(_, _, n) = sort {
@@ -321,42 +481,45 @@ impl DefUsesGraph {
                         } else {
                             todo!("Const array sort not array????")
                         }
-                        self.term_to_terms.insert(t.clone(), terms);
+                        term_to_terms.insert(t.clone(), terms);
+                        // t_const += now.elapsed();
+                        // n_const +=1;
                     }
                     Op::Store => {
-                        let mut array_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
-                        let value_terms = self.term_to_terms.get(&t.cs[2]).unwrap().clone();
+                        // now = Instant::now();
+                        let mut array_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
+                        let value_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[2]);
                         if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                             // constant indexing
                             let idx = bv.uint().to_usize().unwrap().clone();
                             // println!("Store the {} value on a  {} size array.",idx , array_terms.len());
                             array_terms[idx] = value_terms[0].clone();
-                            self.term_to_terms.insert(t.clone(), array_terms);
+                            term_to_terms.insert(t.clone(), array_terms);
                         } else {
+                            self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                             for idx in 0..array_terms.len() {
-                                self.used_terms.insert(array_terms[idx].0.clone());
                                 self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
                                 array_terms[idx] = (t.clone(), 0);
                             }
-                            self.used_terms.insert(value_terms[0].0.clone());
                             self.def_use.insert((value_terms[0].0.clone(), t.clone()));
-                            self.term_to_terms.insert(t.clone(), array_terms);
+                            term_to_terms.insert(t.clone(), array_terms);
                             self.add_term(&t);
                         }
+                        // t_store += now.elapsed();
+                        // n_store +=1;
                     }
                     Op::Select => {
-                        let array_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
+                        let array_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
                         if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
                             // constant indexing
                             let idx = bv.uint().to_usize().unwrap().clone();
-                            self.term_to_terms
-                                .insert(t.clone(), vec![array_terms[idx].clone()]);
+                            term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
                         } else {
+                            self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                             for idx in 0..array_terms.len() {
-                                self.used_terms.insert(array_terms[idx].0.clone());
                                 self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
                             }
-                            self.term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                            term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
                             self.add_term(&t);
                         }
                     }
@@ -379,8 +542,9 @@ impl DefUsesGraph {
                         // args -> call's in
                         let mut arg_id = 0;
                         for arg in t.cs.clone().iter() {
-                            let defs = self.term_to_terms.get(&arg).unwrap().clone();
-                            for (d, _) in defs.iter() {
+                            // Inlining callee's use
+                            let arg_terms = self.get_and_de_ref(&mut term_to_terms, arg);
+                            for (d, _) in arg_terms.iter() {
                                 let uses = context_args.get(arg_id).unwrap();
                                 for u in uses.iter() {
                                     // println!("DEF USE: {}, {}", d.op, u.op);
@@ -388,46 +552,47 @@ impl DefUsesGraph {
                                     self.add_term(u);
                                 }
                                 arg_id += 1;
-                                self.used_terms.insert(d.clone());
                             }
-                        }
 
-                        for c in t.cs.iter() {
-                            let arg_terms = self.term_to_terms.get(c).unwrap();
+                            // Safe call site
                             let mut arg_set: FxHashSet<usize> = FxHashSet::default();
-                            let mut arg_term: Vec<Term> = Vec::new();
-                            for arg in arg_terms.iter() {
-                                arg_set.insert(get_op_id(&arg.0.op));
-                                arg_term.push(arg.0.clone());
+                            let mut arg_vec: Vec<Term> = Vec::new();
+                            for aarg in arg_terms.iter() {
+                                arg_set.insert(get_op_id(&aarg.0.op));
+                                arg_vec.push(aarg.0.clone());
                             }
-                            args_t.push(arg_term);
+                            args_t.push(arg_vec);
                             args.push(arg_set);
                         }
-                        for _ in 0..num_rets {
-                            rets.push(FxHashSet::default());
-                            rets_t.push(Vec::new());
-                        }
+
+                        // for _ in 0..num_rets {
+                        //     rets.push(FxHashSet::default());
+                        //     rets_t.push(Vec::new());
+                        // }
 
                         let mut idx = 0;
                         // println!("{:?}", context_rets);
                         let ret_terms: Vec<(Term, usize)> = context_rets
                             .into_iter()
                             .flatten()
-                            .map(|t| {
-                                self.add_term(&t);
-                                let tu = (t, idx);
+                            .map(|ret| {
+                                self.add_term(&ret);
+                                let tu = (ret, idx);
                                 idx += 1;
+                                self.call_rets_to_term.insert(tu.clone(), t.clone());
+                                rets.push(FxHashSet::default());
+                                rets_t.push(Vec::new());
                                 tu
                             })
                             .collect();
 
-                        for ret_t in ret_terms.iter() {
-                            self.call_rets_to_term.insert(ret_t.clone(), t.clone());
-                        }
+                        // for ret_t in ret_terms.iter() {
+                        //     self.call_rets_to_term.insert(ret_t.clone(), t.clone());
+                        // }
 
                         assert_eq!(num_rets, ret_terms.len());
 
-                        self.term_to_terms.insert(t.clone(), ret_terms);
+                        term_to_terms.insert(t.clone(), ret_terms);
                         self.call_args.insert(t.clone(), args);
                         self.call_rets.insert(t.clone(), rets);
                         self.call_args_terms.insert(t.clone(), args_t);
@@ -436,26 +601,23 @@ impl DefUsesGraph {
                     Op::Ite => {
                         if let Op::Store = t.cs[1].op {
                             // assert_eq!(t.cs[2].op, Op::Store);
-                            let cond_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
+                            let cond_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
                             assert_eq!(cond_terms.len(), 1);
-                            self.used_terms.insert(cond_terms[0].0.clone());
                             self.def_use.insert((cond_terms[0].0.clone(), t.clone()));
                             // true branch
-                            let mut t_terms = self.term_to_terms.get(&t.cs[1]).unwrap().clone();
+                            let mut t_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                             // false branch
-                            let f_terms = self.term_to_terms.get(&t.cs[2]).unwrap().clone();
+                            let f_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[2]);
                             assert_eq!(t_terms.len(), f_terms.len());
                             for idx in 0..t_terms.len() {
-                                self.used_terms.insert(t_terms[idx].0.clone());
-                                self.used_terms.insert(f_terms[idx].0.clone());
                                 self.def_use.insert((t_terms[idx].0.clone(), t.clone()));
                                 self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
                                 t_terms[idx] = (t.clone(), 0);
                             }
-                            self.term_to_terms.insert(t.clone(), t_terms);
+                            term_to_terms.insert(t.clone(), t_terms);
                         } else {
                             for c in t.cs.iter() {
-                                let terms = self.term_to_terms.get(c).unwrap().clone();
+                                let terms = self.get_and_de_ref(&mut term_to_terms, c);
                                 assert_eq!(terms.len(), 1);
                                 if let Some(call_t) = self.call_rets_to_term.get(&terms[0]) {
                                     // insert op to ret set
@@ -465,20 +627,18 @@ impl DefUsesGraph {
                                     let rets_t = self.call_rets_terms.get_mut(&call_t).unwrap();
                                     rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
                                     self.add_term(&terms[0].0);
-                                    self.used_terms.insert(terms[0].0.clone());
                                     self.def_use.insert((terms[0].0.clone(), t.clone()));
                                 } else {
-                                    self.used_terms.insert(terms[0].0.clone());
                                     self.def_use.insert((terms[0].0.clone(), t.clone()));
                                 }
                             }
-                            self.term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                            term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
                         }
                         self.add_term(&t);
                     }
                     _ => {
                         for c in t.cs.iter() {
-                            let terms = self.term_to_terms.get(c).unwrap().clone();
+                            let terms = self.get_and_de_ref(&mut term_to_terms, c);
                             assert_eq!(terms.len(), 1);
                             if let Some(call_t) = self.call_rets_to_term.get(&terms[0]) {
                                 // insert op to ret set
@@ -488,241 +648,243 @@ impl DefUsesGraph {
                                 let rets_t = self.call_rets_terms.get_mut(&call_t).unwrap();
                                 rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
                                 self.add_term(&terms[0].0);
-                                self.used_terms.insert(terms[0].0.clone());
                                 self.def_use.insert((terms[0].0.clone(), t.clone()));
                             } else {
-                                self.used_terms.insert(terms[0].0.clone());
                                 self.def_use.insert((terms[0].0.clone(), t.clone()));
                             }
                         }
-                        self.term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
                         self.add_term(&t);
                     }
                 }
             }
-
-            let out_terms = self.term_to_terms.get(out).unwrap().clone();
+        for out in c.outputs().iter(){
+            let out_terms = self.get_and_de_ref(&mut term_to_terms, out);
             let mut out_v: Vec<Term> = Vec::new();
             for (t, _) in out_terms.iter() {
                 // v.push(t.clone());
                 self.ret_good_terms.push(t.clone());
-                self.used_terms.insert(t.clone());
                 out_v.push(t.clone());
             }
             self.self_outs.push(out_v);
-            // This is for the case when out term is not a good term, we still need it.
-            // if !self.good_terms.contains(out){
-            //     let this_terms = self.term_to_terms.get(out).unwrap();
-            //     for t in this_terms.iter(){
-            //         self.def_use.insert((t.clone(), out.clone()));
-            //     }
-            //     self.add_term(&out);
-            // }
         }
     }
 
     fn construct_def_use(&mut self, c: &Computation) {
-        for out in c.outputs.iter() {
-            for t in PostOrderIterV2::new(out.clone()) {
-                match &t.op {
-                    Op::Const(Value::Tuple(tup)) => {
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
-                        for val in tup.iter() {
-                            terms.push((leaf_term(Op::Const(val.clone())), 0));
-                            self.const_terms.insert(leaf_term(Op::Const(val.clone())));
-                            self.add_term(&leaf_term(Op::Const(val.clone())));
-                        }
-                        self.term_to_terms.insert(t.clone(), terms);
+        self.construct_n_ref(c);
+        let mut term_to_terms: TermMap<Vec<(Term, usize)>> = TermMap::new();
+        for t in PostOrderIterV3::new(c.outputs().clone()) {
+            match &t.op {
+                Op::Const(Value::Tuple(tup)) => {
+                    let mut terms: Vec<(Term, usize)> = Vec::new();
+                    for val in tup.iter() {
+                        terms.push((leaf_term(Op::Const(val.clone())), 0));
+                        self.const_terms.insert(leaf_term(Op::Const(val.clone())));
+                        self.add_term(&leaf_term(Op::Const(val.clone())));
                     }
-                    Op::Tuple => {
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
-                        for c in t.cs.iter() {
-                            terms.extend(self.term_to_terms.get(&c).unwrap().clone());
-                        }
-                        self.term_to_terms.insert(t.clone(), terms);
+                    term_to_terms.insert(t.clone(), terms);
+                }
+                Op::Tuple => {
+                    let mut terms: Vec<(Term, usize)> = Vec::new();
+                    for c in t.cs.iter() {
+                        terms.extend(self.get_and_de_ref(&mut term_to_terms, &c));
                     }
-                    Op::Field(i) => {
-                        let tuple_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
+                    term_to_terms.insert(t.clone(), terms);
+                }
+                Op::Field(i) => {
+                    // println!("t: {}",t.op);
+                    // println!("t.cs.op: {}",t.cs[0].op);
+                    // for tt in t.cs[0].cs.iter(){
+                    //     println!("tt.op: {}",tt.op);
+                    //     for ttt in tt.cs.iter(){
+                    //         println!("ttt.op: {}",ttt.op);
+                    //     }
+                    // }
+                    let tuple_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
 
-                        let tuple_sort = check(&t.cs[0]);
-                        let (offset, len) = match tuple_sort {
-                            Sort::Tuple(t) => {
-                                assert!(*i < t.len());
-                                // find offset
-                                let mut offset = 0;
-                                for j in 0..*i {
-                                    offset += get_sort_len(&t[j]);
-                                }
-                                // find len
-                                let len = get_sort_len(&t[*i]);
+                    let tuple_sort = check(&t.cs[0]);
+                    let (offset, len) = match tuple_sort {
+                        Sort::Tuple(t) => {
+                            // println!("{} < {}", *i, t.len());
+                            
+                            assert!(*i < t.len());
+                            // find offset
+                            let mut offset = 0;
+                            for j in 0..*i {
+                                offset += get_sort_len(&t[j]);
+                            }
+                            // find len
+                            let len = get_sort_len(&t[*i]);
 
-                                (offset, len)
-                            }
-                            _ => panic!("Field op on non-tuple"),
-                        };
-                        // get ret slice
-                        let field_terms = &tuple_terms[offset..offset + len];
-                        self.term_to_terms.insert(t.clone(), field_terms.to_vec());
-                    }
-                    Op::Update(i) => {
-                        let mut tuple_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
-                        let value_terms = self.term_to_terms.get(&t.cs[1]).unwrap().clone();
-                        tuple_terms[*i] = value_terms[0].clone();
-                        self.term_to_terms.insert(t.clone(), tuple_terms);
-                    }
-                    Op::Const(Value::Array(arr)) => {
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
-                        let sort = check(&t);
-                        if let Sort::Array(_, _, n) = sort {
-                            // println!("Create a {} size array.", n);
-                            let n = n as i32;
-                            for i in 0..n {
-                                let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
-                                let v = match arr.map.get(&idx) {
-                                    Some(c) => c,
-                                    None => &*arr.default,
-                                };
-                                terms.push((leaf_term(Op::Const(v.clone())), 0));
-                                self.const_terms.insert(leaf_term(Op::Const(v.clone())));
-                                self.add_term(&leaf_term(Op::Const(v.clone())));
-                            }
-                        } else {
-                            todo!("Const array sort not array????")
+                            (offset, len)
                         }
-                        self.term_to_terms.insert(t.clone(), terms);
+                        _ => panic!("Field op on non-tuple"),
+                    };
+                    // get ret slice
+                    let field_terms = &tuple_terms[offset..offset + len];
+                    term_to_terms.insert(t.clone(), field_terms.to_vec());
+                }
+                Op::Update(i) => {
+                    let mut tuple_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
+                    let value_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
+                    tuple_terms[*i] = value_terms[0].clone();
+                    term_to_terms.insert(t.clone(), tuple_terms);
+                }
+                Op::Const(Value::Array(arr)) => {
+                    let mut terms: Vec<(Term, usize)> = Vec::new();
+                    let sort = check(&t);
+                    if let Sort::Array(_, _, n) = sort {
+                        // println!("Create a {} size array.", n);
+                        let n = n as i32;
+                        for i in 0..n {
+                            let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
+                            let v = match arr.map.get(&idx) {
+                                Some(c) => c,
+                                None => &*arr.default,
+                            };
+                            terms.push((leaf_term(Op::Const(v.clone())), 0));
+                            self.const_terms.insert(leaf_term(Op::Const(v.clone())));
+                            self.add_term(&leaf_term(Op::Const(v.clone())));
+                        }
+                    } else {
+                        todo!("Const array sort not array????")
                     }
-                    Op::Store => {
-                        let mut array_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
-                        let value_terms = self.term_to_terms.get(&t.cs[2]).unwrap().clone();
-                        if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
-                            // constant indexing
-                            let idx = bv.uint().to_usize().unwrap().clone();
-                            // println!("Store the {} value on a  {} size array.",idx , array_terms.len());
-                            array_terms[idx] = value_terms[0].clone();
-                            self.term_to_terms.insert(t.clone(), array_terms);
-                        } else {
-                            for idx in 0..array_terms.len() {
-                                self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
-                                array_terms[idx] = (t.clone(), 0);
-                            }
-                            self.def_use.insert((value_terms[0].0.clone(), t.clone()));
-                            self.term_to_terms.insert(t.clone(), array_terms);
-                            self.add_term(&t);
+                    term_to_terms.insert(t.clone(), terms);
+                }
+                Op::Store => {
+                    let mut array_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
+                    let value_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[2]);
+                    if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                        // constant indexing
+                        let idx = bv.uint().to_usize().unwrap().clone();
+                        // println!("Store the {} value on a  {} size array.",idx , array_terms.len());
+                        array_terms[idx] = value_terms[0].clone();
+                        term_to_terms.insert(t.clone(), array_terms);
+                    } else {
+                        self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
+                        for idx in 0..array_terms.len() {
+                            self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                            array_terms[idx] = (t.clone(), 0);
                         }
-                    }
-                    Op::Select => {
-                        let array_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
-                        if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
-                            // constant indexing
-                            let idx = bv.uint().to_usize().unwrap().clone();
-                            self.term_to_terms
-                                .insert(t.clone(), vec![array_terms[idx].clone()]);
-                        } else {
-                            for idx in 0..array_terms.len() {
-                                self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
-                            }
-                            self.term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
-                            self.add_term(&t);
-                        }
-                    }
-                    Op::Call(_, _, _, ret_sorts) => {
-                        // Use call term itself as the placeholder
-                        // Call term will be ignore by the ilp solver later
-                        let mut ret_terms: Vec<(Term, usize)> = Vec::new();
-                        let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
-                        let mut args: Vec<FxHashSet<usize>> = Vec::new();
-                        let mut rets: Vec<FxHashSet<usize>> = Vec::new();
-                        let mut args_t: Vec<Vec<Term>> = Vec::new();
-                        let mut rets_t: Vec<Vec<Term>> = Vec::new();
-                        for c in t.cs.iter() {
-                            let arg_terms = self.term_to_terms.get(c).unwrap();
-                            let mut arg_set: FxHashSet<usize> = FxHashSet::default();
-                            let mut arg_term: Vec<Term> = Vec::new();
-                            for arg in arg_terms.iter() {
-                                arg_set.insert(get_op_id(&arg.0.op));
-                                arg_term.push(arg.0.clone());
-                            }
-                            args_t.push(arg_term);
-                            args.push(arg_set);
-                        }
-                        for idx in 0..num_rets {
-                            rets.push(FxHashSet::default());
-                            ret_terms.push((t.clone(), idx));
-                            rets_t.push(Vec::new());
-                        }
-                        self.term_to_terms.insert(t.clone(), ret_terms);
-                        self.call_args.insert(t.clone(), args);
-                        self.call_rets.insert(t.clone(), rets);
-                        self.call_args_terms.insert(t.clone(), args_t);
-                        self.call_rets_terms.insert(t.clone(), rets_t);
-                    }
-                    Op::Ite => {
-                        if let Op::Store = t.cs[1].op {
-                            // assert_eq!(t.cs[2].op, Op::Store);
-                            let cond_terms = self.term_to_terms.get(&t.cs[0]).unwrap().clone();
-                            assert_eq!(cond_terms.len(), 1);
-                            self.def_use.insert((cond_terms[0].0.clone(), t.clone()));
-                            // true branch
-                            let mut t_terms = self.term_to_terms.get(&t.cs[1]).unwrap().clone();
-                            // false branch
-                            let f_terms = self.term_to_terms.get(&t.cs[2]).unwrap().clone();
-                            assert_eq!(t_terms.len(), f_terms.len());
-                            for idx in 0..t_terms.len() {
-                                self.def_use.insert((t_terms[idx].0.clone(), t.clone()));
-                                self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
-                                t_terms[idx] = (t.clone(), 0);
-                            }
-                            self.term_to_terms.insert(t.clone(), t_terms);
-                        } else {
-                            for c in t.cs.iter() {
-                                if let Op::Call(..) = t.op {
-                                    continue;
-                                } else {
-                                    let terms = self.term_to_terms.get(c).unwrap();
-                                    assert_eq!(terms.len(), 1);
-                                    if let Op::Call(..) = terms[0].0.op {
-                                        // insert op to ret set
-                                        let rets = self.call_rets.get_mut(&terms[0].0).unwrap();
-                                        rets.get_mut(terms[0].1).unwrap().insert(get_op_id(&t.op));
-                                        // insert term to ret terms
-                                        let rets_t =
-                                            self.call_rets_terms.get_mut(&terms[0].0).unwrap();
-                                        rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
-                                    } else {
-                                        self.def_use.insert((terms[0].0.clone(), t.clone()));
-                                    }
-                                }
-                            }
-                            self.term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
-                        }
+                        self.def_use.insert((value_terms[0].0.clone(), t.clone()));
+                        term_to_terms.insert(t.clone(), array_terms);
                         self.add_term(&t);
                     }
-                    _ => {
+                }
+                Op::Select => {
+                    let array_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
+                    if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                        // constant indexing
+                        let idx = bv.uint().to_usize().unwrap().clone();
+                        term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
+                    } else {
+                        self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
+                        for idx in 0..array_terms.len() {
+                            self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                        }
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        self.add_term(&t);
+                    }
+                }
+                Op::Call(_, _, _, ret_sorts) => {
+                    // Use call term itself as the placeholder
+                    // Call term will be ignore by the ilp solver later
+                    let mut ret_terms: Vec<(Term, usize)> = Vec::new();
+                    let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                    let mut args: Vec<FxHashSet<usize>> = Vec::new();
+                    let mut rets: Vec<FxHashSet<usize>> = Vec::new();
+                    let mut args_t: Vec<Vec<Term>> = Vec::new();
+                    let mut rets_t: Vec<Vec<Term>> = Vec::new();
+                    for c in t.cs.iter() {
+                        let arg_terms = self.get_and_de_ref(&mut term_to_terms, c);
+                        let mut arg_set: FxHashSet<usize> = FxHashSet::default();
+                        let mut arg_term: Vec<Term> = Vec::new();
+                        for arg in arg_terms.iter() {
+                            arg_set.insert(get_op_id(&arg.0.op));
+                            arg_term.push(arg.0.clone());
+                        }
+                        args_t.push(arg_term);
+                        args.push(arg_set);
+                    }
+                    for idx in 0..num_rets {
+                        rets.push(FxHashSet::default());
+                        ret_terms.push((t.clone(), idx));
+                        rets_t.push(Vec::new());
+                    }
+                    term_to_terms.insert(t.clone(), ret_terms);
+                    self.call_args.insert(t.clone(), args);
+                    self.call_rets.insert(t.clone(), rets);
+                    self.call_args_terms.insert(t.clone(), args_t);
+                    self.call_rets_terms.insert(t.clone(), rets_t);
+                }
+                Op::Ite => {
+                    if let Op::Store = t.cs[1].op {
+                        // assert_eq!(t.cs[2].op, Op::Store);
+                        let cond_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
+                        assert_eq!(cond_terms.len(), 1);
+                        self.def_use.insert((cond_terms[0].0.clone(), t.clone()));
+                        // true branch
+                        let mut t_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
+                        // false branch
+                        let f_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[2]);
+                        assert_eq!(t_terms.len(), f_terms.len());
+                        for idx in 0..t_terms.len() {
+                            self.def_use.insert((t_terms[idx].0.clone(), t.clone()));
+                            self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
+                            t_terms[idx] = (t.clone(), 0);
+                        }
+                        term_to_terms.insert(t.clone(), t_terms);
+                    } else {
                         for c in t.cs.iter() {
-                            if let Op::Call(..) = c.op {
+                            if let Op::Call(..) = t.op {
                                 continue;
                             } else {
-                                let terms = self.term_to_terms.get(c).unwrap().clone();
+                                let terms = self.get_and_de_ref(&mut term_to_terms, c);
                                 assert_eq!(terms.len(), 1);
                                 if let Op::Call(..) = terms[0].0.op {
                                     // insert op to ret set
                                     let rets = self.call_rets.get_mut(&terms[0].0).unwrap();
                                     rets.get_mut(terms[0].1).unwrap().insert(get_op_id(&t.op));
                                     // insert term to ret terms
-                                    let rets_t = self.call_rets_terms.get_mut(&terms[0].0).unwrap();
+                                    let rets_t =
+                                        self.call_rets_terms.get_mut(&terms[0].0).unwrap();
                                     rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
                                 } else {
                                     self.def_use.insert((terms[0].0.clone(), t.clone()));
                                 }
                             }
                         }
-                        self.term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
-                        self.add_term(&t);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
                     }
+                    self.add_term(&t);
+                }
+                _ => {
+                    for c in t.cs.iter() {
+                        if let Op::Call(..) = c.op {
+                            continue;
+                        } else {
+                            let terms = self.get_and_de_ref(&mut term_to_terms, c);
+                            assert_eq!(terms.len(), 1);
+                            if let Op::Call(..) = terms[0].0.op {
+                                // insert op to ret set
+                                let rets = self.call_rets.get_mut(&terms[0].0).unwrap();
+                                rets.get_mut(terms[0].1).unwrap().insert(get_op_id(&t.op));
+                                // insert term to ret terms
+                                let rets_t = self.call_rets_terms.get_mut(&terms[0].0).unwrap();
+                                rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
+                            } else {
+                                self.def_use.insert((terms[0].0.clone(), t.clone()));
+                            }
+                        }
+                    }
+                    term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                    self.add_term(&t);
                 }
             }
+        }
 
-            let out_terms = self.term_to_terms.get(out).unwrap().clone();
+        for out in c.outputs().iter(){
+            let out_terms = self.get_and_de_ref(&mut term_to_terms, out);
             let mut out_v: Vec<Term> = Vec::new();
             for (t, _) in out_terms.iter() {
                 // v.push(t.clone());
@@ -731,6 +893,11 @@ impl DefUsesGraph {
             }
             self.self_outs.push(out_v);
         }
+
+        // for (k, _) in self.term_to_terms.iter(){
+        //     println!("Left over ts: {} {}", k.op, self.n_ref.get(k).unwrap());
+        // }
+        // todo!("TEsting")
     }
 
     fn construct_mapping(&mut self) {
