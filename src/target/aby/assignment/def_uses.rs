@@ -898,6 +898,9 @@ impl DefUsesGraph {
         //     println!("Left over ts: {} {}", k.op, self.n_ref.get(k).unwrap());
         // }
         // todo!("TEsting")
+
+        println!("Def Use Graph # of terms: {}", self.good_terms.len());
+        println!("Def Use Graph # of edges: {}", self.def_use.len());
     }
 
     fn construct_mapping(&mut self) {
