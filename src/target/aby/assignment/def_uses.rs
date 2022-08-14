@@ -485,15 +485,6 @@ impl DefUsesGraph {
                         // t_const += now.elapsed();
                         // n_const +=1;
                     }
-                    Op::Array =>{
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
-                        for arg in t.cs.iter(){
-                            let arg_terms = self.get_and_de_ref(&mut term_to_terms, arg);
-                            assert_eq!(arg_terms.len(), 1);
-                            terms.extend(arg_terms);
-                        }
-                        term_to_terms.insert(t.clone(), terms);
-                    }
                     Op::Store => {
                         // now = Instant::now();
                         let mut array_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
@@ -757,15 +748,6 @@ impl DefUsesGraph {
                         }
                     } else {
                         todo!("Const array sort not array????")
-                    }
-                    term_to_terms.insert(t.clone(), terms);
-                }
-                Op::Array =>{
-                    let mut terms: Vec<(Term, usize)> = Vec::new();
-                    for arg in t.cs.iter(){
-                        let arg_terms = self.get_and_de_ref(&mut term_to_terms, arg);
-                        assert_eq!(terms.len(), 1);
-                        terms.extend(arg_terms);
                     }
                     term_to_terms.insert(t.clone(), terms);
                 }

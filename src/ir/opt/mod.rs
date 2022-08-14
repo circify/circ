@@ -4,7 +4,6 @@ pub mod cfold;
 pub mod flat;
 pub mod inline;
 pub mod ite;
-pub mod cindex;
 pub mod link;
 pub mod mem;
 pub mod scalarize_vars;
@@ -42,8 +41,6 @@ pub enum Opt {
     Inline,
     /// Ite peephole optimizations
     Ite,
-    /// Ite peephole optimizations
-    ConstantIndex,
     /// Link function calls
     Link,
     /// Eliminate tuples
@@ -116,9 +113,6 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut fs: Functions, optimizations: I) -> 
                 }
                 Opt::Ite => {
                     ite::rewrite_ites(comp);
-                }
-                Opt::ConstantIndex => {
-                    cindex::cindex(comp);
                 }
                 Opt::Inline => {
                     let public_inputs = comp

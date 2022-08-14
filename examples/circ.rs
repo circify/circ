@@ -304,12 +304,12 @@ fn main() {
     println!("LOG: Optimizations: {:#?}", now.elapsed());
     println!("Done with IR optimization");
 
-    for (name, c) in &cs.computations {
-        println!("name: {}", name);
-        for t in c.terms_postorder() {
-            println!("t: {}", t);
-        }
-    }
+    // for (name, c) in &cs.computations {
+    //     println!("name: {}", name);
+    //     for t in c.terms_postorder() {
+    //         println!("t: {}", t);
+    //     }
+    // }
 
     now = Instant::now();
     match options.backend {

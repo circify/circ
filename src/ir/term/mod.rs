@@ -130,8 +130,6 @@ pub enum Op {
     ///
     /// Makes an array equal to `array`, but with `value` at `index`.
     Store,
-    /// IR array representation
-    Array,
     
     /// Assemble n things into a tuple
     Tuple,
@@ -254,7 +252,6 @@ impl Op {
             Op::UbvToPf(_) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
-            Op::Array => None,
             Op::Tuple => None,
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
@@ -299,7 +296,6 @@ impl Display for Op {
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
-            Op::Array => write!(f, "array"),
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),

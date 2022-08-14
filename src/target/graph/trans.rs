@@ -17,6 +17,7 @@ use crate::target::aby::assignment::def_uses::*;
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
+use std::time::Duration;
 
 use std::fs;
 
@@ -162,38 +163,27 @@ pub fn css_partition_with_mut_smart(
     mss: &usize,
     imbalance: &usize,
 ) -> HashMap<String, SharingMap> {
-    let mut now = Instant::now();
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
 
-    // let main = "mmulT_unrolled_1".to_string();
-    // let main_dug = dugs.get(&main).unwrap();
-    // for (d, u) in main_dug.def_use.iter(){
-    //     println!("Def: {}, Use: {}", d.op, u.op);
-    // }
-    // for t in main_dug.good_terms.iter(){
-    //     println!("Good Term: {}", t);
-    // }
-    // let assignment = smart_global_assign(&main_dug.good_terms, &main_dug.def_use, cm);
-    // for (t, s) in assignment.iter(){
-    //     println!("Op: {}, share: {}", t.op, s.char());
-    // }
-    // todo!("Testing");
+    let mut part_duration: Duration =Duration::ZERO;
+    let mut ilp_duration: Duration =Duration::ZERO;
 
     for (fname, comp) in fs.computations.iter() {
+        let mut now = Instant::now();
         println!("Partitioning: {}", fname);
         let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
         let graph_path = get_graph_path(path, lang, hyper_mode);
         let d = dugs.get(fname).unwrap();
         let (partition, num_parts) = tp.run_from_dug(fname, d, &graph_path, *ps);
 
-        println!("Time: Partition: {:?}", now.elapsed());
+        part_duration += now.elapsed();
 
         let mut assignment: SharingMap;
         if num_parts == 1 {
             // No need to partition
             now = Instant::now();
             assignment = smart_global_assign(&d.good_terms, &d.def_use, cm);
-            println!("Time: ILP : {:?}", now.elapsed());
+            ilp_duration += now.elapsed();
         } else {
             // Construct DefUsesSubGraph
             now = Instant::now();
@@ -217,32 +207,15 @@ pub fn css_partition_with_mut_smart(
                 du.insert_edges(&d);
                 dusg.insert(part_id, du.clone());
             }
-            println!("Time: To Subgraph: {:?}", now.elapsed());
-
-            now = Instant::now();
             assignment = get_share_map_with_mutation_smart(&d, cm, &dusg, &partition, ml, mss);
 
-            println!("Time: ILP : {:?}", now.elapsed());
+            ilp_duration += now.elapsed();
         }
-
-        // HACK: Assign sharetype to out gate
-        // for out in comp.outputs.iter() {
-        //     if !assignment.contains_key(&out) {
-        //         let ref_t = d.term_to_terms.get(&out).unwrap().get(0).unwrap().clone().0;
-        //         // println!("ref_t: op {} ", ref_t.op);
-        //         // Parent is a call term
-        //         let s_type = assignment.get(&ref_t).unwrap_or(&ShareType::Yao).clone();
-        //         assignment.insert(out.clone(), s_type);
-        //         // println!(" op assigned: {}, {}", out.op, s_type.char());
-        //     }
-        //     // println!(" OUT op: {}, {}", out.op, assignment.get(out).unwrap().char());
-        // }
-
-        // for (t, s) in assignment.iter(){
-        //     println!("Op: {}, share: {}", t.op, s.char());
-        // }
         s_map.insert(fname.clone(), assignment);
     }
+
+    println!("LOG: Partition time: {:?}", part_duration);
+    println!("LOG: ILP time: {:?}", ilp_duration);
 
     s_map
 }
@@ -266,14 +239,14 @@ pub fn partition_with_mut_smart(
     let graph_path = get_graph_path(path, lang, hyper_mode);
     let (c, d, partition, num_parts) = tp.run(&main.to_string(), &graph_path, *ps);
 
-    println!("Time: Partition: {:?}", now.elapsed());
+    println!("LOG: Partition time: {:?}", now.elapsed());
 
     let assignment: SharingMap;
     if num_parts == 1 {
         // No need to partition
         now = Instant::now();
         assignment = smart_global_assign(&d.good_terms, &d.def_use, cm);
-        println!("Time: ILP : {:?}", now.elapsed());
+        println!("LOG: ILP time: {:?}", now.elapsed());
     } else {
         // Construct DefUsesSubGraph
         now = Instant::now();
@@ -298,11 +271,9 @@ pub fn partition_with_mut_smart(
             du.insert_edges(&d);
             dusg.insert(part_id, du.clone());
         }
-        println!("Time: To Subgraph: {:?}", now.elapsed());
-
-        now = Instant::now();
+        
         assignment = get_share_map_with_mutation_smart(&d, cm, &dusg, &partition, ml, mss);
-        println!("Time: ILP : {:?}", now.elapsed());
+        println!("LOG: ILP time: {:?}", now.elapsed());
     }
 
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
@@ -354,7 +325,7 @@ pub fn inline_all_and_assign_smart_glp(
 
     now = Instant::now();
     let assignment = smart_global_assign(&dug.good_terms, &dug.def_use, cm);
-    println!("Time: ILP: {:?}", now.elapsed());
+    println!("LOG: ILP time: {:?}", now.elapsed());
 
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);
