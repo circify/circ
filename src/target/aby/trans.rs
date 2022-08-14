@@ -1130,10 +1130,7 @@ pub fn to_aby(
         #[cfg(feature = "lp")]
         "smart_glp" => {
             let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
-<<<<<<< HEAD
-=======
             println!("LOG: Assignment time: {:?}", now.elapsed());
->>>>>>> ce9729fae0b3fb51823671fd1a3c941d3a28ee75
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
