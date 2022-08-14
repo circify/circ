@@ -126,6 +126,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
         Op::Select => array_or(get_ty(&t.cs[0]), "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs[0]).clone()),
+        Op::Array => Ok(Sort::Array(Box::new(get_ty(&t.cs[0]).clone()), Box::new(get_ty(&t.cs[0]).clone()), t.cs.len())),
         Op::Tuple => Ok(Sort::Tuple(t.cs.iter().map(get_ty).cloned().collect())),
         Op::Array => Ok(Sort::Array(Box::new(get_ty(&t.cs[0]).clone()),Box::new(get_ty(&t.cs[0]).clone()) ,t.cs.len())),
         Op::Field(i) => {
