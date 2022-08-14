@@ -131,6 +131,9 @@ pub enum Op {
     /// Makes an array equal to `array`, but with `value` at `index`.
     Store,
 
+    /// IR array representation
+    Array,
+
     /// Assemble n things into a tuple
     Tuple,
     /// Get the n'th element of a tuple
@@ -252,6 +255,7 @@ impl Op {
             Op::UbvToPf(_) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
+            Op::Array => None,
             Op::Tuple => None,
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
@@ -296,6 +300,7 @@ impl Display for Op {
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
+            Op::Array => write!(f, "array"),
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),
@@ -785,6 +790,16 @@ impl Array {
     pub fn select(&self, idx: &Value) -> Value {
         self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
+    }
+
+    /// to_terms
+    pub fn to_terms(&self) -> Vec<Term> {
+        let mut ret = Vec::new();
+        for i in 0..self.size {
+            let r = self.map.get(bv_lit(i, 32).as_value_opt().unwrap()).unwrap_or(&*self.default).clone();
+            ret.push(leaf_term(Op::Const(r)));
+        }
+        return ret;
     }
 }
 

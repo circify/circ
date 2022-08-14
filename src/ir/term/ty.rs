@@ -58,6 +58,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::UbvToPf(_) => Vec::new(),
         Op::Select => vec![t.cs[0].clone()],
         Op::Store => vec![t.cs[0].clone()],
+        Op::Array => vec![t.cs[0].clone()],
         Op::Tuple => t.cs.clone(),
         Op::Field(_) => vec![t.cs[0].clone()],
         Op::Update(_i) => vec![t.cs[0].clone()],

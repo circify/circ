@@ -1,13 +1,11 @@
-void bar(int *x){
-  x[0] += 1;
-  x[1] += 1;
+int foo(int* x){
+  int ret = 0;
+  for(int i = 0; i < 4; i++){
+    ret += x[i];
+  }
+  return ret;
 }
 
-void foo(int* x){
-  bar(x);
-}
-
-int main(__attribute__((private(0))) int a[2], __attribute__((private(1))) int b[2]) { 
-  foo(a);
-  return a[0] + b[0];
+int main(__attribute__((private(0))) int a[4], __attribute__((private(1))) int b) { 
+  return foo(a) + b;
 }
