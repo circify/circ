@@ -67,5 +67,7 @@ impl RewritePass for ConstIndexer {
 /// Binarize (expand) n-ary terms.
 pub fn cindex(c: &mut Computation) {
     let mut pass = ConstIndexer;
+    println!("Before cindex");
     pass.traverse(c);
+    println!("After cindex");
 }

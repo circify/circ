@@ -130,10 +130,9 @@ pub enum Op {
     ///
     /// Makes an array equal to `array`, but with `value` at `index`.
     Store,
-
     /// IR array representation
     Array,
-
+    
     /// Assemble n things into a tuple
     Tuple,
     /// Get the n'th element of a tuple

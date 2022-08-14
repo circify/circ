@@ -1172,7 +1172,6 @@ impl CGen {
             .enter_fn(f.name.to_owned(), Some(f.ret_ty.clone()));
 
         for param in f.params.iter() {
-            println!("param: {}", param.name);
             let r = self
                 .circ
                 .declare_input(param.name.clone(), &param.ty, param.vis, None, true);
