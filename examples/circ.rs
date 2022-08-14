@@ -266,7 +266,7 @@ fn main() {
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Ite,
-                    Opt::ConstantIndex,
+                    // Opt::ConstantIndex,
                     // Inline Function Calls
                     // Opt::Link,
                     Opt::Tuple,

@@ -1,6 +1,6 @@
 //! The stack-allocation memory manager
 
-use crate::ir::term::*;
+use crate::ir::{term::*, opt::cfold::fold};
 use std::collections::HashMap;
 
 /// Identifier for an Allocation block in memory
@@ -85,11 +85,14 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        self.allocate(term![Op::Const(Value::Array(Array::default(
+        let const_array_value = Value::Array(Array::default(
             Sort::BitVector(addr_width),
             &Sort::BitVector(val_width),
             size
-        )))])
+        ));
+        // rewrite to array term
+        let array_term = term(Op::Array, const_array_value.as_array().to_terms());
+        self.allocate(array_term)
     }
 
     /// Load the value of index `offset` from the allocation `id`.
@@ -104,10 +107,29 @@ impl MemManager {
         let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
         assert_eq!(alloc.addr_width, check(&offset).as_bv());
         assert_eq!(alloc.val_width, check(&val).as_bv());
-        let old = alloc.cur_term.clone();
-        let new = term![Op::Store; alloc.var().clone(), offset, val];
-        let ite_store = term![Op::Ite; cond, new, old];
-        alloc.cur_term = ite_store;
+
+        if fold(&offset, &[]).is_const() {
+            if let Value::BitVector(b) = offset.as_value_opt().unwrap() {
+                match &alloc.var().op {
+                    Op::Array => {
+                        let mut array_terms = alloc.var().cs.clone();
+                        array_terms[b.as_sint().to_usize().unwrap()] = val;
+                        alloc.cur_term = term(Op::Array, array_terms)
+                    }   
+                    _ => {
+                        let old = alloc.cur_term.clone();
+                        let new = term![Op::Store; alloc.var().clone(), offset, val];
+                        let ite_store = term![Op::Ite; cond, new, old];
+                        alloc.cur_term = ite_store;
+                    }
+                }
+            } else {
+                let old = alloc.cur_term.clone();
+                let new = term![Op::Store; alloc.var().clone(), offset, val];
+                let ite_store = term![Op::Ite; cond, new, old];
+                alloc.cur_term = ite_store;
+            }
+        }
     }
 
     /// Replace the stored term in the allocation `id` with the value `val`.

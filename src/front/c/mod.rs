@@ -1261,7 +1261,7 @@ impl CGen {
 
             // typecheck return Tuple
             let ret = term(Op::Tuple, ret_terms);
-            check_rec(&ret);
+            // check_rec(&ret);
             self.circ.cir_ctx().cs.borrow_mut().outputs.push(ret);
         }
     }
