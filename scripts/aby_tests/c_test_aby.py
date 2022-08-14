@@ -30,11 +30,10 @@ if __name__ == "__main__":
         mnist_tests + \
         cryptonets_tests + \
         histogram_tests + \
-        gcd_tests + \
-        psi_tests
+        gcd_tests
+      
 
     # tests = ts
-
     # tests = biomatch_tests
 
     # TODO: add support unsigned + int promotion
