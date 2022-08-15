@@ -24,6 +24,18 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
 }
 
+function mpc_test_glp_lan  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "smart_glp"
+}
+
+function mpc_test_glp_wan  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical_wan" --selection-scheme "smart_glp"
+}
+
 function mpc_test_css {
     parties=$1
     cpath=$2
@@ -91,7 +103,7 @@ function mpc_test_9  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --num-parts 96 --mut-level 2 --mut-step-size 1 --graph-type 0
 }
 
-mpc_test_css 2 ./examples/C/mpc/playground.c
+# mpc_test_css 2 ./examples/C/mpc/playground.c
 
 # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
@@ -173,23 +185,23 @@ mpc_test_css 2 ./examples/C/mpc/playground.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
-# # build hycc benchmarks
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join2.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_16.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main_16.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets_16.c
+# build hycc benchmarks
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/db/db_join.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 
 # # build OPA benchmarks
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/gcd/gcd.c
-# mpc_test_2 2 ./examples/C/mpc/benchmarks/psi/psi.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/gcd/gcd.c
+mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/psi/psi.c
 
 
 # # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
