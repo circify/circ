@@ -89,10 +89,6 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
         let share = smap.get_mut(&node).unwrap();
         trunc_smap.insert(node, *share);
     }
-    println!(
-        "LOG: Assignment cost of partition: {}",
-        calculate_node_cost(&trunc_smap, &costs)
-    );
     trunc_smap
 }
 
@@ -130,10 +126,6 @@ pub fn assign_mut_smart(
         let share = smap.get_mut(&node).unwrap();
         trunc_smap.insert(node, *share);
     }
-    println!(
-        "LOG: Assignment cost of partition: {}",
-        calculate_node_cost(&trunc_smap, &costs)
-    );
     trunc_smap
 }
 
@@ -1117,45 +1109,8 @@ pub fn calculate_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
     cost
 }
 
-/// Calculate the cost of a global assignment
-pub fn calculate_node_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
-    let mut cost: f64 = 0.0;
-    for (t, to_ty) in smap {
-        match &t.op {
-            Op::Var(..)
-            | Op::Const(_)
-            | Op::BvConcat
-            | Op::BvExtract(..)
-            | Op::BoolToBv
-            | Op::BvBit(_) => {
-                cost = cost + 0.0;
-            }
-            _ => {
-                cost = cost + costs.get(&t.op).unwrap().get(to_ty).unwrap();
-            }
-        }
-    }
-    cost
-}
 
-/// Calculate the cost of a global assignment
-pub fn calculate_conv_cost(smap: &SharingMap, costs: &CostModel) -> f64 {
-    let mut cost: f64 = 0.0;
-    let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
-    for (t, to_ty) in smap {
-        for arg_t in &t.cs {
-            if smap.contains_key(&arg_t) {
-                let from_ty = smap.get(&arg_t).unwrap();
-                if from_ty != to_ty {
-                    let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
-                    conv_cost.insert((arg_t.clone(), *to_ty), *c);
-                }
-            }
-        }
-    }
-    cost = cost + conv_cost.values().fold(0.0, |acc, &x| acc + x);
-    cost
-}
+
 
 #[cfg(test)]
 mod tests {
