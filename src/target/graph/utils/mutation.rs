@@ -88,18 +88,21 @@ fn mutate_partitions_mp_step_smart(
     // TODO: merge and stop
     let mut mut_smaps: HashMap<usize, HashMap<usize, SharingMap>> = HashMap::new();
 
-    let mut mut_sets: HashMap<(usize, usize), (DefUsesSubGraph, DefUsesSubGraph)> = HashMap::new();
+    let mut mut_sets: HashMap<(usize, usize), (DefUsesSubGraph, TermSet)> = HashMap::new();
 
     for (i, du) in dusg.iter() {
         mut_smaps.insert(*i, HashMap::new());
+        mut_sets.insert((*i, 0), (du.clone(), du.nodes.clone()));
+        let mut old_du = du.clone();
         for j in 0..outer_level {
-            let outer_tmp = extend_dusg(du, dug, j);
-            mut_sets.insert((*i, j), (outer_tmp.clone(), du.clone()));
+            old_du = extend_dusg(&old_du, dug);
+            mut_sets.insert((*i, j), (old_du.clone(), du.nodes.clone()));
         }
     }
 
     let mut children = vec![];
     let _cm = cm.to_string();
+
 
     for ((i, j), (du, du_ref)) in mut_sets.iter() {
         let costm = _cm.clone();

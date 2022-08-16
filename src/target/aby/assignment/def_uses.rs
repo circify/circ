@@ -214,24 +214,21 @@ impl DefUsesSubGraph {
 }
 
 /// Extend current dug to outer n level
-pub fn extend_dusg(dusg: &DefUsesSubGraph, dug: &DefUsesGraph, n: usize) -> DefUsesSubGraph {
-    let mut old_g: DefUsesSubGraph = dusg.clone();
+pub fn extend_dusg(dusg: &DefUsesSubGraph, dug: &DefUsesGraph) -> DefUsesSubGraph {
     let mut new_g: DefUsesSubGraph = DefUsesSubGraph::new();
-    for _ in 0..n {
-        for t in old_g.nodes.iter() {
-            new_g.insert_node(t);
-            for u in dug.def_uses.get(t).unwrap().iter() {
-                new_g.insert_node(u);
-            }
-            for d in dug.use_defs.get(t).unwrap().iter() {
-                new_g.insert_node(d);
-            }
+    new_g.nodes = dusg.nodes.clone();
+    for t in dusg.ins.iter(){
+        for d in dug.use_defs.get(t).unwrap().iter() {
+            new_g.insert_node(d);
         }
-        old_g = new_g;
-        new_g = DefUsesSubGraph::new();
     }
-    old_g.insert_edges(dug);
-    old_g
+    for t in dusg.outs.iter(){
+        for u in dug.def_uses.get(t).unwrap().iter() {
+            new_g.insert_node(u);
+        }
+    }
+    new_g.insert_edges(dug);
+    new_g
 }
 
 

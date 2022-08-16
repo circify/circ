@@ -96,7 +96,7 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
 pub fn assign_mut_smart(
     dusg: &DefUsesSubGraph,
     cm: &str,
-    dusg_ref: &DefUsesSubGraph,
+    dusg_ref: &TermSet,
 ) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
@@ -122,9 +122,9 @@ pub fn assign_mut_smart(
         cnt = cnt + 1;
     }
     let mut trunc_smap = TermMap::new();
-    for node in dusg_ref.nodes.clone() {
+    for node in dusg_ref.iter() {
         let share = smap.get_mut(&node).unwrap();
-        trunc_smap.insert(node, *share);
+        trunc_smap.insert(node.clone(), *share);
     }
     trunc_smap
 }

@@ -21,7 +21,7 @@ esac
 function mpc_test {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "smart_lp" --part-size 8000 --mut-level 2 --mut-step-size 1 --graph-type 0
 }
 
 function mpc_test_glp_lan  {
@@ -186,22 +186,22 @@ function mpc_test_9  {
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
 # build hycc benchmarks
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/db/db_join.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/db/db_join2.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+mpc_test 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
+mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+mpc_test 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
+mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
+mpc_test 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 
 # # build OPA benchmarks
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/gcd/gcd.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/psi/psi.c
+mpc_test 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
+mpc_test 2 ./examples/C/mpc/benchmarks/gcd/gcd.c
+mpc_test 2 ./examples/C/mpc/benchmarks/psi/psi.c
 
 
 # # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c

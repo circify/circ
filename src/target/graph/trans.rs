@@ -267,10 +267,14 @@ pub fn partition_with_mut_smart(
             }
         }
 
+        println!("Finish inserting terms");
+
         for (part_id, mut du) in tmp_dusg.into_iter() {
             du.insert_edges(&d);
             dusg.insert(part_id, du.clone());
         }
+
+        println!("Finish inserting edges");
         
         assignment = get_share_map_with_mutation_smart(&d, cm, &dusg, &partition, ml, mss);
         println!("LOG: ILP time: {:?}", now.elapsed());

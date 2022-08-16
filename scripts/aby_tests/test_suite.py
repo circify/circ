@@ -607,11 +607,11 @@ db_tests = [
         "db_join2",
         "./scripts/aby_tests/test_inputs/join2.txt",
     ],
-    # [
-    #     "db merge",
-    #     "db_merge",
-    #     "./scripts/aby_tests/test_inputs/merge.txt",
-    # ],
+    [
+        "db merge",
+        "db_merge",
+        "./scripts/aby_tests/test_inputs/merge.txt",
+    ],
 ]
 
 benchmark_tests = [
@@ -658,9 +658,9 @@ benchmark_tests = [
 ]
 mnist_tests = [
     [
-        "mnist 16x16",
-        "mnist_16",
-        "./scripts/aby_tests/test_inputs/mnist_16.txt",
+        "mnist",
+        "mnist",
+        "./scripts/aby_tests/test_inputs/mnist.txt",
     ],
     # [
     #     "mnist decomp main 16",
@@ -676,9 +676,9 @@ mnist_tests = [
 
 cryptonets_tests = [
     [
-        "cryptonets 16x16",
-        "cryptonets_16",
-        "./scripts/aby_tests/test_inputs/cryptonets_16.txt",
+        "cryptonets",
+        "cryptonets",
+        "./scripts/aby_tests/test_inputs/cryptonets_28.txt",
     ]
 ]
 
