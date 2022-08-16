@@ -24,6 +24,12 @@ function mpc_test {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "smart_lp" --part-size 8000 --mut-level 2 --mut-step-size 1 --graph-type 0
 }
 
+function mpc_test_wan {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical_wan" --selection-scheme "smart_lp" --part-size 8000 --mut-level 2 --mut-step-size 1 --graph-type 0
+}
+
 function mpc_test_glp_lan  {
     parties=$1
     cpath=$2
@@ -39,7 +45,13 @@ function mpc_test_glp_wan  {
 function mpc_test_css {
     parties=$1
     cpath=$2
-    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "css" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "css" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
+}
+
+function mpc_test_css_wan {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical_wan" --selection-scheme "css" --part-size 3000 --mut-level 4 --mut-step-size 1 --graph-type 0
 }
 
 function mpc_test_2  {
