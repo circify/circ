@@ -1,4 +1,4 @@
-#define N 512
+#define N 256
 #define K 4 // currently fixed, do not change
 
 #define INNER 64
