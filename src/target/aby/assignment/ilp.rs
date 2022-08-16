@@ -48,6 +48,7 @@ pub fn assign(c: &ComputationSubgraph, cm: &str) -> SharingMap {
         "opa" => "opa",
         "hycc" => "hycc",
         "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -65,6 +66,7 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
         "opa" => "opa",
         "hycc" => "hycc",
         "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -102,6 +104,7 @@ pub fn assign_mut_smart(
         "opa" => "opa",
         "hycc" => "hycc",
         "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -139,6 +142,7 @@ pub fn smart_global_assign(
         "opa" => "opa",
         "hycc" => "hycc",
         "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -481,6 +485,7 @@ pub fn comb_selection(
         "opa" => "opa",
         "hycc" => "hycc",
         "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
@@ -728,6 +733,7 @@ pub fn comb_selection_smart(
         "opa" => "opa",
         "hycc" => "hycc",
         "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
