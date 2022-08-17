@@ -334,7 +334,7 @@ void decomposed_relu_3(DT *in, DT *OUTPUT_res) {
             copy[j] = (in+i*1)[j];
         }
 		// relu_map(in, im_res, SIZE_CONVOLUTION_2);
-        relu_map_3(in, im_res);
+        relu_map_3(copy, im_res);
 		// memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
         for (int j = 0; j < 1; j++) {
             (OUTPUT_res + i*1)[j] = im_res[j];
@@ -358,7 +358,7 @@ void decomposed_relu_2(DT *in, DT *OUTPUT_res) {
             copy[j] = (in+i*SIZE_CONVOLUTION_2)[j];
         }
 		// relu_map(in, im_res, SIZE_CONVOLUTION_2);
-        relu_map_2(in, im_res);
+        relu_map_2(copy, im_res);
 		// memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
         for (int j = 0; j < SIZE_CONVOLUTION_2; j++) {
             (OUTPUT_res + i*SIZE_CONVOLUTION_2)[j] = im_res[j];
@@ -381,7 +381,7 @@ void decomposed_relu_1(DT *in, DT *OUTPUT_res) {
             copy[j] = (in+i*SIZE_CONVOLUTION_1)[j];
         }
 		// relu_map(in, im_res, SIZE_CONVOLUTION_1);
-        relu_map_1(in, im_res);
+        relu_map_1(copy, im_res);
 		// memcpy(OUTPUT_res + i*len_inner, im_res, len_inner*sizeof(DT));
         for (int j = 0; j < SIZE_CONVOLUTION_1; j++) {
             (OUTPUT_res + i*SIZE_CONVOLUTION_1)[j] = im_res[j];
