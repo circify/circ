@@ -1103,6 +1103,7 @@ pub fn calculate_cost_smart_dug(smap: &SharingMap, cm: &str, dug: &DefUsesGraph)
         "hycc" => "hycc",
         "empirical" => "empirical",
         "empirical_wan" => "empirical_wan",
+        "synth" => "synthetic",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(
