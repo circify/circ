@@ -96,6 +96,7 @@ fn mutate_partitions_mp_step_smart(
         let mut old_du = du.clone();
         for j in 0..outer_level {
             old_du = extend_dusg(&old_du, dug);
+            println!("Mutation {} for partition {}: {}", i, j, old_du.nodes.len());
             mut_sets.insert((*i, j), (old_du.clone(), du.nodes.clone()));
         }
     }

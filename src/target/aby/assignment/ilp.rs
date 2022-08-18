@@ -178,13 +178,14 @@ fn build_smart_ilp(
                 for ty in &SHARE_TYPES {
                     let name = format!("t_{}_{}", i, ty.char());
                     let v = ilp.new_variable(variable().binary(), name.clone());
-                    if *ty == ShareType::Arithmetic {
-                        term_vars.insert((t.clone(), *ty), (v, 0.1, name));
-                    } else if *ty == ShareType::Boolean{
-                        term_vars.insert((t.clone(), *ty), (v, 0.12, name));
-                    } else{
-                        term_vars.insert((t.clone(), *ty), (v, 0.11, name));
-                    }
+                    // if *ty == ShareType::Arithmetic {
+                    //     term_vars.insert((t.clone(), *ty), (v, 0.1, name));
+                    // } else if *ty == ShareType::Boolean{
+                    //     term_vars.insert((t.clone(), *ty), (v, 0.12, name));
+                    // } else{
+                    //     term_vars.insert((t.clone(), *ty), (v, 0.11, name));
+                    // }
+                    term_vars.insert((t.clone(), *ty), (v, 0.0, name));
                     vars.push(v);
                 }
             }
@@ -1080,7 +1081,54 @@ pub fn calculate_cost_smart(smap: &SharingMap, costs: &CostModel, dusg: &DefUses
                 if from_ty != to_ty {
                     // todo fix the calculation heres
                     let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
-                    conv_cost.insert((arg_t.clone(), *to_ty), *c);
+                    conv_cost.insert((t.clone(), *from_ty), *c);
+                }
+            }
+        }
+    }
+    cost = cost + conv_cost.values().fold(0.0, |acc, &x| acc + x);
+    cost
+}
+
+/// Calculate the cost of a global assignment
+pub fn calculate_cost_smart_dug(smap: &SharingMap, cm: &str, dug: &DefUsesGraph) -> f64 {
+    let base_dir = match cm {
+        "opa" => "opa",
+        "hycc" => "hycc",
+        "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
+        _ => panic!("Unknown cost model type: {}", cm),
+    };
+    let p = format!(
+        "{}/third_party/{}/adapted_costs.json",
+        var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
+        base_dir
+    );
+    let costs = CostModel::from_opa_cost_file(&p);
+    let mut cost: f64 = 0.0;
+    let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
+    for (t, to_ty) in smap {
+        match &t.op {
+            Op::Var(..)
+            | Op::Const(_)
+            | Op::BvConcat
+            | Op::BvExtract(..)
+            | Op::BoolToBv
+            | Op::BvBit(_) => {
+                cost = cost + 0.0;
+            }
+            _ => {
+                // println!("op: {}", t.op);
+                cost = cost + costs.get(&t.op).unwrap().get(to_ty).unwrap();
+            }
+        }
+        for arg_t in dug.def_uses.get(t).unwrap().iter() {
+            if smap.contains_key(&arg_t) {
+                let from_ty = smap.get(&arg_t).unwrap();
+                if from_ty != to_ty {
+                    // todo fix the calculation heres
+                    let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
+                    conv_cost.insert((t.clone(), *from_ty), *c);
                 }
             }
         }

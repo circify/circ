@@ -4,6 +4,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::smart_global_assign;
+use crate::target::aby::assignment::ilp::calculate_cost_smart_dug;
 use crate::target::graph::mlp::*;
 use crate::target::graph::tp::*;
 #[cfg(feature = "lp")]
@@ -280,6 +281,8 @@ pub fn partition_with_mut_smart(
         println!("LOG: ILP time: {:?}", now.elapsed());
     }
 
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &d));
+
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);
     let mut fs = Functions::new();
@@ -329,6 +332,8 @@ pub fn inline_all_and_assign_smart_glp(
 
     now = Instant::now();
     let assignment = smart_global_assign(&dug.good_terms, &dug.def_use, cm);
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
+
     println!("LOG: ILP time: {:?}", now.elapsed());
 
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
