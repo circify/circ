@@ -5,16 +5,10 @@
 #define NUM_BUCKETS (INTERVALS * 5) - 1
 #define TOTAL_REV (NUM_REVIEWERS * NUM_RATINGS)
 
-
-/* returns val/mod, integer division */
-// int quot(int val, int mod) {
-//     if (mod == 0){
-//         return val;
-//     } else{
-//         int rem = val % mod;
-//         return (val - rem) / mod;
-//     }
-// }
+typedef struct
+{
+	int result[NUM_BUCKETS];
+} Output;
 
 int map(int sumRatings) {
 
@@ -25,6 +19,8 @@ int map(int sumRatings) {
 
     int absReview = val / mod;
     int fraction = val % mod;
+    // int absReview = 2;
+    // int fraction = 3;
 
     int m = INTERVALS * (absReview - 1);
     int num = fraction * INTERVALS;
@@ -61,34 +57,26 @@ int map(int sumRatings) {
     return bucket;
 }
 
-void mpc_main()
+Output main(__attribute__((private(0))) int reviews[TOTAL_REV], __attribute__((private(1))) int offset)
 {
-    int INPUT_reviews[TOTAL_REV];
-    int INPUT_offset;
-    int result[NUM_BUCKETS];
-    for(int i = 0; i < NUM_BUCKETS; i ++){
-        result[i] = 0;
-    }
+    Output res;
+
     for (int i = 0; i < NUM_REVIEWERS; i++) {
         int sum = 0;
         for (int j = 0; j < NUM_RATINGS; j++) {
-            sum = sum + INPUT_reviews[i*NUM_RATINGS + j];
+            sum = sum + reviews[i*NUM_RATINGS + j];
         }
         int bucket = map(sum);
         for (int j = 0; j < NUM_BUCKETS; j++) {
             int temp;
             if (j == bucket) {
-                temp = result[j] + 1;
+                temp = res.result[j] + 1;
             }
             else {
-                temp = result[j];
+                temp = res.result[j];
             }
-            result[j] = temp;
+            res.result[j] = temp;
         }
     }
-    int sum_all = INPUT_offset;
-    for(int i = 0; i < NUM_BUCKETS; i++){
-        sum_all = sum_all + result[i];
-    }
-    int OUTPUT_res = sum_all;
+    return res;
 }
