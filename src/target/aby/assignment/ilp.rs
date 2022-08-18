@@ -178,7 +178,13 @@ fn build_smart_ilp(
                 for ty in &SHARE_TYPES {
                     let name = format!("t_{}_{}", i, ty.char());
                     let v = ilp.new_variable(variable().binary(), name.clone());
-                    term_vars.insert((t.clone(), *ty), (v, 0.1, name));
+                    if *ty == ShareType::Arithmetic {
+                        term_vars.insert((t.clone(), *ty), (v, 0.1, name));
+                    } else if *ty == ShareType::Boolean{
+                        term_vars.insert((t.clone(), *ty), (v, 0.12, name));
+                    } else{
+                        term_vars.insert((t.clone(), *ty), (v, 0.11, name));
+                    }
                     vars.push(v);
                 }
             }
@@ -207,6 +213,7 @@ fn build_smart_ilp(
     // build variables for all conversions assignments
     for (def, use_) in def_uses {
         // println!("def op: {}", def.op);
+        // println!("use op: {}", use_.op);
         let def_i = terms.get(def).unwrap();
         for from_ty in &SHARE_TYPES {
             for to_ty in &SHARE_TYPES {

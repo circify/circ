@@ -79,10 +79,11 @@ pub struct CallSiteSimilarity {
     callee_caller: HashSet<(String, String)>,
     func_to_cs: HashMap<String, HashMap<usize, CallSite>>,
     dup_per_func: HashMap<String, usize>,
+    ml: usize,
 }
 
 impl CallSiteSimilarity {
-    pub fn new(fs: &Functions) -> Self {
+    pub fn new(fs: &Functions, ml:&usize) -> Self {
         let mut css = Self {
             fs: fs.clone(),
             dugs: HashMap::new(),
@@ -91,6 +92,7 @@ impl CallSiteSimilarity {
             callee_caller: HashSet::new(),
             func_to_cs: HashMap::new(),
             dup_per_func: HashMap::new(),
+            ml: ml.clone(),
         };
         css
     }
@@ -104,7 +106,7 @@ impl CallSiteSimilarity {
                 }
             }
             println!("Building dug for {}", fname);
-            let mut dug = DefUsesGraph::for_call_site(&c, &self.dugs);
+            let mut dug = DefUsesGraph::for_call_site(&c, &self.dugs, fname);
             dug.gen_in_out(&c);
             let cs: Vec<(
                 String,
@@ -163,10 +165,8 @@ impl CallSiteSimilarity {
             self.dup_per_func.insert(key.0.clone(), call_id + 1);
             let id_to_cs = self.func_to_cs.get_mut(&key.0).unwrap();
             id_to_cs.insert(call_id, cs.clone());
-            // println!("CS: {:?}: {}", key, cs.calls.len());
         }
 
-        // todo!("Testing");
 
         // Generating rewriting set
         for (callee, caller) in self.callee_caller.iter() {
@@ -181,6 +181,7 @@ impl CallSiteSimilarity {
             &duplicated_f,
             &call_map,
             &self.func_to_cs,
+            self.ml,
         )
     }
 }
@@ -366,7 +367,7 @@ fn traverse(fs: &Functions, fname: &String, dugs: &mut HashMap<String, DefUsesGr
                 traverse(fs, callee, dugs);
             }
         }
-        let mut dug = DefUsesGraph::for_call_site(&c, dugs);
+        let mut dug = DefUsesGraph::for_call_site(&c, dugs, fname);
         dug.gen_in_out(&c);
         dugs.insert(fname.clone(), dug);
     }
@@ -378,6 +379,7 @@ fn remap(
     duplicate_set: &HashSet<String>,
     call_map: &TermMap<usize>,
     func_to_cs: &HashMap<String, HashMap<usize, CallSite>>,
+    ml: usize,
 ) -> (Functions, HashMap<String, DefUsesGraph>) {
     let mut n_fs = Functions::new();
     let mut n_dugs: HashMap<String, DefUsesGraph> = HashMap::new();
@@ -403,6 +405,9 @@ fn remap(
                 context_map.insert(new_n, cs.clone());
             }
         } else {
+            if let Some(cs) = id_to_cs.get(&0){
+                context_map.insert(fname.clone(), cs.clone());
+            }
             n_fs.insert(fname.clone(), ncomp);
         }
     }
@@ -412,14 +417,23 @@ fn remap(
     for (fname, cs) in context_map.iter() {
         let mut dug = n_dugs.get_mut(fname).unwrap();
         let comp = n_fs.get_comp(fname).unwrap();
-        dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, comp, 1);
+        dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, comp, ml);
     }
+    // let fname = "activate_sqr".to_string();
+    // let mut dug = n_dugs.get_mut(&fname).unwrap();
+    // let cs = context_map.get(&fname).unwrap();
+    // let comp = n_fs.get_comp(&fname).unwrap();
+    // dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, comp, ml);
+
+    
 
     // HASKSKKKKK
     // let mut fck_fs = Functions::new();
-    // let main = "relu_map_3".to_string();
+    // let main = "activate_sqr".to_string();
     // let main_comp = n_fs.get_comp(&main).unwrap().clone();
     // fck_fs.insert(main, main_comp);
+
+    // todo!("Testing");
 
     // Contrusct the dugs after wards
     // Check graph

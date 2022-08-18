@@ -256,6 +256,8 @@ pub struct DefUsesGraph {
     cache_t: Term,
     cache_terms: Vec<(Term, usize)>,
     cache_flag: bool,
+    is_main: bool,
+    var_used: TermMap<TermSet>,
 }
 
 impl DefUsesGraph {
@@ -281,6 +283,8 @@ impl DefUsesGraph {
             cache_t: leaf_term(Op::Eq),
             cache_terms: Vec::new(),
             cache_flag: false,
+            is_main: true,
+            var_used: TermMap::new(),
         };
         println!("Entering Def Use Graph:");
         dug.construct_def_use(c);
@@ -289,7 +293,7 @@ impl DefUsesGraph {
         dug
     }
 
-    pub fn for_call_site(c: &Computation, dugs: &HashMap<String, DefUsesGraph>) -> Self {
+    pub fn for_call_site(c: &Computation, dugs: &HashMap<String, DefUsesGraph>, fname: &String) -> Self {
         let mut now = Instant::now();
         let mut dug = Self {
             // term_to_terms_idx: TermMap::new(),
@@ -311,6 +315,8 @@ impl DefUsesGraph {
             cache_t: leaf_term(Op::Eq),
             cache_terms: Vec::new(),
             cache_flag: false,
+            is_main: fname == "main",
+            var_used: TermMap::new(),
         };
         dug.construct_def_use_with_dugs(c, dugs);
         // moved this after insert context
@@ -401,13 +407,23 @@ impl DefUsesGraph {
         let mut term_to_terms: TermMap<Vec<(Term, usize)>> = TermMap::new();
             for t in PostOrderIterV3::new(c.outputs().clone()) {
                 match &t.op {
+                    Op::Var(..) => {
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        if self.is_main{
+                            self.add_term(&t);
+                        }
+                    }
+                    Op::Const(Value::BitVector(_)) =>{
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        self.add_term(&t);
+                    }
                     Op::Const(Value::Tuple(tup)) => {
                         // now = Instant::now();
                         let mut terms: Vec<(Term, usize)> = Vec::new();
                         for val in tup.iter() {
                             terms.push((leaf_term(Op::Const(val.clone())), 0));
                             self.const_terms.insert(leaf_term(Op::Const(val.clone())));
-                            self.add_term(&leaf_term(Op::Const(val.clone())));
+                            // self.add_term(&leaf_term(Op::Const(val.clone())));
                         }
                         term_to_terms.insert(t.clone(), terms);
                         // t_const += now.elapsed();
@@ -473,7 +489,7 @@ impl DefUsesGraph {
                                 };
                                 terms.push((leaf_term(Op::Const(v.clone())), 0));
                                 self.const_terms.insert(leaf_term(Op::Const(v.clone())));
-                                self.add_term(&leaf_term(Op::Const(v.clone())));
+                                // self.add_term(&leaf_term(Op::Const(v.clone())));
                             }
                         } else {
                             todo!("Const array sort not array????")
@@ -495,12 +511,13 @@ impl DefUsesGraph {
                         } else {
                             self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                             for idx in 0..array_terms.len() {
-                                self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                                // self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                                self.add_def_use(&array_terms[idx].0, &t);
                                 array_terms[idx] = (t.clone(), 0);
                             }
                             self.def_use.insert((value_terms[0].0.clone(), t.clone()));
                             term_to_terms.insert(t.clone(), array_terms);
-                            self.add_term(&t);
+                            // self.add_term(&t);
                         }
                         // t_store += now.elapsed();
                         // n_store +=1;
@@ -514,10 +531,11 @@ impl DefUsesGraph {
                         } else {
                             self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                             for idx in 0..array_terms.len() {
-                                self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                                // self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                                self.add_def_use(&array_terms[idx].0, &t);
                             }
                             term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
-                            self.add_term(&t);
+                            // self.add_term(&t);
                         }
                     }
                     Op::Call(callee, _, _, ret_sorts) => {
@@ -541,14 +559,18 @@ impl DefUsesGraph {
                         for arg in t.cs.clone().iter() {
                             // Inlining callee's use
                             let arg_terms = self.get_and_de_ref(&mut term_to_terms, arg);
-                            for (d, _) in arg_terms.iter() {
-                                let uses = context_args.get(arg_id).unwrap();
-                                for u in uses.iter() {
-                                    // println!("DEF USE: {}, {}", d.op, u.op);
-                                    self.def_use.insert((d.clone(), u.clone()));
-                                    self.add_term(u);
+                            for tu in arg_terms.iter() {
+                                // Ignore terms ret from a call
+                                if !self.call_rets_to_term.contains_key(tu){
+                                    let uses = context_args.get(arg_id).unwrap();
+                                    for u in uses.iter() {
+                                        // println!("DEF USE: {}, {}", d.op, u.op);
+                                        // self.def_use.insert((tu.0.clone(), u.clone()));
+                                        // self.add_term(u);
+                                        self.add_def_use(&tu.0, &u);
+                                    }
+                                    arg_id += 1;
                                 }
-                                arg_id += 1;
                             }
 
                             // Safe call site
@@ -573,7 +595,7 @@ impl DefUsesGraph {
                             .into_iter()
                             .flatten()
                             .map(|ret| {
-                                self.add_term(&ret);
+                                // self.add_term(&ret);
                                 let tu = (ret, idx);
                                 idx += 1;
                                 self.call_rets_to_term.insert(tu.clone(), t.clone());
@@ -607,8 +629,10 @@ impl DefUsesGraph {
                             let f_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[2]);
                             assert_eq!(t_terms.len(), f_terms.len());
                             for idx in 0..t_terms.len() {
-                                self.def_use.insert((t_terms[idx].0.clone(), t.clone()));
-                                self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
+                                // self.def_use.insert((t_terms[idx].0.clone(), t.clone()));
+                                // self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
+                                self.add_def_use(&t_terms[idx].0, &t);
+                                self.add_def_use(&f_terms[idx].0, &t);
                                 t_terms[idx] = (t.clone(), 0);
                             }
                             term_to_terms.insert(t.clone(), t_terms);
@@ -623,15 +647,17 @@ impl DefUsesGraph {
                                     // insert term to ret terms
                                     let rets_t = self.call_rets_terms.get_mut(&call_t).unwrap();
                                     rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
-                                    self.add_term(&terms[0].0);
-                                    self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                    // self.add_term(&terms[0].0);
+                                    // self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                    self.add_def_use(&terms[0].0, &t);
                                 } else {
-                                    self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                    // self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                    self.add_def_use(&terms[0].0, &t);
                                 }
                             }
                             term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
                         }
-                        self.add_term(&t);
+                        // self.add_term(&t);
                     }
                     _ => {
                         for c in t.cs.iter() {
@@ -644,14 +670,16 @@ impl DefUsesGraph {
                                 // insert term to ret terms
                                 let rets_t = self.call_rets_terms.get_mut(&call_t).unwrap();
                                 rets_t.get_mut(terms[0].1).unwrap().push(t.clone());
-                                self.add_term(&terms[0].0);
-                                self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                // self.add_term(&terms[0].0);
+                                // self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                self.add_def_use(&terms[0].0, &t);
                             } else {
-                                self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                // self.def_use.insert((terms[0].0.clone(), t.clone()));
+                                self.add_def_use(&terms[0].0, &t);
                             }
                         }
                         term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
-                        self.add_term(&t);
+                        // self.add_term(&t);
                     }
                 }
             }
@@ -996,81 +1024,103 @@ impl DefUsesGraph {
             for (sname, index) in ssa_names.iter() {
                 let s = callee.metadata.input_sort(&sname).clone();
                 // println!("Def: {}, Use: {}", v.get(*index).unwrap(), leaf_term(Op::Var(sname.clone(), s.clone())));
-                let def_t = v.get(*index).unwrap();
+                let def_t = v.get(*index).unwrap().clone();
                 let use_t = leaf_term(Op::Var(sname.clone(), s));
                 if let Op::Call(..) = def_t.op {
                     continue;
                 }
-                if !self.good_terms.contains(&use_t) {
-                    // println!("FIX: {}", use_t.op);
-                    // This is because the function doesn't use this arg
-                    //todo!("Fix this...");
+                if let Op::Var(..) = def_t.op {
                     continue;
                 }
-                self.add_term(&def_t);
-                self.def_use.insert((def_t.clone(), use_t));
-                input_set.insert(def_t.clone());
+                if let Op::Const(_) = def_t.op {
+                    continue;
+                }
+                // if !self.good_terms.contains(&use_t) {
+                //     // println!("FIX: {}", use_t.op);
+                //     // This is because the function doesn't use this arg
+                //     //todo!("Fix this...");
+                //     continue;
+                // }
+                if let Some(actual_used) = self.var_used.clone().get(&use_t){
+                    for actual_t in actual_used.iter(){
+                        self.add_term(&def_t);
+                        self.def_use.insert((def_t.clone(), actual_t.clone()));
+                        input_set.insert(def_t.clone());
+                    }
+                }
             }
         }
 
         // insert use of rets
         let outs = self.ret_good_terms.clone();
-        // for tt in rets.iter(){
-        //     println!("[");
-        //     for t in tt.iter(){
-        //         println!("rets op: {}", t);
-        //     }
-        //     println!("]");
-        // }
 
-        // println!("=====");
-
-        // for tt in outs.iter(){
-        //     println!("[");
-        //     for t in tt.iter(){
-        //         println!("outs op: {}", t);
-        //     }
-        //     println!("]");
-        // }
         assert_eq!(outs.len(), rets.len());
         for (d, uses) in outs.into_iter().zip(rets) {
             for u in uses.iter() {
+                // TODO: so weird
+                self.add_term(&d);
                 self.add_term(u);
                 self.def_use.insert((d.clone(), u.clone()));
             }
         }
 
         // kind of mutation?
-        for i in 1..extra_level {
-            // insert def of def
-            for def in input_set.clone().iter() {
-                let def_defs = caller_dug.def_uses.get(def).unwrap();
-                for def_def in def_defs.iter() {
-                    self.add_term(def_def);
-                    self.def_use.insert((def_def.clone(), def.clone()));
-                    input_set.insert(def_def.clone());
-                }
-            }
+        // for i in 1..extra_level {
+        //     // insert def of def
+        //     for def in input_set.clone().iter() {
+        //         let def_defs = caller_dug.def_uses.get(def).unwrap();
+        //         for def_def in def_defs.iter() {
+        //             self.add_term(def_def);
+        //             self.def_use.insert((def_def.clone(), def.clone()));
+        //             input_set.insert(def_def.clone());
+        //         }
+        //     }
 
-            // insert use of use
-            for _use in output_set.clone().iter() {
-                let use_uses = caller_dug.def_uses.get(_use).unwrap();
-                for use_use in use_uses.iter() {
-                    self.add_term(use_use);
-                    self.def_use.insert((_use.clone(), use_use.clone()));
-                    input_set.insert(use_use.clone());
-                }
-            }
-        }
+        //     // insert use of use
+        //     for _use in output_set.clone().iter() {
+        //         let use_uses = caller_dug.def_uses.get(_use).unwrap();
+        //         for use_use in use_uses.iter() {
+        //             self.add_term(use_use);
+        //             self.def_use.insert((_use.clone(), use_use.clone()));
+        //             input_set.insert(use_use.clone());
+        //         }
+        //     }
+        // }
         self.construct_mapping();
     }
 
     fn add_term(&mut self, t: &Term) {
-        self.good_terms.insert(t.clone());
-        let defs: FxHashSet<Term> = FxHashSet::default();
-        let uses: FxHashSet<Term> = FxHashSet::default();
-        self.def_uses.insert(t.clone(), uses);
-        self.use_defs.insert(t.clone(), defs);
+        if !self.good_terms.contains(t){
+            self.good_terms.insert(t.clone());
+            let defs: FxHashSet<Term> = FxHashSet::default();
+            let uses: FxHashSet<Term> = FxHashSet::default();
+            self.def_uses.insert(t.clone(), uses);
+            self.use_defs.insert(t.clone(), defs);
+        }
+    }
+
+    fn add_def_use(&mut self, d: &Term, u: & Term){
+        if self.is_main{
+            self.add_term(d);
+            self.add_term(u);
+            self.def_use.insert((d.clone(), u.clone()));
+        } else{
+            if let Op::Var(..) = d.op{
+                self.add_term(u);
+                if self.var_used.contains_key(d){
+                    self.var_used.get_mut(d).unwrap().insert(u.clone());
+                } else{
+                    let mut var_used_set: TermSet = TermSet::new();
+                    var_used_set.insert(u.clone());
+                    self.var_used.insert(d.clone(), var_used_set);
+                }
+                return;
+            } else{
+                self.add_term(d);
+                self.add_term(u);
+                self.def_use.insert((d.clone(), u.clone()));
+            }
+        }
     }
 }
 

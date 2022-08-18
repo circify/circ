@@ -112,12 +112,13 @@ impl<'a> ToABY<'a> {
             curr_comp: "".to_string(),
             inputs: Vec::new(),
             term_to_shares: TermMap::new(),
-            share_cnt: 0,
+            // 0 is used for not used terms
+            share_cnt: 1,
             cache: HashMap::new(),
             bytecode_input: Vec::new(),
             bytecode_output: Vec::new(),
-            const_output: Vec::new(),
-            share_output: Vec::new(),
+            const_output: vec!["2 1 0 32 0 CONS\n".to_string()],
+            share_output: vec!["0 a\n".to_string()],
             term_share_output: Vec::new(),
             const_map: HashMap::new(),
             written_const_set: HashSet::new(),
@@ -196,7 +197,12 @@ impl<'a> ToABY<'a> {
         if let Some(s) = s_map.get(&t) {
             *s
         } else {
-            ShareType::None
+            if let Op::Const(_) = t.op{
+                ShareType::Arithmetic
+            } else{
+                ShareType::None
+            }
+            
         }
     }
 
@@ -741,6 +747,7 @@ impl<'a> ToABY<'a> {
                         // new const
                         let s_map = self.s_map.get(&self.curr_comp).unwrap();
                         if !s_map.contains_key(&v_term) {
+                            shares.push(0);
                             continue;
                         }
                         let s = self.get_share(&v_term);
@@ -760,6 +767,8 @@ impl<'a> ToABY<'a> {
                     }
                 }
 
+                // println!("shares: {:?}", shares);
+                // println!("arr size: {}", arr.size);
                 assert!(shares.len() == arr.size);
                 self.term_to_shares.insert(t.clone(), shares);
             }
@@ -1096,7 +1105,7 @@ pub fn to_aby(
     match ss {
         #[cfg(feature = "lp")]
         "css" => {
-            let mut css = CallSiteSimilarity::new(&ir);
+            let mut css = CallSiteSimilarity::new(&ir, &ml);
             let (fs, dugs) = css.call_site_similarity_smart();
             let s_map = css_partition_with_mut_smart(
                 &fs,
