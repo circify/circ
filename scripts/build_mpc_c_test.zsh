@@ -115,7 +115,14 @@ function mpc_test_9  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "hycc" --selection-scheme "smart_lp" --num-parts 96 --mut-level 2 --mut-step-size 1 --graph-type 0
 }
 
+function mpc_test_10 {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "synth" --selection-scheme "smart_glp"
+}
+
 # mpc_test_css 2 ./examples/C/mpc/playground.c
+mpc_test_10 2 ./examples/C/mpc/microbenchmarks/db_stats.c
 
 # # build mpc arithmetic tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
@@ -197,22 +204,22 @@ function mpc_test_9  {
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
-# build small benchmarks
-mpc_test 2 ./examples/C/mpc/benchmarks/gcd/gcd.c
-mpc_test 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
-mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
-mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
-mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
-mpc_test 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
-mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join2.c
-mpc_test 2 ./examples/C/mpc/benchmarks/db/db_merge.c
-mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
-mpc_test 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+# # build small benchmarks
+# mpc_test 2 ./examples/C/mpc/benchmarks/gcd/gcd.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/histogram/histogram.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss_inline.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join2.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_merge.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_main.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
 
-# build big benchmarks
-mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
-mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
-mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
+# # build big benchmarks
+# mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
 
 
 # # # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
