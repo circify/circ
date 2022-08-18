@@ -30,12 +30,12 @@ int variance_(int * db) {
 Output main(__attribute__((private(0))) int a[INPUT_LEN], __attribute__((private(1))) int b[INPUT_LEN]) {
     Output res;
 
-	int db[LEN*2];
+	int db[LEN];
     for (int i = 0; i < INPUT_LEN; i++) {
         db[i] = a[i];
     }
-    for (int i = INPUT_LEN; i < LEN; i++) {
-        db[i] = b[i];
+    for (int i = 0; i < INPUT_LEN; i++) {
+        db[i+INPUT_LEN] = b[i];
     }
 
     res.mean = mean_(db);
