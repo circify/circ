@@ -35,4 +35,8 @@ c_smt_test examples/C/smt/assert_assume_fails.c yes
 c_smt_test examples/C/smt/assert_assume_ok.c no
 c_smt_test examples/C/smt/assert_fails.c yes
 c_smt_test examples/C/smt/defined_return.c no
-c_smt_test examples/C/smt/overshift.c yes
+c_smt_test examples/C/smt/shl_fails_1.c yes
+c_smt_test examples/C/smt/shl_fails_2.c yes
+c_smt_test examples/C/smt/shl_fails_3.c yes
+c_smt_test examples/C/smt/shl_fails_4.c yes
+c_smt_test examples/C/smt/shl_ok.c no
