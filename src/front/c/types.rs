@@ -103,18 +103,18 @@ impl Ty {
             }
             Self::Bool => CTerm {
                 term: CTermData::Bool(self.default_ir_term()),
-                udef: false,
+                udef: bool_lit(false),
             },
             Self::Int(s, w) => CTerm {
                 term: CTermData::Int(*s, *w, self.default_ir_term()),
-                udef: false,
+                udef: bool_lit(false),
             },
             Self::Array(s, _, ty) => {
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
                     term: CTermData::Array(self.clone(), Some(id)),
-                    udef: false,
+                    udef: bool_lit(false),
                 }
             }
             Self::Ptr(_s, _ty) => {
@@ -127,7 +127,7 @@ impl Ty {
                     .collect();
                 CTerm {
                     term: CTermData::Struct(self.clone(), FieldList::new(fields)),
-                    udef: false,
+                    udef: bool_lit(false),
                 }
             }
         }
@@ -169,10 +169,10 @@ impl Ty {
         }
     }
 
-    pub fn _total_num_bits(&self, ty: Ty) -> usize {
-        match ty {
+    pub fn total_num_bits(&self) -> usize {
+        match self {
             Ty::Void => 0,
-            Ty::Int(_, w) => w,
+            Ty::Int(_, w) => *w,
             Ty::Bool => 1,
             Ty::Array(s, _, t) => s * t.num_bits(),
             Ty::Ptr(s, t) => s * t.num_bits(),

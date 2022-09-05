@@ -4,6 +4,7 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::ilp::assign;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::smart_global_assign;
+#[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::calculate_cost_smart_dug;
 use crate::target::graph::mlp::*;
 use crate::target::graph::tp::*;
