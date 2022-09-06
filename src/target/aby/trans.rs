@@ -1123,19 +1123,30 @@ pub fn to_aby(
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
-        // #[cfg(feature = "lp")]
-        // "gglp" => {
-        //     let (fs, s_map) = inline_all_and_assign_glp(&ir, cm);
-        //     let mut converter = ToABY::new(fs, s_map, path, lang);
-        //     converter.lower();
-        // }
-        // #[cfg(feature = "lp")]
-        // "lp+mut" => {
-        //     let (fs, s_map) =
-        //         partition_with_mut(&ir, cm, path, lang, ps, *hyper == 1, ml, mss, imbalance);
-        //     let mut converter = ToABY::new(fs, s_map, path, lang);
-        //     converter.lower();
-        // }
+        #[cfg(feature = "lp")]
+        "per_func_ilp" => {
+            let mut dugs: HashMap<String, DefUsesGraph> = HashMap::new();
+            for (fname, cs) in ir.computations.iter(){
+                let dug = DefUsesGraph::new(cs);
+                dugs.insert(fname.clone(), dug);
+            }
+            let s_map = css_partition_with_mut_smart(
+                &ir,
+                &dugs,
+                cm,
+                path,
+                lang,
+                ps,
+                *hyper == 1,
+                ml,
+                mss,
+                imbalance,
+            );
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(ir, s_map, path, lang);
+            converter.lower();
+        }
+        
         #[cfg(feature = "lp")]
         "smart_glp" => {
             let (fs, s_map) = inline_all_and_assign_smart_glp(&ir, cm);
