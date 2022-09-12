@@ -34,32 +34,26 @@ impl PreComp {
     }
     /// Retain only the parts of this precomputation that can be evaluated from
     /// the `known` inputs.
-    pub fn restrict_to_inputs(&mut self, mut known: FxHashSet<String>) {
+    pub fn restrict_to_inputs(&mut self, known: FxHashSet<String>) {
         let os = &mut self.outputs;
         let seq = &mut self.sequence;
         let o_tuple = term(Op::Tuple, os.values().cloned().collect());
-        let cache = &mut TermSet::new();
+        let to_remove = &mut TermSet::new();
         for t in PostOrderIter::new(o_tuple) {
             if let Op::Var(ref name, _) = &t.op {
                 if !known.contains(name) {
-                    cache.insert(t);
+                    to_remove.insert(t);
                 }
-                continue;
+            } else if t.cs.iter().any(|c| to_remove.contains(c)) {
+                to_remove.insert(t);
             }
-
-            if t.cs.iter().any(|c| cache.contains(c)) {
-                cache.insert(t);
-            }
-            continue;
         }
 
         seq.retain(|s| {
             let o = os.get(s).unwrap();
-            let drop = cache.contains(o);
+            let drop = to_remove.contains(o);
             if drop {
                 os.remove(s);
-            } else {
-                known.insert(s.clone());
             }
             !drop
         });
@@ -113,9 +107,18 @@ mod test {
     #[test]
     fn restrict_to_inputs() {
         let mut p = PreComp::new();
-        p.add_output("out0".into(), parse_term(b"(declare ((a bool) (b (bv 4))) (and a (= b #b0000)))"));
-        p.add_output("out1".into(), parse_term(b"(declare ((a bool) (b (bv 4))) (xor a true))"));
-        p.add_output("out2".into(), parse_term(b"(declare ((a bool) (b (bv 4))) (bvuge b #b1000))"));
+        p.add_output(
+            "out0".into(),
+            parse_term(b"(declare ((a bool) (b (bv 4))) (and a (= b #b0000)))"),
+        );
+        p.add_output(
+            "out1".into(),
+            parse_term(b"(declare ((a bool) (b (bv 4))) (xor a true))"),
+        );
+        p.add_output(
+            "out2".into(),
+            parse_term(b"(declare ((a bool) (b (bv 4))) (bvuge b #b1000))"),
+        );
 
         let mut p_with_a = p.clone();
         p_with_a.restrict_to_inputs(vec!["a".into()].into_iter().collect());
@@ -133,7 +136,11 @@ mod test {
         assert_eq!(p_both.outputs.len(), 3);
 
         let mut p_extra = p.clone();
-        p_extra.restrict_to_inputs(vec!["a".into(), "b".into(), "c".into()].into_iter().collect());
+        p_extra.restrict_to_inputs(
+            vec!["a".into(), "b".into(), "c".into()]
+                .into_iter()
+                .collect(),
+        );
         assert_eq!(p_extra.sequence, p.sequence);
         assert_eq!(p_extra.outputs.len(), 3);
     }
