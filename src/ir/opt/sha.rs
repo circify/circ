@@ -19,31 +19,30 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                     let l = get(0);
                     let r = get(1);
                     if l.op == r.op && l.op == BV_AND && l.cs.len() == 2 && r.cs.len() == 2 {
-                        let opt_match = if let Some(r_i) =
-                            r.cs.iter()
-                                .position(|r_c| r_c == &term![BV_NOT; l.cs[0].clone()])
-                        {
-                            Some((&l.cs[0], &l.cs[1], &r.cs[1 - r_i]))
-                        } else if let Some(r_i) =
-                            r.cs.iter()
-                                .position(|r_c| r_c == &term![BV_NOT; l.cs[1].clone()])
-                        {
-                            Some((&l.cs[1], &l.cs[0], &r.cs[1 - r_i]))
-                        } else if let Some(l_i) =
-                            l.cs.iter()
-                                .position(|l_c| l_c == &term![BV_NOT; r.cs[0].clone()])
-                        {
-                            Some((&r.cs[0], &r.cs[1], &l.cs[1 - l_i]))
-                        } else if let Some(l_i) =
-                            l.cs.iter()
-                                .position(|l_c| l_c == &term![BV_NOT; r.cs[1].clone()])
-                        {
-                            Some((&r.cs[1], &r.cs[0], &l.cs[1 - l_i]))
-                        } else {
-                            None
-                        };
+                        let opt_match = r
+                            .cs
+                            .iter()
+                            .position(|r_c| r_c == &term![BV_NOT; l.cs[0].clone()])
+                            .map(|r_i| (&l.cs[0], &l.cs[1], &r.cs[1 - r_i]))
+                            .or_else(|| {
+                                r.cs.iter()
+                                    .position(|r_c| r_c == &term![BV_NOT; l.cs[1].clone()])
+                                    .map(|r_i| (&l.cs[1], &l.cs[0], &r.cs[1 - r_i]))
+                                    .or_else(|| {
+                                        l.cs.iter()
+                                            .position(|l_c| l_c == &term![BV_NOT; r.cs[0].clone()])
+                                            .map(|l_i| (&r.cs[0], &r.cs[1], &l.cs[1 - l_i]))
+                                            .or_else(|| {
+                                                l.cs.iter()
+                                                    .position(|l_c| {
+                                                        l_c == &term![BV_NOT; r.cs[1].clone()]
+                                                    })
+                                                    .map(|l_i| (&r.cs[1], &r.cs[0], &l.cs[1 - l_i]))
+                                            })
+                                    })
+                            });
                         if let Some((c, t, f)) = opt_match {
-                            if let Sort::BitVector(w) = check(&t) {
+                            if let Sort::BitVector(w) = check(t) {
                                 debug!("SHA CH");
                                 Some(term(
                                 BV_CONCAT,
