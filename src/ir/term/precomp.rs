@@ -104,3 +104,37 @@ impl PreComp {
         self
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use text::parse_term;
+
+    #[test]
+    fn restrict_to_inputs() {
+        let mut p = PreComp::new();
+        p.add_output("out0".into(), parse_term(b"(declare ((a bool) (b (bv 4))) (and a (= b #b0000)))"));
+        p.add_output("out1".into(), parse_term(b"(declare ((a bool) (b (bv 4))) (xor a true))"));
+        p.add_output("out2".into(), parse_term(b"(declare ((a bool) (b (bv 4))) (bvuge b #b1000))"));
+
+        let mut p_with_a = p.clone();
+        p_with_a.restrict_to_inputs(vec!["a".into()].into_iter().collect());
+        assert_eq!(p_with_a.sequence, vec!["out1"]);
+        assert_eq!(p_with_a.outputs.len(), 1);
+
+        let mut p_with_b = p.clone();
+        p_with_b.restrict_to_inputs(vec!["b".into()].into_iter().collect());
+        assert_eq!(p_with_b.sequence, vec!["out2"]);
+        assert_eq!(p_with_b.outputs.len(), 1);
+
+        let mut p_both = p.clone();
+        p_both.restrict_to_inputs(vec!["a".into(), "b".into()].into_iter().collect());
+        assert_eq!(p_both.sequence, p.sequence);
+        assert_eq!(p_both.outputs.len(), 3);
+
+        let mut p_extra = p.clone();
+        p_extra.restrict_to_inputs(vec!["a".into(), "b".into(), "c".into()].into_iter().collect());
+        assert_eq!(p_extra.sequence, p.sequence);
+        assert_eq!(p_extra.outputs.len(), 3);
+    }
+}
