@@ -595,7 +595,7 @@ impl Embeddable for Ct {
             Ty::Array(n, _, ty) => {
                 assert!(precompute.is_none());
                 let v: Vec<Self::T> = (0..*n)
-                    .map(|i| self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, None))
+                    .map(|i| self.declare_input(ctx, ty, idx_name(&name, i), visibility, None))
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(*n, 32, ty.num_bits());

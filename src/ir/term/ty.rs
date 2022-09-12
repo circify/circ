@@ -520,7 +520,7 @@ fn int_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<&'a Sort, TypeErrorReaso
 
 fn array_or<'a>(a: &'a Sort, ctx: &'static str) -> Result<(&'a Sort, &'a Sort), TypeErrorReason> {
     if let Sort::Array(k, v, _) = a {
-        Ok((&*k, &*v))
+        Ok((k, v))
     } else {
         Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
     }
@@ -531,7 +531,7 @@ fn arrmap_or<'a>(
     ctx: &'static str,
 ) -> Result<(&'a Sort, &'a Sort, &'a usize), TypeErrorReason> {
     if let Sort::Array(k, v, s) = a {
-        Ok((&*k, &*v, &*s))
+        Ok((k, v, s))
     } else {
         Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
     }
