@@ -948,7 +948,7 @@ impl Embeddable for ZSharp {
                 debug_assert_eq!(*n, ps.len());
                 array(
                     ps.into_iter().enumerate().map(|(i, p)| {
-                        self.declare_input(ctx, &*ty, idx_name(&name, i), visibility, p)
+                        self.declare_input(ctx, ty, idx_name(&name, i), visibility, p)
                     }),
                 )
                 .unwrap()
