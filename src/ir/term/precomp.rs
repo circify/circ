@@ -37,15 +37,29 @@ impl PreComp {
     pub fn restrict_to_inputs(&mut self, mut known: FxHashSet<String>) {
         let os = &mut self.outputs;
         let seq = &mut self.sequence;
-        seq.retain(|o| {
-            let term = os.get(o).unwrap();
-            let drop = extras::free_variables(term.clone())
-                .iter()
-                .any(|v| !known.contains(v));
+        let o_tuple = term(Op::Tuple, os.values().cloned().collect());
+        let cache = &mut TermSet::new();
+        for t in PostOrderIter::new(o_tuple) {
+            if let Op::Var(ref name, _) = &t.op {
+                if !known.contains(name) {
+                    cache.insert(t);
+                }
+                continue;
+            }
+
+            if t.cs.iter().any(|c| cache.contains(c)) {
+                cache.insert(t);
+            }
+            continue;
+        }
+
+        seq.retain(|s| {
+            let o = os.get(s).unwrap();
+            let drop = cache.contains(o);
             if drop {
-                os.remove(o);
+                os.remove(s);
             } else {
-                known.insert(o.clone());
+                known.insert(s.clone());
             }
             !drop
         });
