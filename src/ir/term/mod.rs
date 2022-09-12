@@ -744,7 +744,7 @@ pub enum Value {
     Tuple(Box<[Value]>),
 }
 
-#[derive(Clone, PartialEq, Debug, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Hash, Serialize, Deserialize)]
 /// An IR array value.
 ///
 /// A sized, space array.
@@ -1790,7 +1790,7 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
     /// A map from party names to numbers assigned to them.
@@ -1952,7 +1952,7 @@ impl Display for ComputationMetadata {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
