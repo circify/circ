@@ -327,10 +327,10 @@ impl CGen {
             if let Some((_, term_)) = fs.search(field) {
                 Ok(term_.clone())
             } else {
-                return Err(format!("No field '{}'", field));
+                Err(format!("No field '{}'", field))
             }
         } else {
-            return Err(format!("{} is not a struct", struct_));
+            Err(format!("{} is not a struct", struct_))
         }
     }
 
@@ -342,10 +342,10 @@ impl CGen {
                 let res = cterm(CTermData::CStruct(struct_ty.clone(), new_fs.clone()));
                 Ok(res)
             } else {
-                return Err(format!("No field '{}'", field));
+                Err(format!("No field '{}'", field))
             }
         } else {
-            return Err(format!("{} is not a struct", struct_));
+            Err(format!("{} is not a struct", struct_))
         }
     }
 
@@ -509,18 +509,18 @@ impl CGen {
                 self.array_store(old_inner, idx, val)
             }
             CLoc::Member(l, field) => {
-                let inner_loc = &*l.loc();
+                let inner_loc = l.loc().clone();
                 let base = self
                     .circ
                     .get_value(inner_loc.clone())
                     .map_err(|e| format!("{}", e))?
                     .unwrap_term();
                 let old_inner = self.field_select(&base, &field)?;
-                let new_inner = self.rebuild_lval(old_inner, *l.clone(), val)?;
+                let new_inner = self.rebuild_lval(old_inner, *l, val)?;
                 let res = self.field_store(base, &field, new_inner);
                 Ok(self
                     .circ
-                    .assign(inner_loc.clone(), Val::Term(res.unwrap()))
+                    .assign(inner_loc, Val::Term(res.unwrap()))
                     .map_err(|e| format!("{}", e))?
                     .unwrap_term())
             }
