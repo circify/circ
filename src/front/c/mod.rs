@@ -114,7 +114,7 @@ impl CGen {
     }
 
     /// TODO: Refactor with s_type_
-    pub fn d_type_(&mut self, ds: &Vec<Node<DeclarationSpecifier>>) -> Option<Ty> {
+    pub fn d_type_(&mut self, ds: &[Node<DeclarationSpecifier>]) -> Option<Ty> {
         assert!(!ds.is_empty());
         let res: Vec<Option<Ty>> = ds
             .iter()
@@ -126,7 +126,7 @@ impl CGen {
         compress_type(res)
     }
 
-    pub fn s_type_(&mut self, ss: &Vec<Node<SpecifierQualifier>>) -> Option<Ty> {
+    pub fn s_type_(&mut self, ss: &[Node<SpecifierQualifier>]) -> Option<Ty> {
         assert!(!ss.is_empty());
         let res: Vec<Option<Ty>> = ss
             .iter()
@@ -166,12 +166,12 @@ impl CGen {
                     None => "",
                 };
 
-                if self.structs.contains_key(name) && name != "" {
+                if self.structs.contains_key(name) && !name.is_empty() {
                     Some(self.structs.get(name).unwrap().clone())
                 } else {
                     let mut fs: Vec<(String, Ty)> = Vec::new();
                     if let Some(decls) = declarations {
-                        for d in decls.into_iter() {
+                        for d in decls.iter() {
                             match &d.node {
                                 StructDeclaration::Field(f) => {
                                     let mut base_field_type =
@@ -194,7 +194,7 @@ impl CGen {
                         }
                     }
                     let s_ty = Ty::Struct(name.to_string(), FieldList::new(fs));
-                    if name != "" {
+                    if !name.is_empty() {
                         self.structs.insert(name.to_string(), s_ty.clone());
                     }
                     Some(s_ty)
@@ -240,14 +240,14 @@ impl CGen {
     pub fn get_derived_type(
         &mut self,
         base_ty: &mut Ty,
-        derived: &Vec<Node<DerivedDeclarator>>,
+        derived: &[Node<DerivedDeclarator>],
     ) -> Ty {
         if derived.is_empty() {
             return base_ty.clone();
         }
         let derived_ty = base_ty;
         for d in derived.iter().rev() {
-            *derived_ty = self.get_inner_derived_type(&derived_ty, &d.node);
+            *derived_ty = self.get_inner_derived_type(derived_ty, &d.node);
         }
         derived_ty.clone()
     }
@@ -456,7 +456,7 @@ impl CGen {
                         let loc = self.gen_lval(&bin_op.lhs.node);
 
                         // get offset
-                        let index = self.gen_index(&expr);
+                        let index = self.gen_index(expr);
                         let offset = self.index_offset(&index);
                         let idx = cterm(CTermData::CInt(true, 32, offset));
 
@@ -605,13 +605,13 @@ impl CGen {
                         a
                     }
                     _ => IndexTerm {
-                        base: self.gen_expr(&expr),
+                        base: self.gen_expr(expr),
                         indices: Vec::new(),
                     },
                 }
             }
             _ => IndexTerm {
-                base: self.gen_expr(&expr),
+                base: self.gen_expr(expr),
                 indices: Vec::new(),
             },
         }
@@ -663,7 +663,7 @@ impl CGen {
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::Index => {
-                        let index = self.gen_index(&expr);
+                        let index = self.gen_index(expr);
                         let offset = self.index_offset(&index);
                         match index.base.term {
                             CTermData::CArray(ref ty, id) => {
@@ -778,7 +778,7 @@ impl CGen {
                 assert_eq!(parameters.len(), args.len());
 
                 for (p, a) in parameters.iter().zip(args) {
-                    let param_info = self.get_param_info(&p, false);
+                    let param_info = self.get_param_info(p, false);
                     let r = self.circ.declare_init(
                         param_info.name.clone(),
                         param_info.ty,
@@ -808,7 +808,7 @@ impl CGen {
                 } = &member.node;
                 let base = self.gen_expr(&expression.node);
                 let field = &identifier.node.name;
-                self.field_select(&base, &field)
+                self.field_select(&base, field)
             }
             Expression::SizeOf(s) => {
                 let ty = self.s_type_(&s.node.specifiers);
@@ -836,7 +836,7 @@ impl CGen {
                     let inner_type = ty.clone().inner_ty();
                     let flattened_inits = flatten_inits(init);
                     for li in flattened_inits {
-                        let expr = self.gen_init(&inner_type, &li);
+                        let expr = self.gen_init(&inner_type, li);
                         values.push(expr);
                     }
                     assert!(n == values.len());
@@ -877,7 +877,7 @@ impl CGen {
             }
             Vec::new()
         } else {
-            let decl_infos = self.get_decl_info(&decl);
+            let decl_infos = self.get_decl_info(decl);
             let mut exprs: Vec<CTerm> = Vec::new();
             for (d, info) in decl.declarators.iter().zip(decl_infos.iter()) {
                 let expr: CTerm = if let Some(init) = d.node.initializer.clone() {
@@ -1056,7 +1056,7 @@ impl CGen {
         self.circ.enter_fn(f.name.to_owned(), f.ret_ty.clone());
 
         for arg in f.args.iter() {
-            let param_info = self.get_param_info(&arg, true);
+            let param_info = self.get_param_info(arg, true);
             let r = self.circ.declare_input(
                 param_info.name.clone(),
                 &param_info.ty,
