@@ -291,7 +291,7 @@ impl CGen {
         let base_ty: Option<Ty>;
         if v {
             vis = interpret_visibility(&decl.specifiers[0].node, self.mode);
-            base_ty = self.d_type_(&decl.specifiers[1..].to_vec());
+            base_ty = self.d_type_(&decl.specifiers[1..]);
         } else {
             base_ty = self.d_type_(&decl.specifiers);
         }
