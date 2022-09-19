@@ -448,7 +448,8 @@ impl<'src> IrInterp<'src> {
                         assert_eq!(
                             tts.len(),
                             3,
-                            "A decl should have 2 arguments: (let ((v1 s1) ... (vn sn)) t)"
+                            "A decl should have 2 arguments: (declare ((v1 s1) ... (vn sn)) t), found {:#?}",
+                            tts
                         );
                         let bindings = self.decl_list(&tts[1]);
                         let t = self.term(&tts[2]);

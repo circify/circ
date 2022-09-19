@@ -26,7 +26,7 @@ pub mod ast {
         span.as_str()
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::decimal_literal))]
     pub struct DecimalLiteral<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -35,7 +35,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::boolean_literal))]
     pub struct BooleanLiteral<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -44,7 +44,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::hex_literal))]
     pub struct HexLiteral<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -53,7 +53,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::bin_literal))]
     pub struct BinLiteral<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -62,7 +62,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::literal))]
     pub enum Literal<'ast> {
         DecimalLiteral(DecimalLiteral<'ast>),
@@ -82,7 +82,7 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug, PartialEq, FromPest, Clone)]
+    #[derive(Debug, PartialEq, Eq, FromPest, Clone)]
     #[pest_ast(rule(Rule::un_op))]
     pub enum UnaryOperator<'ast> {
         Not(Not<'ast>),
@@ -90,26 +90,26 @@ pub mod ast {
         Neg(Neg<'ast>),
     }
 
-    #[derive(Debug, PartialEq, FromPest, Clone)]
+    #[derive(Debug, PartialEq, Eq, FromPest, Clone)]
     #[pest_ast(rule(Rule::not))]
     pub struct Not<'ast> {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
-    #[derive(Debug, PartialEq, FromPest, Clone)]
+    #[derive(Debug, PartialEq, Eq, FromPest, Clone)]
     #[pest_ast(rule(Rule::bitnot))]
     pub struct BitNot<'ast> {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
-    #[derive(Debug, PartialEq, FromPest, Clone)]
+    #[derive(Debug, PartialEq, Eq, FromPest, Clone)]
     #[pest_ast(rule(Rule::neg))]
     pub struct Neg<'ast> {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, PartialEq, Clone)]
+    #[derive(Debug, PartialEq, Eq, Clone)]
     pub enum BinaryOperator {
         BitXor,
         BitAnd,
@@ -155,7 +155,7 @@ pub mod ast {
         ])
     }
 
-    #[derive(Debug, PartialEq, Clone)]
+    #[derive(Debug, PartialEq, Eq, Clone)]
     pub enum Expression<'ast> {
         Binary(BinaryExpression<'ast>),
         Identifier(Ident<'ast>),
@@ -166,7 +166,7 @@ pub mod ast {
         Paren(Box<Expression<'ast>>, Span<'ast>),
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::identifier))]
     pub struct Ident<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -175,7 +175,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::call_expr))]
     pub struct CallExpression<'ast> {
         pub fn_name: Ident<'ast>,
@@ -184,7 +184,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::access_expr))]
     pub struct AccessExpression<'ast> {
         pub arr: Ident<'ast>,
@@ -193,7 +193,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, PartialEq, Clone)]
+    #[derive(Debug, PartialEq, Eq, Clone)]
     pub struct BinaryExpression<'ast> {
         pub op: BinaryOperator,
         pub left: Box<Expression<'ast>>,
@@ -201,7 +201,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::unary_expression))]
     pub struct UnaryExpression<'ast> {
         pub op: UnaryOperator<'ast>,
@@ -363,7 +363,7 @@ pub mod ast {
         })
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::ty_uint))]
     pub struct TypeUint<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -372,7 +372,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::ty_bool))]
     pub struct TypeBool<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -381,7 +381,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::ty_field))]
     pub struct TypeField<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -390,7 +390,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::base_ty))]
     pub enum BaseType<'ast> {
         Uint(TypeUint<'ast>),
@@ -408,7 +408,7 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::ty))]
     pub struct Type<'ast> {
         pub base: BaseType<'ast>,
@@ -417,7 +417,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::vis_public))]
     pub struct Public<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -426,7 +426,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::vis_private))]
     pub struct Private<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -435,7 +435,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::vis))]
     pub enum Visibility<'ast> {
         Public(Public<'ast>),
@@ -451,7 +451,7 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::qual_ty))]
     pub struct QualType<'ast> {
         pub qualifier: Option<Visibility<'ast>>,
@@ -460,7 +460,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::decl))]
     pub struct Declaration<'ast> {
         pub ident: Ident<'ast>,
@@ -469,7 +469,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::dec))]
     pub struct Decreasing<'ast> {
         #[pest_ast(outer(with(span_into_str)))]
@@ -478,7 +478,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::fn_arg_decl))]
     pub struct ArgDeclaration<'ast> {
         pub dec: Option<Decreasing<'ast>>,
@@ -488,7 +488,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::exist_prefix))]
     pub struct Existential<'ast> {
         pub declarations: Vec<Declaration<'ast>>,
@@ -496,7 +496,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::condition))]
     pub struct Condition<'ast> {
         pub existential: Option<Existential<'ast>>,
@@ -505,7 +505,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::rule))]
     pub struct Rule_<'ast> {
         pub name: Ident<'ast>,
@@ -515,7 +515,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::program))]
     pub struct Program<'ast> {
         pub rules: Vec<Rule_<'ast>>,
@@ -524,7 +524,7 @@ pub mod ast {
         pub span: Span<'ast>,
     }
 
-    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
     #[pest_ast(rule(Rule::EOI))]
     pub struct EOI;
 }

@@ -16,28 +16,50 @@ pub fn sha_rewrites(term_: &Term) -> Term {
             // or: (a & b) ^ (~a & c)
             &BV_OR | &BV_XOR => {
                 if t.cs.len() == 2 {
-                    let a = get(0);
-                    let b = get(1);
-                    if a.op == b.op
-                        && a.op == BV_AND
-                        && b.cs[0].op == BV_NOT
-                        && b.cs[0].cs[0] == a.cs[0]
-                    {
-                        if let Sort::BitVector(w) = check(&t) {
-                            debug!("SHA CH");
-                            Some(term(
+                    let l = get(0);
+                    let r = get(1);
+                    if l.op == r.op && l.op == BV_AND && l.cs.len() == 2 && r.cs.len() == 2 {
+                        let opt_match = r
+                            .cs
+                            .iter()
+                            .position(|r_c| r_c == &term![BV_NOT; l.cs[0].clone()])
+                            .map(|r_i| (&l.cs[0], &l.cs[1], &r.cs[1 - r_i]))
+                            .or_else(|| {
+                                r.cs.iter()
+                                    .position(|r_c| r_c == &term![BV_NOT; l.cs[1].clone()])
+                                    .map(|r_i| (&l.cs[1], &l.cs[0], &r.cs[1 - r_i]))
+                                    .or_else(|| {
+                                        l.cs.iter()
+                                            .position(|l_c| l_c == &term![BV_NOT; r.cs[0].clone()])
+                                            .map(|l_i| (&r.cs[0], &r.cs[1], &l.cs[1 - l_i]))
+                                            .or_else(|| {
+                                                l.cs.iter()
+                                                    .position(|l_c| {
+                                                        l_c == &term![BV_NOT; r.cs[1].clone()]
+                                                    })
+                                                    .map(|l_i| (&r.cs[1], &r.cs[0], &l.cs[1 - l_i]))
+                                            })
+                                    })
+                            });
+                        if let Some((c, t, f)) = opt_match {
+                            if let Sort::BitVector(w) = check(t) {
+                                debug!("SHA CH");
+                                Some(term(
                                 BV_CONCAT,
                                 (0..w)
                                     .map(|i| {
-                                        term![BOOL_TO_BV; term![ITE; term![Op::BvBit(i); a.cs[0].clone()],
-                                                   term![Op::BvBit(i); a.cs[1].clone()],
-                                                   term![Op::BvBit(i); b.cs[1].clone()]]]
+                                        term![BOOL_TO_BV; term![ITE; term![Op::BvBit(i); c.clone()],
+                                                   term![Op::BvBit(i); t.clone()],
+                                                   term![Op::BvBit(i); f.clone()]]]
                                     })
                                     .rev()
                                     .collect(),
                             ))
+                            } else {
+                                unreachable!()
+                            }
                         } else {
-                            unreachable!()
+                            None
                         }
                     } else {
                         None
@@ -134,6 +156,7 @@ mod test {
     use super::*;
     use crate::ir::term::dist::test::*;
     use quickcheck_macros::quickcheck;
+    use text::parse_term;
 
     #[test]
     fn with_or() {
@@ -177,6 +200,35 @@ mod test {
         let tt =
             term![OR; term![AND; a.clone(), b.clone()], term![AND; b, c.clone()], term![AND; c, a]];
         assert_eq!(tt, sha_maj_elim(&t));
+    }
+
+    fn contains_ite(t: &Term) -> bool {
+        PostOrderIter::new(t.clone()).any(|c| c.op == ITE)
+    }
+
+    #[test]
+    fn catch_all_case() {
+        let abc_term_rewrites = |t: &str| -> bool {
+            contains_ite(&sha_rewrites(&parse_term(
+                format!("(declare ((a (bv 4))(b (bv 4))(c (bv 4))) {})", t).as_bytes(),
+            )))
+        };
+        assert!(abc_term_rewrites("(bvor (bvand a b) (bvand (bvnot a) c))"));
+        assert!(abc_term_rewrites("(bvor (bvand b a) (bvand (bvnot a) c))"));
+        assert!(abc_term_rewrites("(bvor (bvand a b) (bvand c (bvnot a)))"));
+        assert!(abc_term_rewrites("(bvor (bvand b a) (bvand c (bvnot a)))"));
+        assert!(abc_term_rewrites("(bvor (bvand (bvnot a) c) (bvand a b))"));
+        assert!(abc_term_rewrites("(bvor (bvand (bvnot a) c) (bvand b a))"));
+        assert!(abc_term_rewrites("(bvor (bvand c (bvnot a)) (bvand a b))"));
+        assert!(abc_term_rewrites("(bvor (bvand c (bvnot a)) (bvand b a))"));
+        assert!(abc_term_rewrites("(bvxor (bvand a b) (bvand (bvnot a) c))"));
+        assert!(abc_term_rewrites("(bvxor (bvand b a) (bvand (bvnot a) c))"));
+        assert!(abc_term_rewrites("(bvxor (bvand a b) (bvand c (bvnot a)))"));
+        assert!(abc_term_rewrites("(bvxor (bvand b a) (bvand c (bvnot a)))"));
+        assert!(abc_term_rewrites("(bvxor (bvand (bvnot a) c) (bvand a b))"));
+        assert!(abc_term_rewrites("(bvxor (bvand (bvnot a) c) (bvand b a))"));
+        assert!(abc_term_rewrites("(bvxor (bvand c (bvnot a)) (bvand a b))"));
+        assert!(abc_term_rewrites("(bvxor (bvand c (bvnot a)) (bvand b a))"));
     }
 
     #[quickcheck]
