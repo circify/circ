@@ -109,10 +109,10 @@ mpc_test 2 ./examples/C/mpc/unit_tests/ptr_tests/2pc_ptr_add.c
 mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
 mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
-# # build hycc benchmarks
-# mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
-# mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
-# mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
+# build hycc benchmarks
+mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
+mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
+mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/2pc_mnist.c

@@ -550,11 +550,33 @@ impl CGen {
     fn const_(&self, c: &Constant) -> CTerm {
         match c {
             // TODO: move const integer function out to separate function
-            Constant::Integer(i) => cterm(CTermData::CInt(
-                true,
-                32,
-                bv_lit(i.number.parse::<i32>().unwrap(), 32),
-            )),
+            Constant::Integer(i) => {
+                let signed = !i.suffix.unsigned;
+                let _imaginary = i.suffix.imaginary;
+                match (i.suffix.size, signed) {
+                    (IntegerSize::Int, true) => {
+                        let size = 32;
+                        let num = i.number.parse::<i32>().unwrap();
+                        cterm(CTermData::CInt(signed, size, bv_lit(num, size)))
+                    }
+                    (IntegerSize::Int, false) => {
+                        let size = 32;
+                        let num = i.number.parse::<u32>().unwrap();
+                        cterm(CTermData::CInt(signed, size, bv_lit(num, size)))
+                    }
+                    (IntegerSize::Long, true) => {
+                        let size = 64;
+                        let num = i.number.parse::<i64>().unwrap();
+                        cterm(CTermData::CInt(signed, size, bv_lit(num, size)))
+                    }
+                    (IntegerSize::Long, false) => {
+                        let size = 64;
+                        let num = i.number.parse::<u64>().unwrap();
+                        cterm(CTermData::CInt(signed, size, bv_lit(num, size)))
+                    }
+                    _ => unimplemented!("Unimplemented constant literal: {:?}", i),
+                }
+            }
             _ => unimplemented!("Constant {:#?} hasn't been implemented", c),
         }
     }

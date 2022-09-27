@@ -220,6 +220,9 @@ fn main() {
             panic!("Missing feature: c");
         }
     };
+
+    // println!("outputs: {:?}", cs.outputs());
+
     let cs = match mode {
         Mode::Opt => opt(
             cs,

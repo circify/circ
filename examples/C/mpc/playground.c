@@ -1,13 +1,22 @@
-int test(int a, int b) {
-    if (11 > 10) {
-       return 1;
-    } else{
-       return 2;
-    }
+unsigned main() {
+    unsigned i = 0;
+    i = 1u;
+    return i;
 }
 
 
-int main(__attribute__((private(0))) int a, __attribute__((private(1))) int b) {
-    int c = test(a, b); 
-    return c;
-}
+// typedef struct
+// {
+// 	int res[2];
+// } Output;
+
+
+// Output main() {
+//     int a[2] = {1,1};
+//     int b[2] = {2,2};
+
+//     Output o;
+//     o.res[0] = a[0] + b[0];
+//     o.res[1] = a[1] + b[1];
+//     return o;
+// }
