@@ -65,6 +65,8 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Update(_i) => vec![t.cs[0].clone()],
         Op::Map(_) => t.cs.clone(),
         Op::Call(_, _, _) => Vec::new(),
+        Op::Rot => vec![t.cs[0].clone()],
+        Op::Morph => vec![t.cs[0].clone()],
     }
 }
 
@@ -180,6 +182,8 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             }
         }
         Op::Call(_, _, ret) => Ok(ret.clone()),
+        Op::Rot => Ok(get_ty(&t.cs[0]).clone()),
+        Op::Morph => Ok(get_ty(&t.cs[0]).clone()),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }
