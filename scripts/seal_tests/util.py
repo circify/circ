@@ -3,6 +3,7 @@ from subprocess import Popen, PIPE
 import sys
 from typing import List
 from tqdm import tqdm
+import time
 
 def rename_test(name: str, lang: str) -> str:
     """Append path with language type"""
@@ -25,11 +26,16 @@ def get_result(file_path):
         raise RuntimeError("Unable to open file: "+file_path)
 
 
-def run_test(expected: List[str], cmd: List[str]) -> bool:
+def run_test(expected: List[str], cmd: List[str], verbose = False) -> bool:
     try:
+        start = time.time()
         proc = Popen(" ".join(cmd), shell=True, stdout=PIPE, stderr=PIPE)
 
         out, err = proc.communicate(timeout=30)
+        end = time.time()
+        if verbose:
+            print("Command:", " ".join(cmd))
+            print("  Time: ", end - start)
 
         if err:
             raise RuntimeError("Error: "+err.decode("utf-8").strip())
@@ -41,7 +47,7 @@ def run_test(expected: List[str], cmd: List[str]) -> bool:
         assert (output == expected), "out: "+" ".join(output)+"\nexpected: "+" ".join(expected)
         return True, ""
     except Exception as e:
-        print("Exception: ", e)
+        #print("Exception: ", e)
         return False, e
 
 def run_tests(lang: str, tests: List[dict]):
@@ -51,6 +57,28 @@ def run_tests(lang: str, tests: List[dict]):
     2. test name: str
     4. test file path: str 
     """
+    print(f"Running Custom tests for {lang} frontend")
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_add_bytecode_4.txt -t ./scripts/seal_tests/tests/batch_add_4.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_add_bytecode_4.txt -t ./scripts/seal_tests/tests/naive_add_4.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_add_bytecode_16.txt -t ./scripts/seal_tests/tests/batch_add_16.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_add_bytecode_16.txt -t ./scripts/seal_tests/tests/naive_add_16.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_add_bytecode_64.txt -t ./scripts/seal_tests/tests/batch_add_64.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_add_bytecode_64.txt -t ./scripts/seal_tests/tests/naive_add_64.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_add_bytecode_256.txt -t ./scripts/seal_tests/tests/batch_add_256.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_add_bytecode_256.txt -t ./scripts/seal_tests/tests/naive_add_256.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_add_bytecode_1024.txt -t ./scripts/seal_tests/tests/batch_add_1024.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_add_bytecode_1024.txt -t ./scripts/seal_tests/tests/naive_add_1024.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_mul_bytecode_4.txt -t ./scripts/seal_tests/tests/batch_mul_4.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_mul_bytecode_4.txt -t ./scripts/seal_tests/tests/naive_mul_4.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_mul_bytecode_16.txt -t ./scripts/seal_tests/tests/batch_mul_16.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_mul_bytecode_16.txt -t ./scripts/seal_tests/tests/naive_mul_16.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_mul_bytecode_64.txt -t ./scripts/seal_tests/tests/batch_mul_64.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_mul_bytecode_64.txt -t ./scripts/seal_tests/tests/naive_mul_64.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_mul_bytecode_256.txt -t ./scripts/seal_tests/tests/batch_mul_256.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_mul_bytecode_256.txt -t ./scripts/seal_tests/tests/naive_mul_256.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/batch_mul_bytecode_1024.txt -t ./scripts/seal_tests/tests/batch_mul_1024.txt"], True)
+    run_test(['99'], ["./../SEAL/build/bin/sealinterpreter -M fhe -b  ./scripts/seal_tests/tests/naive_mul_bytecode_1024.txt -t ./scripts/seal_tests/tests/naive_mul_1024.txt"], True)
+
     print(f"Running FHE tests for {lang} frontend")
     failed_test_descs = []
     num_retries = 2
