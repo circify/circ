@@ -126,7 +126,7 @@ fn test_rot() {
 
     let rot_0 = term![Op::Rot; a.clone(), bv(0b0000, 32)];
     let rot_1 = term![Op::Rot; a.clone(), bv(0b0001, 32)];
-    let rot_2 = term![Op::Rot; a.clone(), bv(0b0010, 32)];
+    let rot_2 = term![Op::Rot; a, bv(0b0010, 32)];
 
     assert_eq!(
         eval(&rot_0, &FxHashMap::default()),
