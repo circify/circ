@@ -1675,10 +1675,11 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             Value::Array(res)
         }
         Op::Rot => {
+            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
             let r = vs.get(&c.cs[1]).unwrap().as_bv().clone();
             let size = match check(&c.cs[1]) {
                 Sort::BitVector(s) => s,
-                _ => panic!("Rotation amount should be Bitvecotr"),
+                _ => panic!("Rotation amount should be Bitvector"),
             };
             let iter = match check(&c.cs[0]) {
                 Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
@@ -1689,15 +1690,19 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 _ => panic!("Output type of rot should be Array"),
             };
 
-            // calculate new rotation amount
+            // calculate new, positive rotation amount
             let mut rot = r.as_sint().to_i32().unwrap() % len as i32;
             if rot < 0 {
                 rot += len as i32;
             }
 
-            for (idx, val) in iter {
-                let new_idx = BitVector::new(Integer::from((idx + rot as usize) % len), size);
-                res.map.insert(Value::BitVector(new_idx), val);
+            for (idx, idx_val) in iter {
+                let new_idx = Value::BitVector(BitVector::new(
+                    Integer::from((idx + rot as usize) % len),
+                    size,
+                ));
+                let new_val = a.select(&idx_val);
+                res.map.insert(new_idx, new_val);
             }
             Value::Array(res)
         }

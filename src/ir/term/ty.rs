@@ -419,6 +419,12 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(ret.clone())
             }
         }
+        (Op::Rot, &[Sort::Array(k, v, n), i]) => {
+            eq_or(k, i, "rot").map(|_| Sort::Array(k.clone(), v.clone(), *n))
+        }
+        (Op::Morph, &[Sort::Array(k, v, n), i]) => {
+            eq_or(k, i, "morph").map(|_| Sort::Array(k.clone(), v.clone(), *n))
+        }
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
     }
 }
