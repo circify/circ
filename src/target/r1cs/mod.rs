@@ -59,7 +59,7 @@ impl Lc {
     }
     /// Is this a constant? If so, return that constant.
     pub fn as_const(&self) -> Option<&FieldV> {
-        self.monomials.is_empty().then(|| &self.constant)
+        self.monomials.is_empty().then_some(&self.constant)
     }
 }
 
