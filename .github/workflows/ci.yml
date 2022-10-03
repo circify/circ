@@ -37,8 +37,6 @@ jobs:
       run: python3 driver.py --check
     - name: Format
       run: cargo fmt -- --check
-    - name: Cargo version
-      run: cargo clippy --version
     - name: Lint
       run: python3 driver.py --lint
     - name: Build, then Test
