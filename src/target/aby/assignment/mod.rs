@@ -124,7 +124,7 @@ impl CostModel {
         CostModel::new(conversions, ops)
     }
 
-    fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
+    pub fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
         match op {
             Op::Var(..)
             // | Op::Select
@@ -182,10 +182,13 @@ impl CostModel {
     }
 }
 
-fn get_cost_model(cm: &str) -> CostModel {
+pub fn get_cost_model(cm: &str) -> CostModel {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
+        "synth" => "synthetic",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(

@@ -1076,21 +1076,31 @@ impl CGen {
                 }
             }
             Statement::If(node) => {
+
                 let cond = self.gen_expr(node.node.condition.node);
                 let t_res = self
                     .circ
                     .enter_condition(cond.term.term(self.circ.cir_ctx()));
+                self.circ.enter_scope();
+                // println!("Entering Cond True Scope");
                 self.unwrap(t_res);
                 self.gen_stmt(node.node.then_statement.node);
+                // println!("Exiting Cond True Scope");
+                self.circ.exit_scope();
                 self.circ.exit_condition();
                 if let Some(f_cond) = node.node.else_statement {
                     let f_res = self
                         .circ
                         .enter_condition(term!(Op::Not; cond.term.term(self.circ.cir_ctx())));
+                    self.circ.enter_scope();
+                    // println!("Entering Cond False Scope");
                     self.unwrap(f_res);
                     self.gen_stmt(f_cond.node);
+                    // println!("Exiting Cond False Scope");
+                    self.circ.exit_scope();
                     self.circ.exit_condition();
                 }
+
             }
             Statement::Return(ret) => {
                 match ret {

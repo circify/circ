@@ -1162,6 +1162,27 @@ pub fn to_aby(
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();
         }
+        #[cfg(feature = "lp")]
+        "smart_g_y" => {
+            let (fs, s_map) = inline_all_and_assign_y(&ir, cm);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "smart_g_a+y" => {
+            let (fs, s_map) = inline_all_and_assign_a_y(&ir, cm);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "smart_g_a+b" => {
+            let (fs, s_map) = inline_all_and_assign_a_b(&ir, cm);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         // #[cfg(feature = "lp")]
         // "mlp+mut" => {
         //     let (fs, s_map) = mlp_with_mut(&ir, cm, path, lang, np, *hyper==1, ml, mss, imbalance);

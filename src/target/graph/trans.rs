@@ -1,9 +1,11 @@
 use crate::ir::term::*;
 
+use crate::target::aby::assignment::get_cost_model;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::smart_global_assign;
+#[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::calculate_cost_smart_dug;
 use crate::target::graph::mlp::*;
 use crate::target::graph::tp::*;
@@ -332,6 +334,147 @@ pub fn inline_all_and_assign_smart_glp(
 
     now = Instant::now();
     let assignment = smart_global_assign(&dug.good_terms, &dug.def_use, cm);
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
+
+    println!("LOG: ILP time: {:?}", now.elapsed());
+
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)
+}
+
+#[cfg(feature = "lp")]
+/// inline all function into main
+pub fn inline_all_and_assign_y(
+    fs: &Functions,
+    cm: &str,
+) -> (Functions, HashMap<String, SharingMap>) {
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let main = "main";
+    let (c, dug) = tp.inline_all(&main.to_string());
+
+    println!(
+        "Time: Inline and construction def uses: {:?}",
+        now.elapsed()
+    );
+
+    now = Instant::now();
+    let assignment: SharingMap = dug.good_terms
+        .iter()
+        .map(|term| (term.clone(), ShareType::Yao))
+        .collect();
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
+
+    println!("LOG: ILP time: {:?}", now.elapsed());
+
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)
+}
+
+#[cfg(feature = "lp")]
+/// inline all function into main
+pub fn inline_all_and_assign_a_y(
+    fs: &Functions,
+    cm: &str,
+) -> (Functions, HashMap<String, SharingMap>) {
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let main = "main";
+    let (c, dug) = tp.inline_all(&main.to_string());
+
+    println!(
+        "Time: Inline and construction def uses: {:?}",
+        now.elapsed()
+    );
+
+    now = Instant::now();
+    let cost_model = get_cost_model(cm);
+    let assignment: SharingMap = dug.good_terms
+        .iter()
+        .map(|term| {
+            (
+                term.clone(),
+                if let Some(costs) = cost_model.get(&term.op) {
+                    match &term.op {
+                        Op::Select | Op::Store => ShareType::Yao,
+                        _ => {
+                            let mut min_ty: ShareType = ShareType::Yao;
+                            let mut min_cost: f64 = costs[&min_ty];
+                            for ty in &[ShareType::Arithmetic] {
+                                if let Some(c) = costs.get(ty) {
+                                    if *c < min_cost {
+                                        min_ty = *ty;
+                                        min_cost = *c;
+                                    }
+                                }
+                            }
+                            min_ty
+                        }
+                    }
+                } else {
+                    ShareType::Yao
+                },
+            )
+        })
+        .collect();
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
+
+    println!("LOG: ILP time: {:?}", now.elapsed());
+
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)
+}
+
+#[cfg(feature = "lp")]
+/// inline all function into main
+pub fn inline_all_and_assign_a_b(
+    fs: &Functions,
+    cm: &str,
+) -> (Functions, HashMap<String, SharingMap>) {
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let main = "main";
+    let (c, dug) = tp.inline_all(&main.to_string());
+
+    println!(
+        "Time: Inline and construction def uses: {:?}",
+        now.elapsed()
+    );
+
+    now = Instant::now();
+    let cost_model = get_cost_model(cm);
+    let assignment: SharingMap = dug.good_terms
+        .iter()
+        .map(|term| {
+            (
+                term.clone(),
+                if let Some(costs) = cost_model.get(&term.op){
+                    let mut min_ty: ShareType = ShareType::Boolean;
+                    let mut min_cost: f64 = costs[&min_ty];
+                    for ty in &[ShareType::Arithmetic] {
+                        if let Some(c) = costs.get(ty) {
+                            if *c < min_cost {
+                                min_ty = *ty;
+                                min_cost = *c;
+                            }
+                        }
+                    }
+                    min_ty
+                } else {
+                    ShareType::Boolean
+                },
+            )
+        })
+        .collect();
     println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
 
     println!("LOG: ILP time: {:?}", now.elapsed());

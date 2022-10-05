@@ -288,6 +288,34 @@ impl<Ty: Display> FnFrame<Ty> {
         cs
     }
 
+    fn conditions_on_lex(&self, lex: &LexScope<Ty>, found: &mut bool) -> Vec<Term> {
+        let mut cs = Vec::new();
+        for s in &self.stack {
+            match s {
+                StateEntry::Cond(t) =>{
+                    if *found{
+                        // println!("## push ");
+                        cs.push(t.clone());
+                    }
+                } 
+                StateEntry::Break(_, break_conds) => {
+                    if *found{
+                        // println!("## push ");
+                        cs.extend(break_conds.iter().map(|c| term![Op::Not; c.clone()]));
+                    }
+                }
+                StateEntry::Lex(cur_lex) =>{
+                    // TODO: an inefficient way
+                    if cur_lex.prefix == lex.prefix{
+                        // println!("## Start counting the scope {}", lex.prefix);
+                        *found = true;
+                    }
+                }
+            }
+        }
+        cs
+    }
+
     fn enter_breakable(&mut self, name: String) {
         self.stack.push(StateEntry::Break(name, Vec::new()));
     }
@@ -559,6 +587,24 @@ impl<E: Embeddable> Circify<E> {
         Ok(self.get_scope_mut(idx))
     }
 
+    fn get_lex(&self, loc: &Loc) -> Result<&LexScope<E::Ty>> {
+        let idx = loc.idx.ok_or(()).or_else(|_| self.mk_abs(&loc.name))?;
+        Ok(self.get_scope(idx))
+    }
+
+    fn get_scope(&self, idx: Option<ScopeIdx>) -> &LexScope<E::Ty> {
+        match idx {
+            None => &self.globals,
+            Some(ScopeIdx { lex, fn_ }) => {
+                if let StateEntry::Lex(e) = &self.fn_stack[fn_].stack[lex] {
+                    e
+                } else {
+                    unreachable!()
+                }
+            }
+        }
+    }
+
     fn get_lex_ref(&self, loc: &Loc) -> Result<&LexScope<E::Ty>> {
         let idx = loc.idx.ok_or(()).or_else(|_| self.mk_abs(&loc.name))?;
         Ok(self.get_scope_ref(idx))
@@ -580,7 +626,9 @@ impl<E: Embeddable> Circify<E> {
     /// (existential) circuit input.
     pub fn assign(&mut self, loc: Loc, val: Val<E::T>) -> Result<Val<E::T>> {
         // Find the lexical scope that this location is in.
+        let _guard = self.condition_on_lex(&loc)?;
         let lex = self.get_lex_mut(&loc)?;
+        // println!("Lex: id: {:?}", lex);
         // Get the old SSA name
         let old_name = lex.get_name(&loc.name)?.clone();
         // Get the type
@@ -599,12 +647,14 @@ impl<E: Embeddable> Circify<E> {
                     new, new_ty, loc, ty
                 );
                 // get condition under which assignment happens
-                let guard = self.condition.clone();
+                // let guard = self.condition.clone();
+                // println!("Guard: {:?}", guard);
+                // println!("Guard on lex: {:?}", _guard);
                 // build condition-aware new value
-                let ite = match guard.as_bool_opt() {
+                let ite = match _guard.as_bool_opt() {
                     Some(true) => new,
                     Some(false) => old.clone(),
-                    None => self.e.ite(&mut self.cir_ctx, guard, new, (*old).clone()),
+                    None => self.e.ite(&mut self.cir_ctx, _guard, new, (*old).clone()),
                 };
                 let ite_val = Val::Term(ite);
                 // TODO: add language-specific coersion here if needed
@@ -683,6 +733,18 @@ impl<E: Embeddable> Circify<E> {
             leaf_term(Op::Const(Value::Bool(true)))
         } else {
             term(Op::BoolNaryOp(BoolNaryOp::And), cs)
+        }
+    }
+
+    /// Get the current path condition
+    fn condition_on_lex(&self, loc: &Loc) -> Result<Term> {
+        let lex = self.get_lex(loc)?;
+        let mut found = false;
+        let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions_on_lex(lex, &mut found)).collect();
+        if cs.is_empty() {
+            Ok(leaf_term(Op::Const(Value::Bool(true))))
+        } else {
+            Ok(term(Op::BoolNaryOp(BoolNaryOp::And), cs))
         }
     }
 

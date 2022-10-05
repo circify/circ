@@ -42,8 +42,8 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
         client_proc = Popen(" ".join(client_cmd),
                             shell=True, stdout=PIPE, stderr=PIPE)
 
-        server_out, server_err = server_proc.communicate(timeout=30)
-        client_out, client_err = client_proc.communicate(timeout=30)
+        server_out, server_err = server_proc.communicate(timeout=300)
+        client_out, client_err = client_proc.communicate(timeout=300)
 
         if server_err:
             raise RuntimeError(

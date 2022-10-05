@@ -564,6 +564,49 @@ biomatch_tests = [
     # ],
 ]
 
+predict_biomatch_tests = [
+    # [
+    #     "biomatch - 128",
+    #     "biomatch_128",
+    #     "./scripts/aby_tests/test_inputs/biomatch_128.txt",
+    # ],
+    # [
+    #     "biomatch - 256",
+    #     "biomatch_256",
+    #     "./scripts/aby_tests/test_inputs/biomatch_256.txt",
+    # ],
+    # [
+    #     "biomatch - 512",
+    #     "biomatch_512",
+    #     "./scripts/aby_tests/test_inputs/biomatch_512.txt",
+    # ],
+    # [
+    #     "biomatch - 1024",
+    #     "biomatch_1024",
+    #     "./scripts/aby_tests/test_inputs/biomatch_1024.txt",
+    # ],
+    # [
+    #     "biomatch - 2048",
+    #     "biomatch_2048",
+    #     "./scripts/aby_tests/test_inputs/biomatch_2048.txt",
+    # ],
+    [
+        "biomatch - 4096",
+        "biomatch_4096",
+        "./scripts/aby_tests/test_inputs/biomatch_4096.txt",
+    ],
+    [
+        "biomatch - 8192",
+        "biomatch_8192",
+        "./scripts/aby_tests/test_inputs/biomatch_8192.txt",
+    ],
+    [
+        "biomatch - 16384",
+        "biomatch_16384",
+        "./scripts/aby_tests/test_inputs/biomatch_16384.txt",
+    ],
+]
+
 kmeans_tests = [
     [
         "kmeans",
