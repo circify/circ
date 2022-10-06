@@ -548,6 +548,7 @@ impl CGen {
     }
 
     fn const_(&self, c: &Constant) -> CTerm {
+        println!("Const");
         match c {
             // TODO: move const integer function out to separate function
             Constant::Integer(i) => {
@@ -674,6 +675,7 @@ impl CGen {
                     BinaryOperator::Assign => {
                         let loc = self.gen_lval(&bin_op.lhs.node);
                         let val = self.gen_expr(&bin_op.rhs.node);
+                        println!("assign!: val: {}", val);
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::AssignPlus | BinaryOperator::AssignDivide => {
@@ -907,12 +909,13 @@ impl CGen {
                 } else {
                     info.ty.default(self.circ.cir_ctx())
                 };
-
+                println!("cast decl");
                 let res = self.circ.declare_init(
                     info.name.clone(),
                     info.ty.clone(),
                     Val::Term(cast(Some(info.ty.clone()), expr.clone())),
                 );
+                println!("done cast decl");
                 self.unwrap(res);
                 exprs.push(expr);
             }

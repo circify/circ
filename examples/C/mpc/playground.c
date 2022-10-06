@@ -1,6 +1,6 @@
-unsigned main() {
+int main() {
     unsigned i = 0;
-    i = 1u;
+    i = 1;
     return i;
 }
 
