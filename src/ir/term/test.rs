@@ -124,9 +124,9 @@ fn test_rot() {
         vec![bv(0b0011, 4), bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4)],
     );
 
-    let rot_0 = term![Op::Rot; a.clone(), bv(0b0000, 32)];
-    let rot_1 = term![Op::Rot; a.clone(), bv(0b0001, 32)];
-    let rot_2 = term![Op::Rot; a, bv(0b0010, 32)];
+    let rot_0 = term![Op::Rot(0); a.clone()];
+    let rot_1 = term![Op::Rot(1); a.clone()];
+    let rot_2 = term![Op::Rot(2); a];
 
     assert_eq!(
         eval(&rot_0, &FxHashMap::default()),

@@ -150,10 +150,7 @@ pub enum Op {
     Call(String, Vec<Sort>, Sort),
 
     /// Cyclic rotation of an array
-    Rot,
-
-    /// Automorphism of an array
-    Morph,
+    Rot(usize),
 }
 
 /// Boolean AND
@@ -280,8 +277,7 @@ impl Op {
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
             Op::Call(_, args, _) => Some(args.len()),
-            Op::Rot => Some(2),
-            Op::Morph => Some(2),
+            Op::Rot(_) => Some(1),
         }
     }
 }
@@ -328,8 +324,7 @@ impl Display for Op {
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
             Op::Call(name, _, _) => write!(f, "fn:{}", name),
-            Op::Rot => write!(f, "rot"),
-            Op::Morph => write!(f, "morph"),
+            Op::Rot(i) => write!(f, "(rot {})", i),
         }
     }
 }
@@ -1674,13 +1669,8 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             }
             Value::Array(res)
         }
-        Op::Rot => {
+        Op::Rot(i) => {
             let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
-            let r = vs.get(&c.cs[1]).unwrap().as_bv().clone();
-            let size = match check(&c.cs[1]) {
-                Sort::BitVector(s) => s,
-                _ => panic!("Rotation amount should be Bitvector"),
-            };
             let iter = match check(&c.cs[0]) {
                 Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
                 _ => panic!("Input type should be Array"),
@@ -1690,17 +1680,11 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 _ => panic!("Output type of rot should be Array"),
             };
 
-            // calculate new, positive rotation amount
-            let mut rot = r.as_sint().to_i32().unwrap() % len as i32;
-            if rot < 0 {
-                rot += len as i32;
-            }
-
+            // calculate new rotation amount
+            let rot = *i % len;
             for (idx, idx_val) in iter {
-                let new_idx = Value::BitVector(BitVector::new(
-                    Integer::from((idx + rot as usize) % len),
-                    size,
-                ));
+                let w = idx_val.as_bv().width();
+                let new_idx = Value::BitVector(BitVector::new(Integer::from((idx + rot) % len), w));
                 let new_val = a.select(&idx_val);
                 res.map.insert(new_idx, new_val);
             }
