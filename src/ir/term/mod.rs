@@ -149,7 +149,8 @@ pub enum Op {
     /// Call a function (name, argument sorts, return sort)
     Call(String, Vec<Sort>, Sort),
 
-    /// Cyclic rotation of an array
+    /// Cyclic right rotation of an array
+    /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
     Rot(usize),
 }
 
@@ -1675,7 +1676,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
                 _ => panic!("Input type should be Array"),
             };
-            let (mut res, len) = match check(&c) {
+            let (mut res, len) = match check(&c.cs[0]) {
                 Sort::Array(k, v, n) => (Array::default((*k).clone(), &v, n), n),
                 _ => panic!("Output type of rot should be Array"),
             };
