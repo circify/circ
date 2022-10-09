@@ -8,6 +8,7 @@ use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
+use crate::target::aby::taint::TaintAnalyzer;
 use crate::target::aby::utils::*;
 use std::fmt;
 use std::path::Path;
@@ -402,6 +403,10 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
         metadata: md,
         ..
     } = ir.clone();
+
+    // call to taint 
+    let mut analyzer = TaintAnalyzer::new(md.clone());
+    analyzer.fill_vmap(terms.clone());
 
     let s_map: SharingMap = match ss {
         "b" => assign_all_boolean(&ir, cm),
