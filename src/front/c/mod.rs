@@ -670,7 +670,7 @@ impl CGen {
                 .iter()
                 .cloned(),
         );
-        return fns.contains(fname);
+        fns.contains(fname)
     }
 
     fn builtin_call(&self, f_name: &str, args: Vec<CTerm>) -> Result<CTerm, String> {
