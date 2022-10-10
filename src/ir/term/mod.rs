@@ -51,6 +51,9 @@ pub enum Op {
     Var(String, Sort),
     /// a constant
     Const(Value),
+    /// a random value
+    /// TODO: might be better to merge with var?
+    Random(String, Sort),
 
     /// if-then-else: ternary
     Ite,
@@ -226,6 +229,7 @@ impl Op {
             Op::Eq => Some(2),
             Op::Var(_, _) => Some(0),
             Op::Const(_) => Some(0),
+            Op::Random(_, _) => Some(0),
             Op::BvBinOp(_) => Some(2),
             Op::BvBinPred(_) => Some(2),
             Op::BvNaryOp(_) => None,
@@ -271,6 +275,7 @@ impl Display for Op {
             Op::Eq => write!(f, "="),
             Op::Var(n, _) => write!(f, "{}", n),
             Op::Const(c) => write!(f, "{}", c),
+            Op::Random(r, _) => write!(f, "rand {}", r),
             Op::BvBinOp(a) => write!(f, "{}", a),
             Op::BvBinPred(a) => write!(f, "{}", a),
             Op::BvNaryOp(a) => write!(f, "{}", a),
@@ -1732,14 +1737,16 @@ pub struct InputMetadata {
     term: Term,
     visibility: Option<PartyId>,
     epoch: Epoch,
+    random: bool,
 }
 
 impl InputMetadata {
-    fn new(term: Term, visibility: Option<PartyId>, epoch: Epoch) -> InputMetadata {
+    fn new(term: Term, visibility: Option<PartyId>, epoch: Epoch, random: bool) -> InputMetadata {
         InputMetadata {
             term,
             visibility,
             epoch,
+            random,
         }
     }
 }
@@ -1757,6 +1764,7 @@ impl ComputationMetadata {
         input_name: String,
         party: Option<PartyId>,
         epoch: Epoch,
+        random: bool,
         sort: Sort,
     ) {
         let term = leaf_term(Op::Var(input_name.clone(), sort));
@@ -1768,8 +1776,10 @@ impl ComputationMetadata {
             party,
             self.input_vis.get(&input_name).unwrap()
         );
-        self.input_vis
-            .insert(input_name.clone(), InputMetadata::new(term, party, epoch));
+        self.input_vis.insert(
+            input_name.clone(),
+            InputMetadata::new(term, party, epoch, random),
+        );
         self.computation_inputs.insert(input_name);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
@@ -1820,6 +1830,18 @@ impl ComputationMetadata {
             }
         })
     }
+    /// Get all random inputs to the computation itself.
+    ///
+    /// Excludes pre-computation inputs
+    pub fn random_input_names<'a>(&'a self) -> impl Iterator<Item = &str> + 'a {
+        self.input_vis.iter().filter_map(move |(name, party)| {
+            if party.random && self.computation_inputs.contains(name) {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        })
+    }
     /// Get all public inputs to the computation itself.
     ///
     /// Excludes pre-computation inputs.
@@ -1837,11 +1859,29 @@ impl ComputationMetadata {
         })
     }
     /// Get all the inputs visible to `party`.
-    pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashSet<String> {
+    pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashMap<String, u8> {
         self.input_vis
             .iter()
             .filter_map(|(name, input)| {
                 if input.visibility.is_none() || input.visibility == party {
+                    Some((name.clone(), input.epoch))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// get all inputs visible to `party` that can be computed in the given epoch.
+    pub fn get_inputs_for_party_epoch(
+        &self,
+        party: Option<PartyId>,
+        epoch: u8,
+    ) -> FxHashSet<String> {
+        self.input_vis
+            .iter()
+            .filter_map(|(name, input)| {
+                if input.visibility.is_none() || input.visibility == party && input.epoch == epoch {
                     Some(name.clone())
                 } else {
                     None
@@ -1869,7 +1909,7 @@ impl ComputationMetadata {
             .map(|i| {
                 let vis = visibilities.get(i).map(|p| *party_ids.get(p).unwrap());
                 let term = inputs.remove(i).unwrap();
-                (i.clone(), InputMetadata::new(term, vis, 0))
+                (i.clone(), InputMetadata::new(term, vis, 0, false))
             })
             .collect();
         ComputationMetadata {
@@ -1939,9 +1979,10 @@ impl Computation {
         s: Sort,
         party: Option<PartyId>,
         epoch: Epoch,
+        random: bool,
         precompute: Option<Term>,
     ) -> Term {
-        self.new_var_epoched(name, s, party, epoch, precompute)
+        self.new_var_epoched(name, s, party, epoch, random, precompute)
     }
 
     /// Create a new variable, `name: s`, where `val_fn` can be called to get the concrete value,
@@ -1962,6 +2003,7 @@ impl Computation {
         s: Sort,
         party: Option<PartyId>,
         epoch: Epoch,
+        random: bool,
         precompute: Option<Term>,
     ) -> Term {
         debug!(
@@ -1969,9 +2011,10 @@ impl Computation {
             name, s, epoch, party
         );
         self.metadata
-            .new_input(name.to_owned(), party, epoch, s.clone());
+            .new_input(name.to_owned(), party, epoch, random, s.clone());
         if let Some(p) = precompute {
             assert_eq!(&s, &check(&p));
+            assert!(!random, "Cannot have a precompute on a random variable!");
             self.precomputes.add_output(name.to_owned(), p);
         }
         leaf_term(Op::Var(name.to_owned(), s))
@@ -2009,7 +2052,7 @@ impl Computation {
             *input_epochs.iter().max().unwrap_or(&0)
         };
         let sort = check(&precomp);
-        self.new_var(&new_input_var, sort, vis, epoch, Some(precomp));
+        self.new_var(&new_input_var, sort, vis, epoch, false, Some(precomp));
     }
 
     /// Change the sort of a variables

@@ -1,13 +1,13 @@
 #![allow(unused_imports)]
 #[cfg(feature = "r1cs")]
-use bellman::gadgets::test::TestConstraintSystem;
+use bellman_proof::gadgets::test::TestConstraintSystem;
 #[cfg(feature = "r1cs")]
-use bellman::groth16::{
+use bellman_proof::groth16::{
     create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
     verify_proof, Parameters, Proof, VerifyingKey,
 };
 #[cfg(feature = "r1cs")]
-use bellman::Circuit;
+use bellman_proof::Circuit;
 use bls12_381::{Bls12, Scalar};
 #[cfg(feature = "c")]
 use circ::front::c::{self, C};
@@ -46,6 +46,9 @@ use circ::target::r1cs::marlin;
 use rand_chacha::ChaChaRng;
 #[cfg(feature = "marlin")]
 use sha2::Sha256;
+
+#[cfg(feature = "mirage")]
+use circ::target::r1cs::mirage;
 
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
@@ -168,6 +171,7 @@ arg_enum! {
     enum ProofSystem {
         Groth,
         Marlin,
+        Mirage,
     }
 }
 
@@ -347,6 +351,20 @@ fn main() {
                         #[cfg(not(feature = "marlin"))]
                         ProofSystem::Marlin => {
                             panic!("Missing feature: marlin");
+                        }
+                        #[cfg(feature = "mirage")]
+                        ProofSystem::Mirage => {
+                            mirage::gen_params::<Bls12, _, _>(
+                                prover_key,
+                                verifier_key,
+                                &prover_data,
+                                &verifier_data,
+                            )
+                            .unwrap();
+                        }
+                        #[cfg(not(feature = "mirage"))]
+                        ProofSystem::Mirage => {
+                            panic!("Missing feature: mirage");
                         }
                     }
                 }

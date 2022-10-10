@@ -132,7 +132,7 @@ fn parse_tok_tree(bytes: &[u8]) -> TokTree {
         stack.len() - 1
     );
     assert!(!stack[0].is_empty(), "Empty parse");
-    println!("got stack {:?}", stack[0]);
+    //println!("got stack {:?}", stack[0]);
     assert!(stack[0].len() < 2, "Multiple top-level expressions");
     stack.pop().unwrap().pop().unwrap()
 }

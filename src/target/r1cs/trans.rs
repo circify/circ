@@ -40,6 +40,7 @@ struct ToR1cs {
     cache: TermMap<EmbeddedTerm>,
     wit_ext: PreComp,
     public_inputs: FxHashSet<String>,
+    random_inputs: FxHashSet<String>,
     next_idx: usize,
     zero: TermLc,
     one: TermLc,
@@ -47,7 +48,11 @@ struct ToR1cs {
 }
 
 impl ToR1cs {
-    fn new(field: FieldT, public_inputs: FxHashSet<String>) -> Self {
+    fn new(
+        field: FieldT,
+        public_inputs: FxHashSet<String>,
+        random_inputs: FxHashSet<String>,
+    ) -> Self {
         debug!("Starting R1CS back-end, field: {}", field);
         let r1cs = R1cs::new(field.clone());
         let zero = TermLc(pf_lit(field.new_v(0u8)), r1cs.zero());
@@ -57,6 +62,7 @@ impl ToR1cs {
             cache: TermMap::new(),
             wit_ext: precomp::PreComp::new(),
             public_inputs,
+            random_inputs,
             next_idx: 0,
             zero,
             one,
@@ -68,18 +74,45 @@ impl ToR1cs {
     /// If values are being recorded, `value` must be provided.
     ///
     /// `comp` is a term that computes the value.
-    fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, public: bool) -> TermLc {
+    fn fresh_var<D: Display + ?Sized>(
+        &mut self,
+        ctx: &D,
+        comp: Term,
+        public: bool,
+        random: bool,
+    ) -> TermLc {
+        let mut epoch = 0;
+        // see if var belongs in epoch 1
+        for random_var in &self.random_inputs {
+            if extras::free_in(&random_var, comp.clone()) {
+                epoch = 1;
+            }
+        }
+
         // max_epoch analysis on comp
         // epoch number with signal
         // output is defining the computation the prover runs as a precompute
-        // 
         let n = format!("{}_n{}", ctx, self.next_idx);
+        println!("n is {}", n);
+        if n == "return_n3" {
+            println!("return term: {:?}", comp);
+        }
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
-        self.r1cs.add_signal(n.clone(), comp.clone());
+        self.r1cs.add_signal(n.clone(), comp.clone(), epoch);
         self.wit_ext.add_output(n.clone(), comp.clone());
+        assert!(
+            !(!public && random),
+            "Cannot have {} as private and random ... probably change this...",
+            n
+        );
+        println!("adding var {}", n);
         if public {
+            println!("it is public!");
             self.r1cs.publicize(&n);
+        }
+        if random {
+            self.r1cs.randomize(&n);
         }
         debug!("fresh: {}", n);
         TermLc(comp, self.r1cs.signal_lc(&n))
@@ -96,7 +129,7 @@ impl ToR1cs {
     fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term) -> TermLc {
         debug_assert!(matches!(check(&comp), Sort::Bool));
         let comp = term![Op::Ite; comp, self.one.0.clone(), self.zero.0.clone()];
-        let v = self.fresh_var(ctx, comp, false);
+        let v = self.fresh_var(ctx, comp, false, false);
         //debug!("Fresh bit: {}", self.r1cs.format_lc(&v));
         self.enforce_bit(v.clone());
         v
@@ -112,10 +145,12 @@ impl ToR1cs {
             "is_zero_inv",
             term![Op::Ite; eqz.clone(), self.zero.0.clone(), term![PF_RECIP; x.0.clone()]],
             false,
+            false,
         );
         let is_zero = self.fresh_var(
             "is_zero",
             term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
+            false,
             false,
         );
         self.r1cs
@@ -219,7 +254,7 @@ impl ToR1cs {
     /// Return the product of `a` and `b`.
     fn mul(&mut self, a: TermLc, b: TermLc) -> TermLc {
         let mul_val = term![PF_MUL; a.0, b.0];
-        let c = self.fresh_var("mul", mul_val, false);
+        let c = self.fresh_var("mul", mul_val, false, false);
         self.r1cs.constraint(a.1, b.1, c.1.clone());
         c
     }
@@ -365,8 +400,9 @@ impl ToR1cs {
             let lc = match &c.op {
                 Op::Var(name, Sort::Bool) => {
                     let public = self.public_inputs.contains(name);
+                    let random = self.random_inputs.contains(name);
                     let comp = term![Op::Ite; c.clone(), self.one.0.clone(), self.zero.0.clone()];
-                    let v = self.fresh_var(name, comp, public);
+                    let v = self.fresh_var(name, comp, public, random);
                     if !public {
                         self.enforce_bit(v.clone());
                     }
@@ -524,10 +560,12 @@ impl ToR1cs {
                 match &bv.op {
                     Op::Var(name, Sort::BitVector(_)) => {
                         let public = self.public_inputs.contains(name);
+                        let random = self.random_inputs.contains(name);
                         let var = self.fresh_var(
                             name,
                             term![Op::UbvToPf(self.field.clone()); bv.clone()],
                             public,
+                            random,
                         );
                         self.set_bv_uint(bv.clone(), var, n);
                         if !public {
@@ -668,8 +706,8 @@ impl ToR1cs {
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
                                 let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
                                 let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
-                                let q = self.fresh_var("div_q", q_term, false);
-                                let r = self.fresh_var("div_r", r_term, false);
+                                let q = self.fresh_var("div_q", q_term, false, false);
+                                let r = self.fresh_var("div_r", r_term, false, false);
                                 let qb = self.bitify("div_q", &q, n, false);
                                 let rb = self.bitify("div_r", &r, n, false);
                                 self.r1cs.constraint(q.1.clone(), b.1.clone(), (a - &r).1);
@@ -835,7 +873,8 @@ impl ToR1cs {
             let lc = match &c.op {
                 Op::Var(name, Sort::Field(_)) => {
                     let public = self.public_inputs.contains(name);
-                    self.fresh_var(name, c.clone(), public)
+                    let random = self.random_inputs.contains(name);
+                    self.fresh_var(name, c.clone(), public, random)
                 }
                 Op::Const(Value::Field(r)) => TermLc(
                     c.clone(),
@@ -865,7 +904,7 @@ impl ToR1cs {
                 Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
                 Op::PfUnOp(PfUnOp::Recip) => {
                     let x = self.get_pf(&c.cs[0]).clone();
-                    let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
+                    let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false, false);
                     self.r1cs
                         .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                     inv_x
@@ -900,8 +939,12 @@ pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverDat
         .public_input_names()
         .map(ToOwned::to_owned)
         .collect();
+    let random_inputs = metadata
+        .random_input_names()
+        .map(ToOwned::to_owned)
+        .collect();
     debug!("public inputs: {:?}", public_inputs);
-    let mut converter = ToR1cs::new(modulus, public_inputs);
+    let mut converter = ToR1cs::new(modulus, public_inputs, random_inputs);
     debug!(
         "Term count: {}",
         assertions

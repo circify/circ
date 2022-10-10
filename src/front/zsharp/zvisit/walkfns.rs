@@ -197,6 +197,7 @@ pub fn walk_visibility<'ast, Z: ZVisitorMut<'ast>>(
     match vis {
         Public(pu) => visitor.visit_public_visibility(pu),
         Private(pr) => visitor.visit_private_visibility(pr),
+        Random(ra) => visitor.visit_random_visibility(ra),
     }
 }
 

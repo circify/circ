@@ -3,7 +3,7 @@
 #![allow(unused_imports)]
 
 use ark_ff::fields::PrimeField;
-use ark_marlin::{IndexProverKey, IndexVerifierKey, Marlin, Proof, rng::FiatShamirRng};
+use ark_marlin::{rng::FiatShamirRng, IndexProverKey, IndexVerifierKey, Marlin, Proof};
 use ark_poly::polynomial::univariate::DensePolynomial;
 use ark_poly_commit::PolynomialCommitment;
 use ark_relations::{
@@ -131,7 +131,7 @@ impl<'a, F: Field> ConstraintSynthesizer<F> for SynthInput<'a> {
                     } else {
                         cs.new_witness_variable(val_f)?
                     };
-                    //// 
+                    ////
                     //cs.new_verifier_challenge(name? epoch_num)
                     vars.insert(i, v);
                 } else {
@@ -264,7 +264,7 @@ pub fn prove<
 ) -> Result<(), Box<dyn Error>> {
     let (pk, prover_data) = read_prover_key_and_data::<_, F, PC>(pk_path)?;
     let rng = &mut rand::thread_rng();
-    for (input, sort) in &prover_data.precompute_inputs {
+    for (input, (sort, _epoch)) in &prover_data.precompute_inputs {
         let value = inputs_map
             .get(input)
             .unwrap_or_else(|| panic!("No input for {}", input));
@@ -277,8 +277,8 @@ pub fn prove<
     }
     let new_map = prover_data.precompute.eval(inputs_map);
     prover_data.r1cs.check_all(&new_map);
-    let pf =
-        Marlin::<F, PC, FS>::prove(&pk, SynthInput(&prover_data.r1cs, &Some(new_map)), rng).unwrap();
+    let pf = Marlin::<F, PC, FS>::prove(&pk, SynthInput(&prover_data.r1cs, &Some(new_map)), rng)
+        .unwrap();
     let mut pf_file = File::create(pf_path)?;
     pf.serialize(&mut pf_file)?;
     Ok(())

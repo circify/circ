@@ -58,7 +58,7 @@ impl Constraints for Computation {
 
         for v in public_inputs {
             if let Op::Var(n, s) = &v.op {
-                metadata.new_input(n.to_owned(), None, 0, s.clone());
+                metadata.new_input(n.to_owned(), None, 0, false, s.clone());
             } else {
                 panic!()
             }
@@ -66,7 +66,7 @@ impl Constraints for Computation {
         for v in all_vars {
             if let Op::Var(n, s) = &v.op {
                 if !public_inputs_set.contains(n) {
-                    metadata.new_input(n.to_owned(), Some(PROVER_ID), 0, s.clone());
+                    metadata.new_input(n.to_owned(), Some(PROVER_ID), 0, false, s.clone());
                 }
             } else {
                 panic!()

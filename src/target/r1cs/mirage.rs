@@ -1,10 +1,11 @@
 //! Exporting our R1CS to bellman
 use bellman_proof::{
-    groth16::{
+    mirage::{
         create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
         Parameters, Proof, VerifyingKey,
     },
-    Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable,
+    random::{RandomCircuit, RandomConstraintSystem},
+    LinearCombination, SynthesisError, Variable,
 };
 use bincode::{deserialize_from, serialize_into};
 use ff::{Field, PrimeField, PrimeFieldBits};
@@ -18,11 +19,13 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use rug::integer::{IsPrime, Order};
 use rug::Integer;
 
 use super::*;
+use crate::ir::term::precomp::PreComp;
 
 /// Convert a (rug) integer to a prime field element.
 fn int_to_ff<F: PrimeField>(i: Integer) -> F {
@@ -37,9 +40,20 @@ fn int_to_ff<F: PrimeField>(i: Integer) -> F {
     accumulator
 }
 
+fn ff_to_int<F: PrimeFieldBits>(f: F) -> Integer {
+    let mut buffer = vec![];
+    use std::io::Read;
+    f.to_le_bits()
+        .as_bitslice()
+        .read_to_end(&mut buffer)
+        .unwrap();
+    //let bits = f.to_le_bits();
+    Integer::from_digits(&buffer, Order::Lsf)
+}
+
 /// Convert one our our linear combinations to a bellman linear combination.
 /// Takes a zero linear combination. We could build it locally, but bellman provides one, so...
-fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
+fn lc_to_bellman<F: PrimeField, CS: RandomConstraintSystem<F>>(
     vars: &HashMap<usize, Variable>,
     lc: &Lc,
     zero_lc: LinearCombination<F>,
@@ -76,24 +90,42 @@ fn get_modulus<F: Field + PrimeField>() -> Integer {
 ///
 /// Optionally contains a variable value map. This must be populated to use the
 /// bellman prover.
-pub struct SynthInput<'a>(&'a R1cs<String>, &'a Option<FxHashMap<String, Value>>);
+/// Last bool allows incomplete inputs (for getting random coins)
+pub struct SynthInput<'a> {
+    r1cs: &'a R1cs<String>,
+    input_map: &'a Option<FxHashMap<String, Value>>,
+    precomp: &'a Option<PreComp>,
+    epochs: &'a Vec<HashSet<String>>,
+    //random_coins: &'a HashSet<String>,
+}
 
-impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
+impl<'a, F: PrimeField + PrimeFieldBits> RandomCircuit<F> for SynthInput<'a> {
     #[track_caller]
     fn synthesize<CS>(self, cs: &mut CS) -> std::result::Result<(), SynthesisError>
     where
-        CS: ConstraintSystem<F>,
+        CS: RandomConstraintSystem<F>,
     {
         let f_mod = get_modulus::<F>();
         assert_eq!(
-            self.0.modulus.modulus(),
+            self.r1cs.modulus.modulus(),
             &f_mod,
-            "\nR1CS has modulus \n{},\n but Bellman CS expects \n{}",
-            self.0.modulus,
+            "\nR1CS has modulus \n{},\n but Mirage CS expects \n{}",
+            self.r1cs.modulus,
             f_mod
         );
-        let mut uses = HashMap::with_capacity(self.0.next_idx);
-        for (a, b, c) in self.0.constraints.iter() {
+
+        let num_epochs = *self.r1cs.signal_epochs.values().max().unwrap() as usize + 1;
+        // we only allow 2 epochs
+        assert!(num_epochs <= 2, "May only have 2 epochs for mirage!");
+        let f_mod_arc = Arc::new(f_mod);
+
+        // compute the
+
+        let mut values = self.input_map.clone();
+        //let mut coins = FxHashMap::<String, Variable>::default();
+
+        let mut uses = HashMap::with_capacity(self.r1cs.next_idx);
+        for (a, b, c) in self.r1cs.constraints.iter() {
             [a, b, c].iter().for_each(|y| {
                 y.monomials.keys().for_each(|k| {
                     uses.get_mut(k)
@@ -107,34 +139,86 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
                 })
             });
         }
-        let mut vars = HashMap::with_capacity(self.0.next_idx);
-        for i in 0..self.0.next_idx {
-            if let Some(s) = self.0.idxs_signals.get(&i) {
-                //for (_i, s) in self.0.idxs_signals.get() {
-                if uses.get(&i).is_some() {
+
+        let mut vars = HashMap::with_capacity(self.r1cs.next_idx);
+        for epoch in 0..num_epochs {
+            println!("at epoch {} of {}", epoch, num_epochs);
+            // compute the witnesses for this epoch
+            if let Some(precomp) = self.precomp {
+                let mut precomp_restricted = precomp.clone();
+                // only 1 epoch we need to restrict...
+                if let Some(epoch_vars) = self.epochs.get(epoch) {
+                    if epoch == 0 {
+                        precomp_restricted.restrict_to_inputs(epoch_vars.clone());
+                    }
+                }
+                values = Some(precomp_restricted.eval(&values.unwrap()));
+            }
+
+            // add each known witness/input variable to the constraint system
+            for i in 0..self.r1cs.next_idx {
+                if let Some(s) = self.r1cs.idxs_signals.get(&i) {
+                    // skip unused variables
+                    if uses.get(&i).is_none() {
+                        println!("drop dead var: {}", s);
+                        continue;
+                    }
+                    if *self.r1cs.signal_epochs.get(s).unwrap() != epoch as u8 {
+                        println!("skipping var not in this epoch {:?} {}", i, s);
+                        continue;
+                    }
+                    if self.r1cs.random_idxs.contains(&i) {
+                        println!("skipping public coin {}", s);
+                        continue;
+                    }
+
+                    println!(
+                        "adding var {} epoch {}",
+                        s,
+                        *self.r1cs.signal_epochs.get(s).unwrap()
+                    );
                     let name_f = || s.to_string();
                     let val_f = || {
                         Ok({
-                            let i_val = self.1.as_ref().expect("missing values").get(s).unwrap();
+                            let i_val = values.as_ref().expect("missing values").get(s).unwrap();
                             let ff_val = int_to_ff(i_val.as_pf().into());
                             debug!("value : {} -> {:?} ({})", s, ff_val, i_val);
                             ff_val
                         })
                     };
-                    let public = self.0.public_idxs.contains(&i);
-                    debug!("var: {}, public: {}", s, public);
+                    let public = self.r1cs.public_idxs.contains(&i);
+                    println!("var: {}, public: {}", s, public);
                     let v = if public {
                         cs.alloc_input(name_f, val_f)?
                     } else {
                         cs.alloc(name_f, val_f)?
                     };
                     vars.insert(i, v);
-                } else {
-                    debug!("drop dead var: {}", s);
+                }
+            }
+
+            if epoch == 0 {
+                // get public coins, add them to value map
+                for i in &self.r1cs.random_idxs {
+                    if let Some(s) = self.r1cs.idxs_signals.get(&i) {
+                        let coin_name_f = || s.to_string();
+                        let (coin_var, coin) = cs.alloc_random_coin(coin_name_f)?;
+                        vars.insert(*i, coin_var);
+                        if let Some(ref mut value_map) = values {
+                            let input_name = self.r1cs.signal_to_term.get(s).unwrap();
+                            println!("adding coin: {}", input_name);
+                            value_map.insert(
+                                input_name.clone(),
+                                Value::Field(FieldV::new(ff_to_int(coin), f_mod_arc.clone())),
+                            );
+                        }
+                    }
                 }
             }
         }
-        for (i, (a, b, c)) in self.0.constraints.iter().enumerate() {
+
+        // add all constraints
+        for (i, (a, b, c)) in self.r1cs.constraints.iter().enumerate() {
             cs.enforce(
                 || format!("con{}", i),
                 |z| lc_to_bellman::<F, CS>(&vars, a, z),
@@ -145,7 +229,7 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
         debug!(
             "done with synth: {} vars {} cs",
             vars.len(),
-            self.0.constraints.len()
+            self.r1cs.constraints.len()
         );
         Ok(())
     }
@@ -178,9 +262,16 @@ pub fn gen_params<E: Engine, P1: AsRef<Path>, P2: AsRef<Path>>(
 where
     E::G1: WnafGroup,
     E::G2: WnafGroup,
+    E::Fr: PrimeFieldBits,
 {
     let rng = &mut rand::thread_rng();
-    let p = generate_random_parameters::<E, _, _>(SynthInput(&p_data.r1cs, &None), rng).unwrap();
+    let synth_input = SynthInput {
+        r1cs: &p_data.r1cs,
+        input_map: &None,
+        precomp: &None,
+        epochs: &p_data.epochs,
+    };
+    let p = generate_random_parameters::<E, _, _>(synth_input, rng).unwrap();
     write_prover_key_and_data(pk_path, &p, p_data)?;
     write_verifier_key_and_data(vk_path, &p.vk, v_data)?;
     Ok(())
@@ -244,23 +335,34 @@ where
     let (pk, prover_data) = read_prover_key_and_data::<_, E>(pk_path)?;
     let rng = &mut rand::thread_rng();
 
-    // what we will do is compute in rounds 2 rounds
+    // we will compute in 2 rounds
     // each precompute input will have its epoch...
-    //
-    for (input, (sort, _epoch)) in &prover_data.precompute_inputs {
-        let value = inputs_map
-            .get(input)
-            .unwrap_or_else(|| panic!("No input for {}", input));
-        let sort2 = value.sort();
-        assert_eq!(
-            sort, &sort2,
-            "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-            input, sort, sort2
-        );
+    //println!("precomp inputs: {:?}", prover_data.precompute_inputs);
+    //println!("random coins: {:?}", prover_data.random_coins);
+    for (input, (sort, epoch)) in &prover_data.precompute_inputs {
+        if *epoch == 0 && !prover_data.random_coins.contains(input) {
+            let value = inputs_map
+                .get(input)
+                .unwrap_or_else(|| panic!("No input for {}", input));
+            let sort2 = value.sort();
+            assert_eq!(
+                sort, &sort2,
+                "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
+                input, sort, sort2
+            );
+        }
     }
-    let new_map = prover_data.precompute.eval(inputs_map);
-    prover_data.r1cs.check_all(&new_map);
-    let pf = create_random_proof(SynthInput(&prover_data.r1cs, &Some(new_map)), &pk, rng).unwrap();
+
+    //let new_map = prover_data.precompute.eval(inputs_map);
+    //prover_data.r1cs.check_all(&new_map);
+    //println!("prover epochs: {:?}", prover_data.epochs);
+    let synth_input = SynthInput {
+        r1cs: &prover_data.r1cs,
+        input_map: &Some(inputs_map.clone()),
+        precomp: &Some(prover_data.precompute),
+        epochs: &prover_data.epochs,
+    };
+    let pf = create_random_proof(synth_input, &pk, rng).unwrap();
     let mut pf_file = File::create(pf_path)?;
     pf.write(&mut pf_file)?;
     Ok(())
@@ -318,6 +420,13 @@ mod test {
         let by_fn = int_to_ff::<Scalar>(i.clone());
         let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
         by_fn == by_str
+    }
+
+    #[quickcheck]
+    fn ff_to_int_random(BlsScalar(i): BlsScalar) -> bool {
+        let ff = int_to_ff::<Scalar>(i.clone());
+        let int = ff_to_int(ff.clone());
+        int == i
     }
 
     fn convert(i: Integer) {

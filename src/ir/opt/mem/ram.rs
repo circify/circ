@@ -149,18 +149,20 @@ impl Ram {
             check(&read_value),
             Some(crate::ir::proof::PROVER_ID),
             0, // TODO: correct?
+            false,
             Some(read_value),
         );
         self.accesses.push(Access::new_read(idx, var.clone()));
         var
     }
+
     fn new_write(&mut self, idx: Term, val: Term, guard: Term) {
         debug_assert_eq!(&check(&idx), &self.idx_sort);
         debug_assert_eq!(&check(&val), &self.val_sort);
         debug_assert_eq!(&check(&guard), &Sort::Bool);
         self.accesses.push(Access::new_write(idx, val, guard));
     }
-    // TODO: Does this code organization make the most sense?
+
     fn sorted_by_index(&self, computation: &mut Computation) -> Ram {
         let idx_terms: Vec<Term> = self
             .accesses
@@ -200,6 +202,7 @@ impl Ram {
                 self.idx_sort.clone(),
                 Some(crate::ir::proof::PROVER_ID),
                 0, // TODO
+                false,
                 Some(term(Op::NthSmallest(i), idx_terms.clone())),
             );
             let val = computation.new_var(
@@ -207,6 +210,7 @@ impl Ram {
                 self.val_sort.clone(),
                 Some(crate::ir::proof::PROVER_ID),
                 0, // TODO
+                false,
                 Some(
                     term![Op::Select; val_array_term.clone(), term(Op::NthSmallest(i), idx_terms.clone())],
                 ),
@@ -596,15 +600,17 @@ impl Encoder {
         let alpha = computation.new_var(
             &format!("__alpha"),
             self.rams[0].idx_sort.clone(),
-            Some(crate::ir::proof::PROVER_ID),
+            None,
             0, // TODO
+            true,
             None,
         );
         let beta = computation.new_var(
             &format!("__beta"),
             self.rams[0].idx_sort.clone(),
-            Some(crate::ir::proof::PROVER_ID),
+            None,
             0, // TODO
+            true,
             None,
         );
 

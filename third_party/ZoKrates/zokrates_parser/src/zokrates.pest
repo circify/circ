@@ -46,7 +46,8 @@ vis_private_num = @{ "<" ~ ASCII_DIGIT* ~ ">" }
 epoch_num = @{ "<" ~ ASCII_DIGIT* ~ ">" }
 vis_private = {"private" ~ vis_private_num? ~ epoch_num? }
 vis_public = {"public"}
-vis = { vis_private | vis_public }
+vis_random = {"random"}
+vis = { vis_private | vis_public | vis_random }
 
 
 // Statements

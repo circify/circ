@@ -30,6 +30,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Eq => Vec::new(),
         Op::Var(_, _) => Vec::new(),
         Op::Const(_) => Vec::new(),
+        Op::Random(_, _) => Vec::new(),
         Op::BvBinOp(_) => vec![t.cs[0].clone()],
         Op::BvBinPred(_) => Vec::new(),
         Op::BvNaryOp(_) => vec![t.cs[0].clone()],
