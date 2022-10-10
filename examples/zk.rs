@@ -91,7 +91,7 @@ fn main() {
                     mirage::prove::<Bls12, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
                 }
                 #[cfg(not(feature = "mirage"))]
-                ProofSystem::Marlin => {
+                ProofSystem::Mirage => {
                     panic!("Missing feature: mirage");
                 }
             }
@@ -123,7 +123,7 @@ fn main() {
                         .unwrap();
                 }
                 #[cfg(not(feature = "mirage"))]
-                ProofSystem::Marlin => {
+                ProofSystem::Mirage => {
                     panic!("Missing feature: mirage");
                 }
             }
