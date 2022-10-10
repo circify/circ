@@ -540,6 +540,102 @@ pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     wrap_shift(">>", BvBinOp::Lshr, a, b)
 }
 
+fn wrap_vec(
+    ctx: &CirCtx,
+    name: &str,
+    fu: Option<fn(Term, Term) -> Term>,
+    fb: Option<fn(Term, Term) -> Term>,
+    a: CTerm,
+    b: CTerm,
+) -> Result<CTerm, String> {
+    match (a.term, b.term, fu, fb) {
+        (CTermData::CArray(ty_a, aid), CTermData::CArray(ty_b, bid), Some(fu), _) => {
+            // assert vectors are of same type
+            assert_eq!(ty_a, ty_b);
+
+            // init target array
+            let array_c = ty_a.default(ctx);
+
+            // add arrays together
+            let mut mem = ctx.mem.borrow_mut();
+            let array_a = mem.term(aid.unwrap());
+            let array_b = mem.term(bid.unwrap());
+            let array_c_term = fu(array_a, array_b);
+            if let CTermData::CArray(_, cid) = array_c.term {
+                mem.replace(cid.unwrap(), array_c_term);
+            }
+            Ok(array_c)
+        }
+        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+    }
+}
+
+pub fn vec_add_(a: Term, b: Term) -> Term {
+    term![Op::Map(Box::new(BV_ADD)); a, b]
+}
+
+pub fn vec_add(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_vec(ctx, "+", Some(vec_add_), None, a, b)
+}
+
+pub fn vec_sub_(a: Term, b: Term) -> Term {
+    term![Op::Map(Box::new(BV_SUB)); a, b]
+}
+
+pub fn vec_sub(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_vec(ctx, "-", Some(vec_sub_), None, a, b)
+}
+
+pub fn vec_mul_(a: Term, b: Term) -> Term {
+    term![Op::Map(Box::new(BV_MUL)); a, b]
+}
+
+pub fn vec_mul(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_vec(ctx, "*", Some(vec_mul_), None, a, b)
+}
+
+fn wrap_rot(
+    ctx: &CirCtx,
+    name: &str,
+    fu: Option<fn(Term, Term) -> Term>,
+    fb: Option<fn(Term, Term) -> Term>,
+    a: CTerm,
+    b: CTerm,
+) -> Result<CTerm, String> {
+    match (a.term, b.term, fu, fb) {
+        (CTermData::CArray(ty_a, aid), CTermData::CInt(_, _, t), Some(fu), _) => {
+            // init target array
+            let array_b = ty_a.default(ctx);
+
+            // add arrays together
+            let mut mem = ctx.mem.borrow_mut();
+            let array_a = mem.term(aid.unwrap());
+            let array_b_term = fu(array_a, t);
+            if let CTermData::CArray(_, bid) = array_b.term {
+                mem.replace(bid.unwrap(), array_b_term);
+            }
+            Ok(array_b)
+        }
+        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+    }
+}
+
+pub fn rot_left_(a: Term, b: Term) -> Term {
+    term![Op::Map(Box::new(BV_SHL)); a, b]
+}
+
+pub fn rot_left(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_rot(ctx, "<<", Some(rot_left_), None, a, b)
+}
+
+pub fn rot_right_(a: Term, b: Term) -> Term {
+    term![Op::Map(Box::new(BV_LSHR)); a, b]
+}
+
+pub fn rot_right(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
+    wrap_rot(ctx, ">>", Some(rot_right_), None, a, b)
+}
+
 pub struct Ct {}
 
 fn idx_name(struct_name: &str, idx: usize) -> String {

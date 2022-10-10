@@ -19,7 +19,9 @@ use lang_c::span::Node;
 use log::debug;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
+use std::iter::FromIterator;
 use std::path::PathBuf;
 
 use crate::front::PROVER_VIS;
@@ -663,14 +665,12 @@ impl CGen {
     }
 
     fn is_builtin(&self, fname: &str) -> bool {
-        match f_name {
-            "VecAdd" => true,
-            "VecSub" => true,
-            "VecMul" => true,
-            "RotLeft" => true,
-            "RotRight" => true,
-            _ => false,
-        }
+        let fns: HashSet<&str> = HashSet::from_iter(
+            ["VecAdd", "VecSub", "VecMul", "RotLeft", "RotRight"]
+                .iter()
+                .cloned(),
+        );
+        return fns.contains(fname);
     }
 
     fn builtin_call(&self, f_name: &str, args: Vec<CTerm>) -> Result<CTerm, String> {
@@ -803,7 +803,7 @@ impl CGen {
                     .collect::<Vec<_>>();
 
                 if self.is_builtin(&fname) {
-                    return self.builtin_call(&fname, args);
+                    return self.unwrap(self.builtin_call(&fname, args));
                 }
 
                 let f = self
