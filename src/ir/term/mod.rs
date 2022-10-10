@@ -51,6 +51,9 @@ pub enum Op {
     Var(String, Sort),
     /// a constant
     Const(Value),
+    /// a random value
+    /// TODO: might be better to merge with var?
+    Random(String, Sort),
 
     /// if-then-else: ternary
     Ite,
@@ -152,6 +155,9 @@ pub enum Op {
     /// Cyclic right rotation of an array
     /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
     Rot(usize),
+    /// Returns the nth smallest of its arguments
+    /// May only be used in precomputes
+    NthSmallest(usize),
 }
 
 /// Boolean AND
@@ -243,6 +249,7 @@ impl Op {
             Op::Eq => Some(2),
             Op::Var(_, _) => Some(0),
             Op::Const(_) => Some(0),
+            Op::Random(_, _) => Some(0),
             Op::BvBinOp(_) => Some(2),
             Op::BvBinPred(_) => Some(2),
             Op::BvNaryOp(_) => None,
@@ -279,6 +286,7 @@ impl Op {
             Op::Map(op) => op.arity(),
             Op::Call(_, args, _) => Some(args.len()),
             Op::Rot(_) => Some(1),
+            Op::NthSmallest(_) => None,
         }
     }
 }
@@ -290,6 +298,7 @@ impl Display for Op {
             Op::Eq => write!(f, "="),
             Op::Var(n, _) => write!(f, "{}", n),
             Op::Const(c) => write!(f, "{}", c),
+            Op::Random(r, _) => write!(f, "rand {}", r),
             Op::BvBinOp(a) => write!(f, "{}", a),
             Op::BvBinPred(a) => write!(f, "{}", a),
             Op::BvNaryOp(a) => write!(f, "{}", a),
@@ -326,6 +335,7 @@ impl Display for Op {
             Op::Map(op) => write!(f, "(map({}))", op),
             Op::Call(name, _, _) => write!(f, "fn:{}", name),
             Op::Rot(i) => write!(f, "(rot {})", i),
+            Op::NthSmallest(i) => write!(f, "(nthsmallest {})", i),
         }
     }
 }
@@ -1692,6 +1702,13 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             Value::Array(res)
         }
 
+        Op::NthSmallest(i) => {
+            let mut xs: Vec<Value> = c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect();
+            xs.sort();
+            let res = xs[*i].clone();
+            println!("got: {:?}", res);
+            res
+        }
         o => unimplemented!("eval: {:?}", o),
     };
     vs.insert(c.clone(), v.clone());
@@ -1818,6 +1835,9 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
+/// Epoch number for a particular input
+pub type Epoch = u8;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
@@ -1826,9 +1846,29 @@ pub struct ComputationMetadata {
     /// The next free id.
     pub next_party_id: PartyId,
     /// All inputs, including who knows them. If no visibility is set, the input is public.
-    pub input_vis: FxHashMap<String, (Term, Option<PartyId>)>,
+    pub input_vis: FxHashMap<String, InputMetadata>,
     /// The inputs for the computation itself (not the precomputation).
     pub computation_inputs: FxHashSet<String>,
+}
+
+/// An input to the computation
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InputMetadata {
+    term: Term,
+    visibility: Option<PartyId>,
+    epoch: Epoch,
+    random: bool,
+}
+
+impl InputMetadata {
+    fn new(term: Term, visibility: Option<PartyId>, epoch: Epoch, random: bool) -> InputMetadata {
+        InputMetadata {
+            term,
+            visibility,
+            epoch,
+            random,
+        }
+    }
 }
 
 impl ComputationMetadata {
@@ -1839,17 +1879,27 @@ impl ComputationMetadata {
         self.next_party_id - 1
     }
     /// Add a new input to the computation, visible to `party`, or public if `party` is [None].
-    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>, sort: Sort) {
+    pub fn new_input(
+        &mut self,
+        input_name: String,
+        party: Option<PartyId>,
+        epoch: Epoch,
+        random: bool,
+        sort: Sort,
+    ) {
         let term = leaf_term(Op::Var(input_name.clone(), sort));
         debug_assert!(
             !self.input_vis.contains_key(&input_name)
-                || self.input_vis.get(&input_name).unwrap().1 == party,
+                || self.input_vis.get(&input_name).unwrap().visibility == party,
             "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
             input_name,
             party,
             self.input_vis.get(&input_name).unwrap()
         );
-        self.input_vis.insert(input_name.clone(), (term, party));
+        self.input_vis.insert(
+            input_name.clone(),
+            InputMetadata::new(term, party, epoch, random),
+        );
         self.computation_inputs.insert(input_name);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
@@ -1862,7 +1912,19 @@ impl ComputationMetadata {
                     input_name, self.input_vis
                 )
             })
-            .1
+            .visibility
+    }
+    /// Returns the epoch number for the input.
+    pub fn get_epoch(&self, input_name: &str) -> Epoch {
+        self.input_vis
+            .get(input_name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Missing input {} in inputs{:#?}",
+                    input_name, self.input_vis
+                )
+            })
+            .epoch
     }
     /// Is this input public?
     pub fn is_input(&self, input_name: &str) -> bool {
@@ -1874,14 +1936,26 @@ impl ComputationMetadata {
     }
     /// What sort is this input?
     pub fn input_sort(&self, input_name: &str) -> Sort {
-        check(&self.input_vis.get(input_name).unwrap().0)
+        check(&self.input_vis.get(input_name).unwrap().term)
     }
     /// Get all public inputs to the computation itself.
     ///
     /// Excludes pre-computation inputs
     pub fn public_input_names(&'_ self) -> impl Iterator<Item = &str> + '_ {
         self.input_vis.iter().filter_map(move |(name, party)| {
-            if party.1.is_none() && self.computation_inputs.contains(name) {
+            if party.visibility.is_none() && self.computation_inputs.contains(name) {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        })
+    }
+    /// Get all random inputs to the computation itself.
+    ///
+    /// Excludes pre-computation inputs
+    pub fn random_input_names<'a>(&'a self) -> impl Iterator<Item = &str> + 'a {
+        self.input_vis.iter().filter_map(move |(name, party)| {
+            if party.random && self.computation_inputs.contains(name) {
                 Some(name.as_str())
             } else {
                 None
@@ -1896,22 +1970,38 @@ impl ComputationMetadata {
     #[allow(clippy::needless_lifetimes)]
     pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a {
         // TODO: check order?
+        self.input_vis.iter().filter_map(move |(name, input)| {
+            if input.visibility.is_none() && self.computation_inputs.contains(name) {
+                Some(input.term.clone())
+            } else {
+                None
+            }
+        })
+    }
+    /// Get all the inputs visible to `party`.
+    pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashMap<String, u8> {
         self.input_vis
             .iter()
-            .filter_map(move |(name, (term, vis))| {
-                if vis.is_none() && self.computation_inputs.contains(name) {
-                    Some(term.clone())
+            .filter_map(|(name, input)| {
+                if input.visibility.is_none() || input.visibility == party {
+                    Some((name.clone(), input.epoch))
                 } else {
                     None
                 }
             })
+            .collect()
     }
-    /// Get all the inputs visible to `party`.
-    pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashSet<String> {
+
+    /// get all inputs visible to `party` that can be computed in the given epoch.
+    pub fn get_inputs_for_party_epoch(
+        &self,
+        party: Option<PartyId>,
+        epoch: u8,
+    ) -> FxHashSet<String> {
         self.input_vis
             .iter()
-            .filter_map(|(name, (_, vis))| {
-                if vis.is_none() || vis == &party {
+            .filter_map(|(name, input)| {
+                if input.visibility.is_none() || input.visibility == party && input.epoch == epoch {
                     Some(name.clone())
                 } else {
                     None
@@ -1939,7 +2029,7 @@ impl ComputationMetadata {
             .map(|i| {
                 let vis = visibilities.get(i).map(|p| *party_ids.get(p).unwrap());
                 let term = inputs.remove(i).unwrap();
-                (i.clone(), (term, vis))
+                (i.clone(), InputMetadata::new(term, vis, 0, false))
             })
             .collect();
         ComputationMetadata {
@@ -1970,10 +2060,10 @@ impl Display for ComputationMetadata {
             write!(f, " ({} {})", input, sort)?;
         }
         write!(f, ")\n  (")?;
-        for (input, (_, vis)) in &self.input_vis {
-            if let Some(id) = vis {
-                let party = self.party_ids.iter().find(|(_, i)| *i == id).unwrap();
-                write!(f, " ({} {})", input, party.0)?;
+        for (input, input_meta) in &self.input_vis {
+            if let Some(id) = input_meta.visibility {
+                let party = self.party_ids.iter().find(|(_, i)| **i == id).unwrap();
+                write!(f, " ({} {} {})", input, party.0, input_meta.epoch)?;
             }
         }
         write!(f, ")\n)")
@@ -2008,12 +2098,43 @@ impl Computation {
         name: &str,
         s: Sort,
         party: Option<PartyId>,
+        epoch: Epoch,
+        random: bool,
         precompute: Option<Term>,
     ) -> Term {
-        debug!("Var: {} : {} (visibility: {:?})", name, s, party);
-        self.metadata.new_input(name.to_owned(), party, s.clone());
+        self.new_var_epoched(name, s, party, epoch, random, precompute)
+    }
+
+    /// Create a new variable, `name: s`, where `val_fn` can be called to get the concrete value,
+    /// and `public` indicates whether this variable is public in the constraint system.
+    ///
+    /// ## Arguments
+    ///
+    ///    * `name`: the name of the new variable
+    ///    * `s`: its sort
+    ///    * `party`: its visibility: who knows it initially
+    ///    * `epoch`: the epoch the input is chosen in
+    ///    * `precompute`: a precomputation that can determine its value (optional). Note that the
+    ///      precomputation may rely on information that some parties do not have. In this case,
+    ///      those parties will have to provide a value for the variables directly.
+    pub fn new_var_epoched(
+        &mut self,
+        name: &str,
+        s: Sort,
+        party: Option<PartyId>,
+        epoch: Epoch,
+        random: bool,
+        precompute: Option<Term>,
+    ) -> Term {
+        debug!(
+            "Var: {} : {} (visibility: {:?}, epoch: {:?})",
+            name, s, epoch, party
+        );
+        self.metadata
+            .new_input(name.to_owned(), party, epoch, random, s.clone());
         if let Some(p) = precompute {
             assert_eq!(&s, &check(&p));
+            assert!(!random, "Cannot have a precompute on a random variable!");
             self.precomputes.add_output(name.to_owned(), p);
         }
         leaf_term(Op::Var(name.to_owned(), s))
@@ -2041,8 +2162,17 @@ impl Computation {
                 _ => panic!("Precomputation for new var {} with term\n\t{}\ninvolves multiple input non-public visibilities:\n\t{:?}", new_input_var, precomp, input_visiblities),
             }
         };
+        // TODO: Does this make sense?
+        //       Can you ever have a precomputed value with an epoch that isn't 0?
+        let epoch = {
+            let input_epochs: FxHashSet<Epoch> = extras::free_variables(precomp.clone())
+                .into_iter()
+                .map(|v| self.metadata.get_epoch(&v))
+                .collect();
+            *input_epochs.iter().max().unwrap_or(&0)
+        };
         let sort = check(&precomp);
-        self.new_var(&new_input_var, sort, vis, Some(precomp));
+        self.new_var(&new_input_var, sort, vis, epoch, false, Some(precomp));
     }
 
     /// Change the sort of a variables

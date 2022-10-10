@@ -1,5 +1,5 @@
 //! Exporting our R1CS to bellman
-use ::bellman::{
+use bellman_proof::{
     groth16::{
         create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
         Parameters, Proof, VerifyingKey,
@@ -243,7 +243,11 @@ where
 {
     let (pk, prover_data) = read_prover_key_and_data::<_, E>(pk_path)?;
     let rng = &mut rand::thread_rng();
-    for (input, sort) in &prover_data.precompute_inputs {
+
+    // what we will do is compute in rounds 2 rounds
+    // each precompute input will have its epoch...
+    //
+    for (input, (sort, _epoch)) in &prover_data.precompute_inputs {
         let value = inputs_map
             .get(input)
             .unwrap_or_else(|| panic!("No input for {}", input));

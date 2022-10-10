@@ -30,6 +30,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Eq => Vec::new(),
         Op::Var(_, _) => Vec::new(),
         Op::Const(_) => Vec::new(),
+        Op::Random(_, _) => Vec::new(),
         Op::BvBinOp(_) => vec![t.cs[0].clone()],
         Op::BvBinPred(_) => Vec::new(),
         Op::BvNaryOp(_) => vec![t.cs[0].clone()],
@@ -66,6 +67,9 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Map(_) => t.cs.clone(),
         Op::Call(_, _, _) => Vec::new(),
         Op::Rot(_) => vec![t.cs[0].clone()],
+        // TODO: for now, I'm assuming the type of all args will be the same
+        //       though I don't think anything enforces this...
+        Op::NthSmallest(_) => vec![t.cs[0].clone()],
     }
 }
 
@@ -182,6 +186,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         }
         Op::Call(_, _, ret) => Ok(ret.clone()),
         Op::Rot(_) => Ok(get_ty(&t.cs[0]).clone()),
+        Op::NthSmallest(_) => Ok(get_ty(&t.cs[0]).clone()),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }
@@ -420,6 +425,30 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::Rot(_), &[Sort::Array(k, v, n)]) => bv_or(k, "rot key")
             .and_then(|_| bv_or(v, "rot val"))
             .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
+        (Op::NthSmallest(i), a) => {
+            if *i < a.len() {
+                let first = a
+                    .iter()
+                    .next()
+                    .ok_or_else(|| TypeErrorReason::EmptyNary("nthsmallest".to_string()))?;
+                for x in a {
+                    if first != x {
+                        return Err(TypeErrorReason::NotEqual(
+                            (*first).clone(),
+                            (*x).clone(),
+                            "nthsmallest",
+                        ));
+                    }
+                }
+                Ok((*first).clone())
+            } else {
+                Err(TypeErrorReason::OutOfBounds(format!(
+                    "nthsmallest {} in with args of len {}",
+                    i,
+                    a.len()
+                )))
+            }
+        }
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
     }
 }

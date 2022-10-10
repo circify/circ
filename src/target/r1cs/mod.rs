@@ -14,6 +14,10 @@ use crate::ir::term::*;
 
 #[cfg(feature = "r1cs")]
 pub mod bellman;
+#[cfg(all(feature = "r1cs", feature = "marlin"))]
+pub mod marlin;
+#[cfg(feature = "r1cs")]
+pub mod mirage;
 pub mod opt;
 pub mod trans;
 
@@ -22,11 +26,14 @@ pub mod trans;
 pub struct R1cs<S: Hash + Eq> {
     modulus: FieldT,
     signal_idxs: HashMap<S, usize>,
+    signal_epochs: HashMap<S, u8>,
     idxs_signals: HashMap<usize, S>,
     next_idx: usize,
     public_idxs: HashSet<usize>,
+    random_idxs: HashSet<usize>,
     constraints: Vec<(Lc, Lc, Lc)>,
     terms: Vec<Term>,
+    signal_to_term: HashMap<S, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +67,13 @@ impl Lc {
     /// Is this a constant? If so, return that constant.
     pub fn as_const(&self) -> Option<&FieldV> {
         self.monomials.is_empty().then_some(&self.constant)
+    }
+
+    /// Does it have any of the keys in `set`
+    pub fn contains_any(&self, set: &HashSet<usize>) -> bool {
+        let keys_set: HashSet<usize> = self.monomials.keys().copied().collect();
+        let intersection: HashSet<&usize> = keys_set.intersection(&set).collect();
+        !intersection.is_empty()
     }
 }
 
@@ -202,10 +216,13 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             modulus,
             signal_idxs: HashMap::default(),
             idxs_signals: HashMap::default(),
+            signal_epochs: HashMap::default(),
             next_idx: 0,
             public_idxs: HashSet::default(),
+            random_idxs: HashSet::default(),
             constraints: Vec::new(),
             terms: Vec::new(),
+            signal_to_term: HashMap::default(),
         }
     }
     /// Get the zero combination for this system.
@@ -240,11 +257,18 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     /// value, `v`.
     ///
     /// You must also provide `term`, that computes the signal value from *some* inputs.
-    pub fn add_signal(&mut self, s: S, term: Term) {
+    /// TODO: add epoch
+    pub fn add_signal(&mut self, s: S, term: Term, epoch: u8) {
         let n = self.next_idx;
         self.next_idx += 1;
+        self.signal_epochs.insert(s.clone(), epoch);
         self.signal_idxs.insert(s.clone(), n);
-        self.idxs_signals.insert(n, s);
+        self.idxs_signals.insert(n, s.clone());
+
+        if let Op::Var(name, _) = &term.op {
+            self.signal_to_term.insert(s, name.to_string());
+        }
+
         assert_eq!(n, self.terms.len());
         self.terms.push(term);
     }
@@ -254,6 +278,13 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             .get(s)
             .cloned()
             .map(|i| self.public_idxs.insert(i));
+    }
+    /// Make `s` a random wire in the system
+    pub fn randomize(&mut self, s: &S) {
+        self.signal_idxs
+            .get(s)
+            .cloned()
+            .map(|i| self.random_idxs.insert(i));
     }
     /// Make `a * b = c` a constraint.
     pub fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
@@ -378,26 +409,58 @@ impl R1cs<String> {
     pub fn verifier_data(&self, cs: &Computation) -> VerifierData {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, true);
-        let public_inputs = cs.metadata.get_inputs_for_party(None);
-        precompute.restrict_to_inputs(public_inputs);
+        let mut public_inputs = cs.metadata.get_inputs_for_party(None);
+        let random_coins: HashSet<String> = cs
+            .metadata
+            .random_input_names()
+            .map(|s| s.to_string())
+            .collect();
+        // TODO: do this better
+        for coin in &random_coins {
+            public_inputs.remove(coin);
+        }
+        precompute.restrict_to_inputs(public_inputs.keys().cloned().collect());
+
+        // all public inputs are in epoch 0
+        let max_epoch = public_inputs.values().max().unwrap();
+        assert_eq!(*max_epoch, 0, "All public inputs must be in epoch 0!");
+        let mut epochs = vec![HashSet::<String>::default(); *max_epoch as usize + 1];
+        public_inputs.iter().for_each(|(input, epoch)| {
+            if random_coins.contains(input) {
+                return;
+            }
+            for e in 0..*epoch + 1 {
+                epochs[e as usize].insert(input.to_string());
+            }
+        });
+
+        println!("public_idxs: {:?}", self.public_idxs);
         let pf_input_order: Vec<String> = (0..self.next_idx)
+            .filter(|i| self.public_idxs.contains(i) && !self.random_idxs.contains(i))
+            .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
+            .collect();
+        println!("pf input order: {:?}", pf_input_order);
+        let pf_input_order_alt: Vec<String> = (0..self.next_idx)
             .filter(|i| self.public_idxs.contains(i))
             .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
             .collect();
+        println!("alternate: {:?}", pf_input_order_alt);
         let mut precompute_inputs = HashMap::default();
         for input in &pf_input_order {
             if let Some(output_term) = precompute.outputs().get(input) {
                 for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
-                    precompute_inputs.insert(v, s);
+                    precompute_inputs.insert(v.clone(), (s, *public_inputs.get(&v).unwrap()));
                 }
             } else {
-                precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
+                precompute_inputs.insert(input.clone(), (Sort::Field(self.modulus.clone()), 0));
             }
         }
         VerifierData {
             precompute_inputs,
             precompute,
             pf_input_order,
+            epochs,
+            random_coins,
         }
     }
 
@@ -409,7 +472,27 @@ impl R1cs<String> {
         // we still need to remove the non-r1cs variables
         use crate::ir::proof::PROVER_ID;
         let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
-        precompute.restrict_to_inputs(all_inputs);
+        precompute.restrict_to_inputs(all_inputs.keys().cloned().collect());
+        let random_coins: HashSet<String> = cs
+            .metadata
+            .random_input_names()
+            .map(|s| s.to_string())
+            .collect();
+        println!("Random coins are: {:?}", random_coins);
+
+        // TODO: gross...
+        let max_epoch = all_inputs.values().max().unwrap();
+        let mut epochs = vec![HashSet::<String>::default(); *max_epoch as usize + 1];
+        all_inputs.iter().for_each(|(input, epoch)| {
+            if random_coins.contains(input) {
+                return;
+            }
+            // GROSS::::::::::::::::::::::::::::::::::::::::::::::::::::;
+            for e in 0..*epoch + 1 {
+                epochs[e as usize].insert(input.to_string());
+            }
+        });
+
         let pf_input_order: Vec<String> = (0..self.next_idx)
             .filter(|i| self.public_idxs.contains(i))
             .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
@@ -418,10 +501,10 @@ impl R1cs<String> {
         for input in &pf_input_order {
             if let Some(output_term) = precompute.outputs().get(input) {
                 for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
-                    precompute_inputs.insert(v, s);
+                    precompute_inputs.insert(v.clone(), (s, *all_inputs.get(&v).unwrap()));
                 }
             } else {
-                precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
+                precompute_inputs.insert(input.clone(), (Sort::Field(self.modulus.clone()), 0));
             }
         }
         for o in precompute.outputs().keys() {
@@ -431,6 +514,8 @@ impl R1cs<String> {
             precompute_inputs,
             precompute,
             r1cs: self.clone(),
+            epochs,
+            random_coins,
         }
     }
 
@@ -452,28 +537,43 @@ impl R1cs<String> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifierData {
     /// Inputs that the verifier must have
-    pub precompute_inputs: HashMap<String, Sort>,
+    pub precompute_inputs: HashMap<String, (Sort, u8)>,
     /// A precomputation to perform on those inputs
     pub precompute: precomp::PreComp,
     /// The order in which the outputs must be fed into the proof system
     pub pf_input_order: Vec<String>,
+    /// Mapping from the epoch number to a set of inputs
+    pub epochs: Vec<HashSet<String>>,
+    /// Random coins...we will only use 1 set for now...
+    pub random_coins: HashSet<String>,
 }
 
 impl VerifierData {
     /// Given verifier inputs, compute a vector of integers to feed to the proof system.
     pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<rug::Integer> {
-        for (input, sort) in &self.precompute_inputs {
-            let value = value_map
-                .get(input)
-                .unwrap_or_else(|| panic!("No input for {}", input));
-            let sort2 = value.sort();
-            assert_eq!(
-                sort, &sort2,
-                "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-                input, sort, sort2
-            );
+        println!("random coins are: {:?}", self.random_coins);
+        println!(
+            "precomp outputs are: {:?}",
+            self.precompute.outputs().keys()
+        );
+        println!("expected inputs are: {:?}", self.precompute.inputs());
+        println!("expected inputs2 are: {:?}", self.precompute_inputs);
+        println!("my inputs are: {:?}", value_map);
+        for (input, (sort, _epoch)) in &self.precompute_inputs {
+            if !self.random_coins.contains(input) {
+                let value = value_map
+                    .get(input)
+                    .unwrap_or_else(|| panic!("No input for {}", input));
+                let sort2 = value.sort();
+                assert_eq!(
+                    sort, &sort2,
+                    "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
+                    input, sort, sort2
+                );
+            }
         }
         let new_map = self.precompute.eval(value_map);
+        println!("end map is: {:?}", new_map);
         self.pf_input_order
             .iter()
             .map(|input| {
@@ -493,9 +593,13 @@ pub struct ProverData {
     /// The R1CS instance.
     pub r1cs: R1cs<String>,
     /// Inputs that the verifier must have
-    pub precompute_inputs: HashMap<String, Sort>,
+    pub precompute_inputs: HashMap<String, (Sort, u8)>,
     /// A precomputation to perform on those inputs
     pub precompute: precomp::PreComp,
+    /// Mapping from the epoch number to a set of inputs
+    pub epochs: Vec<HashSet<String>>,
+    /// Random coins...we will only use 1 set for now...
+    pub random_coins: HashSet<String>,
 }
 
 #[derive(Clone, Debug)]

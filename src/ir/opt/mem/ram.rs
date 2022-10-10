@@ -35,6 +35,83 @@ impl Access {
     }
 }
 
+fn multiset_hash(terms: impl IntoIterator<Item = Term>, alpha: &Term) -> Term {
+    let field = match check(alpha) {
+        Sort::Field(field) => field,
+        _ => panic!("Alpha value for universal hash isn't a field!"),
+    };
+
+    let factors = terms
+        .into_iter()
+        .map(|t| {
+            // construct (alpha - t) for each term
+            assert_eq!(
+                check(&t),
+                Sort::Field(field.clone()),
+                "Term in multiset hash doesn't have correct field type!"
+            );
+            term![PF_ADD; alpha.clone(), term![PF_NEG; t.clone()]]
+        })
+        .collect();
+
+    term(PF_MUL, factors)
+}
+
+/// Constructs a term representing the unviersal hash of all terms passed in.
+/// Tuples and Arrays are handled recursively
+fn universal_hash(terms: impl IntoIterator<Item = Term>, beta: &Term) -> Term {
+    let field = match check(beta) {
+        Sort::Field(field) => field,
+        _ => panic!("Beta value for universal hash isn't a field!"),
+    };
+
+    // TODO: is extending the iterator here better?
+    let mut stack: Vec<Term> = terms.into_iter().collect();
+    let mut results: Vec<Term> = Vec::new();
+    let mut factor_index = 0;
+    while !stack.is_empty() {
+        let curr_term = stack.pop().unwrap();
+        match check(&curr_term) {
+            Sort::Tuple(sorts) => {
+                stack.extend((0..sorts.len()).map(|i| term![Op::Field(i); curr_term.clone()]));
+            }
+            Sort::Array(k, _, n) => {
+                stack.extend((0..n).map(|i| {
+                    let idx = match k.as_ref() {
+                        Sort::Field(field_typ) => Value::Field(field_typ.new_v(i)),
+                        Sort::BitVector(width) => {
+                            Value::BitVector(BitVector::new(rug::Integer::from(i), *width))
+                        }
+                        _ => panic!("RAM: We don't support arrays with indices other than Field or Bitvector"),
+                    };
+                    term![Op::Select; curr_term.clone(), term![Op::Const(idx)]]
+                }));
+            }
+            _ => {
+                //let mut factors = vec![beta.clone(); factor_index];
+                if factor_index != 0 {
+                    let beta_power = term(PF_MUL, vec![beta.clone(); factor_index]);
+                    results.push(term![PF_MUL; beta_power, cast_to_field(&curr_term, &field)]);
+                } else {
+                    results.push(cast_to_field(&curr_term, &field));
+                }
+                //factors.push(cast_to_field(&curr_term, &field));
+                factor_index += 1;
+            }
+        }
+    }
+    //println!("Universal hash factors: {:?}", results);
+    term(PF_ADD, results)
+}
+
+fn cast_to_field(term: &Term, field: &circ_fields::FieldT) -> Term {
+    match check(term) {
+        Sort::Field(_) => term.clone(),
+        Sort::BitVector(_) => term![Op::UbvToPf(field.clone()); term.clone()],
+        _ => panic!("Cannot cast term of type {:?} to field!", check(term)),
+    }
+}
+
 #[derive(Debug)]
 /// A RAM transcript
 pub struct Ram {
@@ -71,16 +148,89 @@ impl Ram {
             &val_name,
             check(&read_value),
             Some(crate::ir::proof::PROVER_ID),
+            0, // TODO: correct?
+            false,
             Some(read_value),
         );
         self.accesses.push(Access::new_read(idx, var.clone()));
         var
     }
+
     fn new_write(&mut self, idx: Term, val: Term, guard: Term) {
         debug_assert_eq!(&check(&idx), &self.idx_sort);
         debug_assert_eq!(&check(&val), &self.val_sort);
         debug_assert_eq!(&check(&guard), &Sort::Bool);
         self.accesses.push(Access::new_write(idx, val, guard));
+    }
+
+    fn sorted_by_index(&self, computation: &mut Computation) -> Ram {
+        let idx_terms: Vec<Term> = self
+            .accesses
+            .iter()
+            .map(|access| access.idx.clone())
+            .collect();
+        // create array from idx->val to precompute correct values from sorted idxs
+        let empty_arr = leaf_term(Op::Const(Value::Array(Array::default(
+            self.idx_sort.clone(),
+            &self.val_sort,
+            self.accesses.len(),
+        ))));
+        let val_array_term = self.accesses.iter().fold(
+            empty_arr,
+            |arr, access| term![Op::Store; arr, access.idx.clone(), access.val.clone()],
+        );
+
+        // construct a term that ensures __ram_srows are a witness to the ordering
+        // constraints on __ram values
+        let mut sorted_accesses = Vec::new();
+        for i in 0..self.accesses.len() {
+            // create an input for each field
+            // TODO: create a check + stronger opt where we elide all writes
+            //       when we have a pattern of "all writes" -> "all reads",
+            //       where val is the value from the last write
+            //let is_write_name = format!("__ram_srow_{}_{}.is_write", ramid, i);
+            let idx_name = format!("__ram_srow_{}_{}.idx", self.id, i);
+            let val_name = format!("__ram_srow_{}_{}.val", self.id, i);
+            //let is_write = cs.new_var(
+            //    &is_write_name,
+            //    ram.idx_sort.clone(),
+            //    Some(crate::ir::proof::PROVER_ID),
+            //    None,
+            //);
+            let idx = computation.new_var(
+                &idx_name,
+                self.idx_sort.clone(),
+                Some(crate::ir::proof::PROVER_ID),
+                0, // TODO
+                false,
+                Some(term(Op::NthSmallest(i), idx_terms.clone())),
+            );
+            let val = computation.new_var(
+                &val_name,
+                self.val_sort.clone(),
+                Some(crate::ir::proof::PROVER_ID),
+                0, // TODO
+                false,
+                Some(
+                    term![Op::Select; val_array_term.clone(), term(Op::NthSmallest(i), idx_terms.clone())],
+                ),
+            );
+            let access = Access {
+                is_write: bool_lit(false),
+                idx,
+                val,
+            };
+            sorted_accesses.push(access);
+        }
+
+        Ram {
+            id: self.id,
+            init_val: self.init_val.clone(),
+            size: self.size,
+            accesses: sorted_accesses,
+            idx_sort: self.idx_sort.clone(),
+            val_sort: self.val_sort.clone(),
+        }
     }
 }
 
@@ -194,7 +344,6 @@ impl ArrayGraph {
                 .collect();
             while let Some(t) = stack.pop() {
                 if !t.is_const() && !non_ram.contains(&t) {
-                    debug!("Non-RAM: {}", Letified(t.clone()));
                     non_ram.insert(t.clone());
                     for t in ps.get(&t).into_iter().flatten() {
                         stack.push(t.clone());
@@ -213,6 +362,15 @@ impl ArrayGraph {
     }
     fn is_ram(&self, t: &Term) -> bool {
         !t.is_const() && self.array_terms.contains(t) && !self.non_ram.contains(t)
+    }
+    fn is_ram_read(&self, t: &Term) -> bool {
+        match t.op {
+            Op::Field(idx) => {
+                // recursively check if the field of t is a ram
+                self.is_ram_read(&t.cs[0].get().cs[idx])
+            }
+            _ => !t.is_const() && self.array_terms.contains(t) && !self.non_ram.contains(t),
+        }
     }
 }
 
@@ -244,11 +402,41 @@ impl Extactor {
                 self.rams.push(Ram::new(id, a.clone()));
                 id
             }
+            Op::Field(idx) => self.get_or_start(&t.cs[0].get().cs[*idx]),
             _ => *self
                 .term_ram
                 .get(t)
                 .unwrap_or_else(|| panic!("No RAM for term {}", extras::Letified(t.clone()))),
         }
+    }
+
+    fn rewrite_indices(&mut self) {
+        // TODO: try to optimize this?
+        let mut cache = TermMap::new();
+        let mut rams: Vec<Ram> = self.rams.drain(0..).collect();
+        for ram in &mut rams {
+            for access in &mut ram.accesses {
+                access.idx = self.rewrite_index_term(access.idx.clone(), &mut cache);
+            }
+        }
+        self.rams = rams;
+    }
+
+    /// Rewrite a single index term recursivly. Uses the cache if we have already
+    /// seen this term before
+    fn rewrite_index_term(&self, t: Term, cache: &mut TermMap<Term>) -> Term {
+        if self.read_terms.contains_key(&t) {
+            return self.read_terms.get(&t).unwrap().clone();
+        }
+
+        // rewrite all children
+        let mut rewritten_children = Vec::new();
+        for c in &t.get().cs {
+            rewritten_children.push(self.rewrite_index_term(c.clone(), cache));
+        }
+        let res = term(t.get().op.clone(), rewritten_children);
+        cache.insert(t, res.clone());
+        res
     }
 }
 
@@ -290,7 +478,10 @@ impl RewritePass for Extactor {
         } else {
             match &t.op {
                 // Rewrite select's whose array is a RAM term
-                Op::Select if self.graph.is_ram(&t.cs[0]) => {
+                Op::Select if self.graph.is_ram_read(&t.cs[0]) => {
+                    if let Op::Field(_) = t.op {
+                        println!("Field op in ram!: {:?}", t);
+                    }
                     let ram_id = self.get_or_start(&t.cs[0]);
                     let ram = &mut self.rams[ram_id];
                     let read_value = ram.new_read(t.cs[1].clone(), computation, t.clone());
@@ -300,6 +491,144 @@ impl RewritePass for Extactor {
                 _ => None,
             }
         }
+    }
+}
+
+struct Encoder {
+    rams: Vec<Ram>,
+}
+
+impl Encoder {
+    fn new(rams: Vec<Ram>) -> Encoder {
+        Encoder { rams }
+    }
+
+    fn construct_permutation_check(ram1: &Ram, ram2: &Ram, alpha: Term, beta: Term) -> Term {
+        // TODO: support non-field indices?
+        //       Just do a cast on permuation check, and have correct type
+        //       in sorted check
+
+        // construct a term to check the __ram_srow values are the same as the
+        // __ram values
+        let orig_ms_hash = multiset_hash(
+            ram1.accesses
+                .iter()
+                .map(|access| universal_hash(vec![access.idx.clone(), access.val.clone()], &beta)),
+            &alpha,
+        );
+
+        let perm_ms_hash = multiset_hash(
+            ram2.accesses
+                .iter()
+                .map(|access| universal_hash(vec![access.idx.clone(), access.val.clone()], &beta)),
+            &alpha,
+        );
+
+        term![EQ; orig_ms_hash, perm_ms_hash]
+    }
+
+    fn construct_sorted_check(sorted_ram: &Ram) -> Term {
+        // TODO: support non-field indices?
+        //       Just do a cast on permuation check, and have correct type
+        //       in sorted check
+        let idx_field = match &sorted_ram.idx_sort {
+            Sort::Field(field) => field,
+            _ => panic!("Cannot use RAM on non-field index type!"),
+        };
+
+        let mut check_terms = Vec::new();
+        for i in 1..sorted_ram.accesses.len() {
+            // if idx == idx' then v == v' else idx == idx' + 1
+            let check_term = term![
+                ITE;
+                term![
+                    EQ;
+                    sorted_ram.accesses[i].idx.clone(),
+                    sorted_ram.accesses[i - 1].idx.clone()
+                ],
+                term![
+                    Op::Eq;
+                    sorted_ram.accesses[i].val.clone(),
+                    sorted_ram.accesses[i - 1].val.clone()
+                ],
+                term![Op::Eq;
+                    sorted_ram.accesses[i].idx.clone(),
+                    term![PF_ADD; sorted_ram.accesses[i-1].idx.clone(), pf_lit(idx_field.new_v::<u32>(1))]
+                ]
+            ];
+            check_terms.push(check_term);
+        }
+        term(AND, check_terms)
+    }
+
+    fn encode(&mut self, computation: &mut Computation) {
+        if self.rams.len() < 2 {
+            return;
+        }
+        assert_eq!(
+            computation.outputs().len(),
+            1,
+            "Proofs using RAMs must have a single output!"
+        );
+        assert_eq!(
+            check(&computation.outputs()[0]),
+            Sort::Bool,
+            "Proofs using RAMs must have a boolean output!"
+        );
+
+        // remove ram writes
+        // TODO: This ONLY works for read-only rams.
+        for ram in self.rams.iter_mut() {
+            while !ram.accesses.is_empty()
+                && eval(&ram.accesses[0].is_write, &fxhash::FxHashMap::default()).as_bool()
+            {
+                ram.accesses.remove(0);
+            }
+        }
+
+        // remove rams that are empty
+        // TODO: maybe throw a warning here?
+        self.rams = self
+            .rams
+            .drain(0..)
+            .filter(|ram| !ram.accesses.is_empty())
+            .collect();
+
+        // TODO: actually check that the sorts for ram1 and ram2 are equal...
+        // TODO: should this actually be verifier_id?
+        // TODO: assumes that idx_sort is a field
+        let alpha = computation.new_var(
+            &format!("__alpha"),
+            self.rams[0].idx_sort.clone(),
+            None,
+            0, // TODO
+            true,
+            None,
+        );
+        let beta = computation.new_var(
+            &format!("__beta"),
+            self.rams[0].idx_sort.clone(),
+            None,
+            0, // TODO
+            true,
+            None,
+        );
+
+        let mut checks = vec![];
+        checks.push(computation.outputs()[0].clone());
+        for ram in self.rams.iter() {
+            let sorted_ram = ram.sorted_by_index(computation);
+            // TODO: better error handling
+            // TODO: is there a cleaner way to get the field type?
+            let sorted_check = Encoder::construct_sorted_check(&sorted_ram);
+
+            let permutation_check =
+                Encoder::construct_permutation_check(ram, &sorted_ram, alpha.clone(), beta.clone());
+
+            checks.push(sorted_check);
+            checks.push(permutation_check);
+        }
+        computation.outputs[0] = term(AND, checks);
     }
 }
 
@@ -314,11 +643,37 @@ impl RewritePass for Extactor {
 /// * This pass doesn't handle shared stuff very well. If there are two
 ///   different RAMs with the same init sequence of instructions, this pass will
 ///   not extract **either**.
-#[allow(dead_code)]
 pub fn extract(c: &mut Computation) -> Vec<Ram> {
     let mut extractor = Extactor::new(c);
     extractor.traverse(c);
+    extractor.rewrite_indices();
+    println!("found {:?} rams", extractor.rams.len());
+    for ram in &extractor.rams {
+        println!("------------");
+        println!("ram id: {:?}, len: {:?}", ram.id, ram.accesses.len());
+        //for access in ram.accesses.iter() {
+        //    println!("{:?}", access);
+        //}
+        //println!("{:?}", ram.accesses[4]);
+        //println!("{:?}", ram.accesses[5]);
+        //println!("{:?}", ram.accesses[6]);
+    }
     extractor.rams
+}
+
+/// Encodes the given RAMs into the computation, by ensuring there exist
+/// a valid ordering of the RAM accesses
+///
+/// NOTE: This is currently broken for any ram that:
+///       1. doesn't do a single write, then only reads
+///       2. doesn't access every single element in the ram
+pub fn encode(c: &mut Computation, rams: Vec<Ram>) {
+    //println!("Pre-opt terms: {}", c.outputs[0].get().count_terms());
+    //println!("got {}", c.outputs[0].get());
+    let mut encoder = Encoder::new(rams);
+    encoder.encode(c);
+    //println!("got {}", c.outputs[0].get());
+    //println!("Opt-done terms: {}", c.outputs[0].get().count_terms());
 }
 
 #[cfg(test)]

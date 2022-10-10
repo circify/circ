@@ -22,18 +22,18 @@ zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional 
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
-bellman = { version = "0.11", optional = true } 
-ff = "0.11"
+bellman-proof = { path = "../bellman" , optional = true,  package = "bellman", features=["groth16"] } 
+ff = "0.12"
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
-group = "0.11"
+group = "0.12"
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive", "rc"] }
 bincode = "1"
 lang-c = { version = "0.10.1", optional = true}
 logos = "0.12"
-pairing = "0.21"
+pairing = "0.22"
 pest = "2.1"
 pest_derive = "2.1"
 pest-ast = "0.3"
@@ -42,12 +42,22 @@ itertools = "0.10"
 petgraph = "0.6"
 paste = "1.0"
 im = "15"
+ark-marlin = { path = "third_party/ark/marlin", optional = true }
+ark-relations = { path = "third_party/ark/snark/relations", optional = true }
+ark-ff = { version = "0.3.0", optional = true }
+ark-poly-commit = { version = "0.3.0", optional = true }
+ark-poly = { version = "0.3.0", optional = true }
+ark-serialize = { version = "0.3.0", optional = true }
+ark-bls12-381 = { version = "0.3.0", optional = true }
+sha2 = { version = "0.9.0", optional = true }
+rand_chacha = { version = "0.3.1", optional = true }
+digest = { version = "0.9.0", optional = true }
 
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
 env_logger = "0.8"
-bls12_381 = "0.6"
+bls12_381 = "0.7"
 structopt = "0.3"
 approx = "0.5.0"
 
@@ -57,16 +67,18 @@ bls12381 = []
 ff_dfl = []
 c = ["lang-c"]
 lp = ["good_lp", "lp-solvers"]
-r1cs = ["bellman"]
+r1cs = ["bellman-proof"]
 smt = ["rsmt2"]
 zok = ["zokrates_parser", "zokrates_pest_ast"]
+marlin = ["ark-marlin", "ark-relations", "ark-ff", "ark-poly-commit", "ark-poly", "ark-serialize", "ark-bls12-381", "sha2", "rand_chacha", "digest"]
+mirage = ["r1cs"]
 
 [[example]]
 name = "circ"
 
 [[example]]
 name = "zk"
-required-features = ["r1cs"]
+required-features = ["r1cs", "marlin"]
 
 [[example]]
 name = "zxi"

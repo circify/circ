@@ -359,12 +359,19 @@ impl Embeddable for Datalog {
         ty: &Self::Ty,
         name: String,
         visibility: Option<PartyId>,
+        epoch: Epoch,
+        random: bool,
         precompute: Option<T>,
     ) -> Self::T {
         T::new(
-            ctx.cs
-                .borrow_mut()
-                .new_var(&name, ty.sort(), visibility, precompute.map(|v| v.ir)),
+            ctx.cs.borrow_mut().new_var(
+                &name,
+                ty.sort(),
+                visibility,
+                epoch,
+                random,
+                precompute.map(|v| v.ir),
+            ),
             ty.clone(),
         )
     }

@@ -124,6 +124,10 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_private_number(self, pn)
     }
 
+    fn visit_random_visibility(&mut self, _ra: &mut ast::RandomVisibility) -> ZVisitorResult {
+        Ok(())
+    }
+
     fn visit_type(&mut self, ty: &mut ast::Type<'ast>) -> ZVisitorResult {
         walk_type(self, ty)
     }

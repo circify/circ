@@ -10,11 +10,14 @@ use crate::ir::term::*;
 /// A "precomputation".
 ///
 /// Expresses a computation to be run in advance by a single party.
+/// This may be "multi-epoched", meaning some random coins must be resolved
+/// before other values can be computed.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
     outputs: FxHashMap<String, Term>,
-    sequence: Vec<String>,
+    /// The order that precomputes must be resolved in.
+    pub sequence: Vec<String>,
 }
 
 impl PreComp {
@@ -32,6 +35,7 @@ impl PreComp {
         let old = self.outputs.insert(name, value);
         assert!(old.is_none());
     }
+
     /// Retain only the parts of this precomputation that can be evaluated from
     /// the `known` inputs.
     pub fn restrict_to_inputs(&mut self, known: FxHashSet<String>) {

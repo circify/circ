@@ -132,6 +132,7 @@ fn parse_tok_tree(bytes: &[u8]) -> TokTree {
         stack.len() - 1
     );
     assert!(!stack[0].is_empty(), "Empty parse");
+    //println!("got stack {:?}", stack[0]);
     assert!(stack[0].len() < 2, "Multiple top-level expressions");
     stack.pop().unwrap().pop().unwrap()
 }
@@ -279,6 +280,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
+                [Leaf(Ident, b"nthsmallest"), a] => Ok(Op::NthSmallest(self.usize(a))),
                 _ => todo!("Unparsed op: {}", tt),
             },
             _ => todo!("Unparsed op: {}", tt),
@@ -510,7 +512,7 @@ impl<'src> IrInterp<'src> {
 
     fn visibility_list(&self, tt: &TokTree<'src>) -> Vec<(String, String)> {
         if let List(tts) = tt {
-            tts.iter()
+            let res = tts.iter()
                 .map(|tti| match tti {
                     List(ls) => match &ls[..] {
                         [Leaf(Token::Ident, var), Leaf(Token::Ident, party)] => {
@@ -522,7 +524,9 @@ impl<'src> IrInterp<'src> {
                     },
                     _ => panic!("Expected visibility pair, found {}", tti),
                 })
-                .collect()
+                .collect();
+            println!("Got {:?}", res);
+            res
         } else {
             panic!("Expected visibility list, found: {}", tt)
         }
@@ -530,6 +534,7 @@ impl<'src> IrInterp<'src> {
 
     /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
     fn metadata(&mut self, tt: &TokTree<'src>) -> (ComputationMetadata, Vec<Vec<u8>>) {
+        println!("IN META");
         if let List(tts) = tt {
             if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"metadata") {
                 panic!(
@@ -546,6 +551,7 @@ impl<'src> IrInterp<'src> {
                         .map(|i| (from_utf8(i).unwrap().into(), self.get_binding(i).clone()))
                         .collect();
                     let visibilities = self.visibility_list(viss);
+                    println!("VIS: {:?}", visibilities);
                     (
                         ComputationMetadata::from_parts(
                             parties,
