@@ -662,6 +662,10 @@ impl CGen {
         offset
     }
 
+    fn is_builtin(&self) -> bool {}
+
+    fn builtin_call(&self, f_name: &str, args: Vec<CTerm>) -> Result<CTerm, String> {}
+
     fn gen_expr(&mut self, expr: &Expression) -> CTerm {
         let res = match &expr {
             Expression::Identifier(node) => Ok(self
@@ -775,6 +779,14 @@ impl CGen {
             Expression::Call(node) => {
                 let CallExpression { callee, arguments } = &node.node;
                 let fname = name_from_expr(&callee.node);
+                let args = arguments
+                    .iter()
+                    .map(|e| self.gen_expr(&e.node))
+                    .collect::<Vec<_>>();
+
+                if self.is_builtin(&fname) {
+                    return self.builtin_call(&fname, args);
+                }
 
                 let f = self
                     .functions
@@ -788,12 +800,6 @@ impl CGen {
                     args: parameters,
                     body,
                 } = f;
-
-                // Add parameters
-                let args = arguments
-                    .iter()
-                    .map(|e| self.gen_expr(&e.node))
-                    .collect::<Vec<_>>();
 
                 // setup stack frame for entry function
                 self.circ.enter_fn(name, ret_ty.clone());
