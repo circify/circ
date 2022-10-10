@@ -597,8 +597,8 @@ pub fn vec_mul(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
 fn wrap_rot(
     ctx: &CirCtx,
     name: &str,
-    fu: Option<fn(Term, Term) -> Term>,
-    fb: Option<fn(Term, Term) -> Term>,
+    fu: Option<fn(Term, usize, usize) -> Term>,
+    fb: Option<fn(Term, usize, usize) -> Term>,
     a: CTerm,
     b: CTerm,
 ) -> Result<CTerm, String> {
@@ -606,11 +606,22 @@ fn wrap_rot(
         (CTermData::CArray(ty_a, aid), CTermData::CInt(_, _, t), Some(fu), _) => {
             // init target array
             let array_b = ty_a.default(ctx);
+            let sort = ty_a.sort();
+            let len = if let Sort::Array(_, _, size) = sort {
+                size
+            } else {
+                panic!("Type error: wrap_rot a term is not an array");
+            };
 
-            // add arrays together
+            // array term
             let mut mem = ctx.mem.borrow_mut();
             let array_a = mem.term(aid.unwrap());
-            let array_b_term = fu(array_a, t);
+
+            // get index
+            let mut i: usize = t.as_bv_opt().unwrap().as_sint().to_usize().unwrap();
+            i = i % len;
+
+            let array_b_term = fu(array_a, i, len);
             if let CTermData::CArray(_, bid) = array_b.term {
                 mem.replace(bid.unwrap(), array_b_term);
             }
@@ -620,20 +631,20 @@ fn wrap_rot(
     }
 }
 
-pub fn rot_left_(a: Term, b: Term) -> Term {
-    term![Op::Map(Box::new(BV_SHL)); a, b]
+pub fn rot_left_(a: Term, i: usize, len: usize) -> Term {
+    term![Op::Rot(len - i); a]
+}
+
+pub fn rot_right_(a: Term, i: usize, _len: usize) -> Term {
+    term![Op::Rot(i); a]
 }
 
 pub fn rot_left(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_rot(ctx, "<<", Some(rot_left_), None, a, b)
-}
-
-pub fn rot_right_(a: Term, b: Term) -> Term {
-    term![Op::Map(Box::new(BV_LSHR)); a, b]
+    wrap_rot(ctx, "rot_left", Some(rot_left_), None, a, b)
 }
 
 pub fn rot_right(ctx: &CirCtx, a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_rot(ctx, ">>", Some(rot_right_), None, a, b)
+    wrap_rot(ctx, "rot_right", Some(rot_right_), None, a, b)
 }
 
 pub struct Ct {}

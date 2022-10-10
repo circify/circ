@@ -74,7 +74,7 @@ impl fmt::Debug for Ty {
 }
 
 impl Ty {
-    fn sort(&self) -> Sort {
+    pub fn sort(&self) -> Sort {
         match self {
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
