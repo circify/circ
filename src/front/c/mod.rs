@@ -662,9 +662,27 @@ impl CGen {
         offset
     }
 
-    fn is_builtin(&self) -> bool {}
+    fn is_builtin(&self, fname: &str) -> bool {
+        match f_name {
+            "VecAdd" => true,
+            "VecSub" => true,
+            "VecMul" => true,
+            "RotLeft" => true,
+            "RotRight" => true,
+            _ => false,
+        }
+    }
 
-    fn builtin_call(&self, f_name: &str, args: Vec<CTerm>) -> Result<CTerm, String> {}
+    fn builtin_call(&self, f_name: &str, args: Vec<CTerm>) -> Result<CTerm, String> {
+        match f_name {
+            "VecAdd" => vec_add(self.circ.cir_ctx(), args[0].clone(), args[1].clone()),
+            "VecSub" => vec_sub(self.circ.cir_ctx(), args[0].clone(), args[1].clone()),
+            "VecMul" => vec_mul(self.circ.cir_ctx(), args[0].clone(), args[1].clone()),
+            "RotLeft" => rot_left(self.circ.cir_ctx(), args[0].clone(), args[1].clone()),
+            "RotRight" => rot_right(self.circ.cir_ctx(), args[0].clone(), args[1].clone()),
+            _ => unimplemented!("Unknown function call: {}", f_name),
+        }
+    }
 
     fn gen_expr(&mut self, expr: &Expression) -> CTerm {
         let res = match &expr {
