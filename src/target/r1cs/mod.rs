@@ -13,6 +13,7 @@ use std::hash::Hash;
 pub mod bellman;
 pub mod opt;
 pub mod trans;
+#[cfg(feature = "r1cs")]
 pub mod spartan;
 
 #[derive(Clone, Debug)]

@@ -24,6 +24,13 @@ use circ::target::aby::trans::to_aby;
 use circ::target::ilp::trans::to_ilp;
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::bellman::parse_instance;
+#[cfg(feature = "r1cs")]
+use circ::target::r1cs::spartan::r1cs_to_spartan;
+#[cfg(feature = "r1cs")]
+use merlin::Transcript;
+#[cfg(feature = "r1cs")]
+use libspartan::{Instance, NIZKGens, NIZK};
+
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
@@ -38,10 +45,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
-
-use libspartan::{Instance, NIZKGens, NIZK};
-use merlin::Transcript;
-use circ::target::r1cs::spartan::r1cs_to_spartan;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -287,15 +290,7 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs;
-            match action {
-                ProofAction::Spartan => {
-                    r1cs = to_r1cs(cs, FieldT::from(circ::target::r1cs::spartan::SPARTAN_MODULUS.clone()));
-                }
-                _ => {
-                    r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
-                }
-            }
+            let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
