@@ -65,6 +65,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Update(_i) => vec![t.cs[0].clone()],
         Op::Map(_) => t.cs.clone(),
         Op::Call(_, _, _) => Vec::new(),
+        Op::Rot(_) => vec![t.cs[0].clone()],
     }
 }
 
@@ -180,6 +181,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             }
         }
         Op::Call(_, _, ret) => Ok(ret.clone()),
+        Op::Rot(_) => Ok(get_ty(&t.cs[0]).clone()),
         o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
     }
 }
@@ -415,6 +417,9 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(ret.clone())
             }
         }
+        (Op::Rot(_), &[Sort::Array(k, v, n)]) => bv_or(k, "rot key")
+            .and_then(|_| bv_or(v, "rot val"))
+            .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
     }
 }

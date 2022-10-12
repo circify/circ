@@ -101,6 +101,47 @@ fn map_test_bv_key() {
     );
 }
 
+#[test]
+fn test_rot() {
+    let a = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+    );
+    let expected_rot_0 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+    );
+    let expected_rot_1 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4)],
+    );
+    let expected_rot_2 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0011, 4), bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4)],
+    );
+
+    let rot_0 = term![Op::Rot(0); a.clone()];
+    let rot_1 = term![Op::Rot(1); a.clone()];
+    let rot_2 = term![Op::Rot(2); a];
+
+    assert_eq!(
+        eval(&rot_0, &FxHashMap::default()),
+        eval(&expected_rot_0, &FxHashMap::default())
+    );
+    assert_eq!(
+        eval(&rot_1, &FxHashMap::default()),
+        eval(&expected_rot_1, &FxHashMap::default())
+    );
+    assert_eq!(
+        eval(&rot_2, &FxHashMap::default()),
+        eval(&expected_rot_2, &FxHashMap::default())
+    );
+}
+
 mod type_ {
     use super::*;
 
