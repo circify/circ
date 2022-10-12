@@ -171,12 +171,12 @@ void kmeans(int *data, int *OUTPUT_res) {
 		// iteration(data, cluster, new_cluster, len, num_cluster);
 		
 		// We need to copy inputs to outputs
-		for(c = 0; c < NC*D; c++) {
+		for( c = 0; c < NC*D; c++) {
 			cluster[c] = new_cluster[c];
 		}
 	}
 
-	for( c = 0; c < NC; c++) {  
+	for(c = 0; c < NC; c++) {  
 		OUTPUT_res[c*D] = cluster[c*D];
 		OUTPUT_res[c*D+1] = cluster[c*D+1];
 	}
