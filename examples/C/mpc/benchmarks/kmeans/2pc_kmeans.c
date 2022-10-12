@@ -108,7 +108,7 @@ int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int 
                         pos[i_10] = pos[i_10 + stride];
                     }
                 }
-                stride = 2u;
+                stride = 2;
                 for (int i_11 = 0; i_11 < NC - stride; i_11 += 4)
                 {
                     if (dist[i_11 + stride] < dist[i_11])
@@ -117,7 +117,7 @@ int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int 
                         pos[i_11] = pos[i_11 + stride];
                     }
                 }
-                stride = 4u;
+                stride = 4;
                 for (int i_12 = 0; i_12 < NC - stride; i_12 += 8)
                 {
                     if (dist[i_12 + stride] < dist[i_12])
@@ -184,7 +184,6 @@ int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int 
             cluster[i_16] = new_cluster[i_16];
         }
     }
-
     for (int i_17 = 0; i_17 < NC; i_17++)
     {
         output[i_17 * D] = cluster[i_17 * D];
