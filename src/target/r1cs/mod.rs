@@ -20,21 +20,21 @@ pub mod trans;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A Rank 1 Constraint System.
 pub struct R1cs<S: Hash + Eq> {
-    modulus: FieldT,
-    signal_idxs: HashMap<S, usize>,
-    idxs_signals: HashMap<usize, S>,
-    next_idx: usize,
-    public_idxs: HashSet<usize>,
-    constraints: Vec<(Lc, Lc, Lc)>,
-    terms: Vec<Term>,
+    pub modulus: FieldT,
+    pub signal_idxs: HashMap<S, usize>,
+    pub idxs_signals: HashMap<usize, S>,
+    pub next_idx: usize,
+    pub public_idxs: HashSet<usize>,
+    pub constraints: Vec<(Lc, Lc, Lc)>,
+    pub terms: Vec<Term>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A linear combination
 pub struct Lc {
-    modulus: FieldT,
-    constant: FieldV,
-    monomials: HashMap<usize, FieldV>,
+    pub modulus: FieldT,
+    pub constant: FieldV,
+    pub monomials: HashMap<usize, FieldV>,
 }
 
 impl Lc {
