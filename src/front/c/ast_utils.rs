@@ -1,7 +1,6 @@
 use crate::front::c::types::Ty;
 use crate::front::c::Expression::Identifier;
 use lang_c::ast::*;
-use lang_c::span::Node;
 use std::fmt::{self, Display, Formatter};
 
 use crate::front::Mode;
@@ -44,18 +43,18 @@ impl Display for FnInfo {
     }
 }
 
-pub fn name_from_expr(node: Node<Expression>) -> String {
-    match node.node {
-        Identifier(i) => i.node.name.clone(),
+pub fn name_from_expr(expr: &Expression) -> String {
+    match &expr {
+        Identifier(i) => i.node.name.to_string(),
         _ => {
-            panic!("Expression is not an identifier '{:#?}'", node.node);
+            panic!("Expression is not an identifier '{:#?}'", expr);
         }
     }
 }
 
 pub fn name_from_decl(decl: &Declarator) -> String {
     match decl.kind.node {
-        DeclaratorKind::Identifier(ref id) => id.node.name.clone(),
+        DeclaratorKind::Identifier(ref id) => id.node.name.to_string(),
         _ => panic!("Identifier not found: {:?}", decl),
     }
 }
@@ -111,12 +110,12 @@ pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
 }
 
-pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {
-    let mut inits: Vec<Initializer> = Vec::new();
+pub fn flatten_inits(init: &Initializer) -> Vec<&Initializer> {
+    let mut inits: Vec<&Initializer> = Vec::new();
     match init {
         Initializer::List(l) => {
             for li in l {
-                let inner_inits = flatten_inits(li.node.initializer.node);
+                let inner_inits = flatten_inits(&li.node.initializer.node);
                 inits.extend(inner_inits.iter().cloned());
             }
         }
