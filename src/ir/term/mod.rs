@@ -1851,7 +1851,7 @@ impl ComputationMetadata {
     /// Get all public inputs to the computation itself.
     ///
     /// Excludes pre-computation inputs
-    pub fn public_input_names<'a>(&'a self) -> impl Iterator<Item = &str> + 'a {
+    pub fn public_input_names(&'_ self) -> impl Iterator<Item = &str> + '_ {
         self.input_vis.iter().filter_map(move |(name, party)| {
             if party.1.is_none() && self.computation_inputs.contains(name) {
                 Some(name.as_str())

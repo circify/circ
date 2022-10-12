@@ -49,16 +49,15 @@ pub trait CVisitorMut<'ast>: Sized {
         walk_initializer(self, &mut i.node)
     }
 
-    fn visit_static_assert(&mut self, sa: &mut Node<ast::StaticAssert>) -> CVisitorResult {
-        todo!()
+    fn visit_static_assert(&mut self, _sa: &mut Node<ast::StaticAssert>) -> CVisitorResult {
+        Ok(())
     }
 
     fn visit_function_definition(
         &mut self,
-        func_def: &mut Node<ast::FunctionDefinition>,
+        _func_def: &mut Node<ast::FunctionDefinition>,
     ) -> CVisitorResult {
-        todo!()
-        // walk_external_declaration(self, external_decl)
+        Ok(())
     }
 
     fn visit_expression(&mut self, expr: &mut Node<ast::Expression>) -> CVisitorResult {
@@ -67,5 +66,46 @@ pub trait CVisitorMut<'ast>: Sized {
 
     fn visit_identifier(&mut self, i: &mut Node<ast::Identifier>) -> CVisitorResult {
         walk_identifier(self, &mut i.node)
+    }
+
+    fn visit_constant(&mut self, c: &mut Node<ast::Constant>) -> CVisitorResult {
+        walk_constant(self, &mut c.node)
+    }
+
+    fn visit_member_expression(&mut self, m: &mut Node<ast::MemberExpression>) -> CVisitorResult {
+        walk_member_expression(self, &mut m.node)
+    }
+
+    fn visit_call_expression(&mut self, c: &mut Node<ast::CallExpression>) -> CVisitorResult {
+        walk_call_expression(self, &mut c.node)
+    }
+
+    fn visit_unary_operator_expression(
+        &mut self,
+        u: &mut Box<Node<ast::UnaryOperatorExpression>>,
+    ) -> CVisitorResult {
+        walk_unary_operator_expression(self, &mut u.node)
+    }
+
+    fn visit_cast_expression(&mut self, c: &mut Node<ast::CastExpression>) -> CVisitorResult {
+        walk_cast_expression(self, &mut c.node)
+    }
+
+    fn visit_binary_operator_expression(
+        &mut self,
+        b: &mut Box<Node<ast::BinaryOperatorExpression>>,
+    ) -> CVisitorResult {
+        walk_binary_operator_expression(self, &mut b.node)
+    }
+
+    fn visit_conditional_expression(
+        &mut self,
+        c: &mut Node<ast::ConditionalExpression>,
+    ) -> CVisitorResult {
+        walk_conditional_expression(self, &mut c.node)
+    }
+
+    fn visit_statement(&mut self, s: &mut Node<ast::Statement>) -> CVisitorResult {
+        walk_statement(self, &mut s.node)
     }
 }

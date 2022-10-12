@@ -1,10 +1,10 @@
 //! The C front-end
 
 mod ast_utils;
+pub mod cvisit;
 mod parser;
 mod term;
 mod types;
-pub mod cvisit;
 
 use super::{FrontEnd, Mode};
 use crate::circify::{Circify, Loc, Val};
@@ -41,10 +41,6 @@ impl FrontEnd for C {
     fn gen(i: Inputs) -> Computation {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
-
-        println!("here!!");
-
-        todo!();
         let mut g = CGen::new(i.mode, p.unit);
         g.visit_files();
         g.entry_fn("main");
