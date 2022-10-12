@@ -66,7 +66,7 @@ void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_c
 	
 	for(c = 0; c < num_cluster; c++) {
 		OUTPUT_cluster[c*D] = 0;
-		OUTPUT_cluster[c*D+1u] = 0;
+		OUTPUT_cluster[c*D+1] = 0;
 		OUTPUT_count[c] = 0;
 	}	
 	
@@ -111,7 +111,7 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 	
 	
 	// Compute decomposition
-	for(j = 0u; j < LEN_OUTER; j++) {
+	for(j = 0; j < LEN_OUTER; j++) {
 		// Copy data, fasthack for scalability
 		int data_offset = j*LEN_INNER*D;
 		int data_inner[LEN_INNER*D];
@@ -129,9 +129,9 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 		iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner, LEN_INNER, NC);
 
 		// Depth: num_cluster Addition
-		for(c = 0u; c < NC; c++) {
+		for(c = 0; c < NC; c++) {
 			loop_clusterD1[c][j] = cluster_inner[c*D];
-			loop_clusterD2[c][j] = cluster_inner[c*D+1u];
+			loop_clusterD2[c][j] = cluster_inner[c*D+1];
 			loop_count[c][j] = count_inner[c];
 		}
 	}
@@ -145,7 +145,7 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 	// Recompute cluster Pos
 	// Compute mean
 	for(c = 0; c < NC; c++) {  
-	  if(count[c] > 0) {
+	  if(count[c] >0 ) {
 			OUTPUT_cluster[c*D] /= count[c];
 			OUTPUT_cluster[c*D+1] /= count[c];
 	  } 
@@ -165,7 +165,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 		cluster[c*D+1] = data[((c+3)%LEN)*D+1];
 	}
 
-	for (p = 0u; p < PRECISION; p++) { 
+	for (p = 0; p < PRECISION; p++) { 
 		int new_cluster[NC*D];
 		iteration_unrolled_outer(data, cluster, new_cluster);
 		// iteration(data, cluster, new_cluster, len, num_cluster);
@@ -176,7 +176,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 		}
 	}
 
-	for(c = 0; c < NC; c++) {  
+	for( c = 0; c < NC; c++) {  
 		OUTPUT_res[c*D] = cluster[c*D];
 		OUTPUT_res[c*D+1] = cluster[c*D+1];
 	}
