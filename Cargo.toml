@@ -34,7 +34,7 @@ bincode = "1"
 lang-c = { version = "0.10.1", optional = true}
 logos = "0.12"
 pairing = "0.21"
-pest = "2.1"
+pest = "2.4"
 pest_derive = "2.1"
 pest-ast = "0.3"
 from-pest = "0.3"
