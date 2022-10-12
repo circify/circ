@@ -10,7 +10,6 @@ pub type CVisitorResult = CResult<()>;
 
 pub use cvmut::CVisitorMut;
 
-
 impl From<String> for CVisitorError {
     fn from(f: String) -> Self {
         Self(f)
