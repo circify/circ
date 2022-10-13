@@ -71,7 +71,7 @@ mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
 mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
 mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
 
-# # build shift tests
+# build shift tests
 mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
 mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 
@@ -116,9 +116,6 @@ mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/mnist/2pc_mnist.c
-
-
-
 
 # # ilp benchmarks
 # # mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_1.c
