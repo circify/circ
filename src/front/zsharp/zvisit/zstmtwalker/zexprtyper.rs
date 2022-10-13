@@ -1,7 +1,7 @@
 //! AST Walker for zokrates_pest_ast
 
 use super::super::eqtype::*;
-use super::super::{bos_to_type, ZVisitorError, ZVisitorMut, ZVisitorResult};
+use super::super::{bos_to_type, ZResult, ZVisitorError, ZVisitorMut, ZVisitorResult};
 use super::ZStatementWalker;
 
 use zokrates_pest_ast as ast;
@@ -16,8 +16,11 @@ impl<'ast, 'ret, 'wlk> ZExpressionTyper<'ast, 'ret, 'wlk> {
         Self { walker, ty: None }
     }
 
-    pub fn take(&mut self) -> Option<ast::Type<'ast>> {
-        self.ty.take()
+    pub fn take(&mut self) -> ZResult<Option<ast::Type<'ast>>> {
+        self.ty
+            .take()
+            .map(|t| self.walker.canon_type(t))
+            .transpose()
     }
 
     fn visit_identifier_expression_t(
@@ -83,14 +86,14 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     ) -> ZVisitorResult {
         assert!(self.ty.is_none());
         self.visit_expression(&mut te.second)?;
-        let ty2 = self.take();
+        let ty2 = self.take()?;
         self.visit_expression(&mut te.third)?;
-        let ty3 = self.take();
+        let ty3 = self.take()?;
         match (ty2, ty3) {
             (Some(t), None) => self.ty.replace(t),
             (None, Some(t)) => self.ty.replace(t),
             (Some(t1), Some(t2)) => {
-                eq_type(&t1, &t2)?;
+                eq_type(&t1, &t2, self.walker.zgen)?;
                 self.ty.replace(t2)
             }
             (None, None) => None,
@@ -114,14 +117,14 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
             }
             BitXor | BitAnd | BitOr | RightShift | LeftShift | Add | Sub | Mul | Div | Rem => {
                 self.visit_expression(&mut be.left)?;
-                let ty_l = self.take();
+                let ty_l = self.take()?;
                 self.visit_expression(&mut be.right)?;
-                let ty_r = self.take();
+                let ty_r = self.take()?;
                 if let Some(ty) = match (ty_l, ty_r) {
                     (Some(t), None) => Some(t),
                     (None, Some(t)) => Some(t),
                     (Some(t1), Some(t2)) => {
-                        eq_type(&t1, &t2)?;
+                        eq_type(&t1, &t2, self.walker.zgen)?;
                         Some(t2)
                     }
                     (None, None) => None,
@@ -155,9 +158,10 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     fn visit_unary_expression(&mut self, ue: &mut ast::UnaryExpression<'ast>) -> ZVisitorResult {
         use ast::{BasicType::*, Type::*, UnaryOperator::*};
         assert!(self.ty.is_none());
+        self.visit_expression(&mut ue.expression)?;
+        self.ty = self.take()?; // canonicalize
         match &ue.op {
             Pos(_) | Neg(_) => {
-                self.visit_expression(&mut ue.expression)?;
                 if let Some(ty) = &self.ty {
                     if !matches!(ty, Basic(_)) || matches!(ty, Basic(Boolean(_))) {
                         return Err(ZVisitorError(
@@ -167,10 +171,15 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                 }
             }
             Not(_) => {
-                self.ty.replace(Basic(Boolean(ast::BooleanType {
-                    span: ue.span.clone(),
-                })));
+                if let Some(ty) = &self.ty {
+                    if !matches!(ty, Basic(_)) || matches!(ty, Basic(Field(_))) {
+                        return Err(ZVisitorError(
+                            "ZExpressionTyper: got Field or non-Basic for unary !".to_string(),
+                        ));
+                    }
+                }
             }
+            Strict(_) => (),
         }
         Ok(())
     }
@@ -242,7 +251,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         use ast::Type::*;
 
         self.visit_expression(&mut *aie.value)?;
-        if let Some(ty) = self.take() {
+        if let Some(ty) = self.take()? {
             let ty = self.arrayize(ty, aie.count.as_ref().clone(), &aie.span);
             self.ty.replace(Array(ty));
         }
@@ -270,7 +279,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
             .iter_mut()
             .try_for_each::<_, ZVisitorResult>(|soe| {
                 self.visit_spread_or_expression(soe)?;
-                if let Some(ty) = self.take() {
+                if let Some(ty) = self.take()? {
                     let (nty, nln) = if matches!(soe, ast::SpreadOrExpression::Expression(_)) {
                         Ok((ty, 1))
                     } else if let ast::Type::Array(mut at) = ty {
@@ -290,7 +299,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     }?;
 
                     if let Some(acc) = &acc_ty {
-                        eq_type(acc, &nty)?;
+                        eq_type(acc, &nty, self.walker.zgen)?;
                     } else {
                         acc_ty.replace(nty);
                     }

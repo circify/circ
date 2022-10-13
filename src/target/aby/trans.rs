@@ -4,6 +4,7 @@
 //! Inv gates need to typecast circuit object to boolean circuit
 //! [Link to comment in EzPC Compiler](https://github.com/mpc-msri/EzPC/blob/da94a982709123c8186d27c9c93e27f243d85f0e/EzPC/EzPC/codegen.ml)
 
+use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::assign;
@@ -12,10 +13,11 @@ use crate::target::aby::utils::*;
 use std::fmt;
 use std::path::Path;
 
-#[cfg(not(feature = "lp"))]
-use super::assignment::some_arith_sharing;
-
-// const BOOLEAN_BITLEN: i32 = 1;
+use super::assignment::assign_all_boolean;
+use super::assignment::assign_all_yao;
+use super::assignment::assign_arithmetic_and_boolean;
+use super::assignment::assign_arithmetic_and_yao;
+use super::assignment::assign_greedy;
 
 const PUBLIC: u8 = 2;
 
@@ -27,7 +29,14 @@ enum EmbeddedTerm {
 
 impl fmt::Display for EmbeddedTerm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            EmbeddedTerm::Bool(s) => {
+                write!(f, "bool({})", s)
+            }
+            EmbeddedTerm::Bv(s) => {
+                write!(f, "bv({})", s)
+            }
+        }
     }
 }
 
@@ -42,6 +51,20 @@ struct ToABY {
     share_map_path: String,
     bytecode_output: Vec<String>,
     share_map_output: Vec<String>,
+}
+
+impl Drop for ToABY {
+    fn drop(&mut self) {
+        use std::mem::take;
+        // drop everything that uses a Term
+        drop(take(&mut self.md));
+        self.inputs.clear();
+        self.cache.clear();
+        self.term_to_share_cnt.clear();
+        self.s_map.clear();
+        // clean up
+        garbage_collect();
+    }
 }
 
 impl ToABY {
@@ -84,6 +107,10 @@ impl ToABY {
                 let n = new_name.split('_').collect::<Vec<&str>>();
 
                 match n.len() {
+                    1 => n[0].to_string(),
+                    2 => {
+                        format!("{}_{}", n[0], n[1])
+                    }
                     5 => n[3].to_string(),
                     6.. => {
                         let l = n.len() - 1;
@@ -104,8 +131,8 @@ impl ToABY {
     }
 
     fn unwrap_vis(&self, name: &str) -> u8 {
-        match self.md.input_vis.get(name).unwrap() {
-            Some(role) => *role,
+        match self.md.get_input_visibility(name) {
+            Some(role) => role,
             None => PUBLIC,
         }
     }
@@ -135,9 +162,14 @@ impl ToABY {
 
     /// Given term `t`, type-check `t` is of type Bool
     fn check_bool(&self, t: &Term) {
-        self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t));
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
+            EmbeddedTerm::Bool(_) => (),
+            _ => panic!("Non-bool for {:?}", t),
+        }
     }
 
     fn embed_bool(&mut self, t: Term) {
@@ -185,8 +217,8 @@ impl ToABY {
                 let op = "MUX";
 
                 self.check_bool(&t.cs[0]);
-                self.check_bv(&t.cs[1]);
-                self.check_bv(&t.cs[2]);
+                self.check_bool(&t.cs[1]);
+                self.check_bool(&t.cs[2]);
 
                 let sel = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
                 let a = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
@@ -215,6 +247,13 @@ impl ToABY {
                     // This is to bypass adding an AND gate with a single conditional term
                     // Refer to pub fn condition() in src/circify/mod.rs
                     self.check_bool(&t.cs[0]);
+                    let a = *self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                    match o {
+                        BoolNaryOp::And => self.term_to_share_cnt.insert(t.clone(), a),
+                        _ => {
+                            unimplemented!("Single operand boolean operation");
+                        }
+                    };
                     self.cache.insert(t.clone(), EmbeddedTerm::Bool(share));
                 } else {
                     self.check_bool(&t.cs[0]);
@@ -259,9 +298,14 @@ impl ToABY {
 
     /// Given term `t`, type-check `t` is of type Bv
     fn check_bv(&self, t: &Term) {
-        self.cache
+        match self
+            .cache
             .get(t)
-            .unwrap_or_else(|| panic!("Missing wire for {:?}", t));
+            .unwrap_or_else(|| panic!("Missing wire for {:?}", t))
+        {
+            EmbeddedTerm::Bv(_) => (),
+            _ => panic!("Non-bv for {:?}", t),
+        }
     }
 
     fn embed_bv(&mut self, t: Term) {
@@ -345,22 +389,39 @@ impl ToABY {
                     BvBinOp::Urem => "REM",
                     BvBinOp::Shl => "SHL",
                     BvBinOp::Lshr => "LSHR",
-                    BvBinOp::Ashr => "ASHR",
+                    _ => panic!("Binop not supported: {}", o),
                 };
 
-                self.check_bv(&t.cs[0]);
-                self.check_bv(&t.cs[1]);
+                match o {
+                    BvBinOp::Sub | BvBinOp::Udiv | BvBinOp::Urem => {
+                        self.check_bv(&t.cs[0]);
+                        self.check_bv(&t.cs[1]);
 
-                let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
-                let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
+                        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                        let b = self.term_to_share_cnt.get(&t.cs[1]).unwrap();
 
-                let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
-                self.bytecode_output.push(line);
+                        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+                        self.bytecode_output.push(line);
 
-                self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                        self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                    }
+                    BvBinOp::Shl | BvBinOp::Lshr => {
+                        self.check_bv(&t.cs[0]);
+                        self.check_bv(&t.cs[1]);
+
+                        let a = self.term_to_share_cnt.get(&t.cs[0]).unwrap();
+                        let const_shift_amount_term = fold(&t.cs[1], &[]);
+                        let const_shift_amount =
+                            const_shift_amount_term.as_bv_opt().unwrap().uint();
+
+                        let line = format!("2 1 {} {} {} {}\n", a, const_shift_amount, s, op);
+                        self.bytecode_output.push(line);
+
+                        self.cache.insert(t.clone(), EmbeddedTerm::Bv(share));
+                    }
+                    _ => panic!("Binop not supported: {}", o),
+                };
             }
-            // TODO
-            Op::BvExtract(_start, _end) => {}
             _ => panic!("Non-field in embed_bv: {:?}", t),
         }
     }
@@ -395,17 +456,27 @@ impl ToABY {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str) {
+pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
     let Computation {
         outputs: terms,
         metadata: md,
         ..
     } = ir.clone();
 
-    #[cfg(feature = "lp")]
-    let s_map: SharingMap = assign(&ir, cm);
-    #[cfg(not(feature = "lp"))]
-    let s_map: SharingMap = some_arith_sharing(&ir, cm);
+    let s_map: SharingMap = match ss {
+        "b" => assign_all_boolean(&ir, cm),
+        "y" => assign_all_yao(&ir, cm),
+        "a+b" => assign_arithmetic_and_boolean(&ir, cm),
+        "a+y" => assign_arithmetic_and_yao(&ir, cm),
+        "greedy" => assign_greedy(&ir, cm),
+        #[cfg(feature = "lp")]
+        "lp" => assign(&ir, cm),
+        #[cfg(feature = "lp")]
+        "glp" => assign(&ir, cm),
+        _ => {
+            panic!("Unsupported sharing scheme: {}", ss);
+        }
+    };
 
     let mut converter = ToABY::new(s_map, md, path, lang);
 

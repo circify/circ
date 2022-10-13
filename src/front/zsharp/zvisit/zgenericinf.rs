@@ -21,6 +21,7 @@ pub(in super::super) struct ZGenericInf<'ast, 'gen, const IS_CNST: bool> {
     zgen: &'gen ZGen<'ast>,
     fdef: &'gen ast::FunctionDefinition<'ast>,
     gens: &'gen [ast::IdentifierExpression<'ast>],
+    path: &'gen Path,
     sfx: String,
     constr: Option<Term>,
 }
@@ -29,7 +30,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     pub fn new(
         zgen: &'gen ZGen<'ast>,
         fdef: &'gen ast::FunctionDefinition<'ast>,
-        path: &Path,
+        path: &'gen Path,
         name: &str,
     ) -> Self {
         let gens = fdef.generics.as_ref();
@@ -44,6 +45,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             zgen,
             fdef,
             gens,
+            path,
             sfx,
             constr: None,
         }
@@ -99,14 +101,16 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             };
         }
 
+        // self.fdef is in the context of self.path
+        self.zgen.file_stack_push(self.path.to_path_buf());
+
         // 1. build up the already-known generics
         for (cgv, id) in egv.iter().zip(self.fdef.generics.iter()) {
             if let Some(v) = match cgv {
                 CGV::Underscore(_) => None,
-                CGV::Value(v) => Some(self.zgen.literal_(v)),
-                CGV::Identifier(i) => Some(self.const_id_(i)),
+                CGV::Value(v) => Some(self.zgen.literal_(v)?),
+                CGV::Identifier(i) => Some(self.const_id_(i)?),
             } {
-                let v = v?;
                 let var = make_varname(&id.value, &self.sfx);
                 let val = match v.ty {
                     Ty::Uint(32) => Ok(v.term),
@@ -140,6 +144,9 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         // bracketing invariant
         assert!(self.gens == &self.fdef.generics[..]);
         assert!(self.sfx.ends_with(&self.fdef.id.value));
+
+        // back to calling context
+        self.zgen.file_stack_pop();
 
         // 4. run the solver on the term stack, if it's not already cached
         if let Some(res) = self
@@ -197,7 +204,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         match def_ty {
             TT::Basic(dty_b) => self.fdef_gen_ty_basic(arg_ty, dty_b),
             TT::Array(dty_a) => self.fdef_gen_ty_array(arg_ty, dty_a),
-            TT::Struct(dty_s) => self.fdef_gen_ty_struct(arg_ty, dty_s),
+            TT::Struct(dty_s) => self.fdef_gen_ty_struct_or_type(arg_ty, dty_s),
         }
     }
 
@@ -268,35 +275,27 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
 
         use ast::BasicOrStructType as BoST;
         match &def_ty.ty {
-            BoST::Struct(dty_s) => self.fdef_gen_ty_struct(arg_ty, dty_s),
+            BoST::Struct(dty_s) => self.fdef_gen_ty_struct_or_type(arg_ty, dty_s),
             BoST::Basic(dty_b) => self.fdef_gen_ty_basic(arg_ty, dty_b),
         }
     }
 
-    fn fdef_gen_ty_struct(
+    fn fdef_gen_ty_struct_or_type(
         &mut self,
         arg_ty: Ty,
         def_ty: &ast::StructType<'ast>,
     ) -> Result<(), String> {
-        // check type and struct name
-        let mut aty_map = match arg_ty {
-            Ty::Struct(aty_n, aty_map) if aty_n == def_ty.id.value => Ok(aty_map.into_map()),
-            Ty::Struct(aty_n, _) => Err(format!(
-                "Type mismatch: got struct {}, decl was struct {}",
-                &aty_n, &def_ty.id.value
-            )),
-            arg_ty => Err(format!(
-                "Type mismatch unifying generics: got {}, decl was Struct",
-                arg_ty
-            )),
-        }?;
-        let strdef = self
+        let (stdef, stpath) = self
             .zgen
-            .get_struct(&def_ty.id.value)
-            .ok_or_else(|| format!("ZGenericInf: no such struct {}", &def_ty.id.value))?;
+            .get_struct_or_type(&def_ty.id.value)
+            .ok_or_else(|| format!("ZGenericInf: no struct struct or type {}", &def_ty.id.value))?;
+        let generics = match &stdef {
+            Ok(strdef) => &strdef.generics[..],
+            Err(tydef) => &tydef.generics[..],
+        };
 
         // short-circuit if there are no generics in this struct
-        if strdef.generics.is_empty() {
+        if generics.is_empty() {
             return if def_ty.explicit_generics.is_some() {
                 Err(format!(
                     "Unifying generics: got explicit generics for non-generic struct type {}:\n{}",
@@ -331,7 +330,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             .unwrap()
             .values
             .iter()
-            .zip(strdef.generics.iter())
+            .zip(generics.iter())
             .try_for_each::<_, Result<(), String>>(|(cgv, id)| {
                 let sgid = make_varname(&id.value, &new_sfx);
                 let val = match cgv {
@@ -351,26 +350,49 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
 
         // 2. walk through struct def to generate constraints on inner explicit generics
         let old_sfx = std::mem::replace(&mut self.sfx, new_sfx);
-        let old_gens = std::mem::replace(&mut self.gens, &strdef.generics[..]);
-        for ast::StructField { ty, id, .. } in strdef.fields.iter() {
-            if let Some(t) = aty_map.remove(&id.value) {
-                self.fdef_gen_ty(t, ty)?;
-            } else {
-                return Err(format!(
-                    "ZGenericInf: missing member {} in struct {} value",
-                    &id.value, &def_ty.id.value,
-                ));
+        let old_gens = std::mem::replace(&mut self.gens, generics);
+        self.zgen.file_stack_push(stpath);
+        match stdef {
+            Ok(strdef) => {
+                // check type and struct name
+                let mut aty_map = match arg_ty {
+                    Ty::Struct(aty_n, aty_map) if aty_n == def_ty.id.value => {
+                        Ok(aty_map.into_map())
+                    }
+                    Ty::Struct(aty_n, _) => Err(format!(
+                        "Type mismatch: got struct {}, decl was struct {}",
+                        &aty_n, &def_ty.id.value
+                    )),
+                    arg_ty => Err(format!(
+                        "Type mismatch unifying generics: got {}, decl was Struct",
+                        arg_ty
+                    )),
+                }?;
+                for ast::StructField { ty, id, .. } in strdef.fields.iter() {
+                    if let Some(t) = aty_map.remove(&id.value) {
+                        self.fdef_gen_ty(t, ty)?;
+                    } else {
+                        return Err(format!(
+                            "ZGenericInf: missing member {} in struct {} value",
+                            &id.value, &def_ty.id.value,
+                        ));
+                    }
+                }
+                if !aty_map.is_empty() {
+                    return Err(format!(
+                        "ZGenericInf: struct {} value had extra members: {:?}",
+                        &def_ty.id.value,
+                        aty_map.keys().collect::<Vec<_>>(),
+                    ));
+                }
             }
-        }
-        if !aty_map.is_empty() {
-            return Err(format!(
-                "ZGenericInf: struct {} value had extra members: {:?}",
-                &def_ty.id.value,
-                aty_map.keys().collect::<Vec<_>>(),
-            ));
+            Err(tydef) => {
+                self.fdef_gen_ty(arg_ty, &tydef.ty)?;
+            }
         }
 
         // 3. pop stack and continue
+        self.zgen.file_stack_pop();
         self.gens = old_gens;
         self.sfx = old_sfx;
         Ok(())

@@ -4,6 +4,11 @@ use lang_c::ast::*;
 use lang_c::span::Node;
 use std::fmt::{self, Display, Formatter};
 
+use crate::front::Mode;
+use crate::front::PartyId;
+use crate::front::PROVER_VIS;
+use crate::front::PUBLIC_VIS;
+
 #[derive(Clone)]
 pub struct FnInfo {
     pub name: String,
@@ -12,9 +17,17 @@ pub struct FnInfo {
     pub body: Statement,
 }
 
+#[derive(Clone)]
 pub struct DeclInfo {
     pub name: String,
     pub ty: Ty,
+}
+
+#[derive(Clone)]
+pub struct ParamInfo {
+    pub name: String,
+    pub ty: Ty,
+    pub vis: Option<PartyId>,
 }
 
 pub struct ConstIteration {
@@ -32,10 +45,11 @@ impl Display for FnInfo {
 }
 
 pub fn name_from_expr(node: Node<Expression>) -> String {
-    if let Identifier(i) = node.node {
-        i.node.name.clone()
-    } else {
-        panic!("Expression is not an identifier '{:#?}'", node.node);
+    match node.node {
+        Identifier(i) => i.node.name.clone(),
+        _ => {
+            panic!("Expression is not an identifier '{:#?}'", node.node);
+        }
     }
 }
 
@@ -46,31 +60,7 @@ pub fn name_from_decl(decl: &Declarator) -> String {
     }
 }
 
-pub fn d_type_(ds: Vec<Node<DeclarationSpecifier>>) -> Option<Ty> {
-    assert!(!ds.is_empty());
-    let res: Vec<Option<Ty>> = ds
-        .iter()
-        .map(|d| match &d.node {
-            DeclarationSpecifier::TypeSpecifier(t) => type_(t.node.clone()),
-            _ => unimplemented!("Unimplemented declaration type: {:#?}", d),
-        })
-        .collect();
-    compress_type(res)
-}
-
-pub fn s_type_(ss: Vec<Node<SpecifierQualifier>>) -> Option<Ty> {
-    assert!(!ss.is_empty());
-    let res: Vec<Option<Ty>> = ss
-        .iter()
-        .map(|s| match &s.node {
-            SpecifierQualifier::TypeSpecifier(t) => type_(t.node.clone()),
-            _ => unimplemented!("Unimplemented specifier type: {:#?}", s),
-        })
-        .collect();
-    compress_type(res)
-}
-
-fn compress_type(ts: Vec<Option<Ty>>) -> Option<Ty> {
+pub fn compress_type(ts: Vec<Option<Ty>>) -> Option<Ty> {
     if ts.len() == 1 {
         return ts.first().unwrap().clone();
     } else {
@@ -96,49 +86,12 @@ fn compress_type(ts: Vec<Option<Ty>>) -> Option<Ty> {
     }
 }
 
-fn type_(t: TypeSpecifier) -> Option<Ty> {
-    return match t {
-        TypeSpecifier::Int => Some(Ty::Int(true, 32)),
-        TypeSpecifier::Unsigned => Some(Ty::Int(false, 32)), // Some(Ty::Int(false, 32)),
-        TypeSpecifier::Bool => Some(Ty::Bool),
-        TypeSpecifier::Void => None,
-        _ => unimplemented!("Type {:#?} not implemented yet.", t),
-    };
-}
-
-pub fn get_decl_info(decl: Declaration) -> DeclInfo {
-    // TODO: support more than 1 declaration
-    let ty = d_type_(decl.specifiers).unwrap();
-    assert!(decl.declarators.len() == 1);
-    let decls = decl.declarators.first().unwrap().node.clone();
-    let name = name_from_decl(&decls.declarator.node);
-    DeclInfo { name, ty }
-}
-
-pub fn get_fn_info(fn_def: &FunctionDefinition) -> FnInfo {
-    let name = name_from_func(fn_def);
-    let ret_ty = ret_ty_from_func(fn_def);
-    let args = args_from_func(fn_def).unwrap();
-    let body = body_from_func(fn_def);
-
-    FnInfo {
-        name,
-        ret_ty,
-        args: args.to_vec(),
-        body,
-    }
-}
-
-fn name_from_func(fn_def: &FunctionDefinition) -> String {
+pub fn name_from_func(fn_def: &FunctionDefinition) -> String {
     let decl = &fn_def.declarator.node;
     name_from_decl(decl)
 }
 
-fn ret_ty_from_func(fn_def: &FunctionDefinition) -> Option<Ty> {
-    d_type_(fn_def.specifiers.clone())
-}
-
-fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaration>> {
+pub fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaration>> {
     let dec = &fn_def.declarator.node;
     dec.derived.iter().find_map(|d| match d.node {
         DerivedDeclarator::Function(ref fn_dec) => {
@@ -154,6 +107,58 @@ fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclaratio
     })
 }
 
-fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
+pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
+}
+
+pub fn flatten_inits(init: Initializer) -> Vec<Initializer> {
+    let mut inits: Vec<Initializer> = Vec::new();
+    match init {
+        Initializer::List(l) => {
+            for li in l {
+                let inner_inits = flatten_inits(li.node.initializer.node);
+                inits.extend(inner_inits.iter().cloned());
+            }
+        }
+        _ => inits.push(init),
+    }
+    inits
+}
+
+/// Interpret the party association of input parameters
+pub fn interpret_visibility(ext: &DeclarationSpecifier, mode: Mode) -> Option<PartyId> {
+    if let DeclarationSpecifier::Extension(nodes) = ext {
+        assert!(nodes.len() == 1);
+        let node = nodes.first().unwrap();
+        if let Extension::Attribute(attr) = &node.node {
+            let name = &attr.name;
+            return match name.node.as_str() {
+                "public" => PUBLIC_VIS,
+                "private" => match mode {
+                    Mode::Mpc(n_parties) => {
+                        assert!(attr.arguments.len() == 1);
+                        let arg = attr.arguments.first().unwrap();
+                        let mut num_val: u8 = u8::MAX;
+                        if let Expression::Constant(num) = &arg.node {
+                            if let Constant::Integer(i) = &num.node {
+                                num_val = i.number.parse::<u8>().unwrap();
+                            }
+                        }
+                        if num_val <= n_parties {
+                            Some(num_val)
+                        } else {
+                            panic!(
+                                "Party number {} greater than the number of parties ({})",
+                                num_val, n_parties
+                            )
+                        }
+                    }
+                    Mode::Proof => PROVER_VIS,
+                    _ => unimplemented!("Mode {} is not supported.", mode),
+                },
+                _ => panic!("Unknown visibility: {:#?}", name),
+            };
+        }
+    }
+    panic!("Bad visibility declaration.");
 }

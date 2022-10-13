@@ -30,19 +30,12 @@ const GC_INC: usize = 32;
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
-    /// The file to look for concrete arguments to main in. Optional.
-    ///
-    /// ## Examples
-    ///
-    /// If main takes `x: u64, y: field`, this file might contain
-    ///
-    /// ```ignore
-    /// x 4
-    /// y -1
-    /// ```
-    pub inputs: Option<PathBuf>,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
+    /// Whether to isolate assertions.
+    ///
+    /// That is, whether assertions in in-active if/then/else branches are disabled.
+    pub isolate_asserts: bool,
 }
 
 /// The Z# front-end. Implements [FrontEnd].
@@ -51,29 +44,32 @@ pub struct ZSharpFE;
 impl FrontEnd for ZSharpFE {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computation {
+        debug!(
+            "Starting Z# front-end, field: {}",
+            Sort::Field(DFL_T.clone())
+        );
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(i.inputs, asts, i.mode, loader.stdlib());
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
         g.entry_fn("main");
         g.generics_stack_pop();
         g.file_stack_pop();
-        g.circ.into_inner().consume().borrow().clone()
+
+        std::rc::Rc::try_unwrap(g.into_circify().consume())
+            .unwrap_or_else(|rc| (*rc).clone())
+            .into_inner()
     }
 }
 
 impl ZSharpFE {
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
     pub fn interpret(i: Inputs) -> T {
-        if i.inputs.is_some() {
-            panic!("zsharp::interpret() requires main() to take no args");
-        }
-
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(i.inputs, asts, i.mode, loader.stdlib());
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -88,7 +84,11 @@ struct ZGen<'ast> {
     file_stack: RefCell<Vec<PathBuf>>,
     generics_stack: RefCell<Vec<HashMap<String, T>>>,
     functions: HashMap<PathBuf, HashMap<String, ast::FunctionDefinition<'ast>>>,
-    structs: HashMap<PathBuf, HashMap<String, ast::StructDefinition<'ast>>>,
+    // We use a single map for both type definitions and structures.
+    structs_and_tys: HashMap<
+        PathBuf,
+        HashMap<String, Result<ast::StructDefinition<'ast>, ast::TypeDefinition<'ast>>>,
+    >,
     constants: HashMap<PathBuf, HashMap<String, (ast::Type<'ast>, T)>>,
     import_map: HashMap<PathBuf, HashMap<String, (PathBuf, String)>>,
     mode: Mode,
@@ -97,6 +97,25 @@ struct ZGen<'ast> {
     lhs_ty: RefCell<Option<Ty>>,
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
+    assertions: RefCell<Vec<Term>>,
+    isolate_asserts: bool,
+}
+
+impl<'ast> Drop for ZGen<'ast> {
+    fn drop(&mut self) {
+        use std::mem::take;
+
+        // drop all fields that contain T or Ty
+        drop(self.generics_stack.take());
+        drop(take(&mut self.constants));
+        drop(self.cvars_stack.take());
+        drop(self.crets_stack.take());
+        drop(self.lhs_ty.take());
+        drop(self.ret_ty_stack.take());
+
+        // force garbage collection
+        garbage_collect();
+    }
 }
 
 enum ZAccess {
@@ -122,19 +141,19 @@ fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
 
 impl<'ast> ZGen<'ast> {
     fn new(
-        inputs: Option<PathBuf>,
         asts: HashMap<PathBuf, ast::File<'ast>>,
         mode: Mode,
         stdlib: &'ast parser::ZStdLib,
+        isolate_asserts: bool,
     ) -> Self {
         let this = Self {
-            circ: RefCell::new(Circify::new(ZSharp::new(inputs.map(parser::parse_inputs)))),
+            circ: RefCell::new(Circify::new(ZSharp::new())),
             asts,
             stdlib,
             file_stack: Default::default(),
             generics_stack: Default::default(),
             functions: HashMap::new(),
-            structs: HashMap::new(),
+            structs_and_tys: HashMap::new(),
             constants: HashMap::new(),
             import_map: HashMap::new(),
             mode,
@@ -143,6 +162,8 @@ impl<'ast> ZGen<'ast> {
             lhs_ty: Default::default(),
             ret_ty_stack: Default::default(),
             gc_depth_estimate: Cell::new(2 * GC_INC),
+            assertions: Default::default(),
+            isolate_asserts,
         };
         this.circ
             .borrow()
@@ -154,10 +175,14 @@ impl<'ast> ZGen<'ast> {
         this
     }
 
+    fn into_circify(self) -> Circify<ZSharp> {
+        self.circ.replace(Circify::new(ZSharp::new()))
+    }
+
     /// Unwrap a result with a span-dependent error
     fn err<E: Display>(&self, e: E, s: &ast::Span) -> ! {
         println!("Error: {}", e);
-        println!("In: {}", self.cur_path().display());
+        println!("In: {}", self.cur_path().canonicalize().unwrap().display());
         s.lines().for_each(|l| print!("  {}", l));
         std::process::exit(1)
     }
@@ -314,6 +339,7 @@ impl<'ast> ZGen<'ast> {
         name: &str,
         accs: &[ast::AssigneeAccess<'ast>],
         val: T,
+        strict: bool,
     ) -> Result<(), String> {
         let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
         let old = if IS_CNST {
@@ -324,7 +350,9 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))?
                 .unwrap_term()
         };
-        let new = loc_store(old, &zaccs[..], val)?;
+        let new =
+            loc_store(old, &zaccs[..], val)
+                .and_then(|n| if strict { const_val(n) } else { Ok(n) })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -394,6 +422,7 @@ impl<'ast> ZGen<'ast> {
                 }
             },
         }
+        .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
     fn unary_op(&self, o: &ast::UnaryOperator) -> fn(T) -> Result<T, String> {
@@ -401,6 +430,7 @@ impl<'ast> ZGen<'ast> {
             ast::UnaryOperator::Pos(_) => Ok,
             ast::UnaryOperator::Neg(_) => neg,
             ast::UnaryOperator::Not(_) => not,
+            ast::UnaryOperator::Strict(_) => const_val,
         }
     }
 
@@ -650,7 +680,7 @@ impl<'ast> ZGen<'ast> {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
             let vis = self.interpret_visibility(&p.visibility);
-            let r = self.circ_declare(p.id.value.clone(), &ty, true, vis);
+            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false);
             self.unwrap(r, &p.span);
         }
         for s in &f.statements {
@@ -672,10 +702,19 @@ impl<'ast> ZGen<'ast> {
                 Mode::Proof => {
                     let ty = ret_ty.as_ref().unwrap();
                     let name = "return".to_owned();
-                    let term = r.unwrap_term();
-                    self.circ_declare(name.clone(), ty, false, PROVER_VIS)
+                    let ret_val = r.unwrap_term();
+                    let ret_var_val = self
+                        .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
-                    self.circ_assign_with_assertions(name, term, ty, PUBLIC_VIS);
+                    let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
+                    let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
+                    let to_assert = if assertions.is_empty() {
+                        ret_eq
+                    } else {
+                        assertions.push(ret_eq);
+                        term(AND, assertions)
+                    };
+                    self.circ.borrow_mut().assert(to_assert);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
@@ -735,7 +774,7 @@ impl<'ast> ZGen<'ast> {
                         .number
                         .as_ref()
                         .unwrap_or_else(|| self.err("No party number", &private.span));
-                    let num_val = (&num_str.value[1..num_str.value.len() - 1])
+                    let num_val = num_str.value[1..num_str.value.len() - 1]
                         .parse::<u8>()
                         .unwrap_or_else(|e| {
                             self.err(format!("Bad party number: {}", e), &private.span)
@@ -820,9 +859,13 @@ impl<'ast> ZGen<'ast> {
             .or_else(|| self.const_lookup_(&i.value).cloned())
         {
             Some(v) => Ok(v),
-            None if IS_CNST => self
-                .cvar_lookup(&i.value)
-                .ok_or_else(|| format!("Undefined const identifier {}", &i.value)),
+            None if IS_CNST => self.cvar_lookup(&i.value).ok_or_else(|| {
+                format!(
+                    "Undefined const identifier {} in {}",
+                    &i.value,
+                    self.cur_path().canonicalize().unwrap().to_string_lossy()
+                )
+            }),
             _ => match self
                 .circ_get_value(Loc::local(i.value.clone()))
                 .map_err(|e| format!("{}", e))?
@@ -896,8 +939,13 @@ impl<'ast> ZGen<'ast> {
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),
                     _ => {
                         let c = self.expr_impl_::<false>(&u.first)?;
+                        let cbool = bool(c.clone())?;
+                        self.circ_enter_condition(cbool.clone());
                         let a = self.expr_impl_::<false>(&u.second)?;
+                        self.circ_exit_condition();
+                        self.circ_enter_condition(term![NOT; cbool]);
                         let b = self.expr_impl_::<false>(&u.third)?;
+                        self.circ_exit_condition();
                         cond(c, a, b)
                     }
                 }
@@ -983,10 +1031,24 @@ impl<'ast> ZGen<'ast> {
                         .map(|m_expr| (m.id.value.clone(), m_expr))
                 })
                 .collect::<Result<Vec<_>, String>>()
-                .map(|members| T::new_struct(u.ty.value.clone(), members)),
+                .and_then(|members| Ok(T::new_struct(self.canon_struct(&u.ty.value)?, members))),
         }
         .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
+    }
+
+    fn canon_struct(&self, id: &str) -> Result<String, String> {
+        match self
+            .get_struct_or_type(id)
+            .ok_or_else(|| format!("No such struct or type {} canonicalizing InlineStruct", id))?
+            .0
+        {
+            Ok(_) => Ok(id.to_string()),
+            Err(t) => match &t.ty {
+                ast::Type::Struct(s) => self.canon_struct(&s.id.value),
+                _ => Err(format!("Found non-Struct canonicalizing struct {}", id,)),
+            },
+        }
     }
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
@@ -1002,7 +1064,9 @@ impl<'ast> ZGen<'ast> {
         if IS_CNST {
             self.cvar_declare(name, ty)
         } else {
-            self.circ_declare(name, ty, false, PROVER_VIS)
+            self.circ
+                .borrow_mut()
+                .declare_uninit(name, ty)
                 .map_err(|e| format!("{}", e))
         }
     }
@@ -1048,15 +1112,22 @@ impl<'ast> ZGen<'ast> {
                         .ok_or_else(|| "interpreting expr as const bool failed".to_string())
                 }) {
                     Ok(true) => Ok(()),
-                    Ok(false) => Err("Const assert failed".to_string()),
+                    Ok(false) => Err(format!(
+                        "Const assert failed: {} at\n{}",
+                        e.message
+                            .as_ref()
+                            .map(|m| m.value.as_ref())
+                            .unwrap_or("(no error message given)"),
+                        span_to_string(e.expression.span()),
+                    )),
                     Err(err) if IS_CNST => Err(format!(
-                        "Const assert expression eval failed at {}: {}",
+                        "Const assert expression eval failed {} at\n{}",
                         err,
                         span_to_string(e.expression.span()),
                     )),
                     _ => {
                         let b = bool(self.expr_impl_::<false>(&e.expression)?)?;
-                        self.circ_assert(b);
+                        self.assert(b);
                         Ok(())
                     }
                 }
@@ -1084,7 +1155,7 @@ impl<'ast> ZGen<'ast> {
                 self.decl_impl_::<IS_CNST>(v_name, &ty)?;
                 for j in s..e {
                     self.enter_scope_impl_::<IS_CNST>();
-                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j))?;
+                    self.assign_impl_::<IS_CNST>(&i.index.value, &[][..], ival_cons(j), false)?;
                     for s in &i.statements {
                         self.stmt_impl_::<IS_CNST>(s)?;
                     }
@@ -1103,7 +1174,13 @@ impl<'ast> ZGen<'ast> {
                 if let Some(l) = d.lhs.first() {
                     match l {
                         ast::TypedIdentifierOrAssignee::Assignee(l) => {
-                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e)
+                            let strict = match &d.expression {
+                                ast::Expression::Unary(u) => {
+                                    matches!(&u.op, ast::UnaryOperator::Strict(_))
+                                }
+                                _ => false,
+                            };
+                            self.assign_impl_::<IS_CNST>(&l.id.value, &l.accesses[..], e, strict)
                         }
                         ast::TypedIdentifierOrAssignee::TypedIdentifier(l) => {
                             let decl_ty = self.type_impl_::<IS_CNST>(&l.ty)?;
@@ -1399,39 +1476,45 @@ impl<'ast> ZGen<'ast> {
                     .fold(b, |b, d| Ok(Ty::Array(d?, Box::new(b?))))
             }
             ast::Type::Struct(s) => {
-                let sdef = self
-                    .get_struct(&s.id.value)
-                    .ok_or_else(|| {
-                        format!(
-                            "No such struct {} (did you bring it into scope?)",
-                            &s.id.value
-                        )
-                    })?
-                    .clone();
-                let g_len = sdef.generics.len();
+                let (def, path) = self.get_struct_or_type(&s.id.value).ok_or_else(|| {
+                    format!(
+                        "No such struct {} (did you bring it into scope?)",
+                        &s.id.value
+                    )
+                })?;
+                let generics = match def {
+                    Ok(sdef) => &sdef.generics,
+                    Err(tdef) => &tdef.generics,
+                };
+                let g_len = generics.len();
                 let egv = s
                     .explicit_generics
                     .as_ref()
                     .map(|eg| eg.values.as_ref())
                     .unwrap_or(&[][..]);
-                let generics = self.egvs_impl_::<IS_CNST>(egv, sdef.generics)?;
+                let generics = self.egvs_impl_::<IS_CNST>(egv, generics.clone())?;
                 if generics.len() != g_len {
                     return Err(format!(
                         "Struct {} is not monomorphized or wrong number of generic parameters",
                         &s.id.value
                     ));
                 }
+                self.file_stack_push(path);
                 self.generics_stack_push(generics);
-                let ty = Ty::new_struct(
-                    s.id.value.clone(),
-                    sdef.fields
-                        .into_iter()
-                        .map::<Result<_, String>, _>(|f| {
-                            Ok((f.id.value, self.type_impl_::<IS_CNST>(&f.ty)?))
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
+                let ty = match def {
+                    Ok(sdef) => Ty::new_struct(
+                        sdef.id.value.clone(),
+                        sdef.fields
+                            .iter()
+                            .map::<Result<_, String>, _>(|f| {
+                                Ok((f.id.value.clone(), self.type_impl_::<IS_CNST>(&f.ty)?))
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                    ),
+                    Err(tdef) => self.type_impl_::<IS_CNST>(&tdef.ty)?,
+                };
                 self.generics_stack_pop();
+                self.file_stack_pop();
                 Ok(ty)
             }
         }
@@ -1591,7 +1674,7 @@ impl<'ast> ZGen<'ast> {
         let mut clr = ZConstLiteralRewriter::new(None);
         for p in files {
             self.constants.insert(p.clone(), HashMap::new());
-            self.structs.insert(p.clone(), HashMap::new());
+            self.structs_and_tys.insert(p.clone(), HashMap::new());
             self.functions.insert(p.clone(), HashMap::new());
             self.file_stack_push(p.clone());
             for d in t.get_mut(&p).unwrap().declarations.iter_mut() {
@@ -1609,13 +1692,41 @@ impl<'ast> ZGen<'ast> {
                             .unwrap_or_else(|e| self.err(e.0, &s.span));
 
                         if self
-                            .structs
+                            .structs_and_tys
                             .get_mut(self.file_stack.borrow().last().unwrap())
                             .unwrap()
-                            .insert(s.id.value.clone(), s_ast)
+                            .insert(s.id.value.clone(), Ok(s_ast))
                             .is_some()
                         {
-                            self.err(format!("Struct {} redefined", &s.id.value), &s.span);
+                            self.err(
+                                format!("Struct {} defined over existing name", &s.id.value),
+                                &s.span,
+                            );
+                        }
+                    }
+                    ast::SymbolDeclaration::Type(t) => {
+                        debug!(
+                            "processing decl: type definition {} in {}",
+                            t.id.value,
+                            p.display()
+                        );
+                        let mut t_ast = t.clone();
+
+                        // rewrite literals in ArrayTypes
+                        clr.visit_type_definition(&mut t_ast)
+                            .unwrap_or_else(|e| self.err(e.0, &t.span));
+
+                        if self
+                            .structs_and_tys
+                            .get_mut(self.file_stack.borrow().last().unwrap())
+                            .unwrap()
+                            .insert(t.id.value.clone(), Err(t_ast))
+                            .is_some()
+                        {
+                            self.err(
+                                format!("Type {} defined over existing name", &t.id.value),
+                                &t.span,
+                            );
                         }
                     }
                     ast::SymbolDeclaration::Function(f) => {
@@ -1682,15 +1793,44 @@ impl<'ast> ZGen<'ast> {
         self.functions.get(&f_path).and_then(|m| m.get(&f_name))
     }
 
-    fn get_struct(&self, struct_id: &str) -> Option<&ast::StructDefinition<'ast>> {
+    fn get_struct_or_type(
+        &self,
+        struct_id: &str,
+    ) -> Option<(
+        Result<&ast::StructDefinition<'ast>, &ast::TypeDefinition<'ast>>,
+        PathBuf,
+    )> {
         let (s_path, s_name) = self.deref_import(struct_id);
-        self.structs.get(&s_path).and_then(|m| m.get(&s_name))
+        self.structs_and_tys
+            .get(&s_path)
+            .and_then(|m| m.get(&s_name))
+            .map(|m| (m.as_ref(), s_path))
+    }
+
+    fn assert(&self, asrt: Term) {
+        debug_assert!(matches!(check(&asrt), Sort::Bool));
+        if self.isolate_asserts {
+            let path = self.circ_condition();
+            self.assertions
+                .borrow_mut()
+                .push(term![IMPLIES; path, asrt]);
+        } else {
+            self.assertions.borrow_mut().push(asrt);
+        }
     }
 
     /*** circify wrapper functions (hides RefCell) ***/
 
-    fn circ_assert(&self, asrt: Term) {
-        self.circ.borrow_mut().assert(asrt)
+    fn circ_enter_condition(&self, cond: Term) {
+        self.circ.borrow_mut().enter_condition(cond).unwrap();
+    }
+
+    fn circ_exit_condition(&self) {
+        self.circ.borrow_mut().exit_condition()
+    }
+
+    fn circ_condition(&self) -> Term {
+        self.circ.borrow().condition()
     }
 
     fn circ_return_(&self, ret: Option<T>) -> Result<(), CircError> {
@@ -1713,14 +1853,17 @@ impl<'ast> ZGen<'ast> {
         self.circ.borrow_mut().exit_scope()
     }
 
-    fn circ_declare(
+    fn circ_declare_input(
         &self,
         name: String,
         ty: &Ty,
-        input: bool,
         vis: Option<PartyId>,
-    ) -> Result<(), CircError> {
-        self.circ.borrow_mut().declare(name, ty, input, vis)
+        precomputed_value: Option<T>,
+        mangle_name: bool,
+    ) -> Result<T, CircError> {
+        self.circ
+            .borrow_mut()
+            .declare_input(name, ty, vis, precomputed_value, mangle_name)
     }
 
     fn circ_declare_init(&self, name: String, ty: Ty, val: Val<T>) -> Result<Val<T>, CircError> {
@@ -1733,12 +1876,6 @@ impl<'ast> ZGen<'ast> {
 
     fn circ_assign(&self, loc: Loc, val: Val<T>) -> Result<Val<T>, CircError> {
         self.circ.borrow_mut().assign(loc, val)
-    }
-
-    fn circ_assign_with_assertions(&self, name: String, term: T, ty: &Ty, vis: Option<PartyId>) {
-        self.circ
-            .borrow_mut()
-            .assign_with_assertions(name, term, ty, vis)
     }
 }
 

@@ -15,28 +15,39 @@ use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
+use circ::ir::term::{Op, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
-    term::extras::Letified,
+    term::{
+        check,
+        extras::Letified,
+        text::{parse_value_map, serialize_value_map},
+    },
 };
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
-use circ::target::ilp::trans::to_ilp;
+use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::bellman::parse_instance;
+use circ::target::r1cs::bellman::{gen_params, prove, verify};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::spartan::r1cs_to_spartan;
 #[cfg(feature = "r1cs")]
 use merlin::Transcript;
 #[cfg(feature = "r1cs")]
 use libspartan::{Instance, NIZKGens, NIZK};
-
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
+
+use circ::target::r1cs::{ProverData,VerifierData};
+
+
+
+
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
 use circ::util::field::DFL_T;
 use circ_fields::FieldT;
+use fxhash::FxHashMap as HashMap;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
 use std::fs::File;
@@ -45,6 +56,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
+
+use circ::ir::term::{Value, BitVector};
+use fxhash::FxHashMap;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -74,11 +88,6 @@ struct FrontendOptions {
     #[structopt(long)]
     value_threshold: Option<u64>,
 
-    /// File with input witness
-    #[allow(dead_code)]
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
-
     /// How many recursions to allow (datalog)
     #[structopt(short, long, name = "N", default_value = "5")]
     rec_limit: usize,
@@ -86,6 +95,15 @@ struct FrontendOptions {
     /// Lint recursions that are allegedly primitive recursive (datalog)
     #[structopt(long)]
     lint_prim_rec: bool,
+
+    #[cfg(feature = "zok")]
+    /// In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take
+    /// effect if that branch is active.
+    ///
+    /// See `--branch-isolation` in
+    /// [ZoKrates](https://zokrates.github.io/language/control_flow.html).
+    #[structopt(long)]
+    z_isolate_asserts: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -96,10 +114,6 @@ enum Backend {
         prover_key: PathBuf,
         #[structopt(long, default_value = "V", parse(from_os_str))]
         verifier_key: PathBuf,
-        #[structopt(long, default_value = "pi", parse(from_os_str))]
-        proof: PathBuf,
-        #[structopt(long, default_value = "x", parse(from_os_str))]
-        instance: PathBuf,
         #[structopt(long, default_value = "50")]
         /// linear combination constraints up to this size will be eliminated
         lc_elimination_thresh: usize,
@@ -111,11 +125,13 @@ enum Backend {
     Mpc {
         #[structopt(long, default_value = "hycc", name = "cost_model")]
         cost_model: String,
+        #[structopt(long, default_value = "lp", name = "selection_scheme")]
+        selection_scheme: String,
     },
 }
 
 arg_enum! {
-    #[derive(PartialEq, Debug)]
+    #[derive(PartialEq, Eq, Debug)]
     enum Language {
         Zsharp,
         Datalog,
@@ -124,37 +140,28 @@ arg_enum! {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum DeterminedLanguage {
     Zsharp,
     Datalog,
     C,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum CostModelType {
     Opa,
     Hycc,
 }
 
 arg_enum! {
-    #[derive(PartialEq, Debug)]
+    #[derive(PartialEq, Eq, Debug)]
     enum ProofAction {
         Count,
-        Prove,
         Setup,
-        Verify,
         Spartan,
     }
 }
 
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    enum ProofOption {
-        Count,
-        Prove,
-    }
-}
 
 fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
     match *l {
@@ -200,8 +207,8 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             let inputs = zsharp::Inputs {
                 file: options.path,
-                inputs: options.frontend.inputs,
                 mode,
+                isolate_asserts: options.frontend.z_isolate_asserts,
             };
             ZSharpFE::gen(inputs)
         }
@@ -221,7 +228,6 @@ fn main() {
         DeterminedLanguage::C => {
             let inputs = c::Inputs {
                 file: options.path,
-                inputs: options.frontend.inputs,
                 mode,
             };
             C::gen(inputs)
@@ -232,38 +238,45 @@ fn main() {
         }
     };
     let cs = match mode {
-        Mode::Opt => opt(cs, vec![Opt::ScalarizeVars, Opt::ConstantFold]),
-        Mode::Mpc(_) => opt(
+        Mode::Opt => opt(
             cs,
-            vec![
-                Opt::Sha,
-                Opt::ConstantFold,
-                Opt::ScalarizeVars,
-                Opt::ConstantFold,
-                // The obliv elim pass produces more tuples, that must be eliminated
-                Opt::Obliv,
-                Opt::Tuple,
-                // The linear scan pass produces more tuples, that must be eliminated
-                Opt::LinearScan,
-                Opt::Tuple,
-                Opt::ConstantFold,
-                // Binarize nary terms
-                Opt::Binarize,
-            ],
-            // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            vec![Opt::ScalarizeVars, Opt::ConstantFold(Box::new([]))],
         ),
+        Mode::Mpc(_) => {
+            let ignore = [BV_LSHR, BV_SHL];
+            opt(
+                cs,
+                vec![
+                    Opt::ScalarizeVars,
+                    Opt::Flatten,
+                    Opt::Sha,
+                    Opt::ConstantFold(Box::new(ignore.clone())),
+                    Opt::Flatten,
+                    Opt::Obliv,
+                    // The obliv elim pass produces more tuples, that must be eliminated
+                    Opt::Tuple,
+                    Opt::LinearScan,
+                    // The linear scan pass produces more tuples, that must be eliminated
+                    Opt::Tuple,
+                    Opt::ConstantFold(Box::new(ignore)),
+                    // Binarize nary terms
+                    Opt::Binarize,
+                ],
+                // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
+            )
+        }
         Mode::Proof | Mode::ProofOfHighValue(_) => opt(
             cs,
             vec![
                 Opt::ScalarizeVars,
                 Opt::Flatten,
                 Opt::Sha,
-                Opt::ConstantFold,
+                Opt::ConstantFold(Box::new([])),
                 Opt::Flatten,
                 Opt::Inline,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
-                Opt::ConstantFold,
+                Opt::ConstantFold(Box::new([])),
                 Opt::Obliv,
                 // The obliv elim pass produces more tuples, that must be eliminated
                 Opt::Tuple,
@@ -271,7 +284,7 @@ fn main() {
                 // The linear scan pass produces more tuples, that must be eliminated
                 Opt::Tuple,
                 Opt::Flatten,
-                Opt::ConstantFold,
+                Opt::ConstantFold(Box::new([])),
                 Opt::Inline,
             ],
         ),
@@ -282,54 +295,44 @@ fn main() {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
             action,
-            proof,
             prover_key,
             verifier_key,
-            instance,
             lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
-            let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+            let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
-
+            // save the optimized r1cs: the prover needs it to synthesize.
+            prover_data.r1cs = r1cs.clone(); //jess - undo added clone
             match action {
                 ProofAction::Count => (),
-                ProofAction::Prove => {
-                    println!("Proving");
-                    r1cs.check_all();
-                    let rng = &mut rand::thread_rng();
-                    let mut pk_file = File::open(prover_key).unwrap();
-                    let pk = Parameters::<Bls12>::read(&mut pk_file, false).unwrap();
-                    let pf = create_random_proof(&r1cs, &pk, rng).unwrap();
-                    let mut pf_file = File::create(proof).unwrap();
-                    pf.write(&mut pf_file).unwrap();
-                }
                 ProofAction::Setup => {
-                    let rng = &mut rand::thread_rng();
-                    let p =
-                        generate_random_parameters::<bls12_381::Bls12, _, _>(&r1cs, rng).unwrap();
-                    let mut pk_file = File::create(prover_key).unwrap();
-                    p.write(&mut pk_file).unwrap();
-                    let mut vk_file = File::create(verifier_key).unwrap();
-                    p.vk.write(&mut vk_file).unwrap();
-                }
-                ProofAction::Verify => {
-                    println!("Verifying");
-                    let mut vk_file = File::open(verifier_key).unwrap();
-                    let vk = VerifyingKey::<Bls12>::read(&mut vk_file).unwrap();
-                    let pvk = prepare_verifying_key(&vk);
-                    let mut pf_file = File::open(proof).unwrap();
-                    let pf = Proof::read(&mut pf_file).unwrap();
-                    let instance_vec = parse_instance(&instance);
-                    verify_proof(&pvk, &pf, &instance_vec).unwrap();
+                    println!("Generating Parameters");
+                    gen_params::<Bls12, _, _>(
+                        prover_key,
+                        verifier_key,
+                        &prover_data,
+                        &verifier_data,
+                    )
+                    .unwrap();
                 }
                 ProofAction::Spartan => {
-                    println!("Converting R1CS to Spartan");
-                    let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs);
+                    let values: FxHashMap<String, Value> = vec![
+                        ("a".to_owned(), Value::BitVector(BitVector::new(0.into(), 8))), //Field(DFL_T.new_v(1))),
+                        ("b".to_owned(), Value::BitVector(BitVector::new(0.into(), 8))), //ield(DFL_T.new_v(1))),
+                    ]
+                    .into_iter()
+                    .collect();
 
+                    println!("{:#?}\n{:#?}", prover_data, verifier_data);
+
+                    println!("Converting R1CS to Spartan");
+                    let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs, prover_data, verifier_data, &values);
+
+                    /*
                     println!("Proving with Spartan");
                     // produce public parameters
                     let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
@@ -345,7 +348,7 @@ fn main() {
                         .is_ok());
 
                     println!("Proof verification successful!");
-                    
+                    */
                 }
             }
         }
@@ -353,7 +356,10 @@ fn main() {
         Backend::R1cs { .. } => {
             panic!("Missing feature: r1cs");
         }
-        Backend::Mpc { cost_model } => {
+        Backend::Mpc {
+            cost_model,
+            selection_scheme,
+        } => {
             println!("Converting to aby");
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
@@ -361,11 +367,18 @@ fn main() {
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
             println!("Cost model: {}", cost_model);
-            to_aby(cs, &path_buf, &lang_str, &cost_model);
+            println!("Selection scheme: {}", selection_scheme);
+            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
             println!("Converting to ilp");
+            let inputs_and_sorts: HashMap<_, _> = cs
+                .metadata
+                .input_vis
+                .iter()
+                .map(|(name, (sort, _))| (name.clone(), check(sort)))
+                .collect();
             let ilp = to_ilp(cs);
             let solver_result = ilp.solve(default_solver);
             let (max, vars) = solver_result.expect("ILP could not be solved");
@@ -374,15 +387,9 @@ fn main() {
             for (var, val) in &vars {
                 println!("  {}: {}", var, val.round() as u64);
             }
-            let mut f = File::create("assignment.txt").unwrap();
-            for (var, val) in &vars {
-                if var.contains("f0") {
-                    let i = var.find("f0").unwrap();
-                    let s = &var[i + 8..];
-                    let e = s.find('_').unwrap();
-                    writeln!(f, "{} {}", &s[..e], val.round() as u64).unwrap();
-                }
-            }
+            let values = assignment_to_values(&vars, &inputs_and_sorts);
+            let values_as_str = serialize_value_map(&values);
+            std::fs::write("assignment.txt", values_as_str).unwrap();
         }
         #[cfg(not(feature = "lp"))]
         Backend::Ilp { .. } => {

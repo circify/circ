@@ -44,8 +44,9 @@ impl Expr2Smt<()> for Value {
     fn expr_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
         match self {
             Value::Bool(b) => write!(w, "{}", b)?,
-            Value::Field(_) => panic!("Can't give fields to SMT solver"),
-            Value::Int(i) => write!(w, "{}", i)?,
+            Value::Field(f) => write!(w, "#f{}m{}", f.i(), f.modulus())?,
+            Value::Int(i) if i >= &Integer::new() => write!(w, "{}", i)?,
+            Value::Int(i) => write!(w, "(- 0 {})", *i.as_neg())?,
             Value::BitVector(b) => write!(w, "{}", b)?,
             Value::F32(f) => {
                 let (sign, exp, mant) = f.decompose_raw();
@@ -131,6 +132,10 @@ impl Expr2Smt<()> for TermData {
                 write!(w, "({}", self.op)?;
                 true
             }
+            Op::BvUext(s) => {
+                write!(w, "((_ zero_extend {})", s)?;
+                true
+            }
             Op::Const(c) => {
                 write!(w, "{}", SmtDisp(c))?;
                 false
@@ -149,6 +154,30 @@ impl Expr2Smt<()> for TermData {
             }
             Op::Field(i) => {
                 write!(w, "((_ tupSel {})", i)?;
+                true
+            }
+            Op::PfNaryOp(PfNaryOp::Mul) => {
+                write!(w, "(ff.mul")?;
+                true
+            }
+            Op::PfNaryOp(PfNaryOp::Add) => {
+                write!(w, "(ff.add")?;
+                true
+            }
+            Op::PfUnOp(PfUnOp::Neg) => {
+                write!(w, "(ff.neg")?;
+                true
+            }
+            Op::IntNaryOp(IntNaryOp::Mul) => {
+                write!(w, "(*")?;
+                true
+            }
+            Op::IntNaryOp(IntNaryOp::Add) => {
+                write!(w, "(+")?;
+                true
+            }
+            Op::IntBinPred(o) => {
+                write!(w, "({}", o)?;
                 true
             }
             o => panic!("Cannot give {} to SMT solver", o),
@@ -181,7 +210,7 @@ impl Sort2Smt for Sort {
                 }
                 write!(w, ")")?;
             }
-            Sort::Field(_) => panic!("Can't give fields to SMT solver"),
+            Sort::Field(f) => write!(w, "(_ FiniteField {})", f.modulus())?,
         }
         Ok(())
     }
@@ -218,6 +247,8 @@ impl<'a, R: std::io::BufRead> IdentParser<String, Sort, &'a mut SmtParser<R>> fo
     fn parse_type(self, input: &'a mut SmtParser<R>) -> SmtRes<Sort> {
         if input.try_tag("Bool")? {
             Ok(Sort::Bool)
+        } else if input.try_tag("Int")? {
+            Ok(Sort::Int)
         } else if input.try_tag("(_ BitVec")? {
             let n = input
                 .try_int(|s, b| {
@@ -230,6 +261,18 @@ impl<'a, R: std::io::BufRead> IdentParser<String, Sort, &'a mut SmtParser<R>> fo
                 .unwrap();
             input.tag(")")?;
             Ok(Sort::BitVector(n))
+        } else if input.try_tag("(_ FiniteField")? {
+            let n = input
+                .try_int(|s, b| {
+                    if b {
+                        Ok(rug::Integer::from_str_radix(s, 10).unwrap())
+                    } else {
+                        Err("Non-positive finite field size")
+                    }
+                })?
+                .unwrap();
+            input.tag(")")?;
+            Ok(Sort::Field(circ_fields::FieldT::from(n)))
         } else {
             unimplemented!()
         }
@@ -244,7 +287,7 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
         input: &'a mut SmtParser<Br>,
         _: &String,
         _: &[(String, Sort)],
-        _: &Sort,
+        s: &Sort,
     ) -> SmtRes<Value> {
         let r = if let Some(b) = input.try_bool()? {
             Value::Bool(b)
@@ -264,6 +307,14 @@ impl<'a, Br: ::std::io::BufRead> ModelParser<String, Sort, Value, &'a mut SmtPar
                     input.buff_rest()
                 )
             }
+        } else if let Sort::Field(f) = s {
+            let int_literal = input.get_sexpr()?;
+            let i = Integer::from_str_radix(int_literal, 10).unwrap();
+            Value::Field(f.new_v(i))
+        } else if let Sort::Int = s {
+            let int_literal = input.get_sexpr()?;
+            let i = Integer::from_str_radix(int_literal, 10).unwrap();
+            Value::Int(i)
         } else {
             unimplemented!("Could not parse model suffix: {}", input.buff_rest())
         };
@@ -287,6 +338,24 @@ fn make_solver<P>(parser: P, models: bool, inc: bool) -> rsmt2::Solver<P> {
     }
     conf.set_incremental(inc);
     rsmt2::Solver::new(conf, parser).expect("Error creating SMT solver")
+}
+
+/// Write SMT2 the encodes this terms satisfiability to a file
+pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
+    for c in PostOrderIter::new(t.clone()) {
+        if let Op::Var(n, s) = &c.op {
+            write!(w, "(declare-const ").unwrap();
+            SmtSymDisp(n).sym_to_smt2(&mut w, ()).unwrap();
+            write!(w, " ").unwrap();
+            s.sort_to_smt2(&mut w).unwrap();
+            writeln!(w, ")").unwrap();
+        }
+    }
+    assert!(check(t) == Sort::Bool);
+    write!(w, "(assert\n\t").unwrap();
+    t.expr_to_smt2(&mut w, ()).unwrap();
+    writeln!(w, "\n)").unwrap();
+    writeln!(w, "(check-sat)").unwrap();
 }
 
 /// Check whether some term is satisfiable.
@@ -410,6 +479,55 @@ mod test {
         assert!(check_sat(&t));
     }
 
+    // ignored until FF support in cvc5 is upstreamed.
+    #[ignore]
+    #[test]
+    fn ff_is_sat() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (mod 5)) (b (mod 5)))
+            (and
+                (= (* a a) a)
+                (= (* b b) b)
+                (= a b)
+                (= a #f1m5)
+            )
+        )
+        ",
+        );
+        assert!(check_sat(&t));
+    }
+
+    // ignored until FF support in cvc5 is upstreamed.
+    #[ignore]
+    #[test]
+    fn ff_model() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (mod 5)) (b (mod 5)))
+            (and
+                (= (* a a) a)
+                (= (* b b) b)
+                (= a b)
+                (= a #f1m5)
+            )
+        )
+        ",
+        );
+        let field = circ_fields::FieldT::from(rug::Integer::from(5));
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Field(field.new_v(1)),),
+                    ("b".to_owned(), Value::Field(field.new_v(1)),),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
     #[test]
     fn tuple_is_sat() {
         let t = term![Op::Eq; term![Op::Field(0); term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)]], leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
@@ -489,5 +607,168 @@ mod test {
             .assert(&*term![Op::Not; term![Op::Eq; t, leaf_term(Op::Const(val))]])
             .unwrap();
         solver.check_sat().unwrap()
+    }
+
+    #[test]
+    fn int_model() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (b int))
+            (and
+                (or (= (intadd a b) 1)
+                    (= (intadd a b) 0))
+                (< a 1)
+                (> 1 b)
+                (>= a 0)
+                (<= 0 b)
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Int(0.into())),
+                    ("b".to_owned(), Value::Int(0.into())),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn int_no_model() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (b int))
+            (and
+                (or (= (intadd a b) 1)
+                    (= (intadd a b) 1))
+                (< a 1)
+                (> 1 b)
+                (>= a 0)
+                (<= 0 b)
+            )
+        )
+        ",
+        );
+        assert_eq!(find_model(&t), None)
+    }
+
+    #[test]
+    fn int_model_nia() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (b int))
+            (and
+                (= (intmul a a) b)
+                (= (intmul b b) a)
+                (not (= a 0))
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Int(1.into())),
+                    ("b".to_owned(), Value::Int(1.into())),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn int_model_div() {
+        let t = text::parse_term(
+            b"
+        (declare ((a int) (q int) (r int))
+            (and
+                (= a (intadd (intmul q 5) r))
+                (>= r 0)
+                (< r 5)
+                (= (intadd a (intmul -1 r)) 10)
+                (>= a 14)
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    ("a".to_owned(), Value::Int(14.into())),
+                    ("r".to_owned(), Value::Int(4.into())),
+                    ("q".to_owned(), Value::Int(2.into())),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn bv_model_div() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (bv 8)) (q (bv 8)) (r (bv 8)))
+            (and
+                (= a (bvadd (bvmul q #x05) r))
+                (bvuge r #x00)
+                (bvult r #x05)
+                (= (bvsub a r) #x0a)
+                (bvuge a #x0e)
+            )
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![
+                    (
+                        "a".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(14), 8))
+                    ),
+                    (
+                        "r".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(4), 8))
+                    ),
+                    (
+                        "q".to_owned(),
+                        Value::BitVector(BitVector::new(Integer::from(2), 8))
+                    ),
+                ]
+                .into_iter()
+                .collect()
+            )
+        )
+    }
+
+    #[test]
+    fn bv_model_uext() {
+        let t = text::parse_term(
+            b"
+        (declare ((a (bv 8)))
+            (= a ((uext 6) #b10))
+        )
+        ",
+        );
+        assert_eq!(
+            find_model(&t),
+            Some(
+                vec![(
+                    "a".to_owned(),
+                    Value::BitVector(BitVector::new(Integer::from(2), 8))
+                ),]
+                .into_iter()
+                .collect()
+            )
+        )
     }
 }

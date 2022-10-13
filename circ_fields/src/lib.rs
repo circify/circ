@@ -19,6 +19,7 @@ use int_field::IntField;
 use ff::Field;
 use paste::paste;
 use rug::Integer;
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use std::sync::Arc;
@@ -26,7 +27,7 @@ use std::sync::Arc;
 // TODO: rework this using macros?
 
 /// Field element type
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum FieldT {
     /// BLS12-381 scalar field as `ff`
     FBls12381,
@@ -127,7 +128,7 @@ impl FieldT {
 }
 
 /// Field element value
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum FieldV {
     /// BLS12-381 scalar field element as `ff`
     FBls12381(FBls12381),

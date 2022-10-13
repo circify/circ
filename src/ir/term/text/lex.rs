@@ -2,7 +2,7 @@
 
 use logos::{self, Logos};
 
-#[derive(Logos, Debug, PartialEq, Clone, Copy)]
+#[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token {
     // Program constructs
     #[token(b"(")]

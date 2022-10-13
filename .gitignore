@@ -9,6 +9,9 @@ __pycache__
 /x
 /perf.data*
 /heaptrack.*
+/flamegraph.*
 /.gdb_history
 .features.txt
+.mode.txt
 scripts/aby_tests/tests
+/flamegraph*.svg
