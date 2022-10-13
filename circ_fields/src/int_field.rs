@@ -6,11 +6,12 @@ use rug::{
     ops::{RemRounding, RemRoundingAssign},
     Integer,
 };
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct IntField {
     pub(crate) i: Integer,
     m: Arc<Integer>,

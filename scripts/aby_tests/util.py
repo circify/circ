@@ -25,6 +25,8 @@ def get_result(file_path):
     else:
         raise RuntimeError("Unable to open file: "+file_path)
 
+def clean_output(output):
+    return "\n".join([line for line in output.split("\n") if not line.startswith("LOG:")])
 
 def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> bool:
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
@@ -44,6 +46,9 @@ def run_test(expected: str, server_cmd: List[str], client_cmd: List[str]) -> boo
         server_out = server_out.decode("utf-8").strip()
         client_out = client_out.decode("utf-8").strip()
 
+        server_out = clean_output(server_out)
+        client_out = clean_output(client_out)
+
         assert server_out == client_out, "server out != client out\nserver_out: "+server_out+"\nclient_out: "+client_out
         assert server_out == expected, "server_out: "+server_out+"\nexpected: "+expected
         return True, ""
@@ -62,7 +67,7 @@ def run_tests(lang: str, tests: List[dict]):
     failed_test_descs = []
     num_retries = 2
     
-    for test in tqdm(tests, leave=False, dynamic_ncols=True):
+    for test in tqdm(tests, leave=False):
         assert len(test) == 3, "test configurations are wrong for test: "+test[0]
         desc = test[0]
         name = test[1]

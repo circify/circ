@@ -16,6 +16,24 @@ fn eq() {
 }
 
 #[test]
+fn bv2pf() {
+    assert_eq!(
+        leaf_term(Op::Const(eval(
+            &text::parse_term(b"(bvshl #b0001 #b0010)"),
+            &FxHashMap::default()
+        ))),
+        text::parse_term(b" #b0100 ")
+    );
+    assert_eq!(
+        leaf_term(Op::Const(eval(
+            &text::parse_term(b" (set_default_modulus 17 ((pf2bv 4) #f1)) "),
+            &FxHashMap::default()
+        ))),
+        text::parse_term(b" #b0001 ")
+    );
+}
+
+#[test]
 fn map_test_bool_key() {
     let a1 = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(true)]);
     let a2 = make_array(Sort::Bool, Sort::Bool, vec![bool(true), bool(false)]);
@@ -26,6 +44,7 @@ fn map_test_bool_key() {
         eval(&expected, &FxHashMap::default())
     );
 }
+
 #[test]
 fn map_test_bv_key() {
     let a1 = make_array(
@@ -79,6 +98,47 @@ fn map_test_bv_key() {
     assert_eq!(
         eval(&actual_add, &FxHashMap::default()),
         eval(&expected_add, &FxHashMap::default())
+    );
+}
+
+#[test]
+fn test_rot() {
+    let a = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+    );
+    let expected_rot_0 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+    );
+    let expected_rot_1 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4)],
+    );
+    let expected_rot_2 = make_array(
+        Sort::BitVector(32),
+        Sort::BitVector(4),
+        vec![bv(0b0011, 4), bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4)],
+    );
+
+    let rot_0 = term![Op::Rot(0); a.clone()];
+    let rot_1 = term![Op::Rot(1); a.clone()];
+    let rot_2 = term![Op::Rot(2); a];
+
+    assert_eq!(
+        eval(&rot_0, &FxHashMap::default()),
+        eval(&expected_rot_0, &FxHashMap::default())
+    );
+    assert_eq!(
+        eval(&rot_1, &FxHashMap::default()),
+        eval(&expected_rot_1, &FxHashMap::default())
+    );
+    assert_eq!(
+        eval(&rot_2, &FxHashMap::default()),
+        eval(&expected_rot_2, &FxHashMap::default())
     );
 }
 

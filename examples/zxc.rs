@@ -33,9 +33,6 @@ struct Options {
     #[structopt(parse(from_os_str), name = "PATH")]
     path: PathBuf,
 
-    #[structopt(flatten)]
-    frontend: FrontendOptions,
-
     /*
     #[structopt(long, default_value = "P", parse(from_os_str))]
     prover_key: PathBuf,
@@ -59,13 +56,10 @@ struct Options {
 
     #[structopt(long, default_value = "count")]
     action: ProofAction,
-}
 
-#[derive(Debug, StructOpt)]
-struct FrontendOptions {
-    /// File with input witness
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
+    #[structopt(short = "q")]
+    /// quiet mode: don't print R1CS at the end
+    quiet: bool,
 }
 
 arg_enum! {
@@ -97,8 +91,8 @@ fn main() {
     let cs = {
         let inputs = zsharp::Inputs {
             file: options.path,
-            inputs: options.frontend.inputs,
             mode: Mode::Proof,
+            isolate_asserts: false,
         };
         ZSharpFE::gen(inputs)
     };
@@ -110,12 +104,12 @@ fn main() {
             Opt::ScalarizeVars,
             Opt::Flatten,
             Opt::Sha,
-            Opt::ConstantFold,
+            Opt::ConstantFold(Box::new([])),
             Opt::Flatten,
             Opt::Inline,
             // Tuples must be eliminated before oblivious array elim
             Opt::Tuple,
-            Opt::ConstantFold,
+            Opt::ConstantFold(Box::new([])),
             Opt::Obliv,
             // The obliv elim pass produces more tuples, that must be eliminated
             Opt::Tuple,
@@ -123,7 +117,7 @@ fn main() {
             // The linear scan pass produces more tuples, that must be eliminated
             Opt::Tuple,
             Opt::Flatten,
-            Opt::ConstantFold,
+            Opt::ConstantFold(Box::new([])),
             Opt::Inline,
         ],
     );
@@ -138,7 +132,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+    let (r1cs, _, _) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs
@@ -152,7 +146,9 @@ fn main() {
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
         ProofAction::Count => {
-            eprintln!("{:#?}", r1cs.constraints());
+            if !options.quiet {
+                eprintln!("{:#?}", r1cs.constraints());
+            }
         }
         ProofAction::Prove => {
             unimplemented!()

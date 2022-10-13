@@ -6,6 +6,7 @@ use rug::{Integer};
 use core::clone::Clone;
 
 use std::collections::HashMap;
+use fxhash::FxHashMap;
 use gmp_mpfr_sys::gmp::limb_t;
 
 /// Hold Spartan variables
@@ -17,39 +18,42 @@ pub struct Variable {
 
 
 /// circ R1cs -> spartan R1CSInstance
-pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instance, Assignment, Assignment, usize, usize, usize)
+pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>,prover_data: ProverData, verifier_data: VerifierData, inputs_map: &FxHashMap<String, Value>) -> (Instance, Assignment, Assignment, usize, usize, usize)
 {
+// todo hashmap v fxhashmap
 
-    // spartan format mapper: CirC -> Spartan
+    println!("{:#?}", verifier_data);
+
+// spartan format mapper: CirC -> Spartan
     let mut wit = Vec::new();
     let mut inp = Vec::new();
     let mut trans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
     let mut itrans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
 
-    match r1cs.values {
-        Some(_) =>
-            for (k,v) in r1cs.values.as_ref().unwrap() { // CirC id, Integer
+    let values = eval_inputs(inputs_map, prover_data);
 
-                //let name = r1cs.idxs_signals.get(k).unwrap().to_string();
-                let scalar = int_to_scalar(&v.i());
+    for (idx,sig) in r1cs.idxs_signals {
+        
+        let scalar = match values.get(&sig.to_string()) {
+            Some(v) => val_to_scalar(v),
+            None => panic!("Input/witness variable does not have matching evaluation")
+        };
 
-                if r1cs.public_idxs.contains(k) {
-                    // input
-                    //println!("As public io: {}", name);
+        if r1cs.public_idxs.contains(&idx) {
+            // input
+            println!("As public io: {}", sig);
 
-                    itrans.insert(*k, inp.len());
-                    inp.push(scalar.to_bytes());
-                } else {
-                     // witness
-                    //println!("As private witness: {}", name);
+            itrans.insert(idx, inp.len());
+            inp.push(scalar.to_bytes());
+        } else {
+             // witness
+            println!("As private witness: {}", sig);
 
-                    trans.insert(*k, wit.len());
-                    wit.push(scalar.to_bytes());
+            trans.insert(idx, wit.len());
+            wit.push(scalar.to_bytes());
 
-                }
+        }
 
-            }
-        None    => panic!("Tried to run Spartan without inputs/witness"),
     }
 
     assert_eq!(wit.len() + inp.len(), r1cs.next_idx);
@@ -62,7 +66,7 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
     let num_inputs = inp.len();
     let assn_inputs = InputsAssignment::new(&inp).unwrap();
 
-
+    
     for (cid,sid) in itrans{
         trans.insert(cid, sid + const_id + 1);
     }
@@ -104,6 +108,33 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>) -> (Instan
     assert_eq!(res.unwrap(), true);
 
     (inst, assn_witness, assn_inputs, num_cons, num_vars, num_inputs)
+}
+
+fn eval_inputs(inputs_map: &FxHashMap<String, Value>, prover_data: ProverData) -> FxHashMap<String, Value>{
+    for (input, sort) in &prover_data.precompute_inputs {
+        let value = inputs_map
+            .get(input)
+            .unwrap_or_else(|| panic!("No input for {}", input));
+        let sort2 = value.sort();
+        assert_eq!(
+            sort, &sort2,
+            "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
+            input, sort, sort2
+        );
+    }
+    let new_map = prover_data.precompute.eval(inputs_map);
+    prover_data.r1cs.check_all(&new_map);
+
+    return new_map;
+}
+
+fn val_to_scalar(v: &Value) -> Scalar {
+    println!("val: {:#?}", v);
+    match v.sort() {
+        Sort::Field(_) => return int_to_scalar(&v.as_pf().i()),
+        //Sort::Int => return int_to_scalar(&v.as_int()),
+        _ => panic!("Underlying value should be a field")
+    };
 
 }
 

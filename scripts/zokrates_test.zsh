@@ -7,8 +7,9 @@ disable -r time
 # cargo build --release --features r1cs,smt,zok --example circ
 # cargo build --example circ
 
-#BIN=./target/debug/examples/circ
-BIN=./target/release/examples/circ
+MODE=release # debug or release
+BIN=./target/$MODE/examples/circ
+ZK_BIN=./target/$MODE/examples/zk
 
 case "$OSTYPE" in 
     darwin*)
@@ -28,8 +29,17 @@ function r1cs_test {
 function pf_test {
     ex_name=$1
     $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
-    $BIN --inputs examples/ZoKrates/pf/$ex_name.zok.in examples/ZoKrates/pf/$ex_name.zok r1cs --action prove
-    $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --instance examples/ZoKrates/pf/$ex_name.zok.x --action verify
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
+    rm -rf P V pi
+}
+
+# Test prove workflow with --z-isolate-asserts, given an example name
+function pf_test_isolate {
+    ex_name=$1
+    $BIN --z-isolate-asserts examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
+    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
     rm -rf P V pi
 }
 
@@ -47,6 +57,8 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zo
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
 
+pf_test assert
+pf_test_isolate isolate_assert
 pf_test 3_plus
 pf_test xor
 pf_test mul

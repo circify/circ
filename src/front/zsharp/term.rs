@@ -2,10 +2,10 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Display, Formatter};
 
-use log::warn;
 use rug::Integer;
 
-use crate::circify::{CirCtx, Embeddable};
+use crate::circify::{CirCtx, Embeddable, Typed};
+use crate::front::field_list::FieldList;
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
 use crate::util::field::DFL_T;
@@ -17,44 +17,6 @@ pub enum Ty {
     Field,
     Struct(String, FieldList<Ty>),
     Array(usize, Box<Ty>),
-}
-
-pub use field_list::FieldList;
-
-/// This module contains [FieldList].
-///
-/// It gets its own module so that its member can be private.
-mod field_list {
-    use std::collections::BTreeMap;
-
-    #[derive(Clone, PartialEq, Eq)]
-    pub struct FieldList<T> {
-        // must be kept in sorted order
-        list: Vec<(String, T)>,
-    }
-
-    impl<T> FieldList<T> {
-        pub fn new(mut list: Vec<(String, T)>) -> Self {
-            list.sort_by_cached_key(|p| p.0.clone());
-            FieldList { list }
-        }
-        pub fn search(&self, key: &str) -> Option<(usize, &T)> {
-            let idx = self
-                .list
-                .binary_search_by_key(&key, |p| p.0.as_str())
-                .ok()?;
-            Some((idx, &self.list[idx].1))
-        }
-        pub fn get(&self, idx: usize) -> (&str, &T) {
-            (&self.list[idx].0, &self.list[idx].1)
-        }
-        pub fn fields(&self) -> impl Iterator<Item = &(String, T)> {
-            self.list.iter()
-        }
-        pub fn into_map(self) -> BTreeMap<String, T> {
-            self.list.into_iter().collect()
-        }
-    }
 }
 
 impl Display for Ty {
@@ -116,6 +78,13 @@ impl Ty {
     /// Creates a new structure type, sorting the keys.
     pub fn new_struct<I: IntoIterator<Item = (String, Ty)>>(name: String, fields: I) -> Self {
         Self::Struct(name, FieldList::new(fields.into_iter().collect()))
+    }
+    /// Array value type
+    pub fn array_val_ty(&self) -> &Self {
+        match self {
+            Self::Array(_, b) => b,
+            _ => panic!("Not an array type: {:?}", self),
+        }
     }
 }
 
@@ -607,12 +576,12 @@ pub fn const_bool(a: T) -> Option<bool> {
 pub fn const_val(a: T) -> Result<T, String> {
     match const_value(&a.term) {
         Some(v) => Ok(T::new(a.ty, leaf_term(Op::Const(v)))),
-        _ => Err(format!("{} is not a constant basic type", &a)),
+        _ => Err(format!("{} is not a constant value", &a)),
     }
 }
 
 fn const_value(t: &Term) -> Option<Value> {
-    let folded = constant_fold(t);
+    let folded = constant_fold(t, &[]);
     match &folded.op {
         Op::Const(v) => Some(v.clone()),
         _ => None,
@@ -742,7 +711,6 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match array.ty {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
             let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-                warn!("warning: indexing array with Uint type");
                 term![Op::UbvToPf(DFL_T.clone()); idx.term]
             } else {
                 idx.term
@@ -757,7 +725,6 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-            warn!("warning: indexing array with Uint type");
             term![Op::UbvToPf(DFL_T.clone()); idx.term]
         } else {
             idx.term
@@ -772,7 +739,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
 }
 
 fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
-    let mut values = BTreeMap::new();
+    let mut values = HashMap::new();
     let to_insert = elems
         .into_iter()
         .enumerate()
@@ -791,7 +758,7 @@ fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
     let arr = leaf_term(Op::Const(Value::Array(Array::new(
         Sort::Field(DFL_T.clone()),
         Box::new(sort.default_value()),
-        values,
+        values.into_iter().collect::<BTreeMap<_, _>>(),
         len,
     ))));
     to_insert
@@ -911,9 +878,7 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
     ))
 }
 
-pub struct ZSharp {
-    values: Option<HashMap<String, Integer>>,
-}
+pub struct ZSharp {}
 
 fn field_name(struct_name: &str, field_name: &str) -> String {
     format!("{}.{}", struct_name, field_name)
@@ -924,84 +889,82 @@ fn idx_name(struct_name: &str, idx: usize) -> String {
 }
 
 impl ZSharp {
-    pub fn new(values: Option<HashMap<String, Integer>>) -> Self {
-        Self { values }
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Typed<Ty> for T {
+    fn type_(&self) -> Ty {
+        self.ty.clone()
     }
 }
 
 impl Embeddable for ZSharp {
     type T = T;
     type Ty = Ty;
-    fn declare(
+    fn declare_input(
         &self,
         ctx: &mut CirCtx,
         ty: &Self::Ty,
-        raw_name: String,
-        user_name: Option<String>,
+        name: String,
         visibility: Option<PartyId>,
+        precompute: Option<T>,
     ) -> Self::T {
-        let get_int_val = || -> Integer {
-            self.values
-                .as_ref()
-                .and_then(|vs| {
-                    user_name
-                        .as_ref()
-                        .and_then(|n| vs.get(n))
-                        .or_else(|| vs.get(&raw_name))
-                })
-                .cloned()
-                .unwrap_or_else(|| Integer::from(0))
-        };
         match ty {
             Ty::Bool => T::new(
                 Ty::Bool,
                 ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::Bool,
-                    || Value::Bool(get_int_val() != 0),
                     visibility,
+                    precompute.map(|p| p.term),
                 ),
             ),
             Ty::Field => T::new(
                 Ty::Field,
                 ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::Field(DFL_T.clone()),
-                    || Value::Field(DFL_T.new_v(get_int_val())),
                     visibility,
+                    precompute.map(|p| p.term),
                 ),
             ),
             Ty::Uint(w) => T::new(
                 Ty::Uint(*w),
                 ctx.cs.borrow_mut().new_var(
-                    &raw_name,
+                    &name,
                     Sort::BitVector(*w),
-                    || Value::BitVector(BitVector::new(get_int_val(), *w)),
                     visibility,
+                    precompute.map(|p| p.term),
                 ),
             ),
-            Ty::Array(n, ty) => array((0..*n).map(|i| {
-                self.declare(
-                    ctx,
-                    &*ty,
-                    idx_name(&raw_name, i),
-                    user_name.as_ref().map(|u| idx_name(u, i)),
-                    visibility,
+            Ty::Array(n, ty) => {
+                let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
+                    Some(Ok(v)) => v.into_iter().map(Some).collect(),
+                    Some(Err(e)) => panic!("{}", e),
+                    None => std::iter::repeat(None).take(*n).collect(),
+                };
+                debug_assert_eq!(*n, ps.len());
+                array(
+                    ps.into_iter().enumerate().map(|(i, p)| {
+                        self.declare_input(ctx, ty, idx_name(&name, i), visibility, p)
+                    }),
                 )
-            }))
-            .unwrap(),
+                .unwrap()
+            }
             Ty::Struct(n, fs) => T::new_struct(
                 n.clone(),
                 fs.fields()
                     .map(|(f_name, f_ty)| {
                         (
                             f_name.clone(),
-                            self.declare(
+                            self.declare_input(
                                 ctx,
                                 f_ty,
-                                field_name(&raw_name, f_name),
-                                user_name.as_ref().map(|u| field_name(u, f_name)),
+                                field_name(&name, f_name),
                                 visibility,
+                                precompute.as_ref().map(|_| unimplemented!("precomputations for declared inputs that are Z# structures")),
                             ),
                         )
                     })
@@ -1012,23 +975,8 @@ impl Embeddable for ZSharp {
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         ite(cond, t, f).unwrap()
     }
-    fn assign(
-        &self,
-        ctx: &mut CirCtx,
-        ty: &Self::Ty,
-        name: String,
-        t: Self::T,
-        visibility: Option<PartyId>,
-    ) -> Self::T {
-        assert!(t.type_() == ty);
-        T::new(t.ty, ctx.cs.borrow_mut().assign(&name, t.term, visibility))
-    }
-    fn values(&self) -> bool {
-        self.values.is_some()
-    }
-
-    fn type_of(&self, term: &Self::T) -> Self::Ty {
-        term.type_().clone()
+    fn create_uninit(&self, _ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
+        ty.default()
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {

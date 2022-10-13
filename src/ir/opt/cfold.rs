@@ -10,7 +10,21 @@ use std::sync::RwLock;
 
 lazy_static! {
     // TODO: use weak pointers to allow GC
-    static ref FOLDS: RwLock<TermCache<Term>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
+    static ref FOLDS: RwLock<TermCache<TTerm>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
+}
+
+pub(in super::super) fn collect() {
+    let mut cache_handle = FOLDS.write().unwrap();
+    let cache = cache_handle.deref_mut();
+    let mut to_pop = Vec::new();
+    for (k, v) in cache.iter() {
+        if k.elm.strong_count() == 0 || v.elm.strong_count() == 0 {
+            to_pop.push(k.clone());
+        }
+    }
+    for k in to_pop.into_iter() {
+        cache.pop(&k);
+    }
 }
 
 /// Create a constant boolean
@@ -24,7 +38,9 @@ fn cbv(b: BitVector) -> Option<Term> {
 }
 
 /// Fold away operators over constants.
-pub fn fold(node: &Term) -> Term {
+pub fn fold(node: &Term, ignore: &[Op]) -> Term {
+    // lock the collector before locking FOLDS (and, inside fold_cache, TERMS)
+    let _lock = super::super::term::COLLECT.read().unwrap();
     let mut cache_handle = FOLDS.write().unwrap();
     let cache = cache_handle.deref_mut();
 
@@ -32,20 +48,20 @@ pub fn fold(node: &Term) -> Term {
     let old_capacity = cache.cap();
     cache.resize(std::usize::MAX);
 
-    let ret = fold_cache(node, cache);
+    let ret = fold_cache(node, cache, ignore);
     // shrink cache to its max size
     cache.resize(old_capacity);
     ret
 }
 
 /// Do constant-folding backed by a cache.
-pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
+pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
 
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if cache.contains(&t) {
+        if cache.contains(&t.to_weak()) {
             continue;
         }
         if !children_pushed {
@@ -53,16 +69,29 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
             stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
             continue;
         }
-        let mut c_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+
+        let mut c_get = |x: &Term| -> Term {
+            cache
+                .get(&x.to_weak())
+                .and_then(|x| x.to_hconsed())
+                .expect("postorder cache")
+        };
+
+        if ignore.contains(&t.op) {
+            let new_t = term(t.op.clone(), t.cs.iter().map(|c| c_get(c)).collect());
+            cache.put(t.to_weak(), new_t.to_weak());
+            continue;
+        }
+
         let mut get = |i: usize| c_get(&t.cs[i]);
         let new_t_opt = match &t.op {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
             Op::Implies => match get(0).as_bool_opt() {
-                Some(true) => Some(get(1).clone()),
+                Some(true) => Some(get(1)),
                 Some(false) => cbool(true),
                 None => match get(1).as_bool_opt() {
                     Some(true) => cbool(true),
-                    Some(false) => Some(term![NOT; get(0).clone()]),
+                    Some(false) => Some(term![NOT; get(0)]),
                     None => None,
                 },
             },
@@ -100,25 +129,25 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 use BvBinOp::*;
                 match (o, c0.as_bv_opt(), c1.as_bv_opt()) {
                     (Sub, Some(a), Some(b)) => cbv(a.clone() - b.clone()),
-                    (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0.clone()),
+                    (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0),
                     (Udiv, _, Some(b)) if b.uint() == &Integer::from(0) => Some(bv_lit(
                         (Integer::from(1) << b.width() as u32) - 1,
                         b.width(),
                     )),
                     (Udiv, Some(a), Some(b)) => cbv(a.clone() / b),
-                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0.clone()),
+                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0),
                     (Udiv, _, Some(b)) if b.uint() == &Integer::from(-1) => {
-                        Some(term![Op::BvUnOp(BvUnOp::Neg); c0.clone()])
+                        Some(term![Op::BvUnOp(BvUnOp::Neg); c0])
                     }
                     // TODO: Udiv by power of two?
                     (Urem, Some(a), Some(b)) => cbv(a.clone() % b),
                     // TODO: Urem by power of two?
-                    (Shl, Some(a), Some(b)) => cbv(a.clone() << b.clone()),
+                    (Shl, Some(a), Some(b)) => cbv(a.clone() << b),
                     (Shl, _, Some(b)) => {
                         assert!(b.uint() < &Integer::from(b.width()));
                         let n = b.uint().to_usize().unwrap();
                         Some(term![BV_CONCAT;
-                          term![Op::BvExtract(b.width()-n-1, 0); c0.clone()],
+                          term![Op::BvExtract(b.width()-n-1, 0); c0],
                           leaf_term(Op::Const(Value::BitVector(BitVector::zeros(n))))
                         ])
                     }
@@ -127,14 +156,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                         assert!(b.uint() < &Integer::from(b.width()));
                         let n = b.uint().to_usize().unwrap();
                         Some(term![Op::BvSext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0.clone()]])
+                                   term![Op::BvExtract(b.width()-1, n); c0]])
                     }
                     (Lshr, Some(a), Some(b)) => cbv(a.clone().lshr(b)),
                     (Lshr, _, Some(b)) => {
                         assert!(b.uint() < &Integer::from(b.width()));
                         let n = b.uint().to_usize().unwrap();
                         Some(term![Op::BvUext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0.clone()]])
+                                   term![Op::BvExtract(b.width()-1, n); c0]])
                     }
                     _ => None,
                 }
@@ -167,22 +196,16 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                 let t = get(1);
                 let f = get(2);
                 match c.as_bool_opt() {
-                    Some(true) => Some(t.clone()),
-                    Some(false) => Some(f.clone()),
+                    Some(true) => Some(t),
+                    Some(false) => Some(f),
                     None => match t.as_bool_opt() {
-                        Some(true) => Some(fold_cache(&term![OR; c.clone(), f.clone()], cache)),
-                        Some(false) => Some(fold_cache(
-                            &term![AND; neg_bool(c.clone()), f.clone()],
-                            cache,
-                        )),
+                        Some(true) => Some(fold_cache(&term![OR; c, f], cache, ignore)),
+                        Some(false) => Some(fold_cache(&term![AND; neg_bool(c), f], cache, ignore)),
                         _ => match f.as_bool_opt() {
-                            Some(true) => Some(fold_cache(
-                                &term![OR; neg_bool(c.clone()), t.clone()],
-                                cache,
-                            )),
-                            Some(false) => {
-                                Some(fold_cache(&term![AND; c.clone(), t.clone()], cache))
+                            Some(true) => {
+                                Some(fold_cache(&term![OR; neg_bool(c), t], cache, ignore))
                             }
+                            Some(false) => Some(fold_cache(&term![AND; c, t], cache, ignore)),
                             _ => None,
                         },
                     },
@@ -195,6 +218,19 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
+            Op::IntNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::IntBinPred(p) => {
+                if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
+                    Some(leaf_term(Op::Const(Value::Bool(match p {
+                        IntBinPred::Ge => a >= b,
+                        IntBinPred::Gt => a > b,
+                        IntBinPred::Le => a <= b,
+                        IntBinPred::Lt => a < b,
+                    }))))
+                } else {
+                    None
+                }
+            }
             Op::UbvToPf(fty) => get(0)
                 .as_bv_opt()
                 .map(|bv| leaf_term(Op::Const(Value::Field(fty.new_v(bv.uint()))))),
@@ -246,16 +282,30 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<Term>) -> Term {
                     1,
                 ))))
             }),
+            Op::BvUext(w) => get(0).as_bv_opt().map(|b| {
+                leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                    b.uint().clone(),
+                    b.width() + w,
+                ))))
+            }),
             _ => None,
         };
         let new_t = {
-            let mut cc_get = |x: &Term| -> Term { cache.get(x).expect("postorder cache").clone() };
+            let mut cc_get = |x: &Term| -> Term {
+                cache
+                    .get(&x.to_weak())
+                    .and_then(|x| x.to_hconsed())
+                    .expect("postorder cache")
+            };
             new_t_opt
                 .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| cc_get(c)).collect()))
         };
-        cache.put(t, new_t);
+        cache.put(t.to_weak(), new_t.to_weak());
     }
-    cache.get(node).expect("postorder cache").clone()
+    cache
+        .get(&node.to_weak())
+        .and_then(|x| x.to_hconsed())
+        .expect("postorder cache")
 }
 
 fn neg_bool(t: Term) -> Term {
@@ -495,6 +545,43 @@ impl NaryFlat<FieldV> for PfNaryOp {
     }
 }
 
+impl NaryFlat<Integer> for IntNaryOp {
+    fn as_const(t: Term) -> Result<Integer, Term> {
+        match &t.op {
+            Op::Const(Value::Int(b)) => Ok(b.clone()),
+            _ => Err(t),
+        }
+    }
+    fn combine(self, mut children: Vec<Term>, mut consts: Vec<Integer>) -> Term {
+        match self {
+            IntNaryOp::Add => {
+                if let Some(c) = consts.pop() {
+                    let c = consts.into_iter().fold(c, std::ops::Add::add);
+                    if c != 0u8 || children.is_empty() {
+                        children.push(leaf_term(Op::Const(Value::Int(c))));
+                    }
+                }
+                safe_nary(INT_ADD, children)
+            }
+            IntNaryOp::Mul => {
+                if let Some(c) = consts.pop() {
+                    let c = consts.into_iter().fold(c, std::ops::Mul::mul);
+                    if c == 0u8 || children.is_empty() {
+                        leaf_term(Op::Const(Value::Int(c)))
+                    } else {
+                        if c != 1u8 {
+                            children.push(leaf_term(Op::Const(Value::Int(c))));
+                        }
+                        safe_nary(INT_MUL, children)
+                    }
+                } else {
+                    safe_nary(INT_MUL, children)
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -511,7 +598,7 @@ mod test {
 
     #[quickcheck]
     fn semantics_random(ArbitraryTermEnv(t, vs): ArbitraryTermEnv) {
-        let tt = fold(&t);
+        let tt = fold(&t, &[]);
         let orig = eval(&t, &vs);
         let new = eval(&tt, &vs);
         assert!(orig == new, "{} ({}) vs {} ({})", t, orig, tt, new);
@@ -519,23 +606,23 @@ mod test {
 
     #[test]
     fn b_xor() {
-        assert_eq!(fold(&term![XOR; bool(false), bool(true)]), bool(true),);
+        assert_eq!(fold(&term![XOR; bool(false), bool(true)], &[]), bool(true),);
     }
 
     #[test]
     fn b_or() {
-        assert_eq!(fold(&term![OR; bool(false), bool(true)]), bool(true),);
+        assert_eq!(fold(&term![OR; bool(false), bool(true)], &[]), bool(true),);
     }
 
     #[test]
     fn b_and() {
-        assert_eq!(fold(&term![AND; bool(false), bool(true)]), bool(false),);
+        assert_eq!(fold(&term![AND; bool(false), bool(true)], &[]), bool(false),);
     }
 
     #[test]
     fn shl() {
         assert_eq!(
-            fold(&term![BV_SHL; v_bv("a", 8), bv_lit(2, 8)]),
+            fold(&term![BV_SHL; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![BV_CONCAT; term![Op::BvExtract(5, 0); v_bv("a", 8)], bv_lit(0, 2)],
         );
     }
@@ -543,7 +630,7 @@ mod test {
     #[test]
     fn ashr() {
         assert_eq!(
-            fold(&term![BV_ASHR; v_bv("a", 8), bv_lit(2, 8)]),
+            fold(&term![BV_ASHR; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![Op::BvSext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
     }
@@ -551,9 +638,51 @@ mod test {
     #[test]
     fn lshr() {
         assert_eq!(
-            fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)]),
+            fold(&term![BV_LSHR; v_bv("a", 8), bv_lit(2, 8)], &[]),
             term![Op::BvUext(2); term![Op::BvExtract(7, 2); v_bv("a", 8)]],
         );
+    }
+
+    #[test]
+    fn int_add_constants() {
+        let before = text::parse_term(b"(intadd 5 6 10 -4)");
+        let ex_after = text::parse_term(b"17");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_add_vars() {
+        let before = text::parse_term(b"(declare ((a int)) (intadd a 5 6 10 -4))");
+        let ex_after = text::parse_term(b"(declare ((a int)) (intadd a 17))");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_add_vars_zero() {
+        let before = text::parse_term(b"(declare ((a int)) (intadd a -5 -6 10 1))");
+        let ex_after = text::parse_term(b"(declare ((a int)) a)");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_mul_vars() {
+        let before = text::parse_term(b"(declare ((a int)) (intmul a 1 2 4))");
+        let ex_after = text::parse_term(b"(declare ((a int)) (intmul a 8))");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_mul_vars_one() {
+        let before = text::parse_term(b"(declare ((a int)) (intmul a 1 1))");
+        let ex_after = text::parse_term(b"(declare ((a int)) a)");
+        assert_eq!(fold(&before, &[]), ex_after);
+    }
+
+    #[test]
+    fn int_mul_vars_zero() {
+        let before = text::parse_term(b"(declare ((a int)) (intmul a 1 1 0))");
+        let ex_after = text::parse_term(b"(declare ((a int)) 0)");
+        assert_eq!(fold(&before, &[]), ex_after);
     }
 }
 

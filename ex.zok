@@ -1,0 +1,4 @@
+def main(public u8 a, public u8 b) -> u8:
+    u8 c = a + b
+    u8 d = c * a
+    return d

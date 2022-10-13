@@ -1,6 +1,10 @@
 //! Defines a textual serialization format for [Term]s.
 //!
-//! Includes both a parser ([parse_term]) and serializer ([serialize_term]).
+//! Includes a parser ([parse_term]) and serializer ([serialize_term]) for [Term]s.
+//!
+//! Includes a parser ([parse_value_map]) and serializer ([serialize_value_map]) for value maps.
+//!
+//! Includes a parser ([parse_computation]) and serializer ([serialize_computation]) for [Computation]s.
 //!
 //!
 //! * IR Textual format
@@ -9,6 +13,11 @@
 //!   * `I`: integer (arbitrary-precision)
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
+//!   * Computation `C`: `(computation M T)`
+//!     * Metadata `M`: `(metadata PARTIES INPUTS VISIBILITIES)`
+//!       * PARTIES is `(X1 .. Xn)`
+//!       * INPUTS is `((X1 S1) .. (Xn Sn))`
+//!       * VISIBILITIES is `((X_INPUT_1 X_PARTY_1) .. (X_INPUT_n X_PARTY_n))`
 //!   * Sort `S`:
 //!     * `bool`
 //!     * `f32`
@@ -56,6 +65,7 @@ use super::*;
 /// A token tree, LISP-style.
 ///
 /// It can be "interpreted" into an IR term
+#[derive(PartialEq, Eq)]
 enum TokTree<'src> {
     Leaf(Token, &'src [u8]),
     List(Vec<TokTree<'src>>),
@@ -134,6 +144,8 @@ struct IrInterp<'src> {
     int_arcs: Vec<Arc<Integer>>,
     /// The current default field modulus, if any
     modulus_stack: Vec<Arc<Integer>>,
+    /// Whether we should un-bind out-of-scope ids
+    do_unbinds: bool,
 }
 
 enum CtrlOp {
@@ -150,13 +162,16 @@ impl<'src> IrInterp<'src> {
             bindings: HashMap::default(),
             int_arcs: Vec::new(),
             modulus_stack: Vec::new(),
+            do_unbinds: true,
         }
     }
 
     /// Takes bindings in order bound, and unbinds
     fn unbind(&mut self, bindings: Vec<Vec<u8>>) {
-        for b in bindings {
-            self.bindings.get_mut(b.as_slice()).unwrap().pop().unwrap();
+        if self.do_unbinds {
+            for b in bindings {
+                self.bindings.get_mut(b.as_slice()).unwrap().pop().unwrap();
+            }
         }
     }
 
@@ -176,7 +191,7 @@ impl<'src> IrInterp<'src> {
             .unwrap_or_else(|| panic!("Unknown binding {}", from_utf8(key).unwrap()))
     }
 
-    fn op(&mut self, tt: &TokTree) -> Result<Op, CtrlOp> {
+    fn op(&mut self, tt: &TokTree<'src>) -> Result<Op, CtrlOp> {
         use Token::Ident;
         match tt {
             Leaf(Ident, b"let") => Err(CtrlOp::Let),
@@ -243,6 +258,12 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"*") => Ok(Op::PfNaryOp(PfNaryOp::Mul)),
             Leaf(Ident, b"pfrecip") => Ok(Op::PfUnOp(PfUnOp::Recip)),
             Leaf(Ident, b"-") => Ok(Op::PfUnOp(PfUnOp::Neg)),
+            Leaf(Ident, b"<") => Ok(INT_LT),
+            Leaf(Ident, b"<=") => Ok(INT_LE),
+            Leaf(Ident, b">") => Ok(INT_GT),
+            Leaf(Ident, b">=") => Ok(INT_GE),
+            Leaf(Ident, b"intadd") => Ok(INT_ADD),
+            Leaf(Ident, b"intmul") => Ok(INT_MUL),
             Leaf(Ident, b"select") => Ok(Op::Select),
             Leaf(Ident, b"store") => Ok(Op::Store),
             Leaf(Ident, b"tuple") => Ok(Op::Tuple),
@@ -296,6 +317,7 @@ impl<'src> IrInterp<'src> {
             _ => panic!("Expected sort, found {}", tt),
         }
     }
+
     /// Parse this text as an integer, but check the ARC cache before creating a new one.
     fn parse_int(&mut self, s: &[u8]) -> Arc<Integer> {
         let i: Integer = Integer::parse(s).unwrap().into();
@@ -426,7 +448,8 @@ impl<'src> IrInterp<'src> {
                         assert_eq!(
                             tts.len(),
                             3,
-                            "A decl should have 2 arguments: (let ((v1 s1) ... (vn sn)) t)"
+                            "A decl should have 2 arguments: (declare ((v1 s1) ... (vn sn)) t), found {:#?}",
+                            tts
                         );
                         let bindings = self.decl_list(&tts[1]);
                         let t = self.term(&tts[2]);
@@ -469,6 +492,96 @@ impl<'src> IrInterp<'src> {
                 }
             }
             Leaf(Open | Close | Error, _) => unreachable!("should be caught in tree building"),
+        }
+    }
+
+    fn string_list(&self, tt: &TokTree<'src>) -> Vec<String> {
+        if let List(tts) = tt {
+            tts.iter()
+                .map(|tti| match tti {
+                    Leaf(Token::Ident, name) => from_utf8(name).unwrap().into(),
+                    _ => panic!("Expected party, found {}", tti),
+                })
+                .collect()
+        } else {
+            panic!("Expected party list, found: {}", tt)
+        }
+    }
+
+    fn visibility_list(&self, tt: &TokTree<'src>) -> Vec<(String, String)> {
+        if let List(tts) = tt {
+            tts.iter()
+                .map(|tti| match tti {
+                    List(ls) => match &ls[..] {
+                        [Leaf(Token::Ident, var), Leaf(Token::Ident, party)] => {
+                            let var = from_utf8(var).unwrap().to_owned();
+                            let party = from_utf8(party).unwrap().to_owned();
+                            (var, party)
+                        }
+                        _ => panic!("Expected visibility pair, found {}", tti),
+                    },
+                    _ => panic!("Expected visibility pair, found {}", tti),
+                })
+                .collect()
+        } else {
+            panic!("Expected visibility list, found: {}", tt)
+        }
+    }
+
+    /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
+    fn metadata(&mut self, tt: &TokTree<'src>) -> (ComputationMetadata, Vec<Vec<u8>>) {
+        if let List(tts) = tt {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"metadata") {
+                panic!(
+                    "Expected meta-data, but list did not start with 'metadata': {}",
+                    tt
+                )
+            }
+            match &tts[1..] {
+                [parties, inputs, viss] => {
+                    let parties = self.string_list(parties);
+                    let input_names = self.decl_list(inputs);
+                    let inputs: FxHashMap<String, Term> = input_names
+                        .iter()
+                        .map(|i| (from_utf8(i).unwrap().into(), self.get_binding(i).clone()))
+                        .collect();
+                    let visibilities = self.visibility_list(viss);
+                    (
+                        ComputationMetadata::from_parts(
+                            parties,
+                            inputs,
+                            visibilities.into_iter().collect(),
+                        ),
+                        input_names,
+                    )
+                }
+                _ => panic!("Expected meta-data, found {}", tt),
+            }
+        } else {
+            panic!("Expected meta-data, found {}", tt)
+        }
+    }
+
+    /// Parse a computation.
+    pub fn computation(&mut self, tt: &TokTree<'src>) -> Computation {
+        if let List(tts) = tt {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"computation") {
+                panic!(
+                    "Expected computation, but list did not start with 'computation': {}",
+                    tt
+                )
+            }
+            assert!(tts.len() > 2);
+            let (metadata, input_names) = self.metadata(&tts[1]);
+            let outputs = tts[2..].iter().map(|tti| self.term(tti)).collect();
+            self.unbind(input_names);
+            Computation {
+                outputs,
+                metadata,
+                precomputes: Default::default(),
+            }
+        } else {
+            panic!("Expected computation, found {}", tt)
         }
     }
 }
@@ -520,6 +633,62 @@ pub fn serialize_term(t: &Term) -> String {
     writeln!(&mut output, " )").unwrap();
     writeln!(&mut output, ")").unwrap();
     output
+}
+
+/// Parse an IR "value map": a map from strings to values.
+///
+/// A serliazed IR map is a subset of serialized IR terms.  It must have
+/// let-bindings for each map entry.  Each entry *must* be bound to a value
+/// literal.  Duplicate entries are undefined behavior.
+///
+/// The value of the term does not matter, and is ignored.
+pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
+    let tree = parse_tok_tree(src);
+    let mut i = IrInterp::new();
+    i.do_unbinds = false;
+    i.term(&tree);
+    i.bindings
+        .iter()
+        .map(|(name, term)| {
+            let name = std::str::from_utf8(*name).unwrap().to_string();
+            let val = match &term[0].op {
+                Op::Const(v) => v.clone(),
+                _ => panic!("Non-value binding {} associated with {}", term[0], name),
+            };
+            (name, val)
+        })
+        .collect()
+}
+
+/// Serialize an IR "value map": a map from strings to values.
+///
+/// See [parse_value_map].
+pub fn serialize_value_map(src: &HashMap<String, Value>) -> String {
+    let mut out = String::new();
+    writeln!(&mut out, "(let (").unwrap();
+    for (var, val) in src {
+        writeln!(&mut out, "  ({} {})", var, val).unwrap();
+    }
+    writeln!(&mut out, ") true;ignored \n)").unwrap();
+    out
+}
+
+/// Parse a computation.
+pub fn parse_computation(src: &[u8]) -> Computation {
+    let tree = parse_tok_tree(src);
+    let mut i = IrInterp::new();
+    i.computation(&tree)
+}
+
+/// Serialize a computation.
+pub fn serialize_computation(c: &Computation) -> String {
+    let mut out = String::new();
+    writeln!(&mut out, "(computation \n{}", c.metadata).unwrap();
+    for o in &c.outputs {
+        writeln!(&mut out, "\n  {}", serialize_term(o)).unwrap();
+    }
+    writeln!(&mut out, "\n)").unwrap();
+    out
 }
 
 #[cfg(test)]
@@ -602,6 +771,13 @@ mod test {
         assert_eq!(t, t2);
     }
 
+    #[quickcheck]
+    fn serde_roundtrip_random_bool(ArbitraryBoolEnv(t, _): ArbitraryBoolEnv) {
+        let json_string = serde_json::to_string(&t).unwrap();
+        let t2 = serde_json::from_str::<Term>(&json_string).unwrap();
+        assert_eq!(t, t2);
+    }
+
     #[test]
     fn set_default_modulus() {
         let t = parse_term(
@@ -622,5 +798,32 @@ mod test {
         )",
         );
         assert_eq!(check_rec(&t), Sort::Bool);
+    }
+
+    #[test]
+    fn computation_roundtrip() {
+        let c = parse_computation(
+            b"
+            (computation
+                (metadata
+                    (P V)
+                    ((a bool) (b bool) (A (tuple bool bool)))
+                    ((a P))
+                )
+                (let (
+                        (B ((update 1) A b))
+                ) (xor ((field 1) B)
+                        ((field 0) (#t false false #b0000 true))))
+            )",
+        );
+        assert_eq!(c.metadata.input_vis.len(), 3);
+        assert!(!c.metadata.is_input_public("a"));
+        assert!(c.metadata.is_input_public("b"));
+        assert!(c.metadata.is_input_public("A"));
+        assert_eq!(c.outputs().len(), 1);
+        assert_eq!(check(&c.outputs()[0]), Sort::Bool);
+        let s = serialize_computation(&c);
+        let c2 = parse_computation(s.as_bytes());
+        assert_eq!(c, c2);
     }
 }
