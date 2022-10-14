@@ -30,18 +30,14 @@ use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::bellman::{gen_params, prove, verify};
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::spartan::r1cs_to_spartan;
-#[cfg(feature = "r1cs")]
-use merlin::Transcript;
-#[cfg(feature = "r1cs")]
-use libspartan::{Instance, NIZKGens, NIZK};
+use circ::target::r1cs::spartan;
+
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 
 use circ::target::r1cs::{ProverData,VerifierData};
-
-
-
+use std::io::{BufRead, BufReader};
+use rug::Integer;
 
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
@@ -56,9 +52,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
-
+//TODO
 use circ::ir::term::{Value, BitVector};
-use fxhash::FxHashMap;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -104,6 +99,10 @@ struct FrontendOptions {
     /// [ZoKrates](https://zokrates.github.io/language/control_flow.html).
     #[structopt(long)]
     z_isolate_asserts: bool,
+
+    /// File with input witness
+    #[structopt(long, name = "FILE", parse(from_os_str))]
+    inputs: Option<PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -320,35 +319,21 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::Spartan => {
-                    let values: FxHashMap<String, Value> = vec![
+                    let inputs = parse_inputs(options.frontend.inputs.unwrap());
+                    let values = inputs.into_iter().collect();
+
+                    /*let values: FxHashMap<String, Value> = vec![
                         ("a".to_owned(), Value::BitVector(BitVector::new(0.into(), 8))), //Field(DFL_T.new_v(1))),
                         ("b".to_owned(), Value::BitVector(BitVector::new(0.into(), 8))), //ield(DFL_T.new_v(1))),
                     ]
                     .into_iter()
                     .collect();
-
-                    println!("{:#?}\n{:#?}", prover_data, verifier_data);
-
-                    println!("Converting R1CS to Spartan");
-                    let (inst, vars, inps, num_cons, num_vars, num_inputs) = r1cs_to_spartan(r1cs, prover_data, verifier_data, &values);
-
-                    /*
-                    println!("Proving with Spartan");
-                    // produce public parameters
-                    let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
-                    // produce proof
-                    let mut prover_transcript = Transcript::new(b"nizk_example");
-                    let pf = NIZK::prove(&inst, vars, &inps, &gens, &mut prover_transcript);            
-    
-                    println!("Verifying with Spartan");
-                    // verify proof
-                    let mut verifier_transcript = Transcript::new(b"nizk_example");
-                    assert!(pf
-                        .verify(&inst, &inps, &mut verifier_transcript, &gens)
-                        .is_ok());
-
-                    println!("Proof verification successful!");
                     */
+                    println!("Converting R1CS to Spartan");
+                    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&r1cs, &prover_data, &values);
+                    let (gens, proof) = spartan::prove(&inst, wit, &inps, num_cons, num_vars, num_inputs);
+                    spartan::verify(&inst, &inps, proof, &gens);
+                
                 }
             }
         }
@@ -421,3 +406,23 @@ fn main() {
         }
     }
 }
+
+fn parse_inputs(p: PathBuf) -> HashMap<String, Value> {
+    let mut m = HashMap::default();
+    for l in BufReader::new(File::open(p).unwrap()).lines() {
+        let l = l.unwrap();
+        let l = l.trim();
+        if !l.is_empty() {
+            let mut s = l.split_whitespace();
+            let key = s.next().unwrap().to_owned();
+            let value = Value::Field(DFL_T.new_v(Integer::parse_radix(&s.next().unwrap(), 10).unwrap()));
+
+                //Integer::from(Integer::parse_radix(&s.next().unwrap(), 10).unwrap());
+            m.insert(key, value);
+        }
+    }
+    return m;
+}
+
+
+

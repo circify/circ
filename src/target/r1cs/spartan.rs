@@ -4,10 +4,10 @@ use crate::target::r1cs::*;
 use curve25519_dalek::scalar::Scalar;
 use rug::{Integer};
 use core::clone::Clone;
-
-use std::collections::HashMap;
-use fxhash::FxHashMap;
+use merlin::Transcript;
+use libspartan::{Instance, NIZKGens, NIZK};
 use gmp_mpfr_sys::gmp::limb_t;
+use fxhash::FxHashMap as HashMap;
 
 /// Hold Spartan variables
 #[derive(Debug)]
@@ -16,23 +16,41 @@ pub struct Variable {
     value: [u8; 32],
 }
 
+/// generate spartan proof
+pub fn prove(inst: &Instance, witness: Assignment, inputs: &Assignment, num_cons: usize, num_vars: usize, num_inputs: usize) -> (NIZKGens, NIZK) {
+    println!("Proving with Spartan");
+    // produce public parameters
+    let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
+    // produce proof
+    let mut prover_transcript = Transcript::new(b"nizk_example");
+    let pf = NIZK::prove(inst, witness, inputs, &gens, &mut prover_transcript);
+
+    return (gens, pf);
+}
+
+/// verify spartan proof
+pub fn verify(inst: &Instance, inputs: &Assignment, proof: NIZK, gens: &NIZKGens) {
+    println!("Verifying with Spartan");
+    // verify proof
+    let mut verifier_transcript = Transcript::new(b"nizk_example");
+    assert!(proof.verify(&inst, inputs, &mut verifier_transcript, gens).is_ok());
+
+    println!("Proof Verification Successful!");
+}
 
 /// circ R1cs -> spartan R1CSInstance
-pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>,prover_data: ProverData, verifier_data: VerifierData, inputs_map: &FxHashMap<String, Value>) -> (Instance, Assignment, Assignment, usize, usize, usize)
+pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: &R1cs<S>, prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (Instance, Assignment, Assignment, usize, usize, usize)
 {
-// todo hashmap v fxhashmap
 
-    println!("{:#?}", verifier_data);
-
-// spartan format mapper: CirC -> Spartan
+    // spartan format mapper: CirC -> Spartan
     let mut wit = Vec::new();
     let mut inp = Vec::new();
-    let mut trans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
-    let mut itrans: HashMap<usize, usize> = HashMap::new(); // Circ -> spartan ids
+    let mut trans: HashMap<usize, usize> = HashMap::default(); // Circ -> spartan ids
+    let mut itrans: HashMap<usize, usize> = HashMap::default(); // Circ -> spartan ids
 
     let values = eval_inputs(inputs_map, prover_data);
 
-    for (idx,sig) in r1cs.idxs_signals {
+    for (idx,sig) in &r1cs.idxs_signals {
         
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
@@ -41,15 +59,15 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>,prover_data
 
         if r1cs.public_idxs.contains(&idx) {
             // input
-            println!("As public io: {}", sig);
+            //println!("As public io: {}", sig);
 
-            itrans.insert(idx, inp.len());
+            itrans.insert(*idx, inp.len());
             inp.push(scalar.to_bytes());
         } else {
              // witness
-            println!("As private witness: {}", sig);
+            //println!("As private witness: {}", sig);
 
-            trans.insert(idx, wit.len());
+            trans.insert(*idx, wit.len());
             wit.push(scalar.to_bytes());
 
         }
@@ -110,7 +128,7 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>,prover_data
     (inst, assn_witness, assn_inputs, num_cons, num_vars, num_inputs)
 }
 
-fn eval_inputs(inputs_map: &FxHashMap<String, Value>, prover_data: ProverData) -> FxHashMap<String, Value>{
+fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) -> HashMap<String, Value>{
     for (input, sort) in &prover_data.precompute_inputs {
         let value = inputs_map
             .get(input)
@@ -129,7 +147,6 @@ fn eval_inputs(inputs_map: &FxHashMap<String, Value>, prover_data: ProverData) -
 }
 
 fn val_to_scalar(v: &Value) -> Scalar {
-    println!("val: {:#?}", v);
     match v.sort() {
         Sort::Field(_) => return int_to_scalar(&v.as_pf().i()),
         //Sort::Int => return int_to_scalar(&v.as_int()),
