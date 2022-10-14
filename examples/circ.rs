@@ -31,14 +31,8 @@ use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 use circ::target::r1cs::bellman::{gen_params, prove, verify};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::spartan;
-
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
-
-use circ::target::r1cs::{ProverData,VerifierData};
-use std::io::{BufRead, BufReader};
-use rug::Integer;
-
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
 use circ::util::field::DFL_T;
@@ -52,8 +46,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
-//TODO
-use circ::ir::term::{Value, BitVector};
+
+// temp for inputs
+use circ::ir::term::Value;
+use std::io::{BufRead, BufReader};
+use rug::Integer;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -305,7 +303,7 @@ fn main() {
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
             println!("Final R1cs size: {}", r1cs.constraints().len());
             // save the optimized r1cs: the prover needs it to synthesize.
-            prover_data.r1cs = r1cs.clone(); //jess - undo added clone
+            prover_data.r1cs = r1cs.clone();
             match action {
                 ProofAction::Count => (),
                 ProofAction::Setup => {
@@ -319,16 +317,8 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::Spartan => {
-                    let inputs = parse_inputs(options.frontend.inputs.unwrap());
-                    let values = inputs.into_iter().collect();
+                    let values = parse_inputs(options.frontend.inputs.unwrap()).into_iter().collect();
 
-                    /*let values: FxHashMap<String, Value> = vec![
-                        ("a".to_owned(), Value::BitVector(BitVector::new(0.into(), 8))), //Field(DFL_T.new_v(1))),
-                        ("b".to_owned(), Value::BitVector(BitVector::new(0.into(), 8))), //ield(DFL_T.new_v(1))),
-                    ]
-                    .into_iter()
-                    .collect();
-                    */
                     println!("Converting R1CS to Spartan");
                     let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&r1cs, &prover_data, &values);
                     let (gens, proof) = spartan::prove(&inst, wit, &inps, num_cons, num_vars, num_inputs);
@@ -416,8 +406,6 @@ fn parse_inputs(p: PathBuf) -> HashMap<String, Value> {
             let mut s = l.split_whitespace();
             let key = s.next().unwrap().to_owned();
             let value = Value::Field(DFL_T.new_v(Integer::parse_radix(&s.next().unwrap(), 10).unwrap()));
-
-                //Integer::from(Integer::parse_radix(&s.next().unwrap(), 10).unwrap());
             m.insert(key, value);
         }
     }

@@ -149,7 +149,6 @@ fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) ->
 fn val_to_scalar(v: &Value) -> Scalar {
     match v.sort() {
         Sort::Field(_) => return int_to_scalar(&v.as_pf().i()),
-        //Sort::Int => return int_to_scalar(&v.as_int()),
         _ => panic!("Underlying value should be a field")
     };
 
