@@ -81,7 +81,7 @@ impl ZSharpFE {
     pub fn value_map(i: Inputs) -> String {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib());
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
         g.visit_files();
         let cm = g
             .constants
@@ -733,7 +733,7 @@ impl<'ast> ZGen<'ast> {
                         assertions.push(ret_eq);
                         term(AND, assertions)
                     };
-                    self.circ_assert(to_assert);
+                    self.assert(to_assert);
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
