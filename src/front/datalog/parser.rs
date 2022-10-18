@@ -1,5 +1,6 @@
 //! Datalog parser
 #![allow(missing_docs)]
+#![allow(clippy::clone_on_copy)]
 
 use pest::error::Error;
 use pest::Parser;
@@ -18,7 +19,7 @@ pub mod ast {
     use from_pest::Void;
     use lazy_static::lazy_static;
     use pest::iterators::{Pair, Pairs};
-    use pest::prec_climber::{Assoc, Operator, PrecClimber};
+    use pest::pratt_parser::{Assoc, Op, PrattParser};
     pub use pest::Span;
     use pest_ast::FromPest;
 
@@ -131,28 +132,27 @@ pub mod ast {
     }
 
     lazy_static! {
-        static ref PREC_CLIMBER: PrecClimber<Rule> = build_precedence_climber();
+        static ref PREC_CLIMBER: PrattParser<Rule> = build_precedence_climber();
     }
 
     // based on https://docs.python.org/3/reference/expressions.html#operator-precedence
-    fn build_precedence_climber() -> PrecClimber<Rule> {
-        PrecClimber::new(vec![
-            Operator::new(Rule::or, Assoc::Left),
-            Operator::new(Rule::and, Assoc::Left),
-            Operator::new(Rule::lt, Assoc::Left)
-                | Operator::new(Rule::lte, Assoc::Left)
-                | Operator::new(Rule::gt, Assoc::Left)
-                | Operator::new(Rule::gte, Assoc::Left)
-                | Operator::new(Rule::eq, Assoc::Left),
-            Operator::new(Rule::bitor, Assoc::Left),
-            Operator::new(Rule::bitxor, Assoc::Left),
-            Operator::new(Rule::bitand, Assoc::Left),
-            Operator::new(Rule::shl, Assoc::Left) | Operator::new(Rule::shr, Assoc::Left),
-            Operator::new(Rule::add, Assoc::Left) | Operator::new(Rule::sub, Assoc::Left),
-            Operator::new(Rule::mul, Assoc::Left)
-                | Operator::new(Rule::div, Assoc::Left)
-                | Operator::new(Rule::urem, Assoc::Left),
-        ])
+    fn build_precedence_climber() -> PrattParser<Rule> {
+        PrattParser::new()
+            .op(Op::infix(Rule::or, Assoc::Left))
+            .op(Op::infix(Rule::and, Assoc::Left))
+            .op(Op::infix(Rule::lt, Assoc::Left)
+                | Op::infix(Rule::lte, Assoc::Left)
+                | Op::infix(Rule::gt, Assoc::Left)
+                | Op::infix(Rule::gte, Assoc::Left)
+                | Op::infix(Rule::eq, Assoc::Left))
+            .op(Op::infix(Rule::bitor, Assoc::Left))
+            .op(Op::infix(Rule::bitxor, Assoc::Left))
+            .op(Op::infix(Rule::bitand, Assoc::Left))
+            .op(Op::infix(Rule::shl, Assoc::Left) | Op::infix(Rule::shr, Assoc::Left))
+            .op(Op::infix(Rule::add, Assoc::Left) | Op::infix(Rule::sub, Assoc::Left))
+            .op(Op::infix(Rule::mul, Assoc::Left)
+                | Op::infix(Rule::div, Assoc::Left)
+                | Op::infix(Rule::urem, Assoc::Left))
     }
 
     #[derive(Debug, PartialEq, Eq, Clone)]
@@ -297,7 +297,10 @@ pub mod ast {
 
     // Create an Expression from an `expression`. `build_factor` turns each term into an `Expression` and `infix_rule` turns each (Expression, operator, Expression) into an Expression
     pub fn climb(pair: Pair<Rule>) -> Box<Expression> {
-        PREC_CLIMBER.climb(pair.into_inner(), build_factor, infix_rule)
+        PREC_CLIMBER
+            .map_primary(build_factor)
+            .map_infix(infix_rule)
+            .parse(pair.into_inner())
     }
 
     // Create an Expression from a `term`.

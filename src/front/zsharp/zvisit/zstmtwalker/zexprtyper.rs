@@ -48,12 +48,12 @@ impl<'ast, 'ret, 'wlk> ZExpressionTyper<'ast, 'ret, 'wlk> {
             Basic(bty) => ast::ArrayType {
                 ty: ast::BasicOrStructType::Basic(bty),
                 dimensions: vec![cnt],
-                span: spn.clone(),
+                span: *spn,
             },
             Struct(sty) => ast::ArrayType {
                 ty: ast::BasicOrStructType::Struct(sty),
                 dimensions: vec![cnt],
-                span: spn.clone(),
+                span: *spn,
             },
         }
     }
@@ -106,14 +106,12 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         assert!(self.ty.is_none());
         match &be.op {
             Or | And | Eq | NotEq | Lt | Gt | Lte | Gte => {
-                self.ty.replace(Basic(Boolean(ast::BooleanType {
-                    span: be.span.clone(),
-                })));
+                self.ty
+                    .replace(Basic(Boolean(ast::BooleanType { span: be.span })));
             }
             Pow => {
-                self.ty.replace(Basic(Field(ast::FieldType {
-                    span: be.span.clone(),
-                })));
+                self.ty
+                    .replace(Basic(Field(ast::FieldType { span: be.span })));
             }
             BitXor | BitAnd | BitOr | RightShift | LeftShift | Add | Sub | Mul | Div | Rem => {
                 self.visit_expression(&mut be.left)?;
@@ -190,9 +188,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     ) -> ZVisitorResult {
         assert!(self.ty.is_none());
         self.ty.replace(ast::Type::Basic(ast::BasicType::Boolean(
-            ast::BooleanType {
-                span: ble.span.clone(),
-            },
+            ast::BooleanType { span: ble.span },
         )));
         Ok(())
     }
@@ -201,21 +197,13 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         assert!(self.ty.is_none());
         use ast::{BasicType::*, DecimalSuffix as DS, Type::*};
         match ds {
-            DS::U8(s) => self.ty.replace(Basic(U8(ast::U8Type {
-                span: s.span.clone(),
-            }))),
-            DS::U16(s) => self.ty.replace(Basic(U16(ast::U16Type {
-                span: s.span.clone(),
-            }))),
-            DS::U32(s) => self.ty.replace(Basic(U32(ast::U32Type {
-                span: s.span.clone(),
-            }))),
-            DS::U64(s) => self.ty.replace(Basic(U64(ast::U64Type {
-                span: s.span.clone(),
-            }))),
-            DS::Field(s) => self.ty.replace(Basic(Field(ast::FieldType {
-                span: s.span.clone(),
-            }))),
+            DS::U8(s) => self.ty.replace(Basic(U8(ast::U8Type { span: s.span }))),
+            DS::U16(s) => self.ty.replace(Basic(U16(ast::U16Type { span: s.span }))),
+            DS::U32(s) => self.ty.replace(Basic(U32(ast::U32Type { span: s.span }))),
+            DS::U64(s) => self.ty.replace(Basic(U64(ast::U64Type { span: s.span }))),
+            DS::Field(s) => self
+                .ty
+                .replace(Basic(Field(ast::FieldType { span: s.span }))),
         };
         Ok(())
     }
@@ -227,18 +215,10 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         assert!(self.ty.is_none());
         use ast::{BasicType::*, HexNumberExpression as HNE, Type::*};
         match hne {
-            HNE::U8(s) => self.ty.replace(Basic(U8(ast::U8Type {
-                span: s.span.clone(),
-            }))),
-            HNE::U16(s) => self.ty.replace(Basic(U16(ast::U16Type {
-                span: s.span.clone(),
-            }))),
-            HNE::U32(s) => self.ty.replace(Basic(U32(ast::U32Type {
-                span: s.span.clone(),
-            }))),
-            HNE::U64(s) => self.ty.replace(Basic(U64(ast::U64Type {
-                span: s.span.clone(),
-            }))),
+            HNE::U8(s) => self.ty.replace(Basic(U8(ast::U8Type { span: s.span }))),
+            HNE::U16(s) => self.ty.replace(Basic(U16(ast::U16Type { span: s.span }))),
+            HNE::U32(s) => self.ty.replace(Basic(U32(ast::U32Type { span: s.span }))),
+            HNE::U64(s) => self.ty.replace(Basic(U64(ast::U64Type { span: s.span }))),
         };
         Ok(())
     }
@@ -324,9 +304,9 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     ast::HexLiteralExpression {
                         value: ast::HexNumberExpression::U32(ast::U32NumberExpression {
                             value: format!("{:04x}", acc_len),
-                            span: iae.span.clone(),
+                            span: iae.span,
                         }),
-                        span: iae.span.clone(),
+                        span: iae.span,
                     },
                 )),
                 &iae.span,

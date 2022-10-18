@@ -91,7 +91,7 @@ fn canon_type<'ast>(ty: &ast::StructType<'ast>, zgen: &ZGen<'ast>) -> ZResult<as
             Ok(sd) => ast::Type::Struct(ast::StructType {
                 id: sd.id.clone(),
                 explicit_generics: None,
-                span: sd.span.clone(),
+                span: sd.span,
             }),
             Err(t) => t.ty.clone(),
         })

@@ -137,7 +137,7 @@ impl<'ast> Gen<'ast> {
     fn rule_cases(&mut self, rule: &'ast ast::Rule_) -> Result<'ast, term::T> {
         rule.conds.iter().try_fold(term::bool_lit(false), |x, y| {
             let cond = self.condition(y)?;
-            term::or(&x, &cond).map_err(|e| Error::from(e).with_span(rule.span.clone()))
+            term::or(&x, &cond).map_err(|e| Error::from(e).with_span(rule.span))
         })
     }
 
@@ -151,7 +151,7 @@ impl<'ast> Gen<'ast> {
         }
         c.exprs.iter().try_fold(term::bool_lit(true), |x, y| {
             let cond = self.expr(y, true)?;
-            term::and(&x, &cond).map_err(|e| Error::from(e).with_span(y.span().clone()))
+            term::and(&x, &cond).map_err(|e| Error::from(e).with_span(*y.span()))
         })
     }
 
@@ -176,7 +176,7 @@ impl<'ast> Gen<'ast> {
                 let arr = self.ident(&c.arr)?;
                 c.idxs.iter().try_fold(arr, |arr, idx| {
                     let idx_v = self.expr(idx, false)?;
-                    term::array_idx(&arr, &idx_v).map_err(|err| Error::new(err, idx.span().clone()))
+                    term::array_idx(&arr, &idx_v).map_err(|err| Error::new(err, *idx.span()))
                 })
             }
             ast::Expression::Call(ref c) => {
@@ -188,7 +188,7 @@ impl<'ast> Gen<'ast> {
                 match c.fn_name.value {
                     "to_field" => {
                         assert_eq!(1, args.len(), "to_field takes 1 argument: {:?}", c.span);
-                        term::uint_to_field(&args[0]).map_err(|err| Error::new(err, c.span.clone()))
+                        term::uint_to_field(&args[0]).map_err(|err| Error::new(err, c.span))
                     }
                     name => {
                         assert!(
@@ -281,7 +281,7 @@ impl<'ast> Gen<'ast> {
             ast::BinaryOperator::Lte => term::lte(&l, &r),
             ast::BinaryOperator::Gte => term::gte(&l, &r),
         };
-        res.map_err(|err| Error::new(err, e.span.clone()))
+        res.map_err(|err| Error::new(err, e.span))
     }
     fn un_expr(&mut self, e: &'ast ast::UnaryExpression) -> Result<'ast, term::T> {
         let l = self.expr(&e.expression, false)?;
@@ -290,7 +290,7 @@ impl<'ast> Gen<'ast> {
             ast::UnaryOperator::Not(_) => term::not(&l),
             ast::UnaryOperator::Neg(_) => term::neg(&l),
         };
-        res.map_err(|err| Error::new(err, e.span.clone()))
+        res.map_err(|err| Error::new(err, e.span))
     }
 
     // Begin prim-rec linting
@@ -298,7 +298,7 @@ impl<'ast> Gen<'ast> {
         let rules: Vec<&'ast ast::Rule_> = self.rules.values().cloned().collect();
         let bug_if = rules.iter().try_fold(term::bool_lit(false), |x, rule| {
             let cond = self.lint_rule(rule)?;
-            term::or(&x, &cond).map_err(|e| Error::from(e).with_span(rule.span.clone()))
+            term::or(&x, &cond).map_err(|e| Error::from(e).with_span(rule.span))
         })?;
         self.circ.assert(bug_if.as_bool());
         Ok(())
@@ -353,14 +353,12 @@ impl<'ast> Gen<'ast> {
                     &bug_conditions
                         .into_iter()
                         .try_fold(term::bool_lit(true), |x, y| {
-                            term::and(&x, &y)
-                                .map_err(|e| Error::from(e).with_span(rule.span.clone()))
+                            term::and(&x, &y).map_err(|e| Error::from(e).with_span(rule.span))
                         })?,
                     &bad_recursion
                         .into_iter()
                         .try_fold(term::bool_lit(false), |x, y| {
-                            term::or(&x, &y)
-                                .map_err(|e| Error::from(e).with_span(rule.span.clone()))
+                            term::or(&x, &y).map_err(|e| Error::from(e).with_span(rule.span))
                         })?,
                 )?);
                 self.circ.exit_scope();
@@ -369,7 +367,7 @@ impl<'ast> Gen<'ast> {
             bug_in_rule_if_any
                 .into_iter()
                 .try_fold(term::bool_lit(false), |x, y| {
-                    term::or(&x, &y).map_err(|e| Error::from(e).with_span(rule.span.clone()))
+                    term::or(&x, &y).map_err(|e| Error::from(e).with_span(rule.span))
                 })
         } else {
             Ok(term::bool_lit(false))
