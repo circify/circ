@@ -47,7 +47,7 @@ impl FrontEnd for C {
         g.visit_files();
         g.entry_fn("main");
         let mut cs = Computations::new();
-        let main_comp = g.circ.consume().borrow().clone();
+        let main_comp = g.into_circify().consume().borrow().clone();
         cs.cs.insert("main".to_string(), main_comp);
         cs
     }
