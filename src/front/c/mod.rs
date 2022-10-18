@@ -1,6 +1,7 @@
 //! The C front-end
 
 mod ast_utils;
+pub mod cvisit;
 mod parser;
 mod term;
 mod types;
