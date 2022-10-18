@@ -37,13 +37,16 @@ pub struct C;
 
 impl FrontEnd for C {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computation {
+    fn gen(i: Inputs) -> Computations {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
         let mut g = CGen::new(i.mode, p.unit);
         g.visit_files();
         g.entry_fn("main");
-        g.circ.consume().borrow().clone()
+        let mut cs = Computations::new();
+        let main_comp = g.circ.consume().borrow().clone();
+        cs.cs.insert("main".to_string(), main_comp);
+        cs
     }
 }
 
@@ -282,6 +285,7 @@ impl CGen {
     }
 
     pub fn get_param_info(&mut self, decl: ParameterDeclaration, v: bool) -> ParamInfo {
+        println!("param decl: {:#?}", decl);
         let mut vis: Option<PartyId> = None;
         let base_ty: Option<Ty>;
         if v {
@@ -1020,36 +1024,6 @@ impl CGen {
                 }
                 self.circ.exit_scope();
             }
-            // Statement::While(while_stmt) => {
-            //     self.circ.enter_scope();
-            //     let WhileStatement {
-            //         condition,
-            //         statement,
-            //     } = while_stmt.node;
-
-            //     let cond: Option<ConstIteration> = match for_stmt.condition.unwrap().node {
-            //         Expression::BinaryOperator(bin_op) => {
-            //             let expr = self.gen_expr(bin_op.node.rhs.node);
-            //             let val = self.fold_(expr);
-            //             match bin_op.node.operator.node {
-            //                 BinaryOperator::Less => Some(ConstIteration { val }),
-            //                 BinaryOperator::LessOrEqual => Some(ConstIteration { val: val + 1 }),
-            //                 BinaryOperator::Greater => Some(ConstIteration { val }),
-            //                 BinaryOperator::GreaterOrEqual => Some(ConstIteration { val: val - 1 }),
-            //                 _ => None,
-            //             }
-            //         }
-            //         _ => None,
-            //     };
-
-            //     for _ in 0..bound {
-            //         self.circ.enter_scope();
-            //         self.gen_stmt(for_stmt.node.statement.node.clone());
-            //         self.circ.exit_scope();
-            //         self.gen_expr(for_stmt.node.step.as_ref().unwrap().node.clone());
-            //     }
-            //     self.circ.exit_scope();
-            // }
             _ => unimplemented!("Statement {:#?} hasn't been implemented", stmt),
         }
     }

@@ -6,6 +6,7 @@ import sys
 
 from util import *
 
+
 def install(features):
     """
     Used for installing third party libraries
@@ -22,11 +23,13 @@ def install(features):
     for f in features:
         if f == "aby":
             if verify_path_empty(ABY_SOURCE):
-                subprocess.run(["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
+                subprocess.run(
+                    ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
 
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
+
 
 def check(features):
     """
@@ -41,8 +44,9 @@ def check(features):
     cmd = ["cargo", "check", "--tests", "--examples", "--benches", "--bins"]
     cargo_features = filter_cargo_features(features)
     if cargo_features:
-       cmd = cmd + ["--features"] + cargo_features
+        cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd, check=True)
+
 
 def build(features):
     """
@@ -75,8 +79,10 @@ def build(features):
         if "c" in features:
             subprocess.run(["./scripts/build_mpc_c_test.zsh"], check=True)
         if "smt" in features and "zok" in features:
-            subprocess.run(["./scripts/build_mpc_zokrates_test.zsh"], check=True)
+            subprocess.run(
+                ["./scripts/build_mpc_zokrates_test.zsh"], check=True)
         subprocess.run(["./scripts/build_aby.zsh"], check=True)
+
 
 def test(features, extra_args):
     """
@@ -112,7 +118,8 @@ def test(features, extra_args):
 
     if "zok" in features and "smt" in features:
         if "aby" in features:
-            subprocess.run(["python3", "./scripts/aby_tests/zokrates_test_aby.py"], check=True)
+            subprocess.run(
+                ["python3", "./scripts/aby_tests/zokrates_test_aby.py"], check=True)
         if "lp" in features:
             subprocess.run(["./scripts/test_zok_to_ilp.zsh"], check=True)
         if "r1cs" in features:
@@ -122,7 +129,9 @@ def test(features, extra_args):
 
     if "c" in features:
         if "aby" in features:
-            subprocess.run(["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
+            subprocess.run(
+                ["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
+
 
 def benchmark(features):
     mode = load_mode()
@@ -143,9 +152,11 @@ def benchmark(features):
         cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd, check=True)
 
+
 def format():
     print("formatting!")
     subprocess.run(["cargo", "fmt", "--all"], check=True)
+
 
 def lint():
     """
@@ -161,8 +172,9 @@ def lint():
     cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
     cargo_features = filter_cargo_features(features)
     if cargo_features:
-       cmd = cmd + ["--features"] + cargo_features
+        cmd = cmd + ["--features"] + cargo_features
     subprocess.run(cmd, check=True)
+
 
 def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
@@ -173,19 +185,24 @@ def flamegraph(features, extra):
     print("running:", " ".join(cmd))
     subprocess.run(cmd, check=True)
 
+
 def clean(features):
     print("cleaning!")
     if "aby" in features:
         subprocess.run(["./scripts/clean_aby.zsh"])
     subprocess.run(["rm", "-rf", "scripts/aby_tests/__pycache__"])
-    subprocess.run(["rm", "-rf", "P", "V", "pi", "perf.data perf.data.old flamegraph.svg"])
+    subprocess.run(["rm", "-rf", "P", "V", "pi",
+                   "perf.data perf.data.old flamegraph.svg"])
+
 
 def set_mode(mode):
     def verify_mode(mode):
         if mode not in ("debug", "release"):
-            raise RuntimeError(f"Unknown mode: {mode}, --mode <debug, release>")
+            raise RuntimeError(
+                f"Unknown mode: {mode}, --mode <debug, release>")
     verify_mode(mode)
     save_mode(mode)
+
 
 def set_features(features):
     """
@@ -209,37 +226,56 @@ def set_features(features):
     print("Feature set:", sorted(list(features)))
     return features
 
+
 def format_sub_process_cmd(r: subprocess.CalledProcessError) -> str:
     r.cmd
+
 
 if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser()
-        parser.add_argument("-i", "--install", action="store_true", help="install all dependencies from the feature set")
-        parser.add_argument("-c", "--check", action="store_true", help="run `cargo check`")
-        parser.add_argument("-b", "--build", action="store_true", help="run `cargo build` and build all dependencies from the feature set")
-        parser.add_argument("-t", "--test", action="store_true", help="build and test all dependencies from the feature set")
-        parser.add_argument("-f", "--format", action="store_true", help="run `cargo fmt --all`")
-        parser.add_argument("-l", "--lint", action="store_true", help="run `cargo clippy`")
-        parser.add_argument("--flamegraph", action="store_true", help="run `cargo flamegraph`")
-        parser.add_argument("-C", "--clean", action="store_true", help="remove all generated files")
-        parser.add_argument("-m", "--mode", type=str, help="set `debug` or `release` mode")
-        parser.add_argument("-A", "--all_features", action="store_true", help="set all features on")
-        parser.add_argument("-L", "--list_features", action="store_true", help="print active features")
-        parser.add_argument("-F", "--features", nargs="+", help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
-        parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
-        parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER, help="Extra arguments for --flamegraph. Prefix with --")
+        parser.add_argument("-i", "--install", action="store_true",
+                            help="install all dependencies from the feature set")
+        parser.add_argument(
+            "-c", "--check", action="store_true", help="run `cargo check`")
+        parser.add_argument("-b", "--build", action="store_true",
+                            help="run `cargo build` and build all dependencies from the feature set")
+        parser.add_argument("-t", "--test", action="store_true",
+                            help="build and test all dependencies from the feature set")
+        parser.add_argument(
+            "-f", "--format", action="store_true", help="run `cargo fmt --all`")
+        parser.add_argument(
+            "-l", "--lint", action="store_true", help="run `cargo clippy`")
+        parser.add_argument("--flamegraph", action="store_true",
+                            help="run `cargo flamegraph`")
+        parser.add_argument("-C", "--clean", action="store_true",
+                            help="remove all generated files")
+        parser.add_argument("-m", "--mode", type=str,
+                            help="set `debug` or `release` mode")
+        parser.add_argument("-A", "--all_features",
+                            action="store_true", help="set all features on")
+        parser.add_argument("-L", "--list_features",
+                            action="store_true", help="print active features")
+        parser.add_argument("-F", "--features", nargs="+",
+                            help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none")
+        parser.add_argument(
+            "--benchmark", action="store_true", help="build benchmarks")
+        parser.add_argument("extra", metavar="PASS_THROUGH_ARGS", nargs=argparse.REMAINDER,
+                            help="Extra arguments for --flamegraph. Prefix with --")
         args = parser.parse_args()
 
         def verify_single_action(args: argparse.Namespace):
-            actions = [k for k, v in vars(args).items() if (type(v) is bool or k in ["features", "mode"]) and bool(v)]
+            actions = [k for k, v in vars(args).items() if (
+                type(v) is bool or k in ["features", "mode"]) and bool(v)]
             if len(actions) != 1:
-                parser.error("parser error: only one action can be specified. got: " + " ".join(actions))
+                parser.error(
+                    "parser error: only one action can be specified. got: " + " ".join(actions))
         verify_single_action(args)
 
         def verify_extra_implies_flamegraph_or_test(args: argparse.Namespace):
             if (not args.flamegraph and not args.test) and len(args.extra) > 0:
-                parser.error("parser error: no --flamegraph or --test action, and extra arguments")
+                parser.error(
+                    "parser error: no --flamegraph or --test action, and extra arguments")
         verify_extra_implies_flamegraph_or_test(args)
 
         features = load_features()
