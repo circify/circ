@@ -405,7 +405,7 @@ impl FrontEnd for Datalog {
         }
         let mut cs = Computations::new();
         let main_comp = g.circ.consume().borrow().clone();
-        cs.cs.insert("main".to_string(), main_comp);
+        cs.comps.insert("main".to_string(), main_comp);
         cs
     }
 }

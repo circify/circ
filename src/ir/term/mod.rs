@@ -2097,20 +2097,20 @@ impl Computation {
 /// A map of IR computations.
 pub struct Computations {
     /// A map of function name --> function computation
-    pub cs: BTreeMap<String, Computation>,
+    pub comps: FxHashMap<String, Computation>,
 }
 
 impl Computations {
     /// Create new empty computations.
     pub fn new() -> Self {
         Self {
-            cs: BTreeMap::new(),
+            comps: FxHashMap::default(),
         }
     }
 
     /// Get computation by name
     pub fn get(&self, name: &str) -> &Computation {
-        match self.cs.get(name) {
+        match self.comps.get(name) {
             Some(c) => c,
             None => panic!("Unknown computation: {}", name),
         }

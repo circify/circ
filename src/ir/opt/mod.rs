@@ -43,7 +43,7 @@ pub enum Opt {
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for i in optimizations {
         debug!("Applying: {:?}", i);
-        for (_, c) in cs.cs.iter_mut() {
+        for (_, c) in cs.comps.iter_mut() {
             match i.clone() {
                 Opt::ScalarizeVars => {
                     scalarize_vars::scalarize_inputs(c);

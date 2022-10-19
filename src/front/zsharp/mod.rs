@@ -62,7 +62,7 @@ impl FrontEnd for ZSharpFE {
         let main_comp = std::rc::Rc::try_unwrap(g.into_circify().consume())
             .unwrap_or_else(|rc| (*rc).clone())
             .into_inner();
-        cs.cs.insert("main".to_string(), main_comp);
+        cs.comps.insert("main".to_string(), main_comp);
         cs
     }
 }
