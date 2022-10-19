@@ -323,13 +323,7 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             println!("Selection scheme: {}", selection_scheme);
-            to_aby(
-                cs,
-                &path_buf,
-                &lang_str,
-                &cost_model,
-                &selection_scheme,
-            );
+            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {
