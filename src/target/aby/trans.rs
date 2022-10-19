@@ -143,22 +143,26 @@ impl<'a> ToABY<'a> {
     fn get_var_name(name: &String) -> String {
         let new_name = name.to_string().replace('.', "_");
         let n = new_name.split('_').collect::<Vec<&str>>();
-        let offset = n.iter().position(|&r| r == "lex0").unwrap();
+        if n.len() == 1 {
+            name.to_string()
+        } else {
+            let offset = n.iter().position(|&r| r == "lex0").unwrap();
 
-        let var_name = &n[offset + 1..];
+            let var_name = &n[offset + 1..];
 
-        match var_name.len() {
-            2 => var_name[0].to_string(),
-            3.. => {
-                let l = var_name.len();
-                format!(
-                    "{}_{}",
-                    &var_name[0..l - 2].to_vec().join("_"),
-                    var_name[l - 1]
-                )
-            }
-            _ => {
-                panic!("Invalid variable name: {}", name);
+            match var_name.len() {
+                2 => var_name[0].to_string(),
+                3.. => {
+                    let l = var_name.len();
+                    format!(
+                        "{}_{}",
+                        &var_name[0..l - 2].to_vec().join("_"),
+                        var_name[l - 1]
+                    )
+                }
+                _ => {
+                    panic!("Invalid variable name: {}", name);
+                }
             }
         }
     }

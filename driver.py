@@ -109,9 +109,9 @@ def test(features, extra_args):
         test_cmd += ["--"] + extra_args
         test_cmd_release += ["--"] + extra_args
 
-    # subprocess.run(test_cmd, check=True)
-    # if load_mode() == "release":
-    #     subprocess.run(test_cmd_release, check=True)
+    subprocess.run(test_cmd, check=True)
+    if load_mode() == "release":
+        subprocess.run(test_cmd_release, check=True)
 
     if "r1cs" in features and "smt" in features:
         subprocess.run(["./scripts/test_datalog.zsh"], check=True)
