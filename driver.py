@@ -24,7 +24,7 @@ def install(features):
         if f == "aby":
             if verify_path_empty(ABY_SOURCE):
                 subprocess.run(
-                    ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE, "&&", "cd ABY", "&&", "git", "checkout", "functions", "&&", "cd", ".."])
+                    ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
 
     # install python requirements
