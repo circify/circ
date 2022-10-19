@@ -130,14 +130,10 @@ pub fn get_fn_return_sort(
     // Add pointers as return
     assert!(fn_info.params.len() == arg_terms.len());
     for (param, arg) in fn_info.params.iter().zip(arg_terms.iter()) {
-        match &param.ty {
-            Ty::Ptr(n, t) => {
-                let new_ty =
-                    Sort::Array(Box::new(Sort::BitVector(*n)), Box::new(t.sort()), arg.len());
-                names.push(param.name.clone());
-                rets.push(new_ty.clone());
-            }
-            _ => {}
+        if let Ty::Ptr(n, t) = &param.ty {
+            let new_ty = Sort::Array(Box::new(Sort::BitVector(*n)), Box::new(t.sort()), arg.len());
+            names.push(param.name.clone());
+            rets.push(new_ty.clone());
         };
     }
 

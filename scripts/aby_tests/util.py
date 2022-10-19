@@ -8,10 +8,9 @@ def rename_test(name: str, lang: str) -> str:
     """Append path with language type"""
     return f"{name}_{lang}"
 
-def build_cmd(name:str, test_file: str, role: int) -> List[str]:
-    bytecode = f"./scripts/aby_tests/tests/{name}_bytecode.txt"
-    share_map = f"./scripts/aby_tests/tests/{name}_share_map.txt"
-    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map] 
+def build_cmd(name: str, test_file: str, role: int) -> List[str]:
+    path = f"./scripts/aby_tests/tests/{name}"
+    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-m", "mpc", "-f", path, "-t", test_file, "-r", str(role)]
 
 def get_result(file_path):
     if os.path.exists(file_path):

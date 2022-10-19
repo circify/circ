@@ -47,19 +47,18 @@ impl FrontEnd for C {
         g.visit_files();
         g.entry_fn("main");
         let mut cs = Computations::new();
-        let main_comp = g.into_circify().consume().borrow().clone();
+        let main_comp = g.circify().consume().borrow().clone();
         cs.comps.insert("main".to_string(), main_comp);
         while !g.function_queue.is_empty() {
             let call_term = g.function_queue.pop().unwrap();
             if let Op::Call(name, arg_sorts, rets) = &call_term.op {
                 g.fn_call(name, arg_sorts, rets);
-                let comp = g.into_circify().consume().borrow().clone();
+                let comp = g.circify().consume().borrow().clone();
                 cs.comps.insert(name.to_string(), comp);
             } else {
                 panic!("Non-call term added to function queue.");
             }
         }
-
         cs
     }
 }
@@ -123,7 +122,7 @@ impl CGen {
         this
     }
 
-    fn into_circify(&self) -> Circify<Ct> {
+    fn circify(&self) -> Circify<Ct> {
         self.circ.replace(Circify::new(Ct::new()))
     }
 
@@ -315,10 +314,10 @@ impl CGen {
     pub fn get_param_info(&mut self, decl: &ParameterDeclaration) -> ParamInfo {
         let mut vis: Option<PartyId> = None;
         let base_ty: Option<Ty>;
-        if decl.specifiers.len() > 0 {
+        if !decl.specifiers.is_empty() {
             if let DeclarationSpecifier::Extension(_) = &decl.specifiers[0].node {
                 vis = interpret_visibility(&decl.specifiers[0].node, self.mode);
-                base_ty = self.d_type_(&decl.specifiers[1..].to_vec());
+                base_ty = self.d_type_(&decl.specifiers[1..]);
             } else {
                 base_ty = self.d_type_(&decl.specifiers);
             }
@@ -344,10 +343,7 @@ impl CGen {
             None => vec![],
         };
 
-        let params = args
-            .iter()
-            .map(|a| self.get_param_info(&a))
-            .collect();
+        let params = args.iter().map(|a| self.get_param_info(a)).collect();
         let body = body_from_func(fn_def);
 
         FnInfo {
@@ -834,7 +830,7 @@ impl CGen {
 
                 let call_term = term(
                     Op::Call(f.name.clone(), param_sorts, ret_sort),
-                    flatten_args.clone(),
+                    flatten_args,
                 );
 
                 // Add function to queue
@@ -859,9 +855,11 @@ impl CGen {
 
                 // Return value
                 let ret = match f.ret_ty {
-                    None => cterm(CTermData::CBool(call_term)),
-                    Some(Ty::Bool) => cterm(CTermData::CBool(call_term)),
-                    Some(Ty::Int(sign, width)) => cterm(CTermData::CInt(sign, width, call_term)),
+                    None => cterm(CTermData::CBool(term![Op::Field(0); call_term])),
+                    Some(Ty::Bool) => cterm(CTermData::CBool(term![Op::Field(0); call_term])),
+                    Some(Ty::Int(sign, width)) => {
+                        cterm(CTermData::CInt(sign, width, term![Op::Field(0); call_term]))
+                    }
                     _ => unimplemented!("Unimplemented return type: {:?}", f.ret_ty),
                 };
 
@@ -1196,8 +1194,7 @@ impl CGen {
         if let Some(returns) = self.circ_exit_fn_call(&ret_names) {
             let ret_terms = returns
                 .into_iter()
-                .map(|x| x.unwrap_term().term.terms(self.circ.borrow().cir_ctx()))
-                .flatten()
+                .flat_map(|x| x.unwrap_term().term.terms(self.circ.borrow().cir_ctx()))
                 .collect::<Vec<Term>>();
 
             let ret_term = term(Op::Tuple, ret_terms);
