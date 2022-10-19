@@ -40,13 +40,16 @@ pub struct C;
 
 impl FrontEnd for C {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computation {
+    fn gen(i: Inputs) -> Computations {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
         let mut g = CGen::new(i.mode, p.unit);
         g.visit_files();
         g.entry_fn("main");
-        g.into_circify().consume().borrow().clone()
+        let mut cs = Computations::new();
+        let main_comp = g.into_circify().consume().borrow().clone();
+        cs.comps.insert("main".to_string(), main_comp);
+        cs
     }
 }
 

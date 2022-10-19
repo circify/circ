@@ -40,75 +40,77 @@ pub enum Opt {
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
-pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computation, optimizations: I) -> Computation {
+pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for i in optimizations {
         debug!("Applying: {:?}", i);
-        match i.clone() {
-            Opt::ScalarizeVars => {
-                scalarize_vars::scalarize_inputs(&mut cs);
-            }
-            Opt::ConstantFold(ignore) => {
-                // lock the collector because fold_cache locks TERMS
-                let _lock = super::term::COLLECT.read().unwrap();
-                let mut cache = TermCache::new(TERM_CACHE_LIMIT);
-                for a in &mut cs.outputs {
-                    // allow unbounded size during a single fold_cache call
-                    cache.resize(std::usize::MAX);
-                    *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
-                    // then shrink back down to size between calls
-                    cache.resize(TERM_CACHE_LIMIT);
+        for (_, c) in cs.comps.iter_mut() {
+            match i.clone() {
+                Opt::ScalarizeVars => {
+                    scalarize_vars::scalarize_inputs(c);
                 }
-            }
-            Opt::Sha => {
-                for a in &mut cs.outputs {
-                    *a = sha::sha_rewrites(a);
-                }
-            }
-            Opt::Obliv => {
-                mem::obliv::elim_obliv(&mut cs);
-            }
-            Opt::LinearScan => {
-                mem::lin::linearize(&mut cs);
-            }
-            Opt::FlattenAssertions => {
-                let mut new_outputs = Vec::new();
-                for a in std::mem::take(&mut cs.outputs) {
-                    assert_eq!(check(&a), Sort::Bool, "Non-bool in {:?}", i);
-                    if a.op == Op::BoolNaryOp(BoolNaryOp::And) {
-                        new_outputs.extend(a.cs.iter().cloned());
-                    } else {
-                        new_outputs.push(a)
+                Opt::ConstantFold(ignore) => {
+                    // lock the collector because fold_cache locks TERMS
+                    let _lock = super::term::COLLECT.read().unwrap();
+                    let mut cache = TermCache::new(TERM_CACHE_LIMIT);
+                    for a in &mut c.outputs {
+                        // allow unbounded size during a single fold_cache call
+                        cache.resize(std::usize::MAX);
+                        *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
+                        // then shrink back down to size between calls
+                        cache.resize(TERM_CACHE_LIMIT);
                     }
                 }
-                cs.outputs = new_outputs;
-            }
-            Opt::Flatten => {
-                let mut cache = flat::Cache::new();
-                for a in &mut cs.outputs {
-                    *a = flat::flatten_nary_ops_cached(a.clone(), &mut cache);
+                Opt::Sha => {
+                    for a in &mut c.outputs {
+                        *a = sha::sha_rewrites(a);
+                    }
+                }
+                Opt::Obliv => {
+                    mem::obliv::elim_obliv(c);
+                }
+                Opt::LinearScan => {
+                    mem::lin::linearize(c);
+                }
+                Opt::FlattenAssertions => {
+                    let mut new_outputs = Vec::new();
+                    for a in std::mem::take(&mut c.outputs) {
+                        assert_eq!(check(&a), Sort::Bool, "Non-bool in {:?}", i);
+                        if a.op == Op::BoolNaryOp(BoolNaryOp::And) {
+                            new_outputs.extend(a.cs.iter().cloned());
+                        } else {
+                            new_outputs.push(a)
+                        }
+                    }
+                    c.outputs = new_outputs;
+                }
+                Opt::Flatten => {
+                    let mut cache = flat::Cache::new();
+                    for a in &mut c.outputs {
+                        *a = flat::flatten_nary_ops_cached(a.clone(), &mut cache);
+                    }
+                }
+                Opt::Binarize => {
+                    let mut cache = binarize::Cache::new();
+                    for a in &mut c.outputs {
+                        *a = binarize::binarize_nary_ops_cached(a.clone(), &mut cache);
+                    }
+                }
+                Opt::Inline => {
+                    let public_inputs = c
+                        .metadata
+                        .public_input_names()
+                        .map(ToOwned::to_owned)
+                        .collect();
+                    inline::inline(&mut c.outputs, &public_inputs);
+                }
+                Opt::Tuple => {
+                    tuple::eliminate_tuples(c);
                 }
             }
-            Opt::Binarize => {
-                let mut cache = binarize::Cache::new();
-                for a in &mut cs.outputs {
-                    *a = binarize::binarize_nary_ops_cached(a.clone(), &mut cache);
-                }
-            }
-            Opt::Inline => {
-                let public_inputs = cs
-                    .metadata
-                    .public_input_names()
-                    .map(ToOwned::to_owned)
-                    .collect();
-                inline::inline(&mut cs.outputs, &public_inputs);
-            }
-            Opt::Tuple => {
-                tuple::eliminate_tuples(&mut cs);
-            }
+            debug!("After {:?}: {} outputs", i, c.outputs.len());
+            //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
+            debug!("After {:?}: {} terms", i, c.terms());
         }
-        debug!("After {:?}: {} outputs", i, cs.outputs.len());
-        //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
-        debug!("After {:?}: {} terms", i, cs.terms());
     }
     garbage_collect();
     cs

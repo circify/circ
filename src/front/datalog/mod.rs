@@ -380,7 +380,7 @@ pub struct Datalog;
 
 impl FrontEnd for Datalog {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computation {
+    fn gen(i: Inputs) -> Computations {
         let mut f = File::open(&i.file).unwrap();
         let mut buffer = String::new();
         f.read_to_string(&mut buffer).unwrap();
@@ -403,6 +403,9 @@ impl FrontEnd for Datalog {
             eprintln!("{}", e);
             panic!()
         }
-        g.circ.consume().borrow().clone()
+        let mut cs = Computations::new();
+        let main_comp = g.circ.consume().borrow().clone();
+        cs.comps.insert("main".to_string(), main_comp);
+        cs
     }
 }

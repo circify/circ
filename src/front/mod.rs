@@ -7,7 +7,7 @@ pub mod datalog;
 pub mod zsharp;
 
 use crate::ir::proof;
-use crate::ir::term::{Computation, PartyId};
+use crate::ir::term::{Computations, PartyId};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -22,7 +22,7 @@ pub trait FrontEnd {
     type Inputs;
 
     /// Compile the program to constraints
-    fn gen(i: Self::Inputs) -> Computation;
+    fn gen(i: Self::Inputs) -> Computations;
 }
 
 #[derive(Clone, Copy, Debug)]
