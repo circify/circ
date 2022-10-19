@@ -672,6 +672,9 @@ impl Embeddable for Ct {
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
         match ty {
+            Ty::Void => {
+                unimplemented!("Void not implemented")
+            }
             Ty::Bool => CTerm {
                 term: CTermData::CBool(Sort::Bool.default_term()),
                 udef: false,

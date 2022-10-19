@@ -235,6 +235,8 @@ fn main() {
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
+                    // Function calls return tuples 
+                    Opt::Tuple,
                     Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
                     Opt::Tuple,
@@ -242,6 +244,8 @@ fn main() {
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore)),
+                    // Inline Function Calls
+                    Opt::InlineCalls,
                     // Binarize nary terms
                     Opt::Binarize,
                 ],

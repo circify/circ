@@ -3,6 +3,7 @@ pub mod binarize;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
+pub mod inline_calls;
 pub mod mem;
 pub mod scalarize_vars;
 pub mod sha;
@@ -35,6 +36,8 @@ pub enum Opt {
     FlattenAssertions,
     /// Find outputs like `(= variable term)`, and substitute out `variable`
     Inline,
+    /// Inline function calls
+    InlineCalls,
     /// Eliminate tuples
     Tuple,
 }
@@ -102,6 +105,12 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                         .map(ToOwned::to_owned)
                         .collect();
                     inline::inline(&mut c.outputs, &public_inputs);
+                }
+                Opt::InlineCalls => {
+                    let mut cache = inline_calls::Cache::new();
+                    for a in &mut c.outputs {
+                        *a = inline_calls::inline_function_calls(a.clone(), &mut cache, &cs);
+                    }
                 }
                 Opt::Tuple => {
                     tuple::eliminate_tuples(c);

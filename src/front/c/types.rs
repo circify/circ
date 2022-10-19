@@ -9,6 +9,7 @@ use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Eq)]
 pub enum Ty {
+    Void,
     Bool,
     Int(bool, usize),
     Struct(String, FieldList<Ty>),
@@ -20,6 +21,7 @@ impl PartialEq for Ty {
     fn eq(&self, other: &Self) -> bool {
         use Ty::*;
         match (self, other) {
+            (Void, Void) => true,
             (Bool, Bool) => true,
             (Int(a, a_size), Int(b, b_size)) => a == b && a_size == b_size,
             (Struct(_, a_list), Struct(_, b_list)) => a_list == b_list,
@@ -35,6 +37,7 @@ impl PartialEq for Ty {
 impl Display for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            Ty::Void => write!(f, "void"),
             Ty::Bool => write!(f, "bool"),
             Ty::Int(s, w) => {
                 if *s {
@@ -74,8 +77,9 @@ impl fmt::Debug for Ty {
 }
 
 impl Ty {
-    fn sort(&self) -> Sort {
+    pub fn sort(&self) -> Sort {
         match self {
+            Self::Void => unimplemented!("Void not implemented"),
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
             Self::Array(n, _, b) => {
@@ -94,6 +98,9 @@ impl Ty {
 
     pub fn default(&self, ctx: &CirCtx) -> CTerm {
         match self {
+            Self::Void => {
+                unimplemented!("Void not implemented");
+            }
             Self::Bool => CTerm {
                 term: CTermData::CBool(self.default_ir_term()),
                 udef: false,
@@ -110,14 +117,13 @@ impl Ty {
                     udef: false,
                 }
             }
-            Self::Ptr(_s, _ty) => {
-                // let mut mem = ctx.mem.borrow_mut();
-                // let id = mem.zero_allocate(*s, 32, ty.num_bits());
-                // CTerm {
-                //     term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
-                //     udef: false,
-                // }
-                unimplemented!("Unknown array size");
+            Self::Ptr(s, ty) => {
+                let mut mem = ctx.mem.borrow_mut();
+                let id = mem.zero_allocate(*s, 32, ty.num_bits());
+                CTerm {
+                    term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
+                    udef: false,
+                }
             }
             Self::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
@@ -170,6 +176,7 @@ impl Ty {
 
     pub fn _total_num_bits(&self, ty: Ty) -> usize {
         match ty {
+            Ty::Void => 0,
             Ty::Int(_, w) => w,
             Ty::Bool => 1,
             Ty::Array(s, _, t) => s * t.num_bits(),
@@ -180,6 +187,7 @@ impl Ty {
 
     pub fn num_bits(&self) -> usize {
         match self {
+            Ty::Void => 0,
             Ty::Int(_, w) => *w,
             Ty::Bool => 1,
             Ty::Array(_, _, _) => 32,
@@ -190,6 +198,7 @@ impl Ty {
 
     pub fn inner_ty(self) -> Ty {
         match self {
+            Ty::Void => self,
             Ty::Int(_, _) => self,
             Ty::Bool => self,
             Ty::Array(_, _, t) => *t,
