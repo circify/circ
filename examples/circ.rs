@@ -324,7 +324,7 @@ fn main() {
             println!("Cost model: {}", cost_model);
             println!("Selection scheme: {}", selection_scheme);
             to_aby(
-                cs.get("main").clone(),
+                cs,
                 &path_buf,
                 &lang_str,
                 &cost_model,
