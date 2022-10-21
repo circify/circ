@@ -69,6 +69,10 @@ struct Options {
 
     #[structopt(subcommand)]
     backend: Backend,
+
+    /// File with input witness
+    #[structopt(long, default_value = "in", parse(from_os_str))]
+    inputs: PathBuf,    
 }
 
 #[derive(Debug, StructOpt)]
@@ -98,9 +102,6 @@ struct FrontendOptions {
     #[structopt(long)]
     z_isolate_asserts: bool,
 
-    /// File with input witness
-    #[structopt(long, name = "FILE", parse(from_os_str))]
-    inputs: Option<PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -317,10 +318,9 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::Spartan => {
-                    let values = parse_inputs(options.frontend.inputs.unwrap()).into_iter().collect();
-
+                    let input_map = parse_inputs(options.frontend.inputs.unwrap()).into_iter().collect();
                     println!("Converting R1CS to Spartan");
-                    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&r1cs, &prover_data, &values);
+                    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&r1cs, &prover_data, &input_map);
                     let (gens, proof) = spartan::prove(&inst, wit, &inps, num_cons, num_vars, num_inputs);
                     spartan::verify(&inst, &inps, proof, &gens);
                 
@@ -396,21 +396,5 @@ fn main() {
         }
     }
 }
-
-fn parse_inputs(p: PathBuf) -> HashMap<String, Value> {
-    let mut m = HashMap::default();
-    for l in BufReader::new(File::open(p).unwrap()).lines() {
-        let l = l.unwrap();
-        let l = l.trim();
-        if !l.is_empty() {
-            let mut s = l.split_whitespace();
-            let key = s.next().unwrap().to_owned();
-            let value = Value::Field(DFL_T.new_v(Integer::parse_radix(&s.next().unwrap(), 10).unwrap()));
-            m.insert(key, value);
-        }
-    }
-    return m;
-}
-
 
 
