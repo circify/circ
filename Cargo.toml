@@ -22,7 +22,7 @@ zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional 
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
-bellman-proof = { path = "../bellman" , optional = true,  package = "bellman", features=["groth16"] } 
+bellman = { path = "third_party/bellman", optional = true }
 ff = "0.12"
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
@@ -67,7 +67,7 @@ bls12381 = []
 ff_dfl = []
 c = ["lang-c"]
 lp = ["good_lp", "lp-solvers"]
-r1cs = ["bellman-proof"]
+r1cs = ["bellman"]
 smt = ["rsmt2"]
 zok = ["zokrates_parser", "zokrates_pest_ast"]
 marlin = ["ark-marlin", "ark-relations", "ark-ff", "ark-poly-commit", "ark-poly", "ark-serialize", "ark-bls12-381", "sha2", "rand_chacha", "digest"]
@@ -78,7 +78,7 @@ name = "circ"
 
 [[example]]
 name = "zk"
-required-features = ["r1cs", "marlin"]
+required-features = ["r1cs"]
 
 [[example]]
 name = "zxi"

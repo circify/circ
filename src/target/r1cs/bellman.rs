@@ -1,5 +1,5 @@
 //! Exporting our R1CS to bellman
-use bellman_proof::{
+use ::bellman::{
     groth16::{
         create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
         Parameters, Proof, VerifyingKey,
