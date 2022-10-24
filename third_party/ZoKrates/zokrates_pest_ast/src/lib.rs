@@ -31,37 +31,36 @@ mod ast {
     use from_pest::FromPest;
     use from_pest::Void;
     use pest::iterators::{Pair, Pairs};
-    use pest::prec_climber::{Assoc, Operator, PrecClimber};
+    use pest::pratt_parser::{Assoc, Op, PrattParser};
     pub use pest::Span;
     use pest_ast::FromPest;
     use zokrates_parser::Rule;
 
     lazy_static! {
-        static ref PREC_CLIMBER: PrecClimber<Rule> = build_precedence_climber();
+        static ref PREC_CLIMBER: PrattParser<Rule> = build_precedence_climber();
     }
 
     // based on https://docs.python.org/3/reference/expressions.html#operator-precedence
-    fn build_precedence_climber() -> PrecClimber<Rule> {
-        PrecClimber::new(vec![
-            Operator::new(Rule::op_ternary, Assoc::Right),
-            Operator::new(Rule::op_or, Assoc::Left),
-            Operator::new(Rule::op_and, Assoc::Left),
-            Operator::new(Rule::op_lt, Assoc::Left)
-                | Operator::new(Rule::op_lte, Assoc::Left)
-                | Operator::new(Rule::op_gt, Assoc::Left)
-                | Operator::new(Rule::op_gte, Assoc::Left)
-                | Operator::new(Rule::op_not_equal, Assoc::Left)
-                | Operator::new(Rule::op_equal, Assoc::Left),
-            Operator::new(Rule::op_bit_or, Assoc::Left),
-            Operator::new(Rule::op_bit_xor, Assoc::Left),
-            Operator::new(Rule::op_bit_and, Assoc::Left),
-            Operator::new(Rule::op_left_shift, Assoc::Left)
-                | Operator::new(Rule::op_right_shift, Assoc::Left),
-            Operator::new(Rule::op_add, Assoc::Left) | Operator::new(Rule::op_sub, Assoc::Left),
-            Operator::new(Rule::op_mul, Assoc::Left)
-                | Operator::new(Rule::op_div, Assoc::Left)
-                | Operator::new(Rule::op_rem, Assoc::Left),
-        ])
+    fn build_precedence_climber() -> PrattParser<Rule> {
+        PrattParser::new()
+            .op(Op::infix(Rule::op_ternary, Assoc::Right))
+            .op(Op::infix(Rule::op_or, Assoc::Left))
+            .op(Op::infix(Rule::op_and, Assoc::Left))
+            .op(Op::infix(Rule::op_lt, Assoc::Left)
+                | Op::infix(Rule::op_lte, Assoc::Left)
+                | Op::infix(Rule::op_gt, Assoc::Left)
+                | Op::infix(Rule::op_gte, Assoc::Left)
+                | Op::infix(Rule::op_not_equal, Assoc::Left)
+                | Op::infix(Rule::op_equal, Assoc::Left))
+            .op(Op::infix(Rule::op_bit_or, Assoc::Left))
+            .op(Op::infix(Rule::op_bit_xor, Assoc::Left))
+            .op(Op::infix(Rule::op_bit_and, Assoc::Left))
+            .op(Op::infix(Rule::op_left_shift, Assoc::Left)
+                | Op::infix(Rule::op_right_shift, Assoc::Left))
+            .op(Op::infix(Rule::op_add, Assoc::Left) | Op::infix(Rule::op_sub, Assoc::Left))
+            .op(Op::infix(Rule::op_mul, Assoc::Left)
+                | Op::infix(Rule::op_div, Assoc::Left)
+                | Op::infix(Rule::op_rem, Assoc::Left))
     }
 
     // Create an Expression from left and right terms and an operator
@@ -105,9 +104,13 @@ mod ast {
         })
     }
 
-    // Create an Expression from an `expression`. `build_factor` turns each term into an `Expression` and `infix_rule` turns each (Expression, operator, Expression) into an Expression
+    // Create an Expression from an `expression`. `build_factor` turns each term into
+    // an `Expression` and `infix_rule` turns each (Expression, operator, Expression) into an Expression
     pub fn climb(pair: Pair<Rule>) -> Box<Expression> {
-        PREC_CLIMBER.climb(pair.into_inner(), build_factor, infix_rule)
+        PREC_CLIMBER
+            .map_primary(build_factor)
+            .map_infix(infix_rule)
+            .parse(pair.into_inner())
     }
 
     // Create an Expression from a `unaried_term`.
