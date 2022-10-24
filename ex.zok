@@ -1,4 +1,2 @@
-def main(public field a, public field b) -> field:
-    field c = a + b
-    field d = c * a
-    return d
+def main(private field a, private field b) -> field:
+    return a + b

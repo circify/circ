@@ -1,0 +1,2 @@
+def main(private u8 x, private u8 y, private u8 z)-> u8:
+   return x + y + z

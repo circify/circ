@@ -19,6 +19,12 @@ pub struct Variable {
 /// generate spartan proof
 pub fn prove(inst: &Instance, witness: Assignment, inputs: &Assignment, num_cons: usize, num_vars: usize, num_inputs: usize) -> (NIZKGens, NIZK) {
     println!("Proving with Spartan");
+    assert_ne!(
+        num_cons,
+        0,
+        "No constraints"
+    );
+
     // produce public parameters
     let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
     // produce proof
@@ -39,7 +45,7 @@ pub fn verify(inst: &Instance, inputs: &Assignment, proof: NIZK, gens: &NIZKGens
 }
 
 /// circ R1cs -> spartan R1CSInstance
-pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: &R1cs<S>, prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (Instance, Assignment, Assignment, usize, usize, usize)
+pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (Instance, Assignment, Assignment, usize, usize, usize)
 {
 
     // spartan format mapper: CirC -> Spartan
@@ -48,16 +54,30 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: &R1cs<S>, prover_da
     let mut trans: HashMap<usize, usize> = HashMap::default(); // Circ -> spartan ids
     let mut itrans: HashMap<usize, usize> = HashMap::default(); // Circ -> spartan ids
 
+    // check modulus
+    let f_mod = prover_data.r1cs.modulus.modulus();
+    let s_mod = Integer::from_str_radix(
+        "7237005577332262213973186563042994240857116359379907606001950938285454250989",
+         10
+    ).unwrap();
+    assert_eq!(
+        &s_mod,
+        f_mod,
+        "\nR1CS has modulus \n{},\n but Spartan CS expects \n{}",
+        s_mod,
+        f_mod
+    );
+    
     let values = eval_inputs(inputs_map, prover_data);
 
-    for (idx,sig) in &r1cs.idxs_signals {
+    for (idx,sig) in &prover_data.r1cs.idxs_signals {
         
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
             None => panic!("Input/witness variable does not have matching evaluation")
         };
 
-        if r1cs.public_idxs.contains(&idx) {
+        if prover_data.r1cs.public_idxs.contains(&idx) {
             // input
             //println!("As public io: {}", sig);
 
@@ -74,7 +94,7 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: &R1cs<S>, prover_da
 
     }
 
-    assert_eq!(wit.len() + inp.len(), r1cs.next_idx);
+    assert_eq!(wit.len() + inp.len(), prover_data.r1cs.next_idx);
 
     let num_vars = wit.len();
     let const_id = wit.len();
@@ -94,8 +114,9 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: &R1cs<S>, prover_da
     let mut m_b: Vec<(usize, usize, [u8; 32])> = Vec::new();
     let mut m_c: Vec<(usize, usize, [u8; 32])> = Vec::new();
 
+    
     let mut i = 0; // constraint #
-    for (lc_a, lc_b, lc_c) in r1cs.constraints.iter() {
+    for (lc_a, lc_b, lc_c) in prover_data.r1cs.constraints.iter() {
 
         // circ Lc (const, monomials <Integer>) -> Vec<Variable>
         let a = lc_to_v(&lc_a, const_id, &trans);
@@ -114,11 +135,10 @@ pub fn r1cs_to_spartan<S: Eq + Hash + Clone + Display>(r1cs: &R1cs<S>, prover_da
         }
 
         i += 1;
-
     }
 
-
     let num_cons = i;
+
     let inst = Instance::new(num_cons, num_vars, num_inputs, &m_a, &m_b, &m_c).unwrap();
 
     // check if the instance we created is satisfiable
@@ -149,7 +169,7 @@ fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) ->
 fn val_to_scalar(v: &Value) -> Scalar {
     match v.sort() {
         Sort::Field(_) => return int_to_scalar(&v.as_pf().i()),
-        _ => panic!("Underlying value should be a field")
+        _ => panic!("Value should be a field"),
     };
 
 }

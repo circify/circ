@@ -295,11 +295,13 @@ fn main() {
         } => {
             println!("Converting to r1cs");
             let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs, FieldT::from(DFL_T.modulus()));
+
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
+
             println!("Final R1cs size: {}", r1cs.constraints().len());
             // save the optimized r1cs: the prover needs it to synthesize.
-            prover_data.r1cs = r1cs.clone();
+            prover_data.r1cs = r1cs;
             match action {
                 ProofAction::Count => (),
                 ProofAction::Setup => {
@@ -315,7 +317,8 @@ fn main() {
                 ProofAction::Spartan => {
                     let input_map = parse_value_map(&std::fs::read(options.inputs).unwrap());
                     println!("Converting R1CS to Spartan");
-                    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&r1cs, &prover_data, &input_map);
+                    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&prover_data, &input_map);
+
                     let (gens, proof) = spartan::prove(&inst, wit, &inps, num_cons, num_vars, num_inputs);
                     spartan::verify(&inst, &inps, proof, &gens);
                 
