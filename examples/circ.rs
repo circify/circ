@@ -47,11 +47,6 @@ use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
 
-// temp for inputs
-use circ::ir::term::Value;
-use std::io::{BufRead, BufReader};
-use rug::Integer;
-
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -318,7 +313,7 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::Spartan => {
-                    let input_map = parse_inputs(options.frontend.inputs.unwrap()).into_iter().collect();
+                    let input_map = parse_value_map(&std::fs::read(options.inputs).unwrap());
                     println!("Converting R1CS to Spartan");
                     let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&r1cs, &prover_data, &input_map);
                     let (gens, proof) = spartan::prove(&inst, wit, &inps, num_cons, num_vars, num_inputs);
