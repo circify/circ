@@ -140,33 +140,6 @@ impl<'a> ToABY<'a> {
         &self.cs.comps.get(&self.curr_comp).unwrap().metadata
     }
 
-    fn get_var_name(name: &String) -> String {
-        let new_name = name.to_string().replace('.', "_");
-        let n = new_name.split('_').collect::<Vec<&str>>();
-        if n.len() == 1 {
-            name.to_string()
-        } else {
-            let offset = n.iter().position(|&r| r == "lex0").unwrap();
-
-            let var_name = &n[offset + 1..];
-
-            match var_name.len() {
-                2 => var_name[0].to_string(),
-                3.. => {
-                    let l = var_name.len();
-                    format!(
-                        "{}_{}",
-                        &var_name[0..l - 2].to_vec().join("_"),
-                        var_name[l - 1]
-                    )
-                }
-                _ => {
-                    panic!("Invalid variable name: {}", name);
-                }
-            }
-        }
-    }
-
     fn get_term_share_type(&self, t: &Term) -> ShareType {
         let s_map = self.s_map.get(&self.curr_comp).unwrap();
         *s_map.get(t).unwrap()
@@ -307,17 +280,16 @@ impl<'a> ToABY<'a> {
             Op::Var(name, Sort::Bool) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
-                    let term_name = ToABY::get_var_name(name);
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t, to_share_type);
                     let op = "IN";
 
                     if vis == PUBLIC {
                         let bitlen = 1;
-                        let line = format!("3 1 {} {} {} {} {}\n", term_name, vis, bitlen, s, op);
+                        let line = format!("3 1 {} {} {} {} {}\n", name, vis, bitlen, s, op);
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, s, op);
+                        let line = format!("2 1 {} {} {} {}\n", name, vis, s, op);
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -435,17 +407,16 @@ impl<'a> ToABY<'a> {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
-                    let term_name = ToABY::get_var_name(name);
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t, to_share_type);
                     let op = "IN";
 
                     if vis == PUBLIC {
                         let bitlen = 32;
-                        let line = format!("3 1 {} {} {} {} {}\n", term_name, vis, bitlen, s, op);
+                        let line = format!("3 1 {} {} {} {} {}\n", name, vis, bitlen, s, op);
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {} {} {} {}\n", term_name, vis, s, op);
+                        let line = format!("2 1 {} {} {} {}\n", name, vis, s, op);
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -850,14 +821,10 @@ impl<'a> ToABY<'a> {
                 let key = line.split(' ').collect::<Vec<&str>>()[2];
                 bytecode_input_map.insert(key.to_string(), line.to_string());
             }
-            let input_order: Vec<String> = comp
+
+            let inputs: Vec<String> = comp
                 .metadata
                 .computation_inputs
-                .iter()
-                .map(ToABY::get_var_name)
-                .collect();
-
-            let inputs: Vec<String> = input_order
                 .iter()
                 .map(|x| {
                     if bytecode_input_map.contains_key(x) {

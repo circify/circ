@@ -1114,7 +1114,7 @@ impl CGen {
         self.circ_enter_fn(f.name.to_owned(), f.ret_ty.clone());
 
         for p in f.params.iter() {
-            let r = self.circ_declare_input(p.name.clone(), &p.ty, p.vis, None, true);
+            let r = self.circ_declare_input(p.name.clone(), &p.ty, p.vis, None, false);
             self.unwrap(r);
         }
 
@@ -1185,7 +1185,7 @@ impl CGen {
                 }
                 _ => param.ty.clone(),
             };
-            let r = self.circ_declare_input(p_name.to_string(), &p_ty, None, None, true);
+            let r = self.circ_declare_input(p_name.to_string(), &p_ty, None, None, false);
             self.unwrap(r);
         }
 
