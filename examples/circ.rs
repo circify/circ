@@ -65,9 +65,14 @@ struct Options {
     #[structopt(subcommand)]
     backend: Backend,
 
-    /// File with input witness
+    /// File with prover input
     #[structopt(long, default_value = "in", parse(from_os_str))]
-    inputs: PathBuf,    
+    pin: PathBuf,    
+
+    /// File with verifier input
+    #[structopt(long, default_value = "in", parse(from_os_str))]
+    vin: PathBuf,
+
 }
 
 #[derive(Debug, StructOpt)]
@@ -315,12 +320,11 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::Spartan => {
-                    let input_map = parse_value_map(&std::fs::read(options.inputs).unwrap());
-                    println!("Converting R1CS to Spartan");
-                    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&prover_data, &input_map);
-
-                    let (gens, proof) = spartan::prove(&inst, wit, &inps, num_cons, num_vars, num_inputs);
-                    spartan::verify(&inst, &inps, proof, &gens);
+                    let prover_input_map = parse_value_map(&std::fs::read(options.pin).unwrap());
+                    let (gens, inst, proof) = spartan::prove(&prover_data, &prover_input_map);
+                    
+                    let verifier_input_map = parse_value_map(&std::fs::read(options.vin).unwrap());
+                    spartan::verify(&verifier_data, &verifier_input_map, &gens, &inst, proof);
                 
                 }
             }

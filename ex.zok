@@ -1,2 +1,0 @@
-def main(private field a, private field b) -> field:
-    return a + b

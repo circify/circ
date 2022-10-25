@@ -16,8 +16,12 @@ pub struct Variable {
     value: [u8; 32],
 }
 
+
 /// generate spartan proof
-pub fn prove(inst: &Instance, witness: Assignment, inputs: &Assignment, num_cons: usize, num_vars: usize, num_inputs: usize) -> (NIZKGens, NIZK) {
+pub fn prove(prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (NIZKGens, Instance, NIZK) {
+    println!("Converting R1CS to Spartan");
+    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&prover_data, &inputs_map);
+
     println!("Proving with Spartan");
     assert_ne!(
         num_cons,
@@ -29,17 +33,26 @@ pub fn prove(inst: &Instance, witness: Assignment, inputs: &Assignment, num_cons
     let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
     // produce proof
     let mut prover_transcript = Transcript::new(b"nizk_example");
-    let pf = NIZK::prove(inst, witness, inputs, &gens, &mut prover_transcript);
+    let pf = NIZK::prove(&inst, wit, &inps, &gens, &mut prover_transcript);
 
-    return (gens, pf);
+    return (gens, inst, pf);
 }
 
 /// verify spartan proof
-pub fn verify(inst: &Instance, inputs: &Assignment, proof: NIZK, gens: &NIZKGens) {
+pub fn verify(verifier_data: &VerifierData, inputs_map: &HashMap<String, Value>, gens: &NIZKGens, inst: &Instance, proof: NIZK) {
+    
+    let values = verifier_data.eval(inputs_map);
+
+    let mut inp = Vec::new();
+    for v in &values {
+        let scalar = int_to_scalar(v);
+        inp.push(scalar.to_bytes());
+    }
+    let inputs = InputsAssignment::new(&inp).unwrap();
+
     println!("Verifying with Spartan");
-    // verify proof
     let mut verifier_transcript = Transcript::new(b"nizk_example");
-    assert!(proof.verify(&inst, inputs, &mut verifier_transcript, gens).is_ok());
+    assert!(proof.verify(inst, &inputs, &mut verifier_transcript, gens).is_ok());
 
     println!("Proof Verification Successful!");
 }
@@ -79,13 +92,13 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
 
         if prover_data.r1cs.public_idxs.contains(&idx) {
             // input
-            //println!("As public io: {}", sig);
+            // println!("As public io: {}", sig);
 
             itrans.insert(*idx, inp.len());
             inp.push(scalar.to_bytes());
         } else {
-             // witness
-            //println!("As private witness: {}", sig);
+            // witness
+            // println!("As private witness: {}", sig);
 
             trans.insert(*idx, wit.len());
             wit.push(scalar.to_bytes());
