@@ -2093,5 +2093,29 @@ impl Computation {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+/// A map of IR computations.
+pub struct Computations {
+    /// A map of function name --> function computation
+    pub comps: FxHashMap<String, Computation>,
+}
+
+impl Computations {
+    /// Create new empty computations.
+    pub fn new() -> Self {
+        Self {
+            comps: FxHashMap::default(),
+        }
+    }
+
+    /// Get computation by name
+    pub fn get(&self, name: &str) -> &Computation {
+        match self.comps.get(name) {
+            Some(c) => c,
+            None => panic!("Unknown computation: {}", name),
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod test;
