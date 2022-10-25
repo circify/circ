@@ -1,6 +1,7 @@
 use bls12_381::Bls12;
 use circ::ir::term::text::parse_value_map;
-use circ::target::r1cs::bellman::{prove, verify};
+use circ::target::r1cs::bellman;
+use circ::target::r1cs::spartan;
 use std::path::PathBuf;
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
@@ -16,6 +17,10 @@ struct Options {
     proof: PathBuf,
     #[structopt(long, default_value = "in", parse(from_os_str))]
     inputs: PathBuf,
+    #[structopt(long, default_value = "pin", parse(from_os_str))]
+    pin: PathBuf,
+    #[structopt(long, default_value = "vin", parse(from_os_str))]
+    vin: PathBuf,
     #[structopt(long)]
     action: ProofAction,
 }
@@ -25,6 +30,7 @@ arg_enum! {
     enum ProofAction {
         Prove,
         Verify,
+        Spartan,
     }
 }
 
@@ -34,15 +40,25 @@ fn main() {
         .format_timestamp(None)
         .init();
     let opts = Options::from_args();
-    let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
     match opts.action {
         ProofAction::Prove => {
+            let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
             println!("Proving");
-            prove::<Bls12, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
+            bellman::prove::<Bls12, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
         }
         ProofAction::Verify => {
+            let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
             println!("Verifying");
-            verify::<Bls12, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
+            bellman::verify::<Bls12, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
+        }
+        ProofAction::Spartan => {
+            println!("Spartan");
+
+            let prover_input_map = parse_value_map(&std::fs::read(opts.pin).unwrap());
+            let (gens, inst, proof) = spartan::prove(opts.prover_key, &prover_input_map).unwrap();
+            let verifier_input_map = parse_value_map(&std::fs::read(opts.vin).unwrap());
+            spartan::verify(opts.verifier_key, &verifier_input_map, &gens, &inst, proof).unwrap();
+
         }
     }
 }

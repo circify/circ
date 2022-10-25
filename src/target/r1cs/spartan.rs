@@ -8,6 +8,10 @@ use merlin::Transcript;
 use libspartan::{Instance, NIZKGens, NIZK};
 use gmp_mpfr_sys::gmp::limb_t;
 use fxhash::FxHashMap as HashMap;
+use std::path::Path;
+use std::fs::File;
+use bincode::{serialize_into, deserialize_from};
+use std::io;
 
 /// Hold Spartan variables
 #[derive(Debug)]
@@ -18,7 +22,9 @@ pub struct Variable {
 
 
 /// generate spartan proof
-pub fn prove(prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (NIZKGens, Instance, NIZK) {
+pub fn prove<P: AsRef<Path>>(p_path: P, inputs_map: &HashMap<String, Value>) -> io::Result<(NIZKGens, Instance, NIZK)> {
+    let prover_data = read_prover_data::<_>(p_path)?;
+
     println!("Converting R1CS to Spartan");
     let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&prover_data, &inputs_map);
 
@@ -35,12 +41,13 @@ pub fn prove(prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (
     let mut prover_transcript = Transcript::new(b"nizk_example");
     let pf = NIZK::prove(&inst, wit, &inps, &gens, &mut prover_transcript);
 
-    return (gens, inst, pf);
+    return Ok((gens, inst, pf));
 }
 
 /// verify spartan proof
-pub fn verify(verifier_data: &VerifierData, inputs_map: &HashMap<String, Value>, gens: &NIZKGens, inst: &Instance, proof: NIZK) {
-    
+pub fn verify<P: AsRef<Path>>(v_path: P, inputs_map: &HashMap<String, Value>, gens: &NIZKGens, inst: &Instance, proof: NIZK) -> io::Result<()> {
+    let verifier_data = read_verifier_data::<_>(v_path)?;
+
     let values = verifier_data.eval(inputs_map);
 
     let mut inp = Vec::new();
@@ -55,6 +62,7 @@ pub fn verify(verifier_data: &VerifierData, inputs_map: &HashMap<String, Value>,
     assert!(proof.verify(inst, &inputs, &mut verifier_transcript, gens).is_ok());
 
     println!("Proof Verification Successful!");
+    Ok(())
 }
 
 /// circ R1cs -> spartan R1CSInstance
@@ -230,3 +238,48 @@ fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize,usize>) -> Vec<Variab
     v
 }
 
+/// write prover and verifier data to file
+pub fn write_data<P1: AsRef<Path>, P2: AsRef<Path>>(
+    p_path: P1,
+    v_path:P2,
+    p_data: &ProverData,
+    v_data: &VerifierData,
+) -> io::Result<()> {
+    write_prover_data(p_path, p_data)?;
+    write_verifier_data(v_path, v_data)?;
+    Ok(())
+}
+
+fn write_prover_data<P: AsRef<Path>>(
+    path: P,
+    data: &ProverData,
+) -> io::Result<()> {
+    let mut file = File::create(path)?;
+    serialize_into(&mut file, &data).unwrap();
+    Ok(())
+}
+
+fn read_prover_data<P: AsRef<Path>>(
+    path: P,
+) -> io::Result<ProverData> {
+    let mut file = File::open(path)?;
+    let data: ProverData = deserialize_from(&mut file).unwrap();
+    Ok(data)
+}
+
+fn write_verifier_data<P: AsRef<Path>>(
+    path: P,
+    data: &VerifierData,
+) -> io::Result<()> {
+    let mut file = File::create(path)?;
+    serialize_into(&mut file, &data).unwrap();
+    Ok(())
+}
+
+fn read_verifier_data<P: AsRef<Path>>(
+    path: P,
+) -> io::Result<VerifierData> {
+    let mut file = File::open(path)?;
+    let data: VerifierData = deserialize_from(&mut file).unwrap();
+    Ok(data)
+}

@@ -28,9 +28,9 @@ use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::bellman::{gen_params, prove, verify};
+use circ::target::r1cs::bellman::gen_params;
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::spartan;
+use circ::target::r1cs::spartan::write_data;
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
@@ -64,14 +64,6 @@ struct Options {
 
     #[structopt(subcommand)]
     backend: Backend,
-
-    /// File with prover input
-    #[structopt(long, default_value = "in", parse(from_os_str))]
-    pin: PathBuf,    
-
-    /// File with verifier input
-    #[structopt(long, default_value = "in", parse(from_os_str))]
-    vin: PathBuf,
 
 }
 
@@ -156,7 +148,7 @@ arg_enum! {
     enum ProofAction {
         Count,
         Setup,
-        Spartan,
+        SpartanSetup,
     }
 }
 
@@ -320,13 +312,8 @@ fn main() {
                     )
                     .unwrap();
                 }
-                ProofAction::Spartan => {
-                    let prover_input_map = parse_value_map(&std::fs::read(options.pin).unwrap());
-                    let (gens, inst, proof) = spartan::prove(&prover_data, &prover_input_map);
-                    
-                    let verifier_input_map = parse_value_map(&std::fs::read(options.vin).unwrap());
-                    spartan::verify(&verifier_data, &verifier_input_map, &gens, &inst, proof);
-                
+                ProofAction::SpartanSetup => {
+                    write_data::<_,_>(prover_key, verifier_key, &prover_data, &verifier_data).unwrap();               
                 }
             }
         }
