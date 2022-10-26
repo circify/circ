@@ -1,6 +1,6 @@
 #define D 2 // Dimension (fix)
-#define NA 10 // Number of data pounsigneds from Party A
-#define NB 10 // Number of data pounsigneds from Party B
+#define NA 10 // Number of data points from Party A
+#define NB 10 // Number of data points from Party B
 #define NC 5 // Number of clusters
 #define PRECISION 4
 
@@ -9,28 +9,28 @@
 #define LEN_INNER (LEN/LEN_OUTER)
 
 struct input_a{
-	unsigned dataA[D*NA];
+	int dataA[D*NA];
 };
 
 struct input_b {
-	unsigned dataB[D*NA];
+	int dataB[D*NA];
 };
 
 struct output {
-	unsigned cluster[D*NC];
+	int cluster[D*NC];
 };
 
 
-unsigned dist2(unsigned x1, unsigned y1, unsigned x2, unsigned y2) {
+int dist2(int x1, int y1, int x2, int y2) {
   return (x1-x2) * (x1-x2) + (y1 - y2) * (y1 - y2);
 }
 
 // Computes minimum in a tree based fashion and associated with aux element
-unsigned min_with_aux(unsigned *data, unsigned *aux, unsigned len, unsigned stride) {
+int min_with_aux(int *data, int *aux, int len, int stride) {
 	// if(stride > len) {
 	// 	return aux[0];
 	// } else {
-	// 	for(unsigned i = 0; i + stride < len; i+=stride<<1) {
+	// 	for(int i = 0; i + stride < len; i+=stride<<1) {
 	// 		if(data[i+stride] < data[i]) {
 	// 			data[i] = data[i+stride];
 	// 			aux[i] = aux[i+stride];
@@ -38,9 +38,9 @@ unsigned min_with_aux(unsigned *data, unsigned *aux, unsigned len, unsigned stri
 	// 	}
 	// 	return min_with_aux(data, aux, len, stride<<1);
 	// }
-	unsigned min = data[0];
-	unsigned res = 0;
-	for(unsigned i = 1; i < len; i++){
+	int min = data[0];
+	int res = 0;
+	for(int i = 1; i < len; i++){
 		if(data[i] < min) {
 			min = data[i];
 			res = i;
@@ -58,11 +58,11 @@ unsigned min_with_aux(unsigned *data, unsigned *aux, unsigned len, unsigned stri
 /**
  * Iteration loop unrolled and depth minimized by computing minimum over tree structure
  */ 
-void iteration_unrolled_inner_depth(unsigned *data_inner, unsigned *cluster, unsigned *OUTPUT_cluster, unsigned *OUTPUT_count, unsigned len_inner, unsigned num_cluster) {
-	unsigned i,c;
-	unsigned dist[num_cluster];
-	unsigned pos[num_cluster];
-	unsigned bestMap_inner[len_inner];
+void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_cluster, int *OUTPUT_count, int len_inner, int num_cluster) {
+	int i,c;
+	int dist[num_cluster];
+	int pos[num_cluster];
+	int bestMap_inner[len_inner];
 	
 	for(c = 0u; c < num_cluster; c++) {
 		OUTPUT_cluster[c*D] = 0;
@@ -72,15 +72,15 @@ void iteration_unrolled_inner_depth(unsigned *data_inner, unsigned *cluster, uns
 	
 	// Compute nearest clusters for Data item i
 	for(i = 0u; i < len_inner; i++) {
-	  unsigned dx = data_inner[i*D];
-	  unsigned dy = data_inner[i*D+1];
+	  int dx = data_inner[i*D];
+	  int dy = data_inner[i*D+1];
   
 	  for(c = 0u; c < num_cluster; c++) {
 			pos[c]=c;
 			dist[c] = dist2(cluster[D*c], cluster[D*c+1u], dx, dy);
 		}
 		bestMap_inner[i] = min_with_aux(dist, pos, num_cluster, 1);
-		unsigned cc = bestMap_inner[i];
+		int cc = bestMap_inner[i];
 		OUTPUT_cluster[cc*D] += data_inner[i*D];
 		OUTPUT_cluster[cc*D+1u] += data_inner[i*D+1];
 		OUTPUT_count[cc]++;		
@@ -90,11 +90,11 @@ void iteration_unrolled_inner_depth(unsigned *data_inner, unsigned *cluster, uns
 /**
  * Iteration unrolled outer loop
  */ 
-void iteration_unrolled_outer(unsigned *data, unsigned *cluster, unsigned *OUTPUT_cluster) {
-	// unsigned j, c;
-	unsigned j,c;	
-	// unsigned count[NC];
-	unsigned count[NC];
+void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
+	// int j, c;
+	int j,c;	
+	// int count[NC];
+	int count[NC];
 	
 	// Set Outer result
 	for(c = 0u; c < NC; c++) {
@@ -104,27 +104,27 @@ void iteration_unrolled_outer(unsigned *data, unsigned *cluster, unsigned *OUTPU
 	}	
 	
 	// TODO: loop_clusterD1 -- 2d arrays
-	unsigned loop_clusterD1[NC][LEN_OUTER];
-	unsigned loop_clusterD2[NC][LEN_OUTER];
-	// unsigned loop_count[NC][LEN_OUTER];
-	unsigned loop_count[NC][LEN_OUTER];
+	int loop_clusterD1[NC][LEN_OUTER];
+	int loop_clusterD2[NC][LEN_OUTER];
+	// int loop_count[NC][LEN_OUTER];
+	int loop_count[NC][LEN_OUTER];
 	
 	
 	// Compute decomposition
 	for(j = 0u; j < LEN_OUTER; j++) {
 		// Copy data, fasthack for scalability
-		unsigned data_offset = j*LEN_INNER*D;
-		unsigned data_inner[LEN_INNER*D];
+		int data_offset = j*LEN_INNER*D;
+		int data_inner[LEN_INNER*D];
 		
-		// memcpy(data_inner, data+data_offset, LEN_INNER*D*sizeof(unsigned));
-		for (unsigned i = 0; i < LEN_INNER * D; i++)
+		// memcpy(data_inner, data+data_offset, LEN_INNER*D*sizeof(int));
+		for (int i = 0; i < LEN_INNER * D; i++)
 		{
 			data_inner[i] = data[i + data_offset];
 		}
 
-		unsigned cluster_inner[NC*D];
-		// unsigned count_inner[NC];
-		unsigned count_inner[NC];
+		int cluster_inner[NC*D];
+		// int count_inner[NC];
+		int count_inner[NC];
 		
 		iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner, LEN_INNER, NC);
 
@@ -154,10 +154,10 @@ void iteration_unrolled_outer(unsigned *data, unsigned *cluster, unsigned *OUTPU
 
 
 
-void kmeans(unsigned *data, unsigned *OUTPUT_res) {
-	// unsigned c, p;
-	unsigned c, p;
-	unsigned cluster[NC*D];
+void kmeans(int *data, int *OUTPUT_res) {
+	// int c, p;
+	int c, p;
+	int cluster[NC*D];
 
 	// Assign random start cluster from data
 	for(c = 0u; c < NC; c++) {
@@ -166,7 +166,7 @@ void kmeans(unsigned *data, unsigned *OUTPUT_res) {
 	}
 
 	for (p = 0u; p < PRECISION; p++) { 
-		unsigned new_cluster[NC*D];
+		int new_cluster[NC*D];
 		iteration_unrolled_outer(data, cluster, new_cluster);
 		// iteration(data, cluster, new_cluster, len, num_cluster);
 		
@@ -183,16 +183,16 @@ void kmeans(unsigned *data, unsigned *OUTPUT_res) {
 }
 
 
-unsigned main(__attribute__((private(0))) unsigned a[20], __attribute__((private(1))) unsigned b[20])
+int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
 {
     // init data
-    unsigned data[LEN * D];
-    for (unsigned i = 0; i < D * NA; i++)
+    int data[LEN * D];
+    for (int i = 0; i < D * NA; i++)
     {
         data[i] = a[i];
     }
-    unsigned offset = D * NA;
-    for (unsigned i = 0; i < D * NB; i++)
+    int offset = D * NA;
+    for (int i = 0; i < D * NB; i++)
     {
         data[i + offset] = b[i];
     }
@@ -200,8 +200,8 @@ unsigned main(__attribute__((private(0))) unsigned a[20], __attribute__((private
     struct output output;
     kmeans(data, output.cluster);
    
-    unsigned sum = 0;
-    for (unsigned i = 0; i < D * NC; i++)
+    int sum = 0;
+    for (int i = 0; i < D * NC; i++)
     {
         sum += output.cluster[i];
     }
