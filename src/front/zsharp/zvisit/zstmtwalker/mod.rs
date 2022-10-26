@@ -132,11 +132,13 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             .zip(call.arguments.expressions.iter_mut())
             .try_for_each(|(pty, arg)| self.unify_expression(pty, arg))?;
 
-        let ret_ty = fdef.returns.first().cloned().unwrap_or_else(|| {
-            ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType {
-                span: call.span.clone(),
-            }))
-        });
+        let ret_ty =
+            fdef.returns
+                .first()
+                .cloned()
+                .unwrap_or(ast::Type::Basic(ast::BasicType::Boolean(
+                    ast::BooleanType { span: call.span },
+                )));
         if let Some(ty) = rty {
             self.eq_type(ty, &ret_ty)?;
         }
@@ -211,9 +213,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         assert!(!at.dimensions.is_empty());
 
         // XXX(unimpl) does not check array lengths, just unifies ai.count with U32!
-        let u32_ty = Basic(ast::BasicType::U32(ast::U32Type {
-            span: ai.span.clone(),
-        }));
+        let u32_ty = Basic(ast::BasicType::U32(ast::U32Type { span: ai.span }));
         self.unify_expression(u32_ty, &mut *ai.count)?;
 
         let arr_ty = if at.dimensions.len() > 1 {
@@ -297,7 +297,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             ast::Type::Array(ast::ArrayType {
                 ty: at.ty.clone(),
                 dimensions: Vec::from(&at.dimensions[1..]),
-                span: at.span.clone(),
+                span: at.span,
             })
         };
         ia.expressions.iter_mut().try_for_each(|soe| match soe {
@@ -320,9 +320,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         te: &mut ast::TernaryExpression<'ast>,
     ) -> ZVisitorResult {
         // first expr must have type Bool, others the expected output type
-        let bool_ty = ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType {
-            span: te.span.clone(),
-        }));
+        let bool_ty = ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType { span: te.span }));
         self.unify_expression(bool_ty, &mut te.first)?;
         self.unify_expression(ty.clone(), &mut te.second)?;
         self.unify_expression(ty, &mut te.third)
@@ -351,12 +349,9 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 )),
             },
             RightShift | LeftShift => match &bt {
-                U8(_) | U16(_) | U32(_) | U64(_) => Ok((
-                    Basic(bt),
-                    Basic(U32(ast::U32Type {
-                        span: be.span.clone(),
-                    })),
-                )),
+                U8(_) | U16(_) | U32(_) | U64(_) => {
+                    Ok((Basic(bt), Basic(U32(ast::U32Type { span: be.span }))))
+                }
                 _ => Err(ZVisitorError(
                     "ZStatementWalker: << and >> operators require U* left operand".to_owned(),
                 )),
@@ -421,12 +416,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             },
             Pow => match &bt {
                 // XXX does POW operator really require U32 RHS?
-                Field(_) => Ok((
-                    Basic(bt),
-                    Basic(U32(ast::U32Type {
-                        span: be.span.clone(),
-                    })),
-                )),
+                Field(_) => Ok((Basic(bt), Basic(U32(ast::U32Type { span: be.span })))),
                 _ => Err(ZVisitorError(
                     "ZStatementWalker: pow operator must take Field LHS and U32 RHS".to_owned(),
                 )),
@@ -539,21 +529,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                             "ZStatementWalker: DecimalLiteral wanted Bool:\n{}",
                             span_to_string(&dle.span),
                         ))),
-                        Field(_) => Ok(DS::Field(ast::FieldSuffix {
-                            span: dle.span.clone(),
-                        })),
-                        U8(_) => Ok(DS::U8(ast::U8Suffix {
-                            span: dle.span.clone(),
-                        })),
-                        U16(_) => Ok(DS::U16(ast::U16Suffix {
-                            span: dle.span.clone(),
-                        })),
-                        U32(_) => Ok(DS::U32(ast::U32Suffix {
-                            span: dle.span.clone(),
-                        })),
-                        U64(_) => Ok(DS::U64(ast::U64Suffix {
-                            span: dle.span.clone(),
-                        })),
+                        Field(_) => Ok(DS::Field(ast::FieldSuffix { span: dle.span })),
+                        U8(_) => Ok(DS::U8(ast::U8Suffix { span: dle.span })),
+                        U16(_) => Ok(DS::U16(ast::U16Suffix { span: dle.span })),
+                        U32(_) => Ok(DS::U32(ast::U32Suffix { span: dle.span })),
+                        U64(_) => Ok(DS::U64(ast::U64Suffix { span: dle.span })),
                     }
                     .map(|ds| {
                         dle.suffix.replace(ds);
@@ -684,7 +664,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         if self.generic_defined(&id.value) {
             // generics are always U32
             Ok(ast::Type::Basic(ast::BasicType::U32(ast::U32Type {
-                span: id.span.clone(),
+                span: id.span,
             })))
         } else if let Some(t) = self.zgen.const_ty_lookup_(&id.value) {
             Ok(t.clone())
@@ -775,7 +755,7 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         asrt: &mut ast::AssertionStatement<'ast>,
     ) -> ZVisitorResult {
         let bool_ty = ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType {
-            span: asrt.span.clone(),
+            span: asrt.span,
         }));
         self.unify(Some(bool_ty), &mut asrt.expression)?;
         walk_assertion_statement(self, asrt)

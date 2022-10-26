@@ -189,8 +189,6 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 // TODO: add udef check
                 // TODO: add int resize
                 // let term_ = int_resize(s, w, to_s, to_w, term.clone());
-                println!("HERE!!!!");
-                println!("to_s: {}", to_s);
                 CTerm {
                     term: CTermData::CInt(to_s, to_w, term.clone()),
                     udef: t.udef,

@@ -774,7 +774,7 @@ impl<'ast> ZGen<'ast> {
                         .number
                         .as_ref()
                         .unwrap_or_else(|| self.err("No party number", &private.span));
-                    let num_val = (&num_str.value[1..num_str.value.len() - 1])
+                    let num_val = num_str.value[1..num_str.value.len() - 1]
                         .parse::<u8>()
                         .unwrap_or_else(|e| {
                             self.err(format!("Bad party number: {}", e), &private.span)

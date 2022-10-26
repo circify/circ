@@ -101,22 +101,22 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
             self.found = true;
             dle.suffix.replace(match self.to_ty.as_ref().unwrap() {
                 Ty::Uint(8) => Ok(ast::DecimalSuffix::U8(ast::U8Suffix {
-                    span: dle.span.clone(),
+                    span: dle.span,
                 })),
                 Ty::Uint(16) => Ok(ast::DecimalSuffix::U16(ast::U16Suffix {
-                    span: dle.span.clone(),
+                    span: dle.span,
                 })),
                 Ty::Uint(32) => Ok(ast::DecimalSuffix::U32(ast::U32Suffix {
-                    span: dle.span.clone(),
+                    span: dle.span,
                 })),
                 Ty::Uint(64) => Ok(ast::DecimalSuffix::U64(ast::U64Suffix {
-                    span: dle.span.clone(),
+                    span: dle.span,
                 })),
                 Ty::Uint(_) => Err(
                     "ZConstLiteralRewriter: Uint size must be divisible by 8".to_string(),
                 ),
                 Ty::Field => Ok(ast::DecimalSuffix::Field(ast::FieldSuffix {
-                    span: dle.span.clone(),
+                    span: dle.span,
                 })),
                 _ => Err(
                     "ZConstLiteralRewriter: rewriting DecimalLiteralExpression to incompatible type"

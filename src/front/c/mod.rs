@@ -1,6 +1,7 @@
 //! The C front-end
 
 mod ast_utils;
+pub mod cvisit;
 mod parser;
 mod term;
 mod types;
@@ -18,6 +19,7 @@ use lang_c::ast::*;
 use lang_c::span::Node;
 use log::debug;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -80,6 +82,7 @@ struct CGen {
     structs: HashMap<String, Ty>,
     functions: HashMap<String, FnInfo>,
     typedefs: HashMap<String, Ty>,
+    ret_ty: RefCell<Option<Ty>>,
 }
 
 impl CGen {
@@ -91,6 +94,7 @@ impl CGen {
             structs: HashMap::default(),
             functions: HashMap::default(),
             typedefs: HashMap::default(),
+            ret_ty: RefCell::new(None),
         };
         this.circ
             .cir_ctx()
@@ -490,11 +494,26 @@ impl CGen {
 
     fn gen_assign(&mut self, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
         match loc {
-            CLoc::Var(l) => Ok(self
-                .circ
-                .assign(l, Val::Term(val))
-                .map_err(|e| format!("{}", e))?
-                .unwrap_term()),
+            CLoc::Var(l) => {
+                let org_type = self
+                    .circ
+                    .get_value(l.clone())
+                    .map_err(|e| format!("{}", e))?
+                    .unwrap_term()
+                    .term
+                    .type_();
+                let new_type = val.term.type_();
+                // unsigned type casting
+                let new_val = match (&org_type, &new_type) {
+                    (Ty::Int(sa, _), Ty::Int(sb, _)) if sa != sb => cast(Some(org_type), val),
+                    (_, _) => val,
+                };
+                Ok(self
+                    .circ
+                    .assign(l, Val::Term(new_val))
+                    .map_err(|e| format!("{}", e))?
+                    .unwrap_term())
+            }
             CLoc::Idx(l, idx) => {
                 let old_inner: CTerm = match *l {
                     CLoc::Var(inner_loc) => self
@@ -548,7 +567,6 @@ impl CGen {
     }
 
     fn const_(&self, c: &Constant) -> CTerm {
-        println!("Const");
         match c {
             // TODO: move const integer function out to separate function
             Constant::Integer(i) => {
@@ -675,7 +693,6 @@ impl CGen {
                     BinaryOperator::Assign => {
                         let loc = self.gen_lval(&bin_op.lhs.node);
                         let val = self.gen_expr(&bin_op.rhs.node);
-                        println!("assign!: val: {}", val);
                         self.gen_assign(loc, val)
                     }
                     BinaryOperator::AssignPlus | BinaryOperator::AssignDivide => {
@@ -796,6 +813,9 @@ impl CGen {
                     .iter()
                     .map(|e| self.gen_expr(&e.node))
                     .collect::<Vec<_>>();
+
+                // Add return ty
+                self.ret_ty_put(ret_ty.clone());
 
                 // setup stack frame for entry function
                 self.circ.enter_fn(name, ret_ty.clone());
@@ -1033,7 +1053,9 @@ impl CGen {
                 match ret {
                     Some(expr) => {
                         let ret = self.gen_expr(&expr.node);
-                        let ret_res = self.circ.return_(Some(ret));
+                        let ret_ty = self.ret_ty_take();
+                        let new_ret = cast(ret_ty, ret);
+                        let ret_res = self.circ.return_(Some(new_ret));
                         self.unwrap(ret_res);
                     }
                     None => {
@@ -1076,6 +1098,9 @@ impl CGen {
             .get(n)
             .unwrap_or_else(|| panic!("No function '{}'", n))
             .clone();
+
+        // Add return ty
+        self.ret_ty_put(f.ret_ty.clone());
 
         // setup stack frame for entry function
         self.circ.enter_fn(f.name.to_owned(), f.ret_ty.clone());
@@ -1137,5 +1162,13 @@ impl CGen {
                 _ => unimplemented!("Haven't implemented node: {:?}", n.node),
             };
         }
+    }
+
+    fn ret_ty_put(&self, ret_ty: Option<Ty>) {
+        self.ret_ty.replace(ret_ty);
+    }
+
+    fn ret_ty_take(&self) -> Option<Ty> {
+        self.ret_ty.borrow_mut().take()
     }
 }

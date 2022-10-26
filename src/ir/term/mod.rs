@@ -148,6 +148,10 @@ pub enum Op {
 
     /// Call a function (name, argument sorts, return sort)
     Call(String, Vec<Sort>, Sort),
+
+    /// Cyclic right rotation of an array
+    /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
+    Rot(usize),
 }
 
 /// Boolean AND
@@ -274,6 +278,7 @@ impl Op {
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
             Op::Call(_, args, _) => Some(args.len()),
+            Op::Rot(_) => Some(1),
         }
     }
 }
@@ -320,6 +325,7 @@ impl Display for Op {
             Op::Update(i) => write!(f, "(update {})", i),
             Op::Map(op) => write!(f, "(map({}))", op),
             Op::Call(name, _, _) => write!(f, "fn:{}", name),
+            Op::Rot(i) => write!(f, "(rot {})", i),
         }
     }
 }
@@ -1664,6 +1670,28 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             }
             Value::Array(res)
         }
+        Op::Rot(i) => {
+            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
+            let iter = match check(&c.cs[0]) {
+                Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                _ => panic!("Input type should be Array"),
+            };
+            let (mut res, len) = match check(&c.cs[0]) {
+                Sort::Array(k, v, n) => (Array::default((*k).clone(), &v, n), n),
+                _ => panic!("Output type of rot should be Array"),
+            };
+
+            // calculate new rotation amount
+            let rot = *i % len;
+            for (idx, idx_val) in iter {
+                let w = idx_val.as_bv().width();
+                let new_idx = Value::BitVector(BitVector::new(Integer::from((idx + rot) % len), w));
+                let new_val = a.select(&idx_val);
+                res.map.insert(new_idx, new_val);
+            }
+            Value::Array(res)
+        }
+
         o => unimplemented!("eval: {:?}", o),
     };
     vs.insert(c.clone(), v.clone());
@@ -1851,7 +1879,7 @@ impl ComputationMetadata {
     /// Get all public inputs to the computation itself.
     ///
     /// Excludes pre-computation inputs
-    pub fn public_input_names<'a>(&'a self) -> impl Iterator<Item = &str> + 'a {
+    pub fn public_input_names(&'_ self) -> impl Iterator<Item = &str> + '_ {
         self.input_vis.iter().filter_map(move |(name, party)| {
             if party.1.is_none() && self.computation_inputs.contains(name) {
                 Some(name.as_str())
