@@ -20,6 +20,7 @@ use lang_c::ast::*;
 use lang_c::span::Node;
 use log::debug;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
