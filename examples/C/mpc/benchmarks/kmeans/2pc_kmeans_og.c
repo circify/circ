@@ -50,10 +50,10 @@ int min_with_aux(int *data, int *aux, int len, int stride) {
 }
 
 
-#define ADD2(X,A)  A[X] + A[X+1u]
-#define ADD4(X,A)  ADD2(X,A) + ADD2(X+2u,A)
-#define ADD8(X,A)  ADD4(X,A) + ADD4(X+4u,A)
-#define ADD10(X,A)  ADD8(X,A) + ADD2(X+8u,A)
+#define ADD2(X,A)  A[X] + A[X+1]
+#define ADD4(X,A)  ADD2(X,A) + ADD2(X+2,A)
+#define ADD8(X,A)  ADD4(X,A) + ADD4(X+4,A)
+#define ADD10(X,A)  ADD8(X,A) + ADD2(X+8,A)
 
 /**
  * Iteration loop unrolled and depth minimized by computing minimum over tree structure
@@ -64,25 +64,25 @@ void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_c
 	int pos[num_cluster];
 	int bestMap_inner[len_inner];
 	
-	for(c = 0u; c < num_cluster; c++) {
+	for(c = 0; c < num_cluster; c++) {
 		OUTPUT_cluster[c*D] = 0;
-		OUTPUT_cluster[c*D+1u] = 0;
+		OUTPUT_cluster[c*D+1] = 0;
 		OUTPUT_count[c] = 0;
 	}	
 	
 	// Compute nearest clusters for Data item i
-	for(i = 0u; i < len_inner; i++) {
+	for(i = 0; i < len_inner; i++) {
 	  int dx = data_inner[i*D];
 	  int dy = data_inner[i*D+1];
   
-	  for(c = 0u; c < num_cluster; c++) {
+	  for(c = 0; c < num_cluster; c++) {
 			pos[c]=c;
-			dist[c] = dist2(cluster[D*c], cluster[D*c+1u], dx, dy);
+			dist[c] = dist2(cluster[D*c], cluster[D*c+1], dx, dy);
 		}
 		bestMap_inner[i] = min_with_aux(dist, pos, num_cluster, 1);
 		int cc = bestMap_inner[i];
 		OUTPUT_cluster[cc*D] += data_inner[i*D];
-		OUTPUT_cluster[cc*D+1u] += data_inner[i*D+1];
+		OUTPUT_cluster[cc*D+1] += data_inner[i*D+1];
 		OUTPUT_count[cc]++;		
 	}
 }
@@ -97,9 +97,9 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 	int count[NC];
 	
 	// Set Outer result
-	for(c = 0u; c < NC; c++) {
+	for(c = 0; c < NC; c++) {
 		OUTPUT_cluster[c*D] = 0;
-		OUTPUT_cluster[c*D+1u] = 0;
+		OUTPUT_cluster[c*D+1] = 0;
 		count[c] = 0;
 	}	
 	
@@ -111,7 +111,7 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 	
 	
 	// Compute decomposition
-	for(j = 0u; j < LEN_OUTER; j++) {
+	for(j = 0; j < LEN_OUTER; j++) {
 		// Copy data, fasthack for scalability
 		int data_offset = j*LEN_INNER*D;
 		int data_inner[LEN_INNER*D];
@@ -129,25 +129,25 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 		iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner, LEN_INNER, NC);
 
 		// Depth: num_cluster Addition
-		for(c = 0u; c < NC; c++) {
+		for(c = 0; c < NC; c++) {
 			loop_clusterD1[c][j] = cluster_inner[c*D];
-			loop_clusterD2[c][j] = cluster_inner[c*D+1u];
+			loop_clusterD2[c][j] = cluster_inner[c*D+1];
 			loop_count[c][j] = count_inner[c];
 		}
 	}
 	
-	for(c = 0u; c < NC; c++) {
+	for(c = 0; c < NC; c++) {
 		OUTPUT_cluster[c*D] = ADD10(0,loop_clusterD1[c]);
-		OUTPUT_cluster[c*D+1u] = ADD10(0,loop_clusterD2[c]);
+		OUTPUT_cluster[c*D+1] = ADD10(0,loop_clusterD2[c]);
 		count[c] = ADD10(0, loop_count[c]);
 	}	
 
 	// Recompute cluster Pos
 	// Compute mean
-	for(c = 0u; c < NC; c++) {  
-	  if(count[c] > 0) {
+	for(c = 0; c < NC; c++) {  
+	  if(count[c] >0) {
 			OUTPUT_cluster[c*D] /= count[c];
-			OUTPUT_cluster[c*D+1u] /= count[c];
+			OUTPUT_cluster[c*D+1] /= count[c];
 	  } 
 	}
 }
