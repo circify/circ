@@ -145,7 +145,7 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 	// Recompute cluster Pos
 	// Compute mean
 	for(c = 0; c < NC; c++) {  
-	  if(count[c] >0) {
+	  if(count[c] >0 ) {
 			OUTPUT_cluster[c*D] /= count[c];
 			OUTPUT_cluster[c*D+1] /= count[c];
 	  } 
@@ -160,25 +160,25 @@ void kmeans(int *data, int *OUTPUT_res) {
 	int cluster[NC*D];
 
 	// Assign random start cluster from data
-	for(c = 0u; c < NC; c++) {
-		cluster[c*D] = data[((c+3u)%LEN)*D];
-		cluster[c*D+1u] = data[((c+3u)%LEN)*D+1u];
+	for(c = 0; c < NC; c++) {
+		cluster[c*D] = data[((c+3)%LEN)*D];
+		cluster[c*D+1] = data[((c+3)%LEN)*D+1];
 	}
 
-	for (p = 0u; p < PRECISION; p++) { 
+	for (p = 0; p < PRECISION; p++) { 
 		int new_cluster[NC*D];
 		iteration_unrolled_outer(data, cluster, new_cluster);
 		// iteration(data, cluster, new_cluster, len, num_cluster);
 		
 		// We need to copy inputs to outputs
-		for(c = 0u; c < NC*D; c++) {
+		for(c = 0; c < NC*D; c++) {
 			cluster[c] = new_cluster[c];
 		}
 	}
 
-	for(c = 0u; c < NC; c++) {  
+	for(c = 0; c < NC; c++) {  
 		OUTPUT_res[c*D] = cluster[c*D];
-		OUTPUT_res[c*D+1u] = cluster[c*D+1u];
+		OUTPUT_res[c*D+1] = cluster[c*D+1];
 	}
 }
 
