@@ -27,6 +27,8 @@ struct Options {
 
 arg_enum! {
     #[derive(PartialEq, Debug)]
+    /// `Prove`/`Verify` execute proving/verifying in bellman separately
+    /// `Spartan` executes both proving/verifying in spartan
     enum ProofAction {
         Prove,
         Verify,
