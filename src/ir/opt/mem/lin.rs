@@ -125,7 +125,8 @@ mod test {
                     (select (ite true store_1 store_2) c)
                 )
             )
-        ");
+        ",
+        );
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(3 + 3 + 1 + 3, count_ites(&c.outputs[0]));
@@ -146,12 +147,12 @@ mod test {
                     (select (ite true store_1 store_2) c)
                 )
             )
-        ");
+        ",
+        );
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(3 + 3 + 1 + 3, count_ites(&c.outputs[0]));
     }
-
 
     #[test]
     fn select_ite_stores_const() {
@@ -168,7 +169,8 @@ mod test {
                     (select (ite true store_1 store_2) c)
                 )
             )
-        ");
+        ",
+        );
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(3 + 1 + 3, count_ites(&c.outputs[0]));
@@ -189,7 +191,8 @@ mod test {
                     (select (ite true store_1 store_2) c)
                 )
             )
-        ");
+        ",
+        );
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(3 + 1 + 3, count_ites(&c.outputs[0]));
