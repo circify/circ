@@ -20,20 +20,38 @@ pub mod trans;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A Rank 1 Constraint System.
 pub struct R1cs<S: Hash + Eq> {
+    /// Modulus of the field over which the constraints are defined
     pub modulus: FieldT,
+
+    /// Mapping from signal name to index
     pub signal_idxs: HashMap<S, usize>,
+
+    /// Mapping from index to signal name
     pub idxs_signals: HashMap<usize, S>,
+
+    /// First unused index
     pub next_idx: usize,
+
+    /// Indices of public values
     pub public_idxs: HashSet<usize>,
+
+    /// Constraint set
     pub constraints: Vec<(Lc, Lc, Lc)>,
+
+    /// Computations needed to compute nondeterministic wire values
     pub terms: Vec<Term>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A linear combination
 pub struct Lc {
+    /// The modulus of this constraint
     pub modulus: FieldT,
+
+    /// The constant value associated with this constraint
     pub constant: FieldV,
+
+    /// Sparse representation of the linear combination
     pub monomials: HashMap<usize, FieldV>,
 }
 
