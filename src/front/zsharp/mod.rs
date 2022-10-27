@@ -1825,11 +1825,15 @@ impl<'ast> ZGen<'ast> {
     /*** circify wrapper functions (hides RefCell) ***/
 
     fn circ_enter_condition(&self, cond: Term) {
-        self.circ.borrow_mut().enter_condition(cond).unwrap();
+        if self.isolate_asserts {
+            self.circ.borrow_mut().enter_condition(cond).unwrap();
+        }
     }
 
     fn circ_exit_condition(&self) {
-        self.circ.borrow_mut().exit_condition()
+        if self.isolate_asserts {
+            self.circ.borrow_mut().exit_condition()
+        }
     }
 
     fn circ_condition(&self) -> Term {
