@@ -84,7 +84,7 @@ impl ZSharpFE {
     pub fn value_map(i: Inputs) -> String {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib());
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
         g.visit_files();
         let cm = g
             .constants
@@ -407,7 +407,7 @@ impl<'ast> ZGen<'ast> {
     fn literal_(&self, e: &ast::LiteralExpression<'ast>) -> Result<T, String> {
         match e {
             ast::LiteralExpression::DecimalLiteral(d) => {
-                let vstr = &d.value.span.as_str();
+                let vstr = &d.value.value;
                 match &d.suffix {
                     Some(ast::DecimalSuffix::U8(_)) => Ok(uint_lit(vstr.parse::<u8>().unwrap(), 8)),
                     Some(ast::DecimalSuffix::U16(_)) => {
@@ -1900,6 +1900,10 @@ impl<'ast> ZGen<'ast> {
 
     fn circ_assign(&self, loc: Loc, val: Val<T>) -> Result<Val<T>, CircError> {
         self.circ.borrow_mut().assign(loc, val)
+    }
+
+    fn circ_assert(&self, to_assert: Term) {
+        self.circ.borrow_mut().assert(to_assert);
     }
 }
 

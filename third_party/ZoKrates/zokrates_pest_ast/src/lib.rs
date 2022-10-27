@@ -938,6 +938,8 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::decimal_number))]
     pub struct DecimalNumber<'ast> {
+        #[pest_ast(outer(with(span_into_str)))]
+        pub value: String,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
