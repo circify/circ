@@ -43,11 +43,16 @@ impl RewritePass for Linearizer {
                 let tup = &cs[0];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
-                    let first = fields.next().unwrap();
-                    Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
-                        term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
-                    }))
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
+                        Some(term![Op::Field(idx_usize); tup.clone()])
+                    } else {
+                        let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
+                        let first = fields.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
+                            term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
+                        }))
+                    }
                 } else {
                     unreachable!()
                 }
@@ -59,12 +64,17 @@ impl RewritePass for Linearizer {
                 let val = &cs[2];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut updates =
-                        (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
-                    let first = updates.next().unwrap();
-                    Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
+                        Some(term![Op::Update(idx_usize); tup.clone(), val.clone()])
+                    } else {
+                        let mut updates =
+                            (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
+                        let first = updates.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
                         term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
                     }))
+                    }
                 } else {
                     unreachable!()
                 }
