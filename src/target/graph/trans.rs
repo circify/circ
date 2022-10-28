@@ -7,6 +7,8 @@ use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ilp::smart_global_assign;
 #[cfg(feature = "lp")]
 use crate::target::aby::assignment::ilp::calculate_cost_smart_dug;
+#[cfg(feature = "lp")]
+use crate::target::aby::assignment::ilp_opa::opa_smart_global_assign;
 use crate::target::graph::mlp::*;
 use crate::target::graph::tp::*;
 #[cfg(feature = "lp")]
@@ -379,6 +381,38 @@ pub fn inline_all_and_assign_y(
 
 #[cfg(feature = "lp")]
 /// inline all function into main
+pub fn inline_all_and_assign_b(
+    fs: &Functions,
+    cm: &str,
+) -> (Functions, HashMap<String, SharingMap>) {
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let main = "main";
+    let (c, dug) = tp.inline_all(&main.to_string());
+
+    println!(
+        "Time: Inline and construction def uses: {:?}",
+        now.elapsed()
+    );
+
+    now = Instant::now();
+    let assignment: SharingMap = dug.good_terms
+        .iter()
+        .map(|term| (term.clone(), ShareType::Boolean))
+        .collect();
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
+
+    println!("LOG: ILP time: {:?}", now.elapsed());
+
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)
+}
+
+#[cfg(feature = "lp")]
+/// inline all function into main
 pub fn inline_all_and_assign_a_y(
     fs: &Functions,
     cm: &str,
@@ -475,6 +509,37 @@ pub fn inline_all_and_assign_a_b(
             )
         })
         .collect();
+    println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
+
+    println!("LOG: ILP time: {:?}", now.elapsed());
+
+    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+    s_map.insert(main.to_string(), assignment);
+    let mut fs = Functions::new();
+    fs.insert(main.to_string(), c);
+    (fs, s_map)
+}
+
+
+#[cfg(feature = "lp")]
+/// inline all function into main
+pub fn inline_all_and_assign_opa(
+    fs: &Functions,
+    cm: &str,
+    share_types: &[ShareType; 2]
+) -> (Functions, HashMap<String, SharingMap>) {
+    let mut now = Instant::now();
+    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let main = "main";
+    let (c, dug) = tp.inline_all(&main.to_string());
+
+    println!(
+        "Time: Inline and construction def uses: {:?}",
+        now.elapsed()
+    );
+
+    now = Instant::now();
+    let assignment = opa_smart_global_assign(&dug.good_terms, &dug.def_use, cm, share_types);
     println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
 
     println!("LOG: ILP time: {:?}", now.elapsed());

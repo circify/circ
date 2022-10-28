@@ -42,6 +42,12 @@ function mpc_test_g_y  {
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "smart_g_y"
 }
 
+function mpc_test_g_b  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "smart_g_b"
+}
+
 function mpc_test_g_ay  {
     parties=$1
     cpath=$2
@@ -70,6 +76,24 @@ function mpc_test_css_wan {
     parties=$1
     cpath=$2
     RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical_wan" --selection-scheme "css" --part-size 8000 --mut-level 2 --mut-step-size 1 --graph-type 0
+}
+
+function mpc_test_opa_ay  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "opa_ay"
+}
+
+function mpc_test_opa_ab  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "opa_ab"
+}
+
+function mpc_test_opa_by  {
+    parties=$1
+    cpath=$2
+    RUST_BACKTRACE=1 measure_time $BIN --parties $parties $cpath mpc --cost-model "empirical" --selection-scheme "opa_by"
 }
 
 function mpc_test_2  {
@@ -236,7 +260,7 @@ function mpc_test_10 {
 
 # # build big benchmarks
 # mpc_test 2 ./examples/C/mpc/benchmarks/db/db_join.c
-# mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/mnist/mnist_decomp_convolution.c
 
 
@@ -255,14 +279,14 @@ function mpc_test_10 {
 # # mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench_9.c
 # # mpc_test 2 ./examples/C/mpc/ilp_benchmarks/2pc_ilp_bench.c
 
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_128.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_256.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_512.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_1024.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_2048.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_4096.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_8192.c
-mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_16384.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_128.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_256.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_512.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_1024.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_2048.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_4096.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_8192.c
+# mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_16384.c
 
 # mpc_test_g_y 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_128.c
 # mpc_test_g_y 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_256.c
@@ -290,3 +314,30 @@ mpc_test_glp_lan 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_16384.c
 # mpc_test_g_ab 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_4096.c
 # mpc_test_g_ab 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_8192.c
 # mpc_test_g_ab 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_16384.c
+
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_128.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_256.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_512.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_1024.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_2048.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_4096.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_8192.c
+# mpc_test_g_b 2 ./examples/C/mpc/benchmarks/biomatch/biomatch_16384.c
+
+
+# OPA bench
+mpc_test_opa_ay 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+# mpc_test_opa_ab 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+# mpc_test_opa_by 2 ./examples/C/mpc/benchmarks/cryptonets/cryptonets.c
+
+mpc_test_opa_ay 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+# mpc_test_opa_ab 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+# mpc_test_opa_by 2 ./examples/C/mpc/benchmarks/biomatch/biomatch.c
+
+mpc_test_opa_ay 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test_opa_ab 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+# mpc_test_opa_by 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
+
+mpc_test_opa_ay 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_opa_ab 2 ./examples/C/mpc/benchmarks/mnist/mnist.c
+# mpc_test_opa_by 2 ./examples/C/mpc/benchmarks/mnist/mnist.c

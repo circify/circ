@@ -7,6 +7,9 @@ use std::{env::var, fs::File, path::Path};
 #[cfg(feature = "lp")]
 pub mod ilp;
 
+#[cfg(feature = "lp")]
+pub mod ilp_opa;
+
 pub mod def_uses;
 
 /// The sharing scheme used for an operation

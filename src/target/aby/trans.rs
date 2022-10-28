@@ -1155,6 +1155,30 @@ pub fn to_aby(
             converter.lower();
         }
         #[cfg(feature = "lp")]
+        "opa_ay" => {
+            let share_types: [ShareType; 2] = [ShareType::Arithmetic, ShareType::Yao];
+            let (fs, s_map) = inline_all_and_assign_opa(&ir, cm, &share_types);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "opa_ab" => {
+            let share_types: [ShareType; 2] = [ShareType::Arithmetic, ShareType::Boolean];
+            let (fs, s_map) = inline_all_and_assign_opa(&ir, cm, &share_types);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "opa_by" => {
+            let share_types: [ShareType; 2] = [ShareType::Boolean, ShareType::Yao];
+            let (fs, s_map) = inline_all_and_assign_opa(&ir, cm, &share_types);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
         "smart_lp" => {
             let (fs, s_map) =
                 partition_with_mut_smart(&ir, cm, path, lang, ps, *hyper == 1, ml, mss, imbalance);
@@ -1165,6 +1189,13 @@ pub fn to_aby(
         #[cfg(feature = "lp")]
         "smart_g_y" => {
             let (fs, s_map) = inline_all_and_assign_y(&ir, cm);
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
+        #[cfg(feature = "lp")]
+        "smart_g_b" => {
+            let (fs, s_map) = inline_all_and_assign_b(&ir, cm);
             println!("LOG: Assignment time: {:?}", now.elapsed());
             let mut converter = ToABY::new(fs, s_map, path, lang);
             converter.lower();

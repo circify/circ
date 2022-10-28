@@ -1118,24 +1118,43 @@ pub fn calculate_cost_smart_dug(smap: &SharingMap, cm: &str, dug: &DefUsesGraph)
         match &t.op {
             Op::Var(..)
             | Op::Const(_)
-            | Op::BvConcat
-            | Op::BvExtract(..)
-            | Op::BoolToBv
-            | Op::BvBit(_) => {
+            // | Op::BvConcat
+            // | Op::BvExtract(..)
+            // | Op::BoolToBv
+            // | Op::BvBit(_) 
+            => {
                 cost = cost + 0.0;
+                let mut new_to_ty = to_ty.clone();
+                if *to_ty == ShareType::Yao {
+                    new_to_ty = ShareType::Boolean;
+                }
+                for arg_t in dug.def_uses.get(t).unwrap().iter() {
+                    if smap.contains_key(&arg_t) {
+                        let from_ty = smap.get(&arg_t).unwrap();
+                        if *from_ty != new_to_ty {
+                            // todo fix the calculation heres
+                            // println!("conversion from {:?} to {:?}", *to_ty, *from_ty);
+                            // println!("def: {:?} use {:?}", t.op, arg_t.op);
+                            let c = costs.conversions.get(&(new_to_ty, *from_ty)).unwrap();
+                            conv_cost.insert((t.clone(), *from_ty), *c);
+                        }
+                    }
+                }
             }
             _ => {
                 // println!("op: {}", t.op);
                 cost = cost + costs.get(&t.op).unwrap().get(to_ty).unwrap();
-            }
-        }
-        for arg_t in dug.def_uses.get(t).unwrap().iter() {
-            if smap.contains_key(&arg_t) {
-                let from_ty = smap.get(&arg_t).unwrap();
-                if from_ty != to_ty {
-                    // todo fix the calculation heres
-                    let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
-                    conv_cost.insert((t.clone(), *from_ty), *c);
+                for arg_t in dug.def_uses.get(t).unwrap().iter() {
+                    if smap.contains_key(&arg_t) {
+                        let from_ty = smap.get(&arg_t).unwrap();
+                        if from_ty != to_ty {
+                            // todo fix the calculation heres
+                            // println!("conversion from {:?} to {:?}", *to_ty, *from_ty);
+                            // println!("def: {:?} use {:?}", t.op, arg_t.op);
+                            let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
+                            conv_cost.insert((t.clone(), *from_ty), *c);
+                        }
+                    }
                 }
             }
         }
