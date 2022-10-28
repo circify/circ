@@ -73,11 +73,13 @@ fn build_smart_ilp(
             // fix the select and store here for array size
             _ => {
                 if let Some(costs) = costs.get(&t.op) {
-                    for (ty, cost) in costs {
-                        let name = format!("t_{}_{}", i, ty.char());
-                        let v = ilp.new_variable(variable().min(0).max(1), name.clone());
-                        term_vars.insert((t.clone(), *ty), (v, *cost, name));
-                        vars.push(v);
+                    for ty in share_types {
+                        if let Some(cost) = costs.get(ty){
+                            let name = format!("t_{}_{}", i, ty.char());
+                            let v = ilp.new_variable(variable().min(0).max(1), name.clone());
+                            term_vars.insert((t.clone(), *ty), (v, *cost, name));
+                            vars.push(v);
+                        }
                     }
                 } else {
                     panic!("No cost for op {}", &t.op)
