@@ -103,7 +103,7 @@ fn build_smart_ilp(
                     && from_ty != to_ty
                 {
                     let v = ilp.new_variable(
-                        variable().binary(),
+                        variable().min(0).max(1),
                         format!("c_{}_{}2{}", def_i, from_ty.char(), to_ty.char()),
                     );
                     conv_vars.insert(
