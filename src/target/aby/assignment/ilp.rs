@@ -77,13 +77,21 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     for (t, i) in terms.iter() {
         let mut vars = vec![];
         match &t.op {
-            Op::Var(..) | Op::Const(_) => {
+            Op::Var(..)
+            | Op::Const(_)
+            | Op::Call(..)
+            | Op::Field(_)
+            | Op::Update(..)
+            | Op::Tuple => {
                 for ty in &SHARE_TYPES {
                     let name = format!("t_{}_{}", i, ty.char());
                     let v = ilp.new_variable(variable().binary(), name.clone());
                     term_vars.insert((t.clone(), *ty), (v, 0.0, name));
                     vars.push(v);
                 }
+            }
+            Op::Select | Op::Store => {
+                panic!("Requires def-use-graph, tests should not have secret indices.")
             }
             _ => {
                 if let Some(costs) = costs.ops.get(&t.op) {

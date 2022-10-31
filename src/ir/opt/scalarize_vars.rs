@@ -1,5 +1,4 @@
 //! Replacing array and tuple variables with scalars.
-use fxhash::FxHashSet;
 use log::debug;
 
 use crate::ir::opt::visit::RewritePass;
@@ -112,7 +111,7 @@ fn remove_non_scalar_vars_from_main_computation(cs: &mut Computation) {
         .clone()
         .into_iter()
         .filter(|i| cs.metadata.input_sort(i).is_scalar())
-        .collect::<FxHashSet<_>>();
+        .collect::<Vec<_>>();
     cs.metadata.computation_inputs = new_inputs;
     for t in cs.terms_postorder() {
         if let Op::Var(_name, sort) = &t.op {
