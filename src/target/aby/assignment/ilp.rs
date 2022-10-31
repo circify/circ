@@ -91,12 +91,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 }
             }
             Op::Select | Op::Store => {
-                for ty in &[ShareType::Boolean, ShareType::Yao] {
-                    let name = format!("t_{}_{}", i, ty.char());
-                    let v = ilp.new_variable(variable().binary(), name.clone());
-                    term_vars.insert((t.clone(), *ty), (v, 0.0, name));
-                    vars.push(v);
-                }
+                panic!("Requires def-use-graph, tests should not have secret indices.")
             }
             _ => {
                 if let Some(costs) = costs.ops.get(&t.op) {
