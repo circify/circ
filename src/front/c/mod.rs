@@ -479,7 +479,6 @@ impl CGen {
         match &expr {
             Expression::Identifier(_) => {
                 let base_name = name_from_expr(expr);
-                println!("base name: {}", base_name);
                 CLoc::Var(Loc::local(base_name))
             }
             Expression::BinaryOperator(ref node) => {
@@ -525,14 +524,12 @@ impl CGen {
     fn gen_assign(&mut self, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
         match loc {
             CLoc::Var(l) => {
-                println!("Getting original type");
                 let org_type = self
                     .circ_get_value(l.clone())
                     .map_err(|e| format!("{}", e))?
                     .unwrap_term()
                     .term
                     .type_();
-                println!("Pass!");
                 let new_type = val.term.type_();
                 // unsigned type casting
                 let new_val = match (&org_type, &new_type) {
@@ -709,7 +706,6 @@ impl CGen {
     fn gen_expr(&mut self, expr: &Expression) -> CTerm {
         let res = match &expr {
             Expression::Identifier(node) => {
-                println!("identifier in gen_expr");
                 Ok(self
                     .unwrap(self.circ_get_value(Loc::local(node.node.name.clone())))
                     .unwrap_term())
@@ -1289,10 +1285,7 @@ impl CGen {
     }
 
     fn circ_get_value(&self, loc: Loc) -> Result<Val<CTerm>, CircError> {
-        println!("here?");
-        let tmp = self.circ.borrow().get_value(loc);
-        println!("finished");
-        tmp
+        self.circ.borrow().get_value(loc)
     }
 
     fn circ_declare_input(
@@ -1303,7 +1296,6 @@ impl CGen {
         precomputed_value: Option<CTerm>,
         mangle_name: bool,
     ) -> Result<CTerm, CircError> {
-        println!("declaring input: {}", name);
         self.circ
             .borrow_mut()
             .declare_input(name, ty, vis, precomputed_value, mangle_name)
