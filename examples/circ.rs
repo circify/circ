@@ -309,8 +309,8 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::SpartanSetup => {
-                    write_data::<_,_>(prover_key, verifier_key, &prover_data, &verifier_data)
-                        .unwrap();               
+                    write_data::<_, _>(prover_key, verifier_key, &prover_data, &verifier_data)
+                        .unwrap();
                 }
             }
         }

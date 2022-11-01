@@ -5,7 +5,7 @@ use core::clone::Clone;
 use curve25519_dalek::scalar::Scalar;
 use fxhash::FxHashMap as HashMap;
 use gmp_mpfr_sys::gmp::limb_t;
-use libspartan::{Assignment, InputsAssignment, Instance, NIZKGens, NIZK, VarsAssignment};
+use libspartan::{Assignment, InputsAssignment, Instance, NIZKGens, VarsAssignment, NIZK};
 use merlin::Transcript;
 use rug::Integer;
 use std::fs::File;
@@ -22,7 +22,7 @@ pub struct Variable {
 /// generate spartan proof
 pub fn prove<P: AsRef<Path>>(
     p_path: P,
-    inputs_map: &HashMap<String, Value>
+    inputs_map: &HashMap<String, Value>,
 ) -> io::Result<(NIZKGens, Instance, NIZK)> {
     let prover_data = read_prover_data::<_>(p_path)?;
 
@@ -48,7 +48,7 @@ pub fn verify<P: AsRef<Path>>(
     inputs_map: &HashMap<String, Value>,
     gens: &NIZKGens,
     inst: &Instance,
-    proof: NIZK
+    proof: NIZK,
 ) -> io::Result<()> {
     let verifier_data = read_verifier_data::<_>(v_path)?;
 
@@ -60,12 +60,12 @@ pub fn verify<P: AsRef<Path>>(
         inp.push(scalar.to_bytes());
     }
     let inputs = InputsAssignment::new(&inp).unwrap();
-    
+
     println!("Verifying with Spartan");
     let mut verifier_transcript = Transcript::new(b"nizk_example");
     assert!(proof
-            .verify(inst, &inputs, &mut verifier_transcript, gens)
-            .is_ok());
+        .verify(inst, &inputs, &mut verifier_transcript, gens)
+        .is_ok());
 
     println!("Proof Verification Successful!");
     Ok(())
@@ -74,7 +74,7 @@ pub fn verify<P: AsRef<Path>>(
 /// circ R1cs -> spartan R1CSInstance
 pub fn r1cs_to_spartan(
     prover_data: &ProverData,
-    inputs_map: &HashMap<String, Value>
+    inputs_map: &HashMap<String, Value>,
 ) -> (Instance, Assignment, Assignment, usize, usize, usize) {
     // spartan format mapper: CirC -> Spartan
     let mut wit = Vec::new();
@@ -86,7 +86,7 @@ pub fn r1cs_to_spartan(
     let f_mod = prover_data.r1cs.modulus.modulus();
     let s_mod = Integer::from_str_radix(
         "7237005577332262213973186563042994240857116359379907606001950938285454250989",
-         10,
+        10,
     )
     .unwrap();
     assert_eq!(
@@ -98,15 +98,15 @@ pub fn r1cs_to_spartan(
     let values = eval_inputs(inputs_map, prover_data);
 
     let pf_input_order: Vec<usize> = (0..prover_data.r1cs.next_idx)
-            .filter(|i| prover_data.r1cs.public_idxs.contains(i))
-            .collect();
+        .filter(|i| prover_data.r1cs.public_idxs.contains(i))
+        .collect();
 
     for idx in &pf_input_order {
         let sig = prover_data.r1cs.idxs_signals.get(&idx).cloned().unwrap();
 
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
-            None => panic!("Input/witness variable does not have matching evaluation")
+            None => panic!("Input/witness variable does not have matching evaluation"),
         };
 
         // input
@@ -115,10 +115,9 @@ pub fn r1cs_to_spartan(
     }
 
     for (sig, idx) in &prover_data.r1cs.signal_idxs {
-        
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
-            None => panic!("Input/witness variable does not have matching evaluation")
+            None => panic!("Input/witness variable does not have matching evaluation"),
         };
 
         if !prover_data.r1cs.public_idxs.contains(&idx) {
@@ -182,11 +181,14 @@ pub fn r1cs_to_spartan(
         assn_inputs,
         num_cons,
         num_vars,
-        num_inputs
+        num_inputs,
     )
 }
 
-fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) -> HashMap<String, Value>{
+fn eval_inputs(
+    inputs_map: &HashMap<String, Value>,
+    prover_data: &ProverData,
+) -> HashMap<String, Value> {
     for (input, sort) in &prover_data.precompute_inputs {
         let value = inputs_map
             .get(input)
