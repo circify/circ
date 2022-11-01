@@ -1,8 +1,8 @@
 //! Utility functions to write compiler output to ABY
 
 use std::env;
-use std::fs;
-use std::io::prelude::*;
+use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::Path;
 
 /// Get ABY source directory
@@ -15,7 +15,7 @@ pub fn get_aby_source() -> String {
 }
 
 /// Given Path `path` and String denominator `lang`, return the filename of the path
-pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
+pub fn get_path(path: &Path, lang: &str, t: &str, create: bool) -> String {
     let filename = Path::new(&path.iter().last().unwrap())
         .file_stem()
         .unwrap()
@@ -23,34 +23,32 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
         .into_string()
         .unwrap();
 
-    match fs::create_dir_all("scripts/aby_tests/tests") {
-        Err(why) => panic!("couldn't create {}: {}", "scripts/aby_tests/tests", why),
+    let name = format!("{}_{}", filename, lang);
+    let dir_path = format!("scripts/aby_tests/tests/{}", name);
+    match fs::create_dir_all(&dir_path) {
+        Err(why) => panic!("couldn't create {}: {}", dir_path, why),
         Ok(file) => file,
     };
 
-    let name = format!("{}_{}", filename, lang);
-    let path = format!("scripts/aby_tests/tests/{}_{}.txt", name, t);
-    match fs::File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}", path, why),
-        Ok(file) => file,
-    };
-    path
+    let file_path = format!("{}/{}_{}.txt", dir_path, name, t);
+    if create {
+        match File::create(&file_path) {
+            Err(why) => panic!("couldn't create {}: {}", file_path, why),
+            Ok(file) => file,
+        };
+    }
+    file_path
 }
 
-/// Write circuit output to temporary file
-pub fn write_lines_to_file(path: &str, lines: &[String]) {
-    if !Path::new(&path).exists() {
-        fs::File::create(&path).expect(&*format!("Failed to create: {}", path));
-    }
+/// Write lines to a path
+pub fn write_lines(path: &str, lines: &[String]) {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .unwrap_or_else(|_| panic!("Failed to open file: {}", path));
 
     let data = lines.join("");
-
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(path)
-        .expect("Failed to open circuit_tmp file");
-
     file.write_all(data.as_bytes())
-        .expect("Failed to write to circuit_tmp file");
+        .unwrap_or_else(|_| panic!("Failed to write to file: {}", path));
 }

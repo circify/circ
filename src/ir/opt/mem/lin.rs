@@ -43,11 +43,16 @@ impl RewritePass for Linearizer {
                 let tup = &cs[0];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
-                    let first = fields.next().unwrap();
-                    Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
-                        term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
-                    }))
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
+                        Some(term![Op::Field(idx_usize); tup.clone()])
+                    } else {
+                        let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
+                        let first = fields.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
+                            term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
+                        }))
+                    }
                 } else {
                     unreachable!()
                 }
@@ -59,12 +64,17 @@ impl RewritePass for Linearizer {
                 let val = &cs[2];
                 if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
                     assert!(size > 0);
-                    let mut updates =
-                        (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
-                    let first = updates.next().unwrap();
-                    Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
+                        Some(term![Op::Update(idx_usize); tup.clone(), val.clone()])
+                    } else {
+                        let mut updates =
+                            (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
+                        let first = updates.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
                         term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
                     }))
+                    }
                 } else {
                     unreachable!()
                 }
@@ -84,7 +94,6 @@ pub fn linearize(c: &mut Computation) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::util::field::DFL_T;
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
@@ -101,53 +110,91 @@ mod test {
             .count()
     }
 
-    fn field_lit(u: usize) -> Term {
-        leaf_term(Op::Const(Value::Field(DFL_T.new_v(u))))
-    }
-
     #[test]
     fn select_ite_stores() {
-        let z = term![Op::Const(Value::Array(Array::new(
-            Sort::BitVector(4),
-            Box::new(Sort::BitVector(4).default_value()),
-            Default::default(),
-            6
-        )))];
-        let t = term![Op::Select;
-            term![Op::Ite;
-              leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
-              term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
-            ],
-            bv_lit(3, 4)
-        ];
-        let mut c = Computation::default();
-        c.outputs.push(t);
+        let mut c = text::parse_computation(
+            b"
+            (computation
+                (metadata () ((a (bv 4)) (b (bv 4)) (c (bv 4))) ())
+                (let
+                    (
+                        (c_array (#a (bv 4) #x0 4 ()))
+                        (store_1 (store c_array a #x1))
+                        (store_2 (store c_array b #x2))
+                    )
+                    (select (ite true store_1 store_2) c)
+                )
+            )
+        ",
+        );
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
-        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
+        assert_eq!(3 + 3 + 1 + 3, count_ites(&c.outputs[0]));
     }
 
     #[test]
     fn select_ite_stores_field() {
-        let z = term![Op::Const(Value::Array(Array::new(
-            Sort::Field(DFL_T.clone()),
-            Box::new(Sort::BitVector(4).default_value()),
-            Default::default(),
-            6
-        )))];
-        let t = term![Op::Select;
-            term![Op::Ite;
-              leaf_term(Op::Const(Value::Bool(true))),
-              term![Op::Store; z.clone(), field_lit(3), bv_lit(1, 4)],
-              term![Op::Store; z, field_lit(2), bv_lit(1, 4)]
-            ],
-            field_lit(3)
-        ];
-        let mut c = Computation::default();
-        c.outputs.push(t);
+        let mut c = text::parse_computation(
+            b"
+            (computation
+                (metadata () ((a (mod 5)) (b (mod 5)) (c (mod 5))) ())
+                (let
+                    (
+                        (c_array (#a (mod 5) #f1m5 4 ()))
+                        (store_1 (store c_array a #f1m5))
+                        (store_2 (store c_array b #f2m5))
+                    )
+                    (select (ite true store_1 store_2) c)
+                )
+            )
+        ",
+        );
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
-        assert_eq!(5 + 5 + 1 + 5, count_ites(&c.outputs[0]));
+        assert_eq!(3 + 3 + 1 + 3, count_ites(&c.outputs[0]));
+    }
+
+    #[test]
+    fn select_ite_stores_const() {
+        let mut c = text::parse_computation(
+            b"
+            (computation
+                (metadata () ((a (bv 4)) (b (bv 4)) (c (bv 4))) ())
+                (let
+                    (
+                        (c_array (#a (bv 4) #x0 4 ()))
+                        (store_1 (store c_array #x0 #x1))
+                        (store_2 (store c_array b #x2))
+                    )
+                    (select (ite true store_1 store_2) c)
+                )
+            )
+        ",
+        );
+        linearize(&mut c);
+        assert!(array_free(&c.outputs[0]));
+        assert_eq!(3 + 1 + 3, count_ites(&c.outputs[0]));
+    }
+
+    #[test]
+    fn select_ite_stores_field_const() {
+        let mut c = text::parse_computation(
+            b"
+            (computation
+                (metadata () ((a (mod 5)) (b (mod 5)) (c (mod 5))) ())
+                (let
+                    (
+                        (c_array (#a (mod 5) #f1m5 4 ()))
+                        (store_1 (store c_array #f1m5 #f1m5))
+                        (store_2 (store c_array b #f2m5))
+                    )
+                    (select (ite true store_1 store_2) c)
+                )
+            )
+        ",
+        );
+        linearize(&mut c);
+        assert!(array_free(&c.outputs[0]));
+        assert_eq!(3 + 1 + 3, count_ites(&c.outputs[0]));
     }
 }

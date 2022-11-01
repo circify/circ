@@ -110,6 +110,12 @@ impl MemManager {
         alloc.cur_term = ite_store;
     }
 
+    /// Replace the stored term in the allocation `id` with the value `val`.
+    pub fn replace(&mut self, id: AllocId, val: Term) {
+        let alloc = self.allocs.get_mut(&id).expect("Missing allocation");
+        alloc.cur_term = val;
+    }
+
     /// Is `offset` in bounds for the allocation `id`?
     pub fn in_bounds(&self, id: AllocId, offset: Term) -> Term {
         let alloc = self.allocs.get(&id).expect("Missing allocation");
