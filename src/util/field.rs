@@ -11,25 +11,49 @@ use lazy_static::lazy_static;
 #[cfg(feature = "ristretto255")]
 use rug::Integer;
 
-#[cfg(all(feature = "bls12381", not(feature = "bn254"), not(feature = "ristretto255"), feature = "ff_dfl"))]
+#[cfg(all(
+        feature = "bls12381",
+        not(feature = "bn254"),
+        not(feature = "ristretto255"),
+        feature = "ff_dfl"
+))]
 /// Default field
 pub const DFL_T: FieldT = FieldT::FBls12381;
-#[cfg(all(feature = "bls12381", not(feature = "bn254"), not(feature = "ristretto255"), not(feature = "ff_dfl")))]
+#[cfg(all(
+        feature = "bls12381",
+        not(feature = "bn254"),
+        not(feature = "ristretto255"),
+        not(feature = "ff_dfl"
+)))]
 lazy_static! {
     /// Default field
     pub static ref DFL_T: FieldT = FieldT::IntField(F_BLS12381_FMOD_ARC.clone());
 }
 
-#[cfg(all(not(feature = "bls12381"), feature = "bn254", not(feature = "ristretto255"), feature = "ff_dfl"))]
+#[cfg(all(
+        not(feature = "bls12381"),
+        feature = "bn254",
+        not(feature = "ristretto255"),
+        feature = "ff_dfl"
+))]
 /// Default field
 pub const DFL_T: FieldT = FieldT::FBn254;
-#[cfg(all(not(feature = "bls12381"), feature = "bn254", not(feature = "ristretto255"), not(feature = "ff_dfl")))]
+#[cfg(all(
+        not(feature = "bls12381"),
+        feature = "bn254",
+        not(feature = "ristretto255"),
+        not(feature = "ff_dfl"
+)))]
 lazy_static! {
     /// Default field
     pub static ref DFL_T: FieldT = FieldT::IntField(F_BN254_FMOD_ARC.clone());
 }
 
-#[cfg(all(not(feature = "bls12381"), not(feature = "bn254"), feature = "ristretto255"))]
+#[cfg(all(
+        not(feature = "bls12381"),
+        not(feature = "bn254"),
+        feature = "ristretto255"
+))]
 lazy_static! {
     /// Spartan modulus
     pub static ref RISTRETTO255_MOD: Integer = Integer::from_str_radix(
@@ -37,7 +61,11 @@ lazy_static! {
          10
     ).unwrap();
 }
-#[cfg(all(not(feature = "bls12381"), not(feature = "bn254"), feature = "ristretto255"))]
+#[cfg(all(
+        not(feature = "bls12381"),
+        not(feature = "bn254"),
+        feature = "ristretto255"
+))]
 lazy_static! {
     /// Default field
     pub static ref DFL_T: FieldT = FieldT::from(RISTRETTO255_MOD.clone());

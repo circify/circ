@@ -1,17 +1,16 @@
 //! Export circ R1cs to Spartan
-use libspartan::*;
 use crate::target::r1cs::*;
-use curve25519_dalek::scalar::Scalar;
-use rug::{Integer};
+use bincode::{deserialize_from, serialize_into};
 use core::clone::Clone;
-use merlin::Transcript;
-use libspartan::{Instance, NIZKGens, NIZK};
-use gmp_mpfr_sys::gmp::limb_t;
+use curve25519_dalek::scalar::Scalar;
 use fxhash::FxHashMap as HashMap;
-use std::path::Path;
+use gmp_mpfr_sys::gmp::limb_t;
+use libspartan::{Assignment, InputsAssignment, Instance, NIZKGens, NIZK, VarsAssignment};
+use merlin::Transcript;
+use rug::Integer;
 use std::fs::File;
-use bincode::{serialize_into, deserialize_from};
 use std::io;
+use std::path::Path;
 
 /// Hold Spartan variables
 #[derive(Debug)]
@@ -20,20 +19,19 @@ pub struct Variable {
     value: [u8; 32],
 }
 
-
 /// generate spartan proof
-pub fn prove<P: AsRef<Path>>(p_path: P, inputs_map: &HashMap<String, Value>) -> io::Result<(NIZKGens, Instance, NIZK)> {
+pub fn prove<P: AsRef<Path>>(
+    p_path: P,
+    inputs_map: &HashMap<String, Value>
+) -> io::Result<(NIZKGens, Instance, NIZK)> {
     let prover_data = read_prover_data::<_>(p_path)?;
 
     println!("Converting R1CS to Spartan");
-    let (inst, wit, inps, num_cons, num_vars, num_inputs) = spartan::r1cs_to_spartan(&prover_data, &inputs_map);
+    let (inst, wit, inps, num_cons, num_vars, num_inputs) =
+        spartan::r1cs_to_spartan(&prover_data, &inputs_map);
 
     println!("Proving with Spartan");
-    assert_ne!(
-        num_cons,
-        0,
-        "No constraints"
-    );
+    assert_ne!(num_cons, 0, "No constraints");
 
     // produce public parameters
     let gens = NIZKGens::new(num_cons, num_vars, num_inputs);
@@ -45,7 +43,13 @@ pub fn prove<P: AsRef<Path>>(p_path: P, inputs_map: &HashMap<String, Value>) -> 
 }
 
 /// verify spartan proof
-pub fn verify<P: AsRef<Path>>(v_path: P, inputs_map: &HashMap<String, Value>, gens: &NIZKGens, inst: &Instance, proof: NIZK) -> io::Result<()> {
+pub fn verify<P: AsRef<Path>>(
+    v_path: P,
+    inputs_map: &HashMap<String, Value>,
+    gens: &NIZKGens,
+    inst: &Instance,
+    proof: NIZK
+) -> io::Result<()> {
     let verifier_data = read_verifier_data::<_>(v_path)?;
 
     let values = verifier_data.eval(inputs_map);
@@ -59,16 +63,19 @@ pub fn verify<P: AsRef<Path>>(v_path: P, inputs_map: &HashMap<String, Value>, ge
     
     println!("Verifying with Spartan");
     let mut verifier_transcript = Transcript::new(b"nizk_example");
-    assert!(proof.verify(inst, &inputs, &mut verifier_transcript, gens).is_ok());
+    assert!(proof
+            .verify(inst, &inputs, &mut verifier_transcript, gens)
+            .is_ok());
 
     println!("Proof Verification Successful!");
     Ok(())
 }
 
 /// circ R1cs -> spartan R1CSInstance
-pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Value>) -> (Instance, Assignment, Assignment, usize, usize, usize)
-{
-
+pub fn r1cs_to_spartan(
+    prover_data: &ProverData,
+    inputs_map: &HashMap<String, Value>
+) -> (Instance, Assignment, Assignment, usize, usize, usize) {
     // spartan format mapper: CirC -> Spartan
     let mut wit = Vec::new();
     let mut inp = Vec::new();
@@ -79,36 +86,35 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
     let f_mod = prover_data.r1cs.modulus.modulus();
     let s_mod = Integer::from_str_radix(
         "7237005577332262213973186563042994240857116359379907606001950938285454250989",
-         10
-    ).unwrap();
+         10,
+    )
+    .unwrap();
     assert_eq!(
-        &s_mod,
-        f_mod,
+        &s_mod, f_mod,
         "\nR1CS has modulus \n{},\n but Spartan CS expects \n{}",
-        s_mod,
-        f_mod
+        s_mod, f_mod
     );
-    
+
     let values = eval_inputs(inputs_map, prover_data);
 
     let pf_input_order: Vec<usize> = (0..prover_data.r1cs.next_idx)
             .filter(|i| prover_data.r1cs.public_idxs.contains(i))
             .collect();
 
-    for idx in &pf_input_order { //prover_data.r1cs.public_idxs {
+    for idx in &pf_input_order {
         let sig = prover_data.r1cs.idxs_signals.get(&idx).cloned().unwrap();
 
-        // input
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
             None => panic!("Input/witness variable does not have matching evaluation")
         };
 
+        // input
         itrans.insert(*idx, inp.len());
         inp.push(scalar.to_bytes());
     }
 
-    for (sig,idx) in &prover_data.r1cs.signal_idxs {
+    for (sig, idx) in &prover_data.r1cs.signal_idxs {
         
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
@@ -119,9 +125,7 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
             // witness
             trans.insert(*idx, wit.len());
             wit.push(scalar.to_bytes());
-
         }
-
     }
 
     assert_eq!(wit.len() + inp.len(), prover_data.r1cs.next_idx);
@@ -134,8 +138,7 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
     let num_inputs = inp.len();
     let assn_inputs = InputsAssignment::new(&inp).unwrap();
 
-    
-    for (cid,sid) in itrans{
+    for (cid, sid) in itrans {
         trans.insert(cid, sid + const_id + 1);
     }
 
@@ -144,10 +147,8 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
     let mut m_b: Vec<(usize, usize, [u8; 32])> = Vec::new();
     let mut m_c: Vec<(usize, usize, [u8; 32])> = Vec::new();
 
-    
     let mut i = 0; // constraint #
     for (lc_a, lc_b, lc_c) in prover_data.r1cs.constraints.iter() {
-
         // circ Lc (const, monomials <Integer>) -> Vec<Variable>
         let a = lc_to_v(&lc_a, const_id, &trans);
         let b = lc_to_v(&lc_b, const_id, &trans);
@@ -175,7 +176,14 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
     let res = inst.is_sat(&assn_witness, &assn_inputs);
     assert_eq!(res.unwrap(), true);
 
-    (inst, assn_witness, assn_inputs, num_cons, num_vars, num_inputs)
+    (
+        inst,
+        assn_witness,
+        assn_inputs,
+        num_cons,
+        num_vars,
+        num_inputs
+    )
 }
 
 fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) -> HashMap<String, Value>{
@@ -201,7 +209,6 @@ fn val_to_scalar(v: &Value) -> Scalar {
         Sort::Field(_) => return int_to_scalar(&v.as_pf().i()),
         _ => panic!("Value should be a field"),
     };
-
 }
 
 fn int_to_scalar(i: &Integer) -> Scalar {
@@ -219,17 +226,15 @@ fn int_to_scalar(i: &Integer) -> Scalar {
         accumulator += Scalar::from(*digit as u64);
     }
     return accumulator;
-
 }
 
-
 // circ Lc (const, monomials <Integer>) -> Vec<Variable>
-fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize,usize>) -> Vec<Variable> {
+fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize, usize>) -> Vec<Variable> {
     let mut v: Vec<Variable> = Vec::new();
 
-    for (k,m) in &lc.monomials {
+    for (k, m) in &lc.monomials {
         let scalar = int_to_scalar(&m.i());
-        
+
         let var = Variable {
             sid: trans.get(k).unwrap().clone(),
             value: scalar.to_bytes(),
@@ -250,7 +255,7 @@ fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize,usize>) -> Vec<Variab
 /// write prover and verifier data to file
 pub fn write_data<P1: AsRef<Path>, P2: AsRef<Path>>(
     p_path: P1,
-    v_path:P2,
+    v_path: P2,
     p_data: &ProverData,
     v_data: &VerifierData,
 ) -> io::Result<()> {
@@ -259,35 +264,25 @@ pub fn write_data<P1: AsRef<Path>, P2: AsRef<Path>>(
     Ok(())
 }
 
-fn write_prover_data<P: AsRef<Path>>(
-    path: P,
-    data: &ProverData,
-) -> io::Result<()> {
+fn write_prover_data<P: AsRef<Path>>(path: P, data: &ProverData) -> io::Result<()> {
     let mut file = File::create(path)?;
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
-fn read_prover_data<P: AsRef<Path>>(
-    path: P,
-) -> io::Result<ProverData> {
+fn read_prover_data<P: AsRef<Path>>(path: P) -> io::Result<ProverData> {
     let mut file = File::open(path)?;
     let data: ProverData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }
 
-fn write_verifier_data<P: AsRef<Path>>(
-    path: P,
-    data: &VerifierData,
-) -> io::Result<()> {
+fn write_verifier_data<P: AsRef<Path>>(path: P, data: &VerifierData) -> io::Result<()> {
     let mut file = File::create(path)?;
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
-fn read_verifier_data<P: AsRef<Path>>(
-    path: P,
-) -> io::Result<VerifierData> {
+fn read_verifier_data<P: AsRef<Path>>(path: P) -> io::Result<VerifierData> {
     let mut file = File::open(path)?;
     let data: VerifierData = deserialize_from(&mut file).unwrap();
     Ok(data)

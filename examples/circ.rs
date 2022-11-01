@@ -29,9 +29,9 @@ use circ::target::aby::trans::to_aby;
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::bellman::gen_params;
+use circ::target::r1cs::opt::reduce_linearities;
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::spartan::write_data;
-use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
@@ -46,7 +46,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use structopt::clap::arg_enum;
 use structopt::StructOpt;
-
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "circ", about = "CirC: the circuit compiler")]
@@ -64,7 +63,6 @@ struct Options {
 
     #[structopt(subcommand)]
     backend: Backend,
-
 }
 
 #[derive(Debug, StructOpt)]
@@ -93,7 +91,6 @@ struct FrontendOptions {
     /// [ZoKrates](https://zokrates.github.io/language/control_flow.html).
     #[structopt(long)]
     z_isolate_asserts: bool,
-
 }
 
 #[derive(Debug, StructOpt)]
@@ -151,7 +148,6 @@ arg_enum! {
         SpartanSetup,
     }
 }
-
 
 fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
     match *l {
@@ -313,7 +309,8 @@ fn main() {
                     .unwrap();
                 }
                 ProofAction::SpartanSetup => {
-                    write_data::<_,_>(prover_key, verifier_key, &prover_data, &verifier_data).unwrap();               
+                    write_data::<_,_>(prover_key, verifier_key, &prover_data, &verifier_data)
+                        .unwrap();               
                 }
             }
         }
@@ -395,5 +392,3 @@ fn main() {
         }
     }
 }
-
-

@@ -264,6 +264,8 @@ where
 
 /// Given
 /// * a verifying-key path,
+/// * a proof path,
+/// * and a verifier input map
 /// checks the proof at that path
 pub fn verify<E: MultiMillerLoop, P1: AsRef<Path>, P2: AsRef<Path>>(
     vk_path: P1,

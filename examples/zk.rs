@@ -54,13 +54,13 @@ fn main() {
             bellman::verify::<Bls12, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
         }
         ProofAction::Spartan => {
-            println!("Spartan");
-
             let prover_input_map = parse_value_map(&std::fs::read(opts.pin).unwrap());
+            println!("Spartan Proving");
             let (gens, inst, proof) = spartan::prove(opts.prover_key, &prover_input_map).unwrap();
-            let verifier_input_map = parse_value_map(&std::fs::read(opts.vin).unwrap());
-            spartan::verify(opts.verifier_key, &verifier_input_map, &gens, &inst, proof).unwrap();
 
+            let verifier_input_map = parse_value_map(&std::fs::read(opts.vin).unwrap());
+            println!("Spartan Verifying");
+            spartan::verify(opts.verifier_key, &verifier_input_map, &gens, &inst, proof).unwrap();
         }
     }
 }
