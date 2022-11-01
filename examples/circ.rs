@@ -293,7 +293,7 @@ fn main() {
             println!("Converting to r1cs");
             let (r1cs, mut prover_data, verifier_data) =
                 to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
-            
+
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
 

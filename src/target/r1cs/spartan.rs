@@ -56,7 +56,7 @@ pub fn verify<P: AsRef<Path>>(v_path: P, inputs_map: &HashMap<String, Value>, ge
         inp.push(scalar.to_bytes());
     }
     let inputs = InputsAssignment::new(&inp).unwrap();
-
+    
     println!("Verifying with Spartan");
     let mut verifier_transcript = Transcript::new(b"nizk_example");
     assert!(proof.verify(inst, &inputs, &mut verifier_transcript, gens).is_ok());
@@ -91,23 +91,32 @@ pub fn r1cs_to_spartan(prover_data: &ProverData, inputs_map: &HashMap<String, Va
     
     let values = eval_inputs(inputs_map, prover_data);
 
-    for (idx,sig) in &prover_data.r1cs.idxs_signals {
+    let pf_input_order: Vec<usize> = (0..prover_data.r1cs.next_idx)
+            .filter(|i| prover_data.r1cs.public_idxs.contains(i))
+            .collect();
+
+    for idx in &pf_input_order { //prover_data.r1cs.public_idxs {
+        let sig = prover_data.r1cs.idxs_signals.get(&idx).cloned().unwrap();
+
+        // input
+        let scalar = match values.get(&sig.to_string()) {
+            Some(v) => val_to_scalar(v),
+            None => panic!("Input/witness variable does not have matching evaluation")
+        };
+
+        itrans.insert(*idx, inp.len());
+        inp.push(scalar.to_bytes());
+    }
+
+    for (sig,idx) in &prover_data.r1cs.signal_idxs {
         
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
             None => panic!("Input/witness variable does not have matching evaluation")
         };
 
-        if prover_data.r1cs.public_idxs.contains(&idx) {
-            // input
-            // println!("As public io: {}", sig);
-
-            itrans.insert(*idx, inp.len());
-            inp.push(scalar.to_bytes());
-        } else {
+        if !prover_data.r1cs.public_idxs.contains(&idx) {
             // witness
-            // println!("As private witness: {}", sig);
-
             trans.insert(*idx, wit.len());
             wit.push(scalar.to_bytes());
 
