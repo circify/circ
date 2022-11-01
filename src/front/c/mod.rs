@@ -705,11 +705,9 @@ impl CGen {
 
     fn gen_expr(&mut self, expr: &Expression) -> CTerm {
         let res = match &expr {
-            Expression::Identifier(node) => {
-                Ok(self
-                    .unwrap(self.circ_get_value(Loc::local(node.node.name.clone())))
-                    .unwrap_term())
-            }
+            Expression::Identifier(node) => Ok(self
+                .unwrap(self.circ_get_value(Loc::local(node.node.name.clone())))
+                .unwrap_term()),
             Expression::Constant(node) => Ok(self.const_(&node.node)),
             Expression::BinaryOperator(node) => {
                 let bin_op = &node.node;
