@@ -5,8 +5,8 @@ from test_suite import *
 
 if __name__ == "__main__":
     tests = arithmetic_tests + \
-        mod_tests + \
         arithmetic_boolean_tests + \
+        unsigned_arithmetic_tests + \
         nary_arithmetic_tests + \
         bitwise_tests + \
         boolean_tests + \
@@ -16,6 +16,7 @@ if __name__ == "__main__":
         ite_tests + \
         shift_tests + \
         div_tests + \
+        mod_tests + \
         struct_tests + \
         ptr_tests + \
         c_misc_tests
