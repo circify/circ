@@ -1,6 +1,7 @@
 //! Machinery for Taint Analysis
-use crate::ir::term::*;
-use std::fmt::{self, Display, Formatter};
+use crate::{ir::term::*, target::aby::utils::{write_lines_to_file, get_path}};
+use core::str;
+use std::{fmt::{self, Display, Formatter}, path::Path};
 
 const PARTY_A: u8 = 0;
 const PARTY_B: u8 = 1;
@@ -36,14 +37,21 @@ pub type VisMap = TermMap<VisType>;
 /// Taint analyzer for identify opportunities for pre-computation 
 /// in MPC programs
 pub struct TaintAnalyzer {
+    ///Visibility Map
     vmap: VisMap,
-    md: ComputationMetadata,
-    // plaintext_ir: Computation,
-    // party_a_ir: Computation,
-    // party_b_ir: Computation,
-    // mpc_ir: Computation,
-}
+    /// Metadata
+    pub md: ComputationMetadata,
+    ///Output terms of plaintext precomputation
+    plaintext_ir: TermMap<String>,
+    ///Output terms of party_a precomputation
+    party_a_ir: TermMap<String>,
+    ///Output terms of party_B precomputation
+    party_b_ir: TermMap<String>,
 
+    bridge_cnt: i32,
+    ///Defines bridges between the partitioned IRs
+    bridge_map: TermMap<Term>,
+}
 
 impl TaintAnalyzer {
     /// Intantiates new TaintAnalyzer
@@ -51,10 +59,11 @@ impl TaintAnalyzer {
         Self {
             vmap: TermMap::new(),
             md: md,
-            // plaintext_ir: Computation::new(false),
-            // party_a_ir: Computation::new(false),
-            // party_b_ir: Computation::new(false),
-            // mpc_ir: Computation::new(false),
+            plaintext_ir: TermMap::new(),
+            party_a_ir: TermMap::new(),
+            party_b_ir: TermMap::new(),
+            bridge_cnt: 0,
+            bridge_map: TermMap::new(),
         }
     }
     ///Converts visibility integer to a VisType
@@ -165,5 +174,127 @@ impl TaintAnalyzer {
         }
         println!();
         println!();
+    }
+    
+    fn new_bridge_name(&mut self) -> String {
+        let name = format!("bridge_{}", self.bridge_cnt);
+        self.bridge_cnt += 1;
+        name
+    }
+
+    fn add_plaintext_output(&mut self, t: Term) {
+        let name = self.new_bridge_name();
+        self.plaintext_ir.insert(t.clone(), name.clone());
+        let new_term = term(Op::Var(name.clone(), check(&t)), Vec::new());
+        self.md.input_vis.insert(name, Some(PUBLIC));
+        self.bridge_map.insert(t, new_term);
+    }
+
+    fn add_party_a_output(&mut self, t: Term) {
+        let name = self.new_bridge_name();
+        self.party_a_ir.insert(t.clone(), name.clone());
+        let new_term = term(Op::Var(name.clone(), check(&t)), Vec::new());
+        self.md.input_vis.insert(name, Some(PARTY_A));
+        self.bridge_map.insert(t, new_term);
+    }
+
+    fn add_party_b_output(&mut self, t: Term) {
+        let name = self.new_bridge_name();
+        self.party_b_ir.insert(t.clone(), name.clone());
+        let new_term = term(Op::Var(name.clone(), check(&t)), Vec::new());
+        self.md.input_vis.insert(name, Some(PARTY_B));
+        self.bridge_map.insert(t, new_term);
+    }
+
+    ///Partitions the IR based on data dependency
+    pub fn partition_ir(&mut self, terms: Vec<Term>) {
+        for output in terms {
+            for t in PostOrderIter::new(output) {
+                match self.vmap_lookup(t.clone()) {
+                    VisType::MultiParty => {
+                        for cterm in &t.cs {
+                            match self.vmap_lookup(cterm.clone()) {
+                                VisType::Plaintext => {
+                                    self.add_plaintext_output(cterm.clone());
+                                },
+                                VisType::PartyA => {
+                                    self.add_party_a_output(cterm.clone());
+                                },
+                                VisType::PartyB => {
+                                    self.add_party_b_output(cterm.clone());
+                                },
+                                VisType::MultiParty => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        println!("\nPrinting Bridges:");
+        for (key, value) in self.bridge_map.iter() {
+            println!("{} / {}", key, value);
+        }
+    }
+
+    fn serialize_precomputation(&self, terms: &TermMap<String>)-> Vec<String> {
+        let mut lines = Vec::new();
+        for (key, bridge_name) in terms.iter() {
+            lines.push(format!("{}:{},", bridge_name, text::serialize_term(key)));
+        }
+        lines
+    }
+
+    ///Exports precomputations to as text files
+    pub fn export_precomputations(&self, path: &Path, lang: &str) {
+        println!("Printing Plaintext Outs:");
+        for (key, value) in self.plaintext_ir.iter() {
+            println!("{} / {}", key, value);
+        }
+        println!("Printing Party A Outs:");
+        for (key, value) in self.party_a_ir.iter() {
+            println!("{} / {}", key, value);
+        }
+        println!("Printing Party B Outs:");
+        for (key, value) in self.party_b_ir.iter() {
+            println!("{} / {}", key, value);
+        }
+        write_lines_to_file(
+            &get_path(path, lang, "plaintext_ir"),
+            &self.serialize_precomputation(&self.plaintext_ir));
+        write_lines_to_file(
+            &get_path(path, lang, "party_a_ir"),
+            &self.serialize_precomputation(&self.party_a_ir));
+        write_lines_to_file(
+            &get_path(path, lang, "party_b_ir"),
+            &self.serialize_precomputation(&self.party_b_ir));    
+        println!("EXPORTED PRECOMPS");
+    }
+
+    ///Rewrites term in MPC computation to take advantage of precomputations (bridges)
+    pub fn rewrite_term(&self, og_term: Term) -> Term {
+        let mut rewritten =  TermMap::new();
+        for t in PostOrderIter::new(og_term.clone()) {
+            match self.bridge_map.get(&t) {
+                Some(bridge_var) => {
+                    rewritten.insert(t, bridge_var.clone());
+                }
+                None => {
+                    let mut children = Vec::new();
+                    for c in &t.cs {
+                        match rewritten.get(c) {
+                            None => {
+                                children.push(c.clone());
+                            }
+                            Some(rewritten_c) => {
+                                children.push(rewritten_c.clone());
+                            }
+                        }
+                    }
+                    rewritten.insert(t.clone(), term(t.op.clone(), children));
+                }
+            }
+        }
+        rewritten.get(&og_term).expect("Couldn't find rewritten term").clone()
     }
 }

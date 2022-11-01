@@ -44,7 +44,6 @@ pub fn write_lines_to_file(path: &str, lines: &[String]) {
     }
 
     let data = lines.join("");
-
     let mut file = fs::OpenOptions::new()
         .write(true)
         .append(true)

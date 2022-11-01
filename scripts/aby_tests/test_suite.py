@@ -493,6 +493,14 @@ benchmark_tests = [
     ],   
 ]
 
+taint_tests = [
+    [
+        "simple precomp test",
+        "playground",
+        "./scripts/aby_tests/tests/playground_precompute_result.txt",
+    ],
+]
+
 # ilp_benchmark_tests = [
 #     [
 #         "ilp bench - array sum 1",

@@ -86,6 +86,14 @@ impl ToABY {
                 let n = new_name.split('_').collect::<Vec<&str>>();
 
                 match n.len() {
+                    2 => {
+                        if n[0].eq("bridge") {
+                            name.clone()
+                        }
+                        else {
+                            panic!("Invalid variable name: {}", name);
+                        }
+                    }
                     5 => n[3].to_string(),
                     6.. => {
                         let l = n.len() - 1;
@@ -407,25 +415,35 @@ pub fn to_aby(ir: Computation, path: &Path, lang: &str, cm: &str, ss: &str) {
     // call to taint 
     let mut analyzer = TaintAnalyzer::new(md.clone());
     analyzer.fill_vmap(terms.clone());
+    analyzer.partition_ir(terms.clone());
+    analyzer.export_precomputations(path, lang);
+
+    let mut new_terms = Vec::new(); 
+    for term in terms.clone() {
+        new_terms.push(analyzer.rewrite_term(term));
+    }
+    let new_md = analyzer.md;
+    let new_ir = 
+        Computation::construct_new(new_terms.clone(), new_md.clone());
 
     let s_map: SharingMap = match ss {
-        "b" => assign_all_boolean(&ir, cm),
-        "y" => assign_all_yao(&ir, cm),
-        "a+b" => assign_arithmetic_and_boolean(&ir, cm),
-        "a+y" => assign_arithmetic_and_yao(&ir, cm),
-        "greedy" => assign_greedy(&ir, cm),
+        "b" => assign_all_boolean(&new_ir, cm),
+        "y" => assign_all_yao(&new_ir, cm),
+        "a+b" => assign_arithmetic_and_boolean(&new_ir, cm),
+        "a+y" => assign_arithmetic_and_yao(&new_ir, cm),
+        "greedy" => assign_greedy(&new_ir, cm),
         #[cfg(feature = "lp")]
-        "lp" => assign(&ir, cm),
+        "lp" => assign(&new_ir, cm),
         #[cfg(feature = "lp")]
-        "glp" => assign(&ir, cm),
+        "glp" => assign(&new_ir, cm),
         _ => {
             panic!("Unsupported sharing scheme: {}", ss);
         }
     };
 
-    let mut converter = ToABY::new(s_map, md, path, lang);
+    let mut converter = ToABY::new(s_map, new_md, path, lang);
 
-    for t in terms {
+    for t in new_terms {
         // println!("terms: {}", t);
         converter.map_terms_to_shares(t.clone());
         converter.write_mapping_file(t.clone());

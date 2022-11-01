@@ -1811,6 +1811,15 @@ impl Computation {
         }
     }
 
+    /// Create a new system, which tracks values iff `values`.
+    pub fn construct_new(terms: Vec<Term>, md: ComputationMetadata) -> Self {
+        Self {
+            outputs: terms,
+            metadata: md,
+            values: None,
+        }
+    }
+
     /// Get the outputs of the computation.
     ///
     /// For proof systems, these are the assertions that must hold.

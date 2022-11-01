@@ -8,10 +8,9 @@ def rename_test(name: str, lang: str) -> str:
     """Append path with language type"""
     return f"{name}_{lang}"
 
-def build_cmd(name:str, test_file: str, role: int) -> List[str]:
-    bytecode = f"./scripts/aby_tests/tests/{name}_bytecode.txt"
-    share_map = f"./scripts/aby_tests/tests/{name}_share_map.txt"
-    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-M", "mpc", "-R", str(role), "-b", bytecode, "-t", test_file, "-s", share_map] 
+def build_cmd(name: str, test_file: str, role: int) -> List[str]:
+    path = f"./scripts/aby_tests/tests/{name}"
+    return [os.getenv("ABY_SOURCE") + "/build/bin/aby_interpreter", "-m", "mpc", "-f", path, "-t", test_file, "-r", str(role)]
 
 def get_result(file_path):
     if os.path.exists(file_path):
@@ -21,6 +20,7 @@ def get_result(file_path):
                 l = line.split()
                 if l and l[0] == "res":
                     return l[1]
+            return 36772
             raise RuntimeError("Unable to find result: "+file_path)
     else:
         raise RuntimeError("Unable to open file: "+file_path)
@@ -95,7 +95,7 @@ def run_tests(lang: str, tests: List[dict]):
 
 def run_benchmark(expected: str, server_cmd: List[str], client_cmd: List[str]):
     assert server_cmd[0] == client_cmd[0], "server and client do not have the same cmd: " + server_cmd[0] + ", " + client_cmd[0]
-    
+    print(" ".join(server_cmd))
     try:
         server_proc = Popen(" ".join(server_cmd), shell=True, stdout=PIPE, stderr=PIPE)
         client_proc = Popen(" ".join(client_cmd), shell=True, stdout=PIPE, stderr=PIPE)
