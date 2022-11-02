@@ -51,32 +51,6 @@ arithmetic_tests = [
     ],
 ]
 
-mod_tests = [
-    [
-        "Mod two numbers - 1",
-        "2pc_mod",
-        "./scripts/aby_tests/test_inputs/mod_1.txt",
-    ],
-    [
-        "Mod two numbers - 2",
-        "2pc_mod",
-        "./scripts/aby_tests/test_inputs/mod_2.txt",
-    ],
-    [
-        "Mod two numbers - 3",
-        "2pc_mod",
-        "./scripts/aby_tests/test_inputs/mod_3.txt",
-    ],
-]
-
-unsigned_arithmetic_tests = [
-    [
-        "Add two unsigned numbers",
-        "2pc_add_unsigned",
-        "./scripts/aby_tests/test_inputs/add.txt",
-    ],
-]
-
 arithmetic_boolean_tests = [
     [
         "Test two numbers are equal - 1",
@@ -147,6 +121,14 @@ arithmetic_boolean_tests = [
         "Test int <= int - 3",
         "2pc_int_less_equals",
         "./scripts/aby_tests/test_inputs/le_3.txt",
+    ],
+]
+
+unsigned_arithmetic_tests = [
+    [
+        "Add two unsigned numbers",
+        "2pc_add_unsigned",
+        "./scripts/aby_tests/test_inputs/add.txt",
     ],
 ]
 
@@ -485,6 +467,24 @@ div_tests = [
         "Divide a by b - 3",
         "2pc_div",
         "./scripts/aby_tests/test_inputs/div_4.txt",
+    ],
+]
+
+mod_tests = [
+    [
+        "Mod two numbers - 1",
+        "2pc_mod",
+        "./scripts/aby_tests/test_inputs/mod_1.txt",
+    ],
+    [
+        "Mod two numbers - 2",
+        "2pc_mod",
+        "./scripts/aby_tests/test_inputs/mod_2.txt",
+    ],
+    [
+        "Mod two numbers - 3",
+        "2pc_mod",
+        "./scripts/aby_tests/test_inputs/mod_3.txt",
     ],
 ]
 

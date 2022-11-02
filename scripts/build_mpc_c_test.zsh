@@ -38,7 +38,7 @@ mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult.c
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult_add_pub.c
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mod.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add_unsigned.c
+mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add_unsigned.c
 
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_equals.c
 mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_greater_than.c

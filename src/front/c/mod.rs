@@ -19,8 +19,8 @@ use crate::ir::term::*;
 use lang_c::ast::*;
 use lang_c::span::Node;
 use log::debug;
-use std::cell::RefCell;
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -98,6 +98,7 @@ struct CGen {
     typedefs: HashMap<String, Ty>,
     function_queue: Vec<Term>,
     function_cache: HashSet<Op>,
+    ret_ty: Option<Ty>,
 }
 
 impl CGen {
@@ -111,6 +112,7 @@ impl CGen {
             typedefs: HashMap::default(),
             function_queue: Vec::new(),
             function_cache: HashSet::new(),
+            ret_ty: None,
         };
         this.circ
             .borrow()
@@ -521,10 +523,24 @@ impl CGen {
 
     fn gen_assign(&mut self, loc: CLoc, val: CTerm) -> Result<CTerm, String> {
         match loc {
-            CLoc::Var(l) => Ok(self
-                .circ_assign(l, Val::Term(val))
-                .map_err(|e| format!("{}", e))?
-                .unwrap_term()),
+            CLoc::Var(l) => {
+                let org_type = self
+                    .circ_get_value(l.clone())
+                    .map_err(|e| format!("{}", e))?
+                    .unwrap_term()
+                    .term
+                    .type_();
+                let new_type = val.term.type_();
+                // unsigned type casting
+                let new_val = match (&org_type, &new_type) {
+                    (Ty::Int(sa, _), Ty::Int(sb, _)) if sa != sb => cast(Some(org_type), val),
+                    (_, _) => val,
+                };
+                Ok(self
+                    .circ_assign(l, Val::Term(new_val))
+                    .map_err(|e| format!("{}", e))?
+                    .unwrap_term())
+            }
             CLoc::Idx(l, idx) => {
                 let old_inner: CTerm = match *l {
                     CLoc::Var(inner_loc) => self
@@ -807,6 +823,9 @@ impl CGen {
                     .unwrap_or_else(|| panic!("No function '{}'", fname))
                     .clone();
 
+                // Add return ty
+                self.ret_ty_put(f.ret_ty.clone());
+
                 // parameter sorts
                 let param_sorts = f.params.iter().map(|p| p.ty.sort()).collect::<Vec<_>>();
 
@@ -815,6 +834,7 @@ impl CGen {
                     .iter()
                     .map(|e| self.gen_expr(&e.node))
                     .collect::<Vec<_>>();
+                assert_eq!(f.params.len(), args.len());
                 let mut args_map: HashMap<String, CTerm> = HashMap::new();
                 for (p, c) in f.params.iter().zip(args.iter()) {
                     args_map.insert(p.name.clone(), c.clone());
@@ -948,7 +968,6 @@ impl CGen {
                 } else {
                     info.ty.default(self.circ.borrow().cir_ctx())
                 };
-
                 let res = self.circ_declare_init(
                     info.name.clone(),
                     info.ty.clone(),
@@ -1066,7 +1085,9 @@ impl CGen {
                 match ret {
                     Some(expr) => {
                         let ret = self.gen_expr(&expr.node);
-                        let ret_res = self.circ_return_(Some(ret));
+                        let ret_ty = self.ret_ty_take();
+                        let new_ret = cast(ret_ty, ret);
+                        let ret_res = self.circ_return_(Some(new_ret));
                         self.unwrap(ret_res);
                     }
                     None => {
@@ -1109,6 +1130,9 @@ impl CGen {
             .get(n)
             .unwrap_or_else(|| panic!("No function '{}'", n))
             .clone();
+
+        // Add return ty
+        self.ret_ty_put(f.ret_ty.clone());
 
         // setup stack frame for entry function
         self.circ_enter_fn(f.name.to_owned(), f.ret_ty.clone());
@@ -1226,6 +1250,14 @@ impl CGen {
                 _ => unimplemented!("Haven't implemented node: {:?}", n.node),
             };
         }
+    }
+
+    fn ret_ty_put(&mut self, ret_ty: Option<Ty>) {
+        self.ret_ty = ret_ty;
+    }
+
+    fn ret_ty_take(&self) -> Option<Ty> {
+        self.ret_ty.clone()
     }
 
     fn circ_assign(&self, loc: Loc, val: Val<CTerm>) -> Result<Val<CTerm>, CircError> {

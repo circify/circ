@@ -180,6 +180,11 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 term: CTermData::CBool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
                 udef: t.udef,
             },
+            // P 6.3.1.3.3 of the C11 standard says this is "implementation
+            // defined", not "undefined"
+            // u   = if toS && toW < fromW
+            //   then binOr (udef node) (Ty.Not $ Ty.mkEq t (intResize toS fromW t'))
+            //   else udef node
             Some(Ty::Int(to_s, to_w)) => {
                 // TODO: add udef check
                 // TODO: add int resize
