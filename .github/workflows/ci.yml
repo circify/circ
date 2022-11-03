@@ -44,7 +44,7 @@ jobs:
 
 
     - name: Set spartan field feature on
-      run: python3 driver.py --features c zok smt r1cs ristretto255
+      run: python3 driver.py --features zok smt r1cs ristretto255
     - name: Check (spartan custom build)
       run: python3 driver.py --check
     - name: Format (spartan custom build)
