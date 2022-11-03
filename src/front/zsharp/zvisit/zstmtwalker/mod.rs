@@ -132,7 +132,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             .zip(call.arguments.expressions.iter_mut())
             .try_for_each(|(pty, arg)| self.unify_expression(pty, arg))?;
 
-        let ret_ty = fdef.returns.first().cloned().unwrap_or_else(|| {
+        let ret_ty = fdef.returns.first().cloned().unwrap_or({
             ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType {
                 span: call.span,
             }))

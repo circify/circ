@@ -783,7 +783,7 @@ impl<E: Embeddable> Circify<E> {
         self.vals
             .get(l.get_name(&loc.name)?)
             .cloned()
-            .ok_or_else(|| CircError::InvalidLoc(loc))
+            .ok_or(CircError::InvalidLoc(loc))
     }
 
     /// Dereference a reference into a location.
