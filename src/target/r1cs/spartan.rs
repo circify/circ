@@ -1,7 +1,6 @@
 //! Export circ R1cs to Spartan
 use crate::target::r1cs::*;
 use bincode::{deserialize_from, serialize_into};
-use core::clone::Clone;
 use curve25519_dalek::scalar::Scalar;
 use fxhash::FxHashMap as HashMap;
 use gmp_mpfr_sys::gmp::limb_t;
@@ -28,7 +27,7 @@ pub fn prove<P: AsRef<Path>>(
 
     println!("Converting R1CS to Spartan");
     let (inst, wit, inps, num_cons, num_vars, num_inputs) =
-        spartan::r1cs_to_spartan(&prover_data, &inputs_map);
+        spartan::r1cs_to_spartan(&prover_data, inputs_map);
 
     println!("Proving with Spartan");
     assert_ne!(num_cons, 0, "No constraints");
@@ -39,7 +38,7 @@ pub fn prove<P: AsRef<Path>>(
     let mut prover_transcript = Transcript::new(b"nizk_example");
     let pf = NIZK::prove(&inst, wit, &inps, &gens, &mut prover_transcript);
 
-    return Ok((gens, inst, pf));
+    Ok((gens, inst, pf))
 }
 
 /// verify spartan proof
@@ -102,7 +101,7 @@ pub fn r1cs_to_spartan(
         .collect();
 
     for idx in &pf_input_order {
-        let sig = prover_data.r1cs.idxs_signals.get(&idx).cloned().unwrap();
+        let sig = prover_data.r1cs.idxs_signals.get(idx).cloned().unwrap();
 
         let scalar = match values.get(&sig.to_string()) {
             Some(v) => val_to_scalar(v),
@@ -120,7 +119,7 @@ pub fn r1cs_to_spartan(
             None => panic!("Input/witness variable does not have matching evaluation"),
         };
 
-        if !prover_data.r1cs.public_idxs.contains(&idx) {
+        if !prover_data.r1cs.public_idxs.contains(idx) {
             // witness
             trans.insert(*idx, wit.len());
             wit.push(scalar.to_bytes());
@@ -149,9 +148,9 @@ pub fn r1cs_to_spartan(
     let mut i = 0; // constraint #
     for (lc_a, lc_b, lc_c) in prover_data.r1cs.constraints.iter() {
         // circ Lc (const, monomials <Integer>) -> Vec<Variable>
-        let a = lc_to_v(&lc_a, const_id, &trans);
-        let b = lc_to_v(&lc_b, const_id, &trans);
-        let c = lc_to_v(&lc_c, const_id, &trans);
+        let a = lc_to_v(lc_a, const_id, &trans);
+        let b = lc_to_v(lc_b, const_id, &trans);
+        let c = lc_to_v(lc_c, const_id, &trans);
 
         // constraint # x identifier (vars, 1, inp)
         for Variable { sid, value } in a {
@@ -173,7 +172,7 @@ pub fn r1cs_to_spartan(
 
     // check if the instance we created is satisfiable
     let res = inst.is_sat(&assn_witness, &assn_inputs);
-    assert_eq!(res.unwrap(), true);
+    assert!(res.unwrap());
 
     (
         inst,
@@ -203,7 +202,7 @@ fn eval_inputs(
     let new_map = prover_data.precompute.eval(inputs_map);
     prover_data.r1cs.check_all(&new_map);
 
-    return new_map;
+    new_map
 }
 
 fn val_to_scalar(v: &Value) -> Scalar {
@@ -219,15 +218,15 @@ fn int_to_scalar(i: &Integer) -> Scalar {
     assert_eq!(limb_bits, 64);
 
     let two: u64 = 2;
-    let mut m = Scalar::from(two.pow(63) as u64);
-    m = m * Scalar::from(2 as u64);
+    let mut m = Scalar::from(two.pow(63));
+    m *= Scalar::from(two);
 
     // as_ref yeilds a least-significant-first array.
     for digit in i.as_ref().iter().rev() {
         accumulator *= m;
-        accumulator += Scalar::from(*digit as u64);
+        accumulator += Scalar::from(*digit);
     }
-    return accumulator;
+    accumulator
 }
 
 // circ Lc (const, monomials <Integer>) -> Vec<Variable>
@@ -238,12 +237,12 @@ fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize, usize>) -> Vec<Varia
         let scalar = int_to_scalar(&m.i());
 
         let var = Variable {
-            sid: trans.get(k).unwrap().clone(),
+            sid: *trans.get(k).unwrap(),
             value: scalar.to_bytes(),
         };
         v.push(var);
     }
-    if lc.constant.i() != Integer::from(0 as u32) {
+    if lc.constant.i() != 0 {
         let scalar = int_to_scalar(&lc.constant.i());
         let var = Variable {
             sid: const_id,
