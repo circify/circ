@@ -76,6 +76,7 @@ def build(features):
         cmd = cmd + ["--features"] + cargo_features
         if "ristretto255" in features: cmd = cmd + ["--no-default-features"]
 
+    print(cmd)
     subprocess.run(cmd, check=True)
 
     if "aby" in features:

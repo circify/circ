@@ -1,2 +1,0 @@
-def main(private u8 x) -> u8:
-    return x + x + x
