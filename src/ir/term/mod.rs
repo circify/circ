@@ -1828,7 +1828,7 @@ pub struct ComputationMetadata {
     /// All inputs, including who knows them. If no visibility is set, the input is public.
     pub input_vis: FxHashMap<String, (Term, Option<PartyId>)>,
     /// The inputs for the computation itself (not the precomputation).
-    pub computation_inputs: FxHashSet<String>,
+    pub computation_inputs: Vec<String>,
 }
 
 impl ComputationMetadata {
@@ -1850,7 +1850,7 @@ impl ComputationMetadata {
             self.input_vis.get(&input_name).unwrap()
         );
         self.input_vis.insert(input_name.clone(), (term, party));
-        self.computation_inputs.insert(input_name);
+        self.computation_inputs.push(input_name);
     }
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
@@ -1953,7 +1953,9 @@ impl ComputationMetadata {
     /// Remove an input
     pub fn remove_var(&mut self, name: &str) {
         self.input_vis.remove(name);
-        self.computation_inputs.remove(name);
+        if let Some(pos) = self.computation_inputs.iter().position(|x| *x == name) {
+            self.computation_inputs.remove(pos);
+        }
     }
 }
 
