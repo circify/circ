@@ -41,8 +41,6 @@ jobs:
       run: python3 driver.py --lint
     - name: Build, then Test
       run: python3 driver.py --test
-
-
     - name: Set spartan field feature on
       run: python3 driver.py --features zok smt r1cs ristretto255
     - name: Check (spartan custom build)
