@@ -230,7 +230,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         assert!(self.ty.is_none());
         use ast::Type::*;
 
-        self.visit_expression(&mut *aie.value)?;
+        self.visit_expression(&mut aie.value)?;
         if let Some(ty) = self.take()? {
             let ty = self.arrayize(ty, aie.count.as_ref().clone(), &aie.span);
             self.ty.replace(Array(ty));

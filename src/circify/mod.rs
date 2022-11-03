@@ -758,7 +758,7 @@ impl<E: Embeddable> Circify<E> {
         self.vals
             .get(l.get_name(&loc.name)?)
             .cloned()
-            .ok_or(CircError::InvalidLoc(loc))
+            .ok_or_else(|| CircError::InvalidLoc(loc))
     }
 
     /// Dereference a reference into a location.
@@ -895,12 +895,12 @@ mod test {
                 ty.default()
             }
 
-            fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+            fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
                 match (t, f) {
                     (T::Base(a), T::Base(b)) => T::Base(term![Op::Ite; cond, a, b]),
                     (T::Pair(a0, a1), T::Pair(b0, b1)) => T::Pair(
-                        Box::new(self.ite(ctx, cond.clone(), *a0, *b0)),
-                        Box::new(self.ite(ctx, cond, *a1, *b1)),
+                        Box::new(self.ite(_ctx, cond.clone(), *a0, *b0)),
+                        Box::new(self.ite(_ctx, cond, *a1, *b1)),
                     ),
                     (a, b) => panic!("Cannot ITE {}, {}", a, b),
                 }
@@ -937,14 +937,14 @@ mod test {
                         T::Pair(
                             Box::new(self.declare_input(
                                 ctx,
-                                &**a,
+                                a,
                                 format!("{}.0", name),
                                 visibility,
                                 p_1,
                             )),
                             Box::new(self.declare_input(
                                 ctx,
-                                &**b,
+                                b,
                                 format!("{}.1", name),
                                 visibility,
                                 p_2,

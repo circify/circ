@@ -650,7 +650,7 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
     i.bindings
         .iter()
         .map(|(name, term)| {
-            let name = std::str::from_utf8(*name).unwrap().to_string();
+            let name = std::str::from_utf8(name).unwrap().to_string();
             let val = match &term[0].op {
                 Op::Const(v) => v.clone(),
                 _ => panic!("Non-value binding {} associated with {}", term[0], name),

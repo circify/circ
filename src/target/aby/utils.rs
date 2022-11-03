@@ -40,7 +40,7 @@ pub fn get_path(path: &Path, lang: &str, t: &str) -> String {
 /// Write circuit output to temporary file
 pub fn write_lines_to_file(path: &str, lines: &[String]) {
     if !Path::new(&path).exists() {
-        fs::File::create(&path).expect(&*format!("Failed to create: {}", path));
+        fs::File::create(path).unwrap_or_else(|_| panic!("Failed to create: {}", path));
     }
 
     let data = lines.join("");

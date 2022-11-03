@@ -1933,7 +1933,7 @@ impl ComputationMetadata {
             .map(|(i, n)| (n, i as u8))
             .collect();
         let next_party_id = party_ids.len() as u8;
-        let computation_inputs: FxHashSet<String> = inputs.iter().map(|(i, _)| i.clone()).collect();
+        let computation_inputs: FxHashSet<String> = inputs.keys().cloned().collect();
         let input_vis = computation_inputs
             .iter()
             .map(|i| {

@@ -159,7 +159,7 @@ impl T {
                 .into_iter()
                 .map(|(name, t)| (field_ty_list.search(&name).unwrap().0, t))
                 .collect();
-            with_indices.into_iter().map(|(_i, t)| t).collect()
+            with_indices.into_values().collect()
         });
         T::new(Ty::Struct(name, field_ty_list), ir_term)
     }
