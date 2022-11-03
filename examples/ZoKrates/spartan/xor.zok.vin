@@ -1,0 +1,6 @@
+(let (
+    (b #x0004)
+    (d #x0000)
+    (return #x0004)
+) false ; ignored
+)
