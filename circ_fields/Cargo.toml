@@ -14,6 +14,9 @@ paste = "1.0"
 rand = "0.8"
 rug = { version = "1.11", features = ["serde"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
+ark-curve25519 = { path = "../third_party/curve25519" }
+ark-ff = "0.3.0"
+ark-serialize = "0.3.0"
 
 [dev-dependencies]
 rand = "0.8"

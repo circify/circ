@@ -60,7 +60,7 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap, Value, AND,
+    check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap, Value, AND, precomp::PreComp,
 };
 use std::collections::BTreeMap;
 
@@ -272,5 +272,73 @@ pub fn eliminate_tuples(cs: &mut Computation) {
     #[cfg(debug_assertions)]
     for o in &cs.outputs {
         assert!(tuple_free(o.clone()));
+    }
+}
+
+/// Run the tuple elimination pass for precomp.
+pub fn eliminate_tuples_precomp(precomp: &mut PreComp) {
+    let mut lifted: TermMap<TupleTree> = TermMap::new();
+    let outputs = precomp.outputs().clone().iter().map(|(_, v)| v).cloned().collect();
+    let mut terms: Vec<_> = PostOrderIter::new(term(Op::Tuple, outputs)).collect();
+    // drop the top-level tuple term.
+    terms.pop();
+    for t in terms.into_iter() {
+        let mut cs: Vec<TupleTree> =
+            t.cs.iter()
+                .map(|c| lifted.get(c).unwrap().clone())
+                .collect();
+        let new_t = match &t.op {
+            Op::Const(v) => termify_val_tuples(untuple_value(v)),
+            Op::Ite => {
+                let f = cs.pop().unwrap();
+                let t = cs.pop().unwrap();
+                let c = cs.pop().unwrap().unwrap_non_tuple();
+                debug_assert!(cs.is_empty());
+                t.bimap(|a, b| term![Op::Ite; c.clone(), a, b], &f)
+            }
+            Op::Eq => {
+                let b = cs.pop().unwrap();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                let eqs = zip_eq(a.flatten(), b.flatten()).map(|(a, b)| term![Op::Eq; a, b]);
+                TupleTree::NonTuple(term(AND, eqs.collect()))
+            }
+            Op::Store => {
+                let v = cs.pop().unwrap();
+                let i = cs.pop().unwrap().unwrap_non_tuple();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v)
+            }
+            Op::Select => {
+                let i = cs.pop().unwrap().unwrap_non_tuple();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                a.map(|a| term![Op::Select; a, i.clone()])
+            }
+            Op::Field(i) => {
+                let t = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                t.get(*i)
+            }
+            Op::Update(i) => {
+                let v = cs.pop().unwrap();
+                let t = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                t.update(*i, &v)
+            }
+            Op::Tuple => TupleTree::Tuple(cs.into()),
+            _ => TupleTree::NonTuple(term(
+                t.op.clone(),
+                cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
+            )),
+        };
+        lifted.insert(t, new_t);
+    }
+    let outputs = precomp.outputs.clone();
+    for (k, v) in outputs {
+        let terms: Vec<Term> = lifted.get(&v).unwrap().clone().flatten().collect();
+        assert!(terms.len() == 1);
+        precomp.outputs.insert(k.clone(), terms[0].clone());
     }
 }

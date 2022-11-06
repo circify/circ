@@ -1,4 +1,4 @@
-use crate::ir::term::*;
+use crate::ir::term::{*, precomp::PreComp};
 
 /// A rewriting pass.
 pub trait RewritePass {
@@ -42,6 +42,41 @@ pub trait RewritePass {
             .map(|o| cache.get(o).unwrap().clone())
             .collect();
     }
+
+    fn visit_precomp<F: Fn() -> Vec<Term>>(
+        &mut self,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term>;
+    fn traverse_precomp(&mut self, precomp: &mut PreComp) {
+        let mut cache = TermMap::<Term>::new();
+        let mut children_added = TermSet::new();
+        let mut stack = Vec::new();
+        stack.extend(precomp.outputs().iter().map(|(_, v)| v).cloned());
+        while let Some(top) = stack.pop() {
+            if !cache.contains_key(&top) {
+                // was it missing?
+                if children_added.insert(top.clone()) {
+                    stack.push(top.clone());
+                    stack.extend(top.cs.iter().filter(|c| !cache.contains_key(c)).cloned());
+                } else {
+                    let get_children = || -> Vec<Term> {
+                        top.cs
+                            .iter()
+                            .map(|c| cache.get(c).unwrap())
+                            .cloned()
+                            .collect()
+                    };
+                    let new_t_opt = self.visit_precomp(&top, get_children);
+                    let new_t = new_t_opt.unwrap_or_else(|| term(top.op.clone(), get_children()));
+                    cache.insert(top.clone(), new_t);
+                }
+            }
+        }
+        for (k, v) in precomp.outputs.clone().iter() {
+            precomp.outputs.insert(k.clone(), cache[v].clone());
+        }
+    }
 }
 
 /// An analysis pass that repeated sweeps all terms, visiting them, untill a pass makes no more
@@ -56,6 +91,31 @@ pub trait ProgressAnalysisPass {
         let mut visited = TermSet::new();
         let mut stack = Vec::new();
         stack.extend(computation.outputs.iter().cloned());
+        while let Some(top) = stack.pop() {
+            stack.extend(top.cs.iter().filter(|c| !visited.contains(c)).cloned());
+            // was it missing?
+            if visited.insert(top.clone()) {
+                order.push(top);
+            }
+        }
+        while progress {
+            progress = false;
+            for t in &order {
+                progress = self.visit(t) || progress;
+            }
+            for t in order.iter().rev() {
+                progress = self.visit(t) || progress;
+            }
+        }
+    }
+
+    fn traverse_precomp(&mut self, precomp: &PreComp) {
+        println!("new visit");
+        let mut progress = true;
+        let mut order = Vec::new();
+        let mut visited = TermSet::new();
+        let mut stack = Vec::new();
+        stack.extend(precomp.outputs().iter().map(|(_, v)| v).cloned());
         while let Some(top) = stack.pop() {
             stack.extend(top.cs.iter().filter(|c| !visited.contains(c)).cloned());
             // was it missing?

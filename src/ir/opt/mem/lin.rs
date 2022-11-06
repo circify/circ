@@ -83,6 +83,16 @@ impl RewritePass for Linearizer {
             _ => None,
         }
     }
+
+    fn visit_precomp<F: Fn() -> Vec<Term>>(
+        &mut self,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        let _ = orig;
+        let _ = rewritten_children;
+        todo!()
+    }
 }
 
 /// Eliminate arrays using linear scans. See module documentation.

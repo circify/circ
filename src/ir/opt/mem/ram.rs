@@ -301,6 +301,16 @@ impl RewritePass for Extactor {
             }
         }
     }
+
+    fn visit_precomp<F: Fn() -> Vec<Term>>(
+        &mut self,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        let _ = orig;
+        let _ = rewritten_children;
+        todo!()
+    }
 }
 
 /// Find arrays which are RAMs (i.e., accessed with a linear sequences of

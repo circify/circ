@@ -9,7 +9,7 @@ pub mod sha;
 pub mod tuple;
 mod visit;
 
-use super::term::*;
+use super::term::{*, precomp::PreComp};
 
 use log::debug;
 
@@ -114,4 +114,28 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
     }
     garbage_collect();
     cs
+}
+
+/// precomp opt
+pub fn precomp_opt<I: IntoIterator<Item = Opt>>(mut precomp: PreComp, optimizations: I) -> PreComp {
+    for i in optimizations {
+        match i.clone() {
+            Opt::ConstantFold(ignore) => {
+                let mut cache = TermCache::new(TERM_CACHE_LIMIT);
+                cache.resize(std::usize::MAX);
+                for a in precomp.outputs.values_mut() {
+                    *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
+                }
+            },
+            Opt::Obliv => {
+                mem::obliv::elim_obliv_precomp(&mut precomp);
+            },
+            Opt::Tuple => {
+                tuple::eliminate_tuples_precomp(&mut precomp);
+            },
+            _ => ()
+        }
+    }
+    garbage_collect();
+    precomp
 }

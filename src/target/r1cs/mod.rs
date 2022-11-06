@@ -21,10 +21,13 @@ pub mod trans;
 /// A Rank 1 Constraint System.
 pub struct R1cs<S: Hash + Eq> {
     modulus: FieldT,
-    signal_idxs: HashMap<S, usize>,
-    idxs_signals: HashMap<usize, S>,
+    /// variable name to index
+    pub signal_idxs: HashMap<S, usize>,
+    /// index to variable name
+    pub idxs_signals: HashMap<usize, S>,
     next_idx: usize,
-    public_idxs: HashSet<usize>,
+    /// public idxs
+    pub public_idxs: HashSet<usize>,
     constraints: Vec<(Lc, Lc, Lc)>,
     terms: Vec<Term>,
 }
@@ -32,8 +35,11 @@ pub struct R1cs<S: Hash + Eq> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A linear combination
 pub struct Lc {
+    /// comment
     modulus: FieldT,
+    /// comment
     constant: FieldV,
+    /// comment
     monomials: HashMap<usize, FieldV>,
 }
 
@@ -427,6 +433,7 @@ impl R1cs<String> {
         for o in precompute.outputs().keys() {
             precompute_inputs.remove(o);
         }
+        
         ProverData {
             precompute_inputs,
             precompute,

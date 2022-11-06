@@ -29,8 +29,6 @@ good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-feat
 group = "0.11"
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
-serde = { version = "1.0", features = ["derive", "rc"] }
-bincode = "1"
 lang-c = { version = "0.10.1", optional = true}
 logos = "0.12"
 pairing = "0.21"
@@ -42,6 +40,16 @@ itertools = "0.10"
 petgraph = "0.6"
 paste = "1.0"
 im = "15"
+merlin = "3.0.0"
+curve25519-dalek = {version = "3.2.0", features = ["serde"]}
+serde = { version = "1.0.124", features = ["derive"] }
+bincode = "1.2.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+smallvec = "1.9.0"
+libc = "0.2"
+ark-curve25519 = { path = "./third_party/curve25519" }
+ark-ff = "0.3.0"
 
 [dev-dependencies]
 quickcheck = "1"
@@ -52,9 +60,10 @@ structopt = "0.3"
 approx = "0.5.0"
 
 [features]
-default = ["bls12381", "ff_dfl"]
+default = ["bls12381", "ff_dfl", "r1cs", "lp", "smt", "zok"]
 bls12381 = []
 ff_dfl = []
+dalek = []
 c = ["lang-c"]
 lp = ["good_lp", "lp-solvers"]
 r1cs = ["bellman"]
@@ -63,6 +72,10 @@ zok = ["zokrates_parser", "zokrates_pest_ast"]
 
 [[example]]
 name = "circ"
+
+[[example]]
+name = "run_zok"
+required-features = ["r1cs"]
 
 [[example]]
 name = "zk"
@@ -82,3 +95,15 @@ required-features = ["lp"]
 
 [profile.release]
 debug = true
+
+[profile.test]
+opt-level = 3
+
+[patch.crates-io]
+ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
+ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
+ark-algebra-bench-templates = { git = "https://github.com/arkworks-rs/algebra" }
+ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra" }
+ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
+ark-std = { git = "https://github.com/arkworks-rs/std" }

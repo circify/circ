@@ -79,6 +79,16 @@ impl RewritePass for Pass {
             None
         }
     }
+
+    fn visit_precomp<F: Fn() -> Vec<Term>>(
+        &mut self,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        let _ = orig;
+        let _ = rewritten_children;
+        todo!()
+    }
 }
 
 /// Run the tuple elimination pass.

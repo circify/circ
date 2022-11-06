@@ -72,6 +72,7 @@
 use super::super::visit::*;
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
+use crate::ir::term::precomp::PreComp;
 
 use log::debug;
 
@@ -222,10 +223,10 @@ fn get_const(t: &Term) -> usize {
         .expect("oversize")
 }
 
-impl RewritePass for Replacer {
-    fn visit<F: Fn() -> Vec<Term>>(
+impl Replacer {
+    fn visit_comm<F: Fn() -> Vec<Term>>(
         &mut self,
-        computation: &mut Computation,
+        computation: Option<&mut Computation>,
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
@@ -242,7 +243,9 @@ impl RewritePass for Replacer {
                     let precomp = extras::array_to_tuple(orig);
                     let new_name = format!("{}.tup", name);
                     let new_sort = check(&precomp);
-                    computation.extend_precomputation(new_name.clone(), precomp);
+                    if let Some(computation) = computation {
+                        computation.extend_precomputation(new_name.clone(), precomp);
+                    }
                     Some(leaf_term(Op::Var(new_name, new_sort)))
                 } else {
                     None
@@ -288,6 +291,26 @@ impl RewritePass for Replacer {
     }
 }
 
+impl RewritePass for Replacer {
+
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        self.visit_comm(Some(computation), orig, rewritten_children)
+    }
+
+    fn visit_precomp<F: Fn() -> Vec<Term>>(
+        &mut self,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        self.visit_comm(None, orig, rewritten_children)
+    }
+}
+
 /// Eliminate oblivious arrays. See module documentation.
 pub fn elim_obliv(t: &mut Computation) {
     let mut prop_pass = NonOblivComputer::new();
@@ -296,6 +319,16 @@ pub fn elim_obliv(t: &mut Computation) {
         not_obliv: prop_pass.not_obliv,
     };
     <Replacer as RewritePass>::traverse(&mut replace_pass, t)
+}
+
+/// elim_obliv_pre
+pub fn elim_obliv_precomp(t: &mut PreComp) {
+    let mut prop_pass = NonOblivComputer::new();
+    prop_pass.traverse_precomp(t);
+    let mut replace_pass = Replacer {
+        not_obliv: prop_pass.not_obliv,
+    };
+    <Replacer as RewritePass>::traverse_precomp(&mut replace_pass, t) 
 }
 
 #[cfg(test)]

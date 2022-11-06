@@ -262,6 +262,18 @@ where
     Ok(())
 }
 
+/// document
+pub fn test_prove<E: Engine>(r1cs: &R1cs<String>, map: &FxHashMap<String, Value>)
+where
+    E::Fr: PrimeFieldBits,
+    E::G1: WnafGroup,
+    E::G2: WnafGroup,
+{
+    let rng = &mut rand::thread_rng();
+    let pk = generate_random_parameters::<E, _, _>(SynthInput(r1cs, &None), rng).unwrap();
+    let _ = create_random_proof(SynthInput(r1cs, &Some(map.clone())), &pk, rng).unwrap();
+}
+
 /// Given
 /// * a verifying-key path,
 /// * a proof path,
