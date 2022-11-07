@@ -15,6 +15,8 @@ use crate::ir::term::*;
 #[cfg(feature = "r1cs")]
 pub mod bellman;
 pub mod opt;
+#[cfg(feature = "r1cs")]
+pub mod spartan;
 pub mod trans;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

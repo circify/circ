@@ -55,7 +55,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     for a in &mut c.outputs {
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
-                        *a = cfold::fold_cache(a, &mut cache, &*ignore.clone());
+                        *a = cfold::fold_cache(a, &mut cache, &ignore.clone());
                         // then shrink back down to size between calls
                         cache.resize(TERM_CACHE_LIMIT);
                     }

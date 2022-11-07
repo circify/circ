@@ -132,13 +132,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             .zip(call.arguments.expressions.iter_mut())
             .try_for_each(|(pty, arg)| self.unify_expression(pty, arg))?;
 
-        let ret_ty =
-            fdef.returns
-                .first()
-                .cloned()
-                .unwrap_or(ast::Type::Basic(ast::BasicType::Boolean(
-                    ast::BooleanType { span: call.span },
-                )));
+        let ret_ty = fdef.returns.first().cloned().unwrap_or({
+            ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType {
+                span: call.span,
+            }))
+        });
         if let Some(ty) = rty {
             self.eq_type(ty, &ret_ty)?;
         }
@@ -214,7 +212,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
 
         // XXX(unimpl) does not check array lengths, just unifies ai.count with U32!
         let u32_ty = Basic(ast::BasicType::U32(ast::U32Type { span: ai.span }));
-        self.unify_expression(u32_ty, &mut *ai.count)?;
+        self.unify_expression(u32_ty, &mut ai.count)?;
 
         let arr_ty = if at.dimensions.len() > 1 {
             at.dimensions.remove(0); // perf?
@@ -222,7 +220,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         } else {
             bos_to_type(at.ty)
         };
-        self.unify_expression(arr_ty, &mut *ai.value)
+        self.unify_expression(arr_ty, &mut ai.value)
     }
 
     fn unify_inline_struct(

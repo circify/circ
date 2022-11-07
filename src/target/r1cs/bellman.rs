@@ -28,11 +28,11 @@ use super::*;
 fn int_to_ff<F: PrimeField>(i: Integer) -> F {
     let mut accumulator = F::from(0);
     let limb_bits = (std::mem::size_of::<limb_t>() as u64) << 3;
-    let limb_base = F::from(2).pow_vartime(&[limb_bits]);
+    let limb_base = F::from(2).pow_vartime([limb_bits]);
     // as_ref yeilds a least-significant-first array.
     for digit in i.as_ref().iter().rev() {
         accumulator *= limb_base;
-        accumulator += F::from(*digit as u64);
+        accumulator += F::from(*digit);
     }
     accumulator
 }

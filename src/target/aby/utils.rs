@@ -45,7 +45,7 @@ pub fn write_lines(path: &str, lines: &[String]) {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&path)
+        .open(path)
         .unwrap_or_else(|_| panic!("Failed to open file: {}", path));
 
     let data = lines.join("");

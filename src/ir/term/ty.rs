@@ -175,7 +175,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             match error {
                 Some(e) => Err(e),
                 None => {
-                    let value_sort = rec_check_raw_helper(&**op, &arg_sorts_to_inner_op)?;
+                    let value_sort = rec_check_raw_helper(op, &arg_sorts_to_inner_op)?;
                     Ok(Sort::Array(Box::new(key_sort), Box::new(value_sort), size))
                 }
             }
@@ -216,7 +216,7 @@ pub fn check_raw(t: &Term) -> Result<Sort, TypeError> {
                 to_check.push((c, false));
             }
         } else {
-            let ty = check_raw_step(&back.0, &*term_tys).map_err(|reason| TypeError {
+            let ty = check_raw_step(&back.0, &term_tys).map_err(|reason| TypeError {
                 op: back.0.op.clone(),
                 args: vec![], // not quite right
                 reason,
@@ -404,7 +404,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             for ptr in &val_sorts {
                 new_a.push(ptr);
             }
-            rec_check_raw_helper(&(*op.clone()), &new_a[..])
+            rec_check_raw_helper(&op.clone(), &new_a[..])
                 .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size))
         }
         (Op::Call(_, ex_args, ret), act_args) => {

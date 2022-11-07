@@ -1,0 +1,18 @@
+def matmult(field[16] a, field[16] b) -> field[16]:
+          field[16] c = [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+  
+          for field i in 0..4 do
+                  for field j in 0..4 do
+                          field s = 0
+                          for field k in 0..4 do
+                                  s = s + a[i*4 + k] * b[k*4 + j]
+                          endfor
+                  c[i*4 +j] = s
+                  endfor
+          endfor
+          return c
+  
+def main(public field[16] a, public field[16] b, public field[2] ab, public field init, public field final, private field doc) -> bool:
+          field[16] s = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
+          s = if (doc == 0) then matmult(s, a) else matmult(s, b) fi
+          return if s[init*4 + final] == 1 then true else false fi

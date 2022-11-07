@@ -1348,12 +1348,12 @@ impl Value {
         }
     }
     #[track_caller]
-    /// Get the underlying bit-vector constant, or panic!
+    /// Get the underlying integer constant, or panic!
     pub fn as_int(&self) -> &Integer {
         if let Value::Int(b) = self {
             b
         } else {
-            panic!("Not a bit-vec: {}", self)
+            panic!("Not an int: {}", self)
         }
     }
     #[track_caller]
@@ -1933,7 +1933,7 @@ impl ComputationMetadata {
             .map(|(i, n)| (n, i as u8))
             .collect();
         let next_party_id = party_ids.len() as u8;
-        let computation_inputs: Vec<String> = inputs.iter().map(|(i, _)| i.clone()).collect();
+        let computation_inputs: Vec<String> = inputs.keys().cloned().collect();
         let input_vis = computation_inputs
             .iter()
             .map(|i| {

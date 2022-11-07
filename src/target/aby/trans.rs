@@ -231,6 +231,9 @@ impl<'a> ToABY<'a> {
         }
     }
 
+    // clippy doesn't like that self is only used in recursion
+    // allowing so this can remain an associated function
+    #[allow(clippy::only_used_in_recursion)]
     fn get_sort_len(&mut self, s: &Sort) -> usize {
         let mut len = 0;
         len += match s {

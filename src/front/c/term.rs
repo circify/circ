@@ -230,7 +230,7 @@ fn int_promotion(t: &CTerm) -> CTerm {
             // "If an int can represent all values ... converted to an int ...
             // otherwise an unsigned int"
             CTermData::CInt(s, w, v) => {
-                let width = w - if *s { 1 } else { 0 };
+                let width = w - *s as usize;
                 let max_val: u32 = u32::pow(2, width as u32) - 1;
                 let signed = max_val < u32::pow(2u32, 31u32) - 1;
                 CTerm {

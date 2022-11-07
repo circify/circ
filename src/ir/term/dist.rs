@@ -209,7 +209,7 @@ impl FixedSizeDist {
                 let s = Sort::BitVector(self.bv_width.unwrap());
                 vec![s.clone(), s]
             }
-            o if o.arity() == None && o != &Op::BvConcat => repeat(sort.clone())
+            o if o.arity().is_none() && o != &Op::BvConcat => repeat(sort.clone())
                 .take(rng.gen_range(1..self.size))
                 .collect(),
             // perhaps allow concat?

@@ -467,6 +467,9 @@ impl CGen {
         }
     }
 
+    // clippy doesn't like that self is only used in recursion
+    // allowing so this can remain an associated function
+    #[allow(clippy::only_used_in_recursion)]
     fn base_loc(&self, loc: CLoc) -> CLoc {
         match loc {
             CLoc::Var(_) => loc,

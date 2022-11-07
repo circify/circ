@@ -28,8 +28,10 @@ use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::bellman::{gen_params, prove, verify};
+use circ::target::r1cs::bellman::gen_params;
 use circ::target::r1cs::opt::reduce_linearities;
+#[cfg(feature = "r1cs")]
+use circ::target::r1cs::spartan::write_data;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
@@ -143,6 +145,7 @@ arg_enum! {
     enum ProofAction {
         Count,
         Setup,
+        SpartanSetup,
     }
 }
 
@@ -288,8 +291,10 @@ fn main() {
             println!("Converting to r1cs");
             let (r1cs, mut prover_data, verifier_data) =
                 to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
+
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
+
             println!("Final R1cs size: {}", r1cs.constraints().len());
             // save the optimized r1cs: the prover needs it to synthesize.
             prover_data.r1cs = r1cs;
@@ -304,6 +309,10 @@ fn main() {
                         &verifier_data,
                     )
                     .unwrap();
+                }
+                ProofAction::SpartanSetup => {
+                    write_data::<_, _>(prover_key, verifier_key, &prover_data, &verifier_data)
+                        .unwrap();
                 }
             }
         }
