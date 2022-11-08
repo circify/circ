@@ -14,7 +14,7 @@ use crate::ir::term::*;
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
     outputs: FxHashMap<String, Term>,
-    sequence: Vec<String>,
+    sequence: Vec<(String, Sort)>,
 }
 
 impl PreComp {
@@ -28,7 +28,8 @@ impl PreComp {
     }
     /// Add a new output variable to the precomputation. `value` is the term that computes its value.
     pub fn add_output(&mut self, name: String, value: Term) {
-        self.sequence.push(name.clone());
+        let sort = check(&value);
+        self.sequence.push((name.clone(), sort));
         let old = self.outputs.insert(name, value);
         assert!(old.is_none());
     }
@@ -49,11 +50,11 @@ impl PreComp {
             }
         }
 
-        seq.retain(|s| {
-            let o = os.get(s).unwrap();
+        seq.retain(|(name, _sort)| {
+            let o = os.get(name).unwrap();
             let drop = to_remove.contains(o);
             if drop {
-                os.remove(s);
+                os.remove(name);
             }
             !drop
         });
@@ -65,7 +66,7 @@ impl PreComp {
         let mut value_cache: TermMap<Value> = TermMap::new();
         let mut env = env.clone();
         // iterate over all terms, evaluating them using the cache.
-        for o_name in &self.sequence {
+        for (o_name, _o_sort) in &self.sequence {
             let o = self.outputs.get(o_name).unwrap();
             eval_cached(o, &env, &mut value_cache);
             env.insert(o_name.clone(), value_cache.get(o).unwrap().clone());
@@ -87,13 +88,17 @@ impl PreComp {
         self.inputs_to_terms().into_keys().collect()
     }
 
+//    /// Recompute the inputs.
+//    fn recompute_inputs(&mut self) {
+//    }
+
     /// Bind the outputs of `self` to the inputs of `other`.
     pub fn sequential_compose(mut self, other: &PreComp) -> PreComp {
-        for o_name in &other.sequence {
+        for (o_name, o_sort) in &other.sequence {
             let o = other.outputs.get(o_name).unwrap().clone();
             assert!(!self.outputs.contains_key(o_name));
             self.outputs.insert(o_name.clone(), o);
-            self.sequence.push(o_name.clone());
+            self.sequence.push((o_name.clone(), o_sort.clone()));
         }
         self
     }
@@ -122,12 +127,12 @@ mod test {
 
         let mut p_with_a = p.clone();
         p_with_a.restrict_to_inputs(vec!["a".into()].into_iter().collect());
-        assert_eq!(p_with_a.sequence, vec!["out1"]);
+        assert_eq!(p_with_a.sequence.iter().map(|(n, _)| n).collect::<Vec<_>>(), vec!["out1"]);
         assert_eq!(p_with_a.outputs.len(), 1);
 
         let mut p_with_b = p.clone();
         p_with_b.restrict_to_inputs(vec!["b".into()].into_iter().collect());
-        assert_eq!(p_with_b.sequence, vec!["out2"]);
+        assert_eq!(p_with_b.sequence.iter().map(|(n, _)| n).collect::<Vec<_>>(), vec!["out2"]);
         assert_eq!(p_with_b.outputs.len(), 1);
 
         let mut p_both = p.clone();
