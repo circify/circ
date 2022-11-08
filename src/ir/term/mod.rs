@@ -2118,7 +2118,7 @@ impl<'de> Visitor<'de> for ComputationDeserVisitor {
     where
         E: std::error::Error,
     {
-        Ok(text::parse_computation(v.as_bytes()).clone())
+        Ok(text::parse_computation(v.as_bytes()))
     }
 }
 

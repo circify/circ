@@ -147,7 +147,7 @@ impl<'de> Visitor<'de> for PreCompDeserVisitor {
     where
         E: std::error::Error,
     {
-        Ok(text::parse_precompute(v.as_bytes()).clone())
+        Ok(text::parse_precompute(v.as_bytes()))
     }
 }
 
