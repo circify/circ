@@ -116,6 +116,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a (bv 4)) (b (bv 4)) (c (bv 4))) ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (bv 4) #x0 4 ()))
@@ -138,6 +139,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a (mod 5)) (b (mod 5)) (c (mod 5))) ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (mod 5) #f1m5 4 ()))
@@ -160,6 +162,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a (bv 4)) (b (bv 4)) (c (bv 4))) ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (bv 4) #x0 4 ()))
@@ -182,6 +185,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a (mod 5)) (b (mod 5)) (c (mod 5))) ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (mod 5) #f1m5 4 ()))

@@ -6,6 +6,8 @@
 //!
 //! Includes a parser ([parse_computation]) and serializer ([serialize_computation]) for [Computation]s.
 //!
+//! Includes a parser ([parse_precompute]) and serializer ([serialize_precompute]) for [precomp::PreComp]s.
+//!
 //!
 //! * IR Textual format
 //!   * It's s-expressions.
@@ -13,11 +15,15 @@
 //!   * `I`: integer (arbitrary-precision)
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
-//!   * Computation `C`: `(computation M T)`
+//!   * Computation `C`: `(computation M P T)`
 //!     * Metadata `M`: `(metadata PARTIES INPUTS VISIBILITIES)`
 //!       * PARTIES is `(X1 .. Xn)`
 //!       * INPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * VISIBILITIES is `((X_INPUT_1 X_PARTY_1) .. (X_INPUT_n X_PARTY_n))`
+//!     * Precompute `P`: `(precompute INPUTS OUTPUTS TUPLE_TERM)`
+//!       * INPUTS is `((X1 S1) .. (Xn Sn))`
+//!       * OUTPUTS is `((X1 S1) .. (Xn Sn))`
+//!       * TUPLE_TERM is a tuple of the same arity as the output
 //!   * Sort `S`:
 //!     * `bool`
 //!     * `f32`
@@ -571,15 +577,61 @@ impl<'src> IrInterp<'src> {
                     tt
                 )
             }
-            assert!(tts.len() > 2);
+            assert!(tts.len() > 3);
             let (metadata, input_names) = self.metadata(&tts[1]);
-            let outputs = tts[2..].iter().map(|tti| self.term(tti)).collect();
+            let precomputes = self.precompute(&tts[2]);
+            let outputs = tts[3..].iter().map(|tti| self.term(tti)).collect();
             self.unbind(input_names);
             Computation {
                 outputs,
                 metadata,
-                precomputes: Default::default(),
+                precomputes,
             }
+        } else {
+            panic!("Expected computation, found {}", tt)
+        }
+    }
+
+    fn var_decl_list(&mut self, tt: &TokTree<'src>) -> Vec<(String, Sort)> {
+        let input_names = self.decl_list(tt);
+        input_names
+            .iter()
+            .map(|i| (from_utf8(i).unwrap().into(), check(self.get_binding(i))))
+            .collect()
+    }
+
+    /// Parse a pre-computation.
+    pub fn precompute(&mut self, tt: &TokTree<'src>) -> precomp::PreComp {
+        let mut p = precomp::PreComp::new();
+        if let List(tts) = tt {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"precompute") {
+                panic!(
+                    "Expected precompute, but list did not start with 'precompute': {}",
+                    tt
+                )
+            }
+            assert!(
+                tts.len() == 4,
+                "precompute should have 4 children, but has {}",
+                tts.len()
+            );
+            let inputs = self.var_decl_list(&tts[1]);
+            let outputs = self.var_decl_list(&tts[2]);
+            let tuple_term = self.term(&tts[3]);
+            assert!(
+                outputs.len() == tuple_term.cs.len(),
+                "output list has {} items, tuple has {}",
+                outputs.len(),
+                tuple_term.cs.len()
+            );
+            for (n, s) in inputs {
+                p.add_input(n, s);
+            }
+            for ((n, s), t) in outputs.into_iter().zip(&tuple_term.cs) {
+                assert_eq!(s, check(t));
+                p.add_output(n, t.clone());
+            }
+            p
         } else {
             panic!("Expected computation, found {}", tt)
         }
@@ -684,11 +736,36 @@ pub fn parse_computation(src: &[u8]) -> Computation {
 pub fn serialize_computation(c: &Computation) -> String {
     let mut out = String::new();
     writeln!(&mut out, "(computation \n{}", c.metadata).unwrap();
+    writeln!(&mut out, "{}", serialize_precompute(&c.precomputes)).unwrap();
     for o in &c.outputs {
         writeln!(&mut out, "\n  {}", serialize_term(o)).unwrap();
     }
     writeln!(&mut out, "\n)").unwrap();
     out
+}
+
+/// Serialize a pre-computation.
+pub fn serialize_precompute(p: &precomp::PreComp) -> String {
+    let mut out = String::new();
+    writeln!(&mut out, "(precompute (").unwrap();
+    for (name, sort) in p.inputs() {
+        writeln!(&mut out, " ({} {})", name, sort).unwrap();
+    }
+    writeln!(&mut out, ")(").unwrap();
+    for (name, sort) in p.sequence() {
+        writeln!(&mut out, " ({} {})", name, sort).unwrap();
+    }
+    writeln!(&mut out, ")").unwrap();
+    writeln!(&mut out, "\n  {}", serialize_term(&p.tuple())).unwrap();
+    writeln!(&mut out, "\n)").unwrap();
+    out
+}
+
+/// Parse a pre-computation.
+pub fn parse_precompute(src: &[u8]) -> precomp::PreComp {
+    let tree = parse_tok_tree(src);
+    let mut i = IrInterp::new();
+    i.precompute(&tree)
 }
 
 #[cfg(test)]
@@ -810,6 +887,11 @@ mod test {
                     ((a bool) (b bool) (A (tuple bool bool)))
                     ((a P))
                 )
+                (precompute
+                    ((c bool) (d bool))
+                    ((a bool))
+                    (tuple (not (and c d)))
+                )
                 (let (
                         (B ((update 1) A b))
                 ) (xor ((field 1) B)
@@ -824,6 +906,21 @@ mod test {
         assert_eq!(check(&c.outputs()[0]), Sort::Bool);
         let s = serialize_computation(&c);
         let c2 = parse_computation(s.as_bytes());
+        assert_eq!(c, c2);
+    }
+
+    #[test]
+    fn precompute_roundtrip() {
+        let c = parse_precompute(
+            b"
+                (precompute
+                    ((c bool) (d bool))
+                    ((a bool) (b bool))
+                    (tuple (not (and c d)) (not a))
+            )",
+        );
+        let s = serialize_precompute(&c);
+        let c2 = parse_precompute(s.as_bytes());
         assert_eq!(c, c2);
     }
 }
