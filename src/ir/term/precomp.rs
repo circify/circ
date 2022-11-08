@@ -10,7 +10,7 @@ use crate::ir::term::*;
 /// A "precomputation".
 ///
 /// Expresses a computation to be run in advance by a single party.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PreComp {
     /// A map from output names to the terms that compute them.
     outputs: FxHashMap<String, Term>,
@@ -121,6 +121,42 @@ impl PreComp {
         }
         self.recompute_inputs();
         self
+    }
+}
+
+impl Serialize for PreComp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = text::serialize_precompute(self);
+        serializer.serialize_str(&bytes)
+    }
+}
+
+struct PreCompDeserVisitor;
+
+impl<'de> Visitor<'de> for PreCompDeserVisitor {
+    type Value = PreComp;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a string (that textually defines a term)")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: std::error::Error,
+    {
+        Ok(text::parse_precompute(v.as_bytes()).clone())
+    }
+}
+
+impl<'de> Deserialize<'de> for PreComp {
+    fn deserialize<D>(deserializer: D) -> Result<PreComp, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(PreCompDeserVisitor)
     }
 }
 
