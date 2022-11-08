@@ -331,6 +331,7 @@ mod test {
             b"
             (computation
                 (metadata () () ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (bv 4) #x0 4 ()))
@@ -355,6 +356,7 @@ mod test {
             b"
             (computation
                 (metadata () () ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (bv 4) #b000 4 ()))
@@ -392,6 +394,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a bool)) ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (bv 4) #b000 4 ()))
@@ -430,6 +433,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a bool)) ())
+                (precompute () () (#t ))
                 (let
                     (
                         (c_array (#a (bv 4) #b000 4 ()))
@@ -469,6 +473,7 @@ mod test {
             b"
             (computation
                 (metadata () ((a bool)) ())
+                (precompute () () (#t ))
                 (let
                     (
                         ; connected component 0: simple store chain

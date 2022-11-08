@@ -1982,7 +1982,7 @@ impl Display for ComputationMetadata {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
@@ -2092,6 +2092,42 @@ impl Computation {
         // drop the top-level tuple term.
         terms.pop();
         terms.into_iter()
+    }
+}
+
+impl Serialize for Computation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = text::serialize_computation(self);
+        serializer.serialize_str(&bytes)
+    }
+}
+
+struct ComputationDeserVisitor;
+
+impl<'de> Visitor<'de> for ComputationDeserVisitor {
+    type Value = Computation;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a string (that textually defines a term)")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: std::error::Error,
+    {
+        Ok(text::parse_computation(v.as_bytes()))
+    }
+}
+
+impl<'de> Deserialize<'de> for Computation {
+    fn deserialize<D>(deserializer: D) -> Result<Computation, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(ComputationDeserVisitor)
     }
 }
 

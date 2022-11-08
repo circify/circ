@@ -5,7 +5,7 @@ use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::debug;
 use paste::paste;
 use rug::Integer;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::hash_map::Entry;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -28,7 +28,28 @@ pub struct R1cs<S: Hash + Eq> {
     next_idx: usize,
     public_idxs: HashSet<usize>,
     constraints: Vec<(Lc, Lc, Lc)>,
+    #[serde(
+        deserialize_with = "deserialize_term_vec",
+        serialize_with = "serialize_term_vec"
+    )]
     terms: Vec<Term>,
+}
+
+// serde requires a specific signature here.
+#[allow(clippy::ptr_arg)]
+fn serialize_term_vec<S>(ts: &Vec<Term>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    term(Op::Tuple, ts.clone()).serialize(s)
+}
+
+fn deserialize_term_vec<'de, D>(d: D) -> Result<Vec<Term>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let tuple: Term = Deserialize::deserialize(d)?;
+    Ok(tuple.cs.clone())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
