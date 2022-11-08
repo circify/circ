@@ -290,6 +290,7 @@ dependencies = [
  "pest-ast",
  "pest_derive",
  "petgraph",
+ "polynomial",
  "quickcheck",
  "quickcheck_macros",
  "rand 0.8.5",
@@ -1085,6 +1086,15 @@ checksum = "4a13a2fa9d0b63e5f22328828741e523766fff0ee9e779316902290dff3f824f"
 dependencies = [
  "fixedbitset",
  "indexmap",
+]
+
+[[package]]
+name = "polynomial"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4a3d64b1fee2683727dafccbf279a1425a0b5d1306b3b9caa80ecc2b9d32e2f"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
