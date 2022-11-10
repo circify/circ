@@ -22,6 +22,7 @@ zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional 
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
+polynomial = "0.2"
 bellman = { version = "0.11", optional = true }
 ff = "0.11"
 fxhash = "0.2"
@@ -37,10 +38,10 @@ pairing = "0.21"
 pest = "2.4"
 pest_derive = "2.4"
 pest-ast = "0.3"
-polynomial = "0.2.4"
 from-pest = "0.3"
 itertools = "0.10"
 petgraph = "0.6"
+flint-sys = { version = "0.7.1", optional = true, disable-make-check = true }
 spartan = { version = "0.7.0", default-features = false, optional = true }
 merlin = { version = "3.0.0", optional = true }
 curve25519-dalek = {version = "3.2.0", features = ["serde"], optional = true}
@@ -64,7 +65,7 @@ ristretto255 = []
 ff_dfl = []
 c = ["lang-c"]
 lp = ["good_lp", "lp-solvers"]
-regex = ["regex-syntax"]
+regex = ["regex-syntax", "flint-sys"]
 r1cs = ["bellman", "spartan", "merlin", "curve25519-dalek"]
 smt = ["rsmt2"]
 zok = ["zokrates_parser", "zokrates_pest_ast"]
