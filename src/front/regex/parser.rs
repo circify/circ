@@ -6,7 +6,7 @@ use regex_syntax::hir::HirKind::{Group, Class, Concat, Alternation, Repetition, 
 use regex_syntax::hir::Literal::Unicode;
 use regex_syntax::hir::RepetitionKind::{OneOrMore, ZeroOrMore};
 
-pub mod Re {
+pub mod re {
     use hashconsing::{consign, HConsed, HashConsign};
 
     pub type Regex = HConsed<RegexF>;
@@ -79,7 +79,7 @@ pub mod Re {
     }
 }
 
-use Re::Regex;
+use re::Regex;
 
 /// Parser based on crate regex-syntax
 fn to_regex<'a>(h: &'a Hir, ab: &'a str) -> Regex {
@@ -87,25 +87,25 @@ fn to_regex<'a>(h: &'a Hir, ab: &'a str) -> Regex {
        Concat(l) =>
             l.iter()
              .map(|a| to_regex(&a, ab))
-             .reduce(Re::app)
-             .unwrap_or(Re::nil()),
+             .reduce(re::app)
+             .unwrap_or(re::nil()),
        Alternation(l) =>
            l.iter()
              .map(|a| to_regex(&a, ab))
-             .reduce(Re::alt)
-             .unwrap_or(Re::empty()),
+             .reduce(re::alt)
+             .unwrap_or(re::empty()),
        Repetition(r) => {
             let inner = to_regex(&r.hir, ab);
             match r.kind {
-                OneOrMore => Re::app(inner.clone(), Re::star(inner)),
-                ZeroOrMore => Re::star(inner),
+                OneOrMore => re::app(inner.clone(), re::star(inner)),
+                ZeroOrMore => re::star(inner),
                 _=> panic!("Supported repetition operators [+,*]: {:?}", r)
             }
        },
        Group(g) => to_regex(&g.hir, ab),
        Class(_) => // this is dot
-            ab.chars().map(|a| Re::character(a)).reduce(|acc, a| Re::alt(acc, a)).unwrap(),
-       Literal(Unicode(c)) => Re::character(*c),
+            ab.chars().map(|a| re::character(a)).reduce(|acc, a| re::alt(acc, a)).unwrap(),
+       Literal(Unicode(c)) => re::character(*c),
        _ => panic!("Unsupported regex {:?}", h)
     }
 }

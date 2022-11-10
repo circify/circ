@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::collections::HashMap;
 
-use crate::front::regex::parser::Re::{self, Regex, RegexF};
+use crate::front::regex::parser::re::{self, Regex, RegexF};
 
 // TODO: Find a good place for this
 /* use hashconsing::{*, hash_coll::*};
@@ -16,77 +16,86 @@ fn memoize<T: Hash, R>(f: fn(HCons<T>, R)) -> fn(HCons<T>, R) {
 */
 
 pub fn nullable(r: &Regex) -> bool {
-    match **r {
+    match &**r {
         RegexF::Nil | RegexF::Star(_) => true,
         RegexF::Empty | RegexF::Char(_) => false,
-        RegexF::Not(r) => !nullable(&r),
-        RegexF::App(a,b) => nullable(&a) && nullable(&b),
-        RegexF::Alt(a,b) => nullable(&a) || nullable(&b)
+        RegexF::Not(ref r) => !nullable(r),
+        RegexF::App(ref a, ref b) => nullable(a) && nullable(b),
+        RegexF::Alt(ref a, ref b) => nullable(a) || nullable(b)
     }
 }
 
 pub fn deriv(c: char, r: &Regex) -> Regex {
-    match **r {
-        RegexF::Nil => Re::empty(),
-        RegexF::Empty => Re::empty(),
-        RegexF::Char(x) if x == c => Re::nil(),
-        RegexF::Char(_) => Re::empty(),
-        RegexF::Not(r) => Re::not(deriv(c, &r)),
-        RegexF::App(a,b) if nullable(&a) =>
-           Re::alt(Re::app(deriv(c, &a), b.clone()), deriv(c, &b)),
-        RegexF::App(a,b) => Re::app(deriv(c, &a), b.clone()),
-        RegexF::Alt(a,b) => Re::alt(deriv(c, &a), deriv(c, &b)),
-        RegexF::Star(a) => Re::app(deriv(c, &a), Re::star(a.clone()))
+    match &**r {
+        RegexF::Nil => re::empty(),
+        RegexF::Empty => re::empty(),
+        RegexF::Char(x) if *x == c => re::nil(),
+        RegexF::Char(_) => re::empty(),
+        RegexF::Not(ref r) => re::not(deriv(c, r)),
+        RegexF::App(ref a, ref b) if nullable(a) =>
+           re::alt(re::app(deriv(c, a), b.clone()), deriv(c, b)),
+        RegexF::App(ref a, ref b) => re::app(deriv(c, a), b.clone()),
+        RegexF::Alt(ref a, ref b) => re::alt(deriv(c, a), deriv(c, b)),
+        RegexF::Star(ref a) => re::app(deriv(c, a), re::star(a.clone()))
     }
 }
 
+#[derive(Debug)]
 pub struct DFA {
     /// Number of states
     n: i32,
     /// Set of states (and their index)
-    Q: HashMap<Regex, i32>,
+    states: HashMap<Regex, i32>,
     /// Transition relation from [state -> state], given [char]
-    d: HashSet<(Regex, char, Regex)>
+    trans: HashSet<(Regex, char, Regex)>
 }
 
 impl DFA {
     pub fn new() -> Self {
-        Self { n: 0, Q: HashMap::new(), d: HashSet::new() }
+        Self { n: 0, states: HashMap::new(), trans: HashSet::new() }
     }
-    pub fn add_transition(&mut self, from: Regex, c: char, to: Regex) {
-        self.d.insert((from, c, to));
+    pub fn add_transition(&mut self, from: &Regex, c: char, to: &Regex) {
+        self.trans.insert((from.clone(), c, to.clone()));
     }
 
-    pub fn add_state(&mut self, new_state: Regex) {
-        self.n= self.n + 1;
-        self.Q.insert(new_state.clone(), self.n);
+    pub fn add_state(&mut self, new_state: &Regex) {
+        if self.states.insert(new_state.clone(), self.n).is_none() {
+            self.n = self.n + 1;
+        }
     }
 
     pub fn contains_state(&self, state: &Regex) -> bool {
-        self.Q.contains_key(state)
+        self.states.contains_key(state)
     }
 
     pub fn get_state_num(&self, state: &Regex) -> i32 {
-        self.Q[state]
+        self.states[state]
     }
 
     pub fn get_final_states(&self) -> HashSet<i32> {
-        self.Q.into_iter().filter_map(|(k,v)| if nullable(&k) { Some(v) } else { None }).collect()
+        self.states
+          .clone()
+          .into_iter()
+          .filter_map(|(k,v)| if nullable(&k) { Some(v) } else { None })
+          .collect()
     }
 
-    pub fn deltas(&self) -> HashSet<(Regex, char, Regex)> { self.d }
+    pub fn deltas(&self) -> HashSet<(Regex, char, Regex)> { self.trans.clone() }
 }
 
-pub fn mkDFA(q: &Regex, ab: String, d: &mut DFA) {
+/// Top level, generate a DFA using derivatives [Owens et al. 06]
+pub fn mk_dfa(q: &Regex, ab: &String, d: &mut DFA) {
+    // Add to DFA if not already there
+    d.add_state(q);
+
+    // Explore derivatives
     for c in ab.chars() {
       let q_c = deriv(c, q);
-      d.add_transition(q.clone(), c, q_c);
-
+      d.add_transition(q, c, &q_c);
       if d.contains_state(&q_c) {
           continue;
       } else {
-          d.add_state(q_c);
-          mkDFA(&q_c, ab, d);
+          mk_dfa(&q_c, ab, d);
       }
     }
 }
