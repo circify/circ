@@ -62,7 +62,7 @@ impl IntField {
 
     /// Get a ref to the modulus
     pub fn modulus(&self) -> &Integer {
-        &*self.m
+        &self.m
     }
 
     /// Get an Arc of the modulus
@@ -73,7 +73,7 @@ impl IntField {
     /// Invert mod p
     pub fn recip(self) -> Self {
         let r = Self {
-            i: self.i.invert(&*self.m).expect("no inverse!"),
+            i: self.i.invert(&self.m).expect("no inverse!"),
             m: self.m,
         };
         r.check("recip");
