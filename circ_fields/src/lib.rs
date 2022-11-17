@@ -42,7 +42,7 @@ impl Display for FieldT {
         match self {
             Self::FBls12381 => write!(f, "FieldT::FBls12381"),
             Self::FBn254 => write!(f, "FieldT::FBn254"),
-            Self::IntField(m) => write!(f, "FieldT::(mod {})", &*m),
+            Self::IntField(m) => write!(f, "FieldT::(mod {})", m),
         }
     }
 }
@@ -79,8 +79,8 @@ impl FieldT {
     #[inline]
     pub fn modulus(&self) -> &Integer {
         match self {
-            Self::FBls12381 => &*F_BLS12381_FMOD,
-            Self::FBn254 => &*F_BN254_FMOD,
+            Self::FBls12381 => &F_BLS12381_FMOD,
+            Self::FBn254 => &F_BN254_FMOD,
             Self::IntField(m) => m.as_ref(),
         }
     }
@@ -175,8 +175,8 @@ impl FieldV {
     #[inline]
     pub fn modulus(&self) -> &Integer {
         match self {
-            Self::FBls12381(_) => &*F_BLS12381_FMOD,
-            Self::FBn254(_) => &*F_BN254_FMOD,
+            Self::FBls12381(_) => &F_BLS12381_FMOD,
+            Self::FBn254(_) => &F_BN254_FMOD,
             Self::IntField(i) => i.modulus(),
         }
     }

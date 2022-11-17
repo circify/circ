@@ -5,8 +5,8 @@ authors = ["kwantam <kwantam@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-ff = { version = "0.11", features = ["derive"] }
-ff_derive = { git = "https://github.com/kwantam/ff.git", rev = "b3041c177b9ae28095c9ce8347600212252abc83" }
+ff = { version = "0.12", features = ["derive"] }
+ff_derive = "0.12"
 ff-derive-num = "0.2"
 lazy_static = "1.4"
 num-traits = "0.2"
