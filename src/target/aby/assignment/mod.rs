@@ -75,7 +75,7 @@ impl CostModel {
     }
 
     /// Create a cost model from an OPA json file, like [this](https://github.com/ishaq/OPA/blob/d613c15ff715fa62c03e37b673548f94c16bfe0d/solver/sample-costs.json)
-    pub fn from_opa_cost_file(p: &impl AsRef<Path>) -> CostModel {
+    pub fn from_opa_cost_file(p: &impl AsRef<Path>, k: FxHashMap<String, f64>) -> CostModel {
         use ShareType::*;
         let get_cost_opt =
             |share_name: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
@@ -99,6 +99,17 @@ impl CostModel {
             )
             .unwrap()
         };
+        let get_depth = |share_type: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
+            let o = obj
+                .get("depth")
+                .unwrap_or_else(|| panic!("Missing {} in {:#?}", "depth", obj));
+            Some(
+                o.get(share_type)
+                    .unwrap_or_else(|| panic!("Missing {} entry in {:#?}", share_type, o))
+                    .as_f64()
+                    .expect("not a number"),
+            )
+        };
         let mut conversions = FxHashMap::default();
         let mut ops = FxHashMap::default();
         let f = File::open(p).expect("Missing file");
@@ -112,14 +123,22 @@ impl CostModel {
         conversions.insert((Yao, Arithmetic), get_cost("y2a", costs));
         conversions.insert((Arithmetic, Yao), get_cost("a2y", costs));
 
+
         for (op_name, cost) in costs {
             // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
-            if !op_name.contains('2') {
+            if !op_name.contains('2') && !op_name.contains("depth"){
                 for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")] {
                     if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
+                        let mut cost_depth: f64 = 0.0; 
+                        if *share_type != Yao{
+                            if let Some(d) = get_depth(share_name, cost.as_object().unwrap()){
+                                cost_depth += k.get(share_name.clone()).unwrap_or_else(|| &1.0)*d*get_depth(share_name, costs).unwrap();
+                            }
+                        }
                         ops.entry(op_name.clone())
                             .or_insert_with(FxHashMap::default)
-                            .insert(*share_type, c);
+                            .insert(*share_type, c + cost_depth);
+                        // println!("Insert cost model:{}, {}, {}", op_name, share_name, c + cost_depth);
                     }
                 }
             }
@@ -199,7 +218,7 @@ pub fn get_cost_model(cm: &str) -> CostModel {
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    CostModel::from_opa_cost_file(&p)
+    CostModel::from_opa_cost_file(&p, FxHashMap::default())
 }
 
 /// Assigns boolean sharing to all terms

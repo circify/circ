@@ -37,7 +37,7 @@ pub fn opa_smart_global_assign(
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
     build_smart_ilp(terms.clone(), def_uses, &costs, share_types)
 }
 
@@ -65,7 +65,7 @@ fn build_smart_ilp(
             Op::Var(..) | Op::Const(_) => {
                 for ty in share_types {
                     let name = format!("t_{}_{}", i, ty.char());
-                    let v = ilp.new_variable(variable().min(0).max(1), name.clone());
+                    let v = ilp.new_variable(variable().min(0), name.clone());
                     term_vars.insert((t.clone(), *ty), (v, 0.0, name));
                     vars.push(v);
                 }
@@ -76,7 +76,7 @@ fn build_smart_ilp(
                     for ty in share_types {
                         if let Some(cost) = costs.get(ty){
                             let name = format!("t_{}_{}", i, ty.char());
-                            let v = ilp.new_variable(variable().min(0).max(1), name.clone());
+                            let v = ilp.new_variable(variable().min(0), name.clone());
                             term_vars.insert((t.clone(), *ty), (v, *cost, name));
                             vars.push(v);
                         }
@@ -108,6 +108,7 @@ fn build_smart_ilp(
                         variable().min(0).max(1),
                         format!("c_{}_{}2{}", def_i, from_ty.char(), to_ty.char()),
                     );
+                    // println!("t: {:?} {:?}: {:?} cost: {:?}", def, v, format!("c_{}_{}2{}", def_i, from_ty.char(), to_ty.char()), *costs.conversions.get(&(*from_ty, *to_ty)).unwrap());
                     conv_vars.insert(
                         (def.clone(), *from_ty, *to_ty),
                         (v, *costs.conversions.get(&(*from_ty, *to_ty)).unwrap()),
@@ -131,11 +132,22 @@ fn build_smart_ilp(
                 for to_ty in share_types {
                     // OPA formulation:
                     // conv_from_2_to >= def_from - use_from
+                    // This is not correct
+                    // conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
+                    //     term_vars.get(&(def.clone(), *from_ty)).map(|t_from| {
+                    //         term_vars.get(&(use_.clone(), *from_ty)).map(|t_to| {
+                    //             println!("{:?} >> {:?} - {:?}", c.0, def, use_);
+                    //             println!("{:?} >> {:?} - {:?}", c.0, t_from.2, t_to.2);
+                    //             ilp.new_constraint(c.0 >> (t_from.0 - t_to.0))
+                    //         })
+                    //     })
+                    // });
                     conv_vars.get(&(def.clone(), *from_ty, *to_ty)).map(|c| {
                         term_vars.get(&(def.clone(), *from_ty)).map(|t_from| {
-                            term_vars.get(&(use_.clone(), *from_ty)).map(|t_to| {
-                                ilp.new_constraint(c.0 >> (t_from.0 - t_to.0))
-                            })
+                            // c[term i from pi to pi'] >= t[term j with pi'] + t[term i with pi] - 1
+                            term_vars
+                                .get(&(use_.clone(), *to_ty))
+                                .map(|t_to| ilp.new_constraint(c.0 >> (t_from.0 + t_to.0 - 1.0)))
                         })
                     });
                 }
@@ -159,5 +171,6 @@ fn build_smart_ilp(
             assignment.insert(term.clone(), *ty);
         }
     }
+    // println!("{:?}", solution);
     assignment
 }

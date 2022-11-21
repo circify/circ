@@ -57,7 +57,7 @@ pub fn assign(c: &ComputationSubgraph, cm: &str) -> SharingMap {
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
     build_ilp(c, &costs)
 }
 
@@ -76,7 +76,7 @@ pub fn assign_mut(c: &ComputationSubgraph, cm: &str, co: &ComputationSubgraph) -
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
     let mut smap = TermMap::new();
     let mut cnt = 1;
     while smap.len() == 0 {
@@ -101,6 +101,7 @@ pub fn assign_mut_smart(
     dusg: &DefUsesSubGraph,
     cm: &str,
     dusg_ref: &TermSet,
+    k_map: &FxHashMap<String, f64>
 ) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
@@ -115,7 +116,7 @@ pub fn assign_mut_smart(
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, k_map.clone());
     let mut smap = TermMap::new();
     let mut cnt = 1;
     while smap.len() == 0 {
@@ -139,6 +140,7 @@ pub fn assign_mut_smart(
 pub fn smart_global_assign(
     terms: &TermSet,
     def_uses: &FxHashSet<(Term, Term)>,
+    k_map: &FxHashMap<String, f64>,
     cm: &str,
 ) -> SharingMap {
     let base_dir = match cm {
@@ -154,7 +156,7 @@ pub fn smart_global_assign(
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, k_map.clone());
     build_smart_ilp(terms.clone(), def_uses, &costs)
 }
 
@@ -181,16 +183,34 @@ fn build_smart_ilp(
             Op::Var(..) | Op::Const(_) => {
                 for ty in &SHARE_TYPES {
                     let name = format!("t_{}_{}", i, ty.char());
+                    // println!("name: {:?}, op: {:?}", name, t.op);
                     let v = ilp.new_variable(variable().binary(), name.clone());
-                    // if *ty == ShareType::Arithmetic {
-                    //     term_vars.insert((t.clone(), *ty), (v, 0.1, name));
-                    // } else if *ty == ShareType::Boolean{
-                    //     term_vars.insert((t.clone(), *ty), (v, 0.12, name));
-                    // } else{
-                    //     term_vars.insert((t.clone(), *ty), (v, 0.11, name));
-                    // }
-                    term_vars.insert((t.clone(), *ty), (v, 0.0, name));
+                    if *ty == ShareType::Arithmetic {
+                        term_vars.insert((t.clone(), *ty), (v, 0.1, name));
+                    } else if *ty == ShareType::Boolean{
+                        term_vars.insert((t.clone(), *ty), (v, 0.12, name));
+                    } else{
+                        term_vars.insert((t.clone(), *ty), (v, 0.11, name));
+                    }
+                    // term_vars.insert((t.clone(), *ty), (v, 0.0, name));
                     vars.push(v);
+                }
+            }
+            Op::Select | Op::Store => {
+                if let Sort::Array(_, _, length) = check(&t.cs[0]){
+                    if let Some(costs) = costs.get(&t.op) {
+                        for (ty, cost) in costs {
+                            let name = format!("t_{}_{}", i, ty.char());
+                            // println!("name: {:?}, op: {:?}", name, t.op);
+                            let v = ilp.new_variable(variable().binary(), name.clone());
+                            term_vars.insert((t.clone(), *ty), (v, *cost*(length as f64), name));
+                            vars.push(v);
+                        }
+                    } else {
+                        panic!("No cost for op {}", &t.op)
+                    }
+                } else{
+                    panic!("Not array sort {}", &t.cs[1].op)
                 }
             }
             // fix the select and store here for array size
@@ -198,6 +218,7 @@ fn build_smart_ilp(
                 if let Some(costs) = costs.get(&t.op) {
                     for (ty, cost) in costs {
                         let name = format!("t_{}_{}", i, ty.char());
+                        // println!("name: {:?}, op: {:?}", name, t.op);
                         let v = ilp.new_variable(variable().binary(), name.clone());
                         term_vars.insert((t.clone(), *ty), (v, *cost, name));
                         vars.push(v);
@@ -350,6 +371,8 @@ fn build_smart_ilp(
 
     let (_opt, solution) = ilp.default_solve().unwrap();
 
+    // println!("{:?}", solution);
+
     let mut assignment = TermMap::new();
     for ((term, ty), (_, _, var_name)) in &term_vars {
         if solution.get(var_name).unwrap() == &1.0 {
@@ -365,6 +388,8 @@ fn build_smart_ilp(
             //     }
             // }
             assignment.insert(term.clone(), *ty);
+        } else if solution.get(var_name).unwrap() == &0.5{
+            println!("Half op: {:?}", term.op);
         }
     }
     assignment
@@ -506,7 +531,7 @@ pub fn comb_selection(
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
     build_comb_ilp(mut_maps, cs_map, &costs)
 }
 
@@ -755,7 +780,7 @@ pub fn comb_selection_smart(
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, dug.get_k());
     build_comb_ilp_smart(mut_maps, dug, dusg_map, &costs)
 }
 
@@ -870,6 +895,44 @@ fn build_comb_ilp_smart(
                             .fold((0.0).into(), |acc: Expression, v| acc + v)
                             >> v,
                     );
+                }
+            }
+            Op::Select | Op::Store => {
+                if let Sort::Array(_, _, length) = check(&t.cs[0]){
+                    if let Some(costs) = costs.get(&t.op) {
+                        for (ty, cost) in costs {
+                            let name = format!("t_{}_{}_{}", pid, i, ty.char());
+                            let v = ilp.new_variable(variable().binary(), name.clone());
+                            v_vars.insert((t.clone(), *ty), (v, *cost * (length as f64), name));
+                            vars.push(v);
+                            // TODO: add constraints for B here
+                            let mut x_vec = vec![];
+                            for (mid, maps) in mut_maps.get(pid).unwrap().iter() {
+                                // buggy?
+                                let a_ty = maps.get(t).unwrap();
+                                if ty == a_ty {
+                                    if !b_set.contains_key(&(*pid, t.clone(), *ty)) {
+                                        b_set.insert((*pid, t.clone(), *ty), Vec::new());
+                                    }
+                                    b_set
+                                        .get_mut(&(*pid, t.clone(), *ty))
+                                        .unwrap()
+                                        .push(x_vars.get(&(*pid, *mid)).unwrap().0);
+                                    x_vec.push(x_vars.get(&(*pid, *mid)).unwrap().0);
+                                }
+                            }
+                            ilp.new_constraint(
+                                x_vec
+                                    .into_iter()
+                                    .fold((0.0).into(), |acc: Expression, v| acc + v)
+                                    >> v,
+                            );
+                        }
+                    } else {
+                        panic!("No cost for op {}", &t.op)
+                    }
+                } else{
+                    panic!("Not array sort {}", &t.cs[1].op)
                 }
             }
             _ => {
@@ -1076,6 +1139,13 @@ pub fn calculate_cost_smart(smap: &SharingMap, costs: &CostModel, dusg: &DefUses
             | Op::BvBit(_) => {
                 cost = cost + 0.0;
             }
+            Op::Select | Op::Store => {
+                if let Sort::Array(_, _, length) = check(&t.cs[0]){
+                    cost = cost + (length as f64) * costs.get(&t.op).unwrap().get(to_ty).unwrap();
+                } else{
+                    panic!("Not array sort {}", &t.cs[1].op)
+                }
+            }
             _ => {
                 // println!("op: {}", t.op);
                 cost = cost + costs.get(&t.op).unwrap().get(to_ty).unwrap();
@@ -1111,7 +1181,7 @@ pub fn calculate_cost_smart_dug(smap: &SharingMap, cm: &str, dug: &DefUsesGraph)
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p);
+    let costs = CostModel::from_opa_cost_file(&p, dug.get_k());
     let mut cost: f64 = 0.0;
     let mut conv_cost: HashMap<(Term, ShareType), f64> = HashMap::new();
     for (t, to_ty) in smap {
@@ -1139,6 +1209,25 @@ pub fn calculate_cost_smart_dug(smap: &SharingMap, cm: &str, dug: &DefUsesGraph)
                             conv_cost.insert((t.clone(), *from_ty), *c);
                         }
                     }
+                }
+            }
+            Op::Select | Op::Store => {
+                if let Sort::Array(_, _, length) = check(&t.cs[0]){
+                    cost = cost + (length as f64) * costs.get(&t.op).unwrap().get(to_ty).unwrap();
+                    for arg_t in dug.def_uses.get(t).unwrap().iter() {
+                        if smap.contains_key(&arg_t) {
+                            let from_ty = smap.get(&arg_t).unwrap();
+                            if from_ty != to_ty {
+                                // todo fix the calculation heres
+                                // println!("conversion from {:?} to {:?}", *to_ty, *from_ty);
+                                // println!("def: {:?} use {:?}", t.op, arg_t.op);
+                                let c = costs.conversions.get(&(*to_ty, *from_ty)).unwrap();
+                                conv_cost.insert((t.clone(), *from_ty), *c);
+                            }
+                        }
+                    }
+                } else{
+                    panic!("Not array sort {}", &t.cs[1].op)
                 }
             }
             _ => {
@@ -1209,7 +1298,7 @@ mod tests {
             "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
-        let c = CostModel::from_opa_cost_file(&p);
+        let c = CostModel::from_opa_cost_file(&p, FxHashMap::default());
         // random checks from the file...
         assert_eq!(
             &1127.0,
@@ -1231,7 +1320,7 @@ mod tests {
             "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
-        let costs = CostModel::from_opa_cost_file(&p);
+        let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
         let cs = Computation {
             outputs: vec![term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
@@ -1250,7 +1339,7 @@ mod tests {
             "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
-        let costs = CostModel::from_opa_cost_file(&p);
+        let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
         let cs = Computation {
             outputs: vec![term![Op::Eq;
                 term![BV_MUL;
@@ -1297,7 +1386,7 @@ mod tests {
             "{}/third_party/opa/adapted_costs.json",
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
-        let costs = CostModel::from_opa_cost_file(&p);
+        let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
         let cs = Computation {
             outputs: vec![term![Op::Eq;
                 term![BV_MUL;

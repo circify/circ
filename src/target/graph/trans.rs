@@ -187,7 +187,7 @@ pub fn css_partition_with_mut_smart(
         if num_parts == 1 {
             // No need to partition
             now = Instant::now();
-            assignment = smart_global_assign(&d.good_terms, &d.def_use, cm);
+            assignment = smart_global_assign(&d.good_terms, &d.def_use, &d.get_k(), cm);
             ilp_duration += now.elapsed();
         } else {
             // Construct DefUsesSubGraph
@@ -250,7 +250,7 @@ pub fn partition_with_mut_smart(
     if num_parts == 1 {
         // No need to partition
         now = Instant::now();
-        assignment = smart_global_assign(&d.good_terms, &d.def_use, cm);
+        assignment = smart_global_assign(&d.good_terms, &d.def_use, &d.get_k() , cm);
         println!("LOG: ILP time: {:?}", now.elapsed());
     } else {
         // Construct DefUsesSubGraph
@@ -329,13 +329,15 @@ pub fn inline_all_and_assign_smart_glp(
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
+    let k_map = dug.get_k();
+
     println!(
         "Time: Inline and construction def uses: {:?}",
         now.elapsed()
     );
 
     now = Instant::now();
-    let assignment = smart_global_assign(&dug.good_terms, &dug.def_use, cm);
+    let assignment = smart_global_assign(&dug.good_terms, &dug.def_use, &k_map, cm);
     println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
 
     println!("LOG: ILP time: {:?}", now.elapsed());

@@ -103,6 +103,7 @@ fn mutate_partitions_mp_step_smart(
 
     let mut children = vec![];
     let _cm = cm.to_string();
+    let k_map = dug.get_k();
 
 
     for ((i, j), (du, du_ref)) in mut_sets.iter() {
@@ -111,8 +112,9 @@ fn mutate_partitions_mp_step_smart(
         let j = j.clone();
         let du = du.clone();
         let du_ref = du_ref.clone();
+        let k_map = k_map.clone();
         children.push(thread::spawn(move || {
-            (i, j, assign_mut_smart(&du, &costm, &du_ref))
+            (i, j, assign_mut_smart(&du, &costm, &du_ref, &k_map))
         }));
     }
 

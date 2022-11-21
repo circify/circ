@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::time::Instant;
 use std::time::Duration;
+use std::cmp;
 
 
 
@@ -251,13 +252,16 @@ pub struct DefUsesGraph {
     pub ret_good_terms: Vec<Term>,
     pub self_ins: Vec<FxHashSet<Term>>,
     pub self_outs: Vec<Vec<Term>>,
-    pub call_rets_to_term: HashMap<(Term, usize), Term>,
+    pub call_rets_to_term: HashMap<(Term, usize, usize), Term>,
     n_ref: TermMap<usize>,
     cache_t: Term,
     cache_terms: Vec<(Term, usize)>,
     cache_flag: bool,
     is_main: bool,
     var_used: TermMap<TermSet>,
+    pub depth: usize,
+    pub num_bool: usize,
+    pub num_mul: usize,
 }
 
 impl DefUsesGraph {
@@ -285,11 +289,17 @@ impl DefUsesGraph {
             cache_flag: false,
             is_main: true,
             var_used: TermMap::new(),
+            depth: 0,
+            num_bool: 0,
+            num_mul: 0,
         };
         println!("Entering Def Use Graph:");
         dug.construct_def_use(c);
         dug.construct_mapping();
         println!("Time: Def Use Graph: {:?}", now.elapsed());
+        println!("DefUseGraph depth: {:?}", dug.depth);
+        println!("DefUseGraph num_bool: {:?}", dug.num_bool);
+        println!("DefUseGraph num_mul: {:?}", dug.num_mul);
         dug
     }
 
@@ -317,6 +327,9 @@ impl DefUsesGraph {
             cache_flag: false,
             is_main: fname == "main",
             var_used: TermMap::new(),
+            depth: 0,
+            num_bool: 0,
+            num_mul: 0,
         };
         dug.construct_def_use_with_dugs(c, dugs);
         // moved this after insert context
@@ -324,7 +337,19 @@ impl DefUsesGraph {
         now = Instant::now();
         dug.construct_mapping();
         println!("Time: Def Use Graph mapping: {:?}", now.elapsed());
+        println!("DefUseGraph depth: {:?}", dug.depth);
+        println!("DefUseGraph num_bool: {:?}", dug.num_bool);
+        println!("DefUseGraph num_mul: {:?}", dug.num_mul);
         dug
+    }
+
+    pub fn get_k(&self) -> FxHashMap<String, f64>{
+        let mut k_map: FxHashMap<String, f64> = FxHashMap::default();
+        let max_k: f64 = 1.0;
+        k_map.insert("a".to_string(),  max_k.min((self.depth as f64)/ (self.num_mul as f64)));
+        k_map.insert("b".to_string(),  max_k.min((self.depth as f64)/ (self.num_bool as f64)));
+        println!("k_map: {:?}", k_map);
+        k_map
     }
 
     // Cnt # of refs for each term
@@ -339,7 +364,7 @@ impl DefUsesGraph {
         }
     }
 
-    fn get_and_de_ref(&mut self, term_to_terms: &mut TermMap<Vec<(Term, usize)>>, t: &Term) -> Vec<(Term, usize)>{
+    fn get_and_de_ref(&mut self, term_to_terms: &mut TermMap<Vec<(Term, usize,usize)>>, t: &Term) -> Vec<(Term, usize, usize)>{
         let cnt = self.n_ref.get_mut(t).unwrap();
         *cnt -= 1;
         if *cnt == 0{
@@ -361,16 +386,6 @@ impl DefUsesGraph {
         //     }
         //     &self.cache_terms
         // }).clone()
-    }
-
-    fn lazy_insert(&mut self, term_to_terms: &mut TermMap<Vec<(Term, usize)>>, t: Term, terms: Vec<(Term, usize)>){
-        term_to_terms.insert(t.clone(), terms.clone());
-        // if self.cache_flag{
-        //     term_to_terms.insert(self.cache_t.clone(), self.cache_terms.clone());
-        // }
-        // self.cache_t = t;
-        // self.cache_terms = terms;
-        // self.cache_flag = true;
     }
 
     fn construct_def_use_with_dugs(
@@ -404,24 +419,24 @@ impl DefUsesGraph {
         self.construct_n_ref(c);
         // println!("Construct n_ref time: {:?}", now.elapsed());
         // let for_now = Instant::now();
-        let mut term_to_terms: TermMap<Vec<(Term, usize)>> = TermMap::new();
+        let mut term_to_terms: TermMap<Vec<(Term, usize, usize)>> = TermMap::new();
             for t in PostOrderIterV3::new(c.outputs().clone()) {
                 match &t.op {
                     Op::Var(..) => {
-                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0, 0)]);
                         if self.is_main{
                             self.add_term(&t);
                         }
                     }
                     Op::Const(Value::BitVector(_)) =>{
-                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0, 0)]);
                         self.add_term(&t);
                     }
                     Op::Const(Value::Tuple(tup)) => {
                         // now = Instant::now();
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
+                        let mut terms: Vec<(Term, usize, usize)> = Vec::new();
                         for val in tup.iter() {
-                            terms.push((leaf_term(Op::Const(val.clone())), 0));
+                            terms.push((leaf_term(Op::Const(val.clone())), 0, 0));
                             self.const_terms.insert(leaf_term(Op::Const(val.clone())));
                             // self.add_term(&leaf_term(Op::Const(val.clone())));
                         }
@@ -431,7 +446,7 @@ impl DefUsesGraph {
                     }
                     Op::Tuple => {
                         // now = Instant::now();
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
+                        let mut terms: Vec<(Term, usize, usize)> = Vec::new();
                         for c in t.cs.iter() {
                             terms.extend(self.get_and_de_ref(&mut term_to_terms, &c));
                         }
@@ -476,7 +491,7 @@ impl DefUsesGraph {
                     }
                     Op::Const(Value::Array(arr)) => {
                         // now = Instant::now();
-                        let mut terms: Vec<(Term, usize)> = Vec::new();
+                        let mut terms: Vec<(Term, usize, usize)> = Vec::new();
                         let sort = check(&t);
                         if let Sort::Array(_, _, n) = sort {
                             // println!("Create a {} size array.", n);
@@ -487,7 +502,7 @@ impl DefUsesGraph {
                                     Some(c) => c,
                                     None => &*arr.default,
                                 };
-                                terms.push((leaf_term(Op::Const(v.clone())), 0));
+                                terms.push((leaf_term(Op::Const(v.clone())), 0, 0));
                                 self.const_terms.insert(leaf_term(Op::Const(v.clone())));
                                 // self.add_term(&leaf_term(Op::Const(v.clone())));
                             }
@@ -513,7 +528,7 @@ impl DefUsesGraph {
                             for idx in 0..array_terms.len() {
                                 // self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
                                 self.add_def_use(&array_terms[idx].0, &t);
-                                array_terms[idx] = (t.clone(), 0);
+                                array_terms[idx] = (t.clone(), 0, array_terms[idx].2 + 1);
                             }
                             self.def_use.insert((value_terms[0].0.clone(), t.clone()));
                             term_to_terms.insert(t.clone(), array_terms);
@@ -530,11 +545,13 @@ impl DefUsesGraph {
                             term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
                         } else {
                             self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
+                            let mut depth: usize = 0;
                             for idx in 0..array_terms.len() {
                                 // self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
                                 self.add_def_use(&array_terms[idx].0, &t);
+                                depth = cmp::max(depth, array_terms[idx].2)
                             }
-                            term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                            term_to_terms.insert(t.clone(), vec![(t.clone(), 0, depth)]);
                             // self.add_term(&t);
                         }
                     }
@@ -556,6 +573,7 @@ impl DefUsesGraph {
 
                         // args -> call's in
                         let mut arg_id = 0;
+                        let mut depth: usize = 0;
                         for arg in t.cs.clone().iter() {
                             // Inlining callee's use
                             let arg_terms = self.get_and_de_ref(&mut term_to_terms, arg);
@@ -571,6 +589,7 @@ impl DefUsesGraph {
                                     }
                                     arg_id += 1;
                                 }
+                                depth = cmp::max(depth, tu.2);
                             }
 
                             // Safe call site
@@ -591,12 +610,12 @@ impl DefUsesGraph {
 
                         let mut idx = 0;
                         // println!("{:?}", context_rets);
-                        let ret_terms: Vec<(Term, usize)> = context_rets
+                        let ret_terms: Vec<(Term, usize, usize)> = context_rets
                             .into_iter()
                             .flatten()
                             .map(|ret| {
                                 // self.add_term(&ret);
-                                let tu = (ret, idx);
+                                let tu = (ret, idx, depth + 1);
                                 idx += 1;
                                 self.call_rets_to_term.insert(tu.clone(), t.clone());
                                 rets.push(FxHashSet::default());
@@ -633,10 +652,11 @@ impl DefUsesGraph {
                                 // self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
                                 self.add_def_use(&t_terms[idx].0, &t);
                                 self.add_def_use(&f_terms[idx].0, &t);
-                                t_terms[idx] = (t.clone(), 0);
+                                t_terms[idx] = (t.clone(), 0, t_terms[idx].2 + 1);
                             }
                             term_to_terms.insert(t.clone(), t_terms);
                         } else {
+                            let mut depth:usize = 0;
                             for c in t.cs.iter() {
                                 let terms = self.get_and_de_ref(&mut term_to_terms, c);
                                 assert_eq!(terms.len(), 1);
@@ -654,12 +674,14 @@ impl DefUsesGraph {
                                     // self.def_use.insert((terms[0].0.clone(), t.clone()));
                                     self.add_def_use(&terms[0].0, &t);
                                 }
+                                depth = cmp::max(depth, terms[0].2)
                             }
-                            term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                            term_to_terms.insert(t.clone(), vec![(t.clone(), 0, depth+1)]);
                         }
                         // self.add_term(&t);
                     }
                     _ => {
+                        let mut depth:usize = 0;
                         for c in t.cs.iter() {
                             let terms = self.get_and_de_ref(&mut term_to_terms, c);
                             assert_eq!(terms.len(), 1);
@@ -677,8 +699,9 @@ impl DefUsesGraph {
                                 // self.def_use.insert((terms[0].0.clone(), t.clone()));
                                 self.add_def_use(&terms[0].0, &t);
                             }
+                            depth = cmp::max(depth, terms[0].2)
                         }
-                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0, depth+1)]);
                         // self.add_term(&t);
                     }
                 }
@@ -686,45 +709,39 @@ impl DefUsesGraph {
         for out in c.outputs().iter(){
             let out_terms = self.get_and_de_ref(&mut term_to_terms, out);
             let mut out_v: Vec<Term> = Vec::new();
-            for (t, _) in out_terms.iter() {
+            for (t, _, d) in out_terms.iter() {
                 // v.push(t.clone());
                 self.ret_good_terms.push(t.clone());
                 out_v.push(t.clone());
+                self.depth = cmp::max(self.depth, *d);
             }
             self.self_outs.push(out_v);
         }
+
     }
 
     fn construct_def_use(&mut self, c: &Computation) {
         self.construct_n_ref(c);
-        let mut term_to_terms: TermMap<Vec<(Term, usize)>> = TermMap::new();
+        let mut term_to_terms: TermMap<Vec<(Term, usize, usize)>> = TermMap::new();
         for t in PostOrderIterV3::new(c.outputs().clone()) {
             match &t.op {
                 Op::Const(Value::Tuple(tup)) => {
-                    let mut terms: Vec<(Term, usize)> = Vec::new();
+                    let mut terms: Vec<(Term, usize, usize)> = Vec::new();
                     for val in tup.iter() {
-                        terms.push((leaf_term(Op::Const(val.clone())), 0));
+                        terms.push((leaf_term(Op::Const(val.clone())), 0, 0));
                         self.const_terms.insert(leaf_term(Op::Const(val.clone())));
                         self.add_term(&leaf_term(Op::Const(val.clone())));
                     }
                     term_to_terms.insert(t.clone(), terms);
                 }
                 Op::Tuple => {
-                    let mut terms: Vec<(Term, usize)> = Vec::new();
+                    let mut terms: Vec<(Term, usize, usize)> = Vec::new();
                     for c in t.cs.iter() {
                         terms.extend(self.get_and_de_ref(&mut term_to_terms, &c));
                     }
                     term_to_terms.insert(t.clone(), terms);
                 }
                 Op::Field(i) => {
-                    // println!("t: {}",t.op);
-                    // println!("t.cs.op: {}",t.cs[0].op);
-                    // for tt in t.cs[0].cs.iter(){
-                    //     println!("tt.op: {}",tt.op);
-                    //     for ttt in tt.cs.iter(){
-                    //         println!("ttt.op: {}",ttt.op);
-                    //     }
-                    // }
                     let tuple_terms = self.get_and_de_ref(&mut term_to_terms, &t.cs[0]);
 
                     let tuple_sort = check(&t.cs[0]);
@@ -756,7 +773,7 @@ impl DefUsesGraph {
                     term_to_terms.insert(t.clone(), tuple_terms);
                 }
                 Op::Const(Value::Array(arr)) => {
-                    let mut terms: Vec<(Term, usize)> = Vec::new();
+                    let mut terms: Vec<(Term, usize, usize)> = Vec::new();
                     let sort = check(&t);
                     if let Sort::Array(_, _, n) = sort {
                         // println!("Create a {} size array.", n);
@@ -767,7 +784,7 @@ impl DefUsesGraph {
                                 Some(c) => c,
                                 None => &*arr.default,
                             };
-                            terms.push((leaf_term(Op::Const(v.clone())), 0));
+                            terms.push((leaf_term(Op::Const(v.clone())), 0, 0));
                             self.const_terms.insert(leaf_term(Op::Const(v.clone())));
                             self.add_term(&leaf_term(Op::Const(v.clone())));
                         }
@@ -789,7 +806,7 @@ impl DefUsesGraph {
                         self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
                         for idx in 0..array_terms.len() {
                             self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
-                            array_terms[idx] = (t.clone(), 0);
+                            array_terms[idx] = (t.clone(), 0, array_terms[idx].2 + 1);
                         }
                         self.def_use.insert((value_terms[0].0.clone(), t.clone()));
                         term_to_terms.insert(t.clone(), array_terms);
@@ -804,22 +821,25 @@ impl DefUsesGraph {
                         term_to_terms.insert(t.clone(), vec![array_terms[idx].clone()]);
                     } else {
                         self.get_and_de_ref(&mut term_to_terms, &t.cs[1]);
+                        let mut depth: usize = 0;
                         for idx in 0..array_terms.len() {
                             self.def_use.insert((array_terms[idx].0.clone(), t.clone()));
+                            depth = cmp::max(depth, array_terms[idx].2)
                         }
-                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0, depth + 1)]);
                         self.add_term(&t);
                     }
                 }
                 Op::Call(_, _, _, ret_sorts) => {
                     // Use call term itself as the placeholder
                     // Call term will be ignore by the ilp solver later
-                    let mut ret_terms: Vec<(Term, usize)> = Vec::new();
+                    let mut ret_terms: Vec<(Term, usize, usize)> = Vec::new();
                     let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
                     let mut args: Vec<FxHashSet<usize>> = Vec::new();
                     let mut rets: Vec<FxHashSet<usize>> = Vec::new();
                     let mut args_t: Vec<Vec<Term>> = Vec::new();
                     let mut rets_t: Vec<Vec<Term>> = Vec::new();
+                    let mut depth: usize = 0;
                     for c in t.cs.iter() {
                         let arg_terms = self.get_and_de_ref(&mut term_to_terms, c);
                         let mut arg_set: FxHashSet<usize> = FxHashSet::default();
@@ -827,13 +847,14 @@ impl DefUsesGraph {
                         for arg in arg_terms.iter() {
                             arg_set.insert(get_op_id(&arg.0.op));
                             arg_term.push(arg.0.clone());
+                            depth = cmp::max(depth, arg.2);
                         }
                         args_t.push(arg_term);
                         args.push(arg_set);
                     }
                     for idx in 0..num_rets {
                         rets.push(FxHashSet::default());
-                        ret_terms.push((t.clone(), idx));
+                        ret_terms.push((t.clone(), idx, depth + 1));
                         rets_t.push(Vec::new());
                     }
                     term_to_terms.insert(t.clone(), ret_terms);
@@ -856,10 +877,11 @@ impl DefUsesGraph {
                         for idx in 0..t_terms.len() {
                             self.def_use.insert((t_terms[idx].0.clone(), t.clone()));
                             self.def_use.insert((f_terms[idx].0.clone(), t.clone()));
-                            t_terms[idx] = (t.clone(), 0);
+                            t_terms[idx] = (t.clone(), 0, t_terms[idx].2 + 1);
                         }
                         term_to_terms.insert(t.clone(), t_terms);
                     } else {
+                        let mut depth: usize = 0;
                         for c in t.cs.iter() {
                             if let Op::Call(..) = t.op {
                                 continue;
@@ -877,13 +899,15 @@ impl DefUsesGraph {
                                 } else {
                                     self.def_use.insert((terms[0].0.clone(), t.clone()));
                                 }
+                                depth = cmp::max(depth, terms[0].2);
                             }
                         }
-                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                        term_to_terms.insert(t.clone(), vec![(t.clone(), 0, depth+1)]);
                     }
                     self.add_term(&t);
                 }
                 _ => {
+                    let mut depth: usize = 0;
                     for c in t.cs.iter() {
                         if let Op::Call(..) = c.op {
                             continue;
@@ -900,9 +924,10 @@ impl DefUsesGraph {
                             } else {
                                 self.def_use.insert((terms[0].0.clone(), t.clone()));
                             }
+                            depth = cmp::max(depth, terms[0].2);
                         }
                     }
-                    term_to_terms.insert(t.clone(), vec![(t.clone(), 0)]);
+                    term_to_terms.insert(t.clone(), vec![(t.clone(), 0, depth + 1)]);
                     self.add_term(&t);
                 }
             }
@@ -911,10 +936,11 @@ impl DefUsesGraph {
         for out in c.outputs().iter(){
             let out_terms = self.get_and_de_ref(&mut term_to_terms, out);
             let mut out_v: Vec<Term> = Vec::new();
-            for (t, _) in out_terms.iter() {
+            for (t, _, d) in out_terms.iter() {
                 // v.push(t.clone());
                 self.ret_good_terms.push(t.clone());
                 out_v.push(t.clone());
+                self.depth = cmp::max(self.depth, *d);
             }
             self.self_outs.push(out_v);
         }
@@ -1096,6 +1122,59 @@ impl DefUsesGraph {
             let uses: FxHashSet<Term> = FxHashSet::default();
             self.def_uses.insert(t.clone(), uses);
             self.use_defs.insert(t.clone(), defs);
+            match &t.op {
+                Op::Ite => {
+                    self.num_bool += 1
+                }
+                | Op::BvNaryOp(o) => {
+                    match o {
+                        BvNaryOp::Xor => {
+                            self.num_bool += 0;
+                        }
+                        BvNaryOp::Or => {
+                            self.num_bool += 1;
+                        }
+                        BvNaryOp::And => {
+                            self.num_bool += 1;
+                        }
+                        BvNaryOp::Add => {
+                            // self.num_bool += 1;
+                        }
+                        BvNaryOp::Mul => {
+                            // self.num_bool += 1;
+                            self.num_mul += 1;
+                        }
+                    }
+                }
+                | Op::BvBinOp(o) => {
+                    match o {
+                        BvBinOp::Sub => {
+                            // self.num_bool += 1;
+                        }
+                        | BvBinOp::Udiv => {
+                            self.num_bool += 1;
+                        }
+                        | BvBinOp::Urem => {
+                            self.num_bool += 1;
+                        }
+                        _ => {}
+                    }    
+                }
+                | Op::Eq => {
+                    self.num_bool += 1;
+                }
+                | Op::BvBinPred(_) => {
+                    self.num_bool += 1;
+                }
+                | Op::Store| Op::Select => {
+                    // if let Sort::Array(_, _, length) = check(&t.cs[0]){
+                    //     self.num_bool += length;
+                    // }
+                    self.num_bool += 1;
+                }
+                | _ => {}
+            }
+            
         }
     }
 
