@@ -79,6 +79,7 @@ pub struct CallSiteSimilarity {
     callee_caller: HashSet<(String, String)>,
     func_to_cs: HashMap<String, HashMap<usize, CallSite>>,
     dup_per_func: HashMap<String, usize>,
+    call_cnt: HashMap<String, usize>,
     ml: usize,
 }
 
@@ -92,19 +93,21 @@ impl CallSiteSimilarity {
             callee_caller: HashSet::new(),
             func_to_cs: HashMap::new(),
             dup_per_func: HashMap::new(),
+            call_cnt: HashMap::new(),
             ml: ml.clone(),
         };
         css
     }
 
     fn traverse(&mut self, fname: &String) {
-        if !self.visited.contains(fname) {
-            let c = self.fs.get_comp(fname).unwrap().clone();
-            for t in c.terms_postorder() {
-                if let Op::Call(callee, ..) = &t.op {
-                    self.traverse(callee);
-                }
+        *self.call_cnt.entry(fname.clone()).or_insert(0) += 1;
+        let c = self.fs.get_comp(fname).unwrap().clone();
+        for t in c.terms_postorder() {
+            if let Op::Call(callee, ..) = &t.op {
+                self.traverse(callee);
             }
+        }
+        if !self.visited.contains(fname) {
             println!("Building dug for {}", fname);
             let mut dug = DefUsesGraph::for_call_site(&c, &self.dugs, fname);
             dug.gen_in_out(&c);
@@ -180,6 +183,7 @@ impl CallSiteSimilarity {
             &rewriting_f,
             &duplicated_f,
             &call_map,
+            &self.call_cnt,
             &self.func_to_cs,
             self.ml,
         )
@@ -378,12 +382,14 @@ fn remap(
     rewriting_set: &HashSet<String>,
     duplicate_set: &HashSet<String>,
     call_map: &TermMap<usize>,
+    call_cnt: &HashMap<String, usize>,
     func_to_cs: &HashMap<String, HashMap<usize, CallSite>>,
     ml: usize,
 ) -> (Functions, HashMap<String, DefUsesGraph>) {
     let mut n_fs = Functions::new();
     let mut n_dugs: HashMap<String, DefUsesGraph> = HashMap::new();
     let mut context_map: HashMap<String, CallSite> = HashMap::new();
+    let mut css_call_cnt: HashMap<String, usize> = HashMap::new();
     for (fname, comp) in fs.computations.iter() {
         let mut ncomp: Computation = comp.clone();
         let id_to_cs = func_to_cs.get(fname).unwrap();
@@ -402,11 +408,13 @@ fn remap(
                 };
                 rewrite_var(&mut dup_comp, fname, cid);
                 n_fs.insert(new_n.clone(), dup_comp);
-                context_map.insert(new_n, cs.clone());
+                context_map.insert(new_n.clone(), cs.clone());
+                css_call_cnt.insert(new_n, call_cnt.get(fname).unwrap().clone());
             }
         } else {
             if let Some(cs) = id_to_cs.get(&0){
                 context_map.insert(fname.clone(), cs.clone());
+                css_call_cnt.insert(fname.clone(), call_cnt.get(fname).unwrap().clone());
             }
             n_fs.insert(fname.clone(), ncomp);
         }
@@ -417,6 +425,7 @@ fn remap(
     for (fname, cs) in context_map.iter() {
         let mut dug = n_dugs.get_mut(fname).unwrap();
         let comp = n_fs.get_comp(fname).unwrap();
+        dug.set_num_calls(css_call_cnt.get(fname).unwrap());
         dug.insert_context(&cs.arg_names, &cs.args, &cs.rets, &cs.caller_dug, comp, ml);
     }
     // let fname = "activate_sqr".to_string();
