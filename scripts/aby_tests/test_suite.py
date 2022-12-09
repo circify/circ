@@ -611,7 +611,7 @@ kmeans_tests = [
     [
         "kmeans",
         "2pc_kmeans",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
+        "./scripts/aby_tests/test_inputs/kmeans_200.txt",
     ],
 ]
 
@@ -619,7 +619,7 @@ kmeans_tests_2 = [
     [
         "kmeans",
         "2pc_kmeans_",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
+        "./scripts/aby_tests/test_inputs/kmeans_200.txt",
     ],
 ]
 

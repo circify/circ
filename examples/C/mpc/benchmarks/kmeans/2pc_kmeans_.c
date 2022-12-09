@@ -1,6 +1,6 @@
 #define D 2 // Dimension (fix)
-#define NA 10 // Number of data points from Party A
-#define NB 10 // Number of data points from Party B
+#define NA 100 // Number of data points from Party A
+#define NB 100 // Number of data points from Party B
 #define NC 5 // Number of clusters
 #define PRECISION 4
 
@@ -184,7 +184,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 }
 
 
-Output main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
+Output main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int b[200])
 {
     // init data
     int data[LEN * D];

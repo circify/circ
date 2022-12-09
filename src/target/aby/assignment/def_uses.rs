@@ -1216,10 +1216,10 @@ impl DefUsesGraph {
                     self.num_bool += 1;
                 }
                 | Op::Store| Op::Select => {
-                    // if let Sort::Array(_, _, length) = check(&t.cs[0]){
-                    //     self.num_bool += length;
-                    // }
-                    self.num_bool += 1;
+                    if let Sort::Array(_, _, length) = check(&t.cs[0]){
+                        self.num_bool += length;
+                    }
+                    // self.num_bool += 1;
                 }
                 | _ => {}
             }

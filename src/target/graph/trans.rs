@@ -534,6 +534,7 @@ pub fn inline_all_and_assign_opa(
     let mut tp = TrivialPartition::new(fs, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
+    let k_map = dug.get_k();
 
     println!(
         "Time: Inline and construction def uses: {:?}",
@@ -541,7 +542,7 @@ pub fn inline_all_and_assign_opa(
     );
 
     now = Instant::now();
-    let assignment = opa_smart_global_assign(&dug.good_terms, &dug.def_use, cm, share_types);
+    let assignment = opa_smart_global_assign(&dug.good_terms, &dug.def_use, &k_map, cm, share_types);
     println!("Calculate cost: {}", calculate_cost_smart_dug(&assignment, cm, &dug));
 
     println!("LOG: ILP time: {:?}", now.elapsed());

@@ -21,6 +21,7 @@ use std::env::var;
 pub fn opa_smart_global_assign(
     terms: &TermSet,
     def_uses: &FxHashSet<(Term, Term)>,
+    k_map: &FxHashMap<String, f64>,
     cm: &str,
     share_types: &[ShareType; 2]
 ) -> SharingMap {
@@ -37,7 +38,7 @@ pub fn opa_smart_global_assign(
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    let costs = CostModel::from_opa_cost_file(&p, FxHashMap::default());
+    let costs = CostModel::from_opa_cost_file(&p, k_map.clone());
     build_smart_ilp(terms.clone(), def_uses, &costs, share_types)
 }
 
