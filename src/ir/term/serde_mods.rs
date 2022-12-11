@@ -28,6 +28,7 @@ pub mod map {
 pub mod vec {
     use super::super::*;
     /// Serialize a term vector
+    #[allow(clippy::ptr_arg)]
     pub fn serialize<S>(vec: &Vec<Term>, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
