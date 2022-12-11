@@ -29,7 +29,7 @@ use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::sync::{Arc, RwLock};
@@ -37,14 +37,16 @@ use std::sync::{Arc, RwLock};
 pub mod bv;
 pub mod dist;
 pub mod extras;
+pub mod lin;
 pub mod precomp;
+pub mod serde_mods;
 pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 /// An operator
 pub enum Op {
     /// a variable
@@ -330,7 +332,7 @@ impl Display for Op {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Boolean n-ary operator
 pub enum BoolNaryOp {
     /// Boolean AND
@@ -351,7 +353,7 @@ impl Display for BoolNaryOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector binary operator
 pub enum BvBinOp {
     /// Bit-vector (-)
@@ -381,7 +383,7 @@ impl Display for BvBinOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector binary predicate
 pub enum BvBinPred {
     // TODO: add overflow predicates.
@@ -418,7 +420,7 @@ impl Display for BvBinPred {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector n-ary operator
 pub enum BvNaryOp {
     /// Bit-vector (+)
@@ -445,7 +447,7 @@ impl Display for BvNaryOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector unary operator
 pub enum BvUnOp {
     /// Bit-vector bitwise not
@@ -463,7 +465,7 @@ impl Display for BvUnOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Floating-point binary operator
 pub enum FpBinOp {
     /// Floating-point (+)
@@ -496,7 +498,7 @@ impl Display for FpBinOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Floating-point unary operator
 pub enum FpUnOp {
     /// Floating-point unary negation
@@ -520,7 +522,7 @@ impl Display for FpUnOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Floating-point binary predicate
 pub enum FpBinPred {
     /// Floating-point (<=)
@@ -547,7 +549,7 @@ impl Display for FpBinPred {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Floating-point unary predicate
 pub enum FpUnPred {
     /// Is this normal?
@@ -580,7 +582,7 @@ impl Display for FpUnPred {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Finite field n-ary operator
 pub enum PfNaryOp {
     /// Finite field (+)
@@ -598,7 +600,7 @@ impl Display for PfNaryOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Finite field n-ary operator
 pub enum PfUnOp {
     /// Finite field negation
@@ -616,7 +618,7 @@ impl Display for PfUnOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Integer n-ary operator
 pub enum IntNaryOp {
     /// Finite field (+)
@@ -634,7 +636,7 @@ impl Display for IntNaryOp {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Integer binary predicate. See [Op::Eq] for equality.
 pub enum IntBinPred {
     /// Integer (<)
@@ -692,31 +694,14 @@ impl Serialize for TermData {
     where
         S: Serializer,
     {
-        let bytes = text::serialize_term(&mk(self.clone()));
-        serializer.serialize_str(&bytes)
+        let linearized = lin::LinTerm::from(&mk(self.clone()));
+        linearized.serialize(serializer)
     }
 }
-
-struct TermDeserVisitor;
 
 impl hashconsing::UniqueConsign for TermData {
     fn unique_make(self) -> Term {
         mk(self)
-    }
-}
-
-impl<'de> Visitor<'de> for TermDeserVisitor {
-    type Value = TermData;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "a string (that textually defines a term)")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: std::error::Error,
-    {
-        Ok((*text::parse_term(v.as_bytes())).clone())
     }
 }
 
@@ -725,7 +710,8 @@ impl<'de> Deserialize<'de> for TermData {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_str(TermDeserVisitor)
+        let linearized = lin::LinTerm::deserialize(deserializer)?;
+        Ok((*Term::from(linearized)).clone())
     }
 }
 
@@ -1982,10 +1968,11 @@ impl Display for ComputationMetadata {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// An IR computation.
 pub struct Computation {
     /// The outputs of the computation.
+    #[serde(with = "crate::ir::term::serde_mods::vec")]
     pub outputs: Vec<Term>,
     /// Metadata about the computation. I.e. who knows what inputs
     pub metadata: ComputationMetadata,
@@ -2092,42 +2079,6 @@ impl Computation {
         // drop the top-level tuple term.
         terms.pop();
         terms.into_iter()
-    }
-}
-
-impl Serialize for Computation {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let bytes = text::serialize_computation(self);
-        serializer.serialize_str(&bytes)
-    }
-}
-
-struct ComputationDeserVisitor;
-
-impl<'de> Visitor<'de> for ComputationDeserVisitor {
-    type Value = Computation;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "a string (that textually defines a term)")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: std::error::Error,
-    {
-        Ok(text::parse_computation(v.as_bytes()))
-    }
-}
-
-impl<'de> Deserialize<'de> for Computation {
-    fn deserialize<D>(deserializer: D) -> Result<Computation, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(ComputationDeserVisitor)
     }
 }
 
