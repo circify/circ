@@ -180,14 +180,14 @@ mod serde_pk {
     ) -> Result<S::Ok, S::Error> {
         let mut bs: Vec<u8> = Vec::new();
         p.write(&mut bs).unwrap();
-        ser.serialize_bytes(&bs)
+        serde_bytes::ByteBuf::from(bs).serialize(ser)
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>, E: Engine>(
         de: D,
     ) -> Result<Parameters<E>, D::Error> {
-        let bs: &'de [u8] = Deserialize::deserialize(de)?;
-        Ok(Parameters::read(bs, false).unwrap())
+        let bs: serde_bytes::ByteBuf = Deserialize::deserialize(de)?;
+        Ok(Parameters::read(&**bs, false).unwrap())
     }
 }
 
@@ -208,14 +208,14 @@ mod serde_vk {
     ) -> Result<S::Ok, S::Error> {
         let mut bs: Vec<u8> = Vec::new();
         p.write(&mut bs).unwrap();
-        ser.serialize_bytes(&bs)
+        serde_bytes::ByteBuf::from(bs).serialize(ser)
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>, E: Engine>(
         de: D,
     ) -> Result<VerifyingKey<E>, D::Error> {
-        let bs: &'de [u8] = Deserialize::deserialize(de)?;
-        Ok(VerifyingKey::read(bs).unwrap())
+        let bs: serde_bytes::ByteBuf = Deserialize::deserialize(de)?;
+        Ok(VerifyingKey::read(&**bs).unwrap())
     }
 }
 
