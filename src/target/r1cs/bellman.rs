@@ -163,6 +163,62 @@ pub fn parse_instance<P: AsRef<Path>, F: PrimeField>(path: P) -> Vec<F> {
         .collect()
 }
 
+mod serde_pk {
+    use bellman::groth16::Parameters;
+    use pairing::Engine;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize)]
+    pub struct SerPk<'a, E: Engine>(#[serde(with = "self")] pub &'a Parameters<E>);
+
+    #[derive(Deserialize)]
+    pub struct DePk<E: Engine>(#[serde(with = "self")] pub Parameters<E>);
+
+    pub fn serialize<S: Serializer, E: Engine>(
+        p: &Parameters<E>,
+        ser: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut bs: Vec<u8> = Vec::new();
+        p.write(&mut bs).unwrap();
+        serde_bytes::ByteBuf::from(bs).serialize(ser)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>, E: Engine>(
+        de: D,
+    ) -> Result<Parameters<E>, D::Error> {
+        let bs: serde_bytes::ByteBuf = Deserialize::deserialize(de)?;
+        Ok(Parameters::read(&**bs, false).unwrap())
+    }
+}
+
+mod serde_vk {
+    use bellman::groth16::VerifyingKey;
+    use pairing::Engine;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize)]
+    pub struct SerVk<'a, E: Engine>(#[serde(with = "self")] pub &'a VerifyingKey<E>);
+
+    #[derive(Deserialize)]
+    pub struct DeVk<E: Engine>(#[serde(with = "self")] pub VerifyingKey<E>);
+
+    pub fn serialize<S: Serializer, E: Engine>(
+        p: &VerifyingKey<E>,
+        ser: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut bs: Vec<u8> = Vec::new();
+        p.write(&mut bs).unwrap();
+        serde_bytes::ByteBuf::from(bs).serialize(ser)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>, E: Engine>(
+        de: D,
+    ) -> Result<VerifyingKey<E>, D::Error> {
+        let bs: serde_bytes::ByteBuf = Deserialize::deserialize(de)?;
+        Ok(VerifyingKey::read(&**bs).unwrap())
+    }
+}
+
 /// Given
 /// * a proving-key path,
 /// * a verifying-key path,
@@ -191,10 +247,8 @@ fn write_prover_key_and_data<P: AsRef<Path>, E: Engine>(
     params: &Parameters<E>,
     data: &ProverData,
 ) -> io::Result<()> {
-    let mut pk: Vec<u8> = Vec::new();
-    params.write(&mut pk)?;
     let mut file = File::create(path)?;
-    serialize_into(&mut file, &(&pk, &data)).unwrap();
+    serialize_into(&mut file, &(serde_pk::SerPk(params), &data)).unwrap();
     Ok(())
 }
 
@@ -202,8 +256,7 @@ fn read_prover_key_and_data<P: AsRef<Path>, E: Engine>(
     path: P,
 ) -> io::Result<(Parameters<E>, ProverData)> {
     let mut file = File::open(path)?;
-    let (pk_bytes, data): (Vec<u8>, ProverData) = deserialize_from(&mut file).unwrap();
-    let pk: Parameters<E> = Parameters::read(pk_bytes.as_slice(), false)?;
+    let (serde_pk::DePk(pk), data): (_, ProverData) = deserialize_from(&mut file).unwrap();
     Ok((pk, data))
 }
 
@@ -212,10 +265,8 @@ fn write_verifier_key_and_data<P: AsRef<Path>, E: Engine>(
     key: &VerifyingKey<E>,
     data: &VerifierData,
 ) -> io::Result<()> {
-    let mut vk: Vec<u8> = Vec::new();
-    key.write(&mut vk)?;
     let mut file = File::create(path)?;
-    serialize_into(&mut file, &(&vk, &data)).unwrap();
+    serialize_into(&mut file, &(serde_vk::SerVk(key), &data)).unwrap();
     Ok(())
 }
 
@@ -223,8 +274,7 @@ fn read_verifier_key_and_data<P: AsRef<Path>, E: Engine>(
     path: P,
 ) -> io::Result<(VerifyingKey<E>, VerifierData)> {
     let mut file = File::open(path)?;
-    let (vk_bytes, data): (Vec<u8>, VerifierData) = deserialize_from(&mut file).unwrap();
-    let vk: VerifyingKey<E> = VerifyingKey::read(vk_bytes.as_slice())?;
+    let (serde_vk::DeVk(vk), data): (_, VerifierData) = deserialize_from(&mut file).unwrap();
     Ok((vk, data))
 }
 
