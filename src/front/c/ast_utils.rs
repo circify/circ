@@ -1,5 +1,7 @@
 use crate::front::c::types::Ty;
 use crate::front::c::Expression::Identifier;
+use crate::front::c::Sort;
+use crate::front::c::Term;
 use lang_c::ast::*;
 use std::fmt::{self, Display, Formatter};
 
@@ -12,7 +14,7 @@ use crate::front::PUBLIC_VIS;
 pub struct FnInfo {
     pub name: String,
     pub ret_ty: Option<Ty>,
-    pub args: Vec<ParameterDeclaration>,
+    pub params: Vec<ParamInfo>,
     pub body: Statement,
 }
 
@@ -22,7 +24,7 @@ pub struct DeclInfo {
     pub ty: Ty,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ParamInfo {
     pub name: String,
     pub ty: Ty,
@@ -38,7 +40,7 @@ impl Display for FnInfo {
         write!(
             f,
             "name: {},\nargs: {:#?},\nbody: {:#?}",
-            self.name, self.args, self.body
+            self.name, self.params, self.body
         )
     }
 }
@@ -108,6 +110,37 @@ pub fn args_from_func(fn_def: &FunctionDefinition) -> Option<Vec<ParameterDeclar
 
 pub fn body_from_func(fn_def: &FunctionDefinition) -> Statement {
     fn_def.statement.node.clone()
+}
+
+pub fn get_fn_return_sort(
+    fn_info: &FnInfo,
+    arg_terms: &Vec<Vec<Term>>, // arguments taken at call site
+) -> (Vec<(String, Sort)>, Sort) {
+    let mut names: Vec<String> = Vec::new();
+    let mut rets: Vec<Sort> = Vec::new();
+    // Original return value
+    match &fn_info.ret_ty {
+        Some(t) => {
+            names.push("return".to_string());
+            rets.push(t.sort());
+        }
+        None => {}
+    };
+
+    // Add pointers as return
+    assert!(fn_info.params.len() == arg_terms.len());
+    for (param, arg) in fn_info.params.iter().zip(arg_terms.iter()) {
+        if let Ty::Ptr(n, t) = &param.ty {
+            let new_ty = Sort::Array(Box::new(Sort::BitVector(*n)), Box::new(t.sort()), arg.len());
+            names.push(param.name.clone());
+            rets.push(new_ty.clone());
+        };
+    }
+
+    (
+        names.iter().cloned().zip(rets.iter().cloned()).collect(),
+        Sort::Tuple(rets.into_boxed_slice()),
+    )
 }
 
 pub fn flatten_inits(init: &Initializer) -> Vec<&Initializer> {

@@ -99,7 +99,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 Some(bv) => cbool(bv.bit(*i)),
                 _ => None,
             },
-            Op::BoolNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::BoolNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
             Op::Eq => {
                 let c0 = get(0);
                 let c1 = get(1);
@@ -168,7 +168,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     _ => None,
                 }
             }
-            Op::BvNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::BvNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
             Op::BvBinPred(p) => {
                 if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
                     Some(leaf_term(Op::Const(Value::Bool(match p {
@@ -195,30 +195,36 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 let c = get(0);
                 let t = get(1);
                 let f = get(2);
-                match c.as_bool_opt() {
-                    Some(true) => Some(t),
-                    Some(false) => Some(f),
-                    None => match t.as_bool_opt() {
-                        Some(true) => Some(fold_cache(&term![OR; c, f], cache, ignore)),
-                        Some(false) => Some(fold_cache(&term![AND; neg_bool(c), f], cache, ignore)),
-                        _ => match f.as_bool_opt() {
-                            Some(true) => {
-                                Some(fold_cache(&term![OR; neg_bool(c), t], cache, ignore))
+                if t == f {
+                    Some(t)
+                } else {
+                    match c.as_bool_opt() {
+                        Some(true) => Some(t),
+                        Some(false) => Some(f),
+                        None => match t.as_bool_opt() {
+                            Some(true) => Some(fold_cache(&term![OR; c, f], cache, ignore)),
+                            Some(false) => {
+                                Some(fold_cache(&term![AND; neg_bool(c), f], cache, ignore))
                             }
-                            Some(false) => Some(fold_cache(&term![AND; c, t], cache, ignore)),
-                            _ => None,
+                            _ => match f.as_bool_opt() {
+                                Some(true) => {
+                                    Some(fold_cache(&term![OR; neg_bool(c), t], cache, ignore))
+                                }
+                                Some(false) => Some(fold_cache(&term![AND; c, t], cache, ignore)),
+                                _ => None,
+                            },
                         },
-                    },
+                    }
                 }
             }
-            Op::PfNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::PfNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
             Op::PfUnOp(o) => get(0).as_pf_opt().map(|pf| {
                 leaf_term(Op::Const(Value::Field(match o {
                     PfUnOp::Recip => pf.clone().recip(),
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
-            Op::IntNaryOp(o) => Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::IntNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
             Op::IntBinPred(p) => {
                 if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
                     Some(leaf_term(Op::Const(Value::Bool(match p {

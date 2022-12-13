@@ -129,7 +129,7 @@ impl ToMilp {
             bounds.push((r.clone() - x) << 0);
         }
         assert!(n >= 1);
-        self.ilp.new_constraint(sum << (n as i32 - 1));
+        self.ilp.new_constraint(sum << (n - 1));
         self.ilp.new_constraints(bounds);
         r
     }

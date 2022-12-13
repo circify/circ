@@ -16,7 +16,7 @@ def install(features):
         features : set of str
             set of features required
     """
-
+ 
     def verify_path_empty(path) -> bool:
         return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
 
@@ -45,6 +45,7 @@ def check(features):
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
+        if "ristretto255" in features: cmd = cmd + ["--no-default-features"]
     subprocess.run(cmd, check=True)
 
 
@@ -73,6 +74,9 @@ def build(features):
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
+        if "ristretto255" in features: cmd = cmd + ["--no-default-features"]
+
+    print(cmd)
     subprocess.run(cmd, check=True)
 
     if "aby" in features:
@@ -105,6 +109,9 @@ def test(features, extra_args):
     if cargo_features:
         test_cmd += ["--features"] + cargo_features
         test_cmd_release += ["--features"] + cargo_features
+        if "ristretto255" in features:
+            test_cmd += ["--no-default-features"]
+            test_cmd_release += ["--no-default-features"]
     if len(extra_args) > 0:
         test_cmd += ["--"] + extra_args
         test_cmd_release += ["--"] + extra_args
@@ -123,7 +130,10 @@ def test(features, extra_args):
         if "lp" in features:
             subprocess.run(["./scripts/test_zok_to_ilp.zsh"], check=True)
         if "r1cs" in features:
-            subprocess.run(["./scripts/zokrates_test.zsh"], check=True)
+            if "ristretto255" in features: # spartan field
+                subprocess.run(["./scripts/spartan_zok_test.zsh"], check=True)           
+            else: # bellman field
+                subprocess.run(["./scripts/zokrates_test.zsh"], check=True)
         if "lp" in features and "r1cs" in features:
             subprocess.run(["./scripts/test_zok_to_ilp_pf.zsh"], check=True)
 
@@ -131,7 +141,6 @@ def test(features, extra_args):
         if "aby" in features:
             subprocess.run(
                 ["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
-
 
 def benchmark(features):
     mode = load_mode()
@@ -150,6 +159,7 @@ def benchmark(features):
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
+        if "ristretto255" in features: cmd = cmd + ["--no-default-features"]
     subprocess.run(cmd, check=True)
 
 
@@ -173,6 +183,7 @@ def lint():
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
+        if "ristretto255" in features: cmd = cmd + ["--no-default-features"] 
     subprocess.run(cmd, check=True)
 
 
@@ -181,6 +192,7 @@ def flamegraph(features, extra):
     cargo_features = filter_cargo_features(features)
     if cargo_features:
         cmd = cmd + ["--features"] + cargo_features
+        if "ristretto255" in features: cmd = cmd + ["--no-default-features"]
     cmd += extra
     print("running:", " ".join(cmd))
     subprocess.run(cmd, check=True)
@@ -218,7 +230,7 @@ def set_features(features):
         features = set()
 
     def verify_feature(f):
-        if f in valid_features:
+        if f in valid_features | {"ristretto255"}:
             return True
         return False
     features = set(sorted([f for f in features if verify_feature(f)]))

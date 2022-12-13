@@ -752,6 +752,31 @@ impl<E: Embeddable> Circify<E> {
         }
     }
 
+    /// Exit a function call.
+    ///
+    /// ## Returns
+    ///
+    /// Returns the return value of the function, if any.
+    pub fn exit_fn_call(&mut self, ret_names: &Vec<String>) -> Option<Vec<Val<E::T>>> {
+        if let Some(fn_) = self.fn_stack.last() {
+            let mut rets: Vec<Val<E::T>> = Vec::new();
+            // Get return value if possible
+            if fn_.has_return {
+                rets.push(self.get_value(Loc::local(RET_NAME.to_owned())).unwrap());
+            }
+
+            // Get references if possible
+            for name in ret_names {
+                rets.push(self.get_value(Loc::local(name.to_string())).unwrap());
+            }
+
+            self.fn_stack.pop().unwrap();
+            Some(rets)
+        } else {
+            panic!("No fn to exit")
+        }
+    }
+
     /// Get the current value of a location
     pub fn get_value(&self, loc: Loc) -> Result<Val<E::T>> {
         let l = self.get_lex_ref(&loc)?;
@@ -817,6 +842,11 @@ impl<E: Embeddable> Circify<E> {
     pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
         let cond = self.condition();
         self.cir_ctx.mem.borrow_mut().store(id, offset, val, cond);
+    }
+
+    /// Replace term at AllocId
+    pub fn replace(&mut self, id: AllocId, val: Term) {
+        self.cir_ctx.mem.borrow_mut().replace(id, val);
     }
 
     /// Zero allocate an array
@@ -895,12 +925,12 @@ mod test {
                 ty.default()
             }
 
-            fn ite(&self, ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
+            fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
                 match (t, f) {
                     (T::Base(a), T::Base(b)) => T::Base(term![Op::Ite; cond, a, b]),
                     (T::Pair(a0, a1), T::Pair(b0, b1)) => T::Pair(
-                        Box::new(self.ite(ctx, cond.clone(), *a0, *b0)),
-                        Box::new(self.ite(ctx, cond, *a1, *b1)),
+                        Box::new(self.ite(_ctx, cond.clone(), *a0, *b0)),
+                        Box::new(self.ite(_ctx, cond, *a1, *b1)),
                     ),
                     (a, b) => panic!("Cannot ITE {}, {}", a, b),
                 }
@@ -937,14 +967,14 @@ mod test {
                         T::Pair(
                             Box::new(self.declare_input(
                                 ctx,
-                                &**a,
+                                a,
                                 format!("{}.0", name),
                                 visibility,
                                 p_1,
                             )),
                             Box::new(self.declare_input(
                                 ctx,
-                                &**b,
+                                b,
                                 format!("{}.1", name),
                                 visibility,
                                 p_2,

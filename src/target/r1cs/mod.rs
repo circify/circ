@@ -15,6 +15,8 @@ use crate::ir::term::*;
 #[cfg(feature = "r1cs")]
 pub mod bellman;
 pub mod opt;
+#[cfg(feature = "r1cs")]
+pub mod spartan;
 pub mod trans;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +41,7 @@ pub struct R1cs<S: Hash + Eq> {
     pub constraints: Vec<(Lc, Lc, Lc)>,
 
     /// Computations needed to compute nondeterministic wire values
+    #[serde(with = "crate::ir::term::serde_mods::vec")]
     pub terms: Vec<Term>,
 }
 

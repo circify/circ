@@ -25,6 +25,14 @@ function r1cs_test {
     measure_time $BIN $zpath r1cs --action count
 }
 
+function r1cs_test_count {
+    zpath=$1
+    threshold=$2
+    o=$($BIN $zpath r1cs --action count)
+    n_constraints=$(echo $o | grep 'Final R1cs size:' | grep -Eo '\b[0-9]+\b')
+    [[ $n_constraints -lt $threshold ]] || (echo "Got $n_constraints, expected < $threshold" && exit 1)
+}
+
 # Test prove workflow, given an example name
 function pf_test {
     ex_name=$1
@@ -43,6 +51,7 @@ function pf_test_isolate {
     rm -rf P V pi
 }
 
+r1cs_test_count ./examples/ZoKrates/pf/mm4_cond.zok 120
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOrderCheck.zok

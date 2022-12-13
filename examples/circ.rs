@@ -28,8 +28,10 @@ use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::bellman::{gen_params, prove, verify};
+use circ::target::r1cs::bellman::gen_params;
 use circ::target::r1cs::opt::reduce_linearities;
+#[cfg(feature = "r1cs")]
+use circ::target::r1cs::spartan::write_data;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
@@ -143,6 +145,7 @@ arg_enum! {
     enum ProofAction {
         Count,
         Setup,
+        SpartanSetup,
     }
 }
 
@@ -235,6 +238,8 @@ fn main() {
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
+                    // Function calls return tuples
+                    Opt::Tuple,
                     Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
                     Opt::Tuple,
@@ -306,6 +311,10 @@ fn main() {
                     )
                     .unwrap();
                 }
+                ProofAction::SpartanSetup => {
+                    write_data::<_, _>(prover_key, verifier_key, &prover_data, &verifier_data)
+                        .unwrap();
+                }
             }
         }
         #[cfg(not(feature = "r1cs"))]
@@ -324,13 +333,7 @@ fn main() {
             };
             println!("Cost model: {}", cost_model);
             println!("Selection scheme: {}", selection_scheme);
-            to_aby(
-                cs.get("main").clone(),
-                &path_buf,
-                &lang_str,
-                &cost_model,
-                &selection_scheme,
-            );
+            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {

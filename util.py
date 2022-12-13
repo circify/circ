@@ -5,7 +5,7 @@ from os import path
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
 valid_features = {"aby", "c", "lp", "r1cs", "smt", "zok"}
-cargo_features = {"c", "lp", "r1cs", "smt", "zok"}
+cargo_features = {"c", "lp", "r1cs", "smt", "zok", "ristretto255"}
 
 # Environment variables
 ABY_SOURCE="./../ABY"

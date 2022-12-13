@@ -532,6 +532,7 @@ pub mod ast {
     pub struct EOI;
 }
 
+#[allow(clippy::result_large_err)]
 pub fn parse(file_string: &str) -> Result<ast::Program, Error<Rule>> {
     let mut pest_pairs = MyParser::parse(Rule::program, file_string)?;
     use from_pest::FromPest;
