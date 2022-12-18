@@ -907,7 +907,7 @@ impl ToR1cs {
                             .constraint(i.1.clone(), x.1.clone(), -z.1.clone() + 1);
                         self.r1cs.constraint(z.1.clone(), x.1, self.r1cs.zero());
                         self.r1cs
-                            .constraint(z.1.clone(), i.1.clone(), self.r1cs.zero());
+                            .constraint(z.1, i.1.clone(), self.r1cs.zero());
                         i
                     }
                 },

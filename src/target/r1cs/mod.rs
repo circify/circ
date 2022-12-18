@@ -42,7 +42,10 @@ lazy_static! {
             Ok("incomplete") => Relaxation::Incomplete,
             Ok("nondet") => Relaxation::NonDet,
             Ok("det") => Relaxation::Det,
-            Ok(s) => panic!("Invalid CIRC_RELAXATION {}. Should be: incomplete, nondet or det", s),
+            Ok(s) => panic!(
+                "Invalid CIRC_RELAXATION {}. Should be: incomplete, nondet or det",
+                s
+            ),
             Err(_) => Relaxation::Det,
         }
     };
