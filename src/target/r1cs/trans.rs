@@ -164,19 +164,6 @@ impl ToR1cs {
         bits
     }
 
-    /// Given wire `x`, returns whether `x` fits in `n` `signed` bits.
-    fn fits_in_bits<D: Display + ?Sized>(
-        &mut self,
-        d: &D,
-        x: &TermLc,
-        n: usize,
-        signed: bool,
-    ) -> TermLc {
-        let bits = self.decomp(d, x, n);
-        let sum = self.debitify(bits.iter().cloned(), signed);
-        self.are_equal(sum, x)
-    }
-
     /// Given a sequence of `bits`, returns a wire which represents their sum,
     /// `\sum_{i>0} b_i2^i`.
     ///
@@ -455,10 +442,13 @@ impl ToR1cs {
         }
     }
 
-    /// Returns whether `a - b` fits in `size` non-negative bits.
-    /// i.e. is in `{0, 1, ..., 2^n-1}`.
-    fn bv_ge(&mut self, a: TermLc, b: &TermLc, size: usize) -> TermLc {
-        self.fits_in_bits("ge", &(a - b), size, false)
+    /// Given a and b such that -2^n < a - b < 2^n, returns whether a >= b (or a > b if `strict` is
+    /// set).
+    fn bv_greater(&mut self, a: TermLc, b: TermLc, n: usize, strict: bool) -> TermLc {
+        let tweak = if strict { -1 } else { 0 };
+        let shift = self.r1cs.modulus.new_v(Integer::from(1) << n);
+        let sum = a - &b + &shift + tweak;
+        self.decomp("cmp", &sum, n + 1).pop().unwrap()
     }
 
     /// Returns whether `a` is (`strict`ly) (`signed`ly) greater than `b`.
@@ -474,8 +464,7 @@ impl ToR1cs {
         } else {
             self.get_bv_uint(b)
         };
-        // Use the fact: a > b <=> a - 1 >= b
-        self.bv_ge(if strict { a - 1 } else { a }, &b, w)
+        self.bv_greater(a, b, w, strict)
     }
 
     /// Shift `x` left by `2^y`, if bit-valued `c` is true.
@@ -499,17 +488,40 @@ impl ToR1cs {
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
     /// Returns a bit sequence.
+    ///
+    /// If `c` is true, returns bit sequence which is just a copy of `ext_bit`.
     fn shift_bv_bits(
         &mut self,
         x: TermLc,
         y: Vec<TermLc>,
         ext_bit: Option<TermLc>,
-        n: usize,
+        x_w: usize,
+        c: TermLc,
     ) -> Vec<TermLc> {
+        let y_w = y.len();
+        let mask: TermLc = match ext_bit.as_ref() {
+            Some(e) => e.clone() * &self.r1cs.modulus.new_v((1 << x_w) - 1),
+            None => self.zero.clone(),
+        };
         let s = self.shift_bv(x, y, ext_bit);
-        let mut bits = self.bitify("shift", &s, 2 * n - 1, false);
-        bits.truncate(n);
+        let masked_s = self.ite(c, mask, &s);
+        let mut bits = self.bitify("shift", &masked_s, (1 << y_w) + x_w - 1, false);
+        bits.truncate(x_w);
         bits
+    }
+
+    /// Given a shift amount expressed as a bit-sequence, splits that shift into low bits and high
+    /// bits. The number of low bits, `b`, is the minimum amount such that `data_w-1` is representable
+    /// in `b` bits. The rest of the bits (the high ones) are or'd together into a single bit that is
+    /// returned.
+    fn split_shift_amt(
+        &mut self,
+        data_w: usize,
+        mut shift_amt: Vec<TermLc>,
+    ) -> (TermLc, Vec<TermLc>) {
+        let b = bitsize(data_w - 1);
+        let some_high_bit = self.nary_or(shift_amt.drain(b..));
+        (some_high_bit, shift_amt)
     }
 
     fn embed_bv(&mut self, bv: Term) {
@@ -659,7 +671,6 @@ impl ToR1cs {
                                 self.set_bv_bits(bv, bits);
                             }
                             BvBinOp::Udiv | BvBinOp::Urem => {
-                                let is_zero = self.is_zero(b.clone());
                                 let a_bv_term = term![Op::PfToBv(n); a.0.clone()];
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
                                 let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
@@ -669,11 +680,16 @@ impl ToR1cs {
                                 let qb = self.bitify("div_q", &q, n, false);
                                 let rb = self.bitify("div_r", &r, n, false);
                                 self.r1cs.constraint(q.1.clone(), b.1.clone(), (a - &r).1);
-                                let is_gt = self.bv_ge(b - 1, &r, n);
-                                let is_not_ge = self.bool_not(&is_gt);
-                                let is_not_zero = self.bool_not(&is_zero);
-                                self.r1cs
-                                    .constraint(is_not_ge.1, is_not_zero.1, self.r1cs.zero());
+                                // b == 0 -> q == M   //  b != 0 or q == M
+                                // b != 0 -> r < b    //  b == 0 or r < b
+                                // so, since we don't care about b == 0,
+                                // q == M or r < b
+                                // not(q != M and r >= b)
+                                let r_ge_b = self.bv_greater(r, b, n, false);
+                                let max = self.r1cs.modulus.new_v((Integer::from(1) << n) - 1);
+                                let q_eq_max = self.is_zero(q - &max);
+                                let q_ne_max = self.bool_not(&q_eq_max);
+                                self.r1cs.constraint(r_ge_b.1, q_ne_max.1, self.r1cs.zero());
                                 let bits = match o {
                                     BvBinOp::Udiv => qb,
                                     BvBinOp::Urem => rb,
@@ -683,15 +699,10 @@ impl ToR1cs {
                             }
                             // Shift cases
                             _ => {
-                                let r = b;
-                                let b = bitsize(n - 1);
-                                assert!(1 << b == n);
-                                let mut rb = self.get_bv_bits(&bv.cs[1]);
-                                rb.truncate(b);
-                                let sum = self.debitify(rb.clone().into_iter(), false);
-                                self.assert_zero(sum - &r);
+                                let rb = self.get_bv_bits(&bv.cs[1]);
+                                let (high, low) = self.split_shift_amt(n, rb);
                                 let bits = match o {
-                                    BvBinOp::Shl => self.shift_bv_bits(a, rb, None, n),
+                                    BvBinOp::Shl => self.shift_bv_bits(a, low, None, n, high),
                                     BvBinOp::Lshr | BvBinOp::Ashr => {
                                         let mut lb = self.get_bv_bits(&bv.cs[0]);
                                         lb.reverse();
@@ -700,7 +711,7 @@ impl ToR1cs {
                                             _ => None,
                                         };
                                         let l = self.debitify(lb.into_iter(), false);
-                                        let mut bits = self.shift_bv_bits(l, rb, ext_bit, n);
+                                        let mut bits = self.shift_bv_bits(l, low, ext_bit, n, high);
                                         bits.reverse();
                                         bits
                                     }
@@ -859,13 +870,46 @@ impl ToR1cs {
                 }
                 Op::UbvToPf(_) => self.get_bv_uint(&c.cs[0]),
                 Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
-                Op::PfUnOp(PfUnOp::Recip) => {
-                    let x = self.get_pf(&c.cs[0]).clone();
-                    let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
-                    self.r1cs
-                        .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
-                    inv_x
-                }
+                Op::PfUnOp(PfUnOp::Recip) => match *super::RELAXATION {
+                    Relaxation::Incomplete => {
+                        // ix = 1
+                        let x = self.get_pf(&c.cs[0]).clone();
+                        let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
+                        self.r1cs
+                            .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
+                        inv_x
+                    }
+                    Relaxation::NonDet => {
+                        // ixx = x
+                        let x = self.get_pf(&c.cs[0]).clone();
+                        let x2 = self.mul(x.clone(), x.clone());
+                        let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
+                        self.r1cs.constraint(x2.1, inv_x.1.clone(), x.1);
+                        inv_x
+                    }
+                    Relaxation::Det => {
+                        // ix = 1 - z
+                        // zx = 0
+                        // zi = 0
+                        let x = self.get_pf(&c.cs[0]).clone();
+                        let eqz = term![Op::Eq; x.0.clone(), self.zero.0.clone()];
+                        let i = self.fresh_var(
+                            "is_zero_inv",
+                            term![Op::Ite; eqz.clone(), self.zero.0.clone(), term![PF_RECIP; x.0.clone()]],
+                            false,
+                        );
+                        let z = self.fresh_var(
+                            "is_zero",
+                            term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
+                            false,
+                        );
+                        self.r1cs
+                            .constraint(i.1.clone(), x.1.clone(), -z.1.clone() + 1);
+                        self.r1cs.constraint(z.1.clone(), x.1, self.r1cs.zero());
+                        self.r1cs.constraint(z.1, i.1.clone(), self.r1cs.zero());
+                        i
+                    }
+                },
                 _ => panic!("Non-field in embed_pf: {}", c),
             };
             self.cache.insert(c.clone(), EmbeddedTerm::Field(lc));
