@@ -46,7 +46,7 @@ lazy_static! {
                 "Invalid CIRC_RELAXATION {}. Should be: incomplete, nondet or det",
                 s
             ),
-            Err(_) => Relaxation::Det,
+            Err(_) => Relaxation::Incomplete,
         }
     };
 }
