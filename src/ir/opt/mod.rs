@@ -11,7 +11,7 @@ mod visit;
 
 use super::term::*;
 
-use log::debug;
+use log::{debug, trace};
 
 #[derive(Clone, Debug)]
 /// An optimization pass
@@ -108,7 +108,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());
-            //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
+            trace!("After {:?}: {}", i, text::serialize_computation(c));
             debug!("After {:?}: {} terms", i, c.terms());
         }
     }
