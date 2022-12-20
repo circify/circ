@@ -2,7 +2,6 @@
 
 use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use lazy_static::lazy_static;
 use log::debug;
 use paste::paste;
 use rug::Integer;
@@ -19,37 +18,6 @@ pub mod opt;
 #[cfg(feature = "r1cs")]
 pub mod spartan;
 pub mod trans;
-
-/// Guarantees for the IR->R1cs transform
-///
-/// Relevant to division by zero (in the field).
-pub enum Relaxation {
-    /// May introduce incompleteness
-    Incomplete,
-    /// May introduce non-determinism
-    NonDet,
-    /// Deterministic
-    Det,
-}
-
-lazy_static! {
-    static ref RELAXATION: Relaxation = {
-        match std::env::var("CIRC_RELAXATION")
-            .map(|s| s.to_lowercase())
-            .as_ref()
-            .map(|s| s.as_str())
-        {
-            Ok("incomplete") => Relaxation::Incomplete,
-            Ok("nondet") => Relaxation::NonDet,
-            Ok("det") => Relaxation::Det,
-            Ok(s) => panic!(
-                "Invalid CIRC_RELAXATION {}. Should be: incomplete, nondet or det",
-                s
-            ),
-            Err(_) => Relaxation::Incomplete,
-        }
-    };
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A Rank 1 Constraint System.
