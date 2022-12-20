@@ -1,0 +1,9 @@
+def main(private u8 x, private u8 y, private u8 z) -> bool:
+    bool c0 = x < y
+    bool c1 = x <= y
+    bool c2 = y > x
+    bool c3 = z >= y
+    bool c4 = z <= y
+    bool c5 = z == y
+    bool c6 = y != x
+    return c0 && c1 && c2 && c3 && c4 && c5 && c6

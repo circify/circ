@@ -51,6 +51,8 @@ function pf_test_isolate {
     rm -rf P V pi
 }
 
+pf_test field_cmp_rem
+
 r1cs_test_count ./examples/ZoKrates/pf/mm4_cond.zok 120
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
@@ -77,5 +79,7 @@ pf_test str_arr_str
 pf_test arr_str_arr_str
 pf_test var_idx_arr_str_arr_str
 pf_test mm
+pf_test udiv
+pf_test cmp
 
 scripts/zx_tests/run_tests.sh

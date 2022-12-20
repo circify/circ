@@ -1,0 +1,2 @@
+def main(private field x) -> bool:
+   return x < 10 && x % 3 == 0
