@@ -7,6 +7,7 @@ mod term;
 mod types;
 
 use super::{FrontEnd, Mode};
+use crate::cfg::CircCfg;
 use crate::circify::mem::AllocId;
 use crate::circify::{CircError, Circify, Loc, Val};
 use crate::front::c::ast_utils::*;
@@ -40,7 +41,7 @@ pub struct C;
 
 impl FrontEnd for C {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computations {
+    fn gen(i: Inputs, _cfg: &CircCfg) -> Computations {
         let parser = parser::CParser::new();
         let p = parser.parse_file(&i.file).unwrap();
         let mut g = CGen::new(i.mode, p.unit);

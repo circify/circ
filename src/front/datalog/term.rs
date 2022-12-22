@@ -7,9 +7,9 @@ use rug::Integer;
 use super::error::ErrorKind;
 use super::ty::Ty;
 
+use circ_fields::FieldT;
 use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::ir::term::*;
-use crate::util::field::DFL_T;
 
 /// A term
 #[derive(Debug, Clone)]
@@ -52,18 +52,18 @@ impl T {
 pub type Result<T> = std::result::Result<T, ErrorKind>;
 
 /// Initialize a prime field literal
-pub fn pf_lit<I>(i: I) -> T
+pub fn pf_lit<I>(i: I, field: &FieldT) -> T
 where
     Integer: From<I>,
 {
-    T::new(pf_ir_lit(i), Ty::Field)
+    T::new(pf_ir_lit(i, field), Ty::Field)
 }
 /// Initialize a prime field literal
-pub fn pf_ir_lit<I>(i: I) -> Term
+pub fn pf_ir_lit<I>(i: I, field: &FieldT) -> Term
 where
     Integer: From<I>,
 {
-    leaf_term(Op::Const(Value::Field(DFL_T.new_v(i))))
+    leaf_term(Op::Const(Value::Field(field.new_v(i))))
 }
 
 /// Initialize a boolean literal
@@ -77,21 +77,21 @@ pub fn uint_lit(v: u64, w: u8) -> T {
 }
 
 impl Ty {
-    fn sort(&self) -> Sort {
+    fn sort(&self, field: &FieldT) -> Sort {
         match self {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w as usize),
-            Self::Field => Sort::Field(DFL_T.clone()),
+            Self::Field => Sort::Field(field.clone()),
             Self::Array(n, b) => {
-                Sort::Array(Box::new(Sort::Field(DFL_T.clone())), Box::new(b.sort()), *n)
+                Sort::Array(Box::new(Sort::Field(field.clone())), Box::new(b.sort(field)), *n)
             }
         }
     }
-    fn default_ir_term(&self) -> Term {
-        self.sort().default_term()
+    fn default_ir_term(&self, field: &FieldT) -> Term {
+        self.sort(field).default_term()
     }
-    fn default(&self) -> T {
-        T::new(self.default_ir_term(), self.clone())
+    fn default(&self, field: &FieldT) -> T {
+        T::new(self.default_ir_term(field), self.clone())
     }
 }
 impl Display for T {
@@ -313,10 +313,10 @@ pub fn or(s: &T, t: &T) -> Result<T> {
 }
 
 /// Uint to field
-pub fn uint_to_field(s: &T) -> Result<T> {
+pub fn uint_to_field(s: &T, field: &FieldT) -> Result<T> {
     match &s.ty {
         Ty::Uint(_) => Ok(T::new(
-            term![Op::UbvToPf(DFL_T.clone()); s.ir.clone()],
+            term![Op::UbvToPf(field.clone()); s.ir.clone()],
             Ty::Field,
         )),
         _ => Err(ErrorKind::InvalidUnOp("to_field".into(), s.clone())),
@@ -339,7 +339,10 @@ pub fn array_idx(a: &T, i: &T) -> Result<T> {
 }
 
 /// Datalog lang def
-pub struct Datalog;
+pub struct Datalog {
+    /// The field type for this datalog term system
+    pub field: FieldT,
+}
 
 impl Typed<Ty> for T {
     fn type_(&self) -> Ty {
@@ -351,7 +354,7 @@ impl Embeddable for Datalog {
     type T = T;
     type Ty = Ty;
     fn create_uninit(&self, _ctx: &mut CirCtx, ty: &Self::Ty) -> Self::T {
-        ty.default()
+        ty.default(&self.field)
     }
     fn declare_input(
         &self,
@@ -364,7 +367,7 @@ impl Embeddable for Datalog {
         T::new(
             ctx.cs
                 .borrow_mut()
-                .new_var(&name, ty.sort(), visibility, precompute.map(|v| v.ir)),
+                .new_var(&name, ty.sort(&self.field), visibility, precompute.map(|v| v.ir)),
             ty.clone(),
         )
     }
@@ -377,20 +380,16 @@ impl Embeddable for Datalog {
     }
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
-        ty.default()
-    }
-}
-
-impl Default for Datalog {
-    fn default() -> Self {
-        Self::new()
+        ty.default(&self.field)
     }
 }
 
 impl Datalog {
     /// Initialize the Datalog lang def
-    pub fn new() -> Self {
-        Self
+    pub fn new(field: &FieldT) -> Self {
+        Self {
+            field: field.clone(),
+        }
     }
 }
 

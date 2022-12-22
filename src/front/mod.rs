@@ -6,6 +6,7 @@ pub mod datalog;
 #[cfg(all(feature = "smt", feature = "zok"))]
 pub mod zsharp;
 
+use crate::cfg::CircCfg;
 use crate::ir::proof;
 use crate::ir::term::{Computations, PartyId};
 
@@ -22,7 +23,7 @@ pub trait FrontEnd {
     type Inputs;
 
     /// Compile the program to constraints
-    fn gen(i: Self::Inputs) -> Computations;
+    fn gen(i: Self::Inputs, cfg: &CircCfg) -> Computations;
 }
 
 #[derive(Clone, Copy, Debug)]

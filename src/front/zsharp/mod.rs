@@ -5,11 +5,11 @@ mod term;
 pub mod zvisit;
 
 use super::{FrontEnd, Mode};
+use crate::cfg::CircCfg;
 use crate::circify::{CircError, Circify, Loc, Val};
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
-use crate::util::field::DFL_T;
 
 use log::{debug, warn};
 use rug::Integer;
@@ -32,10 +32,6 @@ pub struct Inputs {
     pub file: PathBuf,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
-    /// Whether to isolate assertions.
-    ///
-    /// That is, whether assertions in in-active if/then/else branches are disabled.
-    pub isolate_asserts: bool,
 }
 
 /// The Z# front-end. Implements [FrontEnd].
@@ -43,14 +39,14 @@ pub struct ZSharpFE;
 
 impl FrontEnd for ZSharpFE {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computations {
+    fn gen(i: Inputs, cfg: &CircCfg) -> Computations {
         debug!(
             "Starting Z# front-end, field: {}",
-            Sort::Field(DFL_T.clone())
+            Sort::Field(cfg.field().clone())
         );
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -69,10 +65,10 @@ impl FrontEnd for ZSharpFE {
 
 impl ZSharpFE {
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
-    pub fn interpret(i: Inputs) -> T {
+    pub fn interpret(i: Inputs, cfg: &CircCfg) -> T {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -101,7 +97,8 @@ struct ZGen<'ast> {
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
     assertions: RefCell<Vec<Term>>,
-    isolate_asserts: bool,
+    cfg: &'ast CircCfg,
+    zs: ZSharp,
 }
 
 impl<'ast> Drop for ZGen<'ast> {
@@ -126,18 +123,18 @@ enum ZAccess {
     Idx(T),
 }
 
-fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
+fn loc_store(zs: &ZSharp, struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
     match loc.first() {
         None => Ok(val),
         Some(ZAccess::Member(field)) => {
-            let inner = field_select(&struct_, field)?;
-            let new_inner = loc_store(inner, &loc[1..], val)?;
-            field_store(struct_, field, new_inner)
+            let inner = zs.field_select(&struct_, field)?;
+            let new_inner = loc_store(zs, inner, &loc[1..], val)?;
+            zs.field_store(struct_, field, new_inner)
         }
         Some(ZAccess::Idx(idx)) => {
-            let old_inner = array_select(struct_.clone(), idx.clone())?;
-            let new_inner = loc_store(old_inner, &loc[1..], val)?;
-            array_store(struct_, idx.clone(), new_inner)
+            let old_inner = zs.array_select(struct_.clone(), idx.clone())?;
+            let new_inner = loc_store(zs, old_inner, &loc[1..], val)?;
+            zs.array_store(struct_, idx.clone(), new_inner)
         }
     }
 }
@@ -147,10 +144,10 @@ impl<'ast> ZGen<'ast> {
         asts: HashMap<PathBuf, ast::File<'ast>>,
         mode: Mode,
         stdlib: &'ast parser::ZStdLib,
-        isolate_asserts: bool,
+        cfg: &'ast CircCfg,
     ) -> Self {
         let this = Self {
-            circ: RefCell::new(Circify::new(ZSharp::new())),
+            circ: RefCell::new(Circify::new(ZSharp::new(cfg.field()))),
             asts,
             stdlib,
             file_stack: Default::default(),
@@ -166,7 +163,8 @@ impl<'ast> ZGen<'ast> {
             ret_ty_stack: Default::default(),
             gc_depth_estimate: Cell::new(2 * GC_INC),
             assertions: Default::default(),
-            isolate_asserts,
+            zs: ZSharp::new(cfg.field()),
+            cfg,
         };
         this.circ
             .borrow()
@@ -179,7 +177,8 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn into_circify(self) -> Circify<ZSharp> {
-        self.circ.replace(Circify::new(ZSharp::new()))
+        self.circ
+            .replace(Circify::new(ZSharp::new(self.cfg.field())))
     }
 
     /// Unwrap a result with a span-dependent error
@@ -194,7 +193,12 @@ impl<'ast> ZGen<'ast> {
         r.unwrap_or_else(|e| self.err(e, s))
     }
 
-    fn builtin_call(f_name: &str, mut args: Vec<T>, mut generics: Vec<T>) -> Result<T, String> {
+    fn builtin_call(
+        &self,
+        f_name: &str,
+        mut args: Vec<T>,
+        mut generics: Vec<T>,
+    ) -> Result<T, String> {
         debug!("Builtin Call: {}", f_name);
         match f_name {
             "u8_to_bits" | "u16_to_bits" | "u32_to_bits" | "u64_to_bits" => {
@@ -211,7 +215,7 @@ impl<'ast> ZGen<'ast> {
                         f_name
                     ))
                 } else {
-                    uint_to_bits(args.pop().unwrap())
+                    self.zs.uint_to_bits(args.pop().unwrap())
                 }
             }
             "u8_from_bits" | "u16_from_bits" | "u32_from_bits" | "u64_from_bits" => {
@@ -228,7 +232,7 @@ impl<'ast> ZGen<'ast> {
                         f_name
                     ))
                 } else {
-                    uint_from_bits(args.pop().unwrap())
+                    self.zs.uint_from_bits(args.pop().unwrap())
                 }
             }
             "u8_to_field" | "u16_to_field" | "u32_to_field" | "u64_to_field" => {
@@ -245,7 +249,7 @@ impl<'ast> ZGen<'ast> {
                         f_name
                     ))
                 } else {
-                    uint_to_field(args.pop().unwrap())
+                    self.zs.uint_to_field(args.pop().unwrap())
                 }
             }
             "u8_to_u64" | "u16_to_u64" | "u32_to_u64" | "u8_to_u32" | "u16_to_u32"
@@ -265,9 +269,9 @@ impl<'ast> ZGen<'ast> {
                 } else {
                     let len = f_name.len();
                     match &f_name[len - 2..] {
-                        "64" => uint_to_uint(args.pop().unwrap(), 64),
-                        "32" => uint_to_uint(args.pop().unwrap(), 32),
-                        "16" => uint_to_uint(args.pop().unwrap(), 16),
+                        "64" => self.zs.uint_to_uint(args.pop().unwrap(), 64),
+                        "32" => self.zs.uint_to_uint(args.pop().unwrap(), 32),
+                        "16" => self.zs.uint_to_uint(args.pop().unwrap(), 16),
                         _ => unreachable!(),
                     }
                 }
@@ -284,13 +288,14 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    let nbits =
-                        const_int(generics.pop().unwrap())?
-                            .to_usize()
-                            .ok_or_else(|| {
-                                "builtin_call failed to convert unpack's N to usize".to_string()
-                            })?;
-                    field_to_bits(args.pop().unwrap(), nbits)
+                    let nbits = self
+                        .zs
+                        .const_int(generics.pop().unwrap())?
+                        .to_usize()
+                        .ok_or_else(|| {
+                            "builtin_call failed to convert unpack's N to usize".to_string()
+                        })?;
+                    self.zs.field_to_bits(args.pop().unwrap(), nbits)
                 }
             }
             "bit_array_le" => {
@@ -305,17 +310,17 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    let nbits =
-                        const_int(generics.pop().unwrap())?
-                            .to_usize()
-                            .ok_or_else(|| {
-                                "builtin_call failed to convert bit_array_le's N to usize"
-                                    .to_string()
-                            })?;
+                    let nbits = self
+                        .zs
+                        .const_int(generics.pop().unwrap())?
+                        .to_usize()
+                        .ok_or_else(|| {
+                            "builtin_call failed to convert bit_array_le's N to usize".to_string()
+                        })?;
 
                     let second_arg = args.pop().unwrap();
                     let first_arg = args.pop().unwrap();
-                    bit_array_le(first_arg, second_arg, nbits)
+                    self.zs.bit_array_le(first_arg, second_arg, nbits)
                 }
             }
             "get_field_size" => {
@@ -330,7 +335,7 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    Ok(uint_lit(DFL_T.modulus().significant_bits(), 32))
+                    Ok(self.zs.uint_lit(self.zs.field.modulus().significant_bits(), 32))
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),
@@ -353,9 +358,13 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{}", e))?
                 .unwrap_term()
         };
-        let new =
-            loc_store(old, &zaccs[..], val)
-                .and_then(|n| if strict { const_val(n) } else { Ok(n) })?;
+        let new = loc_store(&self.zs, old, &zaccs[..], val).and_then(|n| {
+            if strict {
+                const_val(n)
+            } else {
+                Ok(n)
+            }
+        })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -391,73 +400,75 @@ impl<'ast> ZGen<'ast> {
             ast::LiteralExpression::DecimalLiteral(d) => {
                 let vstr = &d.value.span.as_str();
                 match &d.suffix {
-                    Some(ast::DecimalSuffix::U8(_)) => Ok(uint_lit(vstr.parse::<u8>().unwrap(), 8)),
+                    Some(ast::DecimalSuffix::U8(_)) => {
+                        Ok(self.zs.uint_lit(vstr.parse::<u8>().unwrap(), 8))
+                    }
                     Some(ast::DecimalSuffix::U16(_)) => {
-                        Ok(uint_lit(vstr.parse::<u16>().unwrap(), 16))
+                        Ok(self.zs.uint_lit(vstr.parse::<u16>().unwrap(), 16))
                     }
                     Some(ast::DecimalSuffix::U32(_)) => {
-                        Ok(uint_lit(vstr.parse::<u32>().unwrap(), 32))
+                        Ok(self.zs.uint_lit(vstr.parse::<u32>().unwrap(), 32))
                     }
                     Some(ast::DecimalSuffix::U64(_)) => {
-                        Ok(uint_lit(vstr.parse::<u64>().unwrap(), 64))
+                        Ok(self.zs.uint_lit(vstr.parse::<u64>().unwrap(), 64))
                     }
-                    Some(ast::DecimalSuffix::Field(_)) => {
-                        Ok(field_lit(Integer::from_str_radix(vstr, 10).unwrap()))
-                    }
+                    Some(ast::DecimalSuffix::Field(_)) => Ok(self
+                        .zs
+                        .field_lit(Integer::from_str_radix(vstr, 10).unwrap())),
                     _ => Err("Could not infer literal type. Annotation needed.".to_string()),
                 }
             }
             ast::LiteralExpression::BooleanLiteral(b) => {
-                Ok(z_bool_lit(bool::from_str(&b.value).unwrap()))
+                Ok(self.zs.z_bool_lit(bool::from_str(&b.value).unwrap()))
             }
             ast::LiteralExpression::HexLiteral(h) => match &h.value {
-                ast::HexNumberExpression::U8(h) => {
-                    Ok(uint_lit(u8::from_str_radix(&h.value, 16).unwrap(), 8))
-                }
-                ast::HexNumberExpression::U16(h) => {
-                    Ok(uint_lit(u16::from_str_radix(&h.value, 16).unwrap(), 16))
-                }
-                ast::HexNumberExpression::U32(h) => {
-                    Ok(uint_lit(u32::from_str_radix(&h.value, 16).unwrap(), 32))
-                }
-                ast::HexNumberExpression::U64(h) => {
-                    Ok(uint_lit(u64::from_str_radix(&h.value, 16).unwrap(), 64))
-                }
+                ast::HexNumberExpression::U8(h) => Ok(self
+                    .zs
+                    .uint_lit(u8::from_str_radix(&h.value, 16).unwrap(), 8)),
+                ast::HexNumberExpression::U16(h) => Ok(self
+                    .zs
+                    .uint_lit(u16::from_str_radix(&h.value, 16).unwrap(), 16)),
+                ast::HexNumberExpression::U32(h) => Ok(self
+                    .zs
+                    .uint_lit(u32::from_str_radix(&h.value, 16).unwrap(), 32)),
+                ast::HexNumberExpression::U64(h) => Ok(self
+                    .zs
+                    .uint_lit(u64::from_str_radix(&h.value, 16).unwrap(), 64)),
             },
         }
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
-    fn unary_op(&self, o: &ast::UnaryOperator) -> fn(T) -> Result<T, String> {
+    fn unary_op(&self, o: &ast::UnaryOperator) -> fn(&ZSharp, T) -> Result<T, String> {
         match o {
-            ast::UnaryOperator::Pos(_) => Ok,
-            ast::UnaryOperator::Neg(_) => neg,
-            ast::UnaryOperator::Not(_) => not,
-            ast::UnaryOperator::Strict(_) => const_val,
+            ast::UnaryOperator::Pos(_) => ZSharp::pos,
+            ast::UnaryOperator::Neg(_) => ZSharp::neg,
+            ast::UnaryOperator::Not(_) => ZSharp::not,
+            ast::UnaryOperator::Strict(_) => ZSharp::const_val,
         }
     }
 
-    fn bin_op(&self, o: &ast::BinaryOperator) -> fn(T, T) -> Result<T, String> {
+    fn bin_op(&self, o: &ast::BinaryOperator) -> fn(&ZSharp, T, T) -> Result<T, String> {
         match o {
-            ast::BinaryOperator::BitXor => bitxor,
-            ast::BinaryOperator::BitAnd => bitand,
-            ast::BinaryOperator::BitOr => bitor,
-            ast::BinaryOperator::RightShift => shr,
-            ast::BinaryOperator::LeftShift => shl,
-            ast::BinaryOperator::Or => or,
-            ast::BinaryOperator::And => and,
-            ast::BinaryOperator::Add => add,
-            ast::BinaryOperator::Sub => sub,
-            ast::BinaryOperator::Mul => mul,
-            ast::BinaryOperator::Div => div,
-            ast::BinaryOperator::Rem => rem,
-            ast::BinaryOperator::Eq => eq,
-            ast::BinaryOperator::NotEq => neq,
-            ast::BinaryOperator::Lt => ult,
-            ast::BinaryOperator::Gt => ugt,
-            ast::BinaryOperator::Lte => ule,
-            ast::BinaryOperator::Gte => uge,
-            ast::BinaryOperator::Pow => pow,
+            ast::BinaryOperator::BitXor => ZSharp::bitxor,
+            ast::BinaryOperator::BitAnd => ZSharp::bitand,
+            ast::BinaryOperator::BitOr => ZSharp::bitor,
+            ast::BinaryOperator::RightShift => ZSharp::shr,
+            ast::BinaryOperator::LeftShift => ZSharp::shl,
+            ast::BinaryOperator::Or => ZSharp::or,
+            ast::BinaryOperator::And => ZSharp::and,
+            ast::BinaryOperator::Add => ZSharp::add,
+            ast::BinaryOperator::Sub => ZSharp::sub,
+            ast::BinaryOperator::Mul => ZSharp::mul,
+            ast::BinaryOperator::Div => ZSharp::div,
+            ast::BinaryOperator::Rem => ZSharp::rem,
+            ast::BinaryOperator::Eq => ZSharp::eq,
+            ast::BinaryOperator::NotEq => ZSharp::neq,
+            ast::BinaryOperator::Lt => ZSharp::ult,
+            ast::BinaryOperator::Gt => ZSharp::ugt,
+            ast::BinaryOperator::Lte => ZSharp::ule,
+            ast::BinaryOperator::Gte => ZSharp::uge,
+            ast::BinaryOperator::Pow => ZSharp::pow,
         }
     }
 
@@ -489,9 +500,9 @@ impl<'ast> ZGen<'ast> {
         egv.iter()
             .map(|cgv| match cgv {
                 ast::ConstantGenericValue::Value(l) => self.literal_(l),
-                ast::ConstantGenericValue::Identifier(i) => {
-                    self.identifier_impl_::<IS_CNST>(i).and_then(const_val)
-                }
+                ast::ConstantGenericValue::Identifier(i) => self
+                    .identifier_impl_::<IS_CNST>(i)
+                    .and_then(|a| self.zs.const_val(a)),
                 ast::ConstantGenericValue::Underscore(_) => Err(
                     "explicit_generic_values got non-monomorphized generic argument".to_string(),
                 ),
@@ -538,7 +549,7 @@ impl<'ast> ZGen<'ast> {
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Self::builtin_call(&f_name, args, generics)
+            self.builtin_call(&f_name, args, generics)
         } else {
             // XXX(unimpl) multi-return unimplemented
             assert!(f.returns.len() <= 1);
@@ -598,7 +609,7 @@ impl<'ast> ZGen<'ast> {
             } else {
                 self.circ_exit_fn()
                     .map(|a| a.unwrap_term())
-                    .unwrap_or_else(|| z_bool_lit(false))
+                    .unwrap_or_else(|| self.zs.z_bool_lit(false))
             };
 
             self.ret_ty_stack_pop();
@@ -693,7 +704,7 @@ impl<'ast> ZGen<'ast> {
             match self.mode {
                 Mode::Mpc(_) => {
                     let ret_term = r.unwrap_term();
-                    let ret_terms = ret_term.terms();
+                    let ret_terms = ret_term.terms(&self.zs);
                     self.circ
                         .borrow()
                         .cir_ctx()
@@ -709,7 +720,7 @@ impl<'ast> ZGen<'ast> {
                     let ret_var_val = self
                         .circ_declare_input(name, ty, PUBLIC_VIS, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
-                    let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
+                    let ret_eq = self.zs.eq(ret_val, ret_var_val).unwrap().term;
                     let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
                     let to_assert = if assertions.is_empty() {
                         ret_eq
@@ -721,7 +732,7 @@ impl<'ast> ZGen<'ast> {
                 }
                 Mode::Opt => {
                     let ret_term = r.unwrap_term();
-                    let ret_terms = ret_term.terms();
+                    let ret_terms = ret_term.terms(&self.zs);
                     assert!(
                         ret_terms.len() == 1,
                         "When compiling to optimize, there can only be one output"
@@ -735,7 +746,7 @@ impl<'ast> ZGen<'ast> {
                 }
                 Mode::ProofOfHighValue(v) => {
                     let ret_term = r.unwrap_term();
-                    let ret_terms = ret_term.terms();
+                    let ret_terms = ret_term.terms(&self.zs);
                     assert!(
                         ret_terms.len() == 1,
                         "When compiling to optimize, there can only be one output"
@@ -883,7 +894,8 @@ impl<'ast> ZGen<'ast> {
         &self,
         e: &ast::Expression<'ast>,
     ) -> Result<isize, String> {
-        const_int(self.expr_impl_::<IS_CNST>(e)?)?
+        self.zs
+            .const_int(self.expr_impl_::<IS_CNST>(e)?)?
             .to_isize()
             .ok_or_else(|| "Constant integer outside isize range".to_string())
     }
@@ -892,7 +904,8 @@ impl<'ast> ZGen<'ast> {
         &self,
         e: &ast::Expression<'ast>,
     ) -> Result<usize, String> {
-        const_int(self.expr_impl_::<IS_CNST>(e)?)?
+        self.zs
+            .const_int(self.expr_impl_::<IS_CNST>(e)?)?
             .to_usize()
             .ok_or_else(|| "Constant integer outside usize range".to_string())
     }
@@ -908,7 +921,7 @@ impl<'ast> ZGen<'ast> {
     ) -> Result<T, String> {
         match &acc.expression {
             ast::RangeOrExpression::Expression(e) => {
-                array_select(val, self.expr_impl_::<IS_CNST>(e)?)
+                self.zs.array_select(val, self.expr_impl_::<IS_CNST>(e)?)
             }
             ast::RangeOrExpression::Range(r) => {
                 // XXX(unimpl) Range expressions must be constant!
@@ -921,7 +934,7 @@ impl<'ast> ZGen<'ast> {
                     r.to.as_ref()
                         .map(|s| self.const_usize_impl_::<IS_CNST>(&s.0))
                         .transpose()?;
-                slice(val, s, e)
+                self.zs.slice(val, s, e)
             }
         }
     }
@@ -936,7 +949,11 @@ impl<'ast> ZGen<'ast> {
 
         match e {
             ast::Expression::Ternary(u) => {
-                match self.expr_impl_::<true>(&u.first).ok().and_then(const_bool) {
+                match self
+                    .expr_impl_::<true>(&u.first)
+                    .ok()
+                    .and_then(|a| self.zs.const_bool(a))
+                {
                     Some(true) => self.expr_impl_::<IS_CNST>(&u.second),
                     Some(false) => self.expr_impl_::<IS_CNST>(&u.third),
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),
@@ -957,12 +974,12 @@ impl<'ast> ZGen<'ast> {
                 let left = self.expr_impl_::<IS_CNST>(&b.left)?;
                 let right = self.expr_impl_::<IS_CNST>(&b.right)?;
                 let op = self.bin_op(&b.op);
-                op(left, right)
+                op(&self.zs, left, right)
             }
             ast::Expression::Unary(u) => {
                 let arg = self.expr_impl_::<IS_CNST>(&u.expression)?;
                 let op = self.unary_op(&u.op);
-                op(arg)
+                op(&self.zs, arg)
             }
             ast::Expression::Identifier(i) => self.identifier_impl_::<IS_CNST>(i),
             ast::Expression::Literal(l) => self.literal_(l),
@@ -977,17 +994,19 @@ impl<'ast> ZGen<'ast> {
                         }
                         ast::SpreadOrExpression::Spread(s) => {
                             avals.append(
-                                &mut self.expr_impl_::<IS_CNST>(&s.expression)?.unwrap_array()?,
+                                &mut self
+                                    .expr_impl_::<IS_CNST>(&s.expression)?
+                                    .unwrap_array(&self.zs)?,
                             );
                             Ok(())
                         }
                     })?;
-                T::new_array(avals)
+                self.zs.array(avals)
             }
             ast::Expression::ArrayInitializer(ai) => {
                 let val = self.expr_impl_::<IS_CNST>(&ai.value)?;
                 let num = self.const_usize_impl_::<IS_CNST>(&ai.count)?;
-                array(vec![val; num])
+                self.zs.array(vec![val; num])
             }
             ast::Expression::Postfix(p) => {
                 // assume no functions in arrays, etc.
@@ -1022,7 +1041,7 @@ impl<'ast> ZGen<'ast> {
                     ast::Access::Call(_) => {
                         Err("Function call in non-first-access position in expr".to_string())
                     }
-                    ast::Access::Member(a) => field_select(&v?, &a.id.value),
+                    ast::Access::Member(a) => self.zs.field_select(&v?, &a.id.value),
                     ast::Access::Select(s) => self.array_access_impl_::<IS_CNST>(s, v?),
                 })
             }
@@ -1036,7 +1055,13 @@ impl<'ast> ZGen<'ast> {
                 .collect::<Result<Vec<_>, String>>()
                 .and_then(|members| Ok(T::new_struct(self.canon_struct(&u.ty.value)?, members))),
         }
-        .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
+        .and_then(|res| {
+            if IS_CNST {
+                self.zs.const_val(res)
+            } else {
+                Ok(res)
+            }
+        })
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
@@ -1056,7 +1081,7 @@ impl<'ast> ZGen<'ast> {
 
     fn ret_impl_<const IS_CNST: bool>(&self, ret: Option<T>) -> Result<(), CircError> {
         if IS_CNST {
-            self.crets_push(ret.unwrap_or_else(|| z_bool_lit(false)));
+            self.crets_push(ret.unwrap_or_else(|| self.zs.z_bool_lit(false)));
             Ok(())
         } else {
             self.circ_return_(ret)
@@ -1111,7 +1136,8 @@ impl<'ast> ZGen<'ast> {
             }
             ast::Statement::Assertion(e) => {
                 match self.expr_impl_::<true>(&e.expression).and_then(|v| {
-                    const_bool(v)
+                    self.zs
+                        .const_bool(v)
                         .ok_or_else(|| "interpreting expr as const bool failed".to_string())
                 }) {
                     Ok(true) => Ok(()),
@@ -1137,12 +1163,12 @@ impl<'ast> ZGen<'ast> {
             }
             ast::Statement::Iteration(i) => {
                 let ty = self.type_impl_::<IS_CNST>(&i.ty)?;
-                let ival_cons = match ty {
-                    Ty::Field => T::new_field,
-                    Ty::Uint(8) => T::new_u8,
-                    Ty::Uint(16) => T::new_u16,
-                    Ty::Uint(32) => T::new_u32,
-                    Ty::Uint(64) => T::new_u64,
+                let ival_cons: Box<dyn Fn(isize) -> T> = match ty {
+                    Ty::Field => Box::new(|i| self.zs.field_lit(i)),
+                    Ty::Uint(8) => Box::new(|i| T::new_u8(i)),
+                    Ty::Uint(16) => Box::new(|i| T::new_u16(i)),
+                    Ty::Uint(32) => Box::new(|i| T::new_u32(i)),
+                    Ty::Uint(64) => Box::new(|i| T::new_u64(i)),
                     _ => {
                         return Err(format!(
                             "Iteration variable must be Field or Uint, got {:?}",
@@ -1354,7 +1380,7 @@ impl<'ast> ZGen<'ast> {
     }
 
     fn cvar_declare(&self, name: String, ty: &Ty) -> Result<(), String> {
-        self.cvar_declare_init(name, ty, ty.default())
+        self.cvar_declare_init(name, ty, ty.default(&self.zs))
     }
 
     fn cvar_lookup(&self, name: &str) -> Option<T> {
@@ -1812,7 +1838,7 @@ impl<'ast> ZGen<'ast> {
 
     fn assert(&self, asrt: Term) {
         debug_assert!(matches!(check(&asrt), Sort::Bool));
-        if self.isolate_asserts {
+        if self.cfg.zsharp.isolate_asserts {
             let path = self.circ_condition();
             self.assertions
                 .borrow_mut()
@@ -1825,13 +1851,13 @@ impl<'ast> ZGen<'ast> {
     /*** circify wrapper functions (hides RefCell) ***/
 
     fn circ_enter_condition(&self, cond: Term) {
-        if self.isolate_asserts {
+        if self.cfg.zsharp.isolate_asserts {
             self.circ.borrow_mut().enter_condition(cond).unwrap();
         }
     }
 
     fn circ_exit_condition(&self) {
-        if self.isolate_asserts {
+        if self.cfg.zsharp.isolate_asserts {
             self.circ.borrow_mut().exit_condition()
         }
     }

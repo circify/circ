@@ -3,6 +3,7 @@
 //! [Ben Braun's
 //! thesis](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.683.6940&rep=rep1&type=pdf)
 //! is a good intro to how this process works.
+use crate::cfg::CircCfg;
 use crate::ir::term::extras::Letified;
 use crate::ir::term::precomp::PreComp;
 use crate::ir::term::*;
@@ -10,6 +11,7 @@ use crate::target::bitsize;
 use crate::target::r1cs::*;
 
 use circ_fields::FieldT;
+use circ_opt::FieldDivByZero;
 use fxhash::FxHashSet;
 use log::debug;
 use rug::ops::Pow;
@@ -35,7 +37,7 @@ enum EmbeddedTerm {
     Tuple(Vec<EmbeddedTerm>),
 }
 
-struct ToR1cs {
+struct ToR1cs<'cfg> {
     r1cs: R1cs<String>,
     cache: TermMap<EmbeddedTerm>,
     wit_ext: PreComp,
@@ -43,11 +45,13 @@ struct ToR1cs {
     next_idx: usize,
     zero: TermLc,
     one: TermLc,
+    cfg: &'cfg CircCfg,
     field: FieldT,
 }
 
-impl ToR1cs {
-    fn new(field: FieldT, public_inputs: FxHashSet<String>) -> Self {
+impl<'cfg> ToR1cs<'cfg> {
+    fn new(cfg: &'cfg CircCfg, public_inputs: FxHashSet<String>) -> Self {
+        let field = cfg.field().clone();
         debug!("Starting R1CS back-end, field: {}", field);
         let r1cs = R1cs::new(field.clone());
         let zero = TermLc(pf_lit(field.new_v(0u8)), r1cs.zero());
@@ -61,6 +65,7 @@ impl ToR1cs {
             zero,
             one,
             field,
+            cfg,
         }
     }
 
@@ -870,8 +875,8 @@ impl ToR1cs {
                 }
                 Op::UbvToPf(_) => self.get_bv_uint(&c.cs[0]),
                 Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
-                Op::PfUnOp(PfUnOp::Recip) => match *super::RELAXATION {
-                    Relaxation::Incomplete => {
+                Op::PfUnOp(PfUnOp::Recip) => match self.cfg.r1cs.div_by_zero {
+                    FieldDivByZero::Incomplete => {
                         // ix = 1
                         let x = self.get_pf(&c.cs[0]).clone();
                         let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
@@ -879,7 +884,7 @@ impl ToR1cs {
                             .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                         inv_x
                     }
-                    Relaxation::NonDet => {
+                    FieldDivByZero::NonDet => {
                         // ixx = x
                         let x = self.get_pf(&c.cs[0]).clone();
                         let x2 = self.mul(x.clone(), x.clone());
@@ -887,7 +892,7 @@ impl ToR1cs {
                         self.r1cs.constraint(x2.1, inv_x.1.clone(), x.1);
                         inv_x
                     }
-                    Relaxation::Det => {
+                    FieldDivByZero::Zero => {
                         // ix = 1 - z
                         // zx = 0
                         // zi = 0
@@ -933,7 +938,7 @@ impl ToR1cs {
 /// ## Returns
 ///
 /// * The R1CS instance
-pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverData, VerifierData) {
+pub fn to_r1cs(mut cs: Computation, cfg: &CircCfg) -> (R1cs<String>, ProverData, VerifierData) {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();
     let public_inputs = metadata
@@ -941,7 +946,7 @@ pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverDat
         .map(ToOwned::to_owned)
         .collect();
     debug!("public inputs: {:?}", public_inputs);
-    let mut converter = ToR1cs::new(modulus, public_inputs);
+    let mut converter = ToR1cs::new(cfg, public_inputs);
     debug!(
         "Term count: {}",
         assertions
@@ -969,19 +974,27 @@ pub fn to_r1cs(mut cs: Computation, modulus: FieldT) -> (R1cs<String>, ProverDat
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::util::field::DFL_T;
 
     use crate::ir::proof::Constraints;
     use crate::ir::term::dist::test::*;
     use crate::ir::term::dist::*;
     use crate::target::r1cs::opt::reduce_linearities;
 
-    use circ_fields::FieldT;
     use fxhash::FxHashMap;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::distributions::Distribution;
     use rand::SeedableRng;
+
+    fn to_r1cs_dflt(cs: Computation) -> (R1cs<String>, ProverData, VerifierData) {
+        to_r1cs(cs, &CircCfg::default())
+    }
+
+    fn to_r1cs_mod17(cs: Computation) -> (R1cs<String>, ProverData, VerifierData) {
+        let mut opt = crate::cfg::CircOpt::default();
+        opt.field.custom_modulus = "17".into();
+        to_r1cs(cs, &CircCfg::from(opt))
+    }
 
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -1006,7 +1019,7 @@ pub mod test {
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
             ],
         );
-        let (r1cs, pd, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let (r1cs, pd, _) = to_r1cs_mod17(cs);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
@@ -1050,7 +1063,7 @@ pub mod test {
             term![Op::Not; t]
         };
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs_dflt(cs);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
@@ -1063,7 +1076,8 @@ pub mod test {
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let cfg = CircCfg::default();
+        let (r1cs, pd, _) = to_r1cs(cs, &cfg);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
@@ -1074,11 +1088,12 @@ pub mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let cfg = CircCfg::default();
+        let (r1cs, pd, _) = to_r1cs(cs, &cfg);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
-        let r1cs2 = reduce_linearities(r1cs, None);
+        let r1cs2 = reduce_linearities(r1cs, &cfg);
         r1cs2.check_all(&extended_values);
     }
 
@@ -1089,11 +1104,12 @@ pub mod test {
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let cfg = CircCfg::default();
+        let (r1cs, pd, _) = to_r1cs(cs, &cfg);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
-        let r1cs2 = reduce_linearities(r1cs, None);
+        let r1cs2 = reduce_linearities(r1cs, &cfg);
         r1cs2.check_all(&extended_values);
     }
 
@@ -1111,7 +1127,7 @@ pub mod test {
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
         );
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs_dflt(cs);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
@@ -1127,11 +1143,12 @@ pub mod test {
         let v = eval(&t, &values);
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let cfg = CircCfg::default();
+        let (r1cs, pd, _) = to_r1cs(cs, &cfg);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);
-        let r1cs2 = reduce_linearities(r1cs, None);
+        let r1cs2 = reduce_linearities(r1cs, &cfg);
         r1cs2.check_all(&extended_values);
     }
 
@@ -1143,14 +1160,14 @@ pub mod test {
         ))))
     }
 
-    fn pf(i: isize) -> Term {
-        leaf_term(Op::Const(Value::Field(DFL_T.new_v(i))))
+    fn pf_dflt(i: isize) -> Term {
+        leaf_term(Op::Const(Value::Field(CircCfg::default().field().new_v(i))))
     }
 
     fn const_test(term: Term) {
         let mut cs = Computation::new();
         cs.assert(term);
-        let (r1cs, pd, _) = to_r1cs(cs, DFL_T.clone());
+        let (r1cs, pd, _) = to_r1cs_dflt(cs);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&Default::default());
         r1cs.check_all(&extended_values);
@@ -1240,17 +1257,17 @@ pub mod test {
     fn pf2bv() {
         const_test(term![
             Op::Eq;
-            term![Op::PfToBv(4); pf(8)],
+            term![Op::PfToBv(4); pf_dflt(8)],
             bv(0b1000, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::PfToBv(4); pf(15)],
+            term![Op::PfToBv(4); pf_dflt(15)],
             bv(0b1111, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::PfToBv(8); pf(15)],
+            term![Op::PfToBv(8); pf_dflt(15)],
             bv(0b1111, 8)
         ]);
     }
@@ -1274,7 +1291,7 @@ pub mod test {
             ],
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (r1cs, pd, _) = to_r1cs(cs, FieldT::from(Integer::from(17)));
+        let (r1cs, pd, _) = to_r1cs_mod17(cs);
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         r1cs.check_all(&extended_values);

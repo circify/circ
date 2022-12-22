@@ -9,6 +9,7 @@ use fxhash::FxHashMap;
 use log::debug;
 use rug::Integer;
 
+use crate::cfg::CircCfg;
 use crate::circify::{Circify, Loc, Val};
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::opt::cfold::fold;
@@ -29,27 +30,23 @@ use parser::ast;
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
-    /// How many recursions to tolerate
-    pub rec_limit: usize,
-    /// Should we lint primitive recursions?
-    pub lint_prim_rec: bool,
 }
 
 struct Gen<'ast> {
     rules: FxHashMap<&'ast str, &'ast ast::Rule_<'ast>>,
     stack_by_fn: FxHashMap<&'ast str, Vec<Option<Integer>>>,
-    rec_limit: usize,
+    cfg: &'ast CircCfg,
     circ: Circify<term::Datalog>,
 }
 
 impl<'ast> Gen<'ast> {
-    fn new(rec_limit: usize) -> Self {
+    fn new(cfg: &'ast CircCfg) -> Self {
         Self {
             rules: FxHashMap::default(),
-            rec_limit,
             stack_by_fn: FxHashMap::default(),
             // TODO: values !?
-            circ: Circify::new(term::Datalog::new()),
+            circ: Circify::new(term::Datalog::new(cfg.field())),
+            cfg,
         }
     }
 
@@ -63,7 +60,7 @@ impl<'ast> Gen<'ast> {
         {
             last_val > this_val
         } else {
-            e.len() <= self.rec_limit
+            e.len() <= self.cfg.datalog.rec_limit
         };
         if do_enter {
             e.push(dec_value);
@@ -188,7 +185,8 @@ impl<'ast> Gen<'ast> {
                 match c.fn_name.value {
                     "to_field" => {
                         assert_eq!(1, args.len(), "to_field takes 1 argument: {:?}", c.span);
-                        term::uint_to_field(&args[0]).map_err(|err| Error::new(err, c.span))
+                        term::uint_to_field(&args[0], self.cfg.field())
+                            .map_err(|err| Error::new(err, c.span))
                     }
                     name => {
                         assert!(
@@ -251,7 +249,7 @@ impl<'ast> Gen<'ast> {
             }
             ast::Literal::DecimalLiteral(ref b) => {
                 let val = Integer::from_str(b.value).unwrap();
-                Ok(term::pf_lit(val))
+                Ok(term::pf_lit(val, self.cfg.field()))
             }
             ast::Literal::BooleanLiteral(ref b) => {
                 let val = bool::from_str(b.value).unwrap();
@@ -380,7 +378,7 @@ pub struct Datalog;
 
 impl FrontEnd for Datalog {
     type Inputs = Inputs;
-    fn gen(i: Inputs) -> Computations {
+    fn gen(i: Inputs, cfg: &CircCfg) -> Computations {
         let mut f = File::open(&i.file).unwrap();
         let mut buffer = String::new();
         f.read_to_string(&mut buffer).unwrap();
@@ -392,9 +390,9 @@ impl FrontEnd for Datalog {
                 panic!("parse error!")
             }
         };
-        let mut g = Gen::new(i.rec_limit);
+        let mut g = Gen::new(cfg);
         g.register_rules(&ast);
-        let r = if i.lint_prim_rec {
+        let r = if cfg.datalog.lint_prim_rec {
             g.lint_rules()
         } else {
             g.entry_rule("main")

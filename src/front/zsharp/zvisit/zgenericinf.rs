@@ -422,12 +422,12 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 let lhs = self.expr(&be.left)?;
                 let rhs = self.expr(&be.right)?;
                 let op = self.zgen.bin_op(&be.op);
-                op(lhs, rhs)
+                op(&self.zgen.zs, lhs, rhs)
             }
             Unary(ue) => {
                 let exp = self.expr(&ue.expression)?;
                 let op = self.zgen.unary_op(&ue.op);
-                op(exp)
+                op(&self.zgen.zs, exp)
             }
             Identifier(id) => {
                 if self.is_generic_var(&id.value) {

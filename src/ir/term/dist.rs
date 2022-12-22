@@ -316,7 +316,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 pub mod test {
     use super::*;
 
-    use crate::util::field::DFL_T;
+    use crate::cfg::CircCfg;
 
     use fxhash::FxHashMap as HashMap;
     use quickcheck::{Arbitrary, Gen};
@@ -335,9 +335,10 @@ pub mod test {
     impl Arbitrary for ArbitraryTerm {
         fn arbitrary(g: &mut Gen) -> Self {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
+            let cfg = CircCfg::default();
             let d = FixedSizeDist {
                 bv_width: Some(8),
-                pf_t: Some(DFL_T.clone()),
+                pf_t: Some(cfg.field().clone()),
                 tuples: true,
                 size: g.size(),
                 sort: Sort::Bool,
