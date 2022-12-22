@@ -1,23 +1,22 @@
 use circ::front::zsharp::{Inputs, ZSharpFE};
 
+use circ::cfg::{
+    clap::{self, Parser},
+    CircOpt,
+};
 use circ::front::Mode;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "circ", about = "CirC: the circuit compiler")]
+#[derive(Debug, Parser)]
+#[command(name = "zxi", about = "The Z# interpreter")]
 struct Options {
     /// Input file
-    #[structopt(parse(from_os_str))]
+    #[arg()]
     zsharp_path: PathBuf,
 
-    /// Number of parties for an MPC. If missing, generates a proof circuit.
-    #[structopt(short, long, name = "PARTIES")]
-    parties: Option<u8>,
-
-    /// Whether to maximize the output
-    #[structopt(short, long)]
-    maximize: bool,
+    #[command(flatten)]
+    /// CirC options
+    circ: CircOpt,
 }
 
 fn main() {
@@ -25,20 +24,11 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
-    //println!("{:?}", options);
-    let mode = if options.maximize {
-        Mode::Opt
-    } else {
-        match options.parties {
-            Some(p) => Mode::Mpc(p),
-            None => Mode::Proof,
-        }
-    };
+    let options = Options::parse();
+    circ::cfg::set(&options.circ);
     let inputs = Inputs {
         file: options.zsharp_path,
-        mode,
-        isolate_asserts: false,
+        mode: Mode::Proof,
     };
     let cs = ZSharpFE::interpret(inputs);
     cs.pretty(&mut std::io::stdout().lock())

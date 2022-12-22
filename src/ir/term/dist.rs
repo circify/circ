@@ -316,8 +316,6 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 pub mod test {
     use super::*;
 
-    use crate::util::field::DFL_T;
-
     use fxhash::FxHashMap as HashMap;
     use quickcheck::{Arbitrary, Gen};
     use rand::distributions::Distribution;
@@ -337,7 +335,7 @@ pub mod test {
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
             let d = FixedSizeDist {
                 bv_width: Some(8),
-                pf_t: Some(DFL_T.clone()),
+                pf_t: Some(FieldT::FBls12381),
                 tuples: true,
                 size: g.size(),
                 sort: Sort::Bool,

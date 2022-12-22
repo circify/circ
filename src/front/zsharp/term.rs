@@ -4,11 +4,11 @@ use std::fmt::{self, Display, Formatter};
 
 use rug::Integer;
 
+use crate::cfg::cfg;
 use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::front::field_list::FieldList;
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
-use crate::util::field::DFL_T;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Ty {
@@ -57,10 +57,12 @@ impl Ty {
         match self {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w),
-            Self::Field => Sort::Field(DFL_T.clone()),
-            Self::Array(n, b) => {
-                Sort::Array(Box::new(Sort::Field(DFL_T.clone())), Box::new(b.sort()), *n)
-            }
+            Self::Field => Sort::Field(cfg().field().clone()),
+            Self::Array(n, b) => Sort::Array(
+                Box::new(Sort::Field(cfg().field().clone())),
+                Box::new(b.sort()),
+                *n,
+            ),
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
@@ -360,10 +362,10 @@ pub fn div(a: T, b: T) -> Result<T, String> {
 }
 
 fn rem_field(a: Term, b: Term) -> Term {
-    let len = DFL_T.modulus().significant_bits() as usize;
+    let len = cfg().field().modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
-    term![Op::UbvToPf(DFL_T.clone()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
+    term![Op::UbvToPf(cfg().field().clone()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
 }
 
 fn rem_uint(a: Term, b: Term) -> Term {
@@ -441,7 +443,7 @@ fn ult_uint(a: Term, b: Term) -> Term {
 // XXX(constr_opt) see TODO file - only need to expand to MIN of two bit-lengths if done right
 // XXX(constr_opt) do this using subtraction instead?
 fn field_comp(a: Term, b: Term, op: BvBinPred) -> Term {
-    let len = DFL_T.modulus().significant_bits() as usize;
+    let len = cfg().field().modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
     term![Op::BvBinPred(op); a_bv, b_bv]
@@ -634,7 +636,7 @@ fn pf_val<I>(i: I) -> Value
 where
     Integer: From<I>,
 {
-    Value::Field(DFL_T.new_v(i))
+    Value::Field(cfg().field().new_v(i))
 }
 
 pub fn field_lit<I>(i: I) -> T
@@ -711,7 +713,7 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match array.ty {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
             let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-                term![Op::UbvToPf(DFL_T.clone()); idx.term]
+                term![Op::UbvToPf(cfg().field().clone()); idx.term]
             } else {
                 idx.term
             };
@@ -725,7 +727,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-            term![Op::UbvToPf(DFL_T.clone()); idx.term]
+            term![Op::UbvToPf(cfg().field().clone()); idx.term]
         } else {
             idx.term
         };
@@ -756,7 +758,7 @@ fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
         .collect::<Vec<(Term, Term)>>();
     let len = values.len() + to_insert.len();
     let arr = leaf_term(Op::Const(Value::Array(Array::new(
-        Sort::Field(DFL_T.clone()),
+        Sort::Field(cfg().field().clone()),
         Box::new(sort.default_value()),
         values.into_iter().collect::<BTreeMap<_, _>>(),
         len,
@@ -786,7 +788,10 @@ pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
 
 pub fn uint_to_field(u: T) -> Result<T, String> {
     match &u.ty {
-        Ty::Uint(_) => Ok(T::new(Ty::Field, term![Op::UbvToPf(DFL_T.clone()); u.term])),
+        Ty::Uint(_) => Ok(T::new(
+            Ty::Field,
+            term![Op::UbvToPf(cfg().field().clone()); u.term],
+        )),
         u => Err(format!("Cannot do uint-to-field on {}", u)),
     }
 }
@@ -925,7 +930,7 @@ impl Embeddable for ZSharp {
                 Ty::Field,
                 ctx.cs.borrow_mut().new_var(
                     &name,
-                    Sort::Field(DFL_T.clone()),
+                    Sort::Field(cfg().field().clone()),
                     visibility,
                     precompute.map(|p| p.term),
                 ),

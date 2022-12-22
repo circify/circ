@@ -1,39 +1,36 @@
 use bls12_381::Bls12;
+use circ::cfg::clap::{self, Parser, ValueEnum};
 use circ::ir::term::text::parse_value_map;
 use circ::target::r1cs::bellman;
 use circ::target::r1cs::spartan;
 use std::path::PathBuf;
-use structopt::clap::arg_enum;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "circ", about = "CirC: the circuit compiler")]
+#[derive(Debug, Parser)]
+#[command(name = "zk", about = "The CirC ZKP runner")]
 struct Options {
-    #[structopt(long, default_value = "P", parse(from_os_str))]
+    #[arg(long, default_value = "P")]
     prover_key: PathBuf,
-    #[structopt(long, default_value = "V", parse(from_os_str))]
+    #[arg(long, default_value = "V")]
     verifier_key: PathBuf,
-    #[structopt(long, default_value = "pi", parse(from_os_str))]
+    #[arg(long, default_value = "pi")]
     proof: PathBuf,
-    #[structopt(long, default_value = "in", parse(from_os_str))]
+    #[arg(long, default_value = "in")]
     inputs: PathBuf,
-    #[structopt(long, default_value = "pin", parse(from_os_str))]
+    #[arg(long, default_value = "pin")]
     pin: PathBuf,
-    #[structopt(long, default_value = "vin", parse(from_os_str))]
+    #[arg(long, default_value = "vin")]
     vin: PathBuf,
-    #[structopt(long)]
+    #[arg(long)]
     action: ProofAction,
 }
 
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    /// `Prove`/`Verify` execute proving/verifying in bellman separately
-    /// `Spartan` executes both proving/verifying in spartan
-    enum ProofAction {
-        Prove,
-        Verify,
-        Spartan,
-    }
+#[derive(PartialEq, Debug, Clone, ValueEnum)]
+/// `Prove`/`Verify` execute proving/verifying in bellman separately
+/// `Spartan` executes both proving/verifying in spartan
+enum ProofAction {
+    Prove,
+    Verify,
+    Spartan,
 }
 
 fn main() {
@@ -41,7 +38,7 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let opts = Options::from_args();
+    let opts = Options::parse();
     match opts.action {
         ProofAction::Prove => {
             let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());

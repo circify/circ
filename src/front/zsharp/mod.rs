@@ -5,11 +5,11 @@ mod term;
 pub mod zvisit;
 
 use super::{FrontEnd, Mode};
+use crate::cfg::cfg;
 use crate::circify::{CircError, Circify, Loc, Val};
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
-use crate::util::field::DFL_T;
 
 use log::{debug, warn};
 use rug::Integer;
@@ -32,10 +32,6 @@ pub struct Inputs {
     pub file: PathBuf,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
-    /// Whether to isolate assertions.
-    ///
-    /// That is, whether assertions in in-active if/then/else branches are disabled.
-    pub isolate_asserts: bool,
 }
 
 /// The Z# front-end. Implements [FrontEnd].
@@ -46,11 +42,11 @@ impl FrontEnd for ZSharpFE {
     fn gen(i: Inputs) -> Computations {
         debug!(
             "Starting Z# front-end, field: {}",
-            Sort::Field(DFL_T.clone())
+            Sort::Field(cfg().field().clone())
         );
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -72,7 +68,7 @@ impl ZSharpFE {
     pub fn interpret(i: Inputs) -> T {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), i.isolate_asserts);
+        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
@@ -330,7 +326,7 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    Ok(uint_lit(DFL_T.modulus().significant_bits(), 32))
+                    Ok(uint_lit(cfg().field().modulus().significant_bits(), 32))
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),
