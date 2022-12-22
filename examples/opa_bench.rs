@@ -4,7 +4,10 @@ use circ::target::aby::assignment::ilp;
 use circ::term;
 
 #[derive(Debug, Parser)]
-#[command(name = "opa_bench", about = "Optimal Protocol Assignment via ILP benchmarker")]
+#[command(
+    name = "opa_bench",
+    about = "Optimal Protocol Assignment via ILP benchmarker"
+)]
 struct Options {
     /// Number of parties for an MPC. If missing, generates a proof circuit.
     #[arg(name = "MULTS")]

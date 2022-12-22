@@ -1,5 +1,5 @@
-use clap::Parser;
 use circ_opt::CircOpt;
+use clap::Parser;
 
 #[derive(Parser, Debug)]
 struct BinaryOpt {

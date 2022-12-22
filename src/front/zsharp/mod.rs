@@ -335,7 +335,9 @@ impl<'ast> ZGen<'ast> {
                         generics.len()
                     ))
                 } else {
-                    Ok(self.zs.uint_lit(self.zs.field.modulus().significant_bits(), 32))
+                    Ok(self
+                        .zs
+                        .uint_lit(self.zs.field.modulus().significant_bits(), 32))
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),

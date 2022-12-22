@@ -58,9 +58,11 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w),
             Self::Field => Sort::Field(zs.field.clone()),
-            Self::Array(n, b) => {
-                Sort::Array(Box::new(Sort::Field(zs.field.clone())), Box::new(b.sort(zs)), *n)
-            }
+            Self::Array(n, b) => Sort::Array(
+                Box::new(Sort::Field(zs.field.clone())),
+                Box::new(b.sort(zs)),
+                *n,
+            ),
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort(zs)).collect())
             }
@@ -791,7 +793,10 @@ impl ZSharp {
 
     pub fn uint_to_field(&self, u: T) -> Result<T, String> {
         match &u.ty {
-            Ty::Uint(_) => Ok(T::new(Ty::Field, term![Op::UbvToPf(self.field.clone()); u.term])),
+            Ty::Uint(_) => Ok(T::new(
+                Ty::Field,
+                term![Op::UbvToPf(self.field.clone()); u.term],
+            )),
             u => Err(format!("Cannot do uint-to-field on {}", u)),
         }
     }

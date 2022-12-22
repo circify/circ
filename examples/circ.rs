@@ -9,6 +9,10 @@ use bellman::groth16::{
 #[cfg(feature = "r1cs")]
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
+use circ::cfg::{
+    clap::{self, Args, Parser, Subcommand, ValueEnum},
+    CircCfg, CircOpt,
+};
 #[cfg(feature = "c")]
 use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
@@ -43,7 +47,6 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use circ::cfg::{clap::{self, Parser, ValueEnum, Args, Subcommand}, CircOpt, CircCfg};
 
 #[derive(Debug, Parser)]
 #[command(name = "circ", about = "CirC: the circuit compiler")]
@@ -183,9 +186,7 @@ fn main() {
             panic!("Missing feature: smt,zok");
         }
         DeterminedLanguage::Datalog => {
-            let inputs = datalog::Inputs {
-                file: options.path,
-            };
+            let inputs = datalog::Inputs { file: options.path };
             Datalog::gen(inputs, &cfg)
         }
         #[cfg(feature = "c")]
@@ -266,8 +267,7 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let (r1cs, mut prover_data, verifier_data) =
-                to_r1cs(cs.get("main").clone(), &cfg);
+            let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs.get("main").clone(), &cfg);
 
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             let r1cs = reduce_linearities(r1cs, &cfg);

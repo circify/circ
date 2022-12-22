@@ -7,9 +7,9 @@ use rug::Integer;
 use super::error::ErrorKind;
 use super::ty::Ty;
 
-use circ_fields::FieldT;
 use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::ir::term::*;
+use circ_fields::FieldT;
 
 /// A term
 #[derive(Debug, Clone)]
@@ -82,9 +82,11 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w as usize),
             Self::Field => Sort::Field(field.clone()),
-            Self::Array(n, b) => {
-                Sort::Array(Box::new(Sort::Field(field.clone())), Box::new(b.sort(field)), *n)
-            }
+            Self::Array(n, b) => Sort::Array(
+                Box::new(Sort::Field(field.clone())),
+                Box::new(b.sort(field)),
+                *n,
+            ),
         }
     }
     fn default_ir_term(&self, field: &FieldT) -> Term {
@@ -365,9 +367,12 @@ impl Embeddable for Datalog {
         precompute: Option<T>,
     ) -> Self::T {
         T::new(
-            ctx.cs
-                .borrow_mut()
-                .new_var(&name, ty.sort(&self.field), visibility, precompute.map(|v| v.ir)),
+            ctx.cs.borrow_mut().new_var(
+                &name,
+                ty.sort(&self.field),
+                visibility,
+                precompute.map(|v| v.ir),
+            ),
             ty.clone(),
         )
     }

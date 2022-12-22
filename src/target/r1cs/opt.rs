@@ -184,10 +184,7 @@ fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
 ///
 ///   * `lc_size_thresh`: the maximum size LC (number of non-constant monomials) that will be used
 ///   for propagation. `None` means no size limit.
-pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(
-    r1cs: R1cs<S>,
-    cfg: &CircCfg,
-) -> R1cs<S> {
+pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>, cfg: &CircCfg) -> R1cs<S> {
     LinReducer::new(r1cs, cfg.r1cs.lc_elim_thresh).run()
 }
 
