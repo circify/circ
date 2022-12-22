@@ -1167,10 +1167,10 @@ impl<'ast> ZGen<'ast> {
                 let ty = self.type_impl_::<IS_CNST>(&i.ty)?;
                 let ival_cons: Box<dyn Fn(isize) -> T> = match ty {
                     Ty::Field => Box::new(|i| self.zs.field_lit(i)),
-                    Ty::Uint(8) => Box::new(|i| T::new_u8(i)),
-                    Ty::Uint(16) => Box::new(|i| T::new_u16(i)),
-                    Ty::Uint(32) => Box::new(|i| T::new_u32(i)),
-                    Ty::Uint(64) => Box::new(|i| T::new_u64(i)),
+                    Ty::Uint(8) => Box::new(T::new_u8),
+                    Ty::Uint(16) => Box::new(T::new_u16),
+                    Ty::Uint(32) => Box::new(T::new_u32),
+                    Ty::Uint(64) => Box::new(T::new_u64),
                     _ => {
                         return Err(format!(
                             "Iteration variable must be Field or Uint, got {:?}",

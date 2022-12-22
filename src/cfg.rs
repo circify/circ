@@ -21,7 +21,7 @@ pub struct CircCfg {
 
 impl From<CircOpt> for CircCfg {
     fn from(opt: CircOpt) -> Self {
-        let field = if opt.field.custom_modulus.len() > 0 {
+        let field = if !opt.field.custom_modulus.is_empty() {
             let error =
                 |r: &str| panic!("The field modulus '{}' is {}", &opt.field.custom_modulus, r);
             let i = Integer::from_str_radix(&opt.field.custom_modulus, 10)
