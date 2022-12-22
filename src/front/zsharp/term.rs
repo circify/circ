@@ -264,6 +264,9 @@ impl Display for T {
     }
 }
 
+/// A system of Z# terms
+///
+/// Essentially, this just specifies the default field
 pub struct ZSharp {
     /// The field type for this Z# term system
     pub field: FieldT,
