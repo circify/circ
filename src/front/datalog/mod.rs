@@ -379,7 +379,7 @@ pub struct Datalog;
 impl FrontEnd for Datalog {
     type Inputs = Inputs;
     fn gen(i: Inputs, cfg: &CircCfg) -> Computations {
-        let mut f = File::open(&i.file).unwrap();
+        let mut f = File::open(i.file).unwrap();
         let mut buffer = String::new();
         f.read_to_string(&mut buffer).unwrap();
         let ast = parser::parse(&buffer);
