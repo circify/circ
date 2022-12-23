@@ -9,6 +9,11 @@ use bellman::groth16::{
 #[cfg(feature = "r1cs")]
 use bellman::Circuit;
 use bls12_381::{Bls12, Scalar};
+use circ::cfg::{
+    cfg,
+    clap::{self, Args, Parser, Subcommand, ValueEnum},
+    CircOpt,
+};
 #[cfg(feature = "c")]
 use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
@@ -35,7 +40,6 @@ use circ::target::r1cs::spartan::write_data;
 use circ::target::r1cs::trans::to_r1cs;
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
-use circ::util::field::DFL_T;
 use circ_fields::FieldT;
 use fxhash::FxHashMap as HashMap;
 #[cfg(feature = "lp")]
@@ -44,87 +48,69 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use structopt::clap::arg_enum;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "circ", about = "CirC: the circuit compiler")]
+#[derive(Debug, Parser)]
+#[command(name = "circ", about = "CirC: the circuit compiler")]
 struct Options {
     /// Input file
-    #[structopt(parse(from_os_str), name = "PATH")]
+    #[arg(name = "PATH")]
     path: PathBuf,
 
-    #[structopt(flatten)]
+    #[command(flatten)]
     frontend: FrontendOptions,
 
+    #[command(flatten)]
+    circ: CircOpt,
+
     /// Number of parties for an MPC.
-    #[structopt(long, default_value = "2", name = "PARTIES")]
+    #[arg(long, default_value = "2", name = "PARTIES")]
     parties: u8,
 
     #[structopt(subcommand)]
     backend: Backend,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 struct FrontendOptions {
     /// Input language
-    #[structopt(long, default_value = "auto", name = "LANG")]
+    #[arg(long, default_value = "auto", name = "LANG")]
     language: Language,
 
     /// Value threshold
-    #[structopt(long)]
+    #[arg(long)]
     value_threshold: Option<u64>,
-
-    /// How many recursions to allow (datalog)
-    #[structopt(short, long, name = "N", default_value = "5")]
-    rec_limit: usize,
-
-    /// Lint recursions that are allegedly primitive recursive (datalog)
-    #[structopt(long)]
-    lint_prim_rec: bool,
-
-    #[cfg(feature = "zok")]
-    /// In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take
-    /// effect if that branch is active.
-    ///
-    /// See `--branch-isolation` in
-    /// [ZoKrates](https://zokrates.github.io/language/control_flow.html).
-    #[structopt(long)]
-    z_isolate_asserts: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 enum Backend {
     #[allow(dead_code)]
     R1cs {
-        #[structopt(long, default_value = "P", parse(from_os_str))]
+        #[arg(long, default_value = "P")]
         prover_key: PathBuf,
-        #[structopt(long, default_value = "V", parse(from_os_str))]
+        #[arg(long, default_value = "V")]
         verifier_key: PathBuf,
-        #[structopt(long, default_value = "50")]
+        #[arg(long, default_value = "50")]
         /// linear combination constraints up to this size will be eliminated
         lc_elimination_thresh: usize,
-        #[structopt(long, default_value = "count")]
+        #[arg(long, default_value = "count")]
         action: ProofAction,
     },
     Smt {},
     Ilp {},
     Mpc {
-        #[structopt(long, default_value = "hycc", name = "cost_model")]
+        #[arg(long, default_value = "hycc", name = "cost_model")]
         cost_model: String,
-        #[structopt(long, default_value = "lp", name = "selection_scheme")]
+        #[arg(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
     },
 }
 
-arg_enum! {
-    #[derive(PartialEq, Eq, Debug)]
-    enum Language {
-        Zsharp,
-        Datalog,
-        C,
-        Auto,
-    }
+#[derive(PartialEq, Eq, Debug, Clone, ValueEnum)]
+enum Language {
+    Zsharp,
+    Datalog,
+    C,
+    Auto,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -140,13 +126,11 @@ pub enum CostModelType {
     Hycc,
 }
 
-arg_enum! {
-    #[derive(PartialEq, Eq, Debug)]
-    enum ProofAction {
-        Count,
-        Setup,
-        SpartanSetup,
-    }
+#[derive(PartialEq, Eq, Debug, Clone, ValueEnum)]
+enum ProofAction {
+    Count,
+    Setup,
+    SpartanSetup,
 }
 
 fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
@@ -175,7 +159,8 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
+    let options = Options::parse();
+    circ::cfg::set(&options.circ);
     let path_buf = options.path.clone();
     println!("{:?}", options);
     let mode = match options.backend {
@@ -194,7 +179,6 @@ fn main() {
             let inputs = zsharp::Inputs {
                 file: options.path,
                 mode,
-                isolate_asserts: options.frontend.z_isolate_asserts,
             };
             ZSharpFE::gen(inputs)
         }
@@ -203,11 +187,7 @@ fn main() {
             panic!("Missing feature: smt,zok");
         }
         DeterminedLanguage::Datalog => {
-            let inputs = datalog::Inputs {
-                file: options.path,
-                rec_limit: options.frontend.rec_limit,
-                lint_prim_rec: options.frontend.lint_prim_rec,
-            };
+            let inputs = datalog::Inputs { file: options.path };
             Datalog::gen(inputs)
         }
         #[cfg(feature = "c")]
@@ -285,15 +265,13 @@ fn main() {
             action,
             prover_key,
             verifier_key,
-            lc_elimination_thresh,
             ..
         } => {
             println!("Converting to r1cs");
-            let (r1cs, mut prover_data, verifier_data) =
-                to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
+            let (r1cs, mut prover_data, verifier_data) = to_r1cs(cs.get("main").clone(), cfg());
 
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
-            let r1cs = reduce_linearities(r1cs, Some(lc_elimination_thresh));
+            let r1cs = reduce_linearities(r1cs, cfg());
 
             println!("Final R1cs size: {}", r1cs.constraints().len());
             // save the optimized r1cs: the prover needs it to synthesize.
@@ -363,7 +341,7 @@ fn main() {
         }
         #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
-            if options.frontend.lint_prim_rec {
+            if options.circ.datalog.lint_prim_rec {
                 let main_comp = cs.get("main").clone();
                 assert_eq!(main_comp.outputs.len(), 1);
                 match find_model(&main_comp.outputs[0]) {
