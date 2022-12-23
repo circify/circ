@@ -57,11 +57,7 @@ bls12_381 = "0.7"
 approx = "0.5.0"
 
 [features]
-default = ["bls12381", "ff_dfl"]
-bls12381 = []
-bn254 = []
-ristretto255 = []
-ff_dfl = []
+default = []
 c = ["lang-c"]
 lp = ["good_lp", "lp-solvers"]
 r1cs = ["bellman", "spartan", "merlin", "curve25519-dalek"]
