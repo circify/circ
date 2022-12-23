@@ -1,5 +1,6 @@
 //! Machinery for formatting IR types
-use super::{check, mk_ref, Array, Op, PostOrderIter, Sort, Term, TermData, TermMap, Value};
+use super::{mk_ref, Array, Op, PostOrderIter, Sort, Term, TermData, TermMap, Value};
+use crate::cfg::{cfg, is_cfg_set};
 
 use circ_fields::{FieldT, FieldV};
 
@@ -9,60 +10,60 @@ use std::fmt::{Debug, Display, Error as FmtError, Formatter, Result as FmtResult
 
 /// State that influences how IR is formatted.
 struct IrFormatter<'a, 'b> {
-    cfg: IrCfg,
+    cfg: &'a IrCfg,
     default_field: Option<FieldT>,
     defs: Defs,
     writer: &'a mut Formatter<'b>,
 }
 
+/// IR formatting configuration.
 pub struct IrCfg {
+    /// Whether to introduce a default modulus.
     pub use_default_field: bool,
 }
 
 impl IrCfg {
+    /// Create, from CirC's global configuration
+    ///
+    /// If the global configuration is not available, uses [IrCfg::parseable].
     pub fn from_circ_cfg() -> Self {
-        Self {
-            use_default_field: true,
+        if is_cfg_set() {
+            Self {
+                use_default_field: cfg().fmt.use_default_field,
+            }
+        } else {
+            Self::parseable()
         }
     }
-    pub fn from_defaults() -> Self {
+    /// Create, with values that ensure parseability.
+    pub fn parseable() -> Self {
         Self {
             use_default_field: true,
         }
     }
 }
 
+/// A wrapper around an IR formattable type, with a configuration.
+/// Implements [Display] and [Debug] for various IR types.
 pub struct IrWrapper<'a, T> {
     t: &'a T,
     cfg: IrCfg,
 }
 
+/// Wrap a reference for IR formatting. Uses [IrCfg::from_circ_cfg].
 pub fn wrap<'a, T>(t: &'a T) -> IrWrapper<'a, T> {
     IrWrapper::new(t, IrCfg::from_circ_cfg())
 }
 
 impl<'a, T> IrWrapper<'a, T> {
+    /// Create
     pub fn new(t: &'a T, cfg: IrCfg) -> Self {
-        Self {
-            t,
-            cfg,
-        }
+        Self { t, cfg }
     }
+    /// Builder function. Sets [IrCfg::use_default_field].
     pub fn use_default_field(mut self, use_default_field: bool) -> Self {
         self.cfg.use_default_field = use_default_field;
         self
-    }
-}
-
-impl<'a, T: DisplayIr> Display for IrWrapper<'a, T> {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl<'a, T: DisplayIr> Debug for IrWrapper<'a, T> {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.t.ir_fmt(&mut IrFormatter::new(f, &self.cfg))
     }
 }
 
@@ -148,7 +149,7 @@ impl DisplayIr for Op {
             Op::Ite => write!(f, "ite"),
             Op::Eq => write!(f, "="),
             Op::Var(n, _) => write!(f, "{}", n),
-            Op::Const(c) => write!(f, "{}", c),
+            Op::Const(c) => c.ir_fmt(f),
             Op::BvBinOp(a) => write!(f, "{}", a),
             Op::BvBinPred(a) => write!(f, "{}", a),
             Op::BvNaryOp(a) => write!(f, "{}", a),
@@ -286,15 +287,11 @@ impl DisplayIr for TermData {
 
 /// Format a term, introducing bindings.
 fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
-    if f.use_default_field && f.default_field.is_none() {
+    let close_dft_f = if f.cfg.use_default_field && f.default_field.is_none() {
         let fields: HashSet<FieldT> = PostOrderIter::new(t.clone())
             .filter_map(|c| {
-                if c.cs.len() == 0 || matches!(&c.op, Op::UbvToPf(_)) {
-                    if let Sort::Field(ty) = check(&c) {
-                        Some(ty)
-                    } else {
-                        None
-                    }
+                if let Op::Const(Value::Field(f)) = &c.op {
+                    Some(f.ty())
                 } else {
                     None
                 }
@@ -302,12 +299,19 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
             .collect();
         if fields.len() == 1 {
             f.default_field = fields.into_iter().next();
+            let i = f.default_field.clone().unwrap();
+            writeln!(f, "(set-default-modulus {}", i.modulus())?;
+            true
+        } else {
+            false
         }
-    }
+    } else {
+        false
+    };
 
     let mut parent_counts = TermMap::<usize>::new();
-    writeln!(f, "(declare").unwrap();
-    writeln!(f, " (").unwrap();
+    writeln!(f, "(declare")?;
+    writeln!(f, " (")?;
     for t in PostOrderIter::new(t.clone()) {
         for c in t.cs.iter().cloned() {
             *parent_counts.entry(c).or_insert(0) += 1;
@@ -333,12 +337,44 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     writeln!(f, "  ")?;
     t.ir_fmt(f)?;
     writeln!(f, ")")?;
-    writeln!(f, ")")
+    writeln!(f, ")")?;
+    if close_dft_f {
+        writeln!(f, ")")?;
+    }
+    Ok(())
+}
+
+impl<'a> Display for IrWrapper<'a, Term> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl<'a> Debug for IrWrapper<'a, Term> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let cfg = IrCfg::from_circ_cfg();
+        let f = &mut IrFormatter::new(f, &cfg);
+        fmt_term_with_bindings(&self.t, f)
+    }
+}
+
+impl<'a> Display for IrWrapper<'a, TermData> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl<'a> Debug for IrWrapper<'a, TermData> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let f = &mut IrFormatter::new(f, &self.cfg);
+        fmt_term_with_bindings(&mk_ref(self.t), f)
+    }
 }
 
 impl Debug for TermData {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let f = &mut IrFormatter::new(f);
+        let cfg = IrCfg::from_circ_cfg();
+        let f = &mut IrFormatter::new(f, &cfg);
         fmt_term_with_bindings(&mk_ref(self), f)
     }
 }
@@ -351,18 +387,18 @@ impl Display for TermData {
 
 impl Display for Sort {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f))
+        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
     }
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f))
+        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
     }
 }
 
 impl Display for Op {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f))
+        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
     }
 }

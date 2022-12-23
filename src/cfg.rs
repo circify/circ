@@ -62,6 +62,11 @@ pub fn cfg() -> &'static CircCfg {
     CFG.get().expect("A component tried to read the CirC configuration, but it was not yet set. Did the top-level application call `circ::cfg::set`?")
 }
 
+/// Has the configuration been set yet?
+pub fn is_cfg_set() -> bool {
+    CFG.get().is_some()
+}
+
 static CFG: OnceCell<CircCfg> = OnceCell::new();
 
 impl From<CircOpt> for CircCfg {

@@ -646,7 +646,7 @@ pub fn parse_term(src: &[u8]) -> Term {
 
 /// Serialize a term as a parseable string
 pub fn serialize_term(t: &Term) -> String {
-    format!("{}", t)
+    format!("{}", super::fmt::IrWrapper::new(t, super::fmt::IrCfg::parseable()))
 }
 
 /// Parse an IR "value map": a map from strings to values.
