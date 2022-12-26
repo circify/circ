@@ -1,16 +1,16 @@
+use circ::cfg::clap::{self, Parser};
 use circ::ir::term::*;
 use circ::target::aby::assignment::ilp;
 use circ::term;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[command(
     name = "opa_bench",
     about = "Optimal Protocol Assignment via ILP benchmarker"
 )]
 struct Options {
     /// Number of parties for an MPC. If missing, generates a proof circuit.
-    #[structopt(name = "MULTS")]
+    #[arg(name = "MULTS")]
     n_mults: u32,
 }
 
@@ -19,7 +19,7 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
+    let options = Options::parse();
     let v = leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)));
     let mut t = v.clone();
     for _i in 0..options.n_mults {

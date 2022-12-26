@@ -10,74 +10,71 @@ use bls12_381::{Bls12, Scalar};
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
-use circ_fields::FieldT;
 /*
 use circ::target::r1cs::bellman::parse_instance;
 */
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
-use circ::util::field::DFL_T;
 /*
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 */
+use circ::cfg::{
+    cfg,
+    clap::{self, Parser, ValueEnum},
+    CircOpt,
+};
 use std::path::PathBuf;
-use structopt::clap::arg_enum;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "zxc", about = "CirC: the circuit compiler")]
+#[derive(Debug, Parser)]
+#[command(name = "zxc", about = "CirC: the circuit compiler")]
 struct Options {
     /// Input file
-    #[structopt(parse(from_os_str), name = "PATH")]
+    #[arg(name = "PATH")]
     path: PathBuf,
 
     /*
-    #[structopt(long, default_value = "P", parse(from_os_str))]
+    #[arg(long, default_value = "P", parse(from_os_str))]
     prover_key: PathBuf,
 
-    #[structopt(long, default_value = "V", parse(from_os_str))]
+    #[arg(long, default_value = "V", parse(from_os_str))]
     verifier_key: PathBuf,
 
-    #[structopt(long, default_value = "pi", parse(from_os_str))]
+    #[arg(long, default_value = "pi", parse(from_os_str))]
     proof: PathBuf,
 
-    #[structopt(long, default_value = "x", parse(from_os_str))]
+    #[arg(long, default_value = "x", parse(from_os_str))]
     instance: PathBuf,
     */
-    #[structopt(short = "L")]
+    #[arg(short = 'L')]
     /// skip linearity reduction entirely
     skip_linred: bool,
 
-    #[structopt(long, default_value = "50")]
-    /// linear combination constraints up to this size will be eliminated (if the pass is enabled)
-    lc_elimination_thresh: usize,
+    #[command(flatten)]
+    /// CirC options
+    circ: CircOpt,
 
-    #[structopt(long, default_value = "count")]
+    #[arg(long, default_value = "count")]
     action: ProofAction,
 
-    #[structopt(short = "q")]
+    #[arg(short = 'q')]
     /// quiet mode: don't print R1CS at the end
     quiet: bool,
 }
 
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    enum ProofAction {
-        Count,
-        Prove,
-        Setup,
-        Verify,
-    }
+#[derive(PartialEq, Eq, Debug, Clone, ValueEnum)]
+enum ProofAction {
+    Count,
+    Setup,
+    Prove,
+    Verify,
 }
 
-arg_enum! {
-    #[derive(PartialEq, Debug)]
-    enum ProofOption {
-        Count,
-        Prove,
-    }
+#[derive(PartialEq, Debug, Clone, ValueEnum)]
+enum ProofOption {
+    Count,
+    Prove,
 }
 
 fn main() {
@@ -85,14 +82,14 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
+    let options = Options::parse();
+    circ::cfg::set(&options.circ);
     println!("{:?}", options);
 
     let cs = {
         let inputs = zsharp::Inputs {
             file: options.path,
             mode: Mode::Proof,
-            isolate_asserts: false,
         };
         ZSharpFE::gen(inputs)
     };
@@ -132,7 +129,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let (r1cs, _, _) = to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
+    let (r1cs, _, _) = to_r1cs(cs.get("main").clone(), cfg());
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs
@@ -141,7 +138,7 @@ fn main() {
             "R1cs size before linearity reduction: {}",
             r1cs.constraints().len()
         );
-        reduce_linearities(r1cs, Some(options.lc_elimination_thresh))
+        reduce_linearities(r1cs, cfg())
     };
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
