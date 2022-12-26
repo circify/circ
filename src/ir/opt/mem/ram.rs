@@ -1,10 +1,9 @@
 /// RAM extraction
 ///
 /// See the documentation for [extract]
-use log::debug;
+use log::trace;
 
 use crate::ir::opt::visit::RewritePass;
-use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 
 #[derive(Debug)]
@@ -156,7 +155,7 @@ impl ArrayGraph {
             let mut is_c_store = false;
             if let Some(c_store) = parse_cond_store(&t) {
                 if term_parents.get(&c_store.store).unwrap().len() == 1 {
-                    debug!("cond store: {}", Letified(t.clone()));
+                    trace!("cond store: {}", t);
                     subsumed.insert(c_store.store.clone());
                     ps.entry(c_store.arr.clone())
                         .or_insert_with(Vec::new)
@@ -194,7 +193,7 @@ impl ArrayGraph {
                 .collect();
             while let Some(t) = stack.pop() {
                 if !t.is_const() && !non_ram.contains(&t) {
-                    debug!("Non-RAM: {}", Letified(t.clone()));
+                    trace!("Non-RAM: {}", t);
                     non_ram.insert(t.clone());
                     for t in ps.get(&t).into_iter().flatten() {
                         stack.push(t.clone());
@@ -247,7 +246,7 @@ impl Extactor {
             _ => *self
                 .term_ram
                 .get(t)
-                .unwrap_or_else(|| panic!("No RAM for term {}", extras::Letified(t.clone()))),
+                .unwrap_or_else(|| panic!("No RAM for term {}", t)),
         }
     }
 }

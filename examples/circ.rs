@@ -25,7 +25,6 @@ use circ::ir::{
     opt::{opt, Opt},
     term::{
         check,
-        extras::Letified,
         text::{parse_value_map, serialize_value_map},
     },
 };
