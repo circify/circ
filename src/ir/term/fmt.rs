@@ -51,7 +51,7 @@ pub struct IrWrapper<'a, T> {
 }
 
 /// Wrap a reference for IR formatting. Uses [IrCfg::from_circ_cfg].
-pub fn wrap<'a, T>(t: &'a T) -> IrWrapper<'a, T> {
+pub fn wrap<T>(t: &T) -> IrWrapper<T> {
     IrWrapper::new(t, IrCfg::from_circ_cfg())
 }
 
@@ -262,7 +262,7 @@ impl DisplayIr for Term {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         let written = f.term_write_if_def(self)?;
         if !written {
-            <TermData as DisplayIr>::ir_fmt(&*self, f)?;
+            <TermData as DisplayIr>::ir_fmt(self, f)?;
         }
         Ok(())
     }
@@ -354,7 +354,7 @@ impl<'a> Debug for IrWrapper<'a, Term> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let cfg = IrCfg::from_circ_cfg();
         let f = &mut IrFormatter::new(f, &cfg);
-        fmt_term_with_bindings(&self.t, f)
+        fmt_term_with_bindings(self.t, f)
     }
 }
 

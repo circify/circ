@@ -982,7 +982,7 @@ impl TermTable {
         // Increment uid count.
         self.count += 1;
         // ...add weak version to the table...
-        self.map.insert(elm.clone(), hconsed.to_weak());
+        self.map.insert(elm, hconsed.to_weak());
         // ...and return consed version.
         hconsed
     }

@@ -11,7 +11,7 @@ mod visit;
 
 use super::term::*;
 
-use log::{debug,trace};
+use log::{debug, trace};
 
 #[derive(Clone, Debug)]
 /// An optimization pass
