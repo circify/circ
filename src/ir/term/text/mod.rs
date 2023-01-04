@@ -65,7 +65,6 @@ use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::str::{from_utf8, FromStr};
 use std::sync::Arc;
 
-use super::extras::substitute_cache;
 use super::*;
 
 /// A token tree, LISP-style.
@@ -647,44 +646,10 @@ pub fn parse_term(src: &[u8]) -> Term {
 
 /// Serialize a term as a parseable string
 pub fn serialize_term(t: &Term) -> String {
-    let mut let_ct = 0;
-    let mut bindings = TermMap::new();
-    let mut output = String::new();
-
-    let mut parent_counts = TermMap::<usize>::new();
-    writeln!(&mut output, "(declare").unwrap();
-    writeln!(&mut output, " (").unwrap();
-    for t in PostOrderIter::new(t.clone()) {
-        for c in t.cs.iter().cloned() {
-            *parent_counts.entry(c).or_insert(0) += 1;
-        }
-        if let Op::Var(name, sort) = &t.op {
-            writeln!(&mut output, "  ({} {})", name, sort).unwrap();
-        }
-    }
-    writeln!(&mut output, " )").unwrap();
-    writeln!(&mut output, " (let").unwrap();
-    writeln!(&mut output, "  (").unwrap();
-    for t in PostOrderIter::new(t.clone()) {
-        if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
-            let name = format!("let_{}", let_ct);
-            let_ct += 1;
-            let var = leaf_term(Op::Var(name.clone(), check(&t)));
-            writeln!(
-                &mut output,
-                "   ({} {})",
-                name,
-                substitute_cache(&t, &mut bindings)
-            )
-            .unwrap();
-            bindings.insert(t, var);
-        }
-    }
-    writeln!(&mut output, "  )").unwrap();
-    writeln!(&mut output, "  {}", substitute_cache(t, &mut bindings)).unwrap();
-    writeln!(&mut output, " )").unwrap();
-    writeln!(&mut output, ")").unwrap();
-    output
+    format!(
+        "{}",
+        super::fmt::IrWrapper::new(t, super::fmt::IrCfg::parseable())
+    )
 }
 
 /// Parse an IR "value map": a map from strings to values.

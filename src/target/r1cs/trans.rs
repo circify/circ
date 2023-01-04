@@ -4,7 +4,6 @@
 //! thesis](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.683.6940&rep=rep1&type=pdf)
 //! is a good intro to how this process works.
 use crate::cfg::CircCfg;
-use crate::ir::term::extras::Letified;
 use crate::ir::term::precomp::PreComp;
 use crate::ir::term::*;
 use crate::target::bitsize;
@@ -255,7 +254,7 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn embed(&mut self, t: Term) {
-        debug!("Embed: {}", Letified(t.clone()));
+        debug!("Embed: {}", t);
         for c in PostOrderIter::new(t) {
             debug!("Embed op: {}", c.op);
             // Handle field access once and for all
@@ -743,7 +742,7 @@ impl<'cfg> ToR1cs<'cfg> {
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }
-                    _ => panic!("Non-bv in embed_bv: {}", Letified(bv)),
+                    _ => panic!("Non-bv in embed_bv: {}", bv),
                 }
             }
         //self.r1cs.eval(self.get_bv_uint(&bv2)).map(|v| {
@@ -840,7 +839,7 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn embed_pf(&mut self, c: Term) -> &TermLc {
-        debug!("embed_pf {}", extras::Letified(c.clone()));
+        debug!("embed_pf {}", c);
         //println!("Embed: {}", c);
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
@@ -927,7 +926,7 @@ impl<'cfg> ToR1cs<'cfg> {
             .constraint(self.r1cs.zero(), self.r1cs.zero(), x.1);
     }
     fn assert(&mut self, t: Term) {
-        debug!("Assert: {}", Letified(t.clone()));
+        debug!("Assert: {}", t);
         debug_assert!(check(&t) == Sort::Bool, "Non bool in assert");
         self.assert_bool(&t);
     }

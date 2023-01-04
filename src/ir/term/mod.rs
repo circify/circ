@@ -31,12 +31,13 @@ use log::debug;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::sync::{Arc, RwLock};
 
 pub mod bv;
 pub mod dist;
 pub mod extras;
+pub mod fmt;
 pub mod lin;
 pub mod precomp;
 pub mod serde_mods;
@@ -285,53 +286,6 @@ impl Op {
     }
 }
 
-impl Display for Op {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Op::Ite => write!(f, "ite"),
-            Op::Eq => write!(f, "="),
-            Op::Var(n, _) => write!(f, "{}", n),
-            Op::Const(c) => write!(f, "{}", c),
-            Op::BvBinOp(a) => write!(f, "{}", a),
-            Op::BvBinPred(a) => write!(f, "{}", a),
-            Op::BvNaryOp(a) => write!(f, "{}", a),
-            Op::BvUnOp(a) => write!(f, "{}", a),
-            Op::BoolToBv => write!(f, "bool2bv"),
-            Op::BvExtract(a, b) => write!(f, "(extract {} {})", a, b),
-            Op::BvConcat => write!(f, "concat"),
-            Op::BvUext(a) => write!(f, "(uext {})", a),
-            Op::BvSext(a) => write!(f, "(sext {})", a),
-            Op::PfToBv(a) => write!(f, "(pf2bv {})", a),
-            Op::Implies => write!(f, "=>"),
-            Op::BoolNaryOp(a) => write!(f, "{}", a),
-            Op::Not => write!(f, "not"),
-            Op::BvBit(a) => write!(f, "(bit {})", a),
-            Op::BoolMaj => write!(f, "maj"),
-            Op::FpBinOp(a) => write!(f, "{}", a),
-            Op::FpBinPred(a) => write!(f, "{}", a),
-            Op::FpUnPred(a) => write!(f, "{}", a),
-            Op::FpUnOp(a) => write!(f, "{}", a),
-            Op::BvToFp => write!(f, "bv2fp"),
-            Op::UbvToFp(a) => write!(f, "(ubv2fp {})", a),
-            Op::SbvToFp(a) => write!(f, "(sbv2fp {})", a),
-            Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
-            Op::PfUnOp(a) => write!(f, "{}", a),
-            Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::IntNaryOp(a) => write!(f, "{}", a),
-            Op::IntBinPred(a) => write!(f, "{}", a),
-            Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
-            Op::Select => write!(f, "select"),
-            Op::Store => write!(f, "store"),
-            Op::Tuple => write!(f, "tuple"),
-            Op::Field(i) => write!(f, "(field {})", i),
-            Op::Update(i) => write!(f, "(update {})", i),
-            Op::Map(op) => write!(f, "(map({}))", op),
-            Op::Call(name, _, _) => write!(f, "fn:{}", name),
-            Op::Rot(i) => write!(f, "(rot {})", i),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Boolean n-ary operator
 pub enum BoolNaryOp {
@@ -344,7 +298,7 @@ pub enum BoolNaryOp {
 }
 
 impl Display for BoolNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             BoolNaryOp::And => write!(f, "and"),
             BoolNaryOp::Or => write!(f, "or"),
@@ -371,7 +325,7 @@ pub enum BvBinOp {
 }
 
 impl Display for BvBinOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             BvBinOp::Sub => write!(f, "bvsub"),
             BvBinOp::Udiv => write!(f, "bvudiv"),
@@ -406,7 +360,7 @@ pub enum BvBinPred {
 }
 
 impl Display for BvBinPred {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             BvBinPred::Ult => write!(f, "bvult"),
             BvBinPred::Ugt => write!(f, "bvugt"),
@@ -436,7 +390,7 @@ pub enum BvNaryOp {
 }
 
 impl Display for BvNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             BvNaryOp::Add => write!(f, "bvadd"),
             BvNaryOp::Mul => write!(f, "bvmul"),
@@ -457,7 +411,7 @@ pub enum BvUnOp {
 }
 
 impl Display for BvUnOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             BvUnOp::Not => write!(f, "bvnot"),
             BvUnOp::Neg => write!(f, "bvneg"),
@@ -485,7 +439,7 @@ pub enum FpBinOp {
 }
 
 impl Display for FpBinOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             FpBinOp::Add => write!(f, "fpadd"),
             FpBinOp::Mul => write!(f, "fpmul"),
@@ -512,7 +466,7 @@ pub enum FpUnOp {
 }
 
 impl Display for FpUnOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             FpUnOp::Neg => write!(f, "fpneg"),
             FpUnOp::Abs => write!(f, "fpabs"),
@@ -538,7 +492,7 @@ pub enum FpBinPred {
 }
 
 impl Display for FpBinPred {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             FpBinPred::Le => write!(f, "fple"),
             FpBinPred::Lt => write!(f, "fplt"),
@@ -569,7 +523,7 @@ pub enum FpUnPred {
 }
 
 impl Display for FpUnPred {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             FpUnPred::Normal => write!(f, "fpnormal"),
             FpUnPred::Subnormal => write!(f, "fpsubnormal"),
@@ -592,7 +546,7 @@ pub enum PfNaryOp {
 }
 
 impl Display for PfNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             PfNaryOp::Add => write!(f, "+"),
             PfNaryOp::Mul => write!(f, "*"),
@@ -610,7 +564,7 @@ pub enum PfUnOp {
 }
 
 impl Display for PfUnOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             PfUnOp::Neg => write!(f, "-"),
             PfUnOp::Recip => write!(f, "pfrecip"),
@@ -628,7 +582,7 @@ pub enum IntNaryOp {
 }
 
 impl Display for IntNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             IntNaryOp::Add => write!(f, "intadd"),
             IntNaryOp::Mul => write!(f, "intmul"),
@@ -650,7 +604,7 @@ pub enum IntBinPred {
 }
 
 impl Display for IntBinPred {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
             IntBinPred::Lt => write!(f, "<"),
             IntBinPred::Gt => write!(f, ">"),
@@ -667,26 +621,6 @@ pub struct TermData {
     pub op: Op,
     /// the arguments
     pub cs: Vec<Term>,
-}
-
-impl Display for TermData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.op.arity() == Some(0) {
-            write!(f, "{}", self.op)
-        } else {
-            write!(f, "({}", self.op)?;
-            for c in &self.cs {
-                write!(f, " {}", c)?;
-            }
-            write!(f, ")")
-        }
-    }
-}
-
-impl Debug for TermData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self)
-    }
 }
 
 impl Serialize for TermData {
@@ -824,37 +758,6 @@ impl Array {
     pub fn select(&self, idx: &Value) -> Value {
         self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
-    }
-}
-
-impl Display for Value {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::F32(b) => write!(f, "{}", b),
-            Value::F64(b) => write!(f, "{}", b),
-            Value::Int(b) => write!(f, "{}", b),
-            Value::Field(b) => write!(f, "{}", b),
-            Value::BitVector(b) => write!(f, "{}", b),
-            Value::Tuple(fields) => {
-                write!(f, "(#t ")?;
-                for field in fields.iter() {
-                    write!(f, " {}", field)?;
-                }
-                write!(f, ")")
-            }
-            Value::Array(a) => write!(f, "{}", a),
-        }
-    }
-}
-
-impl Display for Array {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "(#a {} {} {} (", self.key_sort, self.default, self.size,)?;
-        for (k, v) in &self.map {
-            write!(f, " ({} {})", k, v)?;
-        }
-        write!(f, " ))")
     }
 }
 
@@ -1025,27 +928,6 @@ impl Sort {
     }
 }
 
-impl Display for Sort {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Sort::Bool => write!(f, "bool"),
-            Sort::BitVector(n) => write!(f, "(bv {})", n),
-            Sort::Int => write!(f, "int"),
-            Sort::F32 => write!(f, "f32"),
-            Sort::F64 => write!(f, "f64"),
-            Sort::Field(fty) => write!(f, "(mod {})", fty.modulus()),
-            Sort::Array(k, v, n) => write!(f, "(array {} {} {})", k, v, n),
-            Sort::Tuple(fields) => {
-                write!(f, "(tuple")?;
-                for field in fields.iter() {
-                    write!(f, " {}", field)?;
-                }
-                write!(f, ")")
-            }
-        }
-    }
-}
-
 /// A (perfectly shared) pointer to a term
 pub type Term = HConsed<TermData>;
 // "Temporary" terms.
@@ -1074,6 +956,25 @@ impl TermTable {
         }
         // Otherwise build hconsed version.
         let elm = Arc::new(elm);
+        let hconsed = HConsed {
+            elm: elm.clone(),
+            uid: self.count,
+        };
+        // Increment uid count.
+        self.count += 1;
+        // ...add weak version to the table...
+        self.map.insert(elm, hconsed.to_weak());
+        // ...and return consed version.
+        hconsed
+    }
+    fn mk_ref(&mut self, elm: &TermData) -> Term {
+        // If the element is known and upgradable return it.
+        if let Some(hconsed) = self.get(elm) {
+            //debug_assert!(*hconsed.elm == elm);
+            return hconsed;
+        }
+        // Otherwise build hconsed version.
+        let elm = Arc::new(elm.clone());
         let hconsed = HConsed {
             elm: elm.clone(),
             uid: self.count,
@@ -1174,6 +1075,11 @@ lazy_static! {
 fn mk(elm: TermData) -> Term {
     let mut slf = TERMS.write().unwrap();
     slf.mk(elm)
+}
+
+fn mk_ref(elm: &TermData) -> Term {
+    let mut slf = TERMS.write().unwrap();
+    slf.mk_ref(elm)
 }
 
 /// Scans the term database and the type database and removes dead terms and types.
@@ -1946,7 +1852,7 @@ impl ComputationMetadata {
 }
 
 impl Display for ComputationMetadata {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "(metadata\n  (")?;
         for id in 0..self.next_party_id {
             let party = self.party_ids.iter().find(|(_, i)| **i == id).unwrap().0;

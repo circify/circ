@@ -7,6 +7,7 @@
 //!    * `datalog`: [DatalogOpt]
 //!    * `zsharp`: [ZsharpOpt]
 //!    * `field`: [FieldOpt]
+//!    * `fmt`: [FmtOpt]
 //!    * all options types implement:
 //!       * std's [Default]
 //!       * clap's [Args]; all options are settable by
@@ -52,6 +53,9 @@ pub struct CircOpt {
     /// Options for the prime field used
     #[command(flatten)]
     pub field: FieldOpt,
+    /// Options for term formatting
+    #[command(flatten)]
+    pub fmt: FmtOpt,
     /// Options for the Z# frontend
     #[command(flatten)]
     pub zsharp: ZsharpOpt,
@@ -145,6 +149,26 @@ pub enum BuiltinField {
 impl Default for BuiltinField {
     fn default() -> Self {
         BuiltinField::Bls12381
+    }
+}
+
+/// Options for the prime field used
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
+pub struct FmtOpt {
+    /// Which field to use
+    #[arg(
+        long = "fmt-use-default-field",
+        env = "FMT_USE_DEFAULT_FIELD",
+        action = ArgAction::Set,
+        default_value = "true")]
+    pub use_default_field: bool,
+}
+
+impl Default for FmtOpt {
+    fn default() -> Self {
+        Self {
+            use_default_field: true,
+        }
     }
 }
 
