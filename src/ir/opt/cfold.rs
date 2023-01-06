@@ -1,8 +1,10 @@
 //! Constant folding
 
 use crate::ir::term::*;
+use crate::cfg::cfg_or_default as cfg;
 
 use circ_fields::FieldV;
+use circ_opt::FieldToBv;
 use lazy_static::lazy_static;
 use rug::Integer;
 use std::ops::DerefMut;
@@ -121,7 +123,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 let child = get(0);
                 child
                     .as_pf_opt()
-                    .map(|c| bv_lit(c.i() % (Integer::from(1) << *w as u32), *w))
+                    .map(|c| {
+                        let i = c.i();
+                        if let FieldToBv::Panic = cfg().ir.field_to_bv {
+                            assert!((i.significant_bits() as usize) <= *w, "oversized input to Op::PfToBv({})", w);
+                        }
+                        bv_lit(i % (Integer::from(1) << *w), *w)
+                    })
             }
             Op::BvBinOp(o) => {
                 let c0 = get(0);

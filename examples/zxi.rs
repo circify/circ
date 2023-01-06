@@ -24,7 +24,8 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::parse();
+    let mut options = Options::parse();
+    options.circ.ir.field_to_bv = circ_opt::FieldToBv::Panic;
     circ::cfg::set(&options.circ);
     let inputs = Inputs {
         file: options.zsharp_path,
