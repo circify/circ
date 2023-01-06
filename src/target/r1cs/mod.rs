@@ -406,7 +406,7 @@ impl R1cs<String> {
 
     /// Compute the verifier data for this R1CS relation, given a precomputation
     /// that computes the variables that are relation inputs
-    pub fn prover_data(&self, cs: &Computation) -> ProverData {
+    pub fn prover_data(self, cs: &Computation) -> ProverData {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, false);
         // we still need to remove the non-r1cs variables
@@ -433,7 +433,7 @@ impl R1cs<String> {
         ProverData {
             precompute_inputs,
             precompute,
-            r1cs: self.clone(),
+            r1cs: self,
         }
     }
 

@@ -129,16 +129,16 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let (r1cs, _, _) = to_r1cs(cs.get("main").clone(), cfg());
+    let (prover_data, _) = to_r1cs(cs.get("main").clone(), cfg());
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
-        r1cs
+        prover_data.r1cs
     } else {
         println!(
             "R1cs size before linearity reduction: {}",
-            r1cs.constraints().len()
+            prover_data.r1cs.constraints().len()
         );
-        reduce_linearities(r1cs, cfg())
+        reduce_linearities(prover_data.r1cs, cfg())
     };
     println!("Final R1cs size: {}", r1cs.constraints().len());
     match action {
