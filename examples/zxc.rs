@@ -3,34 +3,40 @@ use circ::front::{FrontEnd, Mode};
 use circ::ir::opt::{opt, Opt};
 use circ::target::r1cs::opt::reduce_linearities;
 use circ::target::r1cs::trans::to_r1cs;
-use circ::util::field::DFL_T;
-use circ_fields::FieldT;
-use std::fs::File;
+use circ::cfg::{
+    cfg,
+    clap::{self, Parser},
+    CircOpt,
+};
 use std::path::PathBuf;
-use structopt::StructOpt;
+use std::fs::File;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "zxc", about = "CirC: the circuit compiler")]
+#[derive(Debug, Parser)]
+#[command(name = "zxc", about = "CirC: the circuit compiler")]
 struct Options {
     /// Input file
-    #[structopt(parse(from_os_str), name = "PATH")]
+    #[arg(name = "PATH")]
     path: PathBuf,
 
     #[structopt(short, long)]
     /// write JSON format if true, otherwise bincode
     json: bool,
 
-    #[structopt(short, long, default_value = "out", parse(from_os_str))]
+    #[structopt(short, long, default_value = "out")]
     /// output r1cs file
     outfile: PathBuf,
 
-    #[structopt(short = "L", long)]
+    #[structopt(short = 'L', long)]
     /// skip linearity reduction entirely
     skip_linred: bool,
 
     #[structopt(short, long, default_value = "50")]
     /// linear combination constraints up to this size will be eliminated (if the pass is enabled)
     lc_elimination_thresh: usize,
+
+    #[command(flatten)]
+    /// CirC options
+    circ: CircOpt,
 }
 
 fn main() {
@@ -38,7 +44,9 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
+    let options = Options::parse();
+    circ::cfg::set(&options.circ);
+
     // open input file now so we don't waste a lot of time only to panic later
     let (mut p_out, mut v_out) = {
         let mut p_file = options.outfile.into_os_string();
@@ -62,7 +70,6 @@ fn main() {
         let inputs = zsharp::Inputs {
             file: options.path,
             mode: Mode::Proof,
-            isolate_asserts: false,
         };
         ZSharpFE::gen(inputs)
     };
@@ -94,7 +101,7 @@ fn main() {
     println!("done.");
 
     println!("Converting to r1cs");
-    let (mut pd, vd) = to_r1cs(cs.get("main").clone(), FieldT::from(DFL_T.modulus()));
+    let (mut pd, vd) = to_r1cs(cs.get("main").clone(), cfg());
     pd.r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         pd.r1cs
@@ -103,7 +110,7 @@ fn main() {
             "R1cs size before linearity reduction: {}",
             pd.r1cs.constraints().len()
         );
-        reduce_linearities(pd.r1cs, Some(options.lc_elimination_thresh))
+        reduce_linearities(pd.r1cs, cfg())
     };
     println!("Final R1cs size: {}", pd.r1cs.constraints().len());
 

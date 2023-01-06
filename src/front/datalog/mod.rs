@@ -9,6 +9,7 @@ use fxhash::FxHashMap;
 use log::debug;
 use rug::Integer;
 
+use crate::cfg::cfg;
 use crate::circify::{Circify, Loc, Val};
 use crate::front::{PROVER_VIS, PUBLIC_VIS};
 use crate::ir::opt::cfold::fold;
@@ -29,10 +30,6 @@ use parser::ast;
 pub struct Inputs {
     /// The file to look for `main` in.
     pub file: PathBuf,
-    /// How many recursions to tolerate
-    pub rec_limit: usize,
-    /// Should we lint primitive recursions?
-    pub lint_prim_rec: bool,
 }
 
 struct Gen<'ast> {
@@ -381,7 +378,7 @@ pub struct Datalog;
 impl FrontEnd for Datalog {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computations {
-        let mut f = File::open(&i.file).unwrap();
+        let mut f = File::open(i.file).unwrap();
         let mut buffer = String::new();
         f.read_to_string(&mut buffer).unwrap();
         let ast = parser::parse(&buffer);
@@ -392,9 +389,9 @@ impl FrontEnd for Datalog {
                 panic!("parse error!")
             }
         };
-        let mut g = Gen::new(i.rec_limit);
+        let mut g = Gen::new(cfg().datalog.rec_limit);
         g.register_rules(&ast);
-        let r = if i.lint_prim_rec {
+        let r = if cfg().datalog.lint_prim_rec {
             g.lint_rules()
         } else {
             g.entry_rule("main")

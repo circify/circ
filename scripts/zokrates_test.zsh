@@ -45,7 +45,7 @@ function pf_test {
 # Test prove workflow with --z-isolate-asserts, given an example name
 function pf_test_isolate {
     ex_name=$1
-    $BIN --z-isolate-asserts examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
+    $BIN --zsharp-isolate-asserts true examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
     $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
     $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
     rm -rf P V pi

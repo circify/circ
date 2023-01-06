@@ -442,7 +442,26 @@ impl R1cs<String> {
     /// Compute the prover data for this R1CS relation, given a precomputation
     /// that computes the variables that are relation inputs
     pub fn prover_data(self, cs: &Computation) -> ProverData {
-        let (mut precompute_inputs, precompute, _) = self.pv_data(cs, false);
+        let mut precompute = cs.precomputes.clone();
+        self.extend_precomputation(&mut precompute, false);
+        // we still need to remove the non-r1cs variables
+        use crate::ir::proof::PROVER_ID;
+        let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
+        precompute.restrict_to_inputs(all_inputs);
+        let pf_input_order: Vec<String> = (0..self.next_idx)
+            .filter(|i| self.public_idxs.contains(i))
+            .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
+            .collect();
+        let mut precompute_inputs = HashMap::default();
+        for input in &pf_input_order {
+            if let Some(output_term) = precompute.outputs().get(input) {
+                for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
+                    precompute_inputs.insert(v, s);
+                }
+            } else {
+                precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
+            }
+        }
         for o in precompute.outputs().keys() {
             precompute_inputs.remove(o);
         }

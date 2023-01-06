@@ -1,20 +1,27 @@
 use circ::ir::term::text::{parse_value_map, serialize_value_map};
+use circ::cfg::{
+    clap::{self, Parser},
+    CircOpt,
+};
 use circ::target::r1cs::ProverData;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 #[structopt(name = "zxe", about = "CirC: the circuit compiler")]
 struct Options {
     /// Input pdat file
-    #[structopt(parse(from_os_str), name = "PATH")]
+    #[arg(name = "PATH")]
     path: PathBuf,
 
-    #[structopt(short, long, default_value = "in", parse(from_os_str))]
+    #[arg(short, long, default_value = "in")]
     /// input values
     inputs: PathBuf,
+
+    #[command(flatten)]
+    /// CirC options
+    circ: CircOpt,
 }
 
 fn main() {
@@ -22,7 +29,7 @@ fn main() {
         .format_level(false)
         .format_timestamp(None)
         .init();
-    let options = Options::from_args();
+    let options = Options::parse();
 
     print!("Opening pdat and inputs... ");
     let input_map = {

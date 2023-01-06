@@ -5,7 +5,6 @@
 // Needed until https://github.com/rust-lang/rust-clippy/pull/8183 is resolved.
 #![allow(clippy::identity_op)]
 
-use crate::ir::term::extras::Letified;
 use crate::ir::term::*;
 use crate::target::bitsize;
 use crate::target::ilp::Ilp;
@@ -97,7 +96,7 @@ impl ToMilp {
     }
 
     fn embed(&mut self, t: Term) {
-        debug!("Embed: {}", Letified(t.clone()));
+        debug!("Embed: {}", t);
         for c in PostOrderIter::new(t) {
             debug!("Embed op: {}", c.op);
             match check(&c) {
@@ -441,7 +440,7 @@ impl ToMilp {
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }
-                    _ => panic!("Non-bv in embed_bv: {}", Letified(bv)),
+                    _ => panic!("Non-bv in embed_bv: {}", bv),
                 }
             }
         } else {
@@ -645,7 +644,7 @@ impl ToMilp {
     }
 
     fn assert(&mut self, t: Term) {
-        debug!("Assert: {}", Letified(t.clone()));
+        debug!("Assert: {}", t);
         self.embed(t.clone());
         let lc = self.get_bool(&t).clone();
         self.ilp.new_constraint(lc.eq(1));

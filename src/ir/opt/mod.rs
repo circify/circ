@@ -108,7 +108,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());
-            trace!("After {:?}: {}", i, text::serialize_computation(c));
+            trace!("After {:?}: {}", i, c.outputs[0]);
             debug!("After {:?}: {} terms", i, c.terms());
         }
     }

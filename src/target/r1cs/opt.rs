@@ -1,5 +1,6 @@
 //! Optimizations over R1CS
 use super::*;
+use crate::cfg::CircCfg;
 use crate::util::once::OnceQueue;
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::debug;
@@ -183,11 +184,8 @@ fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
 ///
 ///   * `lc_size_thresh`: the maximum size LC (number of non-constant monomials) that will be used
 ///   for propagation. `None` means no size limit.
-pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(
-    r1cs: R1cs<S>,
-    lc_size_thresh: Option<usize>,
-) -> R1cs<S> {
-    LinReducer::new(r1cs, lc_size_thresh.unwrap_or(usize::MAX)).run()
+pub fn reduce_linearities<S: Eq + Hash + Clone + Display>(r1cs: R1cs<S>, cfg: &CircCfg) -> R1cs<S> {
+    LinReducer::new(r1cs, cfg.r1cs.lc_elim_thresh).run()
 }
 
 #[cfg(test)]
@@ -256,7 +254,7 @@ mod test {
 
     #[quickcheck]
     fn random(SatR1cs(r1cs, values): SatR1cs) {
-        let r1cs2 = reduce_linearities(r1cs, None);
+        let r1cs2 = reduce_linearities(r1cs, &CircCfg::default());
         r1cs2.check_all(&values);
     }
 }

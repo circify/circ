@@ -2,7 +2,6 @@
 
 use super::*;
 use std::cmp::Ordering;
-use std::fmt::{self, Display, Formatter};
 
 /// Convert `t` to width `w`, though unsigned extension or extraction
 pub fn to_width(t: &Term, w: usize) -> Term {
@@ -11,55 +10,6 @@ pub fn to_width(t: &Term, w: usize) -> Term {
         Ordering::Less => term(Op::BvUext(w - old_w), vec![t.clone()]),
         Ordering::Equal => t.clone(),
         Ordering::Greater => term(Op::BvExtract(w - 1, 0), vec![t.clone()]),
-    }
-}
-
-/// A wrapper for `Term`, which displays the term in a letified fashion, so that no term is
-/// duplicated.
-///
-/// This is a pretty stupid implementation. It replaces every term.
-pub struct Letified(pub Term);
-
-impl Display for Letified {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        //let parent_count = {
-        //    let mut parent_count = HashMap::default();
-        //    for t in PostOrderIter::new(self.0.clone()) {
-        //        for c in &t.cs {
-        //            let mut parents = parent_count.entry(&c).or_insert_with(|| 0);
-        //            *parents += 1;
-        //        }
-        //    }
-        //    parent_count
-        //};
-        let mut let_ct = 0;
-        let mut print_as = TermMap::new();
-
-        let mut parent_counts = TermMap::<usize>::new();
-        for t in PostOrderIter::new(self.0.clone()) {
-            for c in t.cs.iter().cloned() {
-                *parent_counts.entry(c).or_insert(0) += 1;
-            }
-        }
-
-        writeln!(f, "(let (")?;
-        for t in PostOrderIter::new(self.0.clone()) {
-            let letify = if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
-                true
-            } else {
-                matches!(&t.op, Op::Const(Value::Array(..)))
-            };
-            if letify {
-                let name = format!("let_{}", let_ct);
-                let_ct += 1;
-                let sort = check(&t);
-                write!(f, "  ({} ", name)?;
-                let var = leaf_term(Op::Var(name, sort));
-                writeln!(f, "{})", substitute_cache(&t, &mut print_as))?;
-                print_as.insert(t, var);
-            }
-        }
-        writeln!(f, ") {})", substitute_cache(&self.0, &mut print_as))
     }
 }
 
@@ -209,35 +159,4 @@ pub fn array_elements(t: &Term) -> Vec<Term> {
 /// Wrap an array term as a tuple term.
 pub fn array_to_tuple(t: &Term) -> Term {
     term(Op::Tuple, array_elements(t))
-}
-
-#[cfg(test)]
-mod test {
-
-    use super::*;
-    use crate::term;
-
-    fn remove_whitespace(a: &str) -> String {
-        let mut aa = a.to_owned();
-        aa.retain(|c| !c.is_whitespace());
-        aa
-    }
-
-    #[test]
-    fn letified_no_dups() {
-        let t = term![Op::Eq; term![Op::BvNaryOp(BvNaryOp::Add); bv_lit(4,3), bv_lit(1,3)], bv_lit(5,3)];
-        assert_eq!(
-            remove_whitespace("(let ()(= (bvadd #b100 #b001) #b101))"),
-            remove_whitespace(&format!("{}", Letified(t))),
-        );
-    }
-    #[test]
-    fn letified_1_dup() {
-        let a = term![Op::BvNaryOp(BvNaryOp::Add); bv_lit(4,3), bv_lit(1,3)];
-        let t = term![Op::Eq; a.clone(), a];
-        assert_eq!(
-            remove_whitespace("(let ((let_0 (bvadd #b100 #b001)))(= let_0 let_0))"),
-            remove_whitespace(&format!("{}", Letified(t))),
-        );
-    }
 }
