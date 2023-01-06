@@ -64,7 +64,7 @@ pub fn cfg() -> &'static CircCfg {
 
 /// Get the configuration, setting the configuration to the default value if it is unset.
 pub fn cfg_or_default() -> &'static CircCfg {
-    if !is_cfg_set(){
+    if !is_cfg_set() {
         set_default();
     }
     cfg()
