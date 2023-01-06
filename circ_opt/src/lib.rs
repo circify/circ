@@ -53,6 +53,9 @@ pub struct CircOpt {
     /// Options for the prime field used
     #[command(flatten)]
     pub field: FieldOpt,
+    /// Options for the IR itself
+    #[command(flatten)]
+    pub ir: IrOpt,
     /// Options for term formatting
     #[command(flatten)]
     pub fmt: FmtOpt,
@@ -149,6 +152,35 @@ pub enum BuiltinField {
 impl Default for BuiltinField {
     fn default() -> Self {
         BuiltinField::Bls12381
+    }
+}
+
+/// Options for the prime field used
+#[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
+pub struct IrOpt {
+    /// Which field to use
+    #[arg(
+        long = "ir-field-to-bv",
+        env = "IR_FIELD_TO_BV",
+        value_enum,
+        default_value = "wrap"
+    )]
+    pub field_to_bv: FieldToBv,
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// When evaluating IR, if a field element x >= 2^b is converted to a length-b bit-vector, the
+/// result should be
+pub enum FieldToBv {
+    /// x % 2^b
+    Wrap,
+    /// a panic
+    Panic,
+}
+
+impl Default for FieldToBv {
+    fn default() -> Self {
+        FieldToBv::Wrap
     }
 }
 

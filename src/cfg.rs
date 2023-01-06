@@ -62,6 +62,14 @@ pub fn cfg() -> &'static CircCfg {
     CFG.get().expect("A component tried to read the CirC configuration, but it was not yet set. Did the top-level application call `circ::cfg::set`?")
 }
 
+/// Get the configuration, setting the configuration to the default value if it is unset.
+pub fn cfg_or_default() -> &'static CircCfg {
+    if !is_cfg_set() {
+        set_default();
+    }
+    cfg()
+}
+
 /// Has the configuration been set yet?
 pub fn is_cfg_set() -> bool {
     CFG.get().is_some()

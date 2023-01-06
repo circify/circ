@@ -21,9 +21,11 @@
 //!    * [Computation]: a collection of variables and assertions about them
 //!    * [Value]: a variable-free (and evaluated) term
 //!
+use crate::cfg::cfg_or_default as cfg;
 use crate::util::once::OnceQueue;
 
 use circ_fields::{FieldT, FieldV};
+use circ_opt::FieldToBv;
 use fxhash::{FxHashMap, FxHashSet};
 use hashconsing::{HConsed, WHConsed};
 use lazy_static::lazy_static;
@@ -1422,10 +1424,14 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
         }),
         Op::PfToBv(w) => Value::BitVector({
             let i = vs.get(&c.cs[0]).unwrap().as_pf().i();
-            let m = Integer::from(1) << *w as u32;
-            let i = i.div_rem_floor(m.clone()).1;
-            assert!(i < m);
-            BitVector::new(i, *w)
+            if let FieldToBv::Panic = cfg().ir.field_to_bv {
+                assert!(
+                    (i.significant_bits() as usize) <= *w,
+                    "oversized input to Op::PfToBv({})",
+                    w
+                );
+            }
+            BitVector::new(i % (Integer::from(1) << *w), *w)
         }),
         Op::BvUext(w) => Value::BitVector({
             let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
