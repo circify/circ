@@ -471,7 +471,10 @@ impl<'cfg> ToR1cs<'cfg> {
             };
             self.bv_greater(a, b, w, strict)
         } else {
-            assert!(!signed, "Cannot perform signed comparisons on huge bit-vectors");
+            assert!(
+                !signed,
+                "Cannot perform signed comparisons on huge bit-vectors"
+            );
             let a_bits = self.get_bv_bits(a);
             let b_bits = self.get_bv_bits(b);
             self.bv_bitwise_greater(a_bits, b_bits, strict)
