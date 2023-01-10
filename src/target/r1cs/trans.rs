@@ -458,17 +458,43 @@ impl<'cfg> ToR1cs<'cfg> {
     /// Returns whether `a` is (`strict`ly) (`signed`ly) greater than `b`.
     /// Assumes they are each `w`-bit bit-vectors.
     fn bv_cmp(&mut self, w: usize, signed: bool, strict: bool, a: &Term, b: &Term) -> TermLc {
-        let a = if signed {
-            self.get_bv_signed_int(a)
+        if w + 2 < self.field.modulus().significant_bits() as usize {
+            let a = if signed {
+                self.get_bv_signed_int(a)
+            } else {
+                self.get_bv_uint(a)
+            };
+            let b = if signed {
+                self.get_bv_signed_int(b)
+            } else {
+                self.get_bv_uint(b)
+            };
+            self.bv_greater(a, b, w, strict)
         } else {
-            self.get_bv_uint(a)
-        };
-        let b = if signed {
-            self.get_bv_signed_int(b)
-        } else {
-            self.get_bv_uint(b)
-        };
-        self.bv_greater(a, b, w, strict)
+            assert!(
+                !signed,
+                "Cannot perform signed comparisons on huge bit-vectors"
+            );
+            let a_bits = self.get_bv_bits(a);
+            let b_bits = self.get_bv_bits(b);
+            self.bv_bitwise_greater(a_bits, b_bits, strict)
+        }
+    }
+
+    /// Treating `xs` and `ys` as unsigned bit-vectors (with LSB at index 0), emit a bit-wise
+    /// comparison circuit.
+    ///
+    /// Useful for comparisons over very large bit-vectors.
+    fn bv_bitwise_greater(&mut self, xs: Vec<TermLc>, ys: Vec<TermLc>, strict: bool) -> TermLc {
+        let mut acc = self.zero.clone() + (!strict) as isize;
+        for (x, y) in xs.into_iter().zip(ys) {
+            let eq = self.bits_are_equal(&x, &y);
+            let eq_and_acc = self.nary_and(vec![eq, acc].into_iter());
+            let not_y = self.bool_not(&y);
+            let x_gt_y = self.nary_and(vec![x, not_y].into_iter());
+            acc = self.nary_or(vec![x_gt_y, eq_and_acc].into_iter());
+        }
+        acc
     }
 
     /// Shift `x` left by `2^y`, if bit-valued `c` is true.
