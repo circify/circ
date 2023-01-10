@@ -111,7 +111,8 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
         for i in 0..self.0.next_idx {
             if let Some(s) = self.0.idxs_signals.get(&i) {
                 //for (_i, s) in self.0.idxs_signals.get() {
-                if uses.get(&i).is_some() {
+                let public = self.0.public_idxs.contains(&i);
+                if uses.get(&i).is_some() || public {
                     let name_f = || s.to_string();
                     let val_f = || {
                         Ok({
@@ -121,7 +122,6 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
                             ff_val
                         })
                     };
-                    let public = self.0.public_idxs.contains(&i);
                     debug!("var: {}, public: {}", s, public);
                     let v = if public {
                         cs.alloc_input(name_f, val_f)?
@@ -328,7 +328,7 @@ pub fn verify<E: MultiMillerLoop, P1: AsRef<Path>, P2: AsRef<Path>>(
     let inputs_as_ff: Vec<E::Fr> = inputs.into_iter().map(int_to_ff).collect();
     let mut pf_file = File::open(pf_path).unwrap();
     let pf = Proof::read(&mut pf_file).unwrap();
-    verify_proof(&pvk, &pf, &inputs_as_ff).unwrap();
+    verify_proof(&pvk, &pf, dbg!(&inputs_as_ff)).unwrap();
     Ok(())
 }
 

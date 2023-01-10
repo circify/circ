@@ -123,9 +123,11 @@ def test(features, extra_args):
         if "ristretto255" in features:
             test_cmd += ["--no-default-features"]
             test_cmd_release += ["--no-default-features"]
+    test_cmd += ["--", "--test-threads=1"]
+    test_cmd_release += ["--", "--test-threads=1"]
     if len(extra_args) > 0:
-        test_cmd += extra_args
-        test_cmd_release += extra_args
+        test_cmd += [a for a in extra_args if a != "--"]
+        test_cmd_release += [a for a in extra_args if a != "--"]
 
     log_run_check(test_cmd)
     if load_mode() == "release":
