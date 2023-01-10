@@ -328,7 +328,7 @@ pub fn verify<E: MultiMillerLoop, P1: AsRef<Path>, P2: AsRef<Path>>(
     let inputs_as_ff: Vec<E::Fr> = inputs.into_iter().map(int_to_ff).collect();
     let mut pf_file = File::open(pf_path).unwrap();
     let pf = Proof::read(&mut pf_file).unwrap();
-    verify_proof(&pvk, &pf, dbg!(&inputs_as_ff)).unwrap();
+    verify_proof(&pvk, &pf, &inputs_as_ff).unwrap();
     Ok(())
 }
 
