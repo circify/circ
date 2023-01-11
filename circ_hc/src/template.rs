@@ -8,6 +8,7 @@ use std::thread_local;
 const GC_IN_DROP_THRESH: usize = 5000;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct NodeData {
     pub op: TemplateOp,
     pub cs: Vec<Node>,
@@ -17,12 +18,19 @@ pub struct Node {
     ptr: *const NodeValue,
 }
 
+#[allow(dead_code)]
 pub fn create<'a>(op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
     MANAGER.with(|man| man.create(op, children))
 }
 
+#[allow(dead_code)]
 pub fn gc() -> usize {
     MANAGER.with(|man| man.force_gc())
+}
+
+#[allow(dead_code)]
+pub fn table_size() -> usize {
+    MANAGER.with(|man| man.table.borrow().len())
 }
 
 struct NodeValue {

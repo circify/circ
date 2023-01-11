@@ -10,6 +10,7 @@ macro_rules! generate_hashcons {
         const GC_IN_DROP_THRESH: usize = 5000;
 
         #[derive(Clone)]
+        #[allow(dead_code)]
         pub struct NodeData {
             pub op: $Op,
             pub cs: Vec<Node>,
@@ -19,12 +20,19 @@ macro_rules! generate_hashcons {
             ptr: *const NodeValue,
         }
 
+        #[allow(dead_code)]
         pub fn create<'a>(op: &$Op, children: impl IntoIterator<Item = &'a Node>) -> Node {
             MANAGER.with(|man| man.create(op, children))
         }
 
+        #[allow(dead_code)]
         pub fn gc() -> usize {
             MANAGER.with(|man| man.force_gc())
+        }
+
+        #[allow(dead_code)]
+        pub fn table_size() -> usize {
+            MANAGER.with(|man| man.table.borrow().len())
         }
 
         struct NodeValue {
