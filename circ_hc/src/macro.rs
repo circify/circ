@@ -4,7 +4,6 @@ macro_rules! generate_hashcons {
         use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
         use std::cell::{Cell, RefCell};
-        use std::hash::Hash;
         use std::thread_local;
 
         const GC_IN_DROP_THRESH: usize = 5000;
@@ -180,81 +179,87 @@ macro_rules! generate_hashcons {
             }
         }
 
-        // 64 bit primes
-        const HASH_PRIME_1: u64 = 15124035408605323001;
-        const HASH_PRIME_2: u64 = 15133577374253939647;
+        mod hash {
+            use super::{Node, NodeData, NodeValue, NodeValuePtr};
+            use std::hash::{Hash, Hasher};
 
-        impl Hash for NodeValue {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                let id_hash = self
-                    .id
-                    .wrapping_mul(HASH_PRIME_1)
-                    .wrapping_add(HASH_PRIME_2);
-                state.write_u64(id_hash);
+            // 64 bit primes
+            const PRIME_1: u64 = 15124035408605323001;
+            const PRIME_2: u64 = 15133577374253939647;
+
+            impl Hash for NodeValue {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    let id_hash = self.id.wrapping_mul(PRIME_1).wrapping_add(PRIME_2);
+                    state.write_u64(id_hash);
+                }
             }
-        }
 
-        impl Hash for NodeData {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                self.op.hash(state);
-                unsafe {
-                    for c in self.cs.iter() {
-                        (*c.ptr).hash(state);
+            impl Hash for NodeData {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    self.op.hash(state);
+                    unsafe {
+                        for c in self.cs.iter() {
+                            (*c.ptr).hash(state);
+                        }
                     }
                 }
             }
-        }
 
-        impl Hash for Node {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                use std::ops::Deref;
-                self.deref().hash(state)
+            impl Hash for Node {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    use std::ops::Deref;
+                    self.deref().hash(state)
+                }
             }
-        }
 
-        impl Hash for NodeValuePtr {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                unsafe { (*self.0).hash(state) }
+            impl Hash for NodeValuePtr {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    unsafe { (*self.0).hash(state) }
+                }
             }
-        }
 
-        impl PartialEq for NodeValue {
-            fn eq(&self, other: &Self) -> bool {
-                self.id == other.id
-            }
-        }
-
-        impl Eq for NodeValue {}
-
-        impl PartialEq for NodeData {
-            fn eq(&self, other: &Self) -> bool {
-                unsafe {
-                    self.op == other.op
-                        && self.cs.len() == other.cs.len()
-                        && self
-                            .cs
-                            .iter()
-                            .zip(other.cs.iter())
-                            .all(|(s, o)| *(s.ptr) == *(o.ptr))
+            impl PartialEq for NodeValue {
+                fn eq(&self, other: &Self) -> bool {
+                    self.id == other.id
                 }
             }
         }
 
-        impl Eq for NodeData {}
+        mod eq {
+            use super::{Node, NodeData, NodeValue, NodeValuePtr};
 
-        impl PartialEq for Node {
-            fn eq(&self, other: &Self) -> bool {
-                use std::ops::Deref;
-                self.deref() == other.deref()
-            }
-        }
-        impl Eq for Node {}
+            impl Eq for NodeValue {}
 
-        impl PartialEq for NodeValuePtr {
-            fn eq(&self, other: &Self) -> bool {
-                unsafe { *self.0 == *other.0 }
+            impl PartialEq for NodeData {
+                fn eq(&self, other: &Self) -> bool {
+                    unsafe {
+                        self.op == other.op
+                            && self.cs.len() == other.cs.len()
+                            && self
+                                .cs
+                                .iter()
+                                .zip(other.cs.iter())
+                                .all(|(s, o)| *(s.ptr) == *(o.ptr))
+                    }
+                }
             }
+
+            impl Eq for NodeData {}
+
+            impl PartialEq for Node {
+                fn eq(&self, other: &Self) -> bool {
+                    use std::ops::Deref;
+                    self.deref() == other.deref()
+                }
+            }
+            impl Eq for Node {}
+
+            impl PartialEq for NodeValuePtr {
+                fn eq(&self, other: &Self) -> bool {
+                    unsafe { *self.0 == *other.0 }
+                }
+            }
+            impl Eq for NodeValuePtr {}
         }
-        impl Eq for NodeValuePtr {}
     };
 }

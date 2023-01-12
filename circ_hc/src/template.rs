@@ -1,8 +1,8 @@
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use std::cell::{Cell, RefCell};
-use std::hash::Hash;
 use std::net::SocketAddrV6 as TemplateOp;
+use std::rc::Rc;
 use std::thread_local;
 
 const GC_IN_DROP_THRESH: usize = 5000;
@@ -45,6 +45,7 @@ struct NodeValuePtr(*const NodeValue);
 struct Manager {
     table: RefCell<HashMap<NodeData, *const NodeValue>>,
     next_id: Cell<u64>,
+    attr_tables: RefCell<Vec<Rc<dyn attr::AttributeGc>>>,
     zombies: RefCell<HashSet<NodeValuePtr>>,
     in_gc: Cell<bool>,
 }
@@ -53,6 +54,7 @@ thread_local! {
     static MANAGER: Manager = Manager {
         table: Default::default(),
         next_id: Cell::new(0),
+        attr_tables: Default::default(),
         zombies: Default::default(),
         in_gc: Cell::new(false),
     };
@@ -139,7 +141,12 @@ impl Manager {
                     ct += 1;
                     let value_box = self.remove_from_table(zombie);
                     let value = *value_box;
-                    // TODO: attrs?
+
+                    // attr GC
+                    for t in self.attr_tables.borrow().iter() {
+                        t.collect(value.id);
+                    }
+
                     // drops the operator, then the children
                     // may create more zombies
                     std::mem::drop(value)
@@ -148,6 +155,10 @@ impl Manager {
         }
         self.in_gc.set(false);
         ct
+    }
+
+    fn register_attr_table(&self, table: Rc<dyn attr::AttributeGc>) {
+        self.attr_tables.borrow_mut().push(table)
     }
 }
 
@@ -172,85 +183,156 @@ impl std::ops::Deref for Node {
     }
 }
 
+impl Node {
+    /// Get the ref count of this node.
+    pub fn ref_cnt(&self) -> u64 {
+        unsafe { (*self.ptr).id }
+    }
+    /// Get the unique ID of this node.
+    pub fn id(&self) -> u64 {
+        unsafe { (*self.ptr).ref_cnt.get() }
+    }
+}
+
 impl std::ops::Drop for Node {
     fn drop(&mut self) {
         NodeValue::dec(self.ptr)
     }
 }
 
-// 64 bit primes
-const HASH_PRIME_1: u64 = 15124035408605323001;
-const HASH_PRIME_2: u64 = 15133577374253939647;
+mod hash {
+    use super::{Node, NodeData, NodeValue, NodeValuePtr};
+    use std::hash::{Hash, Hasher};
 
-impl Hash for NodeValue {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let id_hash = self
-            .id
-            .wrapping_mul(HASH_PRIME_1)
-            .wrapping_add(HASH_PRIME_2);
-        state.write_u64(id_hash);
+    // 64 bit primes
+    const PRIME_1: u64 = 15124035408605323001;
+    const PRIME_2: u64 = 15133577374253939647;
+
+    impl Hash for NodeValue {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            let id_hash = self.id.wrapping_mul(PRIME_1).wrapping_add(PRIME_2);
+            state.write_u64(id_hash);
+        }
     }
-}
 
-impl Hash for NodeData {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.op.hash(state);
-        unsafe {
-            for c in self.cs.iter() {
-                (*c.ptr).hash(state);
+    impl Hash for NodeData {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.op.hash(state);
+            unsafe {
+                for c in self.cs.iter() {
+                    (*c.ptr).hash(state);
+                }
             }
         }
     }
-}
 
-impl Hash for Node {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        use std::ops::Deref;
-        self.deref().hash(state)
+    impl Hash for Node {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            use std::ops::Deref;
+            self.deref().hash(state)
+        }
     }
-}
 
-impl Hash for NodeValuePtr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        unsafe { (*self.0).hash(state) }
+    impl Hash for NodeValuePtr {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            unsafe { (*self.0).hash(state) }
+        }
     }
-}
 
-impl PartialEq for NodeValue {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for NodeValue {}
-
-impl PartialEq for NodeData {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            self.op == other.op
-                && self.cs.len() == other.cs.len()
-                && self
-                    .cs
-                    .iter()
-                    .zip(other.cs.iter())
-                    .all(|(s, o)| *(s.ptr) == *(o.ptr))
+    impl PartialEq for NodeValue {
+        fn eq(&self, other: &Self) -> bool {
+            self.id == other.id
         }
     }
 }
 
-impl Eq for NodeData {}
+mod eq {
+    use super::{Node, NodeData, NodeValue, NodeValuePtr};
 
-impl PartialEq for Node {
-    fn eq(&self, other: &Self) -> bool {
-        use std::ops::Deref;
-        self.deref() == other.deref()
+    impl Eq for NodeValue {}
+
+    impl PartialEq for NodeData {
+        fn eq(&self, other: &Self) -> bool {
+            unsafe {
+                self.op == other.op
+                    && self.cs.len() == other.cs.len()
+                    && self
+                        .cs
+                        .iter()
+                        .zip(other.cs.iter())
+                        .all(|(s, o)| *(s.ptr) == *(o.ptr))
+            }
+        }
+    }
+
+    impl Eq for NodeData {}
+
+    impl PartialEq for Node {
+        fn eq(&self, other: &Self) -> bool {
+            use std::ops::Deref;
+            self.deref() == other.deref()
+        }
+    }
+    impl Eq for Node {}
+
+    impl PartialEq for NodeValuePtr {
+        fn eq(&self, other: &Self) -> bool {
+            unsafe { *self.0 == *other.0 }
+        }
+    }
+    impl Eq for NodeValuePtr {}
+}
+
+/// Attribute tables
+pub mod attr {
+    use super::*;
+
+    pub struct AttributeTable<T: 'static + Clone> {
+        inner: Rc<AttributeTableInner<T>>,
+    }
+
+    // should not be moved
+    pub struct AttributeTableInner<T: 'static> {
+        table: RefCell<HashMap<u64, T>>,
+    }
+
+    pub trait AttributeGc {
+        fn collect(&self, id: u64);
+    }
+
+    impl<T> AttributeGc for AttributeTableInner<T> {
+        fn collect(&self, id: u64) {
+            self.table.borrow_mut().remove(&id);
+        }
+    }
+
+    impl<T: 'static + Clone> std::default::Default for AttributeTable<T> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<T: 'static + Clone> AttributeTable<T> {
+        /// Create an empty [AttributeTable].
+        pub fn new() -> Self {
+            let inner = Rc::new(AttributeTableInner {
+                table: Default::default(),
+            });
+            let cp = inner.clone();
+            MANAGER.with(|man| man.register_attr_table(cp));
+            AttributeTable { inner }
+        }
+
+        pub fn len(&self) -> usize {
+            self.inner.table.borrow().len()
+        }
+
+        pub fn get(&self, k: &Node) -> Option<T> {
+            self.inner.table.borrow().get(&k.id()).cloned()
+        }
+
+        pub fn insert(&mut self, k: &Node, v: T) -> Option<T> {
+            self.inner.table.borrow_mut().insert(k.id(), v)
+        }
     }
 }
-impl Eq for Node {}
-
-impl PartialEq for NodeValuePtr {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe { *self.0 == *other.0 }
-    }
-}
-impl Eq for NodeValuePtr {}
