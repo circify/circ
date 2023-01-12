@@ -1,8 +1,6 @@
 use quickcheck_macros::quickcheck;
 
-mod hc_u8 {
-    crate::generate_hashcons!(u8);
-}
+use super::hc_u8;
 
 #[quickcheck]
 fn leaf(u: u8) {
@@ -37,9 +35,14 @@ fn four_nodes(a: u8, b: u8, c: u8, d: u8) {
     assert_eq!(hc_u8::gc(), 1);
     std::mem::drop(n_b);
     assert_eq!(hc_u8::gc(), 0);
+    std::mem::drop(n_a);
+    std::mem::drop(n_c);
+    hc_u8::gc();
+    assert_eq!(hc_u8::table_size(), 0);
 }
 
 #[quickcheck]
+#[cfg_attr(miri, ignore)]
 fn many_nodes(steps: Vec<(u8, Vec<usize>)>) {
     hc_u8::gc();
     assert_eq!(hc_u8::table_size(), 0);

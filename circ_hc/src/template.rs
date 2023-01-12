@@ -11,7 +11,7 @@ const GC_IN_DROP_THRESH: usize = 5000;
 #[allow(dead_code)]
 pub struct NodeData {
     pub op: TemplateOp,
-    pub cs: Vec<Node>,
+    pub cs: Box<[Node]>,
 }
 
 pub struct Node {
@@ -137,7 +137,8 @@ impl Manager {
             } else {
                 for zombie in zombies {
                     ct += 1;
-                    let value = self.remove_from_table(zombie);
+                    let value_box = self.remove_from_table(zombie);
+                    let value = *value_box;
                     // TODO: attrs?
                     // drops the operator, then the children
                     // may create more zombies
@@ -147,6 +148,12 @@ impl Manager {
         }
         self.in_gc.set(false);
         ct
+    }
+}
+
+impl std::ops::Drop for Manager {
+    fn drop(&mut self) {
+        self.force_gc();
     }
 }
 
@@ -172,11 +179,15 @@ impl std::ops::Drop for Node {
 }
 
 // 64 bit prime
-const HASH_PRIME: u64 = 15124035408605323001;
+const HASH_PRIME_1: u64 = 15124035408605323001;
+const HASH_PRIME_2: u64 = 15133577374253939647;
 
 impl Hash for NodeValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let id_hash = HASH_PRIME.wrapping_mul(self.id);
+        let id_hash = self
+            .id
+            .wrapping_mul(HASH_PRIME_1)
+            .wrapping_add(HASH_PRIME_2);
         state.write_u64(id_hash);
     }
 }
@@ -185,7 +196,7 @@ impl Hash for NodeData {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.op.hash(state);
         unsafe {
-            for c in &self.cs {
+            for c in self.cs.iter() {
                 (*c.ptr).hash(state);
             }
         }
@@ -217,10 +228,11 @@ impl PartialEq for NodeData {
     fn eq(&self, other: &Self) -> bool {
         unsafe {
             self.op == other.op
+                && self.cs.len() == other.cs.len()
                 && self
                     .cs
                     .iter()
-                    .zip(&other.cs)
+                    .zip(other.cs.iter())
                     .all(|(s, o)| *(s.ptr) == *(o.ptr))
         }
     }
