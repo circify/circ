@@ -115,9 +115,8 @@ checksum = "bed554bd50246729a1ec158d08aa3235d1b69d94ad120ebe187e28894787e736"
 
 [[package]]
 name = "bellman"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e323bc53df375ffa4eab01c7cfded9bfbc45bbb9f8b917e81f946c9eb087db2b"
+version = "0.13.1"
+source = "git+https://github.com/alex-ozdemir/bellman.git?branch=mirage#60176d5b003bd409d1f62aa802e4b3b9bc35b66b"
 dependencies = [
  "bitvec",
  "blake2s_simd",
@@ -127,8 +126,10 @@ dependencies = [
  "group",
  "lazy_static",
  "log",
+ "merlin",
  "num_cpus",
  "pairing",
+ "rand_chacha 0.3.1",
  "rand_core 0.6.3",
  "rayon",
  "subtle",

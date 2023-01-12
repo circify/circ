@@ -23,7 +23,7 @@ zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional 
 typed-arena = "2.0"
 log = "0.4"
 thiserror = "1.0"
-bellman = { version = "0.12", optional = true }
+bellman = { git = "https://github.com/alex-ozdemir/bellman.git", branch = "mirage", optional = true }
 ff = "0.12"
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
