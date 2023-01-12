@@ -1,12 +1,19 @@
-./src/macro_.rs: ./src/template.rs ./generate_macro.zsh
-	zsh ./generate_macro.zsh ./src/template.rs $@
+template = src/template.rs
+macro = src/macro.rs
 
-test:
+.PHONY: test valgrind miri clean
+
+$(macro): generate_macro.zsh $(template)
+	zsh $< $(template) $@
+
+test: $(macro)
 	cargo test
 
-valgrind:
+valgrind: $(macro)
 	cargo valgrind test
 
-miri:
+miri: $(macro)
 	cargo +nightly miri test
 
+clean:
+	cargo clean && rm -rf $(macro)

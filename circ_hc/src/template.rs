@@ -178,7 +178,7 @@ impl std::ops::Drop for Node {
     }
 }
 
-// 64 bit prime
+// 64 bit primes
 const HASH_PRIME_1: u64 = 15124035408605323001;
 const HASH_PRIME_2: u64 = 15133577374253939647;
 
