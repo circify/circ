@@ -1,7 +1,7 @@
 //! Lowering IR to R1CS
 //!
 //! [Ben Braun's
-//! thesis](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.683.6940&rep=rep1&type=pdf)
+//! thesis](https://github.com/circify/circ/tree/master/doc/resources/braun-bs-thesis.pdf)
 //! is a good intro to how this process works.
 use crate::cfg::CircCfg;
 use crate::ir::term::precomp::PreComp;
