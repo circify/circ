@@ -11,3 +11,6 @@ fxhash = "0.2.1"
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+rand_chacha = "0.3"

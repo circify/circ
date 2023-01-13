@@ -4,6 +4,7 @@ macro_rules! generate_hashcons {
         use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
         use std::cell::{Cell, RefCell};
+        use std::rc::Rc;
         use std::thread_local;
 
         const GC_IN_DROP_THRESH: usize = 5000;
@@ -46,6 +47,7 @@ macro_rules! generate_hashcons {
         struct Manager {
             table: RefCell<HashMap<NodeData, *const NodeValue>>,
             next_id: Cell<u64>,
+            attr_tables: RefCell<Vec<Rc<dyn attr::AttributeGc>>>,
             zombies: RefCell<HashSet<NodeValuePtr>>,
             in_gc: Cell<bool>,
         }
@@ -54,6 +56,7 @@ macro_rules! generate_hashcons {
             static MANAGER: Manager = Manager {
                 table: Default::default(),
                 next_id: Cell::new(0),
+                attr_tables: Default::default(),
                 zombies: Default::default(),
                 in_gc: Cell::new(false),
             };
@@ -77,6 +80,14 @@ macro_rules! generate_hashcons {
                         .ref_cnt
                         .set(ref_cnt.checked_add(1).expect("ref_cnt overflow"));
                 }
+            }
+        }
+
+        struct GcClear;
+
+        impl<'a> std::ops::Drop for GcClear {
+            fn drop(&mut self) {
+                MANAGER.with(|man| man.in_gc.set(false));
             }
         }
 
@@ -127,9 +138,9 @@ macro_rules! generate_hashcons {
             }
 
             fn force_gc(&self) -> usize {
-                // TODO: panic safety?
                 assert!(!self.in_gc.get(), "GC requested, but already in GC");
                 self.in_gc.set(true);
+                let clear = GcClear;
                 let mut ct = 0;
                 loop {
                     let zombies = self.zombies.take();
@@ -140,15 +151,24 @@ macro_rules! generate_hashcons {
                             ct += 1;
                             let value_box = self.remove_from_table(zombie);
                             let value = *value_box;
-                            // TODO: attrs?
+
+                            // attr GC
+                            for t in self.attr_tables.borrow().iter() {
+                                t.collect(value.id);
+                            }
+
                             // drops the operator, then the children
                             // may create more zombies
                             std::mem::drop(value)
                         }
                     }
                 }
-                self.in_gc.set(false);
+                std::mem::drop(clear);
                 ct
+            }
+
+            fn register_attr_table(&self, table: Rc<dyn attr::AttributeGc>) {
+                self.attr_tables.borrow_mut().push(table)
             }
         }
 
@@ -170,6 +190,17 @@ macro_rules! generate_hashcons {
 
             fn deref(&self) -> &Self::Target {
                 unsafe { &(*self.ptr).raw }
+            }
+        }
+
+        impl Node {
+            /// Get the ref count of this node.
+            pub fn ref_cnt(&self) -> u64 {
+                unsafe { (*self.ptr).id }
+            }
+            /// Get the unique ID of this node.
+            pub fn id(&self) -> u64 {
+                unsafe { (*self.ptr).ref_cnt.get() }
             }
         }
 
@@ -260,6 +291,60 @@ macro_rules! generate_hashcons {
                 }
             }
             impl Eq for NodeValuePtr {}
+        }
+
+        /// Attribute tables
+        pub mod attr {
+            use super::*;
+
+            pub struct AttributeTable<T: 'static + Clone> {
+                inner: Rc<AttributeTableInner<T>>,
+            }
+
+            // should not be moved
+            pub struct AttributeTableInner<T: 'static> {
+                table: RefCell<HashMap<u64, T>>,
+            }
+
+            pub trait AttributeGc {
+                fn collect(&self, id: u64);
+            }
+
+            impl<T> AttributeGc for AttributeTableInner<T> {
+                fn collect(&self, id: u64) {
+                    self.table.borrow_mut().remove(&id);
+                }
+            }
+
+            impl<T: 'static + Clone> std::default::Default for AttributeTable<T> {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+
+            impl<T: 'static + Clone> AttributeTable<T> {
+                /// Create an empty [AttributeTable].
+                pub fn new() -> Self {
+                    let inner = Rc::new(AttributeTableInner {
+                        table: Default::default(),
+                    });
+                    let cp = inner.clone();
+                    MANAGER.with(|man| man.register_attr_table(cp));
+                    AttributeTable { inner }
+                }
+
+                pub fn len(&self) -> usize {
+                    self.inner.table.borrow().len()
+                }
+
+                pub fn get(&self, k: &Node) -> Option<T> {
+                    self.inner.table.borrow().get(&k.id()).cloned()
+                }
+
+                pub fn insert(&mut self, k: &Node, v: T) -> Option<T> {
+                    self.inner.table.borrow_mut().insert(k.id(), v)
+                }
+            }
         }
     };
 }

@@ -1,7 +1,7 @@
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use std::cell::{Cell, RefCell};
-use std::net::SocketAddrV6 as TemplateOp;
+type TemplateOp = u8;
 use std::rc::Rc;
 use std::thread_local;
 
@@ -33,10 +33,28 @@ pub fn table_size() -> usize {
     MANAGER.with(|man| man.table.borrow().len())
 }
 
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", unsafe { &*self.ptr })
+    }
+}
+
 struct NodeValue {
     raw: NodeData,
     id: u64,
     ref_cnt: Cell<u64>,
+}
+
+impl std::fmt::Debug for NodeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let c_ids = self.raw.cs.iter().map(|n| n.id()).collect::<Vec<_>>();
+        f.debug_struct("NodeValue")
+            .field("id", &self.id)
+            .field("ref_cnt", &self.ref_cnt.get())
+            .field("op", &self.raw.op)
+            .field("cs", &c_ids)
+            .finish()
+    }
 }
 
 #[repr(transparent)]
@@ -81,14 +99,6 @@ impl NodeValue {
     }
 }
 
-struct GcClear;
-
-impl<'a> std::ops::Drop for GcClear {
-    fn drop(&mut self) {
-        MANAGER.with(|man| man.in_gc.set(false));
-    }
-}
-
 impl Manager {
     fn create<'a>(&self, op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
         #[allow(unused_unsafe)]
@@ -101,7 +111,9 @@ impl Manager {
             let id = self.next_id.get();
             let ptr = {
                 let mut table = self.table.borrow_mut();
+                let mut existing = true;
                 let value = table.entry(raw).or_insert_with_key(|raw| {
+                    existing = false;
                     Box::into_raw(Box::new(NodeValue {
                         raw: raw.clone(),
                         id,
@@ -109,6 +121,9 @@ impl Manager {
                     }))
                 });
                 NodeValue::inc(*value);
+                if existing && (**value).ref_cnt.get() == 1 {
+                    self.zombies.borrow_mut().remove(&NodeValuePtr(*value));
+                }
                 if (**value).id == id {
                     self.next_id.set(id.checked_add(1).expect("id overflow"));
                 }
@@ -120,7 +135,12 @@ impl Manager {
 
     fn remove_from_table(&self, ptr: NodeValuePtr) -> Box<NodeValue> {
         unsafe {
-            let value_ptr = self.table.borrow_mut().remove(&(*ptr.0).raw).unwrap();
+            let value_ptr = {
+                let mut table = self.table.borrow_mut();
+                table.remove(&(*ptr.0).raw).unwrap_or_else(|| {
+                    panic!("Error: could not find {:?} in table", *ptr.0)
+                })
+            };
             Box::from_raw(value_ptr as *mut NodeValue)
         }
     }
@@ -136,33 +156,36 @@ impl Manager {
     }
 
     fn force_gc(&self) -> usize {
-        assert!(!self.in_gc.get(), "GC requested, but already in GC");
-        self.in_gc.set(true);
-        let clear = GcClear;
-        let mut ct = 0;
-        loop {
-            let zombies = self.zombies.take();
-            if zombies.is_empty() {
-                break;
-            } else {
-                for zombie in zombies {
-                    ct += 1;
-                    let value_box = self.remove_from_table(zombie);
-                    let value = *value_box;
+        unsafe {
+            assert!(!self.in_gc.get(), "GC requested, but already in GC");
+            self.in_gc.set(true);
+            let mut ct = 0;
+            loop {
+                let zombies = self.zombies.take();
+                if zombies.is_empty() {
+                    break;
+                } else {
+                    for zombie in zombies {
+                        if (*zombie.0).ref_cnt.get() == 0 {
+                            ct += 1;
+                            let value_box = self.remove_from_table(zombie);
+                            let value = *value_box;
 
-                    // attr GC
-                    for t in self.attr_tables.borrow().iter() {
-                        t.collect(value.id);
+                            // attr GC
+                            for t in self.attr_tables.borrow().iter() {
+                                t.collect(value.id);
+                            }
+
+                            // drops the operator, then the children
+                            // may create more zombies
+                            std::mem::drop(value)
+                        }
                     }
-
-                    // drops the operator, then the children
-                    // may create more zombies
-                    std::mem::drop(value)
                 }
             }
+            self.in_gc.set(false);
+            ct
         }
-        std::mem::drop(clear);
-        ct
     }
 
     fn register_attr_table(&self, table: Rc<dyn attr::AttributeGc>) {
@@ -194,11 +217,11 @@ impl std::ops::Deref for Node {
 impl Node {
     /// Get the ref count of this node.
     pub fn ref_cnt(&self) -> u64 {
-        unsafe { (*self.ptr).id }
+        unsafe { (*self.ptr).ref_cnt.get() }
     }
     /// Get the unique ID of this node.
     pub fn id(&self) -> u64 {
-        unsafe { (*self.ptr).ref_cnt.get() }
+        unsafe { (*self.ptr).id }
     }
 }
 
