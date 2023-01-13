@@ -10,9 +10,10 @@ body=$(cat $template \
 echo "
 // Warning: this file is generated from src/template.rs and generate_macro.zsh
 #[macro_export]
-macro_rules! generate_hashcons {
+macro_rules! __generate_hashcons {
     (\$Op:ty) => {
 $body
     };
 }
+pub use crate::__generate_hashcons as generate_hashcons;
 " | rustfmt > $dest

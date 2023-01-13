@@ -1,18 +1,18 @@
-template = src/template.rs
-u8 = src/hc_u8.rs
-macro = src/macro_.rs
+raw_template = src/raw/template.rs
+raw_u8 = src/raw/example_u8.rs
+raw_macro = src/raw/macro_.rs
 
 .PHONY: test valgrind miri clean all
 
-generated = $(macro) $(u8)
+generated = $(raw_macro) $(raw_u8)
 
 all: $(generated)
 
-$(macro): generate_macro.zsh $(template)
-	zsh $< $(template) $@
+$(raw_macro): generate_macro.zsh $(raw_template)
+	zsh $< $(raw_template) $@
 
-$(u8): generate_u8.zsh $(template)
-	zsh $< $(template) $@
+$(raw_u8): generate_u8.zsh $(raw_template)
+	zsh $< $(raw_template) $@
 
 test: $(generated)
 	cargo test

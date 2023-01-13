@@ -2,9 +2,9 @@ mod bench;
 mod qc;
 mod tiny;
 
-mod ours {
+mod raw {
     mod hc_u8 {
-        crate::generate_hashcons!(u8);
+        crate::raw::generate_hashcons!(u8);
     }
     use hc_u8::Table;
 

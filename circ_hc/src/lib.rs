@@ -1,13 +1,12 @@
 use std::cmp::{PartialEq, Eq, PartialOrd, Ord};
 use std::hash::Hash;
 
-pub mod hc_u8;
-pub mod template;
-
-mod macro_;
+pub mod raw;
+pub use raw::macro_::generate_hashcons;
 
 #[cfg(test)]
 mod test;
+
 
 /// A hash-cons table
 pub trait Table<Op> {
