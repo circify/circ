@@ -3,6 +3,7 @@ use std::hash::Hash;
 
 pub mod raw;
 pub use raw::macro_::generate_hashcons;
+pub mod hashconsing;
 
 #[cfg(test)]
 mod test;

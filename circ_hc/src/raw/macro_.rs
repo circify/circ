@@ -1,6 +1,6 @@
 // Warning: this file is generated from src/template.rs and generate_macro.zsh
 #[macro_export]
-macro_rules! __generate_hashcons {
+macro_rules! generate_hashcons_raw {
     ($Op:ty) => {
         use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
@@ -362,4 +362,4 @@ macro_rules! __generate_hashcons {
         }
     };
 }
-pub use crate::__generate_hashcons as generate_hashcons;
+pub use crate::generate_hashcons_raw as generate_hashcons;
