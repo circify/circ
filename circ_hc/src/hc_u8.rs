@@ -1,7 +1,7 @@
+// Warning: this file is generated from src/template.rs and generate_u8.zsh
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use std::cell::{Cell, RefCell};
-type TemplateOp = u8;
 use std::rc::Rc;
 use std::thread_local;
 
@@ -10,7 +10,7 @@ const GC_IN_DROP_THRESH: usize = 5000;
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct NodeData {
-    pub op: TemplateOp,
+    pub op: u8,
     pub cs: Box<[Node]>,
 }
 
@@ -18,24 +18,24 @@ pub struct Node {
     ptr: *const NodeValue,
 }
 
-#[allow(dead_code)]
-pub fn create<'a>(op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
-    MANAGER.with(|man| man.create(op, children))
-}
+pub struct Table {}
 
-#[allow(dead_code)]
-pub fn gc() -> usize {
-    MANAGER.with(|man| man.force_gc())
-}
+impl crate::Table<u8> for Table {
+    type Node = Node;
 
-#[allow(dead_code)]
-pub fn table_size() -> usize {
-    MANAGER.with(|man| man.table.borrow().len())
-}
+    #[allow(dead_code)]
+    fn create<'a>(op: &u8, children: impl IntoIterator<Item = &'a Node>) -> Node {
+        MANAGER.with(|man| man.create(op, children))
+    }
 
-impl std::fmt::Debug for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", unsafe { &*self.ptr })
+    #[allow(dead_code)]
+    fn gc() -> usize {
+        MANAGER.with(|man| man.force_gc())
+    }
+
+    #[allow(dead_code)]
+    fn table_size() -> usize {
+        MANAGER.with(|man| man.table.borrow().len())
     }
 }
 
@@ -43,18 +43,6 @@ struct NodeValue {
     raw: NodeData,
     id: u64,
     ref_cnt: Cell<u64>,
-}
-
-impl std::fmt::Debug for NodeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let c_ids = self.raw.cs.iter().map(|n| n.id()).collect::<Vec<_>>();
-        f.debug_struct("NodeValue")
-            .field("id", &self.id)
-            .field("ref_cnt", &self.ref_cnt.get())
-            .field("op", &self.raw.op)
-            .field("cs", &c_ids)
-            .finish()
-    }
 }
 
 #[repr(transparent)]
@@ -100,7 +88,7 @@ impl NodeValue {
 }
 
 impl Manager {
-    fn create<'a>(&self, op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
+    fn create<'a>(&self, op: &u8, children: impl IntoIterator<Item = &'a Node>) -> Node {
         #[allow(unused_unsafe)]
         unsafe {
             // TODO: hash w/o clone.
@@ -135,12 +123,7 @@ impl Manager {
 
     fn remove_from_table(&self, ptr: NodeValuePtr) -> Box<NodeValue> {
         unsafe {
-            let value_ptr = {
-                let mut table = self.table.borrow_mut();
-                table.remove(&(*ptr.0).raw).unwrap_or_else(|| {
-                    panic!("Error: could not find {:?} in table", *ptr.0)
-                })
-            };
+            let value_ptr = self.table.borrow_mut().remove(&(*ptr.0).raw).unwrap();
             Box::from_raw(value_ptr as *mut NodeValue)
         }
     }
@@ -156,36 +139,32 @@ impl Manager {
     }
 
     fn force_gc(&self) -> usize {
-        unsafe {
-            assert!(!self.in_gc.get(), "GC requested, but already in GC");
-            self.in_gc.set(true);
-            let mut ct = 0;
-            loop {
-                let zombies = self.zombies.take();
-                if zombies.is_empty() {
-                    break;
-                } else {
-                    for zombie in zombies {
-                        if (*zombie.0).ref_cnt.get() == 0 {
-                            ct += 1;
-                            let value_box = self.remove_from_table(zombie);
-                            let value = *value_box;
+        assert!(!self.in_gc.get(), "GC requested, but already in GC");
+        self.in_gc.set(true);
+        let mut ct = 0;
+        loop {
+            let zombies = self.zombies.take();
+            if zombies.is_empty() {
+                break;
+            } else {
+                for zombie in zombies {
+                    ct += 1;
+                    let value_box = self.remove_from_table(zombie);
+                    let value = *value_box;
 
-                            // attr GC
-                            for t in self.attr_tables.borrow().iter() {
-                                t.collect(value.id);
-                            }
-
-                            // drops the operator, then the children
-                            // may create more zombies
-                            std::mem::drop(value)
-                        }
+                    // attr GC
+                    for t in self.attr_tables.borrow().iter() {
+                        t.collect(value.id);
                     }
+
+                    // drops the operator, then the children
+                    // may create more zombies
+                    std::mem::drop(value)
                 }
             }
-            self.in_gc.set(false);
-            ct
         }
+        self.in_gc.set(false);
+        ct
     }
 
     fn register_attr_table(&self, table: Rc<dyn attr::AttributeGc>) {
@@ -206,22 +185,21 @@ impl Clone for Node {
     }
 }
 
-impl std::ops::Deref for Node {
-    type Target = NodeData;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &(*self.ptr).raw }
+impl crate::Node<u8> for Node {
+    fn ref_cnt(&self) -> u64 {
+        unsafe { (*self.ptr).id }
     }
-}
 
-impl Node {
-    /// Get the ref count of this node.
-    pub fn ref_cnt(&self) -> u64 {
+    fn id(&self) -> u64 {
         unsafe { (*self.ptr).ref_cnt.get() }
     }
-    /// Get the unique ID of this node.
-    pub fn id(&self) -> u64 {
-        unsafe { (*self.ptr).id }
+
+    fn op(&self) -> &u8 {
+        unsafe { &(*self.ptr).raw.op }
+    }
+
+    fn cs(&self) -> &[Self] {
+        unsafe { &(*self.ptr).raw.cs }
     }
 }
 
@@ -259,8 +237,7 @@ mod hash {
 
     impl Hash for Node {
         fn hash<H: Hasher>(&self, state: &mut H) {
-            use std::ops::Deref;
-            self.deref().hash(state)
+            unsafe { (*self.ptr).hash(state) }
         }
     }
 
@@ -277,10 +254,9 @@ mod hash {
     }
 }
 
-mod eq {
-    use super::{Node, NodeData, NodeValue, NodeValuePtr};
-
-    impl Eq for NodeValue {}
+mod cmp {
+    use super::{Node, NodeData, NodeValuePtr};
+    use std::cmp::{Ord, PartialOrd};
 
     impl PartialEq for NodeData {
         fn eq(&self, other: &Self) -> bool {
@@ -295,20 +271,28 @@ mod eq {
             }
         }
     }
-
     impl Eq for NodeData {}
 
     impl PartialEq for Node {
         fn eq(&self, other: &Self) -> bool {
-            use std::ops::Deref;
-            self.deref() == other.deref()
+            unsafe { (*self.ptr).id == (*other.ptr).id }
         }
     }
     impl Eq for Node {}
+    impl PartialOrd for Node {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for Node {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            unsafe { (*self.ptr).id.cmp(&(*other.ptr).id) }
+        }
+    }
 
     impl PartialEq for NodeValuePtr {
         fn eq(&self, other: &Self) -> bool {
-            unsafe { *self.0 == *other.0 }
+            unsafe { (*self.0).id == (*other.0).id }
         }
     }
     impl Eq for NodeValuePtr {}
@@ -345,6 +329,7 @@ pub mod attr {
 
     impl<T: 'static + Clone> AttributeTable<T> {
         /// Create an empty [AttributeTable].
+        #[allow(dead_code)]
         pub fn new() -> Self {
             let inner = Rc::new(AttributeTableInner {
                 table: Default::default(),
@@ -354,15 +339,20 @@ pub mod attr {
             AttributeTable { inner }
         }
 
+        #[allow(dead_code)]
         pub fn len(&self) -> usize {
             self.inner.table.borrow().len()
         }
 
+        #[allow(dead_code)]
         pub fn get(&self, k: &Node) -> Option<T> {
+            use crate::Node;
             self.inner.table.borrow().get(&k.id()).cloned()
         }
 
+        #[allow(dead_code)]
         pub fn insert(&mut self, k: &Node, v: T) -> Option<T> {
+            use crate::Node;
             self.inner.table.borrow_mut().insert(k.id(), v)
         }
     }

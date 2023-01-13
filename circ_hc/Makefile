@@ -1,19 +1,27 @@
 template = src/template.rs
-macro = src/macro.rs
+u8 = src/hc_u8.rs
+macro = src/macro_.rs
 
-.PHONY: test valgrind miri clean
+.PHONY: test valgrind miri clean all
+
+generated = $(macro) $(u8)
+
+all: $(generated)
 
 $(macro): generate_macro.zsh $(template)
 	zsh $< $(template) $@
 
-test: $(macro)
+$(u8): generate_u8.zsh $(template)
+	zsh $< $(template) $@
+
+test: $(generated)
 	cargo test
 
-valgrind: $(macro)
+valgrind: $(generated)
 	cargo valgrind test
 
-miri: $(macro)
+miri: $(generated)
 	cargo +nightly miri test
 
 clean:
-	cargo clean && rm -rf $(macro)
+	cargo clean && rm -rf $(generated)

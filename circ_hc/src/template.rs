@@ -18,19 +18,25 @@ pub struct Node {
     ptr: *const NodeValue,
 }
 
-#[allow(dead_code)]
-pub fn create<'a>(op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
-    MANAGER.with(|man| man.create(op, children))
-}
+pub struct Table {}
 
-#[allow(dead_code)]
-pub fn gc() -> usize {
-    MANAGER.with(|man| man.force_gc())
-}
+impl crate::Table<TemplateOp> for Table {
+    type Node = Node;
 
-#[allow(dead_code)]
-pub fn table_size() -> usize {
-    MANAGER.with(|man| man.table.borrow().len())
+    #[allow(dead_code)]
+    fn create<'a>(op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
+        MANAGER.with(|man| man.create(op, children))
+    }
+
+    #[allow(dead_code)]
+    fn gc() -> usize {
+        MANAGER.with(|man| man.force_gc())
+    }
+
+    #[allow(dead_code)]
+    fn table_size() -> usize {
+        MANAGER.with(|man| man.table.borrow().len())
+    }
 }
 
 struct NodeValue {
@@ -81,14 +87,6 @@ impl NodeValue {
     }
 }
 
-struct GcClear;
-
-impl<'a> std::ops::Drop for GcClear {
-    fn drop(&mut self) {
-        MANAGER.with(|man| man.in_gc.set(false));
-    }
-}
-
 impl Manager {
     fn create<'a>(&self, op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
         #[allow(unused_unsafe)]
@@ -101,7 +99,9 @@ impl Manager {
             let id = self.next_id.get();
             let ptr = {
                 let mut table = self.table.borrow_mut();
+                let mut existing = true;
                 let value = table.entry(raw).or_insert_with_key(|raw| {
+                    existing = false;
                     Box::into_raw(Box::new(NodeValue {
                         raw: raw.clone(),
                         id,
@@ -109,6 +109,9 @@ impl Manager {
                     }))
                 });
                 NodeValue::inc(*value);
+                if existing && (**value).ref_cnt.get() == 1 {
+                    self.zombies.borrow_mut().remove(&NodeValuePtr(*value));
+                }
                 if (**value).id == id {
                     self.next_id.set(id.checked_add(1).expect("id overflow"));
                 }
@@ -138,7 +141,6 @@ impl Manager {
     fn force_gc(&self) -> usize {
         assert!(!self.in_gc.get(), "GC requested, but already in GC");
         self.in_gc.set(true);
-        let clear = GcClear;
         let mut ct = 0;
         loop {
             let zombies = self.zombies.take();
@@ -161,7 +163,7 @@ impl Manager {
                 }
             }
         }
-        std::mem::drop(clear);
+        self.in_gc.set(false);
         ct
     }
 
@@ -183,22 +185,21 @@ impl Clone for Node {
     }
 }
 
-impl std::ops::Deref for Node {
-    type Target = NodeData;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &(*self.ptr).raw }
-    }
-}
-
-impl Node {
-    /// Get the ref count of this node.
-    pub fn ref_cnt(&self) -> u64 {
+impl crate::Node<TemplateOp> for Node {
+    fn ref_cnt(&self) -> u64 {
         unsafe { (*self.ptr).id }
     }
-    /// Get the unique ID of this node.
-    pub fn id(&self) -> u64 {
+
+    fn id(&self) -> u64 {
         unsafe { (*self.ptr).ref_cnt.get() }
+    }
+
+    fn op(&self) -> &TemplateOp {
+        unsafe { &(*self.ptr).raw.op }
+    }
+
+    fn cs(&self) -> &[Self] {
+        unsafe { &(*self.ptr).raw.cs }
     }
 }
 
@@ -236,8 +237,7 @@ mod hash {
 
     impl Hash for Node {
         fn hash<H: Hasher>(&self, state: &mut H) {
-            use std::ops::Deref;
-            self.deref().hash(state)
+            unsafe { (*self.ptr).hash(state) }
         }
     }
 
@@ -254,10 +254,9 @@ mod hash {
     }
 }
 
-mod eq {
-    use super::{Node, NodeData, NodeValue, NodeValuePtr};
-
-    impl Eq for NodeValue {}
+mod cmp {
+    use super::{Node, NodeData, NodeValuePtr};
+    use std::cmp::{Ord, PartialOrd};
 
     impl PartialEq for NodeData {
         fn eq(&self, other: &Self) -> bool {
@@ -272,20 +271,28 @@ mod eq {
             }
         }
     }
-
     impl Eq for NodeData {}
 
     impl PartialEq for Node {
         fn eq(&self, other: &Self) -> bool {
-            use std::ops::Deref;
-            self.deref() == other.deref()
+            unsafe { (*self.ptr).id == (*other.ptr).id }
         }
     }
     impl Eq for Node {}
+    impl PartialOrd for Node {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for Node {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            unsafe { (*self.ptr).id.cmp(&(*other.ptr).id) }
+        }
+    }
 
     impl PartialEq for NodeValuePtr {
         fn eq(&self, other: &Self) -> bool {
-            unsafe { *self.0 == *other.0 }
+            unsafe { (*self.0).id == (*other.0).id }
         }
     }
     impl Eq for NodeValuePtr {}
@@ -322,6 +329,7 @@ pub mod attr {
 
     impl<T: 'static + Clone> AttributeTable<T> {
         /// Create an empty [AttributeTable].
+        #[allow(dead_code)]
         pub fn new() -> Self {
             let inner = Rc::new(AttributeTableInner {
                 table: Default::default(),
@@ -331,15 +339,20 @@ pub mod attr {
             AttributeTable { inner }
         }
 
+        #[allow(dead_code)]
         pub fn len(&self) -> usize {
             self.inner.table.borrow().len()
         }
 
+        #[allow(dead_code)]
         pub fn get(&self, k: &Node) -> Option<T> {
+            use crate::Node;
             self.inner.table.borrow().get(&k.id()).cloned()
         }
 
+        #[allow(dead_code)]
         pub fn insert(&mut self, k: &Node, v: T) -> Option<T> {
+            use crate::Node;
             self.inner.table.borrow_mut().insert(k.id(), v)
         }
     }
