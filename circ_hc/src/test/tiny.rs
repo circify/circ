@@ -3,7 +3,7 @@ use crate::{Table, Node};
 pub fn one<T: Table<u8>>() {
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n = T::create(&1, []);
+    let n = T::create_ref(&1, []);
     assert_eq!(T::table_size(), 1);
     std::mem::drop(n);
     T::gc();
@@ -13,8 +13,8 @@ pub fn one<T: Table<u8>>() {
 pub fn two<T: Table<u8>>() {
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n = T::create(&1, []);
-    let n2 = T::create(&1, [&n]);
+    let n = T::create_ref(&1, []);
+    let n2 = T::create_ref(&1, [&n]);
     assert_eq!(T::table_size(), 2);
     std::mem::drop(n);
     std::mem::drop(n2);
@@ -25,10 +25,10 @@ pub fn two<T: Table<u8>>() {
 pub fn dup<T: Table<u8>>() {
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n = T::create(&1, []);
-    let n2 = T::create(&1, [&n]);
+    let n = T::create_ref(&1, []);
+    let n2 = T::create_ref(&1, [&n]);
     assert_eq!(T::table_size(), 2);
-    let n3 = T::create(&1, [&n]);
+    let n3 = T::create_ref(&1, [&n]);
     assert_eq!(T::table_size(), 2);
     std::mem::drop(n);
     T::gc();
@@ -45,12 +45,12 @@ pub fn min<T: Table<u8>>() {
     let d = 0;
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n_a = T::create(&a, std::iter::empty());
-    let n_b = T::create(&b, [&n_a]);
-    let n_c = T::create(&c, [&n_a, &n_b]);
-    let n_d = T::create(&d, [&n_a, &n_b, &n_c]);
+    let n_a = T::create_ref(&a, std::iter::empty());
+    let n_b = T::create_ref(&b, [&n_a]);
+    let n_c = T::create_ref(&c, [&n_a, &n_b]);
+    let n_d = T::create_ref(&d, [&n_a, &n_b, &n_c]);
     assert_eq!(T::table_size(), 4);
-    let n_d_2 = T::create(&d, [&n_a, &n_b, &n_c]);
+    let n_d_2 = T::create_ref(&d, [&n_a, &n_b, &n_c]);
     assert_eq!(T::table_size(), 4);
     assert!(n_d == n_d_2);
     std::mem::drop(n_d_2);
@@ -71,6 +71,6 @@ pub fn min<T: Table<u8>>() {
 pub fn nodrop<T: Table<u8>>() {
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n = T::create(&1, []);
+    let n = T::create_ref(&1, []);
     assert_eq!(n.op(), &1);
 }

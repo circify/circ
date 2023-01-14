@@ -1,9 +1,11 @@
+#![feature(hash_raw_entry)]
 use std::cmp::{PartialEq, Eq, PartialOrd, Ord};
 use std::hash::Hash;
 
 pub mod raw;
 pub use raw::macro_::generate_hashcons;
 pub mod hashconsing;
+pub mod rc;
 
 #[cfg(test)]
 mod test;
@@ -15,7 +17,11 @@ pub trait Table<Op> {
     type Node: Node<Op> + 'static;
 
     /// Create a new node
-    fn create<'a>(op: &Op, children: impl IntoIterator<Item = &'a Self::Node>) -> Self::Node;
+    fn create(op: &Op, children: Vec<Self::Node>) -> Self::Node;
+    /// Create a new node
+    fn create_ref<'a>(op: &Op, children: impl IntoIterator<Item=&'a Self::Node> + Clone) -> Self::Node {
+        Self::create(op, children.into_iter().cloned().collect())
+    }
     /// Run garbage collection
     fn gc() -> usize;
     /// Measure the number of stored elements

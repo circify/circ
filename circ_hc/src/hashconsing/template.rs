@@ -22,8 +22,11 @@ impl crate::Table<TemplateOp> for Table {
     type Node = Node;
 
     #[allow(dead_code)]
-    fn create<'a>(op: &TemplateOp, children: impl IntoIterator<Item = &'a Node>) -> Node {
-        FACTORY.mk(ActualNode { op: op.clone(), cs: children.into_iter().cloned().collect() })
+    fn create(op: &TemplateOp, children: Vec<Node>) -> Node {
+        FACTORY.mk(ActualNode {
+            op: op.clone(),
+            cs: children,
+        })
     }
 
     #[allow(dead_code)]

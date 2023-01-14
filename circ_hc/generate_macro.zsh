@@ -9,7 +9,7 @@ body=$(cat $template \
     | sed 's/TemplateOp/$Op/g')
 
 echo "
-// Warning: this file is generated from src/template.rs and generate_macro.zsh
+// Warning: this file is generated from $template and generate_macro.zsh
 #[macro_export]
 macro_rules! $macro_name {
     (\$Op:ty) => {

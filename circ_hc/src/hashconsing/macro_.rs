@@ -1,4 +1,4 @@
-// Warning: this file is generated from src/template.rs and generate_macro.zsh
+// Warning: this file is generated from src/hashconsing/template.rs and generate_macro.zsh
 #[macro_export]
 macro_rules! generate_hashcons_hashconsing {
     ($Op:ty) => {
@@ -24,10 +24,10 @@ macro_rules! generate_hashcons_hashconsing {
             type Node = Node;
 
             #[allow(dead_code)]
-            fn create<'a>(op: &$Op, children: impl IntoIterator<Item = &'a Node>) -> Node {
+            fn create(op: &$Op, children: Vec<Node>) -> Node {
                 FACTORY.mk(ActualNode {
                     op: op.clone(),
-                    cs: children.into_iter().cloned().collect(),
+                    cs: children,
                 })
             }
 

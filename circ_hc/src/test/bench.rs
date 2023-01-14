@@ -76,12 +76,12 @@ fn run_u8_steps<T: Table<u8>>(steps: &[Step<u8>]) -> Times {
     for s in steps {
         match s {
             Step::New(t, args) => {
-                let new_t = T::create(t, args.iter().map(|i| &mem[*i]));
+                let new_t = T::create_ref(t, args.iter().map(|i| &mem[*i]));
                 mem.push(new_t);
             }
             Step::Dup(i) => {
                 let prev = &mem[*i];
-                let new_t = T::create(prev.op(), prev.cs().iter());
+                let new_t = T::create_ref(prev.op(), prev.cs().iter());
                 mem.push(new_t);
             }
             Step::Del(i) => {

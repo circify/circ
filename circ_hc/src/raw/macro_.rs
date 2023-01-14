@@ -1,4 +1,4 @@
-// Warning: this file is generated from src/template.rs and generate_macro.zsh
+// Warning: this file is generated from src/raw/template.rs and generate_macro.zsh
 #[macro_export]
 macro_rules! generate_hashcons_raw {
     ($Op:ty) => {
@@ -27,7 +27,7 @@ macro_rules! generate_hashcons_raw {
             type Node = Node;
 
             #[allow(dead_code)]
-            fn create<'a>(op: &$Op, children: impl IntoIterator<Item = &'a Node>) -> Node {
+            fn create(op: &$Op, children: Vec<Node>) -> Node {
                 MANAGER.with(|man| man.create(op, children))
             }
 
@@ -91,12 +91,12 @@ macro_rules! generate_hashcons_raw {
         }
 
         impl Manager {
-            fn create<'a>(&self, op: &$Op, children: impl IntoIterator<Item = &'a Node>) -> Node {
+            fn create(&self, op: &$Op, children: Vec<Node>) -> Node {
                 #[allow(unused_unsafe)]
                 unsafe {
                     // TODO: hash w/o clone.
                     let raw = NodeData {
-                        cs: children.into_iter().cloned().collect(),
+                        cs: children.into(),
                         op: op.clone(),
                     };
                     let id = self.next_id.get();

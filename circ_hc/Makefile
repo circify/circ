@@ -4,10 +4,13 @@ raw_macro = src/raw/macro_.rs
 hashconsing_template = src/hashconsing/template.rs
 hashconsing_u8 = src/hashconsing/example_u8.rs
 hashconsing_macro = src/hashconsing/macro_.rs
+rc_template = src/rc/template.rs
+rc_u8 = src/rc/example_u8.rs
+rc_macro = src/rc/macro_.rs
 
 .PHONY: test valgrind miri clean all
 
-generated = $(raw_macro) $(raw_u8) $(hashconsing_macro) $(hashconsing_u8)
+generated = $(raw_macro) $(raw_u8) $(hashconsing_macro) $(hashconsing_u8) $(rc_macro) $(rc_u8)
 
 all: $(generated)
 
@@ -22,6 +25,12 @@ $(hashconsing_macro): generate_macro.zsh $(hashconsing_template)
 
 $(hashconsing_u8): generate_u8.zsh $(hashconsing_template)
 	zsh $< $(hashconsing_template) $@
+
+$(rc_macro): generate_macro.zsh $(rc_template)
+	zsh $< $(rc_template) $@ generate_hashcons_rc
+
+$(rc_u8): generate_u8.zsh $(rc_template)
+	zsh $< $(rc_template) $@
 
 test: $(generated)
 	cargo test

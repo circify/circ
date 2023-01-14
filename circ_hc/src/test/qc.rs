@@ -3,7 +3,7 @@ use crate::{Node, Table};
 pub fn leaf<T: Table<u8>>(u: u8) {
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n = T::create(&u, std::iter::empty());
+    let n = T::create_ref(&u, std::iter::empty());
     assert_eq!(T::table_size(), 1);
     assert_eq!(n.op(), &u);
     assert_eq!(n.cs().len(), 0);
@@ -16,12 +16,12 @@ pub fn leaf<T: Table<u8>>(u: u8) {
 pub fn four_nodes<T: Table<u8>>(a: u8, b: u8, c: u8, d: u8) {
     T::gc();
     assert_eq!(T::table_size(), 0);
-    let n_a = T::create(&a, std::iter::empty());
-    let n_b = T::create(&b, [&n_a]);
-    let n_c = T::create(&c, [&n_a, &n_b]);
-    let n_d = T::create(&d, [&n_a, &n_b, &n_c]);
+    let n_a = T::create_ref(&a, std::iter::empty());
+    let n_b = T::create_ref(&b, [&n_a]);
+    let n_c = T::create_ref(&c, [&n_a, &n_b]);
+    let n_d = T::create_ref(&d, [&n_a, &n_b, &n_c]);
     assert_eq!(T::table_size(), 4);
-    let n_d_2 = T::create(&d, [&n_a, &n_b, &n_c]);
+    let n_d_2 = T::create_ref(&d, [&n_a, &n_b, &n_c]);
     assert_eq!(T::table_size(), 4);
     assert!(n_d == n_d_2);
     std::mem::drop(n_d_2);
@@ -41,11 +41,11 @@ pub fn many_nodes<T: Table<u8>>(steps: Vec<(u8, Vec<usize>)>) {
     T::gc();
     assert_eq!(T::table_size(), 0);
     let mut nodes = Vec::new();
-    nodes.push(T::create(&0, []));
-    nodes.push(T::create(&1, []));
-    nodes.push(T::create(&2, []));
+    nodes.push(T::create_ref(&0, []));
+    nodes.push(T::create_ref(&1, []));
+    nodes.push(T::create_ref(&2, []));
     for (op, children) in steps {
-        let node = T::create(&op, children.into_iter().map(|i| &nodes[i % nodes.len()]));
+        let node = T::create_ref(&op, children.into_iter().map(|i| &nodes[i % nodes.len()]));
         nodes.push(node);
     }
     assert!(T::table_size() > 2);

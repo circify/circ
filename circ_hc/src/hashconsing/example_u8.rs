@@ -21,10 +21,10 @@ impl crate::Table<u8> for Table {
     type Node = Node;
 
     #[allow(dead_code)]
-    fn create<'a>(op: &u8, children: impl IntoIterator<Item = &'a Node>) -> Node {
+    fn create(op: &u8, children: Vec<Node>) -> Node {
         FACTORY.mk(ActualNode {
             op: op.clone(),
-            cs: children.into_iter().cloned().collect(),
+            cs: children,
         })
     }
 

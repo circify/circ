@@ -24,7 +24,7 @@ impl crate::Table<u8> for Table {
     type Node = Node;
 
     #[allow(dead_code)]
-    fn create<'a>(op: &u8, children: impl IntoIterator<Item = &'a Node>) -> Node {
+    fn create(op: &u8, children: Vec<Node>) -> Node {
         MANAGER.with(|man| man.create(op, children))
     }
 
@@ -88,12 +88,12 @@ impl NodeValue {
 }
 
 impl Manager {
-    fn create<'a>(&self, op: &u8, children: impl IntoIterator<Item = &'a Node>) -> Node {
+    fn create(&self, op: &u8, children: Vec<Node>) -> Node {
         #[allow(unused_unsafe)]
         unsafe {
             // TODO: hash w/o clone.
             let raw = NodeData {
-                cs: children.into_iter().cloned().collect(),
+                cs: children.into(),
                 op: op.clone(),
             };
             let id = self.next_id.get();
