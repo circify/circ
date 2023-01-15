@@ -3,8 +3,10 @@
 macro_rules! generate_hashcons_hashconsing {
     ($Op:ty) => {
         use hashconsing::*;
-
         use hashconsing::{HConsed, HashConsign};
+
+        use $crate::Id;
+
         pub type Node = HConsed<ActualNode>;
 
         #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -58,8 +60,8 @@ macro_rules! generate_hashcons_hashconsing {
                 self.arc_count() as u64
             }
 
-            fn id(&self) -> u64 {
-                self.uid()
+            fn id(&self) -> Id {
+                Id(self.uid())
             }
 
             fn op(&self) -> &$Op {

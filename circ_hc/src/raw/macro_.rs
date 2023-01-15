@@ -8,6 +8,8 @@ macro_rules! generate_hashcons_raw {
         use std::rc::Rc;
         use std::thread_local;
 
+        use $crate::Id;
+
         const GC_IN_DROP_THRESH: usize = 5000;
 
         #[derive(Clone)]
@@ -52,7 +54,7 @@ macro_rules! generate_hashcons_raw {
 
         struct NodeValue {
             raw: NodeData,
-            id: u64,
+            id: Id,
             ref_cnt: Cell<u64>,
         }
 
@@ -61,7 +63,7 @@ macro_rules! generate_hashcons_raw {
 
         struct Manager {
             table: RefCell<HashMap<NodeData, *const NodeValue>>,
-            next_id: Cell<u64>,
+            next_id: Cell<Id>,
             attr_tables: RefCell<Vec<Rc<dyn attr::AttributeGc>>>,
             zombies: RefCell<HashSet<NodeValuePtr>>,
             in_gc: Cell<bool>,
@@ -70,7 +72,7 @@ macro_rules! generate_hashcons_raw {
         thread_local! {
             static MANAGER: Manager = Manager {
                 table: Default::default(),
-                next_id: Cell::new(0),
+                next_id: Cell::new(Id(0)),
                 attr_tables: Default::default(),
                 zombies: Default::default(),
                 in_gc: Cell::new(false),
@@ -124,7 +126,8 @@ macro_rules! generate_hashcons_raw {
                             self.zombies.borrow_mut().remove(&NodeValuePtr(*value));
                         }
                         if (**value).id == id {
-                            self.next_id.set(id.checked_add(1).expect("id overflow"));
+                            self.next_id
+                                .set(Id(id.0.checked_add(1).expect("id overflow")));
                         }
                         &**value as *const NodeValue
                     };
@@ -198,11 +201,11 @@ macro_rules! generate_hashcons_raw {
 
         impl $crate::Node<$Op> for Node {
             fn ref_cnt(&self) -> u64 {
-                unsafe { (*self.ptr).id }
+                unsafe { (*self.ptr).ref_cnt.get() }
             }
 
-            fn id(&self) -> u64 {
-                unsafe { (*self.ptr).ref_cnt.get() }
+            fn id(&self) -> Id {
+                unsafe { (*self.ptr).id }
             }
 
             fn op(&self) -> &$Op {
@@ -224,14 +227,9 @@ macro_rules! generate_hashcons_raw {
             use super::{Node, NodeData, NodeValue, NodeValuePtr};
             use std::hash::{Hash, Hasher};
 
-            // 64 bit primes
-            const PRIME_1: u64 = 15124035408605323001;
-            const PRIME_2: u64 = 15133577374253939647;
-
             impl Hash for NodeValue {
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    let id_hash = self.id.wrapping_mul(PRIME_1).wrapping_add(PRIME_2);
-                    state.write_u64(id_hash);
+                    self.id.hash(state);
                 }
             }
 
@@ -319,15 +317,15 @@ macro_rules! generate_hashcons_raw {
 
             // should not be moved
             pub struct AttributeTableInner<T: 'static> {
-                table: RefCell<HashMap<u64, T>>,
+                table: RefCell<HashMap<Id, T>>,
             }
 
             pub trait AttributeGc {
-                fn collect(&self, id: u64);
+                fn collect(&self, id: Id);
             }
 
             impl<T> AttributeGc for AttributeTableInner<T> {
-                fn collect(&self, id: u64) {
+                fn collect(&self, id: Id) {
                     self.table.borrow_mut().remove(&id);
                 }
             }

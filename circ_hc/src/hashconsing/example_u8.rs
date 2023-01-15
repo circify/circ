@@ -1,7 +1,9 @@
 // Warning: this file is generated from src/template.rs and generate_u8.zsh
 use hashconsing::*;
-
 use hashconsing::{HConsed, HashConsign};
+
+use crate::Id;
+
 pub type Node = HConsed<ActualNode>;
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -55,8 +57,8 @@ impl crate::Node<u8> for Node {
         self.arc_count() as u64
     }
 
-    fn id(&self) -> u64 {
-        self.uid()
+    fn id(&self) -> Id {
+        Id(self.uid())
     }
 
     fn op(&self) -> &u8 {

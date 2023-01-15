@@ -5,6 +5,7 @@ use std::cell::{Cell, RefCell};
 use std::net::SocketAddrV6 as TemplateOp;
 use std::rc::Rc;
 use std::thread_local;
+use crate::Id;
 
 #[allow(dead_code)]
 pub struct NodeData {
@@ -17,7 +18,7 @@ pub struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a TemplateOp, &'a Q);
 #[derive(Clone)]
 pub struct Node {
     data: Rc<NodeData>,
-    id: u64,
+    id: Id,
 }
 
 pub struct NodeListShallowDebug<'a>(&'a [Node]);
@@ -74,7 +75,7 @@ impl crate::Table<TemplateOp> for Table {
 
 struct Manager {
     table: RefCell<HashMap<Rc<NodeData>, Node>>,
-    next_id: Cell<u64>,
+    next_id: Cell<Id>,
 }
 
 struct TableDebug<'a>(&'a HashMap<Rc<NodeData>, Node>);
@@ -102,7 +103,7 @@ impl std::fmt::Debug for Manager {
 thread_local! {
     static MANAGER: Manager = Manager {
         table: Default::default(),
-        next_id: Cell::new(0),
+        next_id: Cell::new(Id(0)),
     };
 }
 
@@ -124,7 +125,7 @@ impl Manager {
             .entry(data)
             .or_insert_with_key(|key| {
                 let id = self.next_id.get();
-                self.next_id.set(id.checked_add(1).expect("id overflow"));
+                self.next_id.set(Id(id.0.checked_add(1).expect("id overflow")));
                 Node {
                     data: key.clone(),
                     id,
@@ -170,7 +171,7 @@ impl crate::Node<TemplateOp> for Node {
         Rc::strong_count(&self.data) as u64
     }
 
-    fn id(&self) -> u64 {
+    fn id(&self) -> Id {
         self.id
     }
 
@@ -188,14 +189,9 @@ mod hash {
     use std::borrow::Borrow;
     use std::hash::{Hash, Hasher};
 
-    // 64 bit primes
-    const PRIME_1: u64 = 15124035408605323001;
-    const PRIME_2: u64 = 15133577374253939647;
-
     impl Hash for Node {
         fn hash<H: Hasher>(&self, state: &mut H) {
-            let id_hash = self.id.wrapping_mul(PRIME_1).wrapping_add(PRIME_2);
-            state.write_u64(id_hash);
+            self.id.hash(state)
         }
     }
 

@@ -1,8 +1,10 @@
 use hashconsing::*;
+use hashconsing::{HConsed, HashConsign};
 
 use std::net::SocketAddrV6 as TemplateOp;
 
-use hashconsing::{HConsed, HashConsign};
+use crate::Id;
+
 pub type Node = HConsed<ActualNode>;
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -56,8 +58,8 @@ impl crate::Node<TemplateOp> for Node {
         self.arc_count() as u64
     }
 
-    fn id(&self) -> u64 {
-        self.uid()
+    fn id(&self) -> Id {
+        Id(self.uid())
     }
 
     fn op(&self) -> &TemplateOp {
