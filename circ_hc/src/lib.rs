@@ -1,4 +1,3 @@
-#![feature(hash_raw_entry)]
 use std::cmp::{PartialEq, Eq, PartialOrd, Ord};
 use std::hash::Hash;
 
@@ -6,7 +5,6 @@ pub mod raw;
 pub mod hashconsing;
 pub mod rc;
 pub use rc::generate_hashcons;
-pub mod rc_no_raw;
 
 #[cfg(test)]
 mod test;

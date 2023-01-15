@@ -17,15 +17,6 @@ macro_rules! generate_hashcons_rc {
 
         pub struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a $Op, &'a Q);
 
-        impl<'a, Q: Borrow<[Node]>> NodeDataRef<'a, Q> {
-            fn eq(&self, other: &Rc<NodeData>) -> bool {
-                let cs = self.1.borrow();
-                self.0 == &other.op
-                    && cs.len() == other.cs.len()
-                    && cs.iter().zip(other.cs.iter()).all(|(s, o)| s == o)
-            }
-        }
-
         #[derive(Clone)]
         pub struct Node {
             data: Rc<NodeData>,
@@ -76,7 +67,7 @@ macro_rules! generate_hashcons_rc {
             }
 
             fn name() -> &'static str {
-                "rc"
+                "rc_no_raw"
             }
 
             fn reserve(num_nodes: usize) {
@@ -127,30 +118,21 @@ macro_rules! generate_hashcons_rc {
         impl Manager {
             fn create(&self, op: &$Op, children: Vec<Node>) -> Node {
                 let mut table = self.table.borrow_mut();
-                let ref_ = NodeDataRef(op, &children);
-                let hash = {
-                    use std::hash::{BuildHasher, Hash, Hasher};
-                    let mut hash_state = table.hasher().build_hasher();
-                    ref_.hash(&mut hash_state);
-                    hash_state.finish()
-                };
+                let data = Rc::new(NodeData {
+                    op: op.clone(),
+                    cs: children.into(),
+                });
 
                 table
-                    .raw_entry_mut()
-                    .from_hash(hash, |key| ref_.eq(key))
-                    .or_insert_with(|| {
+                    .entry(data)
+                    .or_insert_with_key(|key| {
                         let id = self.next_id.get();
-                        let node = Node {
-                            data: Rc::new(NodeData {
-                                op: op.clone(),
-                                cs: children.into(),
-                            }),
-                            id,
-                        };
                         self.next_id.set(id.checked_add(1).expect("id overflow"));
-                        (node.data.clone(), node)
+                        Node {
+                            data: key.clone(),
+                            id,
+                        }
                     })
-                    .1
                     .clone()
             }
 
