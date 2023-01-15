@@ -40,6 +40,14 @@ impl crate::Table<u8> for Table {
     fn table_size() -> usize {
         FACTORY.read().map(|f| f.len()).unwrap_or(0)
     }
+
+    fn name() -> &'static str {
+        "hashconsing"
+    }
+
+    fn reserve(num_nodes: usize) {
+        FACTORY.reserve(num_nodes);
+    }
 }
 
 impl crate::Node<u8> for Node {

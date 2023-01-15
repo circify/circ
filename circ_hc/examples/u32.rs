@@ -1,3 +1,4 @@
+#![feature(hash_raw_entry)]
 use circ_hc::{Table as TableTrait, Node as NodeTrait, generate_hashcons};
 
 generate_hashcons!(u32);

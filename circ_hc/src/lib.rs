@@ -3,9 +3,10 @@ use std::cmp::{PartialEq, Eq, PartialOrd, Ord};
 use std::hash::Hash;
 
 pub mod raw;
-pub use raw::macro_::generate_hashcons;
 pub mod hashconsing;
 pub mod rc;
+pub use rc::generate_hashcons;
+pub mod rc_no_raw;
 
 #[cfg(test)]
 mod test;
@@ -26,6 +27,12 @@ pub trait Table<Op> {
     fn gc() -> usize;
     /// Measure the number of stored elements
     fn table_size() -> usize;
+
+    /// Ensure there is space for this many additional nodes
+    fn reserve(num_nodes: usize);
+
+    /// The name of the implementation
+    fn name() -> &'static str;
 }
 
 /// A hash-cons node

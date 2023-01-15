@@ -37,6 +37,14 @@ impl crate::Table<TemplateOp> for Table {
     fn table_size() -> usize {
         MANAGER.with(|man| man.table.borrow().len())
     }
+
+    fn name() -> &'static str {
+        "raw"
+    }
+
+    fn reserve(num_nodes: usize) {
+        MANAGER.with(|man| man.table.borrow_mut().reserve(num_nodes))
+    }
 }
 
 struct NodeValue {

@@ -6,16 +6,12 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::thread_local;
 
-use crate::rc::once::OnceQueue;
-
 #[allow(dead_code)]
-#[derive(Debug)]
 pub struct NodeData {
     pub op: u8,
     pub cs: Box<[Node]>,
 }
 
-#[derive(Debug)]
 pub struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a u8, &'a Q);
 
 impl<'a, Q: Borrow<[Node]>> NodeDataRef<'a, Q> {
@@ -33,12 +29,25 @@ pub struct Node {
     id: u64,
 }
 
-impl std::fmt::Debug for Node {
+pub struct NodeListShallowDebug<'a>(&'a [Node]);
+
+impl<'a> std::fmt::Debug for NodeListShallowDebug<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list()
+            .entries(self.0.iter().map(|n| &n.id))
+            .finish()
+    }
+}
+
+pub struct NodeShallowDebug<'a>(&'a Node);
+
+impl<'a> std::fmt::Debug for NodeShallowDebug<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Node")
-            .field("id", &self.id)
-            .field("rc", &Rc::strong_count(&self.data))
-            .field("data", &self.data)
+            .field("id", &self.0.id)
+            .field("rc", &Rc::strong_count(&self.0.data))
+            .field("op", &self.0.data.op)
+            .field("cs", &NodeListShallowDebug(&self.0.data.cs))
             .finish()
     }
 }
@@ -62,12 +71,41 @@ impl crate::Table<u8> for Table {
     fn table_size() -> usize {
         MANAGER.with(|man| man.table.borrow().len())
     }
+
+    fn name() -> &'static str {
+        "rc"
+    }
+
+    fn reserve(num_nodes: usize) {
+        MANAGER.with(|man| man.table.borrow_mut().reserve(num_nodes))
+    }
 }
 
-#[derive(Debug)]
 struct Manager {
     table: RefCell<HashMap<Rc<NodeData>, Node>>,
     next_id: Cell<u64>,
+}
+
+struct TableDebug<'a>(&'a HashMap<Rc<NodeData>, Node>);
+
+impl<'a> std::fmt::Debug for TableDebug<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_set();
+        // Not using debug_set().entries(..) b/c it requires the entries to be long-lived.
+        for n in self.0.values() {
+            s.entry(&NodeShallowDebug(n));
+        }
+        s.finish()
+    }
+}
+
+impl std::fmt::Debug for Manager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Manager")
+            .field("table", &TableDebug(&*self.table.borrow()))
+            .field("next_id", &self.next_id.get())
+            .finish()
+    }
 }
 
 thread_local! {
@@ -77,24 +115,28 @@ thread_local! {
     };
 }
 
+impl Node {
+    fn try_unwrap(self) -> Result<NodeData, Self> {
+        Rc::try_unwrap(self.data).map_err(|data| Node { data, id: self.id })
+    }
+}
+
 impl Manager {
     fn create(&self, op: &u8, children: Vec<Node>) -> Node {
-        dbg!(self);
         let mut table = self.table.borrow_mut();
-        let ref_ = dbg!(NodeDataRef(op, &children));
+        let ref_ = NodeDataRef(op, &children);
         let hash = {
             use std::hash::{BuildHasher, Hash, Hasher};
             let mut hash_state = table.hasher().build_hasher();
             ref_.hash(&mut hash_state);
             hash_state.finish()
         };
-        dbg!(hash);
 
-        dbg!(table
+        table
             .raw_entry_mut()
-            .from_hash(hash, |key| dbg!(ref_.eq(dbg!(key))))
+            .from_hash(hash, |key| ref_.eq(key))
             .or_insert_with(|| {
-                let id = dbg!(self.next_id.get());
+                let id = self.next_id.get();
                 let node = Node {
                     data: Rc::new(NodeData {
                         op: op.clone(),
@@ -106,33 +148,35 @@ impl Manager {
                 (node.data.clone(), node)
             })
             .1
-            .clone())
+            .clone()
     }
 
     fn force_gc(&self) -> usize {
         let mut table = self.table.borrow_mut();
         let old_size = table.len();
-        let mut to_check: OnceQueue<Node> = OnceQueue::new();
-        table.retain(|key, value| {
-            dbg!(&value);
+        let mut to_collect: Vec<Node> = Vec::new();
+        table.retain(|_, value| {
             if Rc::strong_count(&value.data) > 2 {
                 true
             } else {
-                to_check.extend(key.cs.iter().cloned());
+                to_collect.push(value.clone());
                 false
             }
         });
-        while let Some(t) = to_check.pop() {
-            let okv = table.get_key_value(&t.data);
-            std::mem::drop(t);
-            if let Some((key, _)) = okv {
-                if dbg!(Rc::strong_count(key)) <= 2 {
-                    to_check.extend(key.cs.iter().cloned());
-                    let key = key.clone();
-                    table.remove(&key);
+        while let Some(t) = to_collect.pop() {
+            let data = Node::try_unwrap(t).unwrap_or_else(|node| {
+                panic!(
+                    "Attempting to collect node {:?}. but it has >1 ref",
+                    NodeShallowDebug(&node)
+                )
+            });
+            for c in data.cs.into_vec() {
+                if Rc::strong_count(&c.data) <= 3 {
+                    debug_assert_eq!(Rc::strong_count(&c.data), 3);
+                    table.remove(&c.data);
+                    to_collect.push(c.clone());
                 }
             }
-            dbg!(&table);
         }
         let new_size = table.len();
         old_size - new_size

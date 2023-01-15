@@ -71,6 +71,7 @@ struct Times {
 }
 
 fn run_u8_steps<T: Table<u8>>(steps: &[Step<u8>]) -> Times {
+    T::reserve(steps.len());
     let mut mem = vec![];
     let start_run = Instant::now();
     for s in steps {
@@ -106,6 +107,7 @@ pub fn bench_test<T: Table<u8>>(num_steps: usize) {
     let times = run_u8_steps::<T>(&steps);
     T::gc();
     assert_eq!(T::table_size(), 0);
-    println!("time: {:?}", times.run / num_steps as u32);
-    println!("gc  : {:?}", times.gc / num_steps as u32);
+    println!("");
+    println!("name,steps,time,gc_time");
+    println!("{},{},{:?},{:?}", T::name(), num_steps, times.run / num_steps as u32, times.gc / num_steps as u32);
 }
