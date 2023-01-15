@@ -7,7 +7,7 @@ use std::thread_local;
 
 use crate::Id;
 
-const GC_IN_DROP_THRESH: usize = 5000;
+const GC_IN_DROP_THRESH: f64 = 0.5;
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -123,7 +123,8 @@ impl Manager {
                     self.zombies.borrow_mut().remove(&NodeValuePtr(*value));
                 }
                 if (**value).id == id {
-                    self.next_id.set(Id(id.0.checked_add(1).expect("id overflow")));
+                    self.next_id
+                        .set(Id(id.0.checked_add(1).expect("id overflow")));
                 }
                 &**value as *const NodeValue
             };
@@ -140,9 +141,10 @@ impl Manager {
 
     fn mark_for_deletion(&self, ptr: NodeValuePtr) {
         debug_assert_eq!(unsafe { (*ptr.0).ref_cnt.get() }, 0);
+        let table_size = self.table.borrow().len();
         self.zombies.borrow_mut().insert(ptr);
         if !self.in_gc.get() {
-            if self.zombies.borrow().len() > GC_IN_DROP_THRESH {
+            if self.zombies.borrow().len() as f64 > GC_IN_DROP_THRESH * table_size as f64 {
                 self.force_gc();
             }
         }
