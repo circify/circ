@@ -1,4 +1,9 @@
 Concrete:
+[ ] R1CS optimizations
+  * reduce linearity without recip
+  * don't debitify eagerly
+  * cache pf lits?
+  * LCs as vectors
 [ ] shrink bit-vectors using range analysis.
   * IR analysis infrastructure
   * shrink comparisons too

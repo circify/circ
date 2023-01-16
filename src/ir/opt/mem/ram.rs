@@ -330,7 +330,7 @@ mod test {
         let cs = text::parse_computation(
             b"
             (computation
-                (metadata () () ())
+                (metadata (parties ) (inputs ))
                 (precompute () () (#t ))
                 (let
                     (
@@ -355,7 +355,7 @@ mod test {
         let cs = text::parse_computation(
             b"
             (computation
-                (metadata () () ())
+                (metadata (parties ) (inputs ))
                 (precompute () () (#t ))
                 (let
                     (
@@ -393,7 +393,7 @@ mod test {
         let cs = text::parse_computation(
             b"
             (computation
-                (metadata () ((a bool)) ())
+                (metadata (parties ) (inputs (a bool)))
                 (precompute () () (#t ))
                 (let
                     (
@@ -432,7 +432,7 @@ mod test {
         let cs = text::parse_computation(
             b"
             (computation
-                (metadata () ((a bool)) ())
+                (metadata (parties ) (inputs (a bool)))
                 (precompute () () (#t ))
                 (let
                     (
@@ -472,7 +472,7 @@ mod test {
         let cs = text::parse_computation(
             b"
             (computation
-                (metadata () ((a bool)) ())
+                (metadata (parties ) (inputs (a bool)))
                 (precompute () () (#t ))
                 (let
                     (

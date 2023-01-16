@@ -977,10 +977,7 @@ impl<'cfg> ToR1cs<'cfg> {
 pub fn to_r1cs(mut cs: Computation, cfg: &CircCfg) -> (ProverData, VerifierData) {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();
-    let public_inputs = metadata
-        .public_input_names()
-        .map(ToOwned::to_owned)
-        .collect();
+    let public_inputs = metadata.public_input_names_set();
     debug!("public inputs: {:?}", public_inputs);
     let mut converter = ToR1cs::new(cfg, public_inputs);
     debug!(
@@ -991,7 +988,7 @@ pub fn to_r1cs(mut cs: Computation, cfg: &CircCfg) -> (ProverData, VerifierData)
             .sum::<usize>()
     );
     debug!("declaring inputs");
-    for i in metadata.public_inputs() {
+    for i in metadata.ordered_public_inputs() {
         debug!("input {}", i);
         converter.embed(i);
     }

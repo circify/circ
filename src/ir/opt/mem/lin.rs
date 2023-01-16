@@ -115,7 +115,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata () ((a (bv 4)) (b (bv 4)) (c (bv 4))) ())
+                (metadata (parties ) (inputs (a (bv 4)) (b (bv 4)) (c (bv 4))))
                 (precompute () () (#t ))
                 (let
                     (
@@ -138,7 +138,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata () ((a (mod 5)) (b (mod 5)) (c (mod 5))) ())
+                (metadata (parties ) (inputs (a (mod 5)) (b (mod 5)) (c (mod 5))))
                 (precompute () () (#t ))
                 (let
                     (
@@ -161,7 +161,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata () ((a (bv 4)) (b (bv 4)) (c (bv 4))) ())
+                (metadata (parties ) (inputs (a (bv 4)) (b (bv 4)) (c (bv 4))))
                 (precompute () () (#t ))
                 (let
                     (
@@ -184,7 +184,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata () ((a (mod 5)) (b (mod 5)) (c (mod 5))) ())
+                (metadata (parties ) (inputs (a (mod 5)) (b (mod 5)) (c (mod 5))))
                 (precompute () () (#t ))
                 (let
                     (
