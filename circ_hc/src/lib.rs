@@ -31,6 +31,17 @@ pub trait Table<Op> {
 
     /// The name of the implementation
     fn name() -> &'static str;
+
+    /// When the table garbage-collects a node with ID `id`, it will call `f(id)`. `f(id)` might
+    /// clear caches, etc., but instead of droping `Node`s, it should return them.
+    ///
+    /// They'll be dropped by the GC routine.
+    ///
+    /// The idea is to implement Node-keyed caches that should not retain Nodes in their keys (or
+    /// values!) by keying them on Node IDs, and then returning any nodes in the value when the GC
+    /// hook is called.
+    #[allow(unused_variables)]
+    fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node>) {}
 }
 
 /// A hash-cons node
