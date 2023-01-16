@@ -6,6 +6,7 @@ use std::net::SocketAddrV6 as TemplateOp;
 use crate::Id;
 
 pub type Node = HConsed<ActualNode>;
+pub type Weak = WHConsed<ActualNode>;
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ActualNode {
@@ -54,6 +55,8 @@ impl crate::Table<TemplateOp> for Table {
 }
 
 impl crate::Node<TemplateOp> for Node {
+    type Weak = Weak;
+
     fn ref_cnt(&self) -> u64 {
         self.arc_count() as u64
     }
@@ -68,5 +71,21 @@ impl crate::Node<TemplateOp> for Node {
 
     fn cs(&self) -> &[Self] {
         &self.cs
+    }
+
+    fn downgrade(&self) -> Self::Weak {
+        self.to_weak()
+    }
+}
+
+impl crate::Weak<TemplateOp> for Weak {
+    type Node = Node;
+
+    fn id(&self) -> Id {
+        Id(self.uid)
+    }
+
+    fn upgrade(&self) -> Option<Self::Node> {
+        self.to_hconsed()
     }
 }

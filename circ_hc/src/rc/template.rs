@@ -8,12 +8,12 @@ use std::rc::Rc;
 use std::thread_local;
 
 #[allow(dead_code)]
-pub struct NodeData {
-    pub op: TemplateOp,
-    pub cs: Box<[Node]>,
+struct NodeData {
+    op: TemplateOp,
+    cs: Box<[Node]>,
 }
 
-pub struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a TemplateOp, &'a Q);
+struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a TemplateOp, &'a Q);
 
 #[derive(Clone)]
 pub struct Node {
@@ -21,7 +21,7 @@ pub struct Node {
     id: Id,
 }
 
-pub struct NodeListShallowDebug<'a>(&'a [Node]);
+struct NodeListShallowDebug<'a>(&'a [Node]);
 
 impl<'a> std::fmt::Debug for NodeListShallowDebug<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -31,7 +31,7 @@ impl<'a> std::fmt::Debug for NodeListShallowDebug<'a> {
     }
 }
 
-pub struct NodeShallowDebug<'a>(&'a Node);
+struct NodeShallowDebug<'a>(&'a Node);
 
 impl<'a> std::fmt::Debug for NodeShallowDebug<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,7 +65,7 @@ impl crate::Table<TemplateOp> for Table {
     }
 
     fn name() -> &'static str {
-        "rc_no_raw"
+        "rc"
     }
 
     fn reserve(num_nodes: usize) {
@@ -75,7 +75,7 @@ impl crate::Table<TemplateOp> for Table {
     fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node> + 'static) {
         MANAGER.with(|man| {
             let mut hook = man.gc_hook.borrow_mut();
-            assert!(hook.is_none());
+            // don't assert that the hook is none, to allow it to be overwritten
             *hook = Some(Box::new(f));
         })
     }
@@ -203,14 +203,47 @@ impl crate::Node<TemplateOp> for Node {
     fn cs(&self) -> &[Self] {
         &self.data.cs
     }
+
+    type Weak = Weak;
+
+    fn downgrade(&self) -> Self::Weak {
+        Weak {
+            data: Rc::downgrade(&self.data),
+            id: self.id,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Weak {
+    data: std::rc::Weak<NodeData>,
+    id: Id,
+}
+
+impl crate::Weak<TemplateOp> for Weak {
+    type Node = Node;
+
+    fn id(&self) -> Id {
+        self.id
+    }
+
+    fn upgrade(&self) -> Option<Self::Node> {
+        self.data.upgrade().map(|data| Node { data, id: self.id })
+    }
 }
 
 mod hash {
-    use super::{Node, NodeData, NodeDataRef};
+    use super::{Node, NodeData, NodeDataRef, Weak};
     use std::borrow::Borrow;
     use std::hash::{Hash, Hasher};
 
     impl Hash for Node {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.id.hash(state)
+        }
+    }
+
+    impl Hash for Weak {
         fn hash<H: Hasher>(&self, state: &mut H) {
             self.id.hash(state)
         }
@@ -236,7 +269,7 @@ mod hash {
 }
 
 mod cmp {
-    use super::{Node, NodeData};
+    use super::{Node, NodeData, Weak};
     use std::cmp::{Ord, PartialOrd};
 
     impl PartialEq for Node {
@@ -245,15 +278,6 @@ mod cmp {
         }
     }
     impl Eq for Node {}
-
-    impl PartialEq for NodeData {
-        fn eq(&self, other: &Self) -> bool {
-            self.op == other.op
-                && self.cs.len() == other.cs.len()
-                && self.cs.iter().zip(other.cs.iter()).all(|(s, o)| s == o)
-        }
-    }
-    impl Eq for NodeData {}
 
     impl PartialOrd for Node {
         fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -265,4 +289,31 @@ mod cmp {
             self.id.cmp(&other.id)
         }
     }
+
+    impl PartialEq for Weak {
+        fn eq(&self, other: &Self) -> bool {
+            self.id == other.id
+        }
+    }
+    impl Eq for Weak {}
+
+    impl PartialOrd for Weak {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for Weak {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            self.id.cmp(&other.id)
+        }
+    }
+
+    impl PartialEq for NodeData {
+        fn eq(&self, other: &Self) -> bool {
+            self.op == other.op
+                && self.cs.len() == other.cs.len()
+                && self.cs.iter().zip(other.cs.iter()).all(|(s, o)| s == o)
+        }
+    }
+    impl Eq for NodeData {}
 }

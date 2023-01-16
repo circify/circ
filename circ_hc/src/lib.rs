@@ -4,6 +4,7 @@ use std::hash::Hash;
 pub mod hashconsing;
 pub mod raw;
 pub mod rc;
+// pub mod arc;
 pub use rc::generate_hashcons;
 
 #[cfg(test)]
@@ -48,6 +49,7 @@ pub trait Table<Op> {
 
 /// A hash-cons node
 pub trait Node<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
+    type Weak: Weak<Op, Node = Self>;
     /// Get the ref count of this node.
     fn ref_cnt(&self) -> u64;
     /// Get the unique ID of this node.
@@ -56,6 +58,17 @@ pub trait Node<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
     fn op(&self) -> &Op;
     /// Get the children of this node.
     fn cs(&self) -> &[Self];
+    /// Get a token that does not retain this node during GC.
+    fn downgrade(&self) -> Self::Weak;
+}
+
+/// A hash-cons node that may have been dropped
+pub trait Weak<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
+    type Node: Node<Op, Weak = Self>;
+    /// Get the unique ID of this node.
+    fn id(&self) -> Id;
+    /// Attempt to get the node itself.
+    fn upgrade(&self) -> Option<Self::Node>;
 }
 
 /// A unique term ID.

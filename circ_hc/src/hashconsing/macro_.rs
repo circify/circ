@@ -8,6 +8,7 @@ macro_rules! generate_hashcons_hashconsing {
         use $crate::Id;
 
         pub type Node = HConsed<ActualNode>;
+        pub type Weak = WHConsed<ActualNode>;
 
         #[derive(Debug, Hash, Clone, PartialEq, Eq)]
         pub struct ActualNode {
@@ -56,6 +57,8 @@ macro_rules! generate_hashcons_hashconsing {
         }
 
         impl $crate::Node<$Op> for Node {
+            type Weak = Weak;
+
             fn ref_cnt(&self) -> u64 {
                 self.arc_count() as u64
             }
@@ -70,6 +73,22 @@ macro_rules! generate_hashcons_hashconsing {
 
             fn cs(&self) -> &[Self] {
                 &self.cs
+            }
+
+            fn downgrade(&self) -> Self::Weak {
+                self.to_weak()
+            }
+        }
+
+        impl $crate::Weak<$Op> for Weak {
+            type Node = Node;
+
+            fn id(&self) -> Id {
+                Id(self.uid)
+            }
+
+            fn upgrade(&self) -> Option<Self::Node> {
+                self.to_hconsed()
             }
         }
     };

@@ -60,6 +60,7 @@ struct NodeValuePtr(*const NodeValue);
 
 struct Manager {
     table: RefCell<HashMap<NodeData, *const NodeValue>>,
+    id_table: RefCell<HashMap<Id, *const NodeValue>>,
     next_id: Cell<Id>,
     attr_tables: RefCell<Vec<Rc<dyn attr::AttributeGc>>>,
     zombies: RefCell<HashSet<NodeValuePtr>>,
@@ -69,6 +70,7 @@ struct Manager {
 thread_local! {
     static MANAGER: Manager = Manager {
         table: Default::default(),
+        id_table: Default::default(),
         next_id: Cell::new(Id(0)),
         attr_tables: Default::default(),
         zombies: Default::default(),
@@ -112,11 +114,13 @@ impl Manager {
                 let mut existing = true;
                 let value = table.entry(raw).or_insert_with_key(|raw| {
                     existing = false;
-                    Box::into_raw(Box::new(NodeValue {
+                    let ptr = Box::into_raw(Box::new(NodeValue {
                         raw: raw.clone(),
                         id,
                         ref_cnt: Cell::new(0),
-                    }))
+                    }));
+                    self.id_table.borrow_mut().insert(id, ptr);
+                    ptr
                 });
                 NodeValue::inc(*value);
                 if existing && (**value).ref_cnt.get() == 1 {
@@ -134,6 +138,8 @@ impl Manager {
 
     fn remove_from_table(&self, ptr: NodeValuePtr) -> Box<NodeValue> {
         unsafe {
+            let id = (*ptr.0).id;
+            debug_assert!(self.id_table.borrow_mut().remove(&id).is_some());
             let value_ptr = self.table.borrow_mut().remove(&(*ptr.0).raw).unwrap();
             Box::from_raw(value_ptr as *mut NodeValue)
         }
@@ -198,6 +204,8 @@ impl Clone for Node {
 }
 
 impl crate::Node<u8> for Node {
+    type Weak = Weak;
+
     fn ref_cnt(&self) -> u64 {
         unsafe { (*self.ptr).ref_cnt.get() }
     }
@@ -213,11 +221,35 @@ impl crate::Node<u8> for Node {
     fn cs(&self) -> &[Self] {
         unsafe { &(*self.ptr).raw.cs }
     }
+
+    fn downgrade(&self) -> Self::Weak {
+        Weak(self.id())
+    }
 }
 
 impl std::ops::Drop for Node {
     fn drop(&mut self) {
         NodeValue::dec(self.ptr)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Weak(Id);
+
+impl crate::Weak<u8> for Weak {
+    type Node = Node;
+
+    fn id(&self) -> Id {
+        self.0
+    }
+
+    fn upgrade(&self) -> Option<Self::Node> {
+        MANAGER.with(|man| {
+            man.id_table.borrow().get(&self.id()).map(|ptr| {
+                NodeValue::inc(*ptr);
+                Node { ptr: *ptr }
+            })
+        })
     }
 }
 

@@ -11,12 +11,12 @@ macro_rules! generate_hashcons_rc {
         use $crate::Id;
 
         #[allow(dead_code)]
-        pub struct NodeData {
-            pub op: $Op,
-            pub cs: Box<[Node]>,
+        struct NodeData {
+            op: $Op,
+            cs: Box<[Node]>,
         }
 
-        pub struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a $Op, &'a Q);
+        struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a $Op, &'a Q);
 
         #[derive(Clone)]
         pub struct Node {
@@ -24,7 +24,7 @@ macro_rules! generate_hashcons_rc {
             id: Id,
         }
 
-        pub struct NodeListShallowDebug<'a>(&'a [Node]);
+        struct NodeListShallowDebug<'a>(&'a [Node]);
 
         impl<'a> std::fmt::Debug for NodeListShallowDebug<'a> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -34,7 +34,7 @@ macro_rules! generate_hashcons_rc {
             }
         }
 
-        pub struct NodeShallowDebug<'a>(&'a Node);
+        struct NodeShallowDebug<'a>(&'a Node);
 
         impl<'a> std::fmt::Debug for NodeShallowDebug<'a> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,7 +68,7 @@ macro_rules! generate_hashcons_rc {
             }
 
             fn name() -> &'static str {
-                "rc_no_raw"
+                "rc"
             }
 
             fn reserve(num_nodes: usize) {
@@ -78,7 +78,7 @@ macro_rules! generate_hashcons_rc {
             fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node> + 'static) {
                 MANAGER.with(|man| {
                     let mut hook = man.gc_hook.borrow_mut();
-                    assert!(hook.is_none());
+                    // don't assert that the hook is none, to allow it to be overwritten
                     *hook = Some(Box::new(f));
                 })
             }
@@ -206,14 +206,47 @@ macro_rules! generate_hashcons_rc {
             fn cs(&self) -> &[Self] {
                 &self.data.cs
             }
+
+            type Weak = Weak;
+
+            fn downgrade(&self) -> Self::Weak {
+                Weak {
+                    data: Rc::downgrade(&self.data),
+                    id: self.id,
+                }
+            }
+        }
+
+        #[derive(Clone)]
+        pub struct Weak {
+            data: std::rc::Weak<NodeData>,
+            id: Id,
+        }
+
+        impl $crate::Weak<$Op> for Weak {
+            type Node = Node;
+
+            fn id(&self) -> Id {
+                self.id
+            }
+
+            fn upgrade(&self) -> Option<Self::Node> {
+                self.data.upgrade().map(|data| Node { data, id: self.id })
+            }
         }
 
         mod hash {
-            use super::{Node, NodeData, NodeDataRef};
+            use super::{Node, NodeData, NodeDataRef, Weak};
             use std::borrow::Borrow;
             use std::hash::{Hash, Hasher};
 
             impl Hash for Node {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    self.id.hash(state)
+                }
+            }
+
+            impl Hash for Weak {
                 fn hash<H: Hasher>(&self, state: &mut H) {
                     self.id.hash(state)
                 }
@@ -239,7 +272,7 @@ macro_rules! generate_hashcons_rc {
         }
 
         mod cmp {
-            use super::{Node, NodeData};
+            use super::{Node, NodeData, Weak};
             use std::cmp::{Ord, PartialOrd};
 
             impl PartialEq for Node {
@@ -248,15 +281,6 @@ macro_rules! generate_hashcons_rc {
                 }
             }
             impl Eq for Node {}
-
-            impl PartialEq for NodeData {
-                fn eq(&self, other: &Self) -> bool {
-                    self.op == other.op
-                        && self.cs.len() == other.cs.len()
-                        && self.cs.iter().zip(other.cs.iter()).all(|(s, o)| s == o)
-                }
-            }
-            impl Eq for NodeData {}
 
             impl PartialOrd for Node {
                 fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -268,6 +292,33 @@ macro_rules! generate_hashcons_rc {
                     self.id.cmp(&other.id)
                 }
             }
+
+            impl PartialEq for Weak {
+                fn eq(&self, other: &Self) -> bool {
+                    self.id == other.id
+                }
+            }
+            impl Eq for Weak {}
+
+            impl PartialOrd for Weak {
+                fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                    Some(self.cmp(other))
+                }
+            }
+            impl Ord for Weak {
+                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                    self.id.cmp(&other.id)
+                }
+            }
+
+            impl PartialEq for NodeData {
+                fn eq(&self, other: &Self) -> bool {
+                    self.op == other.op
+                        && self.cs.len() == other.cs.len()
+                        && self.cs.iter().zip(other.cs.iter()).all(|(s, o)| s == o)
+                }
+            }
+            impl Eq for NodeData {}
         }
     };
 }

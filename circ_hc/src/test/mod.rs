@@ -2,6 +2,7 @@ mod bench;
 mod qc;
 mod tiny;
 mod gc_hook;
+mod weak;
 
 mod raw {
     mod hc_u8 {
@@ -67,6 +68,17 @@ mod raw {
         #[test]
         fn ops_1000000_() {
             super::super::bench::bench_test::<super::Table>(1000000)
+        }
+    }
+
+    mod weak {
+        #[test]
+        fn two() {
+            super::super::weak::two::<super::Table>();
+        }
+        #[test]
+        fn three() {
+            super::super::weak::three::<super::Table>();
         }
     }
 }
@@ -135,6 +147,18 @@ mod hashconsing {
         #[test]
         fn ops_1000000_() {
             super::super::bench::bench_test::<super::Table>(1000000)
+        }
+    }
+
+    mod weak {
+        #[test]
+        #[ignore]
+        fn two() {
+            super::super::weak::two::<super::Table>();
+        }
+        #[test]
+        fn three() {
+            super::super::weak::three::<super::Table>();
         }
     }
 }
@@ -207,10 +231,25 @@ mod rc {
         }
     }
 
+    mod weak {
+        #[test]
+        fn two() {
+            super::super::weak::two::<super::Table>();
+        }
+        #[test]
+        fn three() {
+            super::super::weak::three::<super::Table>();
+        }
+    }
+
     mod gc_hook {
         #[test]
         fn two() {
             super::super::gc_hook::two::<super::Table>();
+        }
+        #[test]
+        fn three() {
+            super::super::gc_hook::three::<super::Table>();
         }
     }
 }
