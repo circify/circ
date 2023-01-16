@@ -71,11 +71,20 @@ impl crate::Table<u8> for Table {
     fn reserve(num_nodes: usize) {
         MANAGER.with(|man| man.table.borrow_mut().reserve(num_nodes))
     }
+
+    fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node> + 'static) {
+        MANAGER.with(|man| {
+            let mut hook = man.gc_hook.borrow_mut();
+            assert!(hook.is_none());
+            *hook = Some(Box::new(f));
+        })
+    }
 }
 
 struct Manager {
     table: RefCell<HashMap<Rc<NodeData>, Node>>,
     next_id: Cell<Id>,
+    gc_hook: RefCell<Option<Box<dyn Fn(Id) -> Vec<Node>>>>,
 }
 
 struct TableDebug<'a>(&'a HashMap<Rc<NodeData>, Node>);
@@ -104,6 +113,7 @@ thread_local! {
     static MANAGER: Manager = Manager {
         table: Default::default(),
         next_id: Cell::new(Id(0)),
+        gc_hook: Default::default(),
     };
 }
 
@@ -148,6 +158,7 @@ impl Manager {
             }
         });
         while let Some(t) = to_collect.pop() {
+            let id = t.id;
             let data = Node::try_unwrap(t).unwrap_or_else(|node| {
                 panic!(
                     "Attempting to collect node {:?}. but it has >1 ref",
@@ -159,6 +170,15 @@ impl Manager {
                     debug_assert_eq!(Rc::strong_count(&c.data), 3);
                     table.remove(&c.data);
                     to_collect.push(c.clone());
+                }
+            }
+            if let Some(h) = self.gc_hook.borrow_mut().as_mut() {
+                for c in h(id) {
+                    if Rc::strong_count(&c.data) <= 3 {
+                        debug_assert_eq!(Rc::strong_count(&c.data), 3);
+                        table.remove(&c.data);
+                        to_collect.push(c.clone());
+                    }
                 }
             }
         }

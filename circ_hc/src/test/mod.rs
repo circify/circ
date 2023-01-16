@@ -1,6 +1,7 @@
 mod bench;
 mod qc;
 mod tiny;
+mod gc_hook;
 
 mod raw {
     mod hc_u8 {
@@ -182,6 +183,7 @@ mod rc {
             super::super::qc::many_nodes::<super::Table>(steps);
         }
     }
+
     mod bench {
         #[test]
         fn ops_100_() {
@@ -202,6 +204,13 @@ mod rc {
         #[test]
         fn ops_1000000_() {
             super::super::bench::bench_test::<super::Table>(1000000)
+        }
+    }
+
+    mod gc_hook {
+        #[test]
+        fn two() {
+            super::super::gc_hook::two::<super::Table>();
         }
     }
 }

@@ -1,14 +1,13 @@
-use std::cmp::{PartialEq, Eq, PartialOrd, Ord};
+use std::cmp::{Eq, Ord, PartialEq, PartialOrd};
 use std::hash::Hash;
 
-pub mod raw;
 pub mod hashconsing;
+pub mod raw;
 pub mod rc;
 pub use rc::generate_hashcons;
 
 #[cfg(test)]
 mod test;
-
 
 /// A hash-cons table
 pub trait Table<Op> {
@@ -18,7 +17,10 @@ pub trait Table<Op> {
     /// Create a new node
     fn create(op: &Op, children: Vec<Self::Node>) -> Self::Node;
     /// Create a new node
-    fn create_ref<'a>(op: &Op, children: impl IntoIterator<Item=&'a Self::Node> + Clone) -> Self::Node {
+    fn create_ref<'a>(
+        op: &Op,
+        children: impl IntoIterator<Item = &'a Self::Node> + Clone,
+    ) -> Self::Node {
         Self::create(op, children.into_iter().cloned().collect())
     }
     /// Run garbage collection
@@ -41,7 +43,7 @@ pub trait Table<Op> {
     /// values!) by keying them on Node IDs, and then returning any nodes in the value when the GC
     /// hook is called.
     #[allow(unused_variables)]
-    fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node>) {}
+    fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node> + 'static) {}
 }
 
 /// A hash-cons node
@@ -60,6 +62,12 @@ pub trait Node<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
 #[repr(transparent)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Id(pub u64);
+
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "id{}", self.0)
+    }
+}
 
 mod hash {
     use super::Id;
