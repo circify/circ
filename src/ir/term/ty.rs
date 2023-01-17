@@ -450,6 +450,8 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
             }
             if !back.1 {
                 back.1 = true;
+                // we need to end the lifetime of back before the loop starts.
+                #[allow(clippy::unnecessary_to_owned)]
                 for c in back.0.cs().to_vec() {
                     to_check.push((c, false));
                 }
@@ -461,7 +463,7 @@ pub fn rec_check_raw(t: &Term) -> Result<Sort, TypeError> {
                     .map(|c| term_tys.get(&c.downgrade()).unwrap())
                     .collect::<Vec<_>>();
                 let ty =
-                    rec_check_raw_helper(&back.0.op(), &tys[..]).map_err(|reason| TypeError {
+                    rec_check_raw_helper(back.0.op(), &tys[..]).map_err(|reason| TypeError {
                         op: back.0.op().clone(),
                         args: tys.into_iter().cloned().collect(),
                         reason,

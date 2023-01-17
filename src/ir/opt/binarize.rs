@@ -41,7 +41,7 @@ pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cach
             }
         }
         let entry = match t.op() {
-            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op(), &children),
+            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(t.op(), &children),
             _ => term(t.op().clone(), children.clone()),
         };
         rewritten.insert(t, entry);

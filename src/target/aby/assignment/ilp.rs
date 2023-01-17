@@ -94,7 +94,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 panic!("Requires def-use-graph, tests should not have secret indices.")
             }
             _ => {
-                if let Some(costs) = costs.ops.get(&t.op()) {
+                if let Some(costs) = costs.ops.get(t.op()) {
                     for (ty, cost) in costs {
                         let name = format!("t_{}_{}", i, ty.char());
                         let v = ilp.new_variable(variable().binary(), name.clone());

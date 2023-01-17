@@ -76,7 +76,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 .expect("postorder cache")
         };
 
-        if ignore.contains(&t.op()) {
+        if ignore.contains(t.op()) {
             let new_t = term(t.op().clone(), t.cs().iter().map(|c| c_get(c)).collect());
             cache.put(t.downgrade(), new_t.downgrade());
             continue;

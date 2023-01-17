@@ -355,7 +355,7 @@ impl Debug for Term {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let cfg = IrCfg::from_circ_cfg();
         let f = &mut IrFormatter::new(f, &cfg);
-        fmt_term_with_bindings(&self, f)
+        fmt_term_with_bindings(self, f)
     }
 }
 
