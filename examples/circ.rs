@@ -186,9 +186,14 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             panic!("Missing feature: smt,zok");
         }
+        #[cfg(all(feature = "smt", feature = "datalog"))]
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs { file: options.path };
             Datalog::gen(inputs)
+        }
+        #[cfg(not(all(feature = "smt", feature = "datalog")))]
+        DeterminedLanguage::Datalog => {
+            panic!("Missing feature: smt,datalog");
         }
         #[cfg(feature = "c")]
         DeterminedLanguage::C => {
