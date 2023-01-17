@@ -349,6 +349,15 @@ macro_rules! generate_hashcons_rc {
             }
             impl Eq for NodeData {}
         }
+
+        impl std::ops::Drop for Manager {
+            fn drop(&mut self) {
+                // If we just drop everything in the table, then that can lead to deep Rc::drop recursions.
+                //
+                // If we run GC, then hopefully we avoid that.
+                self.force_gc();
+            }
+        }
     };
 }
 pub use crate::generate_hashcons_rc as generate_hashcons;
