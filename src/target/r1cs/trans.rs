@@ -23,7 +23,9 @@ use std::rc::Rc;
 
 struct BvEntry {
     width: usize,
-    uint: TermLc,
+    /// Empty if not yet created.
+    uint: Option<TermLc>,
+    /// Empty if not yet created.
     bits: Vec<TermLc>,
 }
 
@@ -797,12 +799,11 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn set_bv_bits(&mut self, t: Term, bits: Vec<TermLc>) {
-        let sum = self.debitify(bits.iter().cloned(), false);
         assert!(!self.cache.contains_key(&t));
         self.cache.insert(
             t,
             EmbeddedTerm::Bv(Rc::new(RefCell::new(BvEntry {
-                uint: sum,
+                uint: None,
                 width: bits.len(),
                 bits,
             }))),
@@ -814,7 +815,7 @@ impl<'cfg> ToR1cs<'cfg> {
         self.cache.insert(
             t,
             EmbeddedTerm::Bv(Rc::new(RefCell::new(BvEntry {
-                uint,
+                uint: Some(uint),
                 width,
                 bits: Vec::new(),
             }))),
@@ -836,8 +837,16 @@ impl<'cfg> ToR1cs<'cfg> {
         !(*self.get_bv(t)).borrow().bits.is_empty()
     }
 
-    fn get_bv_uint(&self, t: &Term) -> TermLc {
-        (*self.get_bv(t)).borrow().uint.clone()
+    fn get_bv_uint(&mut self, t: &Term) -> TermLc {
+        let entry_rc = self.get_bv(t);
+        let mut entry = entry_rc.borrow_mut();
+        if let Some(uint) = entry.uint.as_ref() {
+            uint.clone()
+        } else {
+            let uint = self.debitify(entry.bits.clone().into_iter(), false);
+            entry.uint = Some(uint.clone());
+            uint
+        }
     }
 
     fn get_bv_signed_int(&mut self, t: &Term) -> TermLc {
@@ -849,7 +858,7 @@ impl<'cfg> ToR1cs<'cfg> {
         let entry_rc = self.get_bv(t);
         let mut entry = entry_rc.borrow_mut();
         if entry.bits.is_empty() {
-            entry.bits = self.bitify("getbits", &entry.uint, entry.width, false);
+            entry.bits = self.bitify("getbits", entry.uint.as_ref().unwrap(), entry.width, false);
         }
         entry.bits.clone()
     }
