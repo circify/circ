@@ -7,37 +7,48 @@ use std::collections::HashSet;
 /// Detects common C-language SHA patterns and rewrites them.
 pub fn sha_rewrites(term_: &Term) -> Term {
     // what does a term rewrite to?
-    let mut cache = TermMap::<Term>::new();
+    let mut cache = TermMap::<Term>::default();
     for t in PostOrderIter::new(term_.clone()) {
         let c_get = |x: &Term| cache.get(x).unwrap();
-        let get = |i: usize| c_get(&t.cs[i]);
-        let new_t = match &t.op {
+        let get = |i: usize| c_get(&t.cs()[i]);
+        let new_t = match t.op() {
             // A pattern: (a & b) | (~a & c)
             // or: (a & b) ^ (~a & c)
             &BV_OR | &BV_XOR => {
-                if t.cs.len() == 2 {
+                if t.cs().len() == 2 {
                     let l = get(0);
                     let r = get(1);
-                    if l.op == r.op && l.op == BV_AND && l.cs.len() == 2 && r.cs.len() == 2 {
+                    if l.op() == r.op()
+                        && l.op() == &BV_AND
+                        && l.cs().len() == 2
+                        && r.cs().len() == 2
+                    {
                         let opt_match = r
-                            .cs
+                            .cs()
                             .iter()
-                            .position(|r_c| r_c == &term![BV_NOT; l.cs[0].clone()])
-                            .map(|r_i| (&l.cs[0], &l.cs[1], &r.cs[1 - r_i]))
+                            .position(|r_c| r_c == &term![BV_NOT; l.cs()[0].clone()])
+                            .map(|r_i| (&l.cs()[0], &l.cs()[1], &r.cs()[1 - r_i]))
                             .or_else(|| {
-                                r.cs.iter()
-                                    .position(|r_c| r_c == &term![BV_NOT; l.cs[1].clone()])
-                                    .map(|r_i| (&l.cs[1], &l.cs[0], &r.cs[1 - r_i]))
+                                r.cs()
+                                    .iter()
+                                    .position(|r_c| r_c == &term![BV_NOT; l.cs()[1].clone()])
+                                    .map(|r_i| (&l.cs()[1], &l.cs()[0], &r.cs()[1 - r_i]))
                                     .or_else(|| {
-                                        l.cs.iter()
-                                            .position(|l_c| l_c == &term![BV_NOT; r.cs[0].clone()])
-                                            .map(|l_i| (&r.cs[0], &r.cs[1], &l.cs[1 - l_i]))
+                                        l.cs()
+                                            .iter()
+                                            .position(|l_c| {
+                                                l_c == &term![BV_NOT; r.cs()[0].clone()]
+                                            })
+                                            .map(|l_i| (&r.cs()[0], &r.cs()[1], &l.cs()[1 - l_i]))
                                             .or_else(|| {
-                                                l.cs.iter()
+                                                l.cs()
+                                                    .iter()
                                                     .position(|l_c| {
-                                                        l_c == &term![BV_NOT; r.cs[1].clone()]
+                                                        l_c == &term![BV_NOT; r.cs()[1].clone()]
                                                     })
-                                                    .map(|l_i| (&r.cs[1], &r.cs[0], &l.cs[1 - l_i]))
+                                                    .map(|l_i| {
+                                                        (&r.cs()[1], &r.cs()[0], &l.cs()[1 - l_i])
+                                                    })
                                             })
                                     })
                             });
@@ -64,20 +75,20 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                     } else {
                         None
                     }
-                } else if t.cs.len() == 3 {
+                } else if t.cs().len() == 3 {
                     let c0 = get(0);
                     let c1 = get(1);
                     let c2 = get(2);
-                    if c0.op == c1.op
-                        && c1.op == c2.op
-                        && c2.op == BV_AND
-                        && c0.cs.len() == 2
-                        && c1.cs.len() == 2
-                        && c2.cs.len() == 2
+                    if c0.op() == c1.op()
+                        && c1.op() == c2.op()
+                        && c2.op() == &BV_AND
+                        && c0.cs().len() == 2
+                        && c1.cs().len() == 2
+                        && c2.cs().len() == 2
                     {
-                        let s0 = c0.cs.iter().collect::<HashSet<_>>();
-                        let s1 = c1.cs.iter().collect::<HashSet<_>>();
-                        let s2 = c2.cs.iter().collect::<HashSet<_>>();
+                        let s0 = c0.cs().iter().collect::<HashSet<_>>();
+                        let s1 = c1.cs().iter().collect::<HashSet<_>>();
+                        let s2 = c2.cs().iter().collect::<HashSet<_>>();
                         if s0.intersection(&s1).count() == 1
                             && s1.intersection(&s2).count() == 1
                             && s2.intersection(&s0).count() == 1
@@ -111,8 +122,11 @@ pub fn sha_rewrites(term_: &Term) -> Term {
         };
         let new_t = new_t.unwrap_or_else(|| {
             term(
-                t.op.clone(),
-                t.cs.iter().map(|c| cache.get(c).unwrap().clone()).collect(),
+                t.op().clone(),
+                t.cs()
+                    .iter()
+                    .map(|c| cache.get(c).unwrap().clone())
+                    .collect(),
             )
         });
         cache.insert(t, new_t);
@@ -123,11 +137,11 @@ pub fn sha_rewrites(term_: &Term) -> Term {
 /// Eliminate the SHA majority operator, replacing it with ands and ors.
 pub fn sha_maj_elim(term_: &Term) -> Term {
     // what does a term rewrite to?
-    let mut cache = TermMap::<Term>::new();
+    let mut cache = TermMap::<Term>::default();
     for t in PostOrderIter::new(term_.clone()) {
         let c_get = |x: &Term| cache.get(x).unwrap();
-        let get = |i: usize| c_get(&t.cs[i]);
-        let new_t = match t.op {
+        let get = |i: usize| c_get(&t.cs()[i]);
+        let new_t = match t.op() {
             // maj(a, b, c) = (a & b) | (b & c) | (c & a)
             Op::BoolMaj => {
                 let a = get(0);
@@ -142,8 +156,11 @@ pub fn sha_maj_elim(term_: &Term) -> Term {
         };
         let new_t = new_t.unwrap_or_else(|| {
             term(
-                t.op.clone(),
-                t.cs.iter().map(|c| cache.get(c).unwrap().clone()).collect(),
+                t.op().clone(),
+                t.cs()
+                    .iter()
+                    .map(|c| cache.get(c).unwrap().clone())
+                    .collect(),
             )
         });
         cache.insert(t, new_t);
@@ -203,7 +220,7 @@ mod test {
     }
 
     fn contains_ite(t: &Term) -> bool {
-        PostOrderIter::new(t.clone()).any(|c| c.op == ITE)
+        PostOrderIter::new(t.clone()).any(|c| c.op() == &ITE)
     }
 
     #[test]

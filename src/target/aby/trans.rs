@@ -76,7 +76,7 @@ impl<'a> ToABY<'a> {
             lang: lang.to_string(),
             curr_comp: "".to_string(),
             inputs: Vec::new(),
-            term_to_shares: TermMap::new(),
+            term_to_shares: TermMap::default(),
             share_cnt: 0,
             cache: HashMap::new(),
             const_cache: HashMap::new(),
@@ -178,7 +178,7 @@ impl<'a> ToABY<'a> {
                 .unwrap();
             let op = "CONS";
 
-            match &t.op {
+            match &t.op() {
                 Op::Const(Value::BitVector(b)) => {
                     let value = b.as_sint();
                     let bitlen = 32;
@@ -263,9 +263,9 @@ impl<'a> ToABY<'a> {
     fn embed_eq(&mut self, t: &Term) {
         let op = "EQ";
         let to_share_type = self.get_term_share_type(t);
-        let a = self.get_share(&t.cs[0], to_share_type);
-        let b = self.get_share(&t.cs[1], to_share_type);
-        let key = (t.op.clone(), vec![a, b]);
+        let a = self.get_share(&t.cs()[0], to_share_type);
+        let b = self.get_share(&t.cs()[1], to_share_type);
+        let key = (t.op().clone(), vec![a, b]);
         let s = self.get_share(t, to_share_type);
         if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone()) {
             e.insert(s);
@@ -279,7 +279,7 @@ impl<'a> ToABY<'a> {
 
     fn embed_bool(&mut self, t: Term) {
         let to_share_type = self.get_term_share_type(&t);
-        match &t.op {
+        match &t.op() {
             Op::Var(name, Sort::Bool) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
@@ -307,11 +307,11 @@ impl<'a> ToABY<'a> {
             Op::Ite => {
                 let op = "MUX";
                 let to_share_type = self.get_term_share_type(&t);
-                let sel = self.get_share(&t.cs[0], to_share_type);
-                let a = self.get_share(&t.cs[1], to_share_type);
-                let b = self.get_share(&t.cs[2], to_share_type);
+                let sel = self.get_share(&t.cs()[0], to_share_type);
+                let a = self.get_share(&t.cs()[1], to_share_type);
+                let b = self.get_share(&t.cs()[2], to_share_type);
 
-                let key = (t.op.clone(), vec![a, b]);
+                let key = (t.op().clone(), vec![a, b]);
                 let s = self.get_share(&t, to_share_type);
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
@@ -325,9 +325,9 @@ impl<'a> ToABY<'a> {
             }
             Op::Not => {
                 let op = "NOT";
-                let a = self.get_share(&t.cs[0], to_share_type);
+                let a = self.get_share(&t.cs()[0], to_share_type);
 
-                let key = (t.op.clone(), vec![a]);
+                let key = (t.op().clone(), vec![a]);
                 let s = self.get_share(&t, to_share_type);
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
@@ -340,12 +340,12 @@ impl<'a> ToABY<'a> {
                 };
             }
             Op::BoolNaryOp(o) => {
-                if t.cs.len() == 1 {
+                if t.cs().len() == 1 {
                     // HACK: Conditionals might not contain two variables
-                    // If t.cs len is 1, just output that term
+                    // If t.cs() len is 1, just output that term
                     // This is to bypass adding an AND gate with a single conditional term
                     // Refer to pub fn condition() in src/circify/mod.rs
-                    let a = self.get_share(&t.cs[0], to_share_type);
+                    let a = self.get_share(&t.cs()[0], to_share_type);
                     match o {
                         BoolNaryOp::And => self.term_to_shares.insert(t.clone(), a),
                         _ => {
@@ -359,10 +359,10 @@ impl<'a> ToABY<'a> {
                         BoolNaryOp::Xor => "XOR",
                     };
 
-                    let a = self.get_share(&t.cs[0], to_share_type);
-                    let b = self.get_share(&t.cs[1], to_share_type);
+                    let a = self.get_share(&t.cs()[0], to_share_type);
+                    let b = self.get_share(&t.cs()[1], to_share_type);
 
-                    let key = (t.op.clone(), vec![a, b]);
+                    let key = (t.op().clone(), vec![a, b]);
                     let s = self.get_share(&t, to_share_type);
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         self.cache.entry(key.clone())
@@ -385,10 +385,10 @@ impl<'a> ToABY<'a> {
                     _ => panic!("Non-field in bool BvBinPred: {}", o),
                 };
 
-                let a = self.get_share(&t.cs[0], to_share_type);
-                let b = self.get_share(&t.cs[1], to_share_type);
+                let a = self.get_share(&t.cs()[0], to_share_type);
+                let b = self.get_share(&t.cs()[1], to_share_type);
 
-                let key = (t.op.clone(), vec![a, b]);
+                let key = (t.op().clone(), vec![a, b]);
                 let s = self.get_share(&t, to_share_type);
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
@@ -406,7 +406,7 @@ impl<'a> ToABY<'a> {
 
     fn embed_bv(&mut self, t: Term) {
         let to_share_type = self.get_term_share_type(&t);
-        match &t.op {
+        match &t.op() {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
                 if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
@@ -431,11 +431,11 @@ impl<'a> ToABY<'a> {
             }
             Op::Ite => {
                 let op = "MUX";
-                let sel = self.get_share(&t.cs[0], to_share_type);
-                let a = self.get_share(&t.cs[1], to_share_type);
-                let b = self.get_share(&t.cs[2], to_share_type);
+                let sel = self.get_share(&t.cs()[0], to_share_type);
+                let a = self.get_share(&t.cs()[1], to_share_type);
+                let b = self.get_share(&t.cs()[2], to_share_type);
 
-                let key = (t.op.clone(), vec![sel, a, b]);
+                let key = (t.op().clone(), vec![sel, a, b]);
                 let s = self.get_share(&t, to_share_type);
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
@@ -455,10 +455,10 @@ impl<'a> ToABY<'a> {
                     BvNaryOp::Add => "ADD",
                     BvNaryOp::Mul => "MUL",
                 };
-                let a = self.get_share(&t.cs[0], to_share_type);
-                let b = self.get_share(&t.cs[1], to_share_type);
+                let a = self.get_share(&t.cs()[0], to_share_type);
+                let b = self.get_share(&t.cs()[1], to_share_type);
 
-                let key = (t.op.clone(), vec![a, b]);
+                let key = (t.op().clone(), vec![a, b]);
                 let s = self.get_share(&t, to_share_type);
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
@@ -482,10 +482,10 @@ impl<'a> ToABY<'a> {
 
                 match o {
                     BvBinOp::Sub | BvBinOp::Udiv | BvBinOp::Urem => {
-                        let a = self.get_share(&t.cs[0], to_share_type);
-                        let b = self.get_share(&t.cs[1], to_share_type);
+                        let a = self.get_share(&t.cs()[0], to_share_type);
+                        let b = self.get_share(&t.cs()[1], to_share_type);
 
-                        let key = (t.op.clone(), vec![a, b]);
+                        let key = (t.op().clone(), vec![a, b]);
                         let s = self.get_share(&t, to_share_type);
                         if let std::collections::hash_map::Entry::Vacant(e) =
                             self.cache.entry(key.clone())
@@ -499,12 +499,15 @@ impl<'a> ToABY<'a> {
                         };
                     }
                     BvBinOp::Shl | BvBinOp::Lshr => {
-                        let a = self.get_share(&t.cs[0], to_share_type);
-                        let const_shift_amount_term = fold(&t.cs[1], &[]);
+                        let a = self.get_share(&t.cs()[0], to_share_type);
+                        let const_shift_amount_term = fold(&t.cs()[1], &[]);
                         let const_shift_amount =
                             const_shift_amount_term.as_bv_opt().unwrap().uint();
 
-                        let key = (t.op.clone(), vec![a, const_shift_amount.to_i32().unwrap()]);
+                        let key = (
+                            t.op().clone(),
+                            vec![a, const_shift_amount.to_i32().unwrap()],
+                        );
                         let s = self.get_share(&t, to_share_type);
                         if let std::collections::hash_map::Entry::Vacant(e) =
                             self.cache.entry(key.clone())
@@ -521,8 +524,8 @@ impl<'a> ToABY<'a> {
                 };
             }
             Op::Field(i) => {
-                assert!(t.cs.len() == 1);
-                let tuple_share = self.get_share(&t.cs[0], to_share_type);
+                assert!(t.cs().len() == 1);
+                let tuple_share = self.get_share(&t.cs()[0], to_share_type);
                 let field_share = self.get_share(&t, to_share_type);
                 let op = "FIELD";
                 let line = format!("2 1 {} {} {} {}\n", tuple_share, i, field_share, op);
@@ -530,19 +533,19 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), field_share);
             }
             Op::Select => {
-                assert!(t.cs.len() == 2);
+                assert!(t.cs().len() == 2);
                 let select_share = self.get_share(&t, to_share_type);
-                let array_share = self.get_share(&t.cs[0], to_share_type);
+                let array_share = self.get_share(&t.cs()[0], to_share_type);
 
-                let line = if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                let line = if let Op::Const(Value::BitVector(bv)) = &t.cs()[1].op() {
                     let op = "SELECT_CONS";
                     let idx = bv.uint().to_usize().unwrap();
-                    let len = self.get_sort_len(&check(&t.cs[0]));
+                    let len = self.get_sort_len(&check(&t.cs()[0]));
                     assert!(idx < len, "idx: {}, len: {}", idx, len);
                     format!("2 1 {} {} {} {}\n", array_share, idx, select_share, op)
                 } else {
                     let op = "SELECT";
-                    let idx_share = self.get_share(&t.cs[1], to_share_type);
+                    let idx_share = self.get_share(&t.cs()[1], to_share_type);
                     format!(
                         "2 1 {} {} {} {}\n",
                         array_share, idx_share, select_share, op
@@ -557,7 +560,7 @@ impl<'a> ToABY<'a> {
 
     fn embed_vector(&mut self, t: Term) {
         let to_share_type = self.get_term_share_type(&t);
-        match &t.op {
+        match &t.op() {
             Op::Const(Value::Array(arr)) => {
                 let array_share = self.get_share(&t, to_share_type);
                 let mut shares: Vec<i32> = Vec::new();
@@ -632,26 +635,26 @@ impl<'a> ToABY<'a> {
             Op::Ite => {
                 let op = "MUX";
                 let mux_share = self.get_share(&t, to_share_type);
-                let sel = self.get_share(&t.cs[0], to_share_type);
-                let a = self.get_share(&t.cs[1], to_share_type);
-                let b = self.get_share(&t.cs[2], to_share_type);
+                let sel = self.get_share(&t.cs()[0], to_share_type);
+                let a = self.get_share(&t.cs()[1], to_share_type);
+                let b = self.get_share(&t.cs()[2], to_share_type);
 
                 let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, mux_share, op);
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), mux_share);
             }
             Op::Store => {
-                assert!(t.cs.len() == 3);
+                assert!(t.cs().len() == 3);
 
-                let array_share = self.get_share(&t.cs[0], to_share_type);
-                // let mut array_shares = self.get_shares(&t.cs[0], to_share_type).clone();
-                let value_share = self.get_share(&t.cs[2], to_share_type);
+                let array_share = self.get_share(&t.cs()[0], to_share_type);
+                // let mut array_shares = self.get_shares(&t.cs()[0], to_share_type).clone();
+                let value_share = self.get_share(&t.cs()[2], to_share_type);
                 let store_share = self.get_share(&t, to_share_type);
 
-                let line = if let Op::Const(Value::BitVector(bv)) = &t.cs[1].op {
+                let line = if let Op::Const(Value::BitVector(bv)) = &t.cs()[1].op() {
                     let op = "STORE_CONS";
                     let idx = bv.uint().to_usize().unwrap();
-                    let len = self.get_sort_len(&check(&t.cs[0]));
+                    let len = self.get_sort_len(&check(&t.cs()[0]));
                     assert!(idx < len, "idx: {}, len: {}", idx, len);
                     format!(
                         "3 1 {} {} {} {} {}\n",
@@ -659,7 +662,7 @@ impl<'a> ToABY<'a> {
                     )
                 } else {
                     let op = "STORE";
-                    let index_share = self.get_share(&t.cs[1], to_share_type);
+                    let index_share = self.get_share(&t.cs()[1], to_share_type);
                     format!(
                         "3 1 {} {} {} {} {}\n",
                         array_share, index_share, value_share, store_share, op
@@ -669,15 +672,15 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), store_share);
             }
             Op::Field(i) => {
-                assert!(t.cs.len() == 1);
+                assert!(t.cs().len() == 1);
 
-                // let shares = self.get_shares(&t.cs[0], to_share_type);
-                let tuple_share = self.get_share(&t.cs[0], to_share_type);
+                // let shares = self.get_shares(&t.cs()[0], to_share_type);
+                let tuple_share = self.get_share(&t.cs()[0], to_share_type);
                 let field_share = self.get_share(&t, to_share_type);
 
                 let op = "FIELD_VEC";
 
-                let tuple_sort = check(&t.cs[0]);
+                let tuple_sort = check(&t.cs()[0]);
                 let (offset, len) = match tuple_sort {
                     Sort::Tuple(t) => {
                         assert!(*i < t.len());
@@ -704,10 +707,10 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), field_share);
             }
             Op::Update(i) => {
-                assert!(t.cs.len() == 2);
+                assert!(t.cs().len() == 2);
 
-                let tuple_share = self.get_share(&t.cs[0], to_share_type);
-                let value_share = self.get_share(&t.cs[1], to_share_type);
+                let tuple_share = self.get_share(&t.cs()[0], to_share_type);
+                let value_share = self.get_share(&t.cs()[1], to_share_type);
                 let update_share = self.get_share(&t, to_share_type);
 
                 let op = "UPDATE";
@@ -722,14 +725,14 @@ impl<'a> ToABY<'a> {
                 let tuple_share = self.get_share(&t, to_share_type);
 
                 let mut shares: Vec<i32> = Vec::new();
-                for c in t.cs.iter() {
+                for c in t.cs().iter() {
                     shares.push(self.get_share(c, to_share_type));
                 }
 
                 let op = "TUPLE";
                 let line = format!(
                     "{} 1 {} {} {}\n",
-                    t.cs.len(),
+                    t.cs().len(),
                     self.shares_to_string(shares.clone()),
                     tuple_share,
                     op
@@ -742,7 +745,7 @@ impl<'a> ToABY<'a> {
                 let op = format!("CALL({})", name);
 
                 let mut arg_shares: Vec<i32> = Vec::new();
-                for c in t.cs.iter() {
+                for c in t.cs().iter() {
                     arg_shares.push(self.get_share(c, to_share_type));
                 }
 
@@ -757,7 +760,7 @@ impl<'a> ToABY<'a> {
                 self.term_to_shares.insert(t.clone(), call_share);
             }
             _ => {
-                panic!("Non-field in embed_vector: {}", t.op)
+                panic!("Non-field in embed_vector: {}", t.op())
             }
         }
     }

@@ -174,7 +174,7 @@ pub fn assign_arithmetic_and_boolean(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.ops.get(&term.op) {
+                    if let Some(costs) = cost_model.ops.get(term.op()) {
                         let mut min_ty: ShareType = ShareType::Boolean;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic] {
@@ -204,7 +204,7 @@ pub fn assign_arithmetic_and_yao(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.ops.get(&term.op) {
+                    if let Some(costs) = cost_model.ops.get(term.op()) {
                         let mut min_ty: ShareType = ShareType::Yao;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic] {
@@ -234,7 +234,7 @@ pub fn assign_greedy(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.ops.get(&term.op) {
+                    if let Some(costs) = cost_model.ops.get(term.op()) {
                         let mut min_ty: ShareType = ShareType::Yao;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic, ShareType::Boolean] {

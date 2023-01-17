@@ -38,7 +38,7 @@ impl Constraints for Computation {
             let mut set = FxHashSet::default();
             for a in &assertions {
                 for t in PostOrderIter::new(a.clone()) {
-                    if let Op::Var(..) = t.op {
+                    if let Op::Var(..) = t.op() {
                         set.insert(t.clone());
                     }
                 }
@@ -48,7 +48,7 @@ impl Constraints for Computation {
         let public_inputs_set: FxHashSet<String> = public_inputs
             .iter()
             .filter_map(|t| {
-                if let Op::Var(n, _) = &t.op {
+                if let Op::Var(n, _) = &t.op() {
                     Some(n.clone())
                 } else {
                     None
@@ -57,14 +57,14 @@ impl Constraints for Computation {
             .collect();
 
         for v in public_inputs {
-            if let Op::Var(n, s) = &v.op {
+            if let Op::Var(n, s) = &v.op() {
                 metadata.new_input(n.to_owned(), None, s.clone());
             } else {
                 panic!()
             }
         }
         for v in all_vars {
-            if let Op::Var(n, s) = &v.op {
+            if let Op::Var(n, s) = &v.op() {
                 if !public_inputs_set.contains(n) {
                     metadata.new_input(n.to_owned(), Some(PROVER_ID), s.clone());
                 }

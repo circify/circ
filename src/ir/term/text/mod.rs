@@ -291,7 +291,7 @@ impl<'src> IrInterp<'src> {
     }
     fn value(&mut self, tt: &TokTree<'src>) -> Value {
         let t = self.term(tt);
-        match &t.op {
+        match &t.op() {
             Op::Const(v) => v.clone(),
             _ => panic!("Expected value, found term {}", t),
         }
@@ -618,15 +618,15 @@ impl<'src> IrInterp<'src> {
             let outputs = self.var_decl_list(&tts[2]);
             let tuple_term = self.term(&tts[3]);
             assert!(
-                outputs.len() == tuple_term.cs.len(),
+                outputs.len() == tuple_term.cs().len(),
                 "output list has {} items, tuple has {}",
                 outputs.len(),
-                tuple_term.cs.len()
+                tuple_term.cs().len()
             );
             for (n, s) in inputs {
                 p.add_input(n, s);
             }
-            for ((n, s), t) in outputs.into_iter().zip(&tuple_term.cs) {
+            for ((n, s), t) in outputs.into_iter().zip(tuple_term.cs()) {
                 assert_eq!(s, check(t));
                 p.add_output(n, t.clone());
             }
@@ -668,7 +668,7 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
         .iter()
         .map(|(name, term)| {
             let name = std::str::from_utf8(name).unwrap().to_string();
-            let val = match &term[0].op {
+            let val = match term[0].op() {
                 Op::Const(v) => v.clone(),
                 _ => panic!("Non-value binding {} associated with {}", term[0], name),
             };

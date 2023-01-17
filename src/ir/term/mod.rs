@@ -6,7 +6,6 @@
 //!
 //!    * Term structure
 //!       * [Term]: perfectly-shared terms. Think of them as shared pointers to
-//!       * [TermData]: the underlying term. An operator and some children.
 //!       * [Op]: an operator
 //!    * Term types
 //!       * [Sort]: the type of a term
@@ -22,19 +21,18 @@
 //!    * [Value]: a variable-free (and evaluated) term
 //!
 use crate::cfg::cfg_or_default as cfg;
-use crate::util::once::OnceQueue;
 
 use circ_fields::{FieldT, FieldV};
+pub use circ_hc::{Node, Table, Weak};
 use circ_opt::FieldToBv;
 use fxhash::{FxHashMap, FxHashSet};
-use hashconsing::{HConsed, WHConsed};
-use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 pub mod bv;
 pub mod dist;
@@ -616,38 +614,23 @@ impl Display for IntBinPred {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-/// A term: an operator applied to arguements
-pub struct TermData {
-    /// the operator
-    pub op: Op,
-    /// the arguments
-    pub cs: Vec<Term>,
-}
-
-impl Serialize for TermData {
+impl Serialize for Term {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let linearized = lin::LinTerm::from(&mk(self.clone()));
+        let linearized = lin::LinTerm::from(self);
         linearized.serialize(serializer)
     }
 }
 
-impl hashconsing::UniqueConsign for TermData {
-    fn unique_make(self) -> Term {
-        mk(self)
-    }
-}
-
-impl<'de> Deserialize<'de> for TermData {
-    fn deserialize<D>(deserializer: D) -> Result<TermData, D::Error>
+impl<'de> Deserialize<'de> for Term {
+    fn deserialize<D>(deserializer: D) -> Result<Term, D::Error>
     where
         D: Deserializer<'de>,
     {
         let linearized = lin::LinTerm::deserialize(deserializer)?;
-        Ok((*Term::from(linearized)).clone())
+        Ok(Term::from(linearized))
     }
 }
 
@@ -930,159 +913,19 @@ impl Sort {
     }
 }
 
+mod hc {
+    use circ_hc::generate_hashcons_rc;
+
+    generate_hashcons_rc!(super::Op);
+}
+
 /// A (perfectly shared) pointer to a term
-pub type Term = HConsed<TermData>;
+pub type Term = hc::Node;
 // "Temporary" terms.
 /// A weak (perfectly shared) pointer to a term
-pub type TTerm = WHConsed<TermData>;
+pub type TTerm = hc::Weak;
 
-struct TermTable {
-    map: FxHashMap<Arc<TermData>, TTerm>,
-    count: u64,
-    last_len: usize,
-}
-
-impl TermTable {
-    fn get(&self, key: &TermData) -> Option<Term> {
-        if let Some(old) = self.map.get(key) {
-            old.to_hconsed()
-        } else {
-            None
-        }
-    }
-    fn mk(&mut self, elm: TermData) -> Term {
-        // If the element is known and upgradable return it.
-        if let Some(hconsed) = self.get(&elm) {
-            //debug_assert!(*hconsed.elm == elm);
-            return hconsed;
-        }
-        // Otherwise build hconsed version.
-        let elm = Arc::new(elm);
-        let hconsed = HConsed {
-            elm: elm.clone(),
-            uid: self.count,
-        };
-        // Increment uid count.
-        self.count += 1;
-        // ...add weak version to the table...
-        self.map.insert(elm, hconsed.to_weak());
-        // ...and return consed version.
-        hconsed
-    }
-    fn mk_ref(&mut self, elm: &TermData) -> Term {
-        // If the element is known and upgradable return it.
-        if let Some(hconsed) = self.get(elm) {
-            //debug_assert!(*hconsed.elm == elm);
-            return hconsed;
-        }
-        // Otherwise build hconsed version.
-        let elm = Arc::new(elm.clone());
-        let hconsed = HConsed {
-            elm: elm.clone(),
-            uid: self.count,
-        };
-        // Increment uid count.
-        self.count += 1;
-        // ...add weak version to the table...
-        self.map.insert(elm, hconsed.to_weak());
-        // ...and return consed version.
-        hconsed
-    }
-    fn should_collect(&mut self) -> bool {
-        let ret = LEN_THRESH_DEN * self.map.len() > LEN_THRESH_NUM * self.last_len;
-        if self.last_len > TERM_CACHE_LIMIT {
-            // when last_len is big, force a garbage collect every once in a while
-            self.last_len = (self.last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN;
-        }
-        ret
-    }
-    fn collect(&mut self) {
-        let old_size = self.map.len();
-        let mut to_check: OnceQueue<Term> = OnceQueue::new();
-        self.map.retain(|key, _| {
-            if Arc::strong_count(key) > 1 {
-                true
-            } else {
-                to_check.extend(key.cs.iter().cloned());
-                false
-            }
-        });
-        while let Some(t) = to_check.pop() {
-            let okv = self.map.get_key_value(&*t.elm);
-            std::mem::drop(t);
-            if let Some((key, _)) = okv {
-                if Arc::strong_count(key) <= 1 {
-                    to_check.extend(key.cs.iter().cloned());
-                    let key = key.clone();
-                    self.map.remove(&key);
-                }
-            }
-        }
-        let new_size = self.map.len();
-        for (k, v) in self.map.iter() {
-            assert!(v.elm.upgrade().is_some(), "Can not upgrade: {:?}", k)
-        }
-        debug!(target: "ir::term::gc", "{} of {} terms collected", old_size - new_size, old_size);
-        self.last_len = new_size;
-    }
-}
-struct TypeTable {
-    map: FxHashMap<TTerm, Sort>,
-}
-impl std::ops::Deref for TypeTable {
-    type Target = FxHashMap<TTerm, Sort>;
-    fn deref(&self) -> &Self::Target {
-        &self.map
-    }
-}
-impl std::ops::DerefMut for TypeTable {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.map
-    }
-}
-impl TypeTable {
-    fn collect(&mut self) {
-        let old_size = self.map.len();
-        self.map.retain(|term, _| term.elm.strong_count() > 1);
-        let new_size = self.map.len();
-        debug!(target: "ir::term::gc", "{} of {} types collected", old_size - new_size, old_size);
-    }
-}
-
-lazy_static! {
-    static ref TERMS: RwLock<TermTable> = RwLock::new(TermTable {
-        map: FxHashMap::default(),
-        count: 0,
-        last_len: 0,
-    });
-}
-
-// Tests are executed concurrently, meaning that terms might be collected
-// in one thread, breaking constant folding or type checking running in a
-// different thread. To fix this, we add a lock that the collector takes
-// read-write, and cfolding / type-checking takes read-only.
-//
-// Deadlock analysis:
-//      cfold takes FOLD_CACHE(w) -> TERMS(w)
-//      type checking takes TERM_TYPES(w)
-//      garbage collector takes one lock at a time
-//
-// The following locking priority MUST be observed:
-//
-// COLLECT -> FOLD_CACHE -> TERMS -> TERM_TYPES
-lazy_static! {
-    pub(super) static ref COLLECT: RwLock<()> = RwLock::new(());
-}
-
-fn mk(elm: TermData) -> Term {
-    let mut slf = TERMS.write().unwrap();
-    slf.mk(elm)
-}
-
-fn mk_ref(elm: &TermData) -> Term {
-    let mut slf = TERMS.write().unwrap();
-    slf.mk_ref(elm)
-}
+type TypeTable = circ_hc::collections::cache::NodeCache<Op, hc::Table, Sort>;
 
 /// Scans the term database and the type database and removes dead terms and types.
 pub fn garbage_collect() {
@@ -1096,10 +939,23 @@ pub fn garbage_collect() {
     }
 
     // lock the collector before locking anything else
-    let _lock = COLLECT.write().unwrap();
     collect_terms();
     collect_types();
     super::opt::cfold::collect();
+}
+
+thread_local! {
+    static LAST_LEN: Cell<usize> = Default::default();
+}
+
+fn should_collect() -> bool {
+    let last_len = LAST_LEN.with(|l| l.get());
+    let ret = LEN_THRESH_DEN * hc::Table::table_size() > LEN_THRESH_NUM * last_len;
+    if last_len > TERM_CACHE_LIMIT {
+        // when last_len is big, force a garbage collect every once in a while
+        LAST_LEN.with(|l| l.set((last_len * LEN_DECAY_NUM) / LEN_DECAY_DEN));
+    }
+    ret
 }
 
 const LEN_THRESH_NUM: usize = 8;
@@ -1115,35 +971,28 @@ pub fn maybe_garbage_collect() -> bool {
         return false;
     }
 
-    // lock the collector before locking anything else
-    let _lock = COLLECT.write().unwrap();
-    let mut ran = false;
-    {
-        let mut term_table = TERMS.write().unwrap();
-        if term_table.should_collect() {
-            term_table.collect();
-            ran = true;
-        }
-    } // TERMS lock goes out of scope here
-    if ran {
+    if should_collect() {
+        collect_terms();
         collect_types();
         super::opt::cfold::collect();
+        true
+    } else {
+        false
     }
-    ran
 }
 
 fn collect_terms() {
-    TERMS.write().unwrap().collect();
+    hc::Table::gc();
 }
 
 fn collect_types() {
-    ty::TERM_TYPES.write().unwrap().collect();
+    ty::TERM_TYPES.with(|tys| tys.borrow_mut().collect());
 }
 
-impl TermData {
+impl Term {
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
-        if let Op::Const(Value::Bool(b)) = &self.op {
+        if let Op::Const(Value::Bool(b)) = &self.op() {
             Some(*b)
         } else {
             None
@@ -1151,7 +1000,7 @@ impl TermData {
     }
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
-        if let Op::Const(Value::BitVector(b)) = &self.op {
+        if let Op::Const(Value::BitVector(b)) = &self.op() {
             Some(b)
         } else {
             None
@@ -1159,7 +1008,7 @@ impl TermData {
     }
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldV> {
-        if let Op::Const(Value::Field(b)) = &self.op {
+        if let Op::Const(Value::Field(b)) = &self.op() {
             Some(b)
         } else {
             None
@@ -1168,7 +1017,7 @@ impl TermData {
 
     /// Get the underlying tuple constant, if possible.
     pub fn as_tuple_opt(&self) -> Option<&[Value]> {
-        if let Op::Const(Value::Tuple(t)) = &self.op {
+        if let Op::Const(Value::Tuple(t)) = &self.op() {
             Some(t)
         } else {
             None
@@ -1177,7 +1026,7 @@ impl TermData {
 
     /// Get the underlying array constant, if possible.
     pub fn as_array_opt(&self) -> Option<&Array> {
-        if let Op::Const(Value::Array(a)) = &self.op {
+        if let Op::Const(Value::Array(a)) = &self.op() {
             Some(a)
         } else {
             None
@@ -1186,7 +1035,7 @@ impl TermData {
 
     /// Get the underlying constant value, if possible.
     pub fn as_value_opt(&self) -> Option<&Value> {
-        if let Op::Const(v) = &self.op {
+        if let Op::Const(v) = &self.op() {
             Some(v)
         } else {
             None
@@ -1195,12 +1044,12 @@ impl TermData {
 
     /// Is this a variable?
     pub fn is_var(&self) -> bool {
-        matches!(&self.op, Op::Var(..))
+        matches!(&self.op(), Op::Var(..))
     }
 
     /// Is this a value
     pub fn is_const(&self) -> bool {
-        matches!(&self.op, Op::Const(..))
+        matches!(&self.op(), Op::Const(..))
     }
 }
 
@@ -1327,7 +1176,7 @@ pub fn eval_cached<'a>(
             eval_value(vs, h, node);
         } else {
             stack.push((true, node.clone()));
-            for c in &node.cs {
+            for c in node.cs() {
                 // vs doubles as our visited set.
                 if !vs.contains_key(c) {
                     stack.push((false, c.clone()));
@@ -1340,52 +1189,59 @@ pub fn eval_cached<'a>(
 
 /// Recursively evaluate the term `t`, using variable values in `h`.
 pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
-    let mut vs = TermMap::<Value>::new();
+    let mut vs = TermMap::<Value>::default();
     eval_cached(t, h, &mut vs).clone()
 }
 
 /// Helper function for eval function. Handles a single term
 fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) -> Value {
-    let v = match &c.op {
+    let v = match &c.op() {
         Op::Var(n, _) => h
             .get(n)
             .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, h))
             .clone(),
-        Op::Eq => Value::Bool(vs.get(&c.cs[0]).unwrap() == vs.get(&c.cs[1]).unwrap()),
-        Op::Not => Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool()),
-        Op::Implies => {
-            Value::Bool(!vs.get(&c.cs[0]).unwrap().as_bool() || vs.get(&c.cs[1]).unwrap().as_bool())
-        }
+        Op::Eq => Value::Bool(vs.get(&c.cs()[0]).unwrap() == vs.get(&c.cs()[1]).unwrap()),
+        Op::Not => Value::Bool(!vs.get(&c.cs()[0]).unwrap().as_bool()),
+        Op::Implies => Value::Bool(
+            !vs.get(&c.cs()[0]).unwrap().as_bool() || vs.get(&c.cs()[1]).unwrap().as_bool(),
+        ),
         Op::BoolNaryOp(BoolNaryOp::Or) => {
-            Value::Bool(c.cs.iter().any(|c| vs.get(c).unwrap().as_bool()))
+            Value::Bool(c.cs().iter().any(|c| vs.get(c).unwrap().as_bool()))
         }
         Op::BoolNaryOp(BoolNaryOp::And) => {
-            Value::Bool(c.cs.iter().all(|c| vs.get(c).unwrap().as_bool()))
+            Value::Bool(c.cs().iter().all(|c| vs.get(c).unwrap().as_bool()))
         }
         Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
-            c.cs.iter()
+            c.cs()
+                .iter()
                 .map(|c| vs.get(c).unwrap().as_bool())
                 .fold(false, std::ops::BitXor::bitxor),
         ),
-        Op::BvBit(i) => Value::Bool(vs.get(&c.cs[0]).unwrap().as_bv().uint().get_bit(*i as u32)),
+        Op::BvBit(i) => Value::Bool(
+            vs.get(&c.cs()[0])
+                .unwrap()
+                .as_bv()
+                .uint()
+                .get_bit(*i as u32),
+        ),
         Op::BoolMaj => {
-            let c0 = vs.get(&c.cs[0]).unwrap().as_bool() as u8;
-            let c1 = vs.get(&c.cs[1]).unwrap().as_bool() as u8;
-            let c2 = vs.get(&c.cs[2]).unwrap().as_bool() as u8;
+            let c0 = vs.get(&c.cs()[0]).unwrap().as_bool() as u8;
+            let c1 = vs.get(&c.cs()[1]).unwrap().as_bool() as u8;
+            let c2 = vs.get(&c.cs()[2]).unwrap().as_bool() as u8;
             Value::Bool(c0 + c1 + c2 > 1)
         }
         Op::BvConcat => Value::BitVector({
-            let mut it = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
+            let mut it = c.cs().iter().map(|c| vs.get(c).unwrap().as_bv().clone());
             let f = it.next().unwrap();
             it.fold(f, BitVector::concat)
         }),
         Op::BvExtract(h, l) => {
-            Value::BitVector(vs.get(&c.cs[0]).unwrap().as_bv().clone().extract(*h, *l))
+            Value::BitVector(vs.get(&c.cs()[0]).unwrap().as_bv().clone().extract(*h, *l))
         }
         Op::Const(v) => v.clone(),
         Op::BvBinOp(o) => Value::BitVector({
-            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
-            let b = vs.get(&c.cs[1]).unwrap().as_bv().clone();
+            let a = vs.get(&c.cs()[0]).unwrap().as_bv().clone();
+            let b = vs.get(&c.cs()[1]).unwrap().as_bv().clone();
             match o {
                 BvBinOp::Udiv => a / &b,
                 BvBinOp::Urem => a % &b,
@@ -1396,14 +1252,14 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             }
         }),
         Op::BvUnOp(o) => Value::BitVector({
-            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            let a = vs.get(&c.cs()[0]).unwrap().as_bv().clone();
             match o {
                 BvUnOp::Not => !a,
                 BvUnOp::Neg => -a,
             }
         }),
         Op::BvNaryOp(o) => Value::BitVector({
-            let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_bv().clone());
+            let mut xs = c.cs().iter().map(|c| vs.get(c).unwrap().as_bv().clone());
             let f = xs.next().unwrap();
             xs.fold(
                 f,
@@ -1417,13 +1273,13 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             )
         }),
         Op::BvSext(w) => Value::BitVector({
-            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            let a = vs.get(&c.cs()[0]).unwrap().as_bv().clone();
             let mask = ((Integer::from(1) << *w as u32) - 1)
                 * Integer::from(a.uint().get_bit(a.width() as u32 - 1));
             BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
         }),
         Op::PfToBv(w) => Value::BitVector({
-            let i = vs.get(&c.cs[0]).unwrap().as_pf().i();
+            let i = vs.get(&c.cs()[0]).unwrap().as_pf().i();
             if let FieldToBv::Panic = cfg().ir.field_to_bv {
                 assert!(
                     (i.significant_bits() as usize) <= *w,
@@ -1434,19 +1290,19 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             BitVector::new(i % (Integer::from(1) << *w), *w)
         }),
         Op::BvUext(w) => Value::BitVector({
-            let a = vs.get(&c.cs[0]).unwrap().as_bv().clone();
+            let a = vs.get(&c.cs()[0]).unwrap().as_bv().clone();
             BitVector::new(a.uint().clone(), a.width() + w)
         }),
-        Op::Ite => if vs.get(&c.cs[0]).unwrap().as_bool() {
-            vs.get(&c.cs[1])
+        Op::Ite => if vs.get(&c.cs()[0]).unwrap().as_bool() {
+            vs.get(&c.cs()[1])
         } else {
-            vs.get(&c.cs[2])
+            vs.get(&c.cs()[2])
         }
         .unwrap()
         .clone(),
         Op::BvBinPred(o) => Value::Bool({
-            let a = vs.get(&c.cs[0]).unwrap().as_bv();
-            let b = vs.get(&c.cs[1]).unwrap().as_bv();
+            let a = vs.get(&c.cs()[0]).unwrap().as_bv();
+            let b = vs.get(&c.cs()[1]).unwrap().as_bv();
             match o {
                 BvBinPred::Sge => a.as_sint() >= b.as_sint(),
                 BvBinPred::Sgt => a.as_sint() > b.as_sint(),
@@ -1459,11 +1315,11 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             }
         }),
         Op::BoolToBv => Value::BitVector(BitVector::new(
-            Integer::from(vs.get(&c.cs[0]).unwrap().as_bool()),
+            Integer::from(vs.get(&c.cs()[0]).unwrap().as_bool()),
             1,
         )),
         Op::PfUnOp(o) => Value::Field({
-            let a = vs.get(&c.cs[0]).unwrap().as_pf().clone();
+            let a = vs.get(&c.cs()[0]).unwrap().as_pf().clone();
             match o {
                 PfUnOp::Recip => {
                     if a.is_zero() {
@@ -1476,7 +1332,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             }
         }),
         Op::PfNaryOp(o) => Value::Field({
-            let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_pf().clone());
+            let mut xs = c.cs().iter().map(|c| vs.get(c).unwrap().as_pf().clone());
             let f = xs.next().unwrap();
             xs.fold(
                 f,
@@ -1487,8 +1343,8 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             )
         }),
         Op::IntBinPred(o) => Value::Bool({
-            let a = vs.get(&c.cs[0]).unwrap().as_int();
-            let b = vs.get(&c.cs[1]).unwrap().as_int();
+            let a = vs.get(&c.cs()[0]).unwrap().as_int();
+            let b = vs.get(&c.cs()[1]).unwrap().as_int();
             match o {
                 IntBinPred::Ge => a >= b,
                 IntBinPred::Gt => a > b,
@@ -1497,7 +1353,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             }
         }),
         Op::IntNaryOp(o) => Value::Int({
-            let mut xs = c.cs.iter().map(|c| vs.get(c).unwrap().as_int().clone());
+            let mut xs = c.cs().iter().map(|c| vs.get(c).unwrap().as_int().clone());
             let f = xs.next().unwrap();
             xs.fold(
                 f,
@@ -1507,43 +1363,43 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
                 },
             )
         }),
-        Op::UbvToPf(fty) => Value::Field(fty.new_v(vs.get(&c.cs[0]).unwrap().as_bv().uint())),
+        Op::UbvToPf(fty) => Value::Field(fty.new_v(vs.get(&c.cs()[0]).unwrap().as_bv().uint())),
         // tuple
-        Op::Tuple => Value::Tuple(c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect()),
+        Op::Tuple => Value::Tuple(c.cs().iter().map(|c| vs.get(c).unwrap().clone()).collect()),
         Op::Field(i) => {
-            let t = vs.get(&c.cs[0]).unwrap().as_tuple();
-            assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
+            let t = vs.get(&c.cs()[0]).unwrap().as_tuple();
+            assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs()[0]);
             t[*i].clone()
         }
         Op::Update(i) => {
-            let mut t = Vec::from(vs.get(&c.cs[0]).unwrap().as_tuple()).into_boxed_slice();
-            assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs[0]);
-            let e = vs.get(&c.cs[1]).unwrap().clone();
+            let mut t = Vec::from(vs.get(&c.cs()[0]).unwrap().as_tuple()).into_boxed_slice();
+            assert!(i < &t.len(), "{} out of bounds for {}", i, c.cs()[0]);
+            let e = vs.get(&c.cs()[1]).unwrap().clone();
             assert_eq!(t[*i].sort(), e.sort());
             t[*i] = e;
             Value::Tuple(t)
         }
         // array
         Op::Store => {
-            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
-            let i = vs.get(&c.cs[1]).unwrap().clone();
-            let v = vs.get(&c.cs[2]).unwrap().clone();
+            let a = vs.get(&c.cs()[0]).unwrap().as_array().clone();
+            let i = vs.get(&c.cs()[1]).unwrap().clone();
+            let v = vs.get(&c.cs()[2]).unwrap().clone();
             Value::Array(a.store(i, v))
         }
         Op::Select => {
-            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
-            let i = vs.get(&c.cs[1]).unwrap();
+            let a = vs.get(&c.cs()[0]).unwrap().as_array().clone();
+            let i = vs.get(&c.cs()[1]).unwrap();
             a.select(i)
         }
         Op::Map(op) => {
-            let arg_cnt = c.cs.len();
+            let arg_cnt = c.cs().len();
 
             //  term_vecs[i] will store a vector of all the i-th index entries of the array arguments
-            let mut term_vecs = vec![Vec::new(); vs.get(&c.cs[0]).unwrap().as_array().size];
+            let mut term_vecs = vec![Vec::new(); vs.get(&c.cs()[0]).unwrap().as_array().size];
 
             for i in 0..arg_cnt {
-                let arr = vs.get(&c.cs[i]).unwrap().as_array().clone();
-                let iter = match check(&c.cs[i]) {
+                let arr = vs.get(&c.cs()[i]).unwrap().as_array().clone();
+                let iter = match check(&c.cs()[i]) {
                     Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
                     _ => panic!("Input type should be Array"),
                 };
@@ -1569,12 +1425,12 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             Value::Array(res)
         }
         Op::Rot(i) => {
-            let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
-            let iter = match check(&c.cs[0]) {
+            let a = vs.get(&c.cs()[0]).unwrap().as_array().clone();
+            let iter = match check(&c.cs()[0]) {
                 Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
                 _ => panic!("Input type should be Array"),
             };
-            let (mut res, len) = match check(&c.cs[0]) {
+            let (mut res, len) = match check(&c.cs()[0]) {
                 Sort::Array(k, v, n) => (Array::default((*k).clone(), &v, n), n),
                 _ => panic!("Output type of rot should be Array"),
             };
@@ -1619,7 +1475,7 @@ pub fn leaf_term(op: Op) -> Term {
 #[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
     #[cfg_attr(not(debug_assertions), allow(clippy::let_and_return))]
-    let t = mk(TermData { op, cs });
+    let t = hc::Table::create(&op, cs);
     #[cfg(debug_assertions)]
     check_rec(&t);
     t
@@ -1664,11 +1520,11 @@ macro_rules! term {
 }
 
 /// Map from terms
-pub type TermMap<T> = hashconsing::coll::HConMap<Term, T>;
+pub type TermMap<T> = FxHashMap<Term, T>;
 /// LRU cache of terms (like TermMap, but limited size)
-pub type TermCache<T> = hashconsing::coll::WHConLru<Term, T>;
+pub type TermCache<T> = circ_hc::collections::lru::NodeLruCache<Op, hc::Table, T>;
 /// Set of terms
-pub type TermSet = hashconsing::coll::HConSet<Term>;
+pub type TermSet = FxHashSet<Term>;
 
 // default LRU cache size
 // this size avoids quadratic behavior for Falcon verification
@@ -1686,7 +1542,7 @@ impl PostOrderIter {
     pub fn new(root: Term) -> Self {
         Self {
             stack: vec![(false, root)],
-            visited: TermSet::new(),
+            visited: TermSet::default(),
         }
     }
 }
@@ -1701,7 +1557,7 @@ impl std::iter::Iterator for PostOrderIter {
                 self.stack.last_mut().unwrap().0 = true;
                 let last = self.stack.last().unwrap().1.clone();
                 self.stack
-                    .extend(last.cs.iter().map(|c| (false, c.clone())));
+                    .extend(last.cs().iter().map(|c| (false, c.clone())));
             } else {
                 break;
             }
@@ -1954,7 +1810,7 @@ impl Computation {
     /// Assert `s` in the system.
     pub fn assert(&mut self, s: Term) {
         assert!(check(&s) == Sort::Bool);
-        debug!("Assert: {}", &s.op);
+        debug!("Assert: {}", &s.op());
         self.outputs.push(s);
     }
 

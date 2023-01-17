@@ -56,12 +56,12 @@ pub fn assign(c: &Computation, cm: &str) -> SharingMap {
 }
 
 fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
-    let mut terms: TermSet = TermSet::new();
+    let mut terms: TermSet = TermSet::default();
     let mut def_uses: FxHashSet<(Term, Term)> = FxHashSet::default();
     for o in &c.outputs {
         for t in PostOrderIter::new(o.clone()) {
             terms.insert(t.clone());
-            for c in &t.cs {
+            for c in t.cs() {
                 def_uses.insert((c.clone(), t.clone()));
             }
         }
@@ -76,7 +76,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     // build variables for all term assignments
     for (t, i) in terms.iter() {
         let mut vars = vec![];
-        match &t.op {
+        match &t.op() {
             Op::Var(..)
             | Op::Const(_)
             | Op::Call(..)
@@ -94,7 +94,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                 panic!("Requires def-use-graph, tests should not have secret indices.")
             }
             _ => {
-                if let Some(costs) = costs.ops.get(&t.op) {
+                if let Some(costs) = costs.ops.get(t.op()) {
                     for (ty, cost) in costs {
                         let name = format!("t_{}_{}", i, ty.char());
                         let v = ilp.new_variable(variable().binary(), name.clone());
@@ -102,7 +102,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                         vars.push(v);
                     }
                 } else {
-                    panic!("No cost for op {}", &t.op)
+                    panic!("No cost for op {}", &t.op())
                 }
             }
         }
@@ -172,7 +172,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
 
     let (_opt, solution) = ilp.default_solve().unwrap();
 
-    let mut assignment = TermMap::new();
+    let mut assignment = TermMap::default();
     for ((term, ty), (_, _, var_name)) in &term_vars {
         if solution.get(var_name).unwrap() == &1.0 {
             assignment.insert(term.clone(), *ty);
@@ -273,7 +273,7 @@ mod tests {
         // Big enough to do the math with arith
         assert_eq!(
             &ShareType::Arithmetic,
-            assignment.get(&cs.outputs[0].cs[0]).unwrap()
+            assignment.get(&cs.outputs[0].cs()[0]).unwrap()
         );
         // Then convert to boolean
         assert_eq!(&ShareType::Boolean, assignment.get(&cs.outputs[0]).unwrap());
@@ -310,7 +310,7 @@ mod tests {
         // All yao
         assert_eq!(
             &ShareType::Yao,
-            assignment.get(&cs.outputs[0].cs[0]).unwrap()
+            assignment.get(&cs.outputs[0].cs()[0]).unwrap()
         );
         assert_eq!(&ShareType::Yao, assignment.get(&cs.outputs[0]).unwrap());
     }

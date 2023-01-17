@@ -9,7 +9,7 @@ pub struct Cache(TermMap<Term>);
 impl Cache {
     /// Empty cache.
     pub fn new() -> Self {
-        Cache(TermMap::new())
+        Cache(TermMap::default())
     }
 }
 
@@ -33,16 +33,16 @@ pub fn binarize_nary_ops(term_: Term) -> Term {
 pub fn binarize_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache) -> Term {
     for t in PostOrderIter::new(term_.clone()) {
         let mut children = Vec::new();
-        for c in &t.cs {
+        for c in t.cs() {
             if let Some(rewritten_c) = rewritten.get(c) {
                 children.push(rewritten_c.clone());
             } else {
                 children.push(c.clone());
             }
         }
-        let entry = match t.op {
-            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(&t.op, &children),
-            _ => term(t.op.clone(), children.clone()),
+        let entry = match t.op() {
+            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => binarize(t.op(), &children),
+            _ => term(t.op().clone(), children.clone()),
         };
         rewritten.insert(t, entry);
     }
@@ -65,8 +65,8 @@ mod test {
     }
 
     fn is_binary(t: Term) -> bool {
-        PostOrderIter::new(t).all(|c| match c.op {
-            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => c.cs.len() <= 2,
+        PostOrderIter::new(t).all(|c| match c.op() {
+            Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(_) => c.cs().len() <= 2,
             _ => true,
         })
     }

@@ -85,13 +85,14 @@ impl Ram {
 
 /// Parse `ite` as a conditional store (arr, idx, val, guard)
 fn parse_cond_store(ite: &Term) -> Option<ConditionalStore> {
-    if ite.op == Op::Ite && ite.cs[1].op == Op::Store && ite.cs[1].cs[0] == ite.cs[2] {
+    if ite.op() == &Op::Ite && ite.cs()[1].op() == &Op::Store && ite.cs()[1].cs()[0] == ite.cs()[2]
+    {
         Some(ConditionalStore {
-            arr: ite.cs[2].clone(),
-            idx: ite.cs[1].cs[1].clone(),
-            val: ite.cs[1].cs[2].clone(),
-            guard: ite.cs[0].clone(),
-            store: ite.cs[1].clone(),
+            arr: ite.cs()[2].clone(),
+            idx: ite.cs()[1].cs()[1].clone(),
+            val: ite.cs()[1].cs()[2].clone(),
+            guard: ite.cs()[0].clone(),
+            store: ite.cs()[1].clone(),
         })
     } else {
         None
@@ -170,7 +171,7 @@ impl ArrayGraph {
             }
             if !is_c_store && !subsumed.contains(&t) {
                 if let Sort::Array(..) = check(&t) {
-                    for c in &t.cs {
+                    for c in t.cs() {
                         if let Sort::Array(..) = check(c) {
                             arrs.insert(t.clone());
                             ps.entry(c.clone()).or_insert_with(Vec::new).push(t.clone());
@@ -237,7 +238,7 @@ impl Extactor {
     }
     // If this term is a constant array, start a new RAM. Otherwise, look this term up.
     fn get_or_start(&mut self, t: &Term) -> RamId {
-        match &t.op {
+        match &t.op() {
             Op::Const(Value::Array(a)) => {
                 let id = self.rams.len();
                 self.rams.push(Ram::new(id, a.clone()));
@@ -261,7 +262,7 @@ impl RewritePass for Extactor {
         // First, we rewrite RAM terms.
         if self.graph.is_ram(t) {
             // Since this is a "RAM" term, it is non-constant and either a c-store or a store.
-            assert!(matches!(t.op, Op::Store | Op::Ite));
+            assert!(matches!(t.op(), Op::Store | Op::Ite));
             debug_assert!(self.graph.children.get(t).is_some());
             debug_assert_eq!(1, self.graph.children.get(t).unwrap().len());
             // Get dependency's RAM
@@ -269,14 +270,14 @@ impl RewritePass for Extactor {
             let ram_id = self.get_or_start(&child);
             let ram = &mut self.rams[ram_id];
             // Build new term, and parse as a c-store
-            let new = term(t.op.clone(), rewritten_children());
+            let new = term(t.op().clone(), rewritten_children());
             let c_store = parse_cond_store(&new).unwrap_or_else(|| {
                 // this is a plain store then, map it to a c-store
-                assert_eq!(Op::Store, new.op);
+                assert_eq!(&Op::Store, new.op());
                 ConditionalStore {
-                    arr: new.cs[0].clone(),
-                    idx: new.cs[1].clone(),
-                    val: new.cs[2].clone(),
+                    arr: new.cs()[0].clone(),
+                    idx: new.cs()[1].clone(),
+                    val: new.cs()[2].clone(),
                     guard: bool_lit(true),
                     store: bool_lit(false), // dummy; unused.
                 }
@@ -287,12 +288,12 @@ impl RewritePass for Extactor {
             self.term_ram.insert(t.clone(), id);
             None
         } else {
-            match &t.op {
+            match &t.op() {
                 // Rewrite select's whose array is a RAM term
-                Op::Select if self.graph.is_ram(&t.cs[0]) => {
-                    let ram_id = self.get_or_start(&t.cs[0]);
+                Op::Select if self.graph.is_ram(&t.cs()[0]) => {
+                    let ram_id = self.get_or_start(&t.cs()[0]);
                     let ram = &mut self.rams[ram_id];
-                    let read_value = ram.new_read(t.cs[1].clone(), computation, t.clone());
+                    let read_value = ram.new_read(t.cs()[1].clone(), computation, t.clone());
                     self.read_terms.insert(t.clone(), read_value.clone());
                     Some(read_value)
                 }
@@ -504,7 +505,7 @@ mod test {
         assert_eq!(1, cs2.outputs.len());
         assert_ne!(cs, cs2);
         assert_eq!(2, rams.len());
-        assert_eq!(cs.outputs[0].cs[2], cs2.outputs[0].cs[2]);
+        assert_eq!(cs.outputs[0].cs()[2], cs2.outputs[0].cs()[2]);
         assert_eq!(3, rams[0].accesses.len());
         assert_eq!(3, rams[1].accesses.len());
     }

@@ -5,28 +5,26 @@ use crate::ir::term::*;
 
 use circ_fields::FieldV;
 use circ_opt::FieldToBv;
-use lazy_static::lazy_static;
 use rug::Integer;
-use std::ops::DerefMut;
-use std::sync::RwLock;
+use std::cell::RefCell;
 
-lazy_static! {
-    // TODO: use weak pointers to allow GC
-    static ref FOLDS: RwLock<TermCache<TTerm>> = RwLock::new(TermCache::new(TERM_CACHE_LIMIT));
+thread_local! {
+    static FOLDS: RefCell<TermCache<TTerm>> = RefCell::new(TermCache::with_capacity(TERM_CACHE_LIMIT));
 }
 
 pub(in super::super) fn collect() {
-    let mut cache_handle = FOLDS.write().unwrap();
-    let cache = cache_handle.deref_mut();
-    let mut to_pop = Vec::new();
-    for (k, v) in cache.iter() {
-        if k.elm.strong_count() == 0 || v.elm.strong_count() == 0 {
-            to_pop.push(k.clone());
+    FOLDS.with(|cache_handle| {
+        let mut cache = cache_handle.borrow_mut();
+        let mut to_pop = Vec::new();
+        for (k, v) in cache.iter() {
+            if !k.live() || !v.live() {
+                to_pop.push(k.clone());
+            }
         }
-    }
-    for k in to_pop.into_iter() {
-        cache.pop(&k);
-    }
+        for k in to_pop.into_iter() {
+            cache.pop(&k);
+        }
+    })
 }
 
 /// Create a constant boolean
@@ -41,19 +39,18 @@ fn cbv(b: BitVector) -> Option<Term> {
 
 /// Fold away operators over constants.
 pub fn fold(node: &Term, ignore: &[Op]) -> Term {
-    // lock the collector before locking FOLDS (and, inside fold_cache, TERMS)
-    let _lock = super::super::term::COLLECT.read().unwrap();
-    let mut cache_handle = FOLDS.write().unwrap();
-    let cache = cache_handle.deref_mut();
+    FOLDS.with(|cache_handle| {
+        let mut cache = cache_handle.borrow_mut();
 
-    // make the cache unbounded during the fold_cache call
-    let old_capacity = cache.cap();
-    cache.resize(std::usize::MAX);
+        // make the cache unbounded during the fold_cache call
+        let old_capacity = cache.cap();
+        cache.resize(std::usize::MAX);
 
-    let ret = fold_cache(node, cache, ignore);
-    // shrink cache to its max size
-    cache.resize(old_capacity);
-    ret
+        let ret = fold_cache(node, &mut cache, ignore);
+        // shrink cache to its max size
+        cache.resize(old_capacity);
+        ret
+    })
 }
 
 /// Do constant-folding backed by a cache.
@@ -63,30 +60,30 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
 
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if cache.contains(&t.to_weak()) {
+        if cache.contains(&t.downgrade()) {
             continue;
         }
         if !children_pushed {
             stack.push((t.clone(), true));
-            stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
+            stack.extend(t.cs().iter().map(|c| (c.clone(), false)));
             continue;
         }
 
         let mut c_get = |x: &Term| -> Term {
             cache
-                .get(&x.to_weak())
-                .and_then(|x| x.to_hconsed())
+                .get(&x.downgrade())
+                .and_then(|x| x.upgrade())
                 .expect("postorder cache")
         };
 
-        if ignore.contains(&t.op) {
-            let new_t = term(t.op.clone(), t.cs.iter().map(|c| c_get(c)).collect());
-            cache.put(t.to_weak(), new_t.to_weak());
+        if ignore.contains(t.op()) {
+            let new_t = term(t.op().clone(), t.cs().iter().map(|c| c_get(c)).collect());
+            cache.put(t.downgrade(), new_t.downgrade());
             continue;
         }
 
-        let mut get = |i: usize| c_get(&t.cs[i]);
-        let new_t_opt = match &t.op {
+        let mut get = |i: usize| c_get(&t.cs()[i]);
+        let new_t_opt = match &t.op() {
             Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
             Op::Implies => match get(0).as_bool_opt() {
                 Some(true) => Some(get(1)),
@@ -101,7 +98,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 Some(bv) => cbool(bv.bit(*i)),
                 _ => None,
             },
-            Op::BoolNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::BoolNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
             Op::Eq => {
                 let c0 = get(0);
                 let c1 = get(1);
@@ -178,7 +175,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     _ => None,
                 }
             }
-            Op::BvNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::BvNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
             Op::BvBinPred(p) => {
                 if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
                     Some(leaf_term(Op::Const(Value::Bool(match p {
@@ -227,14 +224,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     }
                 }
             }
-            Op::PfNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::PfNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
             Op::PfUnOp(o) => get(0).as_pf_opt().map(|pf| {
                 leaf_term(Op::Const(Value::Field(match o {
                     PfUnOp::Recip => pf.clone().recip(),
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
-            Op::IntNaryOp(o) => Some(o.flatten(t.cs.iter().map(|c| c_get(c)))),
+            Op::IntNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
             Op::IntBinPred(p) => {
                 if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
                     Some(leaf_term(Op::Const(Value::Bool(match p {
@@ -267,12 +264,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
                 _ => None,
             },
-            Op::Tuple => {
-                t.cs.iter()
-                    .map(|c| c_get(c).as_value_opt().cloned())
-                    .collect::<Option<_>>()
-                    .map(|v| leaf_term(Op::Const(Value::Tuple(v))))
-            }
+            Op::Tuple => t
+                .cs()
+                .iter()
+                .map(|c| c_get(c).as_value_opt().cloned())
+                .collect::<Option<_>>()
+                .map(|v| leaf_term(Op::Const(Value::Tuple(v)))),
             Op::Field(n) => get(0)
                 .as_tuple_opt()
                 .map(|t| leaf_term(Op::Const(t[*n].clone()))),
@@ -285,13 +282,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 }
                 _ => None,
             },
-            Op::BvConcat => {
-                t.cs.iter()
-                    .map(|c| c_get(c).as_bv_opt().cloned())
-                    .collect::<Option<Vec<_>>>()
-                    .and_then(|v| v.into_iter().reduce(BitVector::concat))
-                    .map(|bv| leaf_term(Op::Const(Value::BitVector(bv))))
-            }
+            Op::BvConcat => t
+                .cs()
+                .iter()
+                .map(|c| c_get(c).as_bv_opt().cloned())
+                .collect::<Option<Vec<_>>>()
+                .and_then(|v| v.into_iter().reduce(BitVector::concat))
+                .map(|bv| leaf_term(Op::Const(Value::BitVector(bv)))),
             Op::BoolToBv => get(0).as_bool_opt().map(|b| {
                 leaf_term(Op::Const(Value::BitVector(BitVector::new(
                     Integer::from(b),
@@ -309,24 +306,24 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         let new_t = {
             let mut cc_get = |x: &Term| -> Term {
                 cache
-                    .get(&x.to_weak())
-                    .and_then(|x| x.to_hconsed())
+                    .get(&x.downgrade())
+                    .and_then(|x| x.upgrade())
                     .expect("postorder cache")
             };
             new_t_opt
-                .unwrap_or_else(|| term(t.op.clone(), t.cs.iter().map(|c| cc_get(c)).collect()))
+                .unwrap_or_else(|| term(t.op().clone(), t.cs().iter().map(|c| cc_get(c)).collect()))
         };
-        cache.put(t.to_weak(), new_t.to_weak());
+        cache.put(t.downgrade(), new_t.downgrade());
     }
     cache
-        .get(&node.to_weak())
-        .and_then(|x| x.to_hconsed())
+        .get(&node.downgrade())
+        .and_then(|x| x.upgrade())
         .expect("postorder cache")
 }
 
 fn neg_bool(t: Term) -> Term {
-    match t.op {
-        NOT => t.cs[0].clone(),
+    match t.op() {
+        &NOT => t.cs()[0].clone(),
         _ => term![NOT; t],
     }
 }
@@ -349,8 +346,8 @@ trait NaryFlat<T: Clone>: Sized {
 
 impl NaryFlat<bool> for BoolNaryOp {
     fn as_const(t: Term) -> Result<bool, Term> {
-        match t.op {
-            Op::Const(Value::Bool(b)) => Ok(b),
+        match t.op() {
+            Op::Const(Value::Bool(b)) => Ok(*b),
             _ => Err(t),
         }
     }
@@ -393,7 +390,7 @@ impl NaryFlat<bool> for BoolNaryOp {
 
 impl NaryFlat<BitVector> for BvNaryOp {
     fn as_const(t: Term) -> Result<BitVector, Term> {
-        match &t.op {
+        match &t.op() {
             Op::Const(Value::BitVector(b)) => Ok(b.clone()),
             _ => Err(t),
         }
@@ -526,7 +523,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
 
 impl NaryFlat<FieldV> for PfNaryOp {
     fn as_const(t: Term) -> Result<FieldV, Term> {
-        match &t.op {
+        match &t.op() {
             Op::Const(Value::Field(b)) => Ok(b.clone()),
             _ => Err(t),
         }
@@ -563,7 +560,7 @@ impl NaryFlat<FieldV> for PfNaryOp {
 
 impl NaryFlat<Integer> for IntNaryOp {
     fn as_const(t: Term) -> Result<Integer, Term> {
-        match &t.op {
+        match &t.op() {
             Op::Const(Value::Int(b)) => Ok(b.clone()),
             _ => Err(t),
         }

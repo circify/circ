@@ -1,5 +1,5 @@
 //! Machinery for formatting IR types
-use super::{mk_ref, Array, Op, PostOrderIter, Sort, Term, TermData, TermMap, Value};
+use super::{Array, Node, Op, PostOrderIter, Sort, Term, TermMap, Value};
 use crate::cfg::{cfg, is_cfg_set};
 
 use circ_fields::{FieldT, FieldV};
@@ -262,24 +262,17 @@ impl DisplayIr for Term {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         let written = f.term_write_if_def(self)?;
         if !written {
-            <TermData as DisplayIr>::ir_fmt(self, f)?;
-        }
-        Ok(())
-    }
-}
-
-impl DisplayIr for TermData {
-    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
-        if !self.cs.is_empty() {
-            write!(f, "(")?;
-        }
-        self.op.ir_fmt(f)?;
-        for c in &self.cs {
-            write!(f, " ")?;
-            c.ir_fmt(f)?;
-        }
-        if !self.cs.is_empty() {
-            write!(f, ")")?;
+            if !self.cs().is_empty() {
+                write!(f, "(")?;
+            }
+            self.op().ir_fmt(f)?;
+            for c in self.cs() {
+                write!(f, " ")?;
+                c.ir_fmt(f)?;
+            }
+            if !self.cs().is_empty() {
+                write!(f, ")")?;
+            }
         }
         Ok(())
     }
@@ -290,7 +283,7 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     let close_dft_f = if f.cfg.use_default_field && f.default_field.is_none() {
         let fields: HashSet<FieldT> = PostOrderIter::new(t.clone())
             .filter_map(|c| {
-                if let Op::Const(Value::Field(f)) = &c.op {
+                if let Op::Const(Value::Field(f)) = &c.op() {
                     Some(f.ty())
                 } else {
                     None
@@ -309,14 +302,14 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
         false
     };
 
-    let mut parent_counts = TermMap::<usize>::new();
+    let mut parent_counts = TermMap::<usize>::default();
     writeln!(f, "(declare")?;
     writeln!(f, " (")?;
     for t in PostOrderIter::new(t.clone()) {
-        for c in t.cs.iter().cloned() {
+        for c in t.cs().iter().cloned() {
             *parent_counts.entry(c).or_insert(0) += 1;
         }
-        if let Op::Var(name, sort) = &t.op {
+        if let Op::Var(name, sort) = &t.op() {
             write!(f, "  ({} ", name)?;
             sort.ir_fmt(f)?;
             writeln!(f, ")")?;
@@ -326,7 +319,7 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     writeln!(f, " (let")?;
     writeln!(f, "  (")?;
     for t in PostOrderIter::new(t.clone()) {
-        if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs.is_empty() {
+        if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs().is_empty() {
             write!(f, "   ('{} ", f.defs.next_id.clone(),)?;
             t.ir_fmt(f)?;
             writeln!(f, ")")?;
@@ -358,28 +351,15 @@ impl<'a> Debug for IrWrapper<'a, Term> {
     }
 }
 
-impl<'a> Display for IrWrapper<'a, TermData> {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl<'a> Debug for IrWrapper<'a, TermData> {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let f = &mut IrFormatter::new(f, &self.cfg);
-        fmt_term_with_bindings(&mk_ref(self.t), f)
-    }
-}
-
-impl Debug for TermData {
+impl Debug for Term {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let cfg = IrCfg::from_circ_cfg();
         let f = &mut IrFormatter::new(f, &cfg);
-        fmt_term_with_bindings(&mk_ref(self), f)
+        fmt_term_with_bindings(self, f)
     }
 }
 
-impl Display for TermData {
+impl Display for Term {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "{:?}", self)
     }

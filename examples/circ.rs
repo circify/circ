@@ -16,6 +16,7 @@ use circ::cfg::{
 };
 #[cfg(feature = "c")]
 use circ::front::c::{self, C};
+#[cfg(all(feature = "smt", feature = "datalog"))]
 use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
@@ -185,9 +186,14 @@ fn main() {
         DeterminedLanguage::Zsharp => {
             panic!("Missing feature: smt,zok");
         }
+        #[cfg(all(feature = "smt", feature = "datalog"))]
         DeterminedLanguage::Datalog => {
             let inputs = datalog::Inputs { file: options.path };
             Datalog::gen(inputs)
+        }
+        #[cfg(not(all(feature = "smt", feature = "datalog")))]
+        DeterminedLanguage::Datalog => {
+            panic!("Missing feature: smt,datalog");
         }
         #[cfg(feature = "c")]
         DeterminedLanguage::C => {
@@ -239,8 +245,6 @@ fn main() {
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold(Box::new([])),
-                Opt::Flatten,
-                Opt::Inline,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
                 Opt::ConstantFold(Box::new([])),
@@ -252,7 +256,6 @@ fn main() {
                 Opt::Tuple,
                 Opt::Flatten,
                 Opt::ConstantFold(Box::new([])),
-                Opt::Inline,
             ],
         ),
     };

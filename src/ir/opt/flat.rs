@@ -53,7 +53,7 @@ pub struct Cache(TermMap<Entry>);
 impl Cache {
     /// Empty flattening.
     pub fn new() -> Self {
-        Cache(TermMap::new())
+        Cache(TermMap::default())
     }
 }
 
@@ -64,9 +64,9 @@ pub fn flatten_nary_ops(term_: Term) -> Term {
 }
 /// Traverse `term`, flattening n-ary operators.
 pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache) -> Term {
-    let mut parent_counts = TermMap::<usize>::new();
+    let mut parent_counts = TermMap::<usize>::default();
     for t in PostOrderIter::new(term_.clone()) {
-        for c in t.cs.iter().cloned() {
+        for c in t.cs().iter().cloned() {
             *parent_counts.entry(c).or_insert(0) += 1;
         }
     }
@@ -81,20 +81,20 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
         }
         if !children_pushed {
             stack.push((t.clone(), true));
-            stack.extend(t.cs.iter().map(|c| (c.clone(), false)));
+            stack.extend(t.cs().iter().map(|c| (c.clone(), false)));
             continue;
         }
-        let entry = match &t.op {
+        let entry = match &t.op() {
             // Don't flatten field*, since it does not help us.
             Op::BoolNaryOp(_) | Op::BvNaryOp(_) | Op::PfNaryOp(PfNaryOp::Add) => {
                 let mut children = Vec::new();
-                for c in &t.cs {
+                for c in t.cs() {
                     match rewritten.get_mut(c).unwrap() {
                         Entry::Term(t) => {
                             children.push(Rc::new(PersistentConcatList::Leaf(t.clone())))
                         }
                         Entry::NaryTerm(o, ts, _)
-                            if &t.op == o && parent_counts.get(c).unwrap_or(&0) <= &1 =>
+                            if t.op() == o && parent_counts.get(c).unwrap_or(&0) <= &1 =>
                         {
                             children.push(ts.clone());
                         }
@@ -105,14 +105,15 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
                     }
                 }
                 Entry::NaryTerm(
-                    t.op.clone(),
+                    t.op().clone(),
                     Rc::new(PersistentConcatList::Concat(children)),
                     None,
                 )
             }
             _ => Entry::Term(Rc::new(term(
-                t.op.clone(),
-                t.cs.iter()
+                t.op().clone(),
+                t.cs()
+                    .iter()
                     .map(|c| rewritten.get_mut(c).unwrap().as_term())
                     .collect(),
             ))),
@@ -134,10 +135,10 @@ mod test {
 
     fn is_flat(t: Term) -> bool {
         PostOrderIter::new(t).all(|c| {
-            c.op == PF_MUL
-                || c.op == Op::Tuple
-                || c.op.arity().is_some()
-                || !c.cs.iter().any(|cc| c.op == cc.op)
+            c.op() == &PF_MUL
+                || c.op() == &Op::Tuple
+                || c.op().arity().is_some()
+                || !c.cs().iter().any(|cc| c.op() == cc.op())
         })
     }
 

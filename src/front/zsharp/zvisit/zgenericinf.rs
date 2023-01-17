@@ -6,15 +6,14 @@ use crate::ir::term::{bv_lit, leaf_term, term, BoolNaryOp, Op, Sort, Term, Value
 #[cfg(feature = "smt")]
 use crate::target::smt::find_unique_model;
 
-use lazy_static::lazy_static;
 use log::debug;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::RwLock;
 use zokrates_pest_ast as ast;
 
-lazy_static! {
-    static ref CACHE: RwLock<HashMap<Term, HashMap<String, T>>> = RwLock::new(HashMap::new());
+thread_local! {
+    static CACHE: RefCell<HashMap<Term, HashMap<String, T>>> = RefCell::new(HashMap::new());
 }
 
 pub(in super::super) struct ZGenericInf<'ast, 'gen, const IS_CNST: bool> {
@@ -152,7 +151,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         if let Some(res) = self
             .constr
             .as_ref()
-            .and_then(|t| CACHE.read().unwrap().get(t).cloned())
+            .and_then(|t| CACHE.with(|c| c.borrow().get(t).cloned()))
         {
             assert!(self.gens.len() == res.len());
             assert!(self.gens.iter().all(|g| res.contains_key(&g.value)));
@@ -190,10 +189,10 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 }
             });
         if self.constr.is_some() {
-            CACHE
-                .write()
-                .unwrap()
-                .insert(self.constr.take().unwrap(), res.clone());
+            CACHE.with(|c| {
+                c.borrow_mut()
+                    .insert(self.constr.take().unwrap(), res.clone())
+            });
         }
         debug!("done (finished inference)");
         Ok(res)

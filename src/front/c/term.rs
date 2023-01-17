@@ -509,7 +509,7 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 
 pub fn const_int(a: CTerm) -> Integer {
     let s = match &a.term {
-        CTermData::CInt(s, _, i) => match &i.op {
+        CTermData::CInt(s, _, i) => match &i.op() {
             Op::Const(Value::BitVector(f)) => {
                 if *s {
                     f.as_sint()

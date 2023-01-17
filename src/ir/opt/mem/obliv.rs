@@ -109,24 +109,24 @@ impl NonOblivComputer {
 
     fn new() -> Self {
         Self {
-            not_obliv: TermSet::new(),
+            not_obliv: TermSet::default(),
         }
     }
 }
 
 impl ProgressAnalysisPass for NonOblivComputer {
     fn visit(&mut self, term: &Term) -> bool {
-        match &term.op {
+        match &term.op() {
             Op::Store => {
-                let a = &term.cs[0];
-                let i = &term.cs[1];
-                let v = &term.cs[2];
+                let a = &term.cs()[0];
+                let i = &term.cs()[1];
+                let v = &term.cs()[2];
                 let mut progress = false;
                 if let Sort::Array(..) = check(v) {
                     // Imprecisely, mark v as non-obliv iff the array is.
                     progress = self.bi_implicate(term, v) || progress;
                 }
-                if let Op::Const(_) = i.op {
+                if let Op::Const(_) = i.op() {
                     progress = self.bi_implicate(term, a) || progress;
                 } else {
                     progress = self.mark(a) || progress;
@@ -141,10 +141,10 @@ impl ProgressAnalysisPass for NonOblivComputer {
             Op::Select => {
                 // Even though the selected value may not have array sort, we still flag it as
                 // non-oblivious so we know whether to replace it or not.
-                let a = &term.cs[0];
-                let i = &term.cs[1];
+                let a = &term.cs()[0];
+                let i = &term.cs()[1];
                 let mut progress = false;
-                if let Op::Const(_) = i.op {
+                if let Op::Const(_) = i.op() {
                     // pass
                 } else {
                     progress = self.mark(a) || progress;
@@ -154,8 +154,8 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 progress
             }
             Op::Ite => {
-                let t = &term.cs[1];
-                let f = &term.cs[2];
+                let t = &term.cs()[1];
+                let f = &term.cs()[2];
                 if let Sort::Array(..) = check(t) {
                     let mut progress = self.bi_implicate(term, t);
                     progress = self.bi_implicate(t, f) || progress;
@@ -166,8 +166,8 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 }
             }
             Op::Eq => {
-                let a = &term.cs[0];
-                let b = &term.cs[1];
+                let a = &term.cs()[0];
+                let b = &term.cs()[1];
                 if let Sort::Array(..) = check(a) {
                     self.bi_implicate(a, b)
                 } else {
@@ -208,7 +208,7 @@ fn arr_val_to_tup(v: &Value) -> Value {
 }
 
 fn term_arr_val_to_tup(a: Term) -> Term {
-    match &a.op {
+    match &a.op() {
         Op::Const(v @ Value::Array(..)) => leaf_term(Op::Const(arr_val_to_tup(v))),
         _ => a,
     }
@@ -236,7 +236,7 @@ impl RewritePass for Replacer {
                 .map(term_arr_val_to_tup)
                 .collect()
         };
-        match &orig.op {
+        match &orig.op() {
             Op::Var(name, Sort::Array(..)) => {
                 if self.should_replace(orig) {
                     let precomp = extras::array_to_tuple(orig);
@@ -277,7 +277,7 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Eq => {
-                if self.should_replace(&orig.cs[0]) {
+                if self.should_replace(&orig.cs()[0]) {
                     Some(term(Op::Eq, get_cs()))
                 } else {
                     None

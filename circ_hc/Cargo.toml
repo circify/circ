@@ -1,0 +1,31 @@
+[package]
+name = "circ_hc"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+hashconsing = ["dep:hashconsing"]
+lru = ["dep:lru"]
+raw = []
+rc = []
+default = ["hashconsing", "lru", "raw", "rc"]
+
+[dependencies]
+fxhash = "0.2.1"
+hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "phash", optional = true }
+lru = { version = "0.7.2", optional = true }
+
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+rand_chacha = "0.3"
+
+[[example]]
+name = "u32"
+required-features = ["rc"]
+
+
+[profile.release]
+debug = true

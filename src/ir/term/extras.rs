@@ -29,12 +29,13 @@ pub fn substitute_cache(t: &Term, subs: &mut TermMap<Term>) -> Term {
         }
         if !children_pushed {
             stack.push((n.clone(), true));
-            stack.extend(n.cs.iter().map(|c| (c.clone(), false)));
+            stack.extend(n.cs().iter().map(|c| (c.clone(), false)));
             continue;
         }
         let new_n = term(
-            n.op.clone(),
-            n.cs.iter()
+            n.op().clone(),
+            n.cs()
+                .iter()
                 .map(|c| subs.get(c).expect("postorder").clone())
                 .collect(),
         );
@@ -56,7 +57,7 @@ pub fn substitute(t: &Term, mut subs: TermMap<Term>) -> Term {
 /// The substitution map is taken mutably; this function will add rewrites to it.
 /// This allows the same map to be re-used across multiple rewrites, with caching.
 pub fn substitute_single(t: &Term, from: Term, to: Term) -> Term {
-    let mut c = TermMap::new();
+    let mut c = TermMap::default();
     c.insert(from, to);
     substitute_cache(t, &mut c)
 }
@@ -78,7 +79,7 @@ pub fn contains(haystack: Term, needle: &Term) -> bool {
 /// Is `v` free in `t`? Wrong in the presence of lets.
 pub fn free_in(v: &str, t: Term) -> bool {
     for n in PostOrderIter::new(t) {
-        match &n.op {
+        match &n.op() {
             Op::Var(name, _) if v == name => {
                 return true;
             }
@@ -91,7 +92,7 @@ pub fn free_in(v: &str, t: Term) -> bool {
 /// Get all the free variables in this term
 pub fn free_variables(t: Term) -> FxHashSet<String> {
     PostOrderIter::new(t)
-        .filter_map(|n| match &n.op {
+        .filter_map(|n| match &n.op() {
             Op::Var(name, _) => Some(name.into()),
             _ => None,
         })
@@ -101,7 +102,7 @@ pub fn free_variables(t: Term) -> FxHashSet<String> {
 /// Get all the free variables in this term, with sorts
 pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
     PostOrderIter::new(t)
-        .filter_map(|n| match &n.op {
+        .filter_map(|n| match &n.op() {
             Op::Var(name, sort) => Some((name.into(), sort.clone())),
             _ => None,
         })
@@ -110,7 +111,7 @@ pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
 
 /// If this term is a constant field or bit-vector, get the unsigned int value.
 pub fn as_uint_constant(t: &Term) -> Option<Integer> {
-    match &t.op {
+    match &t.op() {
         Op::Const(Value::BitVector(bv)) => Some(bv.uint().clone()),
         Op::Const(Value::Field(f)) => Some(f.i()),
         _ => None,
@@ -133,10 +134,10 @@ pub fn assert_all_vars_declared(c: &Computation) {
 /// Guarantees that every computation term is a key in the map. If there are no
 /// parents, the value will be empty.
 pub fn parents_map(c: &Computation) -> TermMap<Vec<Term>> {
-    let mut parents = TermMap::new();
+    let mut parents = TermMap::default();
     for t in c.terms_postorder() {
         parents.insert(t.clone(), Vec::new());
-        for c in &t.cs {
+        for c in t.cs() {
             parents.get_mut(c).unwrap().push(t.clone());
         }
     }

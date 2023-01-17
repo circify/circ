@@ -41,7 +41,7 @@ impl ToMilp {
     fn new() -> Self {
         Self {
             ilp: Ilp::new(),
-            cache: TermMap::new(),
+            cache: TermMap::default(),
             next_idx: 0,
         }
     }
@@ -98,7 +98,7 @@ impl ToMilp {
     fn embed(&mut self, t: Term) {
         debug!("Embed: {}", t);
         for c in PostOrderIter::new(t) {
-            debug!("Embed op: {}", c.op);
+            debug!("Embed op: {}", c.op());
             match check(&c) {
                 Sort::Bool => {
                     self.embed_bool(c);
@@ -192,34 +192,35 @@ impl ToMilp {
     fn embed_bool(&mut self, c: Term) -> &Expression {
         debug_assert!(check(&c) == Sort::Bool);
         if !self.cache.contains_key(&c) {
-            let lc = match &c.op {
+            let lc = match &c.op() {
                 Op::Var(name, Sort::Bool) => self.bit(name.to_string()),
                 Op::Const(Value::Bool(b)) => Expression::from(*b as i32),
-                Op::Eq => self.embed_eq(&c.cs[0], &c.cs[1]),
+                Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
-                    let a = self.get_bool(&c.cs[0]).clone();
+                    let a = self.get_bool(&c.cs()[0]).clone();
                     let not_a = self.bit_not(&a);
-                    let b = self.get_bool(&c.cs[1]).clone();
-                    let c = self.get_bool(&c.cs[2]).clone();
+                    let b = self.get_bool(&c.cs()[1]).clone();
+                    let c = self.get_bool(&c.cs()[2]).clone();
                     let a_and_b = self.bit_and(&[a, b]);
                     let not_a_and_c = self.bit_and(&[not_a, c]);
                     self.bit_or(&[a_and_b, not_a_and_c])
                 }
                 Op::Not => {
-                    let a = self.get_bool(&c.cs[0]);
+                    let a = self.get_bool(&c.cs()[0]);
                     self.bit_not(a)
                 }
                 Op::Implies => {
-                    let a = self.get_bool(&c.cs[0]).clone();
-                    let b = self.get_bool(&c.cs[1]).clone();
+                    let a = self.get_bool(&c.cs()[0]).clone();
+                    let b = self.get_bool(&c.cs()[1]).clone();
                     let not_a = self.bit_not(&a);
                     self.bit_or(&[not_a, b])
                 }
                 Op::BoolNaryOp(o) => {
-                    let args =
-                        c.cs.iter()
-                            .map(|c| self.get_bool(c).clone())
-                            .collect::<Vec<_>>();
+                    let args = c
+                        .cs()
+                        .iter()
+                        .map(|c| self.get_bool(c).clone())
+                        .collect::<Vec<_>>();
                     match o {
                         BoolNaryOp::Or => self.bit_or(args.iter()),
                         BoolNaryOp::And => self.bit_and(args.iter()),
@@ -227,17 +228,17 @@ impl ToMilp {
                     }
                 }
                 Op::BvBinPred(o) => {
-                    let n = check(&c.cs[0]).as_bv();
+                    let n = check(&c.cs()[0]).as_bv();
                     use BvBinPred::*;
                     match o {
-                        Sge => self.bv_cmp(n, true, false, &c.cs[0], &c.cs[1]),
-                        Sgt => self.bv_cmp(n, true, true, &c.cs[0], &c.cs[1]),
-                        Uge => self.bv_cmp(n, false, false, &c.cs[0], &c.cs[1]),
-                        Ugt => self.bv_cmp(n, false, true, &c.cs[0], &c.cs[1]),
-                        Sle => self.bv_cmp(n, true, false, &c.cs[1], &c.cs[0]),
-                        Slt => self.bv_cmp(n, true, true, &c.cs[1], &c.cs[0]),
-                        Ule => self.bv_cmp(n, false, false, &c.cs[1], &c.cs[0]),
-                        Ult => self.bv_cmp(n, false, true, &c.cs[1], &c.cs[0]),
+                        Sge => self.bv_cmp(n, true, false, &c.cs()[0], &c.cs()[1]),
+                        Sgt => self.bv_cmp(n, true, true, &c.cs()[0], &c.cs()[1]),
+                        Uge => self.bv_cmp(n, false, false, &c.cs()[0], &c.cs()[1]),
+                        Ugt => self.bv_cmp(n, false, true, &c.cs()[0], &c.cs()[1]),
+                        Sle => self.bv_cmp(n, true, false, &c.cs()[1], &c.cs()[0]),
+                        Slt => self.bv_cmp(n, true, true, &c.cs()[1], &c.cs()[0]),
+                        Ule => self.bv_cmp(n, false, false, &c.cs()[1], &c.cs()[0]),
+                        Ult => self.bv_cmp(n, false, true, &c.cs()[1], &c.cs()[0]),
                     }
                 }
                 _ => panic!("Non-boolean in embed_bool: {}", c),
@@ -255,7 +256,7 @@ impl ToMilp {
     fn embed_bv(&mut self, bv: Term) {
         if let Sort::BitVector(n) = check(&bv) {
             if !self.cache.contains_key(&bv) {
-                match &bv.op {
+                match &bv.op() {
                     Op::Var(name, Sort::BitVector(n_bits)) => {
                         let var = self.bv(name.clone(), *n_bits);
                         self.set_bv_uint(bv.clone(), var, n);
@@ -267,19 +268,19 @@ impl ToMilp {
                         self.set_bv_bits(bv, bit_lcs);
                     }
                     Op::Ite => {
-                        let c = self.get_bool(&bv.cs[0]).clone();
-                        let t = self.get_bv_uint(&bv.cs[1]);
-                        let f = self.get_bv_uint(&bv.cs[2]);
+                        let c = self.get_bool(&bv.cs()[0]).clone();
+                        let t = self.get_bv_uint(&bv.cs()[1]);
+                        let f = self.get_bv_uint(&bv.cs()[2]);
                         let ite = self.bv_ite(&c, &t, &f, n);
                         self.set_bv_uint(bv, ite, n);
                     }
                     Op::BvUnOp(BvUnOp::Not) => {
-                        let bits = self.get_bv_bits(&bv.cs[0]);
+                        let bits = self.get_bv_bits(&bv.cs()[0]);
                         let not_bits = bits.iter().map(|bit| self.bit_not(bit)).collect();
                         self.set_bv_bits(bv, not_bits);
                     }
                     Op::BvUnOp(BvUnOp::Neg) => {
-                        let x = self.get_bv_uint(&bv.cs[0]);
+                        let x = self.get_bv_uint(&bv.cs()[0]);
                         // Wrong for x == 0
                         let almost_neg_x = 2f64.powi(n as i32) - x.clone();
                         let is_zero = self.bv_cmp_eq(&x, &0.into(), n);
@@ -287,30 +288,30 @@ impl ToMilp {
                         self.set_bv_uint(bv, neg_x, n);
                     }
                     Op::BvUext(extra_n) => {
-                        if self.bv_has_bits(&bv.cs[0]) {
-                            let bits = self.get_bv_bits(&bv.cs[0]);
+                        if self.bv_has_bits(&bv.cs()[0]) {
+                            let bits = self.get_bv_bits(&bv.cs()[0]);
                             let ext_bits = std::iter::repeat(Expression::from(0)).take(*extra_n);
                             self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
                         } else {
-                            let x = self.get_bv_uint(&bv.cs[0]);
+                            let x = self.get_bv_uint(&bv.cs()[0]);
                             self.set_bv_uint(bv, x, n);
                         }
                     }
                     Op::BvSext(extra_n) => {
-                        let mut bits = self.get_bv_bits(&bv.cs[0]).into_iter().rev();
+                        let mut bits = self.get_bv_bits(&bv.cs()[0]).into_iter().rev();
                         let ext_bits = std::iter::repeat(bits.next().expect("sign ext empty"))
                             .take(extra_n + 1);
 
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }
                     Op::BoolToBv => {
-                        let b = self.get_bool(&bv.cs[0]).clone();
+                        let b = self.get_bool(&bv.cs()[0]).clone();
                         self.set_bv_bits(bv, vec![b]);
                     }
                     Op::BvNaryOp(o) => match o {
                         BvNaryOp::Xor | BvNaryOp::Or | BvNaryOp::And => {
                             let mut bits_by_bv = bv
-                                .cs
+                                .cs()
                                 .iter()
                                 .map(|c| self.get_bv_bits(c))
                                 .collect::<Vec<_>>();
@@ -333,7 +334,7 @@ impl ToMilp {
                         BvNaryOp::Add | BvNaryOp::Mul => {
                             //let f_width = self.ilp.modulus().significant_bits() as usize - 1;
                             let values = bv
-                                .cs
+                                .cs()
                                 .iter()
                                 .map(|c| self.get_bv_uint(c))
                                 .collect::<Vec<_>>();
@@ -346,8 +347,8 @@ impl ToMilp {
                         }
                     },
                     Op::BvBinOp(o) => {
-                        let a = self.get_bv_uint(&bv.cs[0]);
-                        let b = self.get_bv_uint(&bv.cs[1]);
+                        let a = self.get_bv_uint(&bv.cs()[0]);
+                        let b = self.get_bv_uint(&bv.cs()[1]);
                         match o {
                             BvBinOp::Sub => {
                                 let sum = a - b;
@@ -398,14 +399,14 @@ impl ToMilp {
                             //    let a = a.clone();
                             //    let b = bitsize(n - 1);
                             //    assert!(1 << b == n);
-                            //    let mut rb = self.get_bv_bits(&bv.cs[1]);
+                            //    let mut rb = self.get_bv_bits(&bv.cs()[1]);
                             //    rb.truncate(b);
                             //    let sum = self.debitify(rb.clone().into_iter(), false);
                             //    self.assert_zero(sum - &r);
                             //    let bits = match o {
                             //        BvBinOp::Shl => self.shift_bv_bits(a, rb, None, n),
                             //        BvBinOp::Lshr | BvBinOp::Ashr => {
-                            //            let mut lb = self.get_bv_bits(&bv.cs[0]);
+                            //            let mut lb = self.get_bv_bits(&bv.cs()[0]);
                             //            lb.reverse();
                             //            let ext_bit = match o {
                             //                BvBinOp::Ashr => Some(lb.first().unwrap().clone()),
@@ -425,7 +426,7 @@ impl ToMilp {
                     }
                     Op::BvConcat => {
                         let mut bits = Vec::new();
-                        for c in bv.cs.iter().rev() {
+                        for c in bv.cs().iter().rev() {
                             bits.extend(self.get_bv_bits(c));
                         }
                         self.set_bv_bits(bv, bits);
@@ -433,7 +434,7 @@ impl ToMilp {
                     //// inclusive!
                     Op::BvExtract(high, low) => {
                         let bits = self
-                            .get_bv_bits(&bv.cs[0])
+                            .get_bv_bits(&bv.cs()[0])
                             .into_iter()
                             .skip(*low)
                             .take(*high - *low + 1)

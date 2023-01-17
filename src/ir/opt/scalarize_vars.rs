@@ -67,7 +67,7 @@ impl RewritePass for Pass {
         orig: &Term,
         _rewritten_children: F,
     ) -> Option<Term> {
-        if let Op::Var(name, sort) = &orig.op {
+        if let Op::Var(name, sort) = &orig.op() {
             let mut new_var_reqs = Vec::new();
             let new = create_vars(name, orig.clone(), sort, &mut new_var_reqs, true);
             for (name, term) in new_var_reqs {
@@ -92,7 +92,7 @@ pub fn scalarize_inputs(cs: &mut Computation) {
 /// Check that every variables is a scalar.
 pub fn assert_all_vars_are_scalars(cs: &Computation) {
     for t in cs.terms_postorder() {
-        if let Op::Var(_name, sort) = &t.op {
+        if let Op::Var(_name, sort) = &t.op() {
             match sort {
                 Sort::Array(..) | Sort::Tuple(..) => {
                     panic!("Variable {} is non-scalar", t);
@@ -114,7 +114,7 @@ fn remove_non_scalar_vars_from_main_computation(cs: &mut Computation) {
         .collect::<Vec<_>>();
     cs.metadata.computation_inputs = new_inputs;
     for t in cs.terms_postorder() {
-        if let Op::Var(_name, sort) = &t.op {
+        if let Op::Var(_name, sort) = &t.op() {
             match sort {
                 Sort::Array(..) | Sort::Tuple(..) => {
                     panic!("Variable {} is non-scalar", t);

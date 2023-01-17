@@ -57,7 +57,7 @@ impl<'cfg> ToR1cs<'cfg> {
         let one = zero.clone() + 1;
         Self {
             r1cs,
-            cache: TermMap::new(),
+            cache: TermMap::default(),
             wit_ext: precomp::PreComp::new(),
             public_inputs,
             next_idx: 0,
@@ -256,13 +256,13 @@ impl<'cfg> ToR1cs<'cfg> {
     fn embed(&mut self, t: Term) {
         debug!("Embed: {}", t);
         for c in PostOrderIter::new(t) {
-            debug!("Embed op: {}", c.op);
+            debug!("Embed op: {}", c.op());
             // Handle field access once and for all
-            if let Op::Field(i) = &c.op {
+            if let Op::Field(i) = &c.op() {
                 // Need to borrow self in between search and insert. Could refactor.
                 #[allow(clippy::map_entry)]
                 if !self.cache.contains_key(&c) {
-                    let t = self.get_field(&c.cs[0], *i);
+                    let t = self.get_field(&c.cs()[0], *i);
                     self.cache.insert(c, t);
                 }
             } else {
@@ -349,7 +349,7 @@ impl<'cfg> ToR1cs<'cfg> {
         debug_assert!(check(&c) == Sort::Bool);
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
-            let lc = match &c.op {
+            let lc = match &c.op() {
                 Op::Var(name, Sort::Bool) => {
                     let public = self.public_inputs.contains(name);
                     let comp = term![Op::Ite; c.clone(), self.one.0.clone(), self.zero.0.clone()];
@@ -360,17 +360,17 @@ impl<'cfg> ToR1cs<'cfg> {
                     v
                 }
                 Op::Const(Value::Bool(b)) => self.zero.clone() + *b as isize,
-                Op::Eq => self.embed_eq(&c.cs[0], &c.cs[1]),
+                Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
-                    let a = self.get_bool(&c.cs[0]).clone();
-                    let b = self.get_bool(&c.cs[1]).clone();
-                    let c = self.get_bool(&c.cs[2]).clone();
+                    let a = self.get_bool(&c.cs()[0]).clone();
+                    let b = self.get_bool(&c.cs()[1]).clone();
+                    let c = self.get_bool(&c.cs()[2]).clone();
                     self.ite(a, b, &c)
                 }
                 Op::BoolMaj => {
-                    let a = self.get_bool(&c.cs[0]).clone();
-                    let b = self.get_bool(&c.cs[1]).clone();
-                    let c = self.get_bool(&c.cs[2]).clone();
+                    let a = self.get_bool(&c.cs()[0]).clone();
+                    let b = self.get_bool(&c.cs()[1]).clone();
+                    let c = self.get_bool(&c.cs()[2]).clone();
                     // m = ab + bc + ca - 2abc
                     // m = ab + c(b + a - 2ab)
                     //   where i = ab
@@ -379,20 +379,21 @@ impl<'cfg> ToR1cs<'cfg> {
                     self.mul(c, b + &a - &(i.clone() * 2)) - &i
                 }
                 Op::Not => {
-                    let a = self.get_bool(&c.cs[0]);
+                    let a = self.get_bool(&c.cs()[0]);
                     self.bool_not(a)
                 }
                 Op::Implies => {
-                    let a = self.get_bool(&c.cs[0]).clone();
-                    let b = self.get_bool(&c.cs[1]).clone();
+                    let a = self.get_bool(&c.cs()[0]).clone();
+                    let b = self.get_bool(&c.cs()[1]).clone();
                     let not_a = self.bool_not(&a);
                     self.nary_or(vec![not_a, b].into_iter())
                 }
                 Op::BoolNaryOp(o) => {
-                    let args =
-                        c.cs.iter()
-                            .map(|c| self.get_bool(c).clone())
-                            .collect::<Vec<_>>();
+                    let args = c
+                        .cs()
+                        .iter()
+                        .map(|c| self.get_bool(c).clone())
+                        .collect::<Vec<_>>();
                     match o {
                         BoolNaryOp::Or => self.nary_or(args.into_iter()),
                         BoolNaryOp::And => self.nary_and(args.into_iter()),
@@ -400,21 +401,21 @@ impl<'cfg> ToR1cs<'cfg> {
                     }
                 }
                 Op::BvBit(i) => {
-                    let a = self.get_bv_bits(&c.cs[0]);
+                    let a = self.get_bv_bits(&c.cs()[0]);
                     a[*i].clone()
                 }
                 Op::BvBinPred(o) => {
-                    let n = check(&c.cs[0]).as_bv();
+                    let n = check(&c.cs()[0]).as_bv();
                     use BvBinPred::*;
                     match o {
-                        Sge => self.bv_cmp(n, true, false, &c.cs[0], &c.cs[1]),
-                        Sgt => self.bv_cmp(n, true, true, &c.cs[0], &c.cs[1]),
-                        Uge => self.bv_cmp(n, false, false, &c.cs[0], &c.cs[1]),
-                        Ugt => self.bv_cmp(n, false, true, &c.cs[0], &c.cs[1]),
-                        Sle => self.bv_cmp(n, true, false, &c.cs[1], &c.cs[0]),
-                        Slt => self.bv_cmp(n, true, true, &c.cs[1], &c.cs[0]),
-                        Ule => self.bv_cmp(n, false, false, &c.cs[1], &c.cs[0]),
-                        Ult => self.bv_cmp(n, false, true, &c.cs[1], &c.cs[0]),
+                        Sge => self.bv_cmp(n, true, false, &c.cs()[0], &c.cs()[1]),
+                        Sgt => self.bv_cmp(n, true, true, &c.cs()[0], &c.cs()[1]),
+                        Uge => self.bv_cmp(n, false, false, &c.cs()[0], &c.cs()[1]),
+                        Ugt => self.bv_cmp(n, false, true, &c.cs()[0], &c.cs()[1]),
+                        Sle => self.bv_cmp(n, true, false, &c.cs()[1], &c.cs()[0]),
+                        Slt => self.bv_cmp(n, true, true, &c.cs()[1], &c.cs()[0]),
+                        Ule => self.bv_cmp(n, false, false, &c.cs()[1], &c.cs()[0]),
+                        Ult => self.bv_cmp(n, false, true, &c.cs()[1], &c.cs()[0]),
                     }
                 }
                 _ => panic!("Non-boolean in embed_bool: {}", c),
@@ -432,11 +433,11 @@ impl<'cfg> ToR1cs<'cfg> {
     fn assert_bool(&mut self, t: &Term) {
         //println!("Embed: {}", c);
         // TODO: skip if already embedded
-        if t.op == Op::Eq {
-            t.cs.iter().for_each(|c| self.embed(c.clone()));
-            self.assert_eq(&t.cs[0], &t.cs[1]);
-        } else if t.op == AND {
-            for c in &t.cs {
+        if t.op() == &Op::Eq {
+            t.cs().iter().for_each(|c| self.embed(c.clone()));
+            self.assert_eq(&t.cs()[0], &t.cs()[1]);
+        } else if t.op() == &AND {
+            for c in t.cs() {
                 self.assert_bool(c);
             }
         } else {
@@ -559,7 +560,7 @@ impl<'cfg> ToR1cs<'cfg> {
         //let bv2=  bv.clone();
         if let Sort::BitVector(n) = check(&bv) {
             if !self.cache.contains_key(&bv) {
-                match &bv.op {
+                match &bv.op() {
                     Op::Var(name, Sort::BitVector(_)) => {
                         let public = self.public_inputs.contains(name);
                         let var = self.fresh_var(
@@ -579,19 +580,19 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.set_bv_bits(bv, bit_lcs);
                     }
                     Op::Ite => {
-                        let c = self.get_bool(&bv.cs[0]).clone();
-                        let t = self.get_bv_uint(&bv.cs[1]);
-                        let f = self.get_bv_uint(&bv.cs[2]);
+                        let c = self.get_bool(&bv.cs()[0]).clone();
+                        let t = self.get_bv_uint(&bv.cs()[1]);
+                        let f = self.get_bv_uint(&bv.cs()[2]);
                         let ite = self.ite(c, t, &f);
                         self.set_bv_uint(bv, ite, n);
                     }
                     Op::BvUnOp(BvUnOp::Not) => {
-                        let bits = self.get_bv_bits(&bv.cs[0]);
+                        let bits = self.get_bv_bits(&bv.cs()[0]);
                         let not_bits = bits.iter().map(|bit| self.bool_not(bit)).collect();
                         self.set_bv_bits(bv, not_bits);
                     }
                     Op::BvUnOp(BvUnOp::Neg) => {
-                        let x = self.get_bv_uint(&bv.cs[0]);
+                        let x = self.get_bv_uint(&bv.cs()[0]);
                         // Wrong for x == 0
                         let almost_neg_x = self.zero.clone()
                             + &self.r1cs.modulus.new_v(Integer::from(2).pow(n as u32))
@@ -601,35 +602,35 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.set_bv_uint(bv, neg_x, n);
                     }
                     Op::BvUext(extra_n) => {
-                        if self.bv_has_bits(&bv.cs[0]) {
-                            let bits = self.get_bv_bits(&bv.cs[0]);
+                        if self.bv_has_bits(&bv.cs()[0]) {
+                            let bits = self.get_bv_bits(&bv.cs()[0]);
                             let ext_bits = std::iter::repeat(self.zero.clone()).take(*extra_n);
                             self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
                         } else {
-                            let x = self.get_bv_uint(&bv.cs[0]);
+                            let x = self.get_bv_uint(&bv.cs()[0]);
                             self.set_bv_uint(bv, x, n);
                         }
                     }
                     Op::BvSext(extra_n) => {
-                        let mut bits = self.get_bv_bits(&bv.cs[0]).into_iter().rev();
+                        let mut bits = self.get_bv_bits(&bv.cs()[0]).into_iter().rev();
                         let ext_bits = std::iter::repeat(bits.next().expect("sign ext empty"))
                             .take(extra_n + 1);
 
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }
                     Op::PfToBv(nbits) => {
-                        let lc = self.get_pf(&bv.cs[0]).clone();
+                        let lc = self.get_pf(&bv.cs()[0]).clone();
                         let bits = self.bitify("pf2bv", &lc, *nbits, false);
                         self.set_bv_bits(bv.clone(), bits);
                     }
                     Op::BoolToBv => {
-                        let b = self.get_bool(&bv.cs[0]).clone();
+                        let b = self.get_bool(&bv.cs()[0]).clone();
                         self.set_bv_bits(bv, vec![b]);
                     }
                     Op::BvNaryOp(o) => match o {
                         BvNaryOp::Xor | BvNaryOp::Or | BvNaryOp::And => {
                             let mut bits_by_bv = bv
-                                .cs
+                                .cs()
                                 .iter()
                                 .map(|c| self.get_bv_bits(c))
                                 .collect::<Vec<_>>();
@@ -652,7 +653,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         BvNaryOp::Add | BvNaryOp::Mul => {
                             let f_width = self.r1cs.modulus().significant_bits() as usize - 1;
                             let values = bv
-                                .cs
+                                .cs()
                                 .iter()
                                 .map(|c| self.get_bv_uint(c))
                                 .collect::<Vec<_>>();
@@ -660,15 +661,15 @@ impl<'cfg> ToR1cs<'cfg> {
                                 BvNaryOp::Add => {
                                     let sum =
                                         values.into_iter().fold(self.zero.clone(), |s, v| s + &v);
-                                    let extra_width = bitsize(bv.cs.len().saturating_sub(1));
+                                    let extra_width = bitsize(bv.cs().len().saturating_sub(1));
                                     (sum, n + extra_width)
                                 }
                                 BvNaryOp::Mul => {
-                                    if bv.cs.len() * n < f_width {
+                                    if bv.cs().len() * n < f_width {
                                         let z = self.zero.clone() + 1;
                                         (
                                             values.into_iter().fold(z, |acc, v| self.mul(acc, v)),
-                                            bv.cs.len() * n,
+                                            bv.cs().len() * n,
                                         )
                                     } else {
                                         let z = self.zero.clone() + 1;
@@ -689,8 +690,8 @@ impl<'cfg> ToR1cs<'cfg> {
                         }
                     },
                     Op::BvBinOp(o) => {
-                        let a = self.get_bv_uint(&bv.cs[0]);
-                        let b = self.get_bv_uint(&bv.cs[1]);
+                        let a = self.get_bv_uint(&bv.cs()[0]);
+                        let b = self.get_bv_uint(&bv.cs()[1]);
                         match o {
                             BvBinOp::Sub => {
                                 let sum =
@@ -729,12 +730,12 @@ impl<'cfg> ToR1cs<'cfg> {
                             }
                             // Shift cases
                             _ => {
-                                let rb = self.get_bv_bits(&bv.cs[1]);
+                                let rb = self.get_bv_bits(&bv.cs()[1]);
                                 let (high, low) = self.split_shift_amt(n, rb);
                                 let bits = match o {
                                     BvBinOp::Shl => self.shift_bv_bits(a, low, None, n, high),
                                     BvBinOp::Lshr | BvBinOp::Ashr => {
-                                        let mut lb = self.get_bv_bits(&bv.cs[0]);
+                                        let mut lb = self.get_bv_bits(&bv.cs()[0]);
                                         lb.reverse();
                                         let ext_bit = match o {
                                             BvBinOp::Ashr => Some(lb.first().unwrap().clone()),
@@ -753,7 +754,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     }
                     Op::BvConcat => {
                         let mut bits = Vec::new();
-                        for c in bv.cs.iter().rev() {
+                        for c in bv.cs().iter().rev() {
                             bits.extend(self.get_bv_bits(c));
                         }
                         self.set_bv_bits(bv, bits);
@@ -761,7 +762,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     // inclusive!
                     Op::BvExtract(high, low) => {
                         let bits = self
-                            .get_bv_bits(&bv.cs[0])
+                            .get_bv_bits(&bv.cs()[0])
                             .into_iter()
                             .skip(*low)
                             .take(*high - *low + 1)
@@ -869,7 +870,7 @@ impl<'cfg> ToR1cs<'cfg> {
         //println!("Embed: {}", c);
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
-            let lc = match &c.op {
+            let lc = match &c.op() {
                 Op::Var(name, Sort::Field(_)) => {
                     let public = self.public_inputs.contains(name);
                     self.fresh_var(name, c.clone(), public)
@@ -879,13 +880,13 @@ impl<'cfg> ToR1cs<'cfg> {
                     self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
                 ),
                 Op::Ite => {
-                    let cond = self.get_bool(&c.cs[0]).clone();
-                    let t = self.get_pf(&c.cs[1]).clone();
-                    let f = self.get_pf(&c.cs[2]).clone();
+                    let cond = self.get_bool(&c.cs()[0]).clone();
+                    let t = self.get_pf(&c.cs()[1]).clone();
+                    let f = self.get_pf(&c.cs()[2]).clone();
                     self.ite(cond, t, &f)
                 }
                 Op::PfNaryOp(o) => {
-                    let args = c.cs.iter().map(|c| self.get_pf(c));
+                    let args = c.cs().iter().map(|c| self.get_pf(c));
                     match o {
                         PfNaryOp::Add => args.fold(self.zero.clone(), std::ops::Add::add),
                         PfNaryOp::Mul => {
@@ -898,12 +899,12 @@ impl<'cfg> ToR1cs<'cfg> {
                         }
                     }
                 }
-                Op::UbvToPf(_) => self.get_bv_uint(&c.cs[0]),
-                Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs[0]).clone(),
+                Op::UbvToPf(_) => self.get_bv_uint(&c.cs()[0]),
+                Op::PfUnOp(PfUnOp::Neg) => -self.get_pf(&c.cs()[0]).clone(),
                 Op::PfUnOp(PfUnOp::Recip) => match self.cfg.r1cs.div_by_zero {
                     FieldDivByZero::Incomplete => {
                         // ix = 1
-                        let x = self.get_pf(&c.cs[0]).clone();
+                        let x = self.get_pf(&c.cs()[0]).clone();
                         let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
                         self.r1cs
                             .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
@@ -911,7 +912,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     }
                     FieldDivByZero::NonDet => {
                         // ixx = x
-                        let x = self.get_pf(&c.cs[0]).clone();
+                        let x = self.get_pf(&c.cs()[0]).clone();
                         let x2 = self.mul(x.clone(), x.clone());
                         let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
                         self.r1cs.constraint(x2.1, inv_x.1.clone(), x.1);
@@ -921,7 +922,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         // ix = 1 - z
                         // zx = 0
                         // zi = 0
-                        let x = self.get_pf(&c.cs[0]).clone();
+                        let x = self.get_pf(&c.cs()[0]).clone();
                         let eqz = term![Op::Eq; x.0.clone(), self.zero.0.clone()];
                         let i = self.fresh_var(
                             "is_zero_inv",
@@ -1060,7 +1061,7 @@ pub mod test {
             let t = PureBoolDist(g.size()).sample(&mut rng);
             let values: FxHashMap<String, Value> = PostOrderIter::new(t.clone())
                 .filter_map(|c| {
-                    if let Op::Var(n, _) = &c.op {
+                    if let Op::Var(n, _) = &c.op() {
                         Some((n.clone(), Value::Bool(bool::arbitrary(g))))
                     } else {
                         None

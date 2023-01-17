@@ -60,8 +60,8 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    bv_lit, check, leaf_term, term, Array, Computation, Op, PostOrderIter, Sort, Term, TermMap,
-    Value, AND,
+    bv_lit, check, leaf_term, term, Array, Computation, Node, Op, PostOrderIter, Sort, Term,
+    TermMap, Value, AND,
 };
 use std::collections::BTreeMap;
 
@@ -220,13 +220,14 @@ fn tuple_free(t: Term) -> bool {
 
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
-    let mut lifted: TermMap<TupleTree> = TermMap::new();
+    let mut lifted: TermMap<TupleTree> = TermMap::default();
     for t in cs.terms_postorder() {
-        let mut cs: Vec<TupleTree> =
-            t.cs.iter()
-                .map(|c| lifted.get(c).unwrap().clone())
-                .collect();
-        let new_t = match &t.op {
+        let mut cs: Vec<TupleTree> = t
+            .cs()
+            .iter()
+            .map(|c| lifted.get(c).unwrap().clone())
+            .collect();
+        let new_t = match t.op() {
             Op::Const(v) => termify_val_tuples(untuple_value(v)),
             Op::Ite => {
                 let f = cs.pop().unwrap();
@@ -268,7 +269,7 @@ pub fn eliminate_tuples(cs: &mut Computation) {
             }
             Op::Tuple => TupleTree::Tuple(cs.into()),
             _ => TupleTree::NonTuple(term(
-                t.op.clone(),
+                t.op().clone(),
                 cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
             )),
         };
