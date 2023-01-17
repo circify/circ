@@ -16,6 +16,7 @@ use circ::cfg::{
 };
 #[cfg(feature = "c")]
 use circ::front::c::{self, C};
+#[cfg(all(feature = "smt", feature = "datalog"))]
 use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
