@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 circ_fields = { path = "circ_fields" }
 circ_opt = { path = "circ_opt" }
-circ_hc = { path = "circ_hc" }
+circ_hc = { path = "circ_hc", default-features = false, features = ["rc", "lru"]}
 rug = { version = "1.11", features = ["serde"] }
 gmp-mpfr-sys = "1.4"
 lazy_static = "1.4"

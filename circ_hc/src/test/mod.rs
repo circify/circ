@@ -4,6 +4,7 @@ mod qc;
 mod tiny;
 mod weak;
 
+#[cfg(feature = "raw")]
 mod raw {
     mod hc_u8 {
         crate::raw::generate_hashcons!(u8);
@@ -79,6 +80,7 @@ mod raw {
     }
 }
 
+#[cfg(feature = "hashconsing")]
 mod hashconsing {
     mod hc_u8 {
         crate::hashconsing::generate_hashcons!(u8);
@@ -159,6 +161,7 @@ mod hashconsing {
     }
 }
 
+#[cfg(feature = "rc")]
 mod rc {
     mod hc_u8 {
         crate::rc::generate_hashcons!(u8);

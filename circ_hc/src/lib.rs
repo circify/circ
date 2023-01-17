@@ -1,10 +1,12 @@
 use std::cmp::{Eq, Ord, PartialEq, PartialOrd};
 use std::hash::Hash;
 
+#[cfg(feature = "hashconsing")]
 pub mod hashconsing;
+#[cfg(feature = "raw")]
 pub mod raw;
+#[cfg(feature = "rc")]
 pub mod rc;
-pub use rc::generate_hashcons;
 
 pub mod collections;
 
