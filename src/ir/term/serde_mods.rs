@@ -21,10 +21,7 @@ pub mod map {
         K: Hash + Eq + Clone + Deserialize<'de>,
     {
         let (keys, tuple): (Vec<K>, Term) = Deserialize::deserialize(de)?;
-        Ok(keys
-            .into_iter()
-            .zip(tuple.cs().iter().cloned())
-            .collect())
+        Ok(keys.into_iter().zip(tuple.cs().iter().cloned()).collect())
     }
 }
 /// For term vectors
