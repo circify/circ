@@ -88,6 +88,10 @@ macro_rules! generate_hashcons_hashconsing {
                 Id(self.uid)
             }
 
+            fn live(&self) -> bool {
+                std::sync::Weak::strong_count(&self.elm) > 0
+            }
+
             fn upgrade(&self) -> Option<Self::Node> {
                 self.to_hconsed()
             }

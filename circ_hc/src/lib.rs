@@ -73,6 +73,10 @@ pub trait Weak<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
     type Node: Node<Op, Weak = Self>;
     /// Get the unique ID of this node.
     fn id(&self) -> Id;
+    /// Is this upgradeable?
+    fn live(&self) -> bool {
+        self.upgrade().is_some()
+    }
     /// Attempt to get the node itself.
     fn upgrade(&self) -> Option<Self::Node>;
 }

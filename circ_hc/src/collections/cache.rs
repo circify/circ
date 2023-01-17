@@ -2,7 +2,7 @@
 
 use fxhash::FxHashMap as HashMap;
 
-use crate::{Table, Weak, Node};
+use crate::{Table, Weak};
 
 /// A cache from terms that does not retain its keys.
 pub struct NodeCache<Op, T: Table<Op>, V> {
@@ -26,16 +26,18 @@ impl<Op, T: Table<Op>, V> NodeCache<Op, T, V> {
     pub fn collect(&mut self) {
         self.inner.retain(|k, _| k.upgrade().is_some());
     }
-    /// Lookup; free entry if deallocated.
-    pub fn get(&self, k: &T::Node) -> Option<&V> {
-        self.get_weak(&k.downgrade())
+}
+
+impl<Op, T: Table<Op>, V> std::ops::Deref for NodeCache<Op, T, V> {
+    type Target = HashMap<T::Weak, V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
-    /// Lookup; free entry if deallocated.
-    pub fn get_weak(&self, k: &T::Weak) -> Option<&V> {
-        self.inner.get(k)
-    }
-    /// Insert
-    pub fn insert(&mut self, k: T::Node, v: V) -> Option<V> {
-        self.inner.insert(k.downgrade(), v)
+}
+
+impl<Op, T: Table<Op>, V> std::ops::DerefMut for NodeCache<Op, T, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

@@ -509,7 +509,7 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 
 pub fn const_int(a: CTerm) -> Integer {
     let s = match &a.term {
-        CTermData::CInt(s, _, i) => match &i.op {
+        CTermData::CInt(s, _, i) => match &i.op() {
             Op::Const(Value::BitVector(f)) => {
                 if *s {
                     f.as_sint()
@@ -576,7 +576,7 @@ impl Embeddable for Ct {
     ) -> Self::T {
         match ty {
             Ty::Bool => Self::T {
-                term: CTermData::CBool(ctx.cs.borrow_mut().new_var(
+                term: CTermData::CBool(ctx.cs().borrow_mut().new_var(
                     &name,
                     Sort::Bool,
                     visibility,
@@ -588,7 +588,7 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(
                     *s,
                     *w,
-                    ctx.cs.borrow_mut().new_var(
+                    ctx.cs().borrow_mut().new_var(
                         &name,
                         Sort::BitVector(*w),
                         visibility,

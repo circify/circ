@@ -31,9 +31,9 @@ pub struct Inliner<'a> {
 impl<'a> Inliner<'a> {
     fn new(protected: &'a FxHashSet<String>) -> Self {
         Self {
-            substs: TermMap::new(),
-            subst_cache: TermMap::new(),
-            stale_vars: TermSet::new(),
+            substs: TermMap::default(),
+            subst_cache: TermMap::default(),
+            stale_vars: TermSet::default(),
             protected,
         }
     }
@@ -107,21 +107,21 @@ impl<'a> Inliner<'a> {
     ///
     /// Will not return `v` which are protected.
     fn as_fresh_def(&self, t: &Term) -> Option<(Term, Term)> {
-        if EQ == t.op {
-            if let Op::Var(name, _) = &t.cs[0].op {
-                if !self.stale_vars.contains(&t.cs[0])
+        if &EQ == t.op() {
+            if let Op::Var(name, _) = &t.cs()[0].op() {
+                if !self.stale_vars.contains(&t.cs()[0])
                     && !self.protected.contains(name)
-                    && does_not_contain(t.cs[1].clone(), &t.cs[0])
+                    && does_not_contain(t.cs()[1].clone(), &t.cs()[0])
                 {
-                    return Some((t.cs[0].clone(), t.cs[1].clone()));
+                    return Some((t.cs()[0].clone(), t.cs()[1].clone()));
                 }
             }
-            if let Op::Var(name, _) = &t.cs[1].op {
-                if !self.stale_vars.contains(&t.cs[1])
+            if let Op::Var(name, _) = &t.cs()[1].op() {
+                if !self.stale_vars.contains(&t.cs()[1])
                     && !self.protected.contains(name)
-                    && does_not_contain(t.cs[0].clone(), &t.cs[1])
+                    && does_not_contain(t.cs()[0].clone(), &t.cs()[1])
                 {
-                    return Some((t.cs[1].clone(), t.cs[0].clone()));
+                    return Some((t.cs()[1].clone(), t.cs()[0].clone()));
                 }
             }
         }

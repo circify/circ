@@ -17,9 +17,9 @@ impl From<&Term> for LinTerm {
         let mut steps = Vec::new();
         let mut indices = TermMap::default();
         for (i, t) in PostOrderIter::new(root.clone()).enumerate() {
-            let op = t.op.clone();
+            let op = t.op().clone();
             let children =
-                t.cs.iter()
+                t.cs().iter()
                     .map(|c| *indices.get(c).unwrap())
                     .collect::<Vec<_>>();
             indices.insert(t, i);

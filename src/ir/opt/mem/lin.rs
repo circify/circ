@@ -28,7 +28,7 @@ impl RewritePass for Linearizer {
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
-        match &orig.op {
+        match &orig.op() {
             Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
             Op::Var(name, Sort::Array(..)) => {
                 let precomp = extras::array_to_tuple(orig);
@@ -41,7 +41,7 @@ impl RewritePass for Linearizer {
                 let cs = rewritten_children();
                 let idx = &cs[1];
                 let tup = &cs[0];
-                if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
+                if let Sort::Array(key_sort, _, size) = check(&orig.cs()[0]) {
                     assert!(size > 0);
                     if idx.is_const() {
                         let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
@@ -62,7 +62,7 @@ impl RewritePass for Linearizer {
                 let tup = &cs[0];
                 let idx = &cs[1];
                 let val = &cs[2];
-                if let Sort::Array(key_sort, _, size) = check(&orig.cs[0]) {
+                if let Sort::Array(key_sort, _, size) = check(&orig.cs()[0]) {
                     assert!(size > 0);
                     if idx.is_const() {
                         let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
@@ -106,7 +106,7 @@ mod test {
 
     fn count_ites(t: &Term) -> usize {
         PostOrderIter::new(t.clone())
-            .filter(|t| t.op == Op::Ite)
+            .filter(|t| t.op() == &Op::Ite)
             .count()
     }
 

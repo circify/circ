@@ -179,7 +179,7 @@ mod type_ {
                 Op::BvBit(4),
             ],
             PostOrderIter::new(tt)
-                .map(|t| t.op.clone())
+                .map(|t| t.op().clone())
                 .collect::<Vec<_>>()
         );
     }

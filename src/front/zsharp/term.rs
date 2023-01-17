@@ -204,7 +204,7 @@ impl T {
 
     pub fn pretty<W: std::io::Write>(&self, f: &mut W) -> Result<(), std::io::Error> {
         use std::io::{Error, ErrorKind};
-        let val = match &self.term.op {
+        let val = match &self.term.op() {
             Op::Const(v) => Ok(v),
             _ => Err(Error::new(ErrorKind::Other, "not a const val")),
         }?;
@@ -584,7 +584,7 @@ pub fn const_val(a: T) -> Result<T, String> {
 
 fn const_value(t: &Term) -> Option<Value> {
     let folded = constant_fold(t, &[]);
-    match &folded.op {
+    match &folded.op() {
         Op::Const(v) => Some(v.clone()),
         _ => None,
     }

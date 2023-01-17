@@ -53,13 +53,13 @@ impl PreComp {
         let os = &mut self.outputs;
         let seq = &mut self.sequence;
         let o_tuple = term(Op::Tuple, os.values().cloned().collect());
-        let to_remove = &mut TermSet::new();
+        let to_remove = &mut TermSet::default();
         for t in PostOrderIter::new(o_tuple) {
-            if let Op::Var(ref name, _) = &t.op {
+            if let Op::Var(ref name, _) = &t.op() {
                 if !known.contains(name) {
                     to_remove.insert(t);
                 }
-            } else if t.cs.iter().any(|c| to_remove.contains(c)) {
+            } else if t.cs().iter().any(|c| to_remove.contains(c)) {
                 to_remove.insert(t);
             }
         }
@@ -78,7 +78,7 @@ impl PreComp {
     ///
     /// Requires an input environment that binds all inputs for the underlying computation.
     pub fn eval(&self, env: &FxHashMap<String, Value>) -> FxHashMap<String, Value> {
-        let mut value_cache: TermMap<Value> = TermMap::new();
+        let mut value_cache: TermMap<Value> = TermMap::default();
         let mut env = env.clone();
         // iterate over all terms, evaluating them using the cache.
         for (o_name, _o_sort) in &self.sequence {
@@ -105,7 +105,7 @@ impl PreComp {
     fn recompute_inputs(&mut self) {
         let mut inputs = FxHashSet::default();
         for t in PostOrderIter::new(self.tuple()) {
-            if let Op::Var(name, sort) = &t.op {
+            if let Op::Var(name, sort) = &t.op() {
                 inputs.insert((name.clone(), sort.clone()));
             }
         }

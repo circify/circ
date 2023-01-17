@@ -12,8 +12,8 @@ pub trait RewritePass {
         rewritten_children: F,
     ) -> Option<Term>;
     fn traverse(&mut self, computation: &mut Computation) {
-        let mut cache = TermMap::<Term>::new();
-        let mut children_added = TermSet::new();
+        let mut cache = TermMap::<Term>::default();
+        let mut children_added = TermSet::default();
         let mut stack = Vec::new();
         stack.extend(computation.outputs.iter().cloned());
         while let Some(top) = stack.pop() {
@@ -21,17 +21,17 @@ pub trait RewritePass {
                 // was it missing?
                 if children_added.insert(top.clone()) {
                     stack.push(top.clone());
-                    stack.extend(top.cs.iter().filter(|c| !cache.contains_key(c)).cloned());
+                    stack.extend(top.cs().iter().filter(|c| !cache.contains_key(c)).cloned());
                 } else {
                     let get_children = || -> Vec<Term> {
-                        top.cs
+                        top.cs()
                             .iter()
                             .map(|c| cache.get(c).unwrap())
                             .cloned()
                             .collect()
                     };
                     let new_t_opt = self.visit(computation, &top, get_children);
-                    let new_t = new_t_opt.unwrap_or_else(|| term(top.op.clone(), get_children()));
+                    let new_t = new_t_opt.unwrap_or_else(|| term(top.op().clone(), get_children()));
                     cache.insert(top.clone(), new_t);
                 }
             }
@@ -53,11 +53,11 @@ pub trait ProgressAnalysisPass {
     fn traverse(&mut self, computation: &Computation) {
         let mut progress = true;
         let mut order = Vec::new();
-        let mut visited = TermSet::new();
+        let mut visited = TermSet::default();
         let mut stack = Vec::new();
         stack.extend(computation.outputs.iter().cloned());
         while let Some(top) = stack.pop() {
-            stack.extend(top.cs.iter().filter(|c| !visited.contains(c)).cloned());
+            stack.extend(top.cs().iter().filter(|c| !visited.contains(c)).cloned());
             // was it missing?
             if visited.insert(top.clone()) {
                 order.push(top);

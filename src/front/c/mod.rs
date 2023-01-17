@@ -51,7 +51,7 @@ impl FrontEnd for C {
         cs.comps.insert("main".to_string(), main_comp);
         while !g.function_queue.is_empty() {
             let call_term = g.function_queue.pop().unwrap();
-            if let Op::Call(name, arg_sorts, rets) = &call_term.op {
+            if let Op::Call(name, arg_sorts, rets) = &call_term.op() {
                 g.fn_call(name, arg_sorts, rets);
                 let comp = g.circify().consume().borrow().clone();
                 cs.comps.insert(name.to_string(), comp);
@@ -117,7 +117,7 @@ impl CGen {
         this.circ
             .borrow()
             .cir_ctx()
-            .cs
+            .cs()
             .borrow_mut()
             .metadata
             .add_prover_and_verifier();
@@ -857,8 +857,8 @@ impl CGen {
                 );
 
                 // Add function to queue
-                if !self.function_cache.contains(&call_term.op) {
-                    self.function_cache.insert(call_term.op.clone());
+                if !self.function_cache.contains(&call_term.op()) {
+                    self.function_cache.insert(call_term.op().clone());
                     self.function_queue.push(call_term.clone());
                 }
 
@@ -1155,7 +1155,7 @@ impl CGen {
                     self.circ
                         .borrow()
                         .cir_ctx()
-                        .cs
+                        .cs()
                         .borrow_mut()
                         .outputs
                         .extend(ret_terms);
@@ -1231,7 +1231,7 @@ impl CGen {
             self.circ
                 .borrow()
                 .cir_ctx()
-                .cs
+                .cs()
                 .borrow_mut()
                 .outputs
                 .push(ret_term);

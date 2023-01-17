@@ -248,6 +248,7 @@ dependencies = [
  "bincode",
  "bls12_381",
  "circ_fields",
+ "circ_hc",
  "circ_opt",
  "curve25519-dalek",
  "env_logger",
@@ -257,7 +258,6 @@ dependencies = [
  "gmp-mpfr-sys",
  "good_lp",
  "group",
- "hashconsing",
  "ieee754",
  "im",
  "itertools 0.10.3",
@@ -302,6 +302,15 @@ dependencies = [
  "rand 0.8.5",
  "rug",
  "serde",
+]
+
+[[package]]
+name = "circ_hc"
+version = "0.1.0"
+dependencies = [
+ "fxhash",
+ "hashconsing",
+ "lru",
 ]
 
 [[package]]

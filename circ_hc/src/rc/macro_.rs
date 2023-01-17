@@ -255,6 +255,10 @@ macro_rules! generate_hashcons_rc {
                 self.id
             }
 
+            fn live(&self) -> bool {
+                std::rc::Weak::strong_count(&self.data) > 0
+            }
+
             fn upgrade(&self) -> Option<Self::Node> {
                 self.data.upgrade().map(|data| Node { data, id: self.id })
             }

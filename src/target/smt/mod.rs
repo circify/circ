@@ -105,9 +105,9 @@ impl Expr2Smt<()> for Value {
     }
 }
 
-impl Expr2Smt<()> for TermData {
+impl Expr2Smt<()> for Term {
     fn expr_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
-        let s_expr_children = match &self.op {
+        let s_expr_children = match &self.op() {
             Op::Var(n, _) => {
                 write!(w, "{}", n)?;
                 false
@@ -129,7 +129,7 @@ impl Expr2Smt<()> for TermData {
                 true
             }
             Op::BoolNaryOp(_) | Op::BvBinPred(_) | Op::BvBinOp(_) | Op::BvNaryOp(_) => {
-                write!(w, "({}", self.op)?;
+                write!(w, "({}", self.op())?;
                 true
             }
             Op::BvUext(s) => {
@@ -183,8 +183,8 @@ impl Expr2Smt<()> for TermData {
             o => panic!("Cannot give {} to SMT solver", o),
         };
         if s_expr_children {
-            for c in &self.cs {
-                write!(w, " {}", SmtDisp(&**c))?;
+            for c in self.cs() {
+                write!(w, " {}", SmtDisp(c))?;
             }
             write!(w, ")")?;
         }
@@ -343,7 +343,7 @@ fn make_solver<P>(parser: P, models: bool, inc: bool) -> rsmt2::Solver<P> {
 /// Write SMT2 the encodes this terms satisfiability to a file
 pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
     for c in PostOrderIter::new(t.clone()) {
-        if let Op::Var(n, s) = &c.op {
+        if let Op::Var(n, s) = &c.op() {
             write!(w, "(declare-const ").unwrap();
             SmtSymDisp(n).sym_to_smt2(&mut w, ()).unwrap();
             write!(w, " ").unwrap();
@@ -362,12 +362,12 @@ pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
 pub fn check_sat(t: &Term) -> bool {
     let mut solver = make_solver((), false, false);
     for c in PostOrderIter::new(t.clone()) {
-        if let Op::Var(n, s) = &c.op {
+        if let Op::Var(n, s) = &c.op() {
             solver.declare_const(&SmtSymDisp(n), s).unwrap();
         }
     }
     assert!(check(t) == Sort::Bool);
-    solver.assert(&**t).unwrap();
+    solver.assert(t).unwrap();
     solver.check_sat().unwrap()
 }
 
@@ -375,7 +375,7 @@ fn get_model_solver(t: &Term, inc: bool) -> rsmt2::Solver<Parser> {
     let mut solver = make_solver(Parser, true, inc);
     //solver.path_tee("solver_com").unwrap();
     for c in PostOrderIter::new(t.clone()) {
-        if let Op::Var(n, s) = &c.op {
+        if let Op::Var(n, s) = &c.op() {
             solver.declare_const(&SmtSymDisp(n), s).unwrap();
         }
     }
@@ -386,7 +386,7 @@ fn get_model_solver(t: &Term, inc: bool) -> rsmt2::Solver<Parser> {
 /// Get a satisfying assignment for `t`, assuming it is SAT.
 pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
     let mut solver = get_model_solver(t, false);
-    solver.assert(&**t).unwrap();
+    solver.assert(t).unwrap();
     if solver.check_sat().unwrap() {
         Some(
             solver
@@ -404,7 +404,7 @@ pub fn find_model(t: &Term) -> Option<HashMap<String, Value>> {
 /// Get a unique satisfying assignment for `t`, assuming it is SAT.
 pub fn find_unique_model(t: &Term, uniqs: Vec<String>) -> Option<HashMap<String, Value>> {
     let mut solver = get_model_solver(t, true);
-    solver.assert(&**t).unwrap();
+    solver.assert(t).unwrap();
     // first, get the result
     let model: HashMap<String, Value> = if solver.check_sat().unwrap() {
         solver
@@ -430,7 +430,7 @@ pub fn find_unique_model(t: &Term, uniqs: Vec<String>) -> Option<HashMap<String,
         None => Some(model),
         Some(ast) => {
             solver.push(1).unwrap();
-            solver.assert(&*ast).unwrap();
+            solver.assert(&ast).unwrap();
             match solver.check_sat().unwrap() {
                 true => None,
                 false => Some(model),
@@ -585,11 +585,11 @@ mod test {
         for (var, val) in vs {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
-            solver.assert(&*term![Op::Eq; leaf_term(Op::Var(var.to_owned(), s)), leaf_term(Op::Const(val.clone()))]).unwrap();
+            solver.assert(&term![Op::Eq; leaf_term(Op::Var(var.to_owned(), s)), leaf_term(Op::Const(val.clone()))]).unwrap();
         }
         let val = eval(&t, vs);
         solver
-            .assert(&*term![Op::Eq; t, leaf_term(Op::Const(val))])
+            .assert(&term![Op::Eq; t, leaf_term(Op::Const(val))])
             .unwrap();
         solver.check_sat().unwrap()
     }
@@ -600,11 +600,11 @@ mod test {
         for (var, val) in vs {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
-            solver.assert(&*term![Op::Eq; leaf_term(Op::Var(var.to_owned(), s)), leaf_term(Op::Const(val.clone()))]).unwrap();
+            solver.assert(&term![Op::Eq; leaf_term(Op::Var(var.to_owned(), s)), leaf_term(Op::Const(val.clone()))]).unwrap();
         }
         let val = eval(&t, vs);
         solver
-            .assert(&*term![Op::Not; term![Op::Eq; t, leaf_term(Op::Const(val))]])
+            .assert(&term![Op::Not; term![Op::Eq; t, leaf_term(Op::Const(val))]])
             .unwrap();
         solver.check_sat().unwrap()
     }

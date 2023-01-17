@@ -49,9 +49,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     scalarize_vars::scalarize_inputs(c);
                 }
                 Opt::ConstantFold(ignore) => {
-                    // lock the collector because fold_cache locks TERMS
-                    let _lock = super::term::COLLECT.read().unwrap();
-                    let mut cache = TermCache::new(TERM_CACHE_LIMIT);
+                    let mut cache = TermCache::with_capacity(TERM_CACHE_LIMIT);
                     for a in &mut c.outputs {
                         // allow unbounded size during a single fold_cache call
                         cache.resize(std::usize::MAX);
@@ -75,8 +73,8 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     let mut new_outputs = Vec::new();
                     for a in std::mem::take(&mut c.outputs) {
                         assert_eq!(check(&a), Sort::Bool, "Non-bool in {:?}", i);
-                        if a.op == Op::BoolNaryOp(BoolNaryOp::And) {
-                            new_outputs.extend(a.cs.iter().cloned());
+                        if a.op() == &Op::BoolNaryOp(BoolNaryOp::And) {
+                            new_outputs.extend(a.cs().iter().cloned());
                         } else {
                             new_outputs.push(a)
                         }

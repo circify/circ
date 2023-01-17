@@ -364,7 +364,7 @@ pub mod test {
             let d = PureBoolDist(g.size());
             let t = d.sample(&mut rng);
             let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
-                .filter_map(|c| match &c.op {
+                .filter_map(|c| match &c.op() {
                     Op::Var(n, Sort::Bool) => Some((n.clone(), Value::Bool(bool::arbitrary(g)))),
                     _ => None,
                 })
@@ -405,7 +405,7 @@ pub mod test {
             };
             let t = d.sample(&mut rng);
             let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
-                .filter_map(|c| match &c.op {
+                .filter_map(|c| match &c.op() {
                     Op::Var(n, s) => Some((n.clone(), UniformValue(s).sample(&mut rng))),
                     _ => None,
                 })
