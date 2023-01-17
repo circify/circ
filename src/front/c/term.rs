@@ -576,7 +576,7 @@ impl Embeddable for Ct {
     ) -> Self::T {
         match ty {
             Ty::Bool => Self::T {
-                term: CTermData::CBool(ctx.cs().borrow_mut().new_var(
+                term: CTermData::CBool(ctx.cs.borrow_mut().new_var(
                     &name,
                     Sort::Bool,
                     visibility,
@@ -588,7 +588,7 @@ impl Embeddable for Ct {
                 term: CTermData::CInt(
                     *s,
                     *w,
-                    ctx.cs().borrow_mut().new_var(
+                    ctx.cs.borrow_mut().new_var(
                         &name,
                         Sort::BitVector(*w),
                         visibility,
