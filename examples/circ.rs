@@ -239,8 +239,6 @@ fn main() {
                 Opt::Flatten,
                 Opt::Sha,
                 Opt::ConstantFold(Box::new([])),
-                Opt::Flatten,
-                Opt::Inline,
                 // Tuples must be eliminated before oblivious array elim
                 Opt::Tuple,
                 Opt::ConstantFold(Box::new([])),
@@ -252,7 +250,6 @@ fn main() {
                 Opt::Tuple,
                 Opt::Flatten,
                 Opt::ConstantFold(Box::new([])),
-                Opt::Inline,
             ],
         ),
     };
