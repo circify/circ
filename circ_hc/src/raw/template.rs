@@ -24,6 +24,7 @@ pub struct Table {}
 
 impl crate::Table<TemplateOp> for Table {
     type Node = Node;
+    type Weak = Weak;
 
     #[allow(dead_code)]
     fn create(op: &TemplateOp, children: Vec<Node>) -> Node {

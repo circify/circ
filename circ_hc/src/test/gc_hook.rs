@@ -25,7 +25,9 @@ fn test_seq<T: Table<u8>>(steps: &[Step]) {
     let scalar_cache = Rc::new(RefCell::new(HashMap::<Id, u8>::default()));
     let cache2 = cache.clone();
     let scalar_cache2 = scalar_cache.clone();
-    T::set_gc_hook(move |id| {
+    // in case a previous test panic'd
+    T::gc_hooks_clear();
+    T::gc_hook_add("test", move |id| {
         scalar_cache2.borrow_mut().remove(&id);
         cache2.borrow_mut().remove(&id).into_iter().collect()
     });
@@ -61,6 +63,7 @@ fn test_seq<T: Table<u8>>(steps: &[Step]) {
             }
         }
     }
+    T::gc_hook_remove("test");
 }
 
 pub fn two<T: Table<u8>>() {

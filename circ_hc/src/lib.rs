@@ -4,8 +4,9 @@ use std::hash::Hash;
 pub mod hashconsing;
 pub mod raw;
 pub mod rc;
-// pub mod arc;
 pub use rc::generate_hashcons;
+
+pub mod collections;
 
 #[cfg(test)]
 mod test;
@@ -13,7 +14,8 @@ mod test;
 /// A hash-cons table
 pub trait Table<Op> {
     /// The type of nodes
-    type Node: Node<Op> + 'static;
+    type Node: Node<Op, Weak = Self::Weak> + 'static;
+    type Weak: Weak<Op, Node = Self::Node> + 'static;
 
     /// Create a new node
     fn create(op: &Op, children: Vec<Self::Node>) -> Self::Node;
@@ -44,7 +46,11 @@ pub trait Table<Op> {
     /// values!) by keying them on Node IDs, and then returning any nodes in the value when the GC
     /// hook is called.
     #[allow(unused_variables)]
-    fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node> + 'static) {}
+    fn gc_hook_add(name: &'static str, f: impl Fn(Id) -> Vec<Self::Node> + 'static) {}
+    /// Remove a GC hook
+    #[allow(unused_variables)]
+    fn gc_hook_remove(name: &'static str) {}
+    fn gc_hooks_clear() {}
 }
 
 /// A hash-cons node

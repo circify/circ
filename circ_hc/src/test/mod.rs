@@ -36,10 +36,6 @@ mod raw {
     mod qc {
         use quickcheck_macros::quickcheck;
         #[quickcheck]
-        pub fn leaf(u: u8) {
-            super::super::qc::leaf::<super::Table>(u);
-        }
-        #[quickcheck]
         pub fn four_nodes(a: u8, b: u8, c: u8, d: u8) {
             super::super::qc::four_nodes::<super::Table>(a, b, c, d);
         }

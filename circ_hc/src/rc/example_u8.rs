@@ -48,6 +48,7 @@ pub struct Table {}
 
 impl crate::Table<u8> for Table {
     type Node = Node;
+    type Weak = Weak;
 
     #[allow(dead_code)]
     fn create(op: &u8, children: Vec<Node>) -> Node {
@@ -72,11 +73,34 @@ impl crate::Table<u8> for Table {
         MANAGER.with(|man| man.table.borrow_mut().reserve(num_nodes))
     }
 
-    fn set_gc_hook(f: impl Fn(Id) -> Vec<Self::Node> + 'static) {
+    fn gc_hook_add(name: &'static str, f: impl Fn(Id) -> Vec<Self::Node> + 'static) {
         MANAGER.with(|man| {
-            let mut hook = man.gc_hook.borrow_mut();
-            // don't assert that the hook is none, to allow it to be overwritten
-            *hook = Some(Box::new(f));
+            let mut hooks = man.gc_hooks.borrow_mut();
+            let name = name.to_owned();
+            assert!(!hooks.0.contains(&name), "Already a hook for '{}'", name);
+            hooks.0.push(name);
+            hooks.1.push(Box::new(f));
+        })
+    }
+    // false positive on hooks!
+    #[allow(unused_must_use)]
+    fn gc_hook_remove(name: &'static str) {
+        MANAGER.with(|man| {
+            let mut hooks = man.gc_hooks.borrow_mut();
+            let i = hooks
+                .0
+                .iter()
+                .position(|n| n == name)
+                .unwrap_or_else(|| panic!("No hook for '{}' to remove", name));
+            hooks.0.remove(i);
+            hooks.1.remove(i);
+        })
+    }
+    fn gc_hooks_clear() {
+        MANAGER.with(|man| {
+            let mut hooks = man.gc_hooks.borrow_mut();
+            hooks.0.clear();
+            hooks.1.clear();
         })
     }
 }
@@ -84,7 +108,8 @@ impl crate::Table<u8> for Table {
 struct Manager {
     table: RefCell<HashMap<Rc<NodeData>, Node>>,
     next_id: Cell<Id>,
-    gc_hook: RefCell<Option<Box<dyn Fn(Id) -> Vec<Node>>>>,
+    /// a Vec map from [String] to function
+    gc_hooks: RefCell<(Vec<String>, Vec<Box<dyn Fn(Id) -> Vec<Node>>>)>,
 }
 
 struct TableDebug<'a>(&'a HashMap<Rc<NodeData>, Node>);
@@ -113,7 +138,7 @@ thread_local! {
     static MANAGER: Manager = Manager {
         table: Default::default(),
         next_id: Cell::new(Id(0)),
-        gc_hook: Default::default(),
+        gc_hooks: Default::default(),
     };
 }
 
@@ -172,7 +197,7 @@ impl Manager {
                     to_collect.push(c.clone());
                 }
             }
-            if let Some(h) = self.gc_hook.borrow_mut().as_mut() {
+            for h in self.gc_hooks.borrow_mut().1.iter_mut() {
                 for c in h(id) {
                     if Rc::strong_count(&c.data) <= 3 {
                         debug_assert_eq!(Rc::strong_count(&c.data), 3);

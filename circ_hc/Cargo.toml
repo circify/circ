@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 fxhash = "0.2.1"
 hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "phash"}
+lru = "0.7.2"
 
 [dev-dependencies]
 quickcheck = "1"

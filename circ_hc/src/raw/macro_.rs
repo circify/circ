@@ -27,6 +27,7 @@ macro_rules! generate_hashcons_raw {
 
         impl $crate::Table<$Op> for Table {
             type Node = Node;
+            type Weak = Weak;
 
             #[allow(dead_code)]
             fn create(op: &$Op, children: Vec<Node>) -> Node {
