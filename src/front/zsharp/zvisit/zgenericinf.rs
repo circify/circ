@@ -189,8 +189,10 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 }
             });
         if self.constr.is_some() {
-            CACHE.with(|c| c.borrow_mut()
-                .insert(self.constr.take().unwrap(), res.clone()));
+            CACHE.with(|c| {
+                c.borrow_mut()
+                    .insert(self.constr.take().unwrap(), res.clone())
+            });
         }
         debug!("done (finished inference)");
         Ok(res)

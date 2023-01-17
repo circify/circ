@@ -389,10 +389,11 @@ impl<'cfg> ToR1cs<'cfg> {
                     self.nary_or(vec![not_a, b].into_iter())
                 }
                 Op::BoolNaryOp(o) => {
-                    let args =
-                        c.cs().iter()
-                            .map(|c| self.get_bool(c).clone())
-                            .collect::<Vec<_>>();
+                    let args = c
+                        .cs()
+                        .iter()
+                        .map(|c| self.get_bool(c).clone())
+                        .collect::<Vec<_>>();
                     match o {
                         BoolNaryOp::Or => self.nary_or(args.into_iter()),
                         BoolNaryOp::And => self.nary_and(args.into_iter()),

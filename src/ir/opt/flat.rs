@@ -112,7 +112,8 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
             }
             _ => Entry::Term(Rc::new(term(
                 t.op().clone(),
-                t.cs().iter()
+                t.cs()
+                    .iter()
                     .map(|c| rewritten.get_mut(c).unwrap().as_term())
                     .collect(),
             ))),

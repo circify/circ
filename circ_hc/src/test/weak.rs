@@ -11,7 +11,6 @@ enum Step {
     AssertTableSize(usize),
 }
 
-
 fn test_seq<T: Table<u8>>(steps: &[Step]) {
     T::reserve(steps.len());
     let mut nodes = vec![];

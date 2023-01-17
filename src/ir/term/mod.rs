@@ -23,14 +23,14 @@
 use crate::cfg::cfg_or_default as cfg;
 
 use circ_fields::{FieldT, FieldV};
+pub use circ_hc::{Node, Table, Weak};
 use circ_opt::FieldToBv;
-pub use circ_hc::{Table, Weak, Node};
 use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::BTreeMap;
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
@@ -944,7 +944,7 @@ pub fn garbage_collect() {
     super::opt::cfold::collect();
 }
 
-thread_local!{
+thread_local! {
     static LAST_LEN: Cell<usize> = Default::default();
 }
 
@@ -957,7 +957,6 @@ fn should_collect() -> bool {
     }
     ret
 }
-
 
 const LEN_THRESH_NUM: usize = 8;
 const LEN_THRESH_DEN: usize = 1;
@@ -1203,9 +1202,9 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             .clone(),
         Op::Eq => Value::Bool(vs.get(&c.cs()[0]).unwrap() == vs.get(&c.cs()[1]).unwrap()),
         Op::Not => Value::Bool(!vs.get(&c.cs()[0]).unwrap().as_bool()),
-        Op::Implies => {
-            Value::Bool(!vs.get(&c.cs()[0]).unwrap().as_bool() || vs.get(&c.cs()[1]).unwrap().as_bool())
-        }
+        Op::Implies => Value::Bool(
+            !vs.get(&c.cs()[0]).unwrap().as_bool() || vs.get(&c.cs()[1]).unwrap().as_bool(),
+        ),
         Op::BoolNaryOp(BoolNaryOp::Or) => {
             Value::Bool(c.cs().iter().any(|c| vs.get(c).unwrap().as_bool()))
         }
@@ -1213,11 +1212,18 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             Value::Bool(c.cs().iter().all(|c| vs.get(c).unwrap().as_bool()))
         }
         Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
-            c.cs().iter()
+            c.cs()
+                .iter()
                 .map(|c| vs.get(c).unwrap().as_bool())
                 .fold(false, std::ops::BitXor::bitxor),
         ),
-        Op::BvBit(i) => Value::Bool(vs.get(&c.cs()[0]).unwrap().as_bv().uint().get_bit(*i as u32)),
+        Op::BvBit(i) => Value::Bool(
+            vs.get(&c.cs()[0])
+                .unwrap()
+                .as_bv()
+                .uint()
+                .get_bit(*i as u32),
+        ),
         Op::BoolMaj => {
             let c0 = vs.get(&c.cs()[0]).unwrap().as_bool() as u8;
             let c1 = vs.get(&c.cs()[1]).unwrap().as_bool() as u8;

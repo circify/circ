@@ -1,4 +1,4 @@
-use crate::{Table, Node};
+use crate::{Node, Table};
 
 pub fn one<T: Table<u8>>() {
     T::gc();

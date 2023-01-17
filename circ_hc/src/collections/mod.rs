@@ -1,2 +1,2 @@
-pub mod lru;
 pub mod cache;
+pub mod lru;

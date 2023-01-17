@@ -85,7 +85,8 @@ impl Ram {
 
 /// Parse `ite` as a conditional store (arr, idx, val, guard)
 fn parse_cond_store(ite: &Term) -> Option<ConditionalStore> {
-    if ite.op() == &Op::Ite && ite.cs()[1].op() == &Op::Store && ite.cs()[1].cs()[0] == ite.cs()[2] {
+    if ite.op() == &Op::Ite && ite.cs()[1].op() == &Op::Store && ite.cs()[1].cs()[0] == ite.cs()[2]
+    {
         Some(ConditionalStore {
             arr: ite.cs()[2].clone(),
             idx: ite.cs()[1].cs()[1].clone(),

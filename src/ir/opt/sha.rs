@@ -18,26 +18,37 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                 if t.cs().len() == 2 {
                     let l = get(0);
                     let r = get(1);
-                    if l.op() == r.op() && l.op() == &BV_AND && l.cs().len() == 2 && r.cs().len() == 2 {
+                    if l.op() == r.op()
+                        && l.op() == &BV_AND
+                        && l.cs().len() == 2
+                        && r.cs().len() == 2
+                    {
                         let opt_match = r
                             .cs()
                             .iter()
                             .position(|r_c| r_c == &term![BV_NOT; l.cs()[0].clone()])
                             .map(|r_i| (&l.cs()[0], &l.cs()[1], &r.cs()[1 - r_i]))
                             .or_else(|| {
-                                r.cs().iter()
+                                r.cs()
+                                    .iter()
                                     .position(|r_c| r_c == &term![BV_NOT; l.cs()[1].clone()])
                                     .map(|r_i| (&l.cs()[1], &l.cs()[0], &r.cs()[1 - r_i]))
                                     .or_else(|| {
-                                        l.cs().iter()
-                                            .position(|l_c| l_c == &term![BV_NOT; r.cs()[0].clone()])
+                                        l.cs()
+                                            .iter()
+                                            .position(|l_c| {
+                                                l_c == &term![BV_NOT; r.cs()[0].clone()]
+                                            })
                                             .map(|l_i| (&r.cs()[0], &r.cs()[1], &l.cs()[1 - l_i]))
                                             .or_else(|| {
-                                                l.cs().iter()
+                                                l.cs()
+                                                    .iter()
                                                     .position(|l_c| {
                                                         l_c == &term![BV_NOT; r.cs()[1].clone()]
                                                     })
-                                                    .map(|l_i| (&r.cs()[1], &r.cs()[0], &l.cs()[1 - l_i]))
+                                                    .map(|l_i| {
+                                                        (&r.cs()[1], &r.cs()[0], &l.cs()[1 - l_i])
+                                                    })
                                             })
                                     })
                             });
@@ -112,7 +123,10 @@ pub fn sha_rewrites(term_: &Term) -> Term {
         let new_t = new_t.unwrap_or_else(|| {
             term(
                 t.op().clone(),
-                t.cs().iter().map(|c| cache.get(c).unwrap().clone()).collect(),
+                t.cs()
+                    .iter()
+                    .map(|c| cache.get(c).unwrap().clone())
+                    .collect(),
             )
         });
         cache.insert(t, new_t);
@@ -143,7 +157,10 @@ pub fn sha_maj_elim(term_: &Term) -> Term {
         let new_t = new_t.unwrap_or_else(|| {
             term(
                 t.op().clone(),
-                t.cs().iter().map(|c| cache.get(c).unwrap().clone()).collect(),
+                t.cs()
+                    .iter()
+                    .map(|c| cache.get(c).unwrap().clone())
+                    .collect(),
             )
         });
         cache.insert(t, new_t);

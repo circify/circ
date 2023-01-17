@@ -1,7 +1,7 @@
 mod bench;
+mod gc_hook;
 mod qc;
 mod tiny;
-mod gc_hook;
 mod weak;
 
 mod raw {

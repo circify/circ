@@ -504,7 +504,10 @@ impl<'a> ToABY<'a> {
                         let const_shift_amount =
                             const_shift_amount_term.as_bv_opt().unwrap().uint();
 
-                        let key = (t.op().clone(), vec![a, const_shift_amount.to_i32().unwrap()]);
+                        let key = (
+                            t.op().clone(),
+                            vec![a, const_shift_amount.to_i32().unwrap()],
+                        );
                         let s = self.get_share(&t, to_share_type);
                         if let std::collections::hash_map::Entry::Vacant(e) =
                             self.cache.entry(key.clone())

@@ -1,7 +1,7 @@
-use crate::{Node, Table, Id};
+use crate::{Id, Node, Table};
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// One step in the test.
 #[derive(Debug)]
@@ -16,7 +16,6 @@ enum Step {
     AssertTableSize(usize),
     AssertCacheSize(usize),
 }
-
 
 fn test_seq<T: Table<u8>>(steps: &[Step]) {
     T::reserve(steps.len());
@@ -47,10 +46,14 @@ fn test_seq<T: Table<u8>>(steps: &[Step]) {
                 mem.remove(i % mem.len());
             }
             Step::CacheNode(k, v) => {
-                cache.borrow_mut().insert(mem[k % mem.len()].id(), mem[v % mem.len()].clone());
+                cache
+                    .borrow_mut()
+                    .insert(mem[k % mem.len()].id(), mem[v % mem.len()].clone());
             }
             Step::CacheScalar(k, v) => {
-                scalar_cache.borrow_mut().insert(mem[k % mem.len()].id(), *v);
+                scalar_cache
+                    .borrow_mut()
+                    .insert(mem[k % mem.len()].id(), *v);
             }
             Step::Gc => {
                 T::gc();

@@ -216,10 +216,11 @@ impl ToMilp {
                     self.bit_or(&[not_a, b])
                 }
                 Op::BoolNaryOp(o) => {
-                    let args =
-                        c.cs().iter()
-                            .map(|c| self.get_bool(c).clone())
-                            .collect::<Vec<_>>();
+                    let args = c
+                        .cs()
+                        .iter()
+                        .map(|c| self.get_bool(c).clone())
+                        .collect::<Vec<_>>();
                     match o {
                         BoolNaryOp::Or => self.bit_or(args.iter()),
                         BoolNaryOp::And => self.bit_and(args.iter()),

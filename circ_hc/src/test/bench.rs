@@ -1,4 +1,3 @@
-
 use rand_chacha::ChaChaRng;
 
 fn test_rng() -> ChaChaRng {
@@ -109,5 +108,11 @@ pub fn bench_test<T: Table<u8>>(num_steps: usize) {
     assert_eq!(T::table_size(), 0);
     println!("");
     println!("name,steps,time,gc_time");
-    println!("{},{},{:?},{:?}", T::name(), num_steps, times.run / num_steps as u32, times.gc / num_steps as u32);
+    println!(
+        "{},{},{:?},{:?}",
+        T::name(),
+        num_steps,
+        times.run / num_steps as u32,
+        times.gc / num_steps as u32
+    );
 }

@@ -34,7 +34,8 @@ pub fn substitute_cache(t: &Term, subs: &mut TermMap<Term>) -> Term {
         }
         let new_n = term(
             n.op().clone(),
-            n.cs().iter()
+            n.cs()
+                .iter()
                 .map(|c| subs.get(c).expect("postorder").clone())
                 .collect(),
         );
