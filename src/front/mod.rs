@@ -2,6 +2,7 @@
 
 #[cfg(feature = "c")]
 pub mod c;
+#[cfg(all(feature = "smt", feature = "datalog"))]
 pub mod datalog;
 #[cfg(all(feature = "smt", feature = "zok"))]
 pub mod zsharp;
