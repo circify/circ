@@ -12,7 +12,7 @@ circ_opt = { path = "circ_opt" }
 circ_hc = { path = "circ_hc", default-features = false, features = ["rc", "lru"]}
 rug = { version = "1.11", features = ["serde"] }
 gmp-mpfr-sys = "1.4"
-lazy_static = "1.4"
+lazy_static = { version = "1.4", optional = true }
 rand = "0.8"
 rsmt2 = { version = "0.14", optional = true }
 ieee754 = { version = "0.2", optional = true}
@@ -62,7 +62,7 @@ lp = ["good_lp", "lp-solvers"]
 r1cs = ["bellman", "spartan", "merlin", "curve25519-dalek", "ff", "group", "pairing", "serde_bytes", "bincode"]
 smt = ["rsmt2", "ieee754"]
 zok = ["zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
-datalog = ["pest", "pest-ast", "pest_derive", "from-pest"]
+datalog = ["pest", "pest-ast", "pest_derive", "from-pest", "lazy_static"]
 
 [[example]]
 name = "circ"
