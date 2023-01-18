@@ -1,13 +1,14 @@
 #![allow(unused_imports)]
-#[cfg(feature = "r1cs")]
-use bellman::gadgets::test::TestConstraintSystem;
-#[cfg(feature = "r1cs")]
-use bellman::groth16::{
-    create_random_proof, generate_parameters, generate_random_parameters, prepare_verifying_key,
-    verify_proof, Parameters, Proof, VerifyingKey,
+#[cfg(feature = "bellman")]
+use bellman::{
+    gadgets::test::TestConstraintSystem,
+    groth16::{
+        create_random_proof, generate_parameters, generate_random_parameters,
+        prepare_verifying_key, verify_proof, Parameters, Proof, VerifyingKey,
+    },
+    Circuit,
 };
-#[cfg(feature = "r1cs")]
-use bellman::Circuit;
+#[cfg(feature = "bellman")]
 use bls12_381::{Bls12, Scalar};
 use circ::cfg::{
     cfg,
@@ -29,15 +30,16 @@ use circ::ir::{
         text::{parse_value_map, serialize_value_map},
     },
 };
+#[cfg(feature = "aby")]
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
-#[cfg(feature = "r1cs")]
+#[cfg(feature = "bellman")]
 use circ::target::r1cs::bellman::gen_params;
-use circ::target::r1cs::opt::reduce_linearities;
-#[cfg(feature = "r1cs")]
+#[cfg(feature = "spartan")]
 use circ::target::r1cs::spartan::write_data;
-use circ::target::r1cs::trans::to_r1cs;
+#[cfg(feature = "r1cs")]
+use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs};
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
 use circ_fields::FieldT;
@@ -154,6 +156,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
     }
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn main() {
     env_logger::Builder::from_default_env()
         .format_level(false)
@@ -281,6 +284,7 @@ fn main() {
             println!("Final R1cs size: {}", prover_data.r1cs.constraints().len());
             match action {
                 ProofAction::Count => (),
+                #[cfg(feature = "bellman")]
                 ProofAction::Setup => {
                     println!("Generating Parameters");
                     gen_params::<Bls12, _, _>(
@@ -291,16 +295,22 @@ fn main() {
                     )
                     .unwrap();
                 }
+                #[cfg(not(feature = "bellman"))]
+                ProofAction::Setup => panic!("Missing feature: bellman"),
+                #[cfg(feature = "spartan")]
                 ProofAction::SpartanSetup => {
                     write_data::<_, _>(prover_key, verifier_key, &prover_data, &verifier_data)
                         .unwrap();
                 }
+                #[cfg(not(feature = "spartan"))]
+                ProofAction::SpartanSetup => panic!("Missing feature: spartan"),
             }
         }
         #[cfg(not(feature = "r1cs"))]
         Backend::R1cs { .. } => {
             panic!("Missing feature: r1cs");
         }
+        #[cfg(feature = "aby")]
         Backend::Mpc {
             cost_model,
             selection_scheme,
@@ -314,6 +324,10 @@ fn main() {
             println!("Cost model: {}", cost_model);
             println!("Selection scheme: {}", selection_scheme);
             to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
+        }
+        #[cfg(not(feature = "aby"))]
+        Backend::Mpc { .. } => {
+            panic!("Missing feature: aby");
         }
         #[cfg(feature = "lp")]
         Backend::Ilp { .. } => {

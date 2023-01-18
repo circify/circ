@@ -35,7 +35,8 @@ use super::{ShareType, SharingMap, SHARE_TYPES};
 use crate::ir::term::*;
 use crate::target::aby::assignment::CostModel;
 
-use crate::target::ilp::{variable, Expression, Ilp, Variable};
+use crate::target::ilp::{Expression, Ilp, Variable};
+use good_lp::variable;
 
 use std::env::var;
 

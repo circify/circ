@@ -273,7 +273,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.embed_bool(c);
                     }
                     Sort::BitVector(_) => {
-                        self.embed_bv(c);
+                        self.embed_bv_lit(c);
                     }
                     Sort::Field(_) => {
                         self.embed_pf(c);
@@ -501,21 +501,21 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     /// Shift `x` left by `2^y`, if bit-valued `c` is true.
-    fn const_pow_shift_bv(&mut self, x: &TermLc, y: usize, c: TermLc) -> TermLc {
+    fn const_pow_shift_bv_lit(&mut self, x: &TermLc, y: usize, c: TermLc) -> TermLc {
         self.ite(c, x.clone() * (1 << (1 << y)), x)
     }
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
     /// Returns an *oversized* number
-    fn shift_bv(&mut self, x: TermLc, y: Vec<TermLc>, ext_bit: Option<TermLc>) -> TermLc {
+    fn shift_bv_lit(&mut self, x: TermLc, y: Vec<TermLc>, ext_bit: Option<TermLc>) -> TermLc {
         if let Some(b) = ext_bit {
-            let left = self.shift_bv(x, y.clone(), None);
-            let right = self.shift_bv(b.clone(), y, None) - 1;
+            let left = self.shift_bv_lit(x, y.clone(), None);
+            let right = self.shift_bv_lit(b.clone(), y, None) - 1;
             left + &self.mul(b, right)
         } else {
             y.into_iter()
                 .enumerate()
-                .fold(x, |x, (i, yi)| self.const_pow_shift_bv(&x, i, yi))
+                .fold(x, |x, (i, yi)| self.const_pow_shift_bv_lit(&x, i, yi))
         }
     }
 
@@ -536,7 +536,7 @@ impl<'cfg> ToR1cs<'cfg> {
             Some(e) => e.clone() * &self.r1cs.modulus.new_v((1 << x_w) - 1),
             None => self.zero.clone(),
         };
-        let s = self.shift_bv(x, y, ext_bit);
+        let s = self.shift_bv_lit(x, y, ext_bit);
         let masked_s = self.ite(c, mask, &s);
         let mut bits = self.bitify("shift", &masked_s, (1 << y_w) + x_w - 1, false);
         bits.truncate(x_w);
@@ -557,7 +557,7 @@ impl<'cfg> ToR1cs<'cfg> {
         (some_high_bit, shift_amt)
     }
 
-    fn embed_bv(&mut self, bv: Term) {
+    fn embed_bv_lit(&mut self, bv: Term) {
         //println!("Embed: {}", bv);
         //let bv2=  bv.clone();
         if let Sort::BitVector(n) = check(&bv) {
@@ -822,7 +822,7 @@ impl<'cfg> ToR1cs<'cfg> {
         );
     }
 
-    fn get_bv(&self, t: &Term) -> Rc<RefCell<BvEntry>> {
+    fn get_bv_lit(&self, t: &Term) -> Rc<RefCell<BvEntry>> {
         match self
             .cache
             .get(t)
@@ -834,11 +834,11 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn bv_has_bits(&self, t: &Term) -> bool {
-        !(*self.get_bv(t)).borrow().bits.is_empty()
+        !(*self.get_bv_lit(t)).borrow().bits.is_empty()
     }
 
     fn get_bv_uint(&mut self, t: &Term) -> TermLc {
-        let entry_rc = self.get_bv(t);
+        let entry_rc = self.get_bv_lit(t);
         let mut entry = entry_rc.borrow_mut();
         if let Some(uint) = entry.uint.as_ref() {
             uint.clone()
@@ -855,7 +855,7 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn get_bv_bits(&mut self, t: &Term) -> Vec<TermLc> {
-        let entry_rc = self.get_bv(t);
+        let entry_rc = self.get_bv_lit(t);
         let mut entry = entry_rc.borrow_mut();
         if entry.bits.is_empty() {
             entry.bits = self.bitify("getbits", entry.uint.as_ref().unwrap(), entry.width, false);
@@ -1010,14 +1010,10 @@ pub mod test {
 
     use crate::ir::proof::Constraints;
     use crate::ir::term::dist::test::*;
-    use crate::ir::term::dist::*;
     use crate::target::r1cs::opt::reduce_linearities;
 
     use fxhash::FxHashMap;
-    use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
-    use rand::distributions::Distribution;
-    use rand::SeedableRng;
 
     fn to_r1cs_dflt(cs: Computation) -> (ProverData, VerifierData) {
         to_r1cs(cs, &CircCfg::default())
@@ -1056,36 +1052,6 @@ pub mod test {
         let precomp = pd.precompute;
         let extended_values = precomp.eval(&values);
         pd.r1cs.check_all(&extended_values);
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct PureBool(pub Term, pub FxHashMap<String, Value>);
-
-    impl Arbitrary for PureBool {
-        fn arbitrary(g: &mut Gen) -> Self {
-            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
-            let t = PureBoolDist(g.size()).sample(&mut rng);
-            let values: FxHashMap<String, Value> = PostOrderIter::new(t.clone())
-                .filter_map(|c| {
-                    if let Op::Var(n, _) = &c.op() {
-                        Some((n.clone(), Value::Bool(bool::arbitrary(g))))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            PureBool(t, values)
-        }
-
-        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
-            let vs = self.1.clone();
-            let ts = PostOrderIter::new(self.0.clone())
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev();
-
-            Box::new(ts.skip(1).map(move |t| PureBool(t, vs.clone())))
-        }
     }
 
     #[quickcheck]
@@ -1156,7 +1122,7 @@ pub mod test {
         .collect();
 
         let cs = Computation::from_constraint_system_parts(
-            vec![term![Op::Not; term![Op::Eq; bv(0b10110, 8),
+            vec![term![Op::Not; term![Op::Eq; bv_lit(0b10110, 8),
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
         );
@@ -1185,14 +1151,6 @@ pub mod test {
         r1cs2.check_all(&extended_values);
     }
 
-    /// A bit-vector literal with value `u` and size `w`
-    pub fn bv(u: usize, w: usize) -> Term {
-        leaf_term(Op::Const(Value::BitVector(BitVector::new(
-            Integer::from(u),
-            w,
-        ))))
-    }
-
     fn pf_dflt(i: isize) -> Term {
         leaf_term(Op::Const(Value::Field(CircCfg::default().field().new_v(i))))
     }
@@ -1211,43 +1169,43 @@ pub mod test {
         init();
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b1111,4)],
-            bv(0b0001, 4)
+            term![Op::BvBinOp(BvBinOp::Udiv); bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b0001, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b0001,4)],
-            bv(0b1111, 4)
+            term![Op::BvBinOp(BvBinOp::Udiv); bv_lit(0b1111,4), bv_lit(0b0001,4)],
+            bv_lit(0b1111, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b0111,4), bv(0b0000,4)],
-            bv(0b1111, 4)
+            term![Op::BvBinOp(BvBinOp::Udiv); bv_lit(0b0111,4), bv_lit(0b0000,4)],
+            bv_lit(0b1111, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Udiv); bv(0b1111,4), bv(0b0010,4)],
-            bv(0b0111, 4)
+            term![Op::BvBinOp(BvBinOp::Udiv); bv_lit(0b1111,4), bv_lit(0b0010,4)],
+            bv_lit(0b0111, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Urem); bv(0b1111,4), bv(0b1111,4)],
-            bv(0b0000, 4)
+            term![Op::BvBinOp(BvBinOp::Urem); bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b0000, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Urem); bv(0b1111,4), bv(0b0001,4)],
-            bv(0b0000, 4)
+            term![Op::BvBinOp(BvBinOp::Urem); bv_lit(0b1111,4), bv_lit(0b0001,4)],
+            bv_lit(0b0000, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Urem); bv(0b0111,4), bv(0b0000,4)],
-            bv(0b0111, 4)
+            term![Op::BvBinOp(BvBinOp::Urem); bv_lit(0b0111,4), bv_lit(0b0000,4)],
+            bv_lit(0b0111, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Urem); bv(0b1111,4), bv(0b0010,4)],
-            bv(0b0001, 4)
+            term![Op::BvBinOp(BvBinOp::Urem); bv_lit(0b1111,4), bv_lit(0b0010,4)],
+            bv_lit(0b0001, 4)
         ]);
     }
 
@@ -1256,52 +1214,52 @@ pub mod test {
         init();
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Shl); bv(0b1111,4), bv(0b0011,4)],
-            bv(0b1000, 4)
+            term![Op::BvBinOp(BvBinOp::Shl); bv_lit(0b1111,4), bv_lit(0b0011,4)],
+            bv_lit(0b1000, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Shl); bv(0b1101,4), bv(0b0010,4)],
-            bv(0b0100, 4)
+            term![Op::BvBinOp(BvBinOp::Shl); bv_lit(0b1101,4), bv_lit(0b0010,4)],
+            bv_lit(0b0100, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Ashr); bv(0b1111,4), bv(0b0011,4)],
-            bv(0b1111, 4)
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b1111,4), bv_lit(0b0011,4)],
+            bv_lit(0b1111, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Ashr); bv(0b0111,4), bv(0b0010,4)],
-            bv(0b0001, 4)
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b0111,4), bv_lit(0b0010,4)],
+            bv_lit(0b0001, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Lshr); bv(0b0111,4), bv(0b0010,4)],
-            bv(0b0001, 4)
+            term![Op::BvBinOp(BvBinOp::Lshr); bv_lit(0b0111,4), bv_lit(0b0010,4)],
+            bv_lit(0b0001, 4)
         ]);
         const_test(term![
             Op::Eq;
-            term![Op::BvBinOp(BvBinOp::Lshr); bv(0b1111,4), bv(0b0011,4)],
-            bv(0b0001, 4)
+            term![Op::BvBinOp(BvBinOp::Lshr); bv_lit(0b1111,4), bv_lit(0b0011,4)],
+            bv_lit(0b0001, 4)
         ]);
     }
 
     #[test]
-    fn pf2bv() {
+    fn pf2bv_lit() {
         const_test(term![
             Op::Eq;
             term![Op::PfToBv(4); pf_dflt(8)],
-            bv(0b1000, 4)
+            bv_lit(0b1000, 4)
         ]);
         const_test(term![
             Op::Eq;
             term![Op::PfToBv(4); pf_dflt(15)],
-            bv(0b1111, 4)
+            bv_lit(0b1111, 4)
         ]);
         const_test(term![
             Op::Eq;
             term![Op::PfToBv(8); pf_dflt(15)],
-            bv(0b1111, 8)
+            bv_lit(0b1111, 8)
         ]);
     }
 

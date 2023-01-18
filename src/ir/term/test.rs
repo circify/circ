@@ -2,7 +2,6 @@
 #![allow(missing_docs)]
 
 use super::*;
-use crate::target::r1cs::trans::test::bv;
 use fxhash::FxHashMap;
 
 #[test]
@@ -71,12 +70,12 @@ fn map_test_bv_key() {
     let a1 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+        vec![bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4), bv_lit(0b0100, 4)],
     );
     let a2 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0001, 4), bv(0b0100, 4), bv(0b1001, 4), bv(0b0000, 4)],
+        vec![bv_lit(0b0001, 4), bv_lit(0b0100, 4), bv_lit(0b1001, 4), bv_lit(0b0000, 4)],
     );
     let actual_eq = term![Op::Map(Box::new(Op::Eq)); a1.clone(), a2.clone()];
     let actual_add = term![Op::Map(Box::new(BV_ADD)); a1, a2];
@@ -88,7 +87,7 @@ fn map_test_bv_key() {
     let expected_add = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0010, 4), bv(0b0110, 4), bv(0b1100, 4), bv(0b0100, 4)],
+        vec![bv_lit(0b0010, 4), bv_lit(0b0110, 4), bv_lit(0b1100, 4), bv_lit(0b0100, 4)],
     );
 
     assert_eq!(
@@ -106,22 +105,22 @@ fn test_rot() {
     let a = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+        vec![bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4), bv_lit(0b0100, 4)],
     );
     let expected_rot_0 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4), bv(0b0100, 4)],
+        vec![bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4), bv_lit(0b0100, 4)],
     );
     let expected_rot_1 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4), bv(0b0011, 4)],
+        vec![bv_lit(0b0100, 4), bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4)],
     );
     let expected_rot_2 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv(0b0011, 4), bv(0b0100, 4), bv(0b0001, 4), bv(0b0010, 4)],
+        vec![bv_lit(0b0011, 4), bv_lit(0b0100, 4), bv_lit(0b0001, 4), bv_lit(0b0010, 4)],
     );
 
     let rot_0 = term![Op::Rot(0); a.clone()];
@@ -201,20 +200,20 @@ pub fn bv_eq_tests() -> Vec<Term> {
     vec![
         term![
             Op::Eq;
-            bv(0b1111, 4),
-            bv(0b1111, 4)
+            bv_lit(0b1111, 4),
+            bv_lit(0b1111, 4)
         ],
         term![
             Op::Eq;
-            bv(0b0101, 4),
-            bv(0b0101, 4)
+            bv_lit(0b0101, 4),
+            bv_lit(0b0101, 4)
         ],
         term![
             Op::Eq;
             term![
                 Op::Eq;
-                bv(0b0101, 4),
-                bv(0b0101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b0101, 4)
             ],
             bool(true)
         ],
@@ -222,8 +221,8 @@ pub fn bv_eq_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 Op::Eq;
-                bv(0b0101, 4),
-                bv(0b1101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b1101, 4)
             ],
             bool(false)
         ],
@@ -234,20 +233,20 @@ pub fn bv_le_tests() -> Vec<Term> {
     vec![
         term![
             BV_ULE;
-            bv(0b1111, 4),
-            bv(0b1111, 4)
+            bv_lit(0b1111, 4),
+            bv_lit(0b1111, 4)
         ],
         term![
             BV_ULE;
-            bv(0b0101, 4),
-            bv(0b0101, 4)
+            bv_lit(0b0101, 4),
+            bv_lit(0b0101, 4)
         ],
         term![
             Op::Eq;
             term![
                 BV_ULE;
-                bv(0b0101, 4),
-                bv(0b0101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b0101, 4)
             ],
             bool(true)
         ],
@@ -255,8 +254,8 @@ pub fn bv_le_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 BV_ULE;
-                bv(0b1101, 4),
-                bv(0b0101, 4)
+                bv_lit(0b1101, 4),
+                bv_lit(0b0101, 4)
             ],
             bool(false)
         ],
@@ -267,30 +266,30 @@ pub fn bv_sle_tests() -> Vec<Term> {
     vec![
         term![
             BV_SLE;
-            bv(0b1111, 4),
-            bv(0b1111, 4)
+            bv_lit(0b1111, 4),
+            bv_lit(0b1111, 4)
         ],
         term![
             BV_SLE;
-            bv(0b1000, 4),
-            bv(0b0111, 4)
+            bv_lit(0b1000, 4),
+            bv_lit(0b0111, 4)
         ],
         term![
             BV_SLE;
-            bv(0b1000, 4),
-            bv(0b0000, 4)
+            bv_lit(0b1000, 4),
+            bv_lit(0b0000, 4)
         ],
         term![
             BV_SLE;
-            bv(0b1111, 4),
-            bv(0b0000, 4)
+            bv_lit(0b1111, 4),
+            bv_lit(0b0000, 4)
         ],
         term![
             Op::Eq;
             term![
                 BV_SLE;
-                bv(0b0101, 4),
-                bv(0b0101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b0101, 4)
             ],
             bool(true)
         ],
@@ -298,8 +297,8 @@ pub fn bv_sle_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 BV_SLE;
-                bv(0b0101, 4),
-                bv(0b1101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b1101, 4)
             ],
             bool(false)
         ],
@@ -310,25 +309,25 @@ pub fn bv_slt_tests() -> Vec<Term> {
     vec![
         term![
             BV_SLT;
-            bv(0b0000, 4),
-            bv(0b0001, 4)
+            bv_lit(0b0000, 4),
+            bv_lit(0b0001, 4)
         ],
         term![
             BV_SLT;
-            bv(0b1111, 4),
-            bv(0b0000, 4)
+            bv_lit(0b1111, 4),
+            bv_lit(0b0000, 4)
         ],
         term![
             BV_SLT;
-            bv(0b0101, 4),
-            bv(0b0110, 4)
+            bv_lit(0b0101, 4),
+            bv_lit(0b0110, 4)
         ],
         term![
             Op::Eq;
             term![
                 BV_SLT;
-                bv(0b0101, 4),
-                bv(0b0101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b0101, 4)
             ],
             bool(false)
         ],
@@ -336,8 +335,8 @@ pub fn bv_slt_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 BV_SLT;
-                bv(0b0101, 4),
-                bv(0b1101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b1101, 4)
             ],
             bool(false)
         ],
@@ -349,10 +348,10 @@ pub fn bv_concat_tests() -> Vec<Term> {
         Op::Eq;
         term![
             BV_CONCAT;
-            bv(0b0101, 4),
-            bv(0b0100, 4)
+            bv_lit(0b0101, 4),
+            bv_lit(0b0100, 4)
         ],
-        bv(0b01010100, 8)
+        bv_lit(0b01010100, 8)
     ]]
 }
 
@@ -361,9 +360,9 @@ pub fn bv_not_tests() -> Vec<Term> {
         Op::Eq;
         term![
             BV_NOT;
-            bv(0b0100, 4)
+            bv_lit(0b0100, 4)
         ],
-        bv(0b1011, 4)
+        bv_lit(0b1011, 4)
     ]]
 }
 
@@ -373,25 +372,25 @@ pub fn bv_neg_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 BV_NEG;
-                bv(0b0100, 4)
+                bv_lit(0b0100, 4)
             ],
-            bv(0b1100, 4)
+            bv_lit(0b1100, 4)
         ],
         term![
             Op::Eq;
             term![
                 BV_NEG;
-                bv(0b0000, 4)
+                bv_lit(0b0000, 4)
             ],
-            bv(0b0000, 4)
+            bv_lit(0b0000, 4)
         ],
         term![
             Op::Eq;
             term![
                 BV_NEG;
-                bv(0b1111, 4)
+                bv_lit(0b1111, 4)
             ],
-            bv(0b0001, 4)
+            bv_lit(0b0001, 4)
         ],
     ]
 }
@@ -400,20 +399,20 @@ pub fn bv_lt_tests() -> Vec<Term> {
     vec![
         term![
             BV_ULT;
-            bv(0b0111, 4),
-            bv(0b1111, 4)
+            bv_lit(0b0111, 4),
+            bv_lit(0b1111, 4)
         ],
         term![
             BV_ULT;
-            bv(0b0101, 4),
-            bv(0b1101, 4)
+            bv_lit(0b0101, 4),
+            bv_lit(0b1101, 4)
         ],
         term![
             Op::Eq;
             term![
                 BV_ULT;
-                bv(0b0101, 4),
-                bv(0b0101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b0101, 4)
             ],
             bool(false)
         ],
@@ -421,8 +420,8 @@ pub fn bv_lt_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 BV_ULT;
-                bv(0b0101, 4),
-                bv(0b1101, 4)
+                bv_lit(0b0101, 4),
+                bv_lit(0b1101, 4)
             ],
             bool(false)
         ],
@@ -433,13 +432,13 @@ pub fn bv_and_tests() -> Vec<Term> {
     vec![
         term![
             Op::Eq;
-            term![BV_AND; bv(0b1111,4), bv(0b1111,4)],
-            bv(0b1111, 4)
+            term![BV_AND; bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b1111, 4)
         ],
         term![
             Op::Eq;
-            term![BV_AND; bv(0b0111,4), bv(0b1101,4)],
-            bv(0b0101, 4)
+            term![BV_AND; bv_lit(0b0111,4), bv_lit(0b1101,4)],
+            bv_lit(0b0101, 4)
         ],
     ]
 }
@@ -447,13 +446,13 @@ pub fn bv_or_tests() -> Vec<Term> {
     vec![
         term![
             Op::Eq;
-            term![BV_OR; bv(0b1111,4), bv(0b1111,4)],
-            bv(0b1111, 4)
+            term![BV_OR; bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b1111, 4)
         ],
         term![
             Op::Eq;
-            term![BV_OR; bv(0b0111,4), bv(0b0101,4)],
-            bv(0b0111, 4)
+            term![BV_OR; bv_lit(0b0111,4), bv_lit(0b0101,4)],
+            bv_lit(0b0111, 4)
         ],
     ]
 }
@@ -461,28 +460,28 @@ pub fn bv_add_tests() -> Vec<Term> {
     vec![
         term![
             Op::Eq;
-            term![BV_ADD; bv(0b1111,4), bv(0b1111,4)],
-            bv(0b1110, 4)
+            term![BV_ADD; bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b1110, 4)
         ],
         term![
             Op::Eq;
-            term![BV_ADD; bv(0b1111,4), bv(0b0101,4)],
-            bv(0b0100, 4)
+            term![BV_ADD; bv_lit(0b1111,4), bv_lit(0b0101,4)],
+            bv_lit(0b0100, 4)
         ],
         term![
             Op::Eq;
-            term![BV_ADD; bv(0b1111,4), bv(0b1111,4), bv(0b1111,4), bv(0b1111,4)],
-            bv(0b1100, 4)
+            term![BV_ADD; bv_lit(0b1111,4), bv_lit(0b1111,4), bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b1100, 4)
         ],
         term![
             Op::Eq;
-            term![BV_ADD; bv(0b1111,4), bv(0b1111,4), bv(0b1111,4)],
-            bv(0b1101, 4)
+            term![BV_ADD; bv_lit(0b1111,4), bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b1101, 4)
         ],
         term![
             Op::Eq;
-            term![BV_ADD; bv(0b0000,4), bv(0b1110,4), bv(0b0000,4), bv(0b0000,4)],
-            bv(0b1110, 4)
+            term![BV_ADD; bv_lit(0b0000,4), bv_lit(0b1110,4), bv_lit(0b0000,4), bv_lit(0b0000,4)],
+            bv_lit(0b1110, 4)
         ],
     ]
 }
@@ -490,23 +489,23 @@ pub fn bv_mul_tests() -> Vec<Term> {
     vec![
         term![
             Op::Eq;
-            term![BV_MUL; bv(0b0001,4)],
-            bv(0b0001, 4)
+            term![BV_MUL; bv_lit(0b0001,4)],
+            bv_lit(0b0001, 4)
         ],
         term![
             Op::Eq;
-            term![BV_MUL; bv(0b0000,4), bv(0b1111,4)],
-            bv(0b0000, 4)
+            term![BV_MUL; bv_lit(0b0000,4), bv_lit(0b1111,4)],
+            bv_lit(0b0000, 4)
         ],
         term![
             Op::Eq;
-            term![BV_MUL; bv(0b0010,4), bv(0b1111,4)],
-            bv(0b1110, 4)
+            term![BV_MUL; bv_lit(0b0010,4), bv_lit(0b1111,4)],
+            bv_lit(0b1110, 4)
         ],
         term![
             Op::Eq;
-            term![BV_MUL; bv(0b1001,4), bv(0b0101,4)],
-            bv(0b1101, 4)
+            term![BV_MUL; bv_lit(0b1001,4), bv_lit(0b0101,4)],
+            bv_lit(0b1101, 4)
         ],
     ]
 }
@@ -517,25 +516,25 @@ pub fn bv_sext_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 Op::BvSext(2);
-                bv(0b10, 2)
+                bv_lit(0b10, 2)
             ],
-            bv(0b1110, 4)
+            bv_lit(0b1110, 4)
         ],
         term![
             Op::Eq;
             term![
                 Op::BvSext(2);
-                bv(0b01, 2)
+                bv_lit(0b01, 2)
             ],
-            bv(0b0001, 4)
+            bv_lit(0b0001, 4)
         ],
         term![
             Op::Eq;
             term![
                 Op::BvSext(2);
-                term![BV_ADD; bv(0b01, 2), bv(0b01, 2)]
+                term![BV_ADD; bv_lit(0b01, 2), bv_lit(0b01, 2)]
             ],
-            bv(0b1110, 4)
+            bv_lit(0b1110, 4)
         ],
     ]
 }
@@ -546,25 +545,25 @@ pub fn bv_uext_tests() -> Vec<Term> {
             Op::Eq;
             term![
                 Op::BvUext(2);
-                bv(0b10, 2)
+                bv_lit(0b10, 2)
             ],
-            bv(0b0010, 4)
+            bv_lit(0b0010, 4)
         ],
         term![
             Op::Eq;
             term![
                 Op::BvUext(2);
-                term![BV_ADD; bv(0b01, 2), bv(0b01, 2)]
+                term![BV_ADD; bv_lit(0b01, 2), bv_lit(0b01, 2)]
             ],
-            bv(0b0010, 4)
+            bv_lit(0b0010, 4)
         ],
         term![
             Op::Eq;
             term![
                 Op::BvUext(2);
-                bv(0b01, 2)
+                bv_lit(0b01, 2)
             ],
-            bv(0b0001, 4)
+            bv_lit(0b0001, 4)
         ],
     ]
 }
@@ -572,23 +571,23 @@ pub fn bv_sub_tests() -> Vec<Term> {
     vec![
         term![
             Op::Eq;
-            term![BV_SUB; bv(0b1111,4), bv(0b1111,4)],
-            bv(0b0000, 4)
+            term![BV_SUB; bv_lit(0b1111,4), bv_lit(0b1111,4)],
+            bv_lit(0b0000, 4)
         ],
         term![
             Op::Eq;
-            term![BV_SUB; bv(0b1111,4), bv(0b0000,4)],
-            bv(0b1111, 4)
+            term![BV_SUB; bv_lit(0b1111,4), bv_lit(0b0000,4)],
+            bv_lit(0b1111, 4)
         ],
         term![
             Op::Eq;
-            term![BV_SUB; bv(0b1111,4), bv(0b1110,4)],
-            bv(0b0001, 4)
+            term![BV_SUB; bv_lit(0b1111,4), bv_lit(0b1110,4)],
+            bv_lit(0b0001, 4)
         ],
         term![
             Op::Eq;
-            term![BV_SUB; bv(0b0000,4), bv(0b1111,4)],
-            bv(0b0001, 4)
+            term![BV_SUB; bv_lit(0b0000,4), bv_lit(0b1111,4)],
+            bv_lit(0b0001, 4)
         ],
     ]
 }
