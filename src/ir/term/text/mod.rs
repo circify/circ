@@ -163,7 +163,9 @@ enum CtrlOp {
 }
 
 enum VariableMetadataItem {
-    Party(u8),
+    Party(PartyId),
+    Round(Round),
+    Random,
 }
 
 impl<'src> IrInterp<'src> {
@@ -566,6 +568,11 @@ impl<'src> IrInterp<'src> {
                 let id = self.int(&tts[1]).to_u8().unwrap();
                 VariableMetadataItem::Party(id)
             }
+            b"round" => {
+                let id = self.int(&tts[1]).to_u8().unwrap();
+                VariableMetadataItem::Round(id)
+            }
+            b"random" => VariableMetadataItem::Random,
             i => {
                 panic!(
                     "Expected variable metadata item, got {}",
@@ -577,18 +584,22 @@ impl<'src> IrInterp<'src> {
 
     fn variable_metadata(&mut self, tt: &TokTree<'src>) -> (&'src [u8], VariableMetadata) {
         let tts = self.unwrap_list(tt, "variable metadata");
-        let name = self.ident_string(&tts[0]);
-        let name_bytes = self.ident(&tts[0]);
-        let sort = self.sort(&tts[1]);
         let mut md = VariableMetadata {
-            vis: None,
-            sort,
-            name,
+            name: self.ident_string(&tts[0]),
+            sort: self.sort(&tts[1]),
+            ..Default::default()
         };
+        let name_bytes = self.ident(&tts[0]);
         for tti in &tts[2..] {
             match self.variable_metadata_item(tti) {
                 VariableMetadataItem::Party(p) => {
                     md.vis = Some(p);
+                }
+                VariableMetadataItem::Round(r) => {
+                    md.round = r;
+                }
+                VariableMetadataItem::Random => {
+                    md.random = true;
                 }
             }
         }
@@ -617,7 +628,7 @@ impl<'src> IrInterp<'src> {
                         let (name_bytes, v_md) = self.variable_metadata(tti_input);
                         self.bind(name_bytes, v_md.term());
                         unbind.push(name_bytes.to_owned());
-                        md.vars.insert(v_md.name.clone(), v_md);
+                        md.new_input_from_meta(v_md);
                     }
                     (md, unbind)
                 }
@@ -910,7 +921,7 @@ mod test {
             (computation
                 (metadata
                     (parties P V)
-                    (inputs (a bool (party 0)) (b bool) (A (tuple bool bool)))
+                    (inputs (a bool (party 0) (random) (round 1)) (b bool) (A (tuple bool bool)))
                 )
                 (precompute
                     ((c bool) (d bool))

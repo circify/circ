@@ -29,6 +29,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
@@ -1600,11 +1601,15 @@ pub type Round = u8;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VariableMetadata {
     /// Who knows it (None if public)
-    vis: Option<PartyId>,
+    pub vis: Option<PartyId>,
     /// Its type
-    sort: Sort,
+    pub sort: Sort,
     /// The name
-    name: String,
+    pub name: String,
+    /// Which round this is introduced in
+    pub round: Round,
+    /// Whether this is random
+    pub random: bool,
 }
 
 impl VariableMetadata {
@@ -1629,21 +1634,27 @@ impl ComputationMetadata {
         self.party_ids.insert(name, self.party_ids.len() as u8);
         self.party_ids.len() as u8 - 1
     }
+
     /// Add a new input to the computation, visible to `party`, or public if `party` is [None].
     pub fn new_input(&mut self, name: String, party: Option<PartyId>, sort: Sort) {
-        debug_assert!(
-            !self.vars.contains_key(&name),
-            "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
-            name,
-            party,
-            self.vars.get(&name).unwrap()
-        );
         let var_md = VariableMetadata {
             sort,
             vis: party,
-            name: name.clone(),
+            name,
+            ..Default::default()
         };
-        self.vars.insert(name, var_md);
+        self.new_input_from_meta(var_md);
+    }
+
+    /// Add a new input to the computation.
+    pub fn new_input_from_meta(&mut self, metadata: VariableMetadata) {
+        debug_assert!(
+            !self.vars.contains_key(&metadata.name),
+            "Tried to create input {}, but it already existed: {:?}",
+            metadata.name,
+            self.vars.get(&metadata.name).unwrap()
+        );
+        self.vars.insert(metadata.name.clone(), metadata);
     }
 
     #[track_caller]
@@ -1696,6 +1707,19 @@ impl ComputationMetadata {
             .collect();
         out.sort_by(|a, b| a.as_var_name().cmp(b.as_var_name()));
         out
+    }
+
+    /// Get a round after the rounds of these variables
+    pub fn future_round<'a, Q: Borrow<str> + 'a>(
+        &self,
+        var_names: impl Iterator<Item = &'a Q>,
+    ) -> Round {
+        var_names
+            .map(|name| self.lookup(name.borrow()).round)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .unwrap()
     }
 
     /// Give all inputs, in a fixed order.
