@@ -16,10 +16,11 @@
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
 //!   * Computation `C`: `(computation M P T)`
-//!     * Metadata `M`: `(metadata PARTIES INPUTS VISIBILITIES)`
-//!       * PARTIES is `(X1 .. Xn)`
-//!       * INPUTS is `((X1 S1) .. (Xn Sn))`
-//!       * VISIBILITIES is `((X_INPUT_1 X_PARTY_1) .. (X_INPUT_n X_PARTY_n))`
+//!     * Metadata `M`: `(metadata PARTIES INPUTS)`
+//!       * PARTIES is `(parties X1 .. Xn)`
+//!       * INPUTS is `(inputs INPUT1 .. INPUTn)`
+//!       * INPUT is `(X S PARTY)`
+//!       * PARTY is `(party X)` or nothing (public)
 //!     * Precompute `P`: `(precompute INPUTS OUTPUTS TUPLE_TERM)`
 //!       * INPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * OUTPUTS is `((X1 S1) .. (Xn Sn))`
@@ -159,6 +160,10 @@ enum CtrlOp {
     TupleValue,
     ArrayValue,
     SetDefaultModulus,
+}
+
+enum VariableMetadataItem {
+    Party(u8),
 }
 
 impl<'src> IrInterp<'src> {
@@ -513,28 +518,87 @@ impl<'src> IrInterp<'src> {
         }
     }
 
-    fn visibility_list(&self, tt: &TokTree<'src>) -> Vec<(String, String)> {
+    #[track_caller]
+    fn unwrap_list<'a>(&self, tt: &'a TokTree<'src>, err: &str) -> &'a [TokTree<'src>] {
         if let List(tts) = tt {
-            tts.iter()
-                .map(|tti| match tti {
-                    List(ls) => match &ls[..] {
-                        [Leaf(Token::Ident, var), Leaf(Token::Ident, party)] => {
-                            let var = from_utf8(var).unwrap().to_owned();
-                            let party = from_utf8(party).unwrap().to_owned();
-                            (var, party)
-                        }
-                        _ => panic!("Expected visibility pair, found {}", tti),
-                    },
-                    _ => panic!("Expected visibility pair, found {}", tti),
-                })
-                .collect()
+            tts.as_slice()
         } else {
-            panic!("Expected visibility list, found: {}", tt)
+            panic!("Expected {}, found non-list: {}", err, tt)
         }
+    }
+
+    #[track_caller]
+    fn unwrap_prefix_list<'a>(&self, tt: &'a TokTree<'src>, prefix: &str) -> &'a [TokTree<'src>] {
+        let tts = self.unwrap_list(tt, prefix);
+        assert_eq!(
+            self.ident_str(&tts[0]),
+            prefix,
+            "Expected list head '{}', but found {}",
+            prefix,
+            &tts[0]
+        );
+        &tts[1..]
+    }
+
+    #[track_caller]
+    fn ident(&self, tt: &TokTree<'src>) -> &'src [u8] {
+        if let Leaf(Token::Ident, i) = tt {
+            i
+        } else {
+            panic!("Expected identifier, found {}", tt)
+        }
+    }
+
+    #[track_caller]
+    fn ident_str(&self, tt: &TokTree<'src>) -> &'src str {
+        from_utf8(self.ident(tt)).unwrap()
+    }
+
+    #[track_caller]
+    fn ident_string(&self, tt: &TokTree<'src>) -> String {
+        self.ident_str(tt).to_owned()
+    }
+
+    fn variable_metadata_item(&mut self, tt: &TokTree<'src>) -> VariableMetadataItem {
+        let tts = self.unwrap_list(tt, "variable metadata item");
+        match self.ident(&tts[0]) {
+            b"party" => {
+                let id = self.int(&tts[1]).to_u8().unwrap();
+                VariableMetadataItem::Party(id)
+            }
+            i => {
+                panic!(
+                    "Expected variable metadata item, got {}",
+                    from_utf8(i).unwrap()
+                )
+            }
+        }
+    }
+
+    fn variable_metadata(&mut self, tt: &TokTree<'src>) -> (&'src [u8], VariableMetadata) {
+        let tts = self.unwrap_list(tt, "variable metadata");
+        let name = self.ident_string(&tts[0]);
+        let name_bytes = self.ident(&tts[0]);
+        let sort = self.sort(&tts[1]);
+        let mut md = VariableMetadata {
+            vis: None,
+            sort,
+            name,
+        };
+        for tti in &tts[2..] {
+            match self.variable_metadata_item(tti) {
+                VariableMetadataItem::Party(p) => {
+                    md.vis = Some(p);
+                }
+            }
+        }
+        (name_bytes, md)
     }
 
     /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
     fn metadata(&mut self, tt: &TokTree<'src>) -> (ComputationMetadata, Vec<Vec<u8>>) {
+        let mut md = ComputationMetadata::default();
+        let mut unbind = Vec::new();
         if let List(tts) = tt {
             if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"metadata") {
                 panic!(
@@ -543,22 +607,19 @@ impl<'src> IrInterp<'src> {
                 )
             }
             match &tts[1..] {
-                [parties, inputs, viss] => {
+                [parties, inputs] => {
                     let parties = self.string_list(parties);
-                    let input_names = self.decl_list(inputs);
-                    let inputs: FxHashMap<String, Term> = input_names
-                        .iter()
-                        .map(|i| (from_utf8(i).unwrap().into(), self.get_binding(i).clone()))
-                        .collect();
-                    let visibilities = self.visibility_list(viss);
-                    (
-                        ComputationMetadata::from_parts(
-                            parties,
-                            inputs,
-                            visibilities.into_iter().collect(),
-                        ),
-                        input_names,
-                    )
+                    for p in parties.into_iter().skip(1) {
+                        md.add_party(p);
+                    }
+                    let tts_inputs = self.unwrap_prefix_list(inputs, "inputs");
+                    for tti_input in tts_inputs {
+                        let (name_bytes, v_md) = self.variable_metadata(tti_input);
+                        self.bind(name_bytes, v_md.term());
+                        unbind.push(name_bytes.to_owned());
+                        md.vars.insert(v_md.name.clone(), v_md);
+                    }
+                    (md, unbind)
                 }
                 _ => panic!("Expected meta-data, found {}", tt),
             }
@@ -848,9 +909,8 @@ mod test {
             b"
             (computation
                 (metadata
-                    (P V)
-                    ((a bool) (b bool) (A (tuple bool bool)))
-                    ((a P))
+                    (parties P V)
+                    (inputs (a bool (party 0)) (b bool) (A (tuple bool bool)))
                 )
                 (precompute
                     ((c bool) (d bool))
@@ -863,7 +923,7 @@ mod test {
                         ((field 0) (#t false false #b0000 true))))
             )",
         );
-        assert_eq!(c.metadata.input_vis.len(), 3);
+        assert_eq!(c.metadata.vars.len(), 3);
         assert!(!c.metadata.is_input_public("a"));
         assert!(c.metadata.is_input_public("b"));
         assert!(c.metadata.is_input_public("A"));

@@ -798,6 +798,12 @@ pub enum Sort {
     Tuple(Box<[Sort]>),
 }
 
+impl Default for Sort {
+    fn default() -> Self {
+        Self::Bool
+    }
+}
+
 impl Sort {
     #[track_caller]
     /// Unwrap the bitsize of this bit-vector, panicking otherwise.
@@ -1050,6 +1056,16 @@ impl Term {
     /// Is this a value
     pub fn is_const(&self) -> bool {
         matches!(&self.op(), Op::Const(..))
+    }
+
+    /// Get the variable name; panic if not a variable.
+    #[track_caller]
+    pub fn as_var_name(&self) -> &str {
+        if let Op::Var(n, _) = &self.op() {
+            n
+        } else {
+            panic!("not a variable")
+        }
     }
 }
 
@@ -1572,101 +1588,138 @@ impl std::iter::Iterator for PostOrderIter {
 /// A party identifier
 pub type PartyId = u8;
 
+/// Which round the variable is given in.
+///
+/// (Relevant when compiling to/from an interactive protocol).
+pub type Round = u8;
+
+/// Metadata associated with a variable.
+///
+/// We require all fields to have a [Default] implementation. This requirement is forced by
+/// deriving [Default].
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VariableMetadata {
+    /// Who knows it (None if public)
+    vis: Option<PartyId>,
+    /// Its type
+    sort: Sort,
+    /// The name
+    name: String,
+}
+
+impl VariableMetadata {
+    /// term (cached)
+    fn term(&self) -> Term {
+        leaf_term(Op::Var(self.name.clone(), self.sort.clone()))
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// An IR constraint system.
 pub struct ComputationMetadata {
+    /// A map from variables to their metadata
+    vars: FxHashMap<String, VariableMetadata>,
     /// A map from party names to numbers assigned to them.
-    pub party_ids: FxHashMap<String, PartyId>,
-    /// The next free id.
-    pub next_party_id: PartyId,
-    /// All inputs, including who knows them. If no visibility is set, the input is public.
-    pub input_vis: FxHashMap<String, (Term, Option<PartyId>)>,
-    /// The inputs for the computation itself (not the precomputation).
-    pub computation_inputs: Vec<String>,
+    party_ids: FxHashMap<String, PartyId>,
 }
 
 impl ComputationMetadata {
     /// Add a new party to the computation, getting a [PartyId] for them.
     pub fn add_party(&mut self, name: String) -> PartyId {
-        self.party_ids.insert(name, self.next_party_id);
-        self.next_party_id += 1;
-        self.next_party_id - 1
+        self.party_ids.insert(name, self.party_ids.len() as u8);
+        self.party_ids.len() as u8 - 1
     }
     /// Add a new input to the computation, visible to `party`, or public if `party` is [None].
-    pub fn new_input(&mut self, input_name: String, party: Option<PartyId>, sort: Sort) {
-        let term = leaf_term(Op::Var(input_name.clone(), sort));
+    pub fn new_input(&mut self, name: String, party: Option<PartyId>, sort: Sort) {
         debug_assert!(
-            !self.input_vis.contains_key(&input_name)
-                || self.input_vis.get(&input_name).unwrap().1 == party,
+            !self.vars.contains_key(&name),
             "Tried to create input {} (visibility {:?}), but it already existed (visibility {:?})",
-            input_name,
+            name,
             party,
-            self.input_vis.get(&input_name).unwrap()
+            self.vars.get(&name).unwrap()
         );
-        self.input_vis.insert(input_name.clone(), (term, party));
-        self.computation_inputs.push(input_name);
+        let var_md = VariableMetadata {
+            sort,
+            vis: party,
+            name: name.clone(),
+        };
+        self.vars.insert(name, var_md);
     }
+
+    #[track_caller]
+    fn lookup<Q: std::borrow::Borrow<str> + ?Sized>(&self, name: &Q) -> &VariableMetadata {
+        let n = name.borrow();
+        self.vars
+            .get(n)
+            .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", n, self.vars))
+    }
+
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
     pub fn get_input_visibility(&self, input_name: &str) -> Option<PartyId> {
-        self.input_vis
-            .get(input_name)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Missing input {} in inputs{:#?}",
-                    input_name, self.input_vis
-                )
-            })
-            .1
+        self.lookup(input_name).vis
     }
-    /// Is this input public?
+
+    /// Is this an input?
     pub fn is_input(&self, input_name: &str) -> bool {
-        self.input_vis.contains_key(input_name)
+        self.vars.contains_key(input_name)
     }
+
     /// Is this input public?
     pub fn is_input_public(&self, input_name: &str) -> bool {
         self.get_input_visibility(input_name).is_none()
     }
+
     /// What sort is this input?
     pub fn input_sort(&self, input_name: &str) -> Sort {
-        check(&self.input_vis.get(input_name).unwrap().0)
+        self.lookup(input_name).sort.clone()
     }
-    /// Get all public inputs to the computation itself.
-    ///
-    /// Excludes pre-computation inputs
-    pub fn public_input_names(&'_ self) -> impl Iterator<Item = &str> + '_ {
-        self.input_vis.iter().filter_map(move |(name, party)| {
-            if party.1.is_none() && self.computation_inputs.contains(name) {
-                Some(name.as_str())
-            } else {
-                None
-            }
-        })
+
+    /// Give all inputs, in a fixed order.
+    pub fn ordered_input_names(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.vars.keys().cloned().collect();
+        out.sort();
+        out
     }
-    /// Get all public inputs to the computation itself.
-    ///
-    /// Excludes pre-computation inputs.
-    // I think the lint is just broken here.
-    // TODO: submit a patch
-    #[allow(clippy::needless_lifetimes)]
-    pub fn public_inputs<'a>(&'a self) -> impl Iterator<Item = Term> + 'a {
-        // TODO: check order?
-        self.input_vis
-            .iter()
-            .filter_map(move |(name, (term, vis))| {
-                if vis.is_none() && self.computation_inputs.contains(name) {
-                    Some(term.clone())
+
+    /// Give all public inputs, in a fixed order.
+    pub fn ordered_public_inputs(&self) -> Vec<Term> {
+        let mut out: Vec<Term> = self
+            .vars
+            .values()
+            .filter_map(|v| {
+                if v.vis.is_none() {
+                    Some(v.term())
                 } else {
                     None
                 }
             })
+            .collect();
+        out.sort_by(|a, b| a.as_var_name().cmp(b.as_var_name()));
+        out
     }
+
+    /// Give all inputs, in a fixed order.
+    pub fn ordered_inputs(&self) -> Vec<Term> {
+        let mut out: Vec<Term> = self.vars.values().map(|v| v.term()).collect();
+        out.sort_by(|a, b| a.as_var_name().cmp(b.as_var_name()));
+        out
+    }
+
+    /// Give the set of public input names.
+    pub fn public_input_names_set(&self) -> FxHashSet<String> {
+        self.ordered_public_inputs()
+            .iter()
+            .map(|t| t.as_var_name().into())
+            .collect()
+    }
+
     /// Get all the inputs visible to `party`.
     pub fn get_inputs_for_party(&self, party: Option<PartyId>) -> FxHashSet<String> {
-        self.input_vis
-            .iter()
-            .filter_map(|(name, (_, vis))| {
-                if vis.is_none() || vis == &party {
-                    Some(name.clone())
+        self.vars
+            .values()
+            .filter_map(|v| {
+                if v.vis.is_none() || v.vis == party {
+                    Some(v.name.clone())
                 } else {
                     None
                 }
@@ -1674,65 +1727,9 @@ impl ComputationMetadata {
             .collect()
     }
 
-    /// From a list of parties, a list of inputs, and a list of visibilities,
-    /// create a [ComputationMetadata].
-    pub fn from_parts(
-        parties: Vec<String>,
-        mut inputs: FxHashMap<String, Term>,
-        visibilities: FxHashMap<String, String>,
-    ) -> Self {
-        let party_ids: FxHashMap<String, PartyId> = parties
-            .into_iter()
-            .enumerate()
-            .map(|(i, n)| (n, i as u8))
-            .collect();
-        let next_party_id = party_ids.len() as u8;
-        let computation_inputs: Vec<String> = inputs.keys().cloned().collect();
-        let input_vis = computation_inputs
-            .iter()
-            .map(|i| {
-                let vis = visibilities.get(i).map(|p| *party_ids.get(p).unwrap());
-                let term = inputs.remove(i).unwrap();
-                (i.clone(), (term, vis))
-            })
-            .collect();
-        ComputationMetadata {
-            party_ids,
-            next_party_id,
-            input_vis,
-            computation_inputs,
-        }
-    }
-
     /// Remove an input
     pub fn remove_var(&mut self, name: &str) {
-        self.input_vis.remove(name);
-        if let Some(pos) = self.computation_inputs.iter().position(|x| *x == name) {
-            self.computation_inputs.remove(pos);
-        }
-    }
-}
-
-impl Display for ComputationMetadata {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "(metadata\n  (")?;
-        for id in 0..self.next_party_id {
-            let party = self.party_ids.iter().find(|(_, i)| **i == id).unwrap().0;
-            write!(f, " {}", party)?;
-        }
-        write!(f, ")\n  (")?;
-        for input in self.input_vis.keys() {
-            let sort = self.input_sort(input);
-            write!(f, " ({} {})", input, sort)?;
-        }
-        write!(f, ")\n  (")?;
-        for (input, (_, vis)) in &self.input_vis {
-            if let Some(id) = vis {
-                let party = self.party_ids.iter().find(|(_, i)| *i == id).unwrap();
-                write!(f, " ({} {})", input, party.0)?;
-            }
-        }
-        write!(f, ")\n)")
+        self.vars.remove(name);
     }
 }
 

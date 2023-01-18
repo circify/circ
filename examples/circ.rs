@@ -21,7 +21,7 @@ use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
 use circ::front::{FrontEnd, Mode};
-use circ::ir::term::{Op, BV_LSHR, BV_SHL};
+use circ::ir::term::{Node, Op, BV_LSHR, BV_SHL};
 use circ::ir::{
     opt::{opt, Opt},
     term::{
@@ -322,9 +322,12 @@ fn main() {
                 .get("main")
                 .clone()
                 .metadata
-                .input_vis
+                .ordered_inputs()
                 .iter()
-                .map(|(name, (sort, _))| (name.clone(), check(sort)))
+                .map(|term| match term.op() {
+                    Op::Var(n, s) => (n.clone(), s.clone()),
+                    _ => unreachable!(),
+                })
                 .collect();
             let ilp = to_ilp(cs.get("main").clone());
             let solver_result = ilp.solve(default_solver);

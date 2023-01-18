@@ -105,22 +105,10 @@ pub fn assert_all_vars_are_scalars(cs: &Computation) {
 
 /// Check that every variables is a scalar.
 fn remove_non_scalar_vars_from_main_computation(cs: &mut Computation) {
-    let new_inputs = cs
-        .metadata
-        .computation_inputs
-        .clone()
-        .into_iter()
-        .filter(|i| cs.metadata.input_sort(i).is_scalar())
-        .collect::<Vec<_>>();
-    cs.metadata.computation_inputs = new_inputs;
-    for t in cs.terms_postorder() {
-        if let Op::Var(_name, sort) = &t.op() {
-            match sort {
-                Sort::Array(..) | Sort::Tuple(..) => {
-                    panic!("Variable {} is non-scalar", t);
-                }
-                _ => {}
-            }
+    for input in cs.metadata.ordered_public_inputs() {
+        if !check(&input).is_scalar() {
+            cs.metadata.remove_var(input.as_var_name());
         }
     }
+    assert_all_vars_are_scalars(cs);
 }

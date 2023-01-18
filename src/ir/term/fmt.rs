@@ -1,10 +1,13 @@
 //! Machinery for formatting IR types
-use super::{Array, Node, Op, PostOrderIter, Sort, Term, TermMap, Value};
+use super::{
+    Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
+    VariableMetadata,
+};
 use crate::cfg::{cfg, is_cfg_set};
 
 use circ_fields::{FieldT, FieldV};
 
-use fxhash::FxHashSet as HashSet;
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use std::fmt::{Debug, Display, Error as FmtError, Formatter, Result as FmtResult, Write};
 
@@ -278,6 +281,40 @@ impl DisplayIr for Term {
     }
 }
 
+impl DisplayIr for VariableMetadata {
+    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
+        write!(f, "({} ", self.name)?;
+        self.sort.ir_fmt(f)?;
+        if let Some(v) = self.vis.as_ref() {
+            write!(f, " (party {})", v)?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl DisplayIr for ComputationMetadata {
+    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
+        write!(f, "(metadata\n  (parties ")?;
+        let ids_to_parties: HashMap<PartyId, &str> = self
+            .party_ids
+            .iter()
+            .map(|(name, id)| (*id, name.as_str()))
+            .collect();
+        for id in 0..self.party_ids.len() as u8 {
+            let party = ids_to_parties.get(&id).unwrap();
+            write!(f, " {}", party)?;
+        }
+        writeln!(f, ")")?;
+        write!(f, "\n  (inputs")?;
+        for v in self.vars.values() {
+            write!(f, "\n    ")?;
+            v.ir_fmt(f)?;
+        }
+        write!(f, "\n  )")?;
+        write!(f, "\n)")
+    }
+}
+
 /// Format a term, introducing bindings.
 fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     let close_dft_f = if f.cfg.use_default_field && f.default_field.is_none() {
@@ -378,6 +415,12 @@ impl Display for Value {
 }
 
 impl Display for Op {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
+    }
+}
+
+impl Display for ComputationMetadata {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
     }

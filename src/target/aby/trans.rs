@@ -282,7 +282,7 @@ impl<'a> ToABY<'a> {
         match &t.op() {
             Op::Var(name, Sort::Bool) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
+                if !self.inputs.contains(&t) && md.is_input(name) {
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t, to_share_type);
                     let op = "IN";
@@ -409,7 +409,7 @@ impl<'a> ToABY<'a> {
         match &t.op() {
             Op::Var(name, Sort::BitVector(_)) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.input_vis.contains_key(name) {
+                if !self.inputs.contains(&t) && md.is_input(name) {
                     let vis = self.unwrap_vis(name);
                     let s = self.get_share(&t, to_share_type);
                     let op = "IN";
@@ -830,7 +830,7 @@ impl<'a> ToABY<'a> {
 
             let inputs: Vec<String> = comp
                 .metadata
-                .computation_inputs
+                .ordered_input_names()
                 .iter()
                 .map(|x| {
                     if bytecode_input_map.contains_key(x) {

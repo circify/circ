@@ -94,11 +94,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     }
                 }
                 Opt::Inline => {
-                    let public_inputs = c
-                        .metadata
-                        .public_input_names()
-                        .map(ToOwned::to_owned)
-                        .collect();
+                    let public_inputs = c.metadata.public_input_names_set();
                     inline::inline(&mut c.outputs, &public_inputs);
                 }
                 Opt::Tuple => {
