@@ -1718,7 +1718,7 @@ impl ComputationMetadata {
         self.vars
             .values()
             .filter_map(|v| {
-                if v.vis.is_none() || &v.vis == &party {
+                if v.vis.is_none() || v.vis == party {
                     Some(v.name.clone())
                 } else {
                     None

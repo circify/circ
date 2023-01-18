@@ -530,7 +530,13 @@ impl<'src> IrInterp<'src> {
     #[track_caller]
     fn unwrap_prefix_list<'a>(&self, tt: &'a TokTree<'src>, prefix: &str) -> &'a [TokTree<'src>] {
         let tts = self.unwrap_list(tt, prefix);
-        assert_eq!(self.ident_str(&tts[0]), prefix, "Expected list head '{}', but found {}", prefix, &tts[0]);
+        assert_eq!(
+            self.ident_str(&tts[0]),
+            prefix,
+            "Expected list head '{}', but found {}",
+            prefix,
+            &tts[0]
+        );
         &tts[1..]
     }
 
@@ -561,7 +567,10 @@ impl<'src> IrInterp<'src> {
                 VariableMetadataItem::Party(id)
             }
             i => {
-                panic!("Expected variable metadata item, got {}", from_utf8(i).unwrap())
+                panic!(
+                    "Expected variable metadata item, got {}",
+                    from_utf8(i).unwrap()
+                )
             }
         }
     }
@@ -603,7 +612,7 @@ impl<'src> IrInterp<'src> {
                     for p in parties.into_iter().skip(1) {
                         md.add_party(p);
                     }
-                    let tts_inputs = self.unwrap_prefix_list(&inputs, "inputs");
+                    let tts_inputs = self.unwrap_prefix_list(inputs, "inputs");
                     for tti_input in tts_inputs {
                         let (name_bytes, v_md) = self.variable_metadata(tti_input);
                         self.bind(name_bytes, v_md.term());

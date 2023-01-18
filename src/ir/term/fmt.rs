@@ -1,10 +1,13 @@
 //! Machinery for formatting IR types
-use super::{Array, Node, Op, PostOrderIter, Sort, Term, TermMap, Value, ComputationMetadata, PartyId, VariableMetadata};
+use super::{
+    Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
+    VariableMetadata,
+};
 use crate::cfg::{cfg, is_cfg_set};
 
 use circ_fields::{FieldT, FieldV};
 
-use fxhash::{FxHashSet as HashSet, FxHashMap as HashMap};
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use std::fmt::{Debug, Display, Error as FmtError, Formatter, Result as FmtResult, Write};
 
@@ -291,21 +294,24 @@ impl DisplayIr for VariableMetadata {
 
 impl DisplayIr for ComputationMetadata {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
-         write!(f, "(metadata\n  (parties ")?;
-         let ids_to_parties: HashMap<PartyId, &str> =
-             self.party_ids.iter().map(|(name, id)| (*id, name.as_str())).collect();
-         for id in 0..self.party_ids.len() as u8 {
-             let party = ids_to_parties.get(&id).unwrap();
-             write!(f, " {}", party)?;
-         }
-         writeln!(f, ")")?;
-         write!(f, "\n  (inputs")?;
-         for v in self.vars.values() {
-             write!(f, "\n    ")?;
-             v.ir_fmt(f)?;
-         }
-         write!(f, "\n  )")?;
-         write!(f, "\n)")
+        write!(f, "(metadata\n  (parties ")?;
+        let ids_to_parties: HashMap<PartyId, &str> = self
+            .party_ids
+            .iter()
+            .map(|(name, id)| (*id, name.as_str()))
+            .collect();
+        for id in 0..self.party_ids.len() as u8 {
+            let party = ids_to_parties.get(&id).unwrap();
+            write!(f, " {}", party)?;
+        }
+        writeln!(f, ")")?;
+        write!(f, "\n  (inputs")?;
+        for v in self.vars.values() {
+            write!(f, "\n    ")?;
+            v.ir_fmt(f)?;
+        }
+        write!(f, "\n  )")?;
+        write!(f, "\n)")
     }
 }
 
