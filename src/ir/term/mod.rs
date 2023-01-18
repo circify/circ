@@ -1640,7 +1640,7 @@ impl ComputationMetadata {
         let var_md = VariableMetadata {
             sort,
             vis: party,
-            name: name.clone(),
+            name,
             ..Default::default()
         };
         self.new_input_from_meta(var_md);

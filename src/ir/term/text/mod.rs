@@ -572,9 +572,7 @@ impl<'src> IrInterp<'src> {
                 let id = self.int(&tts[1]).to_u8().unwrap();
                 VariableMetadataItem::Round(id)
             }
-            b"random" => {
-                VariableMetadataItem::Random
-            }
+            b"random" => VariableMetadataItem::Random,
             i => {
                 panic!(
                     "Expected variable metadata item, got {}",
@@ -586,10 +584,12 @@ impl<'src> IrInterp<'src> {
 
     fn variable_metadata(&mut self, tt: &TokTree<'src>) -> (&'src [u8], VariableMetadata) {
         let tts = self.unwrap_list(tt, "variable metadata");
-        let mut md = VariableMetadata::default();
-        md.name = self.ident_string(&tts[0]);
+        let mut md = VariableMetadata {
+            name: self.ident_string(&tts[0]),
+            sort: self.sort(&tts[1]),
+            ..Default::default()
+        };
         let name_bytes = self.ident(&tts[0]);
-        md.sort = self.sort(&tts[1]);
         for tti in &tts[2..] {
             match self.variable_metadata_item(tti) {
                 VariableMetadataItem::Party(p) => {
