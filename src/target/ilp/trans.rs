@@ -684,8 +684,8 @@ pub fn to_ilp(cs: Computation) -> Ilp {
 mod test {
     use super::*;
     use crate::ir::proof::Constraints;
-    use crate::ir::term::test as test_vecs;
     use crate::ir::term::dist::test::PureBool;
+    use crate::ir::term::test as test_vecs;
     use approx::assert_abs_diff_eq;
     use good_lp::default_solver;
     use quickcheck_macros::quickcheck;

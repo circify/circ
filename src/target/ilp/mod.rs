@@ -5,8 +5,8 @@ pub mod trans;
 use crate::ir::term::*;
 use fxhash::FxHashMap as HashMap;
 pub(crate) use good_lp::{
-    Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver,
-    SolverModel, Variable, VariableDefinition,
+    Constraint, Expression, ProblemVariables, ResolutionError, Solution, Solver, SolverModel,
+    Variable, VariableDefinition,
 };
 use log::debug;
 use std::fmt::{self, Debug, Formatter};

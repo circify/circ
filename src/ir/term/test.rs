@@ -70,12 +70,22 @@ fn map_test_bv_key() {
     let a1 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4), bv_lit(0b0100, 4)],
+        vec![
+            bv_lit(0b0001, 4),
+            bv_lit(0b0010, 4),
+            bv_lit(0b0011, 4),
+            bv_lit(0b0100, 4),
+        ],
     );
     let a2 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0001, 4), bv_lit(0b0100, 4), bv_lit(0b1001, 4), bv_lit(0b0000, 4)],
+        vec![
+            bv_lit(0b0001, 4),
+            bv_lit(0b0100, 4),
+            bv_lit(0b1001, 4),
+            bv_lit(0b0000, 4),
+        ],
     );
     let actual_eq = term![Op::Map(Box::new(Op::Eq)); a1.clone(), a2.clone()];
     let actual_add = term![Op::Map(Box::new(BV_ADD)); a1, a2];
@@ -87,7 +97,12 @@ fn map_test_bv_key() {
     let expected_add = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0010, 4), bv_lit(0b0110, 4), bv_lit(0b1100, 4), bv_lit(0b0100, 4)],
+        vec![
+            bv_lit(0b0010, 4),
+            bv_lit(0b0110, 4),
+            bv_lit(0b1100, 4),
+            bv_lit(0b0100, 4),
+        ],
     );
 
     assert_eq!(
@@ -105,22 +120,42 @@ fn test_rot() {
     let a = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4), bv_lit(0b0100, 4)],
+        vec![
+            bv_lit(0b0001, 4),
+            bv_lit(0b0010, 4),
+            bv_lit(0b0011, 4),
+            bv_lit(0b0100, 4),
+        ],
     );
     let expected_rot_0 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4), bv_lit(0b0100, 4)],
+        vec![
+            bv_lit(0b0001, 4),
+            bv_lit(0b0010, 4),
+            bv_lit(0b0011, 4),
+            bv_lit(0b0100, 4),
+        ],
     );
     let expected_rot_1 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0100, 4), bv_lit(0b0001, 4), bv_lit(0b0010, 4), bv_lit(0b0011, 4)],
+        vec![
+            bv_lit(0b0100, 4),
+            bv_lit(0b0001, 4),
+            bv_lit(0b0010, 4),
+            bv_lit(0b0011, 4),
+        ],
     );
     let expected_rot_2 = make_array(
         Sort::BitVector(32),
         Sort::BitVector(4),
-        vec![bv_lit(0b0011, 4), bv_lit(0b0100, 4), bv_lit(0b0001, 4), bv_lit(0b0010, 4)],
+        vec![
+            bv_lit(0b0011, 4),
+            bv_lit(0b0100, 4),
+            bv_lit(0b0001, 4),
+            bv_lit(0b0010, 4),
+        ],
     );
 
     let rot_0 = term![Op::Rot(0); a.clone()];
