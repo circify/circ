@@ -61,6 +61,15 @@ def check(features):
     log_run_check(cmd)
 
 
+def check_all():
+    """
+    Run cargo check with every individual feature
+    """
+    for feature in cargo_features:
+        log_run_check(["cargo", "check", "--tests", "--examples", "--benches", "--bins", "--features", feature])
+
+
+
 def build(features):
     """
     Run cargo build and any test cases in the feature list
@@ -272,6 +281,9 @@ if __name__ == "__main__":
             "-c", "--check", action="store_true", help="run `cargo check`"
         )
         parser.add_argument(
+            "--check-all", action="store_true", help="Check all single-feature builds"
+        )
+        parser.add_argument(
             "-b",
             "--build",
             action="store_true",
@@ -354,6 +366,9 @@ if __name__ == "__main__":
 
         if args.check:
             check(features)
+
+        if args.check_all:
+            check_all()
 
         if args.build:
             build(features)

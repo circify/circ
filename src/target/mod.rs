@@ -1,8 +1,10 @@
 //! Target circuit representations (and lowering passes)
 
+#[cfg(feature = "aby")]
 pub mod aby;
 #[cfg(feature = "lp")]
 pub mod ilp;
+#[cfg(feature = "r1cs")]
 pub mod r1cs;
 #[cfg(feature = "smt")]
 pub mod smt;

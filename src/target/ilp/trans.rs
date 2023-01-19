@@ -66,7 +66,7 @@ impl ToMilp {
     fn fresh_bv<D: Display + ?Sized>(&mut self, ctx: &D, bits: usize) -> Expression {
         let n = format!("{}_v{}", ctx, self.next_idx);
         self.next_idx += 1;
-        self.bv(n, bits)
+        self.bv_lit(n, bits)
     }
 
     /// Get a new variable, with name dependent on `d`.
@@ -83,7 +83,7 @@ impl ToMilp {
     }
 
     /// Get a new BV variable, named `name`.
-    fn bv(&mut self, name: String, bits: usize) -> Expression {
+    fn bv_lit(&mut self, name: String, bits: usize) -> Expression {
         self.ilp
             .new_variable(
                 variable()
@@ -258,7 +258,7 @@ impl ToMilp {
             if !self.cache.contains_key(&bv) {
                 match &bv.op() {
                     Op::Var(name, Sort::BitVector(n_bits)) => {
-                        let var = self.bv(name.clone(), *n_bits);
+                        let var = self.bv_lit(name.clone(), *n_bits);
                         self.set_bv_uint(bv.clone(), var, n);
                     }
                     Op::Const(Value::BitVector(b)) => {
@@ -684,8 +684,8 @@ pub fn to_ilp(cs: Computation) -> Ilp {
 mod test {
     use super::*;
     use crate::ir::proof::Constraints;
+    use crate::ir::term::dist::test::PureBool;
     use crate::ir::term::test as test_vecs;
-    use crate::target::r1cs::trans::test::{bv, PureBool};
     use approx::assert_abs_diff_eq;
     use good_lp::default_solver;
     use quickcheck_macros::quickcheck;
@@ -864,7 +864,7 @@ mod test {
         let cs = Computation {
             outputs: vec![term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
-                bv(1,4)
+                bv_lit(1,4)
             ]],
             metadata: ComputationMetadata::default(),
             precomputes: Default::default(),
@@ -880,7 +880,7 @@ mod test {
             precomputes: Default::default(),
             outputs: vec![term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
-                bv(2,4)
+                bv_lit(2,4)
             ]],
             metadata: ComputationMetadata::default(),
         };
@@ -895,7 +895,7 @@ mod test {
             outputs: vec![term![BV_ADD;
                 term![BV_MUL;
                     leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
-                    bv(2,4)
+                    bv_lit(2,4)
                 ],
 
                     leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))
@@ -914,8 +914,8 @@ mod test {
         let cs = Computation {
             precomputes: Default::default(),
             outputs: vec![term![BV_ADD;
-            term![ITE; c, bv(2,4), bv(1,4)],
-            term![BV_MUL; a, bv(2,4)]
+            term![ITE; c, bv_lit(2,4), bv_lit(1,4)],
+            term![BV_MUL; a, bv_lit(2,4)]
             ]],
             metadata: ComputationMetadata::default(),
         };

@@ -321,6 +321,36 @@ pub mod test {
     use rand::distributions::Distribution;
     use rand::SeedableRng;
 
+    #[derive(Clone, Debug)]
+    pub struct PureBool(pub Term, pub FxHashMap<String, Value>);
+
+    impl Arbitrary for PureBool {
+        fn arbitrary(g: &mut Gen) -> Self {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
+            let t = PureBoolDist(g.size()).sample(&mut rng);
+            let values: FxHashMap<String, Value> = PostOrderIter::new(t.clone())
+                .filter_map(|c| {
+                    if let Op::Var(n, _) = &c.op() {
+                        Some((n.clone(), Value::Bool(bool::arbitrary(g))))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            PureBool(t, values)
+        }
+
+        fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
+            let vs = self.1.clone();
+            let ts = PostOrderIter::new(self.0.clone())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev();
+
+            Box::new(ts.skip(1).map(move |t| PureBool(t, vs.clone())))
+        }
+    }
+
     #[derive(Clone)]
     pub struct ArbitraryTerm(pub Term);
 

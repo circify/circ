@@ -1,9 +1,16 @@
-use bls12_381::Bls12;
 use circ::cfg::clap::{self, Parser, ValueEnum};
-use circ::ir::term::text::parse_value_map;
-use circ::target::r1cs::bellman;
-use circ::target::r1cs::spartan;
 use std::path::PathBuf;
+
+#[cfg(feature = "bellman")]
+use bls12_381::Bls12;
+#[cfg(feature = "bellman")]
+use circ::target::r1cs::bellman;
+
+#[cfg(feature = "spartan")]
+use circ::target::r1cs::spartan;
+
+#[cfg(any(feature = "bellman", feature = "spartan"))]
+use circ::ir::term::text::parse_value_map;
 
 #[derive(Debug, Parser)]
 #[command(name = "zk", about = "The CirC ZKP runner")]
@@ -40,16 +47,19 @@ fn main() {
         .init();
     let opts = Options::parse();
     match opts.action {
+        #[cfg(feature = "bellman")]
         ProofAction::Prove => {
             let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
             println!("Proving");
             bellman::prove::<Bls12, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
         }
+        #[cfg(feature = "bellman")]
         ProofAction::Verify => {
             let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
             println!("Verifying");
             bellman::verify::<Bls12, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
         }
+        #[cfg(feature = "spartan")]
         ProofAction::Spartan => {
             let prover_input_map = parse_value_map(&std::fs::read(opts.pin).unwrap());
             println!("Spartan Proving");
@@ -59,5 +69,9 @@ fn main() {
             println!("Spartan Verifying");
             spartan::verify(opts.verifier_key, &verifier_input_map, &gens, &inst, proof).unwrap();
         }
+        #[cfg(not(feature = "bellman"))]
+        ProofAction::Prove | ProofAction::Verify => panic!("Missing feature: bellman"),
+        #[cfg(not(feature = "spartan"))]
+        ProofAction::Spartan => panic!("Missing feature: spartan"),
     }
 }

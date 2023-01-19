@@ -12,10 +12,10 @@ use std::hash::Hash;
 
 use crate::ir::term::*;
 
-#[cfg(feature = "r1cs")]
+#[cfg(feature = "bellman")]
 pub mod bellman;
 pub mod opt;
-#[cfg(feature = "r1cs")]
+#[cfg(feature = "spartan")]
 pub mod spartan;
 pub mod trans;
 

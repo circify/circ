@@ -11,7 +11,7 @@ circ_fields = { path = "circ_fields" }
 circ_opt = { path = "circ_opt" }
 circ_hc = { path = "circ_hc", default-features = false, features = ["rc", "lru"]}
 rug = { version = "1.11", features = ["serde"] }
-gmp-mpfr-sys = "1.4"
+gmp-mpfr-sys = { version = "1.4", optional = true }
 lazy_static = { version = "1.4", optional = true }
 rand = "0.8"
 rsmt2 = { version = "0.14", optional = true }
@@ -57,12 +57,17 @@ approx = "0.5.0"
 
 [features]
 default = []
+# frontends
 c = ["lang-c"]
-lp = ["good_lp", "lp-solvers"]
-r1cs = ["bellman", "spartan", "merlin", "curve25519-dalek", "ff", "group", "pairing", "serde_bytes", "bincode"]
-smt = ["rsmt2", "ieee754"]
 zok = ["zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
 datalog = ["pest", "pest-ast", "pest_derive", "from-pest", "lazy_static"]
+# backends
+smt = ["rsmt2", "ieee754"]
+lp = ["good_lp", "lp-solvers"]
+aby = ["lp"]
+r1cs = []
+spartan = ["r1cs", "dep:spartan", "merlin", "curve25519-dalek", "bincode", "gmp-mpfr-sys"]
+bellman = ["r1cs", "dep:bellman", "ff", "group", "pairing", "serde_bytes", "bincode", "gmp-mpfr-sys"]
 
 [[example]]
 name = "circ"
@@ -81,7 +86,7 @@ required-features = ["smt", "zok"]
 
 [[example]]
 name = "opa_bench"
-required-features = ["lp"]
+required-features = ["lp", "aby"]
 
 [profile.release]
 debug = true
