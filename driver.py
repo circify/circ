@@ -66,8 +66,8 @@ def check_all():
     Run cargo check with every individual feature
     """
     for feature in cargo_features:
-        log_run_check(["cargo", "check", "--tests", "--examples", "--benches", "--bins", "--features", feature])
-
+        log_run_check(["cargo", "check", "--tests", "--examples",
+                      "--benches", "--bins", "--features", feature])
 
 
 def build(features):
@@ -145,7 +145,8 @@ def test(features, extra_args):
 
     if "zok" in features and "smt" in features:
         if "aby" in features:
-            log_run_check(["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
+            log_run_check(
+                ["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
         if "lp" in features:
             log_run_check(["./scripts/test_zok_to_ilp.zsh"])
         if "r1cs" in features:
@@ -159,6 +160,8 @@ def test(features, extra_args):
     if "c" in features:
         if "aby" in features:
             log_run_check(["python3", "./scripts/aby_tests/c_test_aby.py"])
+        if "smt" in features:
+            log_run_check(["./scripts/test_c_smt.zsh"])
 
 
 def benchmark(features):
@@ -234,7 +237,8 @@ def clean(features):
 def set_mode(mode):
     def verify_mode(mode):
         if mode not in ("debug", "release"):
-            raise RuntimeError(f"Unknown mode: {mode}, --mode <debug, release>")
+            raise RuntimeError(
+                f"Unknown mode: {mode}, --mode <debug, release>")
 
     verify_mode(mode)
     save_mode(mode)
@@ -322,7 +326,8 @@ if __name__ == "__main__":
             nargs="+",
             help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none",
         )
-        parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
+        parser.add_argument(
+            "--benchmark", action="store_true", help="build benchmarks")
         parser.add_argument(
             "extra",
             metavar="PASS_THROUGH_ARGS",

@@ -6,6 +6,7 @@
 //!    * `r1cs`: [R1csOpt]
 //!    * `datalog`: [DatalogOpt]
 //!    * `zsharp`: [ZsharpOpt]
+//!    * `c` : [COpt]
 //!    * `field`: [FieldOpt]
 //!    * `fmt`: [FmtOpt]
 //!    * all options types implement:
@@ -65,6 +66,9 @@ pub struct CircOpt {
     /// Options for the datalog frontend
     #[command(flatten)]
     pub datalog: DatalogOpt,
+    /// Options for C frontend
+    #[command(flatten)]
+    pub c: COpt,
 }
 
 /// Options for the R1cs backend
@@ -240,6 +244,18 @@ impl Default for DatalogOpt {
             lint_prim_rec: false,
         }
     }
+}
+
+/// Options for the C frontend
+#[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
+pub struct COpt {
+    /// Enable SV competition builtin functions
+    #[arg(long = "c-sv-functions", env = "C_SV_FUNCTIONS", action = ArgAction::SetTrue, default_value = "false")]
+    pub sv_functions: bool,
+
+    /// Assert no undefined behavior
+    #[arg(long = "c-assert-no-ub", env = "C_ASSERT_NO_UB", action = ArgAction::SetTrue, default_value = "false")]
+    pub assert_no_ub: bool,
 }
 
 #[cfg(test)]

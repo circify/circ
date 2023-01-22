@@ -7,6 +7,7 @@ use circ_fields::FieldV;
 use circ_opt::FieldToBv;
 use rug::Integer;
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 thread_local! {
     static FOLDS: RefCell<TermCache<TTerm>> = RefCell::new(TermCache::with_capacity(TERM_CACHE_LIMIT));
@@ -98,7 +99,42 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 Some(bv) => cbool(bv.bit(*i)),
                 _ => None,
             },
-            Op::BoolNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
+            Op::BoolNaryOp(o) => match o {
+                BoolNaryOp::Xor | BoolNaryOp::Or => {
+                    Some((*o).flatten(t.cs().iter().map(|c| c_get(c))))
+                }
+                BoolNaryOp::And => {
+                    let flattened = (*o).flatten(t.cs().iter().map(|c| c_get(c)));
+                    Some(if *flattened.op() == AND {
+                        let mut dedup_children: HashSet<Term> = HashSet::new();
+                        for t in flattened.cs().iter() {
+                            dedup_children.insert(t.clone());
+                        }
+                        let mut flag = true;
+                        for a in dedup_children.iter() {
+                            for b in dedup_children.iter() {
+                                if term![Op::Not; a.clone()] == *b {
+                                    flag = false;
+                                }
+                            }
+                        }
+                        let dedup_children = dedup_children.into_iter().collect::<Vec<_>>().clone();
+                        if !flag {
+                            bool_lit(false)
+                        } else if AND == *flattened.op() {
+                            if dedup_children.len() == 1 {
+                                dedup_children[0].clone()
+                            } else {
+                                term(AND, dedup_children.clone())
+                            }
+                        } else {
+                            flattened
+                        }
+                    } else {
+                        flattened
+                    })
+                }
+            },
             Op::Eq => {
                 let c0 = get(0);
                 let c1 = get(1);
