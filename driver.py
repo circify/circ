@@ -130,6 +130,8 @@ def test(features, extra_args):
         if "aby" in features:
             subprocess.run(
                 ["python3", "./scripts/aby_tests/c_test_aby.py"], check=True)
+        if "smt" in features:
+            subprocess.run(["./scripts/test_c_smt.zsh"], check=True)
 
 
 def build_benchmark(features):

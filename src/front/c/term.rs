@@ -135,7 +135,8 @@ impl fmt::Debug for CTermData {
 #[derive(Clone, Debug)]
 pub struct CTerm {
     pub term: CTermData,
-    pub udef: bool,
+    /// A boolean term indicating whether this term is undefined.
+    pub udef: Term,
 }
 
 impl Display for CTerm {
@@ -151,7 +152,7 @@ fn field_name(struct_name: &str, field_name: &str) -> String {
 pub fn cterm(data: CTermData) -> CTerm {
     CTerm {
         term: data,
-        udef: false,
+        udef: bool_lit(false),
     }
 }
 
@@ -189,7 +190,7 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                     w,
                     term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]],
                 ),
-                udef: t.udef,
+                udef: t.udef.clone(),
             },
             Some(Ty::Bool) => t.clone(),
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
@@ -197,7 +198,7 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
         CTermData::Int(_s, w, ref term) => match to_ty {
             Some(Ty::Bool) => CTerm {
                 term: CTermData::Bool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
-                udef: t.udef,
+                udef: t.udef.clone(),
             },
             Some(Ty::Int(to_s, to_w)) => {
                 // TODO: add udef check
@@ -236,6 +237,10 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
     }
 }
 
+pub fn cast_to_bool(t: CTerm) -> Term {
+    cast(Some(Ty::Bool), t).term.simple_term()
+}
+
 /// Implementation of integer promotion (C11, 6.3.1.1.3)
 fn int_promotion(t: &CTerm) -> CTerm {
     let ty = t.term.type_();
@@ -249,12 +254,12 @@ fn int_promotion(t: &CTerm) -> CTerm {
                 let signed = max_val < u32::pow(2u32, 31u32) - 1;
                 CTerm {
                     term: CTermData::Int(signed, 32, v.clone()),
-                    udef: t.udef,
+                    udef: t.udef.clone(),
                 }
             }
             CTermData::Bool(v) => CTerm {
                 term: CTermData::Int(false, 32, v.clone()),
-                udef: t.udef,
+                udef: t.udef.clone(),
             },
             _ => t.clone(),
         }
@@ -328,20 +333,20 @@ fn wrap_bin_arith(
         (CTermData::Int(sx, nx, x), CTermData::Int(sy, ny, y), Some(fu), _) if nx == ny => {
             Ok(CTerm {
                 term: CTermData::Int(sx && sy, nx, fu(x, y)),
-                udef: false,
+                udef: bool_lit(false),
             })
         }
         (CTermData::Bool(x), CTermData::Bool(y), _, Some(fb)) => Ok(CTerm {
             term: CTermData::Bool(fb(x, y)),
-            udef: false,
+            udef: bool_lit(false),
         }),
         (CTermData::Array(ty, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
             term: CTermData::StackPtr(ty, fu(bv_lit(0, 32), y), aid),
-            udef: false,
+            udef: bool_lit(false),
         }),
         (CTermData::StackPtr(ty, offset, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
             term: CTermData::StackPtr(ty, fu(offset, y), aid),
-            udef: false,
+            udef: bool_lit(false),
         }),
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
@@ -423,7 +428,7 @@ fn wrap_bin_logical(
     match (a_bool.term, b_bool.term, fu, fb) {
         (CTermData::Bool(a), CTermData::Bool(b), _, Some(fb)) => Ok(CTerm {
             term: CTermData::Bool(fb(a, b)),
-            udef: false,
+            udef: bool_lit(false),
         }),
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
@@ -457,12 +462,12 @@ fn wrap_bin_cmp(
         (CTermData::Int(_, nx, x), CTermData::Int(_, ny, y), Some(fu), _) if nx == ny => {
             Ok(CTerm {
                 term: CTermData::Bool(fu(x, y)),
-                udef: false,
+                udef: bool_lit(false),
             })
         }
         (CTermData::Bool(x), CTermData::Bool(y), _, Some(fb)) => Ok(CTerm {
             term: CTermData::Bool(fb(x, y)),
-            udef: false,
+            udef: bool_lit(false),
         }),
         (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
     }
@@ -540,14 +545,36 @@ fn wrap_shift(name: &str, op: BvBinOp, a: CTerm, b: CTerm) -> Result<CTerm, Stri
     match &a.term {
         CTermData::Int(s, na, a) => Ok(CTerm {
             term: CTermData::Int(*s, *na, term![Op::BvBinOp(op); a.clone(), bv_lit(bc, *na)]),
-            udef: false,
+            udef: bool_lit(false),
         }),
         x => Err(format!("Cannot perform op '{}' on {} and {}", name, x, bc)),
     }
 }
 
 pub fn shl(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_shift("<<", BvBinOp::Shl, a, b)
+    let l = int_promotion(&a);
+    let r = int_promotion(&b);
+    if !l.type_().is_integer_type() {
+        return Err(format!("non-integer {} in shift", a));
+    }
+    if !r.type_().is_integer_type() {
+        return Err(format!("non-integer {} in shift", b));
+    }
+    let l_bits = l.type_().total_num_bits();
+    let r_bits = r.type_().total_num_bits();
+    let r_signed = r.type_().is_signed_int();
+    let r_in_range = if r_signed {
+        term![AND; term![BV_SGE; r.term.simple_term(), bv_lit(0, r_bits)], term![BV_SLT; r.term.simple_term(), bv_lit(l_bits, r_bits)]]
+    } else {
+        term![BV_ULT; r.term.simple_term(), bv_lit(l_bits, r_bits)]
+    };
+    // missing: result must be in-range.
+    // see C11 6.5.7.3
+    let res = term![BV_SHL; l.term.simple_term(), r.term.simple_term()];
+    Ok(CTerm {
+        term: CTermData::Int(l.type_().is_signed_int(), l_bits, res),
+        udef: term![OR; a.udef, b.udef, term![NOT; r_in_range]],
+    })
 }
 
 pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
@@ -591,7 +618,7 @@ impl Embeddable for Ct {
                     visibility,
                     precompute.map(|p| p.term.simple_term()),
                 )),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Int(s, w) => Self::T {
                 term: CTermData::Int(
@@ -604,7 +631,7 @@ impl Embeddable for Ct {
                         precompute.map(|p| p.term.simple_term()),
                     ),
                 ),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Array(n, _, inner_ty) => {
                 assert!(precompute.is_none());
@@ -617,7 +644,7 @@ impl Embeddable for Ct {
                 let id = mem.zero_allocate(*n, 32, inner_ty.num_bits());
                 let arr = Self::T {
                     term: CTermData::Array(ty.clone(), Some(id)),
-                    udef: false,
+                    udef: bool_lit(false),
                 };
                 for (i, t) in v.iter().enumerate() {
                     let val = t.term.term(ctx);
@@ -655,11 +682,11 @@ impl Embeddable for Ct {
         match (t.term, f.term) {
             (CTermData::Bool(a), CTermData::Bool(b)) => Self::T {
                 term: CTermData::Bool(term![Op::Ite; cond, a, b]),
-                udef: false,
+                udef: bool_lit(false),
             },
             (CTermData::Int(sa, wa, a), CTermData::Int(sb, wb, b)) if wa == wb => Self::T {
                 term: CTermData::Int(sa && sb, wa, term![Op::Ite; cond, a, b]),
-                udef: false,
+                udef: bool_lit(false),
             },
             (CTermData::Struct(ta, fa), CTermData::Struct(tb, fb)) if ta == tb => {
                 let fields: Vec<(String, CTerm)> = fa
@@ -675,7 +702,7 @@ impl Embeddable for Ct {
 
                 Self::T {
                     term: CTermData::Struct(ta, FieldList::new(fields)),
-                    udef: false,
+                    udef: bool_lit(false),
                 }
             }
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
@@ -690,15 +717,15 @@ impl Embeddable for Ct {
         match ty {
             Ty::Void | Ty::Bool => CTerm {
                 term: CTermData::Bool(Sort::Bool.default_term()),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Int(s, w) => CTerm {
                 term: CTermData::Int(*s, *w, Sort::BitVector(*w).default_term()),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Array(_s, _, ty) => CTerm {
                 term: CTermData::Array(*ty.clone(), None),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
@@ -707,12 +734,12 @@ impl Embeddable for Ct {
                     .collect();
                 CTerm {
                     term: CTermData::Struct(ty.clone(), FieldList::new(fields)),
-                    udef: false,
+                    udef: bool_lit(false),
                 }
             }
             Ty::Ptr(size, ty) => CTerm {
                 term: CTermData::StackPtr(*ty.clone(), Sort::BitVector(*size).default_term(), None),
-                udef: false,
+                udef: bool_lit(false),
             },
         }
     }

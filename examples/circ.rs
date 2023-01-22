@@ -84,9 +84,19 @@ struct FrontendOptions {
     rec_limit: usize,
 
     /// Lint recursions that are allegedly primitive recursive (datalog)
-    #[cfg(all(feature = "smt", feature = "zok"))]
+    #[cfg(all(feature = "smt"))]
     #[structopt(long)]
     lint_prim_rec: bool,
+
+    /// Enable SV competition builtin functions
+    #[structopt(long)]
+    #[cfg(feature = "c")]
+    sv_functions: bool,
+
+    /// Assert no undefined behavior
+    #[structopt(long)]
+    #[cfg(feature = "c")]
+    assert_no_ub: bool,
 }
 
 #[derive(Debug, StructOpt)]
@@ -228,6 +238,8 @@ fn main() {
             let inputs = c::Inputs {
                 file: options.path,
                 mode,
+                sv_functions: options.frontend.sv_functions,
+                assert_no_ub: options.frontend.assert_no_ub,
             };
             C::gen(inputs)
         }
@@ -407,9 +419,10 @@ fn main() {
         #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
             let c = cs.get_entry();
+            assert_eq!(c.outputs.len(), 1);
+            let model = find_model(&c.outputs[0]);
             if options.frontend.lint_prim_rec {
-                assert_eq!(c.outputs.len(), 1);
-                match find_model(&c.outputs[0]) {
+                match model {
                     Some(m) => {
                         println!("Not primitive recursive!");
                         for (var, val) in m {
@@ -422,7 +435,18 @@ fn main() {
                     }
                 }
             } else {
-                todo!()
+                match model {
+                    Some(m) => {
+                        println!("Property does not hold!\nCounterexample:");
+                        for (var, val) in m {
+                            println!("{} -> {}", var, val);
+                        }
+                        std::process::exit(1)
+                    }
+                    None => {
+                        println!("Property holds");
+                    }
+                }
             }
         }
         #[cfg(not(feature = "smt"))]

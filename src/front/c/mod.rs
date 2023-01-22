@@ -30,6 +30,10 @@ pub struct Inputs {
     pub file: PathBuf,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
+    /// enable SV competition builtin functions
+    pub sv_functions: bool,
+    /// assert no undefined behavior
+    pub assert_no_ub: bool,
 }
 
 /// The C front-end. Implements [FrontEnd].
@@ -46,7 +50,7 @@ impl FrontEnd for C {
         let p = parser.parse_file(&i.file).unwrap();
 
         // Convert to CirC IR
-        let mut g = CGen::new(i.mode.clone(), p.unit.clone());
+        let mut g = CGen::new(i, p.unit.clone());
         g.visit_files();
         g.entry_fn("main");
         let main_comp = g.circ.consume().borrow().clone();
@@ -133,19 +137,31 @@ struct CGen {
     structs: HashMap<String, Ty>,
     functions: HashMap<String, FnInfo>,
     typedefs: HashMap<String, Ty>,
+    /// Proof mode; find evaluations satisfying these.
+    assumptions: Vec<Term>,
+    /// Proof mode; find evaluations violating these.
+    assertions: Vec<Term>,
+    /// enable SV competition builtin functions
+    sv_functions: bool,
+    /// assert no undefined behavior
+    assert_no_ub: bool,
 }
 
 impl CGen {
-    fn new(mode: Mode, tu: TranslationUnit) -> Self {
+    fn new(cfg: Inputs, tu: TranslationUnit) -> Self {
         let this = Self {
             circ: Circify::new(Ct::new()),
             function_queue: Vec::new(),
             function_cache: HashSet::new(),
-            mode,
+            mode: cfg.mode,
             tu,
             structs: HashMap::default(),
             functions: HashMap::default(),
             typedefs: HashMap::default(),
+            assertions: Vec::new(),
+            assumptions: Vec::new(),
+            sv_functions: cfg.sv_functions,
+            assert_no_ub: cfg.assert_no_ub,
         };
         this.circ
             .cir_ctx()
@@ -832,73 +848,80 @@ impl CGen {
                 // Get function name
                 let fname = name_from_expr(*callee);
 
-                // Get function info
-                let f = self
-                    .functions
-                    .get(&fname)
-                    .unwrap_or_else(|| panic!("No function '{}'", fname))
-                    .clone();
-                let ret_ty = f.ret_ty.clone();
-
-                // Map of argument names to CTerms
-                let mut args_map: HashMap<String, CTerm> = HashMap::new();
+                // Get arguments
                 let args = arguments
                     .iter()
                     .map(|e| self.gen_expr(e.node.clone()))
                     .collect::<Vec<_>>();
-                for (p, c) in f.params.iter().zip(args.iter()) {
-                    args_map.insert(p.name.clone(), c.clone());
-                }
 
-                // Vector of argument Terms
-                let arg_terms = args
-                    .iter()
-                    .map(|e| e.term.terms(self.circ.cir_ctx()))
-                    .collect::<Vec<_>>();
+                let maybe_return = self.maybe_handle_builtins(&fname, &args);
 
-                // create call terms
-                let (name, arg_names, arg_sorts, ret_names, ret_sorts) =
-                    fn_info_to_defs(&f, &args_map);
+                if let Some(r) = maybe_return {
+                    Ok(r)
+                } else {
+                    // Get function info
+                    let f = self
+                        .functions
+                        .get(&fname)
+                        .unwrap_or_else(|| panic!("No function '{}'", fname))
+                        .clone();
+                    let ret_ty = f.ret_ty.clone();
 
-                let call_term = term(
-                    Op::Call(
-                        name.clone(),
-                        arg_names.clone(),
-                        arg_sorts.clone(),
-                        ret_sorts.clone(),
-                    ),
-                    arg_terms.clone().into_iter().flatten().collect::<Vec<_>>(),
-                );
+                    // Map of argument names to CTerms
+                    let mut args_map: HashMap<String, CTerm> = HashMap::new();
+                    for (p, c) in f.params.iter().zip(args.iter()) {
+                        args_map.insert(p.name.clone(), c.clone());
+                    }
 
-                // Add function to queue
-                if !self.function_cache.contains(&call_term.op) {
-                    self.function_cache.insert(call_term.op.clone());
-                    self.function_queue.push(call_term.clone());
-                }
+                    // Vector of argument Terms
+                    let arg_terms = args
+                        .iter()
+                        .map(|e| e.term.terms(self.circ.cir_ctx()))
+                        .collect::<Vec<_>>();
 
-                // Rewiring
-                for (i, (ret_name, sort)) in ret_names.iter().zip(ret_sorts.iter()).enumerate() {
-                    if let Sort::Array(..) = sort {
-                        let ct = args_map.get(ret_name).unwrap();
-                        if let CTermData::Array(_, id) = ct.term {
-                            self.circ
-                                .replace(id.unwrap(), term![Op::Field(i); call_term.clone()]);
-                        } else {
-                            unimplemented!("This should only be handling ptrs to arrays");
+                    // create call terms
+                    let (name, arg_names, arg_sorts, ret_names, ret_sorts) =
+                        fn_info_to_defs(&f, &args_map);
+
+                    let call_term = term(
+                        Op::Call(
+                            name.clone(),
+                            arg_names.clone(),
+                            arg_sorts.clone(),
+                            ret_sorts.clone(),
+                        ),
+                        arg_terms.clone().into_iter().flatten().collect::<Vec<_>>(),
+                    );
+
+                    // Add function to queue
+                    if !self.function_cache.contains(&call_term.op) {
+                        self.function_cache.insert(call_term.op.clone());
+                        self.function_queue.push(call_term.clone());
+                    }
+
+                    // Rewiring
+                    for (i, (ret_name, sort)) in ret_names.iter().zip(ret_sorts.iter()).enumerate() {
+                        if let Sort::Array(..) = sort {
+                            let ct = args_map.get(ret_name).unwrap();
+                            if let CTermData::Array(_, id) = ct.term {
+                                self.circ
+                                    .replace(id.unwrap(), term![Op::Field(i); call_term.clone()]);
+                            } else {
+                                unimplemented!("This should only be handling ptrs to arrays");
+                            }
                         }
                     }
+
+                    // Set return value
+                    let ret = match ret_ty {
+                        Ty::Void | Ty::Bool => cterm(CTermData::Bool(term![Op::Field(0); call_term])),
+                        Ty::Int(sign, width) => {
+                            cterm(CTermData::Int(sign, width, term![Op::Field(0); call_term]))
+                        }
+                        _ => unimplemented!("Unimplemented return type: {}", ret_ty),
+                    };
+                    Ok(ret)
                 }
-
-                // Set return value
-                let ret = match ret_ty {
-                    Ty::Void | Ty::Bool => cterm(CTermData::Bool(term![Op::Field(0); call_term])),
-                    Ty::Int(sign, width) => {
-                        cterm(CTermData::Int(sign, width, term![Op::Field(0); call_term]))
-                    }
-                    _ => unimplemented!("Unimplemented return type: {}", ret_ty),
-                };
-
-                Ok(ret)
             }
             Expression::Member(member) => {
                 let MemberExpression {
@@ -1202,11 +1225,46 @@ impl CGen {
                         .outputs
                         .extend(ret_terms);
                 }
+                Mode::Proof => {
+                    let ret_term = r.unwrap_term();
+                    // Ensure non-empty
+                    self.assumptions.push(bool_lit(true));
+                    self.assertions.push(bool_lit(true));
+                    if self.assert_no_ub {
+                        self.assertions.push(term![NOT; ret_term.udef]);
+                    }
+                    let assumptions_hold = term(AND, self.assumptions.clone());
+                    let an_assertion_doesnt = term(
+                        OR,
+                        self.assertions
+                            .iter()
+                            .map(|a| term![NOT; a.clone()])
+                            .collect(),
+                    );
+                    let bug_if = term![AND; assumptions_hold, an_assertion_doesnt];
+                    self.circ.cir_ctx().cs.borrow_mut().outputs.push(bug_if);
+                }
                 _ => unimplemented!("Mode: {}", self.mode),
             }
         }
     }
 
+    /// Returns whether this was a builtin, and thus has been handled.
+    fn maybe_handle_builtins(&mut self, name: &String, args: &Vec<CTerm>) -> Option<CTerm> {
+        if self.sv_functions && (name == "__VERIFIER_assert" || name == "__VERIFIER_assume") {
+            assert!(args.len() == 1);
+            let bool_arg = cast_to_bool(args[0].clone());
+            assert!(matches!(check(&bool_arg), Sort::Bool));
+            if name == "__VERIFIER_assert" {
+                self.assertions.push(bool_arg);
+            } else {
+                self.assumptions.push(bool_arg);
+            }
+            Some(Ty::Bool.default(self.circ.cir_ctx()))
+        } else {
+            None
+        }
+    }
     fn fn_call(&mut self, name: &String, arg_names: &Vec<String>, arg_sorts: &Vec<Sort>) {
         debug!("Call: {}", name);
 

@@ -115,31 +115,35 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     Some(o.clone().flatten(t.cs.iter().map(|c| c_get(c))))
                 }
                 BoolNaryOp::And => {
-                    let children = o.clone().flatten(t.cs.iter().map(|c| c_get(c)));
-                    let mut dedup_children: HashSet<Term> = HashSet::new();
-                    for t in children.cs.iter() {
-                        dedup_children.insert(t.clone());
-                    }
-                    let mut flag = true;
-                    for a in dedup_children.iter() {
-                        for b in dedup_children.iter() {
-                            if term![Op::Not; a.clone()] == *b {
-                                flag = false;
+                    let flattened = o.clone().flatten(t.cs.iter().map(|c| c_get(c)));
+                    Some(if flattened.op == AND {
+                        let mut dedup_children: HashSet<Term> = HashSet::new();
+                        for t in flattened.cs.iter() {
+                            dedup_children.insert(t.clone());
+                        }
+                        let mut flag = true;
+                        for a in dedup_children.iter() {
+                            for b in dedup_children.iter() {
+                                if term![Op::Not; a.clone()] == *b {
+                                    flag = false;
+                                }
                             }
                         }
-                    }
-                    let dedup_children = dedup_children.into_iter().collect::<Vec<_>>().clone();
-                    if !flag {
-                        Some(bool_lit(false))
-                    } else if AND == children.op {
-                        if dedup_children.len() == 1 {
-                            Some(dedup_children[0].clone())
+                        let dedup_children = dedup_children.into_iter().collect::<Vec<_>>().clone();
+                        if !flag {
+                            bool_lit(false)
+                        } else if AND == flattened.op {
+                            if dedup_children.len() == 1 {
+                                dedup_children[0].clone()
+                            } else {
+                                term(AND, dedup_children.clone())
+                            }
                         } else {
-                            Some(term(AND, dedup_children.clone()))
+                            flattened
                         }
                     } else {
-                        Some(children)
-                    }
+                        flattened
+                    })
                 }
             },
             Op::Eq => {
