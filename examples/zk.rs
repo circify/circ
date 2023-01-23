@@ -1,4 +1,7 @@
-use circ::cfg::clap::{self, Parser, ValueEnum};
+use circ::cfg::{
+    clap::{self, Parser, ValueEnum},
+    CircOpt,
+};
 use std::path::PathBuf;
 
 #[cfg(feature = "bellman")]
@@ -29,6 +32,8 @@ struct Options {
     vin: PathBuf,
     #[arg(long)]
     action: ProofAction,
+    #[command(flatten)]
+    circ: CircOpt,
 }
 
 #[derive(PartialEq, Debug, Clone, ValueEnum)]
@@ -46,6 +51,7 @@ fn main() {
         .format_timestamp(None)
         .init();
     let opts = Options::parse();
+    circ::cfg::set(&opts.circ);
     match opts.action {
         #[cfg(feature = "bellman")]
         ProofAction::Prove => {

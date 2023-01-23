@@ -123,6 +123,19 @@ impl PreComp {
         self.recompute_inputs();
         self
     }
+
+    /// Reduce the precomputation to a single, step-less map.
+    pub fn flatten(self) -> FxHashMap<String, Term> {
+        let mut out: FxHashMap<String, Term> = Default::default();
+        let mut cache: TermMap<Term> = Default::default();
+        for (name, sort) in &self.sequence {
+            let term = extras::substitute_cache(self.outputs.get(name).unwrap(), &mut cache);
+            let var_term = leaf_term(Op::Var(name.clone(), sort.clone()));
+            out.insert(name.into(), term.clone());
+            cache.insert(var_term, term);
+        }
+        out
+    }
 }
 
 #[cfg(test)]

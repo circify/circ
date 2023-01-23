@@ -4,6 +4,7 @@
 
 #![warn(missing_docs)]
 #![deny(warnings)]
+#![allow(unreachable_code, dead_code, unused)]
 
 #[macro_use]
 pub mod ir;

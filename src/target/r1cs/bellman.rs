@@ -22,7 +22,8 @@ use std::str::FromStr;
 use rug::integer::{IsPrime, Order};
 use rug::Integer;
 
-use super::*;
+use super::{Lc, ProverDataNew, VerifierDataNew, R1csFinal, Var, VarType, wit_comp::StagedWitCompEvaluator};
+use crate::ir::term::Value;
 
 /// Convert a (rug) integer to a prime field element.
 fn int_to_ff<F: PrimeField>(i: Integer) -> F {
@@ -40,7 +41,7 @@ fn int_to_ff<F: PrimeField>(i: Integer) -> F {
 /// Convert one our our linear combinations to a bellman linear combination.
 /// Takes a zero linear combination. We could build it locally, but bellman provides one, so...
 fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
-    vars: &HashMap<usize, Variable>,
+    vars: &HashMap<Var, Variable>,
     lc: &Lc,
     zero_lc: LinearCombination<F>,
 ) -> LinearCombination<F> {
@@ -76,7 +77,7 @@ fn get_modulus<F: Field + PrimeField>() -> Integer {
 ///
 /// Optionally contains a variable value map. This must be populated to use the
 /// bellman prover.
-pub struct SynthInput<'a>(&'a R1cs<String>, &'a Option<FxHashMap<String, Value>>);
+pub struct SynthInput<'a>(&'a ProverDataNew, Option<&'a FxHashMap<String, Value>>);
 
 impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
     #[track_caller]
@@ -86,55 +87,57 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
     {
         let f_mod = get_modulus::<F>();
         assert_eq!(
-            self.0.modulus.modulus(),
+            self.0.r1cs.field.modulus(),
             &f_mod,
             "\nR1CS has modulus \n{},\n but Bellman CS expects \n{}",
-            self.0.modulus,
+            self.0.r1cs.field,
             f_mod
         );
-        let mut uses = HashMap::with_capacity(self.0.next_idx);
-        for (a, b, c) in self.0.constraints.iter() {
-            [a, b, c].iter().for_each(|y| {
-                y.monomials.keys().for_each(|k| {
-                    uses.get_mut(k)
-                        .map(|i| {
-                            *i += 1;
-                        })
-                        .or_else(|| {
-                            uses.insert(*k, 1);
-                            None
-                        });
+        // let mut uses = HashMap::with_capacity(self.0.vars.len());
+        // for (a, b, c) in self.0.constraints.iter() {
+        //     [a, b, c].iter().for_each(|y| {
+        //         y.monomials.keys().for_each(|k| {
+        //             uses.get_mut(k)
+        //                 .map(|i| {
+        //                     *i += 1;
+        //                 })
+        //                 .or_else(|| {
+        //                     uses.insert(*k, 1);
+        //                     None
+        //                 });
+        //         })
+        //     });
+        // }
+        let mut vars = HashMap::with_capacity(self.0.r1cs.vars.len());
+        let values: Option<Vec<_>> = self.1.map(|values| {
+            let mut evaluator = StagedWitCompEvaluator::new(&self.0.precompute);
+            let mut ffs = Vec::new();
+            ffs.extend(evaluator.eval_stage(values.clone()).into_iter().cloned());
+            ffs.extend(evaluator.eval_stage(Default::default()).into_iter().cloned());
+            ffs
+        });
+        for (i, var) in self.0.r1cs.vars.iter().copied().enumerate() {
+            assert!(!matches!(var.ty(), VarType::CWit), "Bellman doesn't support committed witnesses");
+            assert!(!matches!(var.ty(), VarType::RoundWit | VarType::Chall), "Bellman doesn't support rounds");
+            let public = matches!(var.ty(), VarType::Inst);
+            let name_f = || format!("{:?}", var);
+            let val_f = || {
+                Ok({
+                    let i_val = &values.as_ref().expect("missing values")[i];
+                    let ff_val = int_to_ff(i_val.as_pf().into());
+                    debug!("value : {:?} -> {:?} ({})", var, ff_val, i_val);
+                    ff_val
                 })
-            });
+            };
+            debug!("var: {:?}, public: {}", var, public);
+            let v = if public {
+                cs.alloc_input(name_f, val_f)?
+            } else {
+                cs.alloc(name_f, val_f)?
+            };
+            vars.insert(var, v);
         }
-        let mut vars = HashMap::with_capacity(self.0.next_idx);
-        for i in 0..self.0.next_idx {
-            if let Some(s) = self.0.idxs_signals.get(&i) {
-                //for (_i, s) in self.0.idxs_signals.get() {
-                let public = self.0.public_idxs.contains(&i);
-                if uses.get(&i).is_some() || public {
-                    let name_f = || s.to_string();
-                    let val_f = || {
-                        Ok({
-                            let i_val = self.1.as_ref().expect("missing values").get(s).unwrap();
-                            let ff_val = int_to_ff(i_val.as_pf().into());
-                            debug!("value : {} -> {:?} ({})", s, ff_val, i_val);
-                            ff_val
-                        })
-                    };
-                    debug!("var: {}, public: {}", s, public);
-                    let v = if public {
-                        cs.alloc_input(name_f, val_f)?
-                    } else {
-                        cs.alloc(name_f, val_f)?
-                    };
-                    vars.insert(i, v);
-                } else {
-                    debug!("drop dead var: {}", s);
-                }
-            }
-        }
-        for (i, (a, b, c)) in self.0.constraints.iter().enumerate() {
+        for (i, (a, b, c)) in self.0.r1cs.constraints.iter().enumerate() {
             cs.enforce(
                 || format!("con{}", i),
                 |z| lc_to_bellman::<F, CS>(&vars, a, z),
@@ -145,7 +148,7 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
         debug!(
             "done with synth: {} vars {} cs",
             vars.len(),
-            self.0.constraints.len()
+            self.0.r1cs.constraints.len()
         );
         Ok(())
     }
@@ -228,15 +231,15 @@ mod serde_vk {
 pub fn gen_params<E: Engine, P1: AsRef<Path>, P2: AsRef<Path>>(
     pk_path: P1,
     vk_path: P2,
-    p_data: &ProverData,
-    v_data: &VerifierData,
+    p_data: &ProverDataNew,
+    v_data: &VerifierDataNew,
 ) -> io::Result<()>
 where
     E::G1: WnafGroup,
     E::G2: WnafGroup,
 {
     let rng = &mut rand::thread_rng();
-    let p = generate_random_parameters::<E, _, _>(SynthInput(&p_data.r1cs, &None), rng).unwrap();
+    let p = generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();
     write_prover_key_and_data(pk_path, &p, p_data)?;
     write_verifier_key_and_data(vk_path, &p.vk, v_data)?;
     Ok(())
@@ -245,7 +248,7 @@ where
 fn write_prover_key_and_data<P: AsRef<Path>, E: Engine>(
     path: P,
     params: &Parameters<E>,
-    data: &ProverData,
+    data: &ProverDataNew,
 ) -> io::Result<()> {
     let mut file = File::create(path)?;
     serialize_into(&mut file, &(serde_pk::SerPk(params), &data)).unwrap();
@@ -254,16 +257,16 @@ fn write_prover_key_and_data<P: AsRef<Path>, E: Engine>(
 
 fn read_prover_key_and_data<P: AsRef<Path>, E: Engine>(
     path: P,
-) -> io::Result<(Parameters<E>, ProverData)> {
+) -> io::Result<(Parameters<E>, ProverDataNew)> {
     let mut file = File::open(path)?;
-    let (serde_pk::DePk(pk), data): (_, ProverData) = deserialize_from(&mut file).unwrap();
+    let (serde_pk::DePk(pk), data): (_, ProverDataNew) = deserialize_from(&mut file).unwrap();
     Ok((pk, data))
 }
 
 fn write_verifier_key_and_data<P: AsRef<Path>, E: Engine>(
     path: P,
     key: &VerifyingKey<E>,
-    data: &VerifierData,
+    data: &VerifierDataNew,
 ) -> io::Result<()> {
     let mut file = File::create(path)?;
     serialize_into(&mut file, &(serde_vk::SerVk(key), &data)).unwrap();
@@ -272,9 +275,9 @@ fn write_verifier_key_and_data<P: AsRef<Path>, E: Engine>(
 
 fn read_verifier_key_and_data<P: AsRef<Path>, E: Engine>(
     path: P,
-) -> io::Result<(VerifyingKey<E>, VerifierData)> {
+) -> io::Result<(VerifyingKey<E>, VerifierDataNew)> {
     let mut file = File::open(path)?;
-    let (serde_vk::DeVk(vk), data): (_, VerifierData) = deserialize_from(&mut file).unwrap();
+    let (serde_vk::DeVk(vk), data): (_, VerifierDataNew) = deserialize_from(&mut file).unwrap();
     Ok((vk, data))
 }
 
@@ -293,20 +296,19 @@ where
 {
     let (pk, prover_data) = read_prover_key_and_data::<_, E>(pk_path)?;
     let rng = &mut rand::thread_rng();
-    for (input, sort) in &prover_data.precompute_inputs {
-        let value = inputs_map
-            .get(input)
-            .unwrap_or_else(|| panic!("No input for {}", input));
-        let sort2 = value.sort();
-        assert_eq!(
-            sort, &sort2,
-            "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-            input, sort, sort2
-        );
-    }
-    let new_map = prover_data.precompute.eval(inputs_map);
-    prover_data.r1cs.check_all(&new_map);
-    let pf = create_random_proof(SynthInput(&prover_data.r1cs, &Some(new_map)), &pk, rng).unwrap();
+//    for (input, sort) in &prover_data.precompute_inputs {
+//        let value = inputs_map
+//            .get(input)
+//            .unwrap_or_else(|| panic!("No input for {}", input));
+//        let sort2 = value.sort();
+//        assert_eq!(
+//            sort, &sort2,
+//            "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
+//            input, sort, sort2
+//        );
+//    }
+    prover_data.check_all(&inputs_map);
+    let pf = create_random_proof(SynthInput(&prover_data, Some(inputs_map)), &pk, rng).unwrap();
     let mut pf_file = File::create(pf_path)?;
     pf.write(&mut pf_file)?;
     Ok(())
@@ -325,7 +327,7 @@ pub fn verify<E: MultiMillerLoop, P1: AsRef<Path>, P2: AsRef<Path>>(
     let (vk, verifier_data) = read_verifier_key_and_data::<_, E>(vk_path)?;
     let pvk = prepare_verifying_key(&vk);
     let inputs = verifier_data.eval(inputs_map);
-    let inputs_as_ff: Vec<E::Fr> = inputs.into_iter().map(int_to_ff).collect();
+    let inputs_as_ff: Vec<E::Fr> = inputs.into_iter().map(|i| int_to_ff(i.i())).collect();
     let mut pf_file = File::open(pf_path).unwrap();
     let pf = Proof::read(&mut pf_file).unwrap();
     verify_proof(&pvk, &pf, &inputs_as_ff).unwrap();
