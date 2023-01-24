@@ -128,7 +128,11 @@ impl<'a> StagedWitCompEvaluator<'a> {
     }
     /// Evaluate one stage.
     pub fn eval_stage(&mut self, inputs: HashMap<String, Value>) -> Vec<&Value> {
-        trace!("Beginning stage {}/{}", self.stages_evaluated, self.comp.stages.len());
+        trace!(
+            "Beginning stage {}/{}",
+            self.stages_evaluated,
+            self.comp.stages.len()
+        );
         debug_assert!(self.stages_evaluated < self.comp.stages.len());
         let stage = &self.comp.stages[self.stages_evaluated];
         let num_outputs = stage.num_outputs;

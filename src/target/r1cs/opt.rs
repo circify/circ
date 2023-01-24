@@ -114,9 +114,7 @@ impl LinReducer {
 
     fn run(mut self) -> R1cs {
         while let Some(con_id) = self.queue.pop() {
-            if let Some((var, lc)) =
-                as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs)
-            {
+            if let Some((var, lc)) = as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs) {
                 if lc.monomials.len() < self.lc_size_thresh {
                     debug!(
                         "Elim: {} -> {}",
@@ -240,7 +238,8 @@ mod test {
                 } else {
                     r1cs.zero()
                 } + cc;
-                let off = r1cs.eval(&a, &var_values) * r1cs.eval(&b, &var_values) - r1cs.eval(&c, &var_values);
+                let off = r1cs.eval(&a, &var_values) * r1cs.eval(&b, &var_values)
+                    - r1cs.eval(&c, &var_values);
                 c += &off;
                 r1cs.constraint(a, b, c);
             }

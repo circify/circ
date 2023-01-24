@@ -15,8 +15,8 @@ use crate::ir::term::*;
 
 #[cfg(feature = "bellman")]
 pub mod bellman;
-pub mod proof;
 pub mod opt;
+pub mod proof;
 #[cfg(feature = "spartan")]
 pub mod spartan;
 pub mod trans;
@@ -427,14 +427,7 @@ impl R1csFinal {
 
         s.push_str(&format_i(&a.constant));
         for (idx, coeff) in &a.monomials {
-            s.extend(
-                format!(
-                    " {} {}",
-                    self.names.get(idx).unwrap(),
-                    format_i(coeff),
-                )
-                .chars(),
-            );
+            s.extend(format!(" {} {}", self.names.get(idx).unwrap(), format_i(coeff),).chars());
         }
         s
     }
@@ -442,7 +435,8 @@ impl R1csFinal {
     fn eval(&self, lc: &Lc, values: &HashMap<Var, FieldV>) -> FieldV {
         let mut acc = lc.constant.clone();
         for (var, coeff) in &lc.monomials {
-            let val = values.get(var)
+            let val = values
+                .get(var)
                 .unwrap_or_else(|| panic!("Missing value in R1cs::eval for variable {:?}", var))
                 .clone();
             acc += val * coeff;
@@ -467,7 +461,11 @@ impl ProverDataNew {
         // this will hold inputs to the multi-round evaluator.
         let mut inputs = values.clone();
         while var_values.len() < self.r1cs.vars.len() {
-            trace!("Have {}/{} values, doing another round", var_values.len(), self.r1cs.vars.len());
+            trace!(
+                "Have {}/{} values, doing another round",
+                var_values.len(),
+                self.r1cs.vars.len()
+            );
             // do a round of evaluation
             let value_vec = eval.eval_stage(std::mem::take(&mut inputs));
             for value in value_vec {
@@ -506,8 +504,16 @@ impl<S: Hash + Eq + Clone + Debug, T: Hash + Eq + Clone + Debug> BiMap<S, T> {
         self.fwd.len()
     }
     fn insert(&mut self, s: S, t: T) {
-        assert!(self.fwd.insert(s.clone(), t.clone()).is_none(), "Duplicate key {:?}", s);
-        assert!(self.rev.insert(t.clone(), s).is_none(), "Duplicate value {:?}", t);
+        assert!(
+            self.fwd.insert(s.clone(), t.clone()).is_none(),
+            "Duplicate key {:?}",
+            s
+        );
+        assert!(
+            self.rev.insert(t.clone(), s).is_none(),
+            "Duplicate value {:?}",
+            t
+        );
     }
     fn contains_key<Q>(&self, s: &Q) -> bool
     where
@@ -777,7 +783,8 @@ impl R1cs {
     fn eval(&self, lc: &Lc, values: &HashMap<Var, FieldV>) -> FieldV {
         let mut acc = lc.constant.clone();
         for (var, coeff) in &lc.monomials {
-            let val = values.get(var)
+            let val = values
+                .get(var)
                 .unwrap_or_else(|| panic!("Missing value in R1cs::eval for variable {:?}", var))
                 .clone();
             acc += val * coeff;
@@ -788,14 +795,17 @@ impl R1cs {
     fn eval_all_vars(&self, inputs: &HashMap<String, Value>) -> HashMap<Var, FieldV> {
         let after_precompute = self.precompute.eval(inputs);
         let mut cache = Default::default();
-        self.terms.iter().map(|(var, term)| {
-            let val = eval_cached(term, &after_precompute, &mut cache);
-            if let Value::Field(f) = val {
-                (*var, f.clone())
-            } else {
-                panic!("Non-field");
-            }
-        }).collect()
+        self.terms
+            .iter()
+            .map(|(var, term)| {
+                let val = eval_cached(term, &after_precompute, &mut cache);
+                if let Value::Field(f) = val {
+                    (*var, f.clone())
+                } else {
+                    panic!("Non-field");
+                }
+            })
+            .collect()
     }
 
     /// Check all assertions, if values are being tracked.
@@ -923,7 +933,10 @@ impl R1cs {
         ProverDataNew {
             r1cs: R1csFinal {
                 field: self.modulus.clone(),
-                names: vars.iter().map(|v| (*v, self.idx_to_sig.get_fwd(v).unwrap().clone())).collect(),
+                names: vars
+                    .iter()
+                    .map(|v| (*v, self.idx_to_sig.get_fwd(v).unwrap().clone()))
+                    .collect(),
                 vars,
                 num_cwits: self.num_cwits,
                 constraints: self.constraints,
@@ -1042,7 +1055,10 @@ impl VerifierDataNew {
     /// Given verifier inputs, compute a vector of field values to feed to the proof system.
     pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<FieldV> {
         let mut eval = wit_comp::StagedWitCompEvaluator::new(&self.precompute);
-        eval.eval_stage(value_map.clone()).into_iter().map(|v| v.as_pf().clone()).collect()
+        eval.eval_stage(value_map.clone())
+            .into_iter()
+            .map(|v| v.as_pf().clone())
+            .collect()
     }
 }
 

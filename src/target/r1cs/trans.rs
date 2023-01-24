@@ -51,7 +51,11 @@ struct ToR1cs<'cfg> {
 }
 
 impl<'cfg> ToR1cs<'cfg> {
-    fn new(cfg: &'cfg CircCfg, public_inputs: FxHashSet<String>, precompute: precomp::PreComp) -> Self {
+    fn new(
+        cfg: &'cfg CircCfg,
+        public_inputs: FxHashSet<String>,
+        precompute: precomp::PreComp,
+    ) -> Self {
         let field = cfg.field().clone();
         debug!("Starting R1CS back-end, field: {}", field);
         let r1cs = R1cs::new(field.clone(), precompute);
@@ -90,8 +94,21 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     /// Get a new var that is a [VarType::FinalWit] or a [VarType::Inst]. See [ToR1cs::fresh_var].
-    fn fresh_simple_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, public: bool) -> TermLc {
-        self.fresh_var(ctx, comp, if public { VarType::Inst } else { VarType::FinalWit })
+    fn fresh_simple_var<D: Display + ?Sized>(
+        &mut self,
+        ctx: &D,
+        comp: Term,
+        public: bool,
+    ) -> TermLc {
+        self.fresh_var(
+            ctx,
+            comp,
+            if public {
+                VarType::Inst
+            } else {
+                VarType::FinalWit
+            },
+        )
     }
 
     /// Enforce `x` to be bit-valued

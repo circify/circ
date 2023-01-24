@@ -1,8 +1,5 @@
 //! Exporting our R1CS to bellman
-use ::bellman::{
-    groth16,
-    Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable,
-};
+use ::bellman::{groth16, Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
 use bincode::{deserialize_from, serialize_into};
 use ff::{Field, PrimeField, PrimeFieldBits};
 use fxhash::FxHashMap;
@@ -10,7 +7,7 @@ use gmp_mpfr_sys::gmp::limb_t;
 use group::WnafGroup;
 use log::debug;
 use pairing::{Engine, MultiMillerLoop};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
@@ -21,8 +18,10 @@ use std::str::FromStr;
 use rug::integer::{IsPrime, Order};
 use rug::Integer;
 
-use super::{Lc, ProverDataNew, VerifierDataNew, R1cs, Var, VarType, wit_comp::StagedWitCompEvaluator};
 use super::proof;
+use super::{
+    wit_comp::StagedWitCompEvaluator, Lc, ProverDataNew, R1cs, Var, VarType, VerifierDataNew,
+};
 use crate::ir::term::Value;
 
 /// Convert a (rug) integer to a prime field element.
@@ -98,12 +97,23 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
             let mut evaluator = StagedWitCompEvaluator::new(&self.0.precompute);
             let mut ffs = Vec::new();
             ffs.extend(evaluator.eval_stage(values.clone()).into_iter().cloned());
-            ffs.extend(evaluator.eval_stage(Default::default()).into_iter().cloned());
+            ffs.extend(
+                evaluator
+                    .eval_stage(Default::default())
+                    .into_iter()
+                    .cloned(),
+            );
             ffs
         });
         for (i, var) in self.0.r1cs.vars.iter().copied().enumerate() {
-            assert!(!matches!(var.ty(), VarType::CWit), "Bellman doesn't support committed witnesses");
-            assert!(!matches!(var.ty(), VarType::RoundWit | VarType::Chall), "Bellman doesn't support rounds");
+            assert!(
+                !matches!(var.ty(), VarType::CWit),
+                "Bellman doesn't support committed witnesses"
+            );
+            assert!(
+                !matches!(var.ty(), VarType::RoundWit | VarType::Chall),
+                "Bellman doesn't support rounds"
+            );
             let public = matches!(var.ty(), VarType::Inst);
             let name_f = || format!("{:?}", var);
             let val_f = || {
@@ -200,34 +210,34 @@ mod serde_pf {
     use pairing::Engine;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S: Serializer, E: Engine>(
-        p: &Proof<E>,
-        ser: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer, E: Engine>(p: &Proof<E>, ser: S) -> Result<S::Ok, S::Error> {
         let mut bs: Vec<u8> = Vec::new();
         p.write(&mut bs).unwrap();
         serde_bytes::ByteBuf::from(bs).serialize(ser)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>, E: Engine>(
-        de: D,
-    ) -> Result<Proof<E>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>, E: Engine>(de: D) -> Result<Proof<E>, D::Error> {
         let bs: serde_bytes::ByteBuf = Deserialize::deserialize(de)?;
         Ok(Proof::read(&**bs).unwrap())
     }
 }
-
 
 /// The [::bellman] implementation of Groth16.
 pub struct Bellman<E: Engine>(PhantomData<E>);
 
 /// The pk for [Bellman]
 #[derive(Serialize, Deserialize)]
-pub struct ProvingKey<E: Engine>(ProverDataNew, #[serde(with = "serde_pk")] groth16::Parameters<E>);
+pub struct ProvingKey<E: Engine>(
+    ProverDataNew,
+    #[serde(with = "serde_pk")] groth16::Parameters<E>,
+);
 
 /// The vk for [Bellman]
 #[derive(Serialize, Deserialize)]
-pub struct VerifyingKey<E: Engine>(VerifierDataNew, #[serde(with = "serde_vk")] groth16::VerifyingKey<E>);
+pub struct VerifyingKey<E: Engine>(
+    VerifierDataNew,
+    #[serde(with = "serde_vk")] groth16::VerifyingKey<E>,
+);
 
 /// The proof for [Bellman]
 #[derive(Serialize, Deserialize)]
@@ -250,8 +260,9 @@ where
         p_data: ProverDataNew,
         v_data: VerifierDataNew,
     ) -> (Self::ProvingKey, Self::VerifyingKey) {
-    let rng = &mut rand::thread_rng();
-        let params = groth16::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();
+        let rng = &mut rand::thread_rng();
+        let params =
+            groth16::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();
         let v_params = params.vk.clone();
         (ProvingKey(p_data, params), VerifyingKey(v_data, v_params))
     }
@@ -265,7 +276,10 @@ where
     fn verify(vk: &Self::VerifyingKey, inst: &FxHashMap<String, Value>, pf: &Self::Proof) -> bool {
         let pvk = groth16::prepare_verifying_key(&vk.1);
         let r1cs_inst_map = vk.0.eval(inst);
-        let r1cs_inst: Vec<E::Fr> = r1cs_inst_map.into_iter().map(|i| int_to_ff(i.i())).collect();
+        let r1cs_inst: Vec<E::Fr> = r1cs_inst_map
+            .into_iter()
+            .map(|i| int_to_ff(i.i()))
+            .collect();
         groth16::verify_proof(&pvk, &pf.0, &r1cs_inst).is_ok()
     }
 }

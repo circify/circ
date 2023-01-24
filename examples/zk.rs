@@ -10,9 +10,9 @@ use bls12_381::Bls12;
 use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
 
 #[cfg(feature = "spartan")]
-use circ::target::r1cs::spartan;
-#[cfg(feature = "spartan")]
 use circ::ir::term::text::parse_value_map;
+#[cfg(feature = "spartan")]
+use circ::target::r1cs::spartan;
 
 #[derive(Debug, Parser)]
 #[command(name = "zk", about = "The CirC ZKP runner")]

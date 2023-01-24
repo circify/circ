@@ -20,7 +20,7 @@ use ff::Field;
 use paste::paste;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Display, Debug, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use std::sync::Arc;
 
