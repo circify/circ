@@ -70,7 +70,7 @@ impl StagedWitComp {
 
 /// Builder interface
 impl StagedWitComp {
-    fn step_args<'a>(&'a self, step_idx: usize) -> impl Iterator<Item = usize> + 'a {
+    fn step_args(&self, step_idx: usize) -> impl Iterator<Item = usize> + '_ {
         assert!(step_idx < self.steps.len());
         let args_end = self.steps[step_idx].1;
         let args_start = if step_idx == 0 {

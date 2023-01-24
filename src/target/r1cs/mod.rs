@@ -453,7 +453,7 @@ impl R1csFinal {
     /// Check all assertions
     fn check_all(&self, values: &HashMap<Var, FieldV>) {
         for (a, b, c) in &self.constraints {
-            self.check(a, b, c, &values)
+            self.check(a, b, c, values)
         }
     }
 }
@@ -730,8 +730,7 @@ impl Vars {
                     .chain(self.cw.iter().flat_map(|b| b.iter().copied()))
                     .chain(
                         self.rounds
-                            .iter()
-                            .next()
+                            .first()
                             .into_iter()
                             .flat_map(|p| p.0.iter().copied()),
                     ),
@@ -807,13 +806,13 @@ impl R1cs {
         }
     }
 
-    fn insts_iter<'a>(&'a self) -> impl Iterator<Item = Var> + 'a {
+    fn insts_iter(&self) -> impl Iterator<Item = Var> + '_ {
         (0..self.num_insts)
             .map(|i| Var::new(VarType::Inst, i))
             .filter(move |v| self.idx_to_sig.contains_key(v))
     }
 
-    fn final_wits_iter<'a>(&'a self) -> impl Iterator<Item = Var> + 'a {
+    fn final_wits_iter(&self) -> impl Iterator<Item = Var> + '_ {
         (0..self.num_final_wits)
             .map(|i| Var::new(VarType::FinalWit, i))
             .filter(move |v| self.idx_to_sig.contains_key(v))
@@ -972,7 +971,7 @@ impl R1cs {
             if !matches!(var.ty(), VarType::Chall)
                 && (!public_signals_only || matches!(var.ty(), VarType::Inst))
             {
-                let sig_name = self.idx_to_sig.get_fwd(&var).unwrap();
+                let sig_name = self.idx_to_sig.get_fwd(var).unwrap();
                 if !precompute.outputs().contains_key(sig_name) {
                     precompute.add_output(sig_name.clone(), term.clone());
                 }

@@ -1367,7 +1367,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
         // tuple
-        Op::Tuple => Value::Tuple(args.into_iter().map(|a| (*a).clone()).collect()),
+        Op::Tuple => Value::Tuple(args.iter().map(|a| (*a).clone()).collect()),
         Op::Field(i) => {
             let t = args[0].as_tuple();
             assert!(i < &t.len(), "{} out of bounds for {} on {:?}", i, op, args);
@@ -1399,9 +1399,9 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             //  term_vecs[i] will store a vector of all the i-th index entries of the array arguments
             let mut arg_vecs: Vec<Vec<Value>> = vec![Vec::new(); args[0].as_array().size];
 
-            for i in 0..arg_cnt {
-                let arr = args[i].as_array().clone();
-                let iter = match args[i].sort() {
+            for arg in args {
+                let arr = arg.as_array().clone();
+                let iter = match arg.sort() {
                     Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
                     _ => panic!("Input type should be Array"),
                 };
@@ -1425,7 +1425,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
 
             for (i, idxval) in iter {
                 let args: Vec<&Value> = arg_vecs[i].iter().collect();
-                let val = eval_op(&*inner_op, &args, var_vals);
+                let val = eval_op(inner_op, &args, var_vals);
                 res.map.insert(idxval, val);
             }
             Value::Array(res)
