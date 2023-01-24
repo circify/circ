@@ -288,7 +288,10 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
-                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(self.ident_string(name), FieldT::from(self.int(field)))),
+                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(
+                    self.ident_string(name),
+                    FieldT::from(self.int(field)),
+                )),
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
@@ -690,6 +693,10 @@ impl<'src> IrInterp<'src> {
             let inputs = self.var_decl_list(&tts[1]);
             let outputs = self.var_decl_list(&tts[2]);
             let tuple_term = self.term(&tts[3]);
+            assert!(
+                matches!(check(&tuple_term), Sort::Tuple(..)),
+                "precompute output term must be a tuple"
+            );
             assert!(
                 outputs.len() == tuple_term.cs().len(),
                 "output list has {} items, tuple has {}",

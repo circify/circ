@@ -265,7 +265,7 @@ fn main() {
         } => {
             println!("Converting to r1cs");
             let cs = cs.get("main");
-            let mut r1cs = to_r1cs(cs.clone(), cfg());
+            let mut r1cs = to_r1cs(&cs, cfg());
 
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             r1cs = reduce_linearities(r1cs, cfg());

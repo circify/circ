@@ -1,5 +1,8 @@
 //! Exporting our R1CS to bellman
-use ::bellman::{mirage, cc::{CcCircuit, CcConstraintSystem}, SynthesisError};
+use ::bellman::{
+    cc::{CcCircuit, CcConstraintSystem},
+    mirage, SynthesisError,
+};
 use ff::{PrimeField, PrimeFieldBits};
 use fxhash::FxHashMap;
 use group::WnafGroup;
@@ -16,12 +19,20 @@ use std::str::FromStr;
 use rug::Integer;
 
 use super::proof;
-use super::{
-    wit_comp::StagedWitCompEvaluator, ProverDataNew, VarType, VerifierDataNew,
-};
+use super::{wit_comp::StagedWitCompEvaluator, ProverDataNew, VarType, VerifierDataNew};
 use crate::ir::term::Value;
 
-use super::bellman::{int_to_ff, lc_to_bellman, get_modulus};
+use super::bellman::{get_modulus, int_to_ff, lc_to_bellman};
+
+fn ff_to_int<F: PrimeFieldBits>(f: F) -> Integer {
+    let mut buffer = vec![];
+    use std::io::Read;
+    f.to_le_bits()
+        .as_bitslice()
+        .read_to_end(&mut buffer)
+        .unwrap();
+    Integer::from_digits(&buffer, rug::integer::Order::Lsf)
+}
 
 /// A synthesizable bellman circuit.
 ///
@@ -29,7 +40,7 @@ use super::bellman::{int_to_ff, lc_to_bellman, get_modulus};
 /// bellman prover.
 pub struct SynthInput<'a>(&'a ProverDataNew, Option<&'a FxHashMap<String, Value>>);
 
-impl<'a, F: PrimeField> CcCircuit<F> for SynthInput<'a> {
+impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a> {
     #[track_caller]
     fn synthesize<CS>(self, cs: &mut CS) -> std::result::Result<(), SynthesisError>
     where
@@ -39,50 +50,72 @@ impl<'a, F: PrimeField> CcCircuit<F> for SynthInput<'a> {
         assert_eq!(
             self.0.r1cs.field.modulus(),
             &f_mod,
-            "\nR1CS has modulus \n{},\n but Bellman CS expects \n{}",
+            "\nR1CS has modulus \n{},\n but mirage CS expects \n{}",
             self.0.r1cs.field,
             f_mod
         );
         let mut vars = HashMap::with_capacity(self.0.r1cs.vars.len());
-        let values: Option<Vec<_>> = self.1.map(|values| {
-            let mut evaluator = StagedWitCompEvaluator::new(&self.0.precompute);
-            let mut ffs = Vec::new();
-            ffs.extend(evaluator.eval_stage(values.clone()).into_iter().cloned());
-            ffs.extend(
-                evaluator
-                    .eval_stage(Default::default())
-                    .into_iter()
-                    .cloned(),
-            );
-            ffs
-        });
-        for (i, var) in self.0.r1cs.vars.iter().copied().enumerate() {
-            assert!(
-                !matches!(var.ty(), VarType::CWit),
-                "Bellman doesn't support committed witnesses"
-            );
-            assert!(
-                !matches!(var.ty(), VarType::RoundWit | VarType::Chall),
-                "Bellman doesn't support rounds"
-            );
-            let public = matches!(var.ty(), VarType::Inst);
-            let name_f = || format!("{:?}", var);
-            let val_f = || {
-                Ok({
-                    let i_val = &values.as_ref().expect("missing values")[i];
-                    let ff_val = int_to_ff(i_val.as_pf().into());
-                    debug!("value : {:?} -> {:?} ({})", var, ff_val, i_val);
-                    ff_val
-                })
-            };
-            debug!("var: {:?}, public: {}", var, public);
-            let v = if public {
-                cs.alloc_input(name_f, val_f)?
+        // (assignment values, evaluator, next evaluator inputs)
+        let mut wit_comp: Option<(Vec<Value>, StagedWitCompEvaluator<'a>, FxHashMap<String, Value>)> =
+            self.1.map(|inputs| {
+                (
+                    Vec::new(),
+                    StagedWitCompEvaluator::new(&self.0.precompute),
+                    inputs.clone(),
+                )
+            });
+        let mut var_idx = 0;
+        let num_stages = self.0.precompute.stage_sizes().count();
+        for (i, num_vars) in self.0.precompute.stage_sizes().enumerate() {
+            if let Some((ref mut var_values, ref mut evaluator, ref mut inputs)) = wit_comp.as_mut()
+            {
+                var_values.extend(
+                    evaluator
+                        .eval_stage(std::mem::take(inputs))
+                        .into_iter()
+                        .cloned(),
+                );
+            }
+            let num_challs = if i + 1 < num_stages {
+                self.0.precompute.num_stage_inputs(i + 1)
             } else {
-                cs.alloc(name_f, val_f)?
+                0
             };
-            vars.insert(var, v);
+            for j in 0..(num_vars + num_challs) {
+                let var = self.0.r1cs.vars[var_idx];
+                let name_f = || format!("{:?}", var);
+                let val_f = || {
+                    Ok({
+                        let i_val = &wit_comp.as_ref().expect("missing values").0[var_idx];
+                        let ff_val = int_to_ff(i_val.as_pf().into());
+                        debug!("value : {:?} -> {:?} ({})", var, ff_val, i_val);
+                        ff_val
+                    })
+                };
+                let v = match var.ty() {
+                    VarType::Inst => cs.alloc_input(name_f, val_f)?,
+                    VarType::RoundWit => cs.alloc(name_f, val_f)?,
+                    VarType::FinalWit => cs.alloc(name_f, val_f)?,
+                    VarType::Chall => {
+                        let (v, val) = cs.alloc_random(name_f)?;
+                        if let Some((ref mut values, _, ref mut inputs)) = wit_comp.as_mut() {
+                            let val = Value::Field(self.0.r1cs.field.new_v(ff_to_int(val.unwrap())));
+                            values.push(val.clone());
+                            let name = self.0.r1cs.names.get(&var).unwrap();
+                            inputs.insert(name.to_owned(), val);
+                        }
+                        v
+                    },
+                    VarType::CWit => unimplemented!(),
+                };
+                vars.insert(var, v);
+                var_idx += 1;
+                if j + 1 == num_vars && num_challs > 0 {
+                    cs.end_aux_block(|| format!("block {}", i-1))?;
+                }
+            }
         }
+
         for (i, (a, b, c)) in self.0.r1cs.constraints.iter().enumerate() {
             cs.enforce(
                 || format!("con{}", i),
@@ -100,7 +133,7 @@ impl<'a, F: PrimeField> CcCircuit<F> for SynthInput<'a> {
     }
 
     fn num_aux_blocks(&self) -> usize {
-        self.0.r1cs.num_cwits.len() + self.0.r1cs.num_chall_rounds
+        self.0.precompute.stage_sizes().count() - 2
     }
 }
 
@@ -178,27 +211,27 @@ mod serde_pf {
 }
 
 /// The [::bellman] implementation of Groth16.
-pub struct Bellman<E: Engine>(PhantomData<E>);
+pub struct Mirage<E: Engine>(PhantomData<E>);
 
-/// The pk for [Bellman]
+/// The pk for [mirage]
 #[derive(Serialize, Deserialize)]
 pub struct ProvingKey<E: Engine>(
     ProverDataNew,
     #[serde(with = "serde_pk")] mirage::Parameters<E>,
 );
 
-/// The vk for [Bellman]
+/// The vk for [mirage]
 #[derive(Serialize, Deserialize)]
 pub struct VerifyingKey<E: Engine>(
     VerifierDataNew,
     #[serde(with = "serde_vk")] mirage::VerifyingKey<E>,
 );
 
-/// The proof for [Bellman]
+/// The proof for [mirage]
 #[derive(Serialize, Deserialize)]
 pub struct Proof<E: Engine>(#[serde(with = "serde_pf")] mirage::Proof<E>);
 
-impl<E: Engine> proof::ProofSystem for Bellman<E>
+impl<E: Engine> proof::ProofSystem for Mirage<E>
 where
     E: MultiMillerLoop,
     E::G1: WnafGroup,
@@ -271,6 +304,13 @@ mod test {
         let by_fn = int_to_ff::<Scalar>(i.clone());
         let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
         by_fn == by_str
+    }
+
+    #[quickcheck]
+    fn roundtrip_random(BlsScalar(i): BlsScalar) -> bool {
+        let ff = int_to_ff::<Scalar>(i.clone());
+        let i2 = ff_to_int(ff);
+        i == i2
     }
 
     fn convert(i: Integer) {

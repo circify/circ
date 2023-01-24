@@ -142,10 +142,9 @@ pub struct R1cs {
 pub struct R1csFinal {
     field: FieldT,
     vars: Vec<Var>,
-    num_cwits: Vec<usize>,
-    num_chall_rounds: usize,
     constraints: Vec<(Lc, Lc, Lc)>,
     names: HashMap<Var, String>,
+    // chall_precompute_names: HashMap<Var, String>,
 }
 
 /// A variable
@@ -478,7 +477,11 @@ impl ProverDataNew {
                     if !matches!(self.r1cs.vars[next_var_i].ty(), VarType::Chall) {
                         break;
                     }
-                    var_values.insert(self.r1cs.vars[next_var_i], self.r1cs.field.new_v(1));
+                    let var = self.r1cs.vars[next_var_i];
+                    let name = self.r1cs.names.get(&var).unwrap().clone();
+                    let val = self.r1cs.field.new_v(1);
+                    var_values.insert(var, val.clone());
+                    inputs.insert(name, Value::Field(val));
                 }
             }
         }
@@ -720,49 +723,6 @@ impl MulAssign<isize> for Lc {
     }
 }
 
-#[derive(Default)]
-struct Vars {
-    inst: Vec<Var>,
-    cw: Vec<Vec<Var>>,
-    rounds: Vec<(Vec<Var>, Vec<Var>)>,
-    finalw: Vec<Var>,
-}
-
-impl Vars {
-    fn before_chall<'a>(&'a self, n: usize) -> Box<dyn Iterator<Item = Var> + 'a> {
-        if n == 0 {
-            Box::new(
-                self.inst
-                    .iter()
-                    .copied()
-                    .chain(self.cw.iter().flat_map(|b| b.iter().copied()))
-                    .chain(
-                        self.rounds
-                            .first()
-                            .into_iter()
-                            .flat_map(|p| p.0.iter().copied()),
-                    ),
-            )
-        } else if n < self.rounds.len() {
-            Box::new(self.rounds[n].0.iter().copied())
-        } else {
-            Box::new(self.finalw.iter().copied())
-        }
-    }
-    fn all(self) -> Vec<Var> {
-        self.inst
-            .into_iter()
-            .chain(self.cw.into_iter().flatten())
-            .chain(
-                self.rounds
-                    .into_iter()
-                    .flat_map(|r| r.0.into_iter().chain(r.1)),
-            )
-            .chain(self.finalw)
-            .collect()
-    }
-}
-
 impl R1cs {
     /// Check `a * b = c` in this constraint system.
     pub fn check(&self, a: &Lc, b: &Lc, c: &Lc, values: &HashMap<Var, FieldV>) {
@@ -830,54 +790,54 @@ impl R1cs {
             .filter(move |v| self.idx_to_sig.contains_key(v))
     }
 
-    fn cwits(&self) -> Vec<Vec<Var>> {
-        let mut out = Vec::new();
-        let mut i = 0;
-        for cw in &self.num_cwits {
-            let mut block = Vec::new();
-            for j in 0..*cw {
-                let v = Var::new(VarType::CWit, i + j);
-                assert!(self.idx_to_sig.contains_key(&v));
-                block.push(v);
-            }
-            out.push(block);
-            i += *cw;
-        }
-        out
+    fn cwits_iter(&self) -> impl Iterator<Item = Var> + '_ {
+        (0..self.next_cwit)
+            .map(|i| Var::new(VarType::CWit, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
     }
 
-    fn rounds(&self) -> Vec<(Vec<Var>, Vec<Var>)> {
-        let mut out = Vec::new();
-        let mut round_wit_start = 0;
-        let mut round_chall_start = 0;
-        for i in 0..self.round_chall_ends.len() {
-            let mut w = Vec::new();
-            for j in round_wit_start..self.round_wit_ends[i] {
-                let v = Var::new(VarType::RoundWit, j);
-                assert!(self.idx_to_sig.contains_key(&v));
-                w.push(v);
-            }
-            let c = Vec::new();
-            for j in round_chall_start..self.round_chall_ends[i] {
-                let v = Var::new(VarType::Chall, j);
-                assert!(self.idx_to_sig.contains_key(&v));
-                w.push(v);
-            }
-            round_wit_start = self.round_wit_ends[i];
-            round_chall_start = self.round_chall_ends[i];
-            out.push((w, c));
-        }
-        out
+    fn challs_iter(&self, round: usize) -> impl Iterator<Item = Var> + '_ {
+        let start = if round == 0 {
+            0
+        } else {
+            self.round_chall_ends[round - 1]
+        };
+        let end = self.round_chall_ends[round];
+        (start..end)
+            .map(|i| Var::new(VarType::Chall, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
     }
 
-    /// Returns the intial
-    fn round_structure(&self) -> Vars {
-        Vars {
-            inst: self.insts_iter().collect(),
-            cw: self.cwits(),
-            rounds: self.rounds(),
-            finalw: self.final_wits_iter().collect(),
+    fn round_wits_iter(&self, round: usize) -> impl Iterator<Item = Var> + '_ {
+        let start = if round == 0 {
+            0
+        } else {
+            self.round_wit_ends[round - 1]
+        };
+        let end = self.round_wit_ends[round];
+        (start..end)
+            .map(|i| Var::new(VarType::RoundWit, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
+    }
+
+    /// Returns a list of (signal list, challenge list) pairs.
+    /// The prove computes the values of signals.
+    /// The proof system computes the values of challenges.
+    /// All signals are computed from (a) prover inputs and (b) challenge values.
+    fn stage_vars(&self) -> Vec<(Vec<Var>, Vec<Var>)> {
+        let mut out = Vec::new();
+        out.push((
+            self.insts_iter().chain(self.cwits_iter()).collect(),
+            Vec::new(),
+        ));
+        for round_idx in 0..self.round_chall_ends.len() {
+            out.push((
+                self.round_wits_iter(round_idx).collect(),
+                self.challs_iter(round_idx).collect(),
+            ));
         }
+        out.push((self.final_wits_iter().collect(), Vec::new()));
+        out
     }
 
     /// Prover Data
@@ -904,44 +864,36 @@ impl R1cs {
         }
         let mut precompute_map = precompute.flatten();
         let mut comp = wit_comp::StagedWitComp::default();
-        let round_structure = self.round_structure();
-        for chall in round_structure.rounds.iter().flat_map(|r| r.1.iter()) {
-            let name = self.idx_to_sig.get_fwd(chall).unwrap();
-            vars.remove(name);
-        }
-        for round_i in 0..=(round_structure.rounds.len() + 1) {
-            let terms = round_structure
-                .before_chall(round_i)
+        let mut var_sequence = Vec::new();
+        for (computed_in_stage, challs) in self.stage_vars() {
+            let terms = computed_in_stage
+                .iter()
                 .map(|v| {
-                    let name = self.idx_to_sig.get_fwd(&v).unwrap();
+                    let name = self.idx_to_sig.get_fwd(v).unwrap();
                     precompute_map.remove(name).unwrap()
                 })
                 .collect();
             comp.add_stage(std::mem::take(&mut vars), terms);
-            if round_i < round_structure.rounds.len() {
-                vars = round_structure.rounds[round_i]
-                    .1
-                    .iter()
-                    .map(|cvar| {
-                        (
-                            self.idx_to_sig.get_fwd(cvar).unwrap().clone(),
-                            Sort::Field(self.modulus.clone()),
-                        )
-                    })
-                    .collect()
-            }
+            vars = challs
+                .iter()
+                .map(|cvar| {
+                    (
+                        self.idx_to_sig.get_fwd(cvar).unwrap().clone(),
+                        Sort::Field(self.modulus.clone()),
+                    )
+                })
+                .collect();
+            var_sequence.extend(computed_in_stage);
+            var_sequence.extend(challs);
         }
-        let vars = round_structure.all();
         ProverDataNew {
             r1cs: R1csFinal {
                 field: self.modulus.clone(),
-                names: vars
+                names: var_sequence
                     .iter()
                     .map(|v| (*v, self.idx_to_sig.get_fwd(v).unwrap().clone()))
                     .collect(),
-                vars,
-                num_chall_rounds: self.round_chall_ends.len(),
-                num_cwits: self.num_cwits,
+                vars: var_sequence,
                 constraints: self.constraints,
             },
             precompute: comp,
@@ -953,7 +905,9 @@ impl R1cs {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, true);
         let public_inputs = cs.metadata.get_inputs_for_party(None);
+        dbg!(&precompute);
         precompute.restrict_to_inputs(public_inputs);
+        dbg!(&precompute);
         let vars: HashMap<String, Sort> = {
             PostOrderIter::new(precompute.tuple())
                 .filter_map(|t| {
@@ -968,12 +922,12 @@ impl R1cs {
         for c in &self.challenge_names {
             assert!(!vars.contains_key(c));
         }
-        let mut precompute_map = precompute.flatten();
+        let mut precompute_map = dbg!(precompute.flatten());
         let terms = self
             .insts_iter()
             .map(|v| {
                 let name = self.idx_to_sig.get_fwd(&v).unwrap();
-                precompute_map.remove(name).unwrap()
+                precompute_map.remove(dbg!(name)).unwrap()
             })
             .collect();
         let mut comp = wit_comp::StagedWitComp::default();
@@ -987,7 +941,7 @@ impl R1cs {
             if !matches!(var.ty(), VarType::Chall)
                 && (!public_signals_only || matches!(var.ty(), VarType::Inst))
             {
-                let sig_name = self.idx_to_sig.get_fwd(var).unwrap();
+                let sig_name = dbg!(self.idx_to_sig.get_fwd(var).unwrap());
                 if !precompute.outputs().contains_key(sig_name) {
                     precompute.add_output(sig_name.clone(), term.clone());
                 }

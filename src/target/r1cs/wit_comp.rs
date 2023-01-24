@@ -66,9 +66,19 @@ impl StagedWitComp {
         self.steps.push((term.op().clone(), self.step_args.len()));
         self.term_to_step.insert(term, step_idx);
     }
+
+    /// How many stages are there?
+    pub fn stage_sizes(&self) -> impl Iterator<Item = usize> + '_ {
+        self.stages.iter().map(|s| s.num_outputs)
+    }
+
+    /// How many inputs are there for this stage?
+    pub fn num_stage_inputs(&self, n: usize) -> usize {
+        self.stages[n].inputs.len()
+    }
 }
 
-/// Builder interface
+/// Evaluator interface
 impl StagedWitComp {
     fn step_args(&self, step_idx: usize) -> impl Iterator<Item = usize> + '_ {
         assert!(step_idx < self.steps.len());
@@ -137,15 +147,17 @@ impl<'a> StagedWitCompEvaluator<'a> {
         let stage = &self.comp.stages[self.stages_evaluated];
         let num_outputs = stage.num_outputs;
         self.variable_values.extend(inputs);
-        let max_step = (0..num_outputs)
-            .map(|i| {
-                let new_output_i = i + self.outputs_evaluted;
-                self.comp.ouput_steps[new_output_i]
-            })
-            .max()
-            .unwrap_or(self.outputs_evaluted);
-        while self.step_values.len() <= max_step {
-            self.eval_step();
+        if num_outputs > 0 {
+            let max_step = (0..num_outputs)
+                .map(|i| {
+                    let new_output_i = i + self.outputs_evaluted;
+                    self.comp.ouput_steps[new_output_i]
+                })
+                .max()
+                .unwrap();
+            while self.step_values.len() <= max_step {
+                self.eval_step();
+            }
         }
         self.outputs_evaluted += num_outputs;
         self.stages_evaluated += 1;

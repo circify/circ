@@ -73,6 +73,7 @@ impl RewritePass for Pass {
             for (name, term) in new_var_reqs {
                 computation.extend_precomputation(name, term);
             }
+            //computation.metadata.remove_var(name);
             Some(new)
         } else {
             None
@@ -105,7 +106,7 @@ pub fn assert_all_vars_are_scalars(cs: &Computation) {
 
 /// Check that every variables is a scalar.
 fn remove_non_scalar_vars_from_main_computation(cs: &mut Computation) {
-    for input in cs.metadata.ordered_public_inputs() {
+    for input in cs.metadata.ordered_inputs() {
         if !check(&input).is_scalar() {
             cs.metadata.remove_var(input.as_var_name());
         }
