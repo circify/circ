@@ -7,12 +7,11 @@ use std::path::PathBuf;
 #[cfg(feature = "bellman")]
 use bls12_381::Bls12;
 #[cfg(feature = "bellman")]
-use circ::target::r1cs::bellman;
+use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
 
 #[cfg(feature = "spartan")]
 use circ::target::r1cs::spartan;
-
-#[cfg(any(feature = "bellman", feature = "spartan"))]
+#[cfg(feature = "spartan")]
 use circ::ir::term::text::parse_value_map;
 
 #[derive(Debug, Parser)]
@@ -55,15 +54,16 @@ fn main() {
     match opts.action {
         #[cfg(feature = "bellman")]
         ProofAction::Prove => {
-            let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
             println!("Proving");
-            bellman::prove::<Bls12, _, _>(opts.prover_key, opts.proof, &input_map).unwrap();
+            Bellman::<Bls12>::prove_fs(opts.prover_key, opts.proof, opts.inputs).unwrap();
         }
         #[cfg(feature = "bellman")]
         ProofAction::Verify => {
-            let input_map = parse_value_map(&std::fs::read(opts.inputs).unwrap());
             println!("Verifying");
-            bellman::verify::<Bls12, _, _>(opts.verifier_key, opts.proof, &input_map).unwrap();
+            assert!(
+                Bellman::<Bls12>::verify_fs(opts.verifier_key, opts.inputs, opts.proof).unwrap(),
+                "invalid proof"
+            );
         }
         #[cfg(feature = "spartan")]
         ProofAction::Spartan => {

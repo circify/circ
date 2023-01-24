@@ -1,14 +1,5 @@
 #![allow(unused_imports)]
 #[cfg(feature = "bellman")]
-use bellman::{
-    gadgets::test::TestConstraintSystem,
-    groth16::{
-        create_random_proof, generate_parameters, generate_random_parameters,
-        prepare_verifying_key, verify_proof, Parameters, Proof, VerifyingKey,
-    },
-    Circuit,
-};
-#[cfg(feature = "bellman")]
 use bls12_381::{Bls12, Scalar};
 use circ::cfg::{
     cfg,
@@ -34,10 +25,10 @@ use circ::ir::{
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
-#[cfg(feature = "bellman")]
-use circ::target::r1cs::bellman::gen_params;
 #[cfg(feature = "spartan")]
 use circ::target::r1cs::spartan::write_data;
+#[cfg(feature = "bellman")]
+use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs};
 #[cfg(feature = "smt")]
@@ -276,10 +267,7 @@ fn main() {
             let cs = cs.get("main");
             let mut r1cs = to_r1cs(cs.clone(), cfg());
 
-            println!(
-                "Pre-opt R1cs size: {}",
-                r1cs.constraints().len()
-            );
+            println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             r1cs = reduce_linearities(r1cs, cfg());
 
             println!("Final R1cs size: {}", r1cs.constraints().len());
@@ -289,11 +277,11 @@ fn main() {
                 #[cfg(feature = "bellman")]
                 ProofAction::Setup => {
                     println!("Generating Parameters");
-                    gen_params::<Bls12, _, _>(
+                    Bellman::<Bls12>::setup_fs(
+                        prover_data,
+                        verifier_data,
                         prover_key,
                         verifier_key,
-                        &prover_data,
-                        &verifier_data,
                     )
                     .unwrap();
                 }
