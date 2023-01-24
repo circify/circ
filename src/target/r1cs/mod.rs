@@ -15,6 +15,8 @@ use crate::ir::term::*;
 
 #[cfg(feature = "bellman")]
 pub mod bellman;
+#[cfg(feature = "bellman")]
+pub mod mirage;
 pub mod opt;
 pub mod proof;
 #[cfg(feature = "spartan")]
@@ -143,6 +145,7 @@ pub struct R1csFinal {
     field: FieldT,
     vars: Vec<Var>,
     num_cwits: Vec<usize>,
+    num_chall_rounds: usize,
     constraints: Vec<(Lc, Lc, Lc)>,
     names: HashMap<Var, String>,
 }
@@ -938,6 +941,7 @@ impl R1cs {
                     .map(|v| (*v, self.idx_to_sig.get_fwd(v).unwrap().clone()))
                     .collect(),
                 vars,
+                num_chall_rounds: self.round_chall_ends.len(),
                 num_cwits: self.num_cwits,
                 constraints: self.constraints,
             },

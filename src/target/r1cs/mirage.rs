@@ -1,5 +1,5 @@
 //! Exporting our R1CS to bellman
-use ::bellman::{groth16, Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
+use ::bellman::{mirage, cc::{CcCircuit, CcConstraintSystem}, LinearCombination, SynthesisError, Variable};
 use bincode::{deserialize_from, serialize_into};
 use ff::{Field, PrimeField, PrimeFieldBits};
 use fxhash::FxHashMap;
@@ -24,53 +24,7 @@ use super::{
 };
 use crate::ir::term::Value;
 
-/// Convert a (rug) integer to a prime field element.
-pub(super) fn int_to_ff<F: PrimeField>(i: Integer) -> F {
-    let mut accumulator = F::from(0);
-    let limb_bits = (std::mem::size_of::<limb_t>() as u64) << 3;
-    let limb_base = F::from(2).pow_vartime([limb_bits]);
-    // as_ref yeilds a least-significant-first array.
-    for digit in i.as_ref().iter().rev() {
-        accumulator *= limb_base;
-        accumulator += F::from(*digit);
-    }
-    accumulator
-}
-
-/// Convert one our our linear combinations to a bellman linear combination.
-/// Takes a zero linear combination. We could build it locally, but bellman provides one, so...
-pub(super) fn lc_to_bellman<F: PrimeField, CS: ConstraintSystem<F>>(
-    vars: &HashMap<Var, Variable>,
-    lc: &Lc,
-    zero_lc: LinearCombination<F>,
-) -> LinearCombination<F> {
-    let mut lc_bellman = zero_lc;
-    // This zero test is needed until https://github.com/zkcrypto/bellman/pull/78 is resolved
-    if !lc.constant.is_zero() {
-        lc_bellman = lc_bellman + (int_to_ff((&lc.constant).into()), CS::one());
-    }
-    for (v, c) in &lc.monomials {
-        // ditto
-        if !c.is_zero() {
-            lc_bellman = lc_bellman + (int_to_ff(c.into()), *vars.get(v).unwrap());
-        }
-    }
-    lc_bellman
-}
-
-// hmmm... this should work essentially all the time, I think
-pub(super) fn get_modulus<F: Field + PrimeField>() -> Integer {
-    let neg_1_f = -F::one();
-    let p_lsf: Integer = Integer::from_digits(neg_1_f.to_repr().as_ref(), Order::Lsf) + 1;
-    let p_msf: Integer = Integer::from_digits(neg_1_f.to_repr().as_ref(), Order::Msf) + 1;
-    if p_lsf.is_probably_prime(30) != IsPrime::No {
-        p_lsf
-    } else if p_msf.is_probably_prime(30) != IsPrime::No {
-        p_msf
-    } else {
-        panic!("could not determine ff::Field byte order")
-    }
-}
+use super::bellman::{int_to_ff, lc_to_bellman, get_modulus};
 
 /// A synthesizable bellman circuit.
 ///
@@ -78,11 +32,11 @@ pub(super) fn get_modulus<F: Field + PrimeField>() -> Integer {
 /// bellman prover.
 pub struct SynthInput<'a>(&'a ProverDataNew, Option<&'a FxHashMap<String, Value>>);
 
-impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
+impl<'a, F: PrimeField> CcCircuit<F> for SynthInput<'a> {
     #[track_caller]
     fn synthesize<CS>(self, cs: &mut CS) -> std::result::Result<(), SynthesisError>
     where
-        CS: ConstraintSystem<F>,
+        CS: CcConstraintSystem<F>,
     {
         let f_mod = get_modulus::<F>();
         assert_eq!(
@@ -147,6 +101,10 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
         );
         Ok(())
     }
+
+    fn num_aux_blocks(&self) -> usize {
+        self.0.r1cs.num_cwits.len() + self.0.r1cs.num_chall_rounds
+    }
 }
 
 /// Convert a (rug) integer to a prime field element.
@@ -162,7 +120,7 @@ pub fn parse_instance<P: AsRef<Path>, F: PrimeField>(path: P) -> Vec<F> {
 }
 
 mod serde_pk {
-    use bellman::groth16::Parameters;
+    use bellman::mirage::Parameters;
     use pairing::Engine;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -184,7 +142,7 @@ mod serde_pk {
 }
 
 mod serde_vk {
-    use bellman::groth16::VerifyingKey;
+    use bellman::mirage::VerifyingKey;
     use pairing::Engine;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -206,7 +164,7 @@ mod serde_vk {
 }
 
 mod serde_pf {
-    use bellman::groth16::Proof;
+    use bellman::mirage::Proof;
     use pairing::Engine;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -229,19 +187,19 @@ pub struct Bellman<E: Engine>(PhantomData<E>);
 #[derive(Serialize, Deserialize)]
 pub struct ProvingKey<E: Engine>(
     ProverDataNew,
-    #[serde(with = "serde_pk")] groth16::Parameters<E>,
+    #[serde(with = "serde_pk")] mirage::Parameters<E>,
 );
 
 /// The vk for [Bellman]
 #[derive(Serialize, Deserialize)]
 pub struct VerifyingKey<E: Engine>(
     VerifierDataNew,
-    #[serde(with = "serde_vk")] groth16::VerifyingKey<E>,
+    #[serde(with = "serde_vk")] mirage::VerifyingKey<E>,
 );
 
 /// The proof for [Bellman]
 #[derive(Serialize, Deserialize)]
-pub struct Proof<E: Engine>(#[serde(with = "serde_pf")] groth16::Proof<E>);
+pub struct Proof<E: Engine>(#[serde(with = "serde_pf")] mirage::Proof<E>);
 
 impl<E: Engine> proof::ProofSystem for Bellman<E>
 where
@@ -262,7 +220,7 @@ where
     ) -> (Self::ProvingKey, Self::VerifyingKey) {
         let rng = &mut rand::thread_rng();
         let params =
-            groth16::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();
+            mirage::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();
         let v_params = params.vk.clone();
         (ProvingKey(p_data, params), VerifyingKey(v_data, v_params))
     }
@@ -270,17 +228,17 @@ where
     fn prove(pk: &Self::ProvingKey, witness: &FxHashMap<String, Value>) -> Self::Proof {
         let rng = &mut rand::thread_rng();
         pk.0.check_all(witness);
-        Proof(groth16::create_random_proof(SynthInput(&pk.0, Some(witness)), &pk.1, rng).unwrap())
+        Proof(mirage::create_random_proof(SynthInput(&pk.0, Some(witness)), &pk.1, rng).unwrap())
     }
 
     fn verify(vk: &Self::VerifyingKey, inst: &FxHashMap<String, Value>, pf: &Self::Proof) -> bool {
-        let pvk = groth16::prepare_verifying_key(&vk.1);
+        let pvk = mirage::prepare_verifying_key(&vk.1);
         let r1cs_inst_map = vk.0.eval(inst);
         let r1cs_inst: Vec<E::Fr> = r1cs_inst_map
             .into_iter()
             .map(|i| int_to_ff(i.i()))
             .collect();
-        groth16::verify_proof(&pvk, &pf.0, &r1cs_inst).is_ok()
+        mirage::verify_proof(&pvk, &pf.0, &r1cs_inst).is_ok()
     }
 }
 

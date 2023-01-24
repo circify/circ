@@ -77,3 +77,8 @@ pub trait ProofSystem {
         Ok(Self::verify(&vk, &instance, &pf))
     }
 }
+
+#[cfg(test)]
+mod test {
+    // TODO: generic proof system test.
+}
