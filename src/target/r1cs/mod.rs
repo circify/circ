@@ -6,8 +6,6 @@ use log::{debug, trace};
 use paste::paste;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
-use std::cell::Cell;
-use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -495,6 +493,7 @@ struct BiMap<S: Hash + Eq + Clone, T: Hash + Eq + Clone> {
     rev: HashMap<T, S>,
 }
 
+#[allow(dead_code)]
 impl<S: Hash + Eq + Clone + Debug, T: Hash + Eq + Clone + Debug> BiMap<S, T> {
     fn new() -> Self {
         Self {
@@ -611,13 +610,13 @@ macro_rules! arith_impl {
                     }
                     for (i, v) in &other.monomials {
                         match self.monomials.entry(*i) {
-                            Entry::Occupied(mut e) => {
+                            std::collections::hash_map::Entry::Occupied(mut e) => {
                                 e.get_mut().[<$fn _assign>](v);
                                 if e.get().is_zero() {
                                     e.remove_entry();
                                 }
                             }
-                            Entry::Vacant(e) => {
+                            std::collections::hash_map::Entry::Vacant(e) => {
                                 let mut m = self.modulus.zero();
                                 m.[<$fn _assign>](v);
                                 e.insert(m);
@@ -858,7 +857,7 @@ impl R1cs {
                 assert!(self.idx_to_sig.contains_key(&v));
                 w.push(v);
             }
-            let mut c = Vec::new();
+            let c = Vec::new();
             for j in round_chall_start..self.round_chall_ends[i] {
                 let v = Var::new(VarType::Chall, j);
                 assert!(self.idx_to_sig.contains_key(&v));
@@ -955,7 +954,7 @@ impl R1cs {
         self.extend_precomputation(&mut precompute, true);
         let public_inputs = cs.metadata.get_inputs_for_party(None);
         precompute.restrict_to_inputs(public_inputs);
-        let mut vars: HashMap<String, Sort> = {
+        let vars: HashMap<String, Sort> = {
             PostOrderIter::new(precompute.tuple())
                 .filter_map(|t| {
                     if let Op::Var(n, s) = t.op() {

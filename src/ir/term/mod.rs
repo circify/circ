@@ -1377,7 +1377,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         Op::PfChallenge(name, field) => {
             use rand::SeedableRng;
             use rand_chacha::ChaChaRng;
-            use std::hash::{BuildHasher, Hasher, Hash};
+            use std::hash::{Hasher, Hash};
             // hash the string
             let mut hasher = fxhash::FxHasher::default();
             name.hash(&mut hasher);
@@ -1417,8 +1417,6 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             a.select(i)
         }
         Op::Map(inner_op) => {
-            let arg_cnt = args.len();
-
             //  term_vecs[i] will store a vector of all the i-th index entries of the array arguments
             let mut arg_vecs: Vec<Vec<Value>> = vec![Vec::new(); args[0].as_array().size];
 

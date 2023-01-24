@@ -1,9 +1,12 @@
 //! Optimizations over R1CS
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use log::debug;
+
+use std::collections::hash_map::Entry;
+
 use super::*;
 use crate::cfg::CircCfg;
 use crate::util::once::OnceQueue;
-use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use log::debug;
 
 struct LinReducer {
     r1cs: R1cs,

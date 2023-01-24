@@ -4,7 +4,6 @@
 //! thesis](https://github.com/circify/circ/tree/master/doc/resources/braun-bs-thesis.pdf)
 //! is a good intro to how this process works.
 use crate::cfg::CircCfg;
-use crate::ir::term::precomp::PreComp;
 use crate::ir::term::*;
 use crate::target::bitsize;
 use crate::target::r1cs::*;
@@ -41,7 +40,6 @@ enum EmbeddedTerm {
 struct ToR1cs<'cfg> {
     r1cs: R1cs,
     cache: TermMap<EmbeddedTerm>,
-    wit_ext: PreComp,
     public_inputs: FxHashSet<String>,
     next_idx: usize,
     zero: TermLc,
@@ -64,7 +62,6 @@ impl<'cfg> ToR1cs<'cfg> {
         Self {
             r1cs,
             cache: TermMap::default(),
-            wit_ext: precomp::PreComp::new(),
             public_inputs,
             next_idx: 0,
             zero,
@@ -83,7 +80,6 @@ impl<'cfg> ToR1cs<'cfg> {
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
         self.r1cs.add_var(n.clone(), comp.clone(), ty);
-        // self.wit_ext.add_output(n.clone(), comp.clone());
         debug!("fresh: {}", n);
         TermLc(comp, self.r1cs.signal_lc(&n))
     }
@@ -994,7 +990,7 @@ impl<'cfg> ToR1cs<'cfg> {
 ///
 /// * Prover data (including the R1CS instance)
 /// * Verifier data
-pub fn to_r1cs(mut cs: Computation, cfg: &CircCfg) -> R1cs {
+pub fn to_r1cs(cs: Computation, cfg: &CircCfg) -> R1cs {
     let assertions = cs.outputs.clone();
     let metadata = cs.metadata.clone();
     let public_inputs = metadata.public_input_names_set();
@@ -1017,17 +1013,6 @@ pub fn to_r1cs(mut cs: Computation, cfg: &CircCfg) -> R1cs {
         converter.assert(c);
     }
     converter.r1cs
-}
-
-#[derive(Default)]
-struct NameGenerator(usize);
-
-impl NameGenerator {
-    fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D) -> String {
-        let n = format!("{}_n{}", ctx, self.0);
-        self.0 += 1;
-        n
-    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,5 @@
 //! Exporting our R1CS to bellman
 use ::bellman::{groth16, Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
-use bincode::{deserialize_from, serialize_into};
 use ff::{Field, PrimeField, PrimeFieldBits};
 use fxhash::FxHashMap;
 use gmp_mpfr_sys::gmp::limb_t;
@@ -10,7 +9,7 @@ use pairing::{Engine, MultiMillerLoop};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, BufReader};
 use std::marker::PhantomData;
 use std::path::Path;
 use std::str::FromStr;
@@ -20,7 +19,7 @@ use rug::Integer;
 
 use super::proof;
 use super::{
-    wit_comp::StagedWitCompEvaluator, Lc, ProverDataNew, R1cs, Var, VarType, VerifierDataNew,
+    wit_comp::StagedWitCompEvaluator, Lc, ProverDataNew, Var, VarType, VerifierDataNew,
 };
 use crate::ir::term::Value;
 

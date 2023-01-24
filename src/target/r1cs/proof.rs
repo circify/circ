@@ -53,7 +53,7 @@ pub trait ProofSystem {
         P1: AsRef<Path>,
         P2: AsRef<Path>,
     {
-        let mut pk_file = File::open(pk_path)?;
+        let pk_file = File::open(pk_path)?;
         let mut pf_file = File::create(pf_path)?;
         let witness_bytes = std::fs::read(witness_path)?;
         let witness = parse_value_map(&witness_bytes);
@@ -68,8 +68,8 @@ pub trait ProofSystem {
         P1: AsRef<Path>,
         P2: AsRef<Path>,
     {
-        let mut vk_file = File::open(vk_path)?;
-        let mut pf_file = File::open(pf_path)?;
+        let vk_file = File::open(vk_path)?;
+        let pf_file = File::open(pf_path)?;
         let instance_bytes = std::fs::read(instance_path)?;
         let instance = parse_value_map(&instance_bytes);
         let vk: Self::VerifyingKey = deserialize_from(vk_file).unwrap();
