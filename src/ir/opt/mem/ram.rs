@@ -385,7 +385,6 @@ mod test {
         assert_eq!(bv_lit(1, 3), rams[0].accesses[0].val);
         assert_eq!(bv_lit(2, 3), rams[0].accesses[1].val);
         assert!(rams[0].accesses[2].val.is_var());
-        dbg!(cs2);
     }
 
     #[test]

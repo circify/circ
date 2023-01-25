@@ -44,10 +44,11 @@ struct ToR1cs<'cfg> {
     one: TermLc,
     cfg: &'cfg CircCfg,
     field: FieldT,
+    used_vars: HashSet<String>,
 }
 
 impl<'cfg> ToR1cs<'cfg> {
-    fn new(cfg: &'cfg CircCfg, precompute: precomp::PreComp) -> Self {
+    fn new(cfg: &'cfg CircCfg, precompute: precomp::PreComp, used_vars: HashSet<String>) -> Self {
         let field = cfg.field().clone();
         debug!("Starting R1CS back-end, field: {}", field);
         let r1cs = R1cs::new(field.clone(), precompute);
@@ -56,6 +57,7 @@ impl<'cfg> ToR1cs<'cfg> {
         Self {
             r1cs,
             cache: TermMap::default(),
+            used_vars,
             next_idx: 0,
             zero,
             one,
@@ -260,6 +262,9 @@ impl<'cfg> ToR1cs<'cfg> {
             var.op()
         );
         assert!(!matches!(ty, VarType::CWit), "Unimplemented");
+        if !self.used_vars.contains(var.as_var_name()) {
+            return;
+        }
         let public = matches!(ty, VarType::Inst);
         match var.op() {
             Op::Var(name, Sort::Bool) => {
@@ -989,7 +994,8 @@ impl<'cfg> ToR1cs<'cfg> {
 pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
     let public_inputs = cs.metadata.public_input_names_set();
     debug!("public inputs: {:?}", public_inputs);
-    let mut converter = ToR1cs::new(cfg, cs.precomputes.clone());
+    let used_vars = extras::free_variables(term(Op::Tuple, cs.outputs.clone()));
+    let mut converter = ToR1cs::new(cfg, cs.precomputes.clone(), used_vars);
     debug!(
         "Term count: {}",
         cs.outputs

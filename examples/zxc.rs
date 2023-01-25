@@ -129,7 +129,7 @@ fn main() {
     */
 
     println!("Converting to r1cs");
-    let r1cs = to_r1cs(cs.get("main").clone(), cfg());
+    let r1cs = to_r1cs(cs.get("main"), cfg());
     let r1cs = if options.skip_linred {
         println!("Skipping linearity reduction, as requested.");
         r1cs

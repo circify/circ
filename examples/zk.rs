@@ -29,6 +29,8 @@ struct Options {
     pin: PathBuf,
     #[arg(long, default_value = "vin")]
     vin: PathBuf,
+    #[arg(long, default_value = "groth16")]
+    proof_impl: ProofImpl,
     #[arg(long)]
     action: ProofAction,
     #[command(flatten)]
@@ -44,6 +46,13 @@ enum ProofAction {
     Spartan,
 }
 
+#[derive(PartialEq, Debug, Clone, ValueEnum)]
+/// Whether to use Groth16 or Mirage
+enum ProofImpl {
+    Groth16,
+    Mirage
+}
+
 fn main() {
     env_logger::Builder::from_default_env()
         .format_level(false)
@@ -55,7 +64,7 @@ fn main() {
         #[cfg(feature = "bellman")]
         ProofAction::Prove => {
             println!("Proving");
-            Bellman::<Bls12>::prove_fs(opts.prover_key, opts.proof, opts.inputs).unwrap();
+            Bellman::<Bls12>::prove_fs(opts.prover_key, opts.inputs, opts.proof).unwrap();
         }
         #[cfg(feature = "bellman")]
         ProofAction::Verify => {

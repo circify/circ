@@ -35,20 +35,26 @@ function r1cs_test_count {
 
 # Test prove workflow, given an example name
 function pf_test {
-    ex_name=$1
-    $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
-    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
-    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
-    rm -rf P V pi
+    for proof_impl in groth16 mirage
+    do
+        ex_name=$1
+        $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup --proof-impl $proof_impl
+        $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove --proof-impl $proof_impl
+        $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify --proof-impl $proof_impl
+        rm -rf P V pi
+    done
 }
 
 # Test prove workflow with --z-isolate-asserts, given an example name
 function pf_test_isolate {
-    ex_name=$1
-    $BIN --zsharp-isolate-asserts true examples/ZoKrates/pf/$ex_name.zok r1cs --action setup
-    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove
-    $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify
-    rm -rf P V pi
+    for proof_impl in groth16 mirage
+    do
+        ex_name=$1
+        $BIN --zsharp-isolate-asserts true examples/ZoKrates/pf/$ex_name.zok r1cs --action setup --proof-impl $proof_impl
+        $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove --proof-impl $proof_impl
+        $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify --proof-impl $proof_impl
+        rm -rf P V pi
+    done
 }
 
 r1cs_test_count ./examples/ZoKrates/pf/mm4_cond.zok 120

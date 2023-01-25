@@ -1,7 +1,7 @@
 //! Rank 1 Constraint Systems
 
 use circ_fields::{FieldT, FieldV};
-use fxhash::FxHashMap as HashMap;
+use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::{debug, trace};
 use paste::paste;
 use rug::Integer;
@@ -905,9 +905,7 @@ impl R1cs {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, true);
         let public_inputs = cs.metadata.get_inputs_for_party(None);
-        dbg!(&precompute);
         precompute.restrict_to_inputs(public_inputs);
-        dbg!(&precompute);
         let vars: HashMap<String, Sort> = {
             PostOrderIter::new(precompute.tuple())
                 .filter_map(|t| {
@@ -922,12 +920,12 @@ impl R1cs {
         for c in &self.challenge_names {
             assert!(!vars.contains_key(c));
         }
-        let mut precompute_map = dbg!(precompute.flatten());
+        let mut precompute_map = precompute.flatten();
         let terms = self
             .insts_iter()
             .map(|v| {
                 let name = self.idx_to_sig.get_fwd(&v).unwrap();
-                precompute_map.remove(dbg!(name)).unwrap()
+                precompute_map.remove(name).unwrap()
             })
             .collect();
         let mut comp = wit_comp::StagedWitComp::default();
@@ -941,7 +939,7 @@ impl R1cs {
             if !matches!(var.ty(), VarType::Chall)
                 && (!public_signals_only || matches!(var.ty(), VarType::Inst))
             {
-                let sig_name = dbg!(self.idx_to_sig.get_fwd(var).unwrap());
+                let sig_name = self.idx_to_sig.get_fwd(var).unwrap();
                 if !precompute.outputs().contains_key(sig_name) {
                     precompute.add_output(sig_name.clone(), term.clone());
                 }
@@ -970,44 +968,6 @@ impl R1cs {
     }
 }
 
-/// Relation-related data that a verifier needs to check a proof.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifierData {
-    /// Inputs that the verifier must have
-    pub precompute_inputs: HashMap<String, Sort>,
-    /// A precomputation to perform on those inputs
-    pub precompute: precomp::PreComp,
-    /// The order in which the outputs must be fed into the proof system
-    pub pf_input_order: Vec<String>,
-}
-
-impl VerifierData {
-    /// Given verifier inputs, compute a vector of integers to feed to the proof system.
-    pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<rug::Integer> {
-        for (input, sort) in &self.precompute_inputs {
-            let value = value_map
-                .get(input)
-                .unwrap_or_else(|| panic!("No input for {}", input));
-            let sort2 = value.sort();
-            assert_eq!(
-                sort, &sort2,
-                "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-                input, sort, sort2
-            );
-        }
-        let new_map = self.precompute.eval(value_map);
-        self.pf_input_order
-            .iter()
-            .map(|input| {
-                new_map
-                    .get(input)
-                    .unwrap_or_else(|| panic!("Missing input {}", input))
-                    .as_pf()
-                    .i()
-            })
-            .collect()
-    }
-}
 impl VerifierDataNew {
     /// Given verifier inputs, compute a vector of field values to feed to the proof system.
     pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<FieldV> {
@@ -1017,17 +977,6 @@ impl VerifierDataNew {
             .map(|v| v.as_pf().clone())
             .collect()
     }
-}
-
-/// Relation-related data that a prover needs to check a proof.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProverData {
-    /// R1cs
-    pub r1cs: R1cs,
-    /// Inputs that the prover must have
-    pub precompute_inputs: HashMap<String, Sort>,
-    /// A precomputation to perform on those inputs
-    pub precompute: precomp::PreComp,
 }
 
 /// Relation-related data that a prover needs to make a proof.

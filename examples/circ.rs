@@ -87,6 +87,8 @@ enum Backend {
         lc_elimination_thresh: usize,
         #[arg(long, default_value = "count")]
         action: ProofAction,
+        #[arg(long, default_value = "groth16")]
+        proof_impl: ProofImpl,
     },
     Smt {},
     Ilp {},
@@ -124,6 +126,12 @@ enum ProofAction {
     Count,
     Setup,
     SpartanSetup,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, ValueEnum)]
+enum ProofImpl {
+    Groth16,
+    Mirage,
 }
 
 fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
