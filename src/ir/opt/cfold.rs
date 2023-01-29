@@ -8,6 +8,7 @@ use circ_opt::FieldToBv;
 use itertools::Itertools;
 use rug::Integer;
 use std::cell::RefCell;
+use std::cmp::Ordering;
 
 thread_local! {
     static FOLDS: RefCell<TermCache<TTerm>> = RefCell::new(TermCache::with_capacity(TERM_CACHE_LIMIT));
@@ -114,12 +115,11 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                                 dedup_children.insert(t.clone());
                             }
                         }
-                        if dedup_children.len() == 1 {
-                            dedup_children.into_iter().collect_vec()[0].clone()
-                        } else if dedup_children.len() > 1 {
-                                term(OR, dedup_children.into_iter().collect_vec())
-                        } else {
-                            flattened
+
+                        match dedup_children.len().cmp(&1) {
+                            Ordering::Less => flattened,
+                            Ordering::Equal => dedup_children.into_iter().collect_vec()[0].clone(),
+                            Ordering::Greater => term(OR, dedup_children.into_iter().collect_vec()),
                         }
                     } else {
                         flattened
@@ -137,12 +137,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             }
                             dedup_children.insert(t.clone());
                         }
-                        if dedup_children.len() == 1 {
-                            dedup_children.iter().collect_vec()[0].clone()
-                        } else if dedup_children.len() > 1 {
-                            term(AND, dedup_children.into_iter().collect_vec())
-                        } else {
-                            flattened
+                        match dedup_children.len().cmp(&1) {
+                            Ordering::Less => flattened,
+                            Ordering::Equal => dedup_children.iter().collect_vec()[0].clone(),
+                            Ordering::Greater => {
+                                term(AND, dedup_children.into_iter().collect_vec())
+                            }
                         }
                     } else {
                         flattened
