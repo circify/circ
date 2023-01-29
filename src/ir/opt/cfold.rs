@@ -5,9 +5,9 @@ use crate::ir::term::*;
 
 use circ_fields::FieldV;
 use circ_opt::FieldToBv;
+use itertools::Itertools;
 use rug::Integer;
 use std::cell::RefCell;
-use std::collections::HashSet;
 
 thread_local! {
     static FOLDS: RefCell<TermCache<TTerm>> = RefCell::new(TermCache::with_capacity(TERM_CACHE_LIMIT));
@@ -100,33 +100,47 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 _ => None,
             },
             Op::BoolNaryOp(o) => match o {
-                BoolNaryOp::Xor | BoolNaryOp::Or => {
-                    Some((*o).flatten(t.cs().iter().map(|c| c_get(c))))
+                BoolNaryOp::Xor => Some((*o).flatten(t.cs().iter().map(|c| c_get(c)))),
+                BoolNaryOp::Or => {
+                    // (a || a) = a
+                    // (a || !a) = true
+                    let flattened = (*o).flatten(t.cs().iter().map(|c| c_get(c)));
+                    Some(if *flattened.op() == OR {
+                        let mut dedup_children = TermSet::default();
+                        for t in flattened.cs().iter() {
+                            if dedup_children.contains(&term![Op::Not; t.clone()]) {
+                                dedup_children.remove(&term![Op::Not; t.clone()]);
+                            } else {
+                                dedup_children.insert(t.clone());
+                            }
+                        }
+                        if dedup_children.len() == 1 {
+                            dedup_children.into_iter().collect_vec()[0].clone()
+                        } else if dedup_children.len() > 1 {
+                                term(OR, dedup_children.into_iter().collect_vec())
+                        } else {
+                            flattened
+                        }
+                    } else {
+                        flattened
+                    })
                 }
                 BoolNaryOp::And => {
+                    // (a && a) = a
+                    // (a && !a) = false
                     let flattened = (*o).flatten(t.cs().iter().map(|c| c_get(c)));
+                    let mut dedup_children = TermSet::default();
                     Some(if *flattened.op() == AND {
-                        let mut dedup_children: HashSet<Term> = HashSet::new();
                         for t in flattened.cs().iter() {
+                            if dedup_children.contains(&term![Op::Not; t.clone()]) {
+                                return bool_lit(false);
+                            }
                             dedup_children.insert(t.clone());
                         }
-                        let mut flag = true;
-                        for a in dedup_children.iter() {
-                            for b in dedup_children.iter() {
-                                if term![Op::Not; a.clone()] == *b {
-                                    flag = false;
-                                }
-                            }
-                        }
-                        let dedup_children = dedup_children.into_iter().collect::<Vec<_>>().clone();
-                        if !flag {
-                            bool_lit(false)
-                        } else if AND == *flattened.op() {
-                            if dedup_children.len() == 1 {
-                                dedup_children[0].clone()
-                            } else {
-                                term(AND, dedup_children.clone())
-                            }
+                        if dedup_children.len() == 1 {
+                            dedup_children.iter().collect_vec()[0].clone()
+                        } else if dedup_children.len() > 1 {
+                            term(AND, dedup_children.into_iter().collect_vec())
                         } else {
                             flattened
                         }
