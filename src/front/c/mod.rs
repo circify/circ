@@ -131,7 +131,7 @@ impl CGen {
 
     /// Unwrap a result of an error and abort
     fn err<E: Display>(&self, e: E) -> ! {
-        println!("Error: {}", e);
+        println!("Error: {e}");
         std::process::exit(1)
     }
 
@@ -366,10 +366,10 @@ impl CGen {
             if let Some((_, term_)) = fs.search(field) {
                 Ok(term_.clone())
             } else {
-                Err(format!("No field '{}'", field))
+                Err(format!("No field '{field}'"))
             }
         } else {
-            Err(format!("{} is not a struct", struct_))
+            Err(format!("{struct_} is not a struct"))
         }
     }
 
@@ -381,10 +381,10 @@ impl CGen {
                 let res = cterm(CTermData::CStruct(struct_ty.clone(), new_fs.clone()));
                 Ok(res)
             } else {
-                Err(format!("No field '{}'", field))
+                Err(format!("No field '{field}'"))
             }
         } else {
-            Err(format!("{} is not a struct", struct_))
+            Err(format!("{struct_} is not a struct"))
         }
     }
 
@@ -409,7 +409,7 @@ impl CGen {
                     _ => unimplemented!(),
                 }))
             }
-            (a, b) => Err(format!("[Array Select] cannot index {} by {}", a, b)),
+            (a, b) => Err(format!("[Array Select] cannot index {a} by {b}")),
         }
     }
 
@@ -447,7 +447,7 @@ impl CGen {
                     Ok(val.clone())
                 }
             }
-            (a, b) => Err(format!("[Array Store] cannot index {} by {}", a, b)),
+            (a, b) => Err(format!("[Array Store] cannot index {a} by {b}")),
         }
     }
 
@@ -530,7 +530,7 @@ impl CGen {
             CLoc::Var(l) => {
                 let org_type = self
                     .circ_get_value(l.clone())
-                    .map_err(|e| format!("{}", e))?
+                    .map_err(|e| format!("{e}"))?
                     .unwrap_term()
                     .term
                     .type_();
@@ -542,26 +542,26 @@ impl CGen {
                 };
                 Ok(self
                     .circ_assign(l, Val::Term(new_val))
-                    .map_err(|e| format!("{}", e))?
+                    .map_err(|e| format!("{e}"))?
                     .unwrap_term())
             }
             CLoc::Idx(l, idx) => {
                 let old_inner: CTerm = match *l {
                     CLoc::Var(inner_loc) => self
                         .circ_get_value(inner_loc)
-                        .map_err(|e| format!("{}", e))?
+                        .map_err(|e| format!("{e}"))?
                         .unwrap_term(),
                     CLoc::Member(inner_loc, field) => {
                         let base = self
                             .circ_get_value(inner_loc.loc().clone())
-                            .map_err(|e| format!("{}", e))?
+                            .map_err(|e| format!("{e}"))?
                             .unwrap_term();
                         self.field_select(&base, &field).unwrap()
                     }
                     CLoc::Idx(inner_loc, idx) => {
                         let base = self
                             .circ_get_value(inner_loc.loc().clone())
-                            .map_err(|e| format!("{}", e))?
+                            .map_err(|e| format!("{e}"))?
                             .unwrap_term();
                         self.array_select(&base, &idx).unwrap()
                     }
@@ -572,14 +572,14 @@ impl CGen {
                 let inner_loc = l.loc().clone();
                 let base = self
                     .circ_get_value(inner_loc.clone())
-                    .map_err(|e| format!("{}", e))?
+                    .map_err(|e| format!("{e}"))?
                     .unwrap_term();
                 let old_inner = self.field_select(&base, &field)?;
                 let new_inner = self.rebuild_lval(old_inner, *l, val)?;
                 let res = self.field_store(&base, &field, &new_inner);
                 Ok(self
                     .circ_assign(inner_loc, Val::Term(res.unwrap()))
-                    .map_err(|e| format!("{}", e))?
+                    .map_err(|e| format!("{e}"))?
                     .unwrap_term())
             }
         }

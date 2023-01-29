@@ -43,11 +43,11 @@ impl<'a, T: Sort2Smt + 'a> Display for SmtSortDisp<'a, T> {
 impl Expr2Smt<()> for Value {
     fn expr_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
         match self {
-            Value::Bool(b) => write!(w, "{}", b)?,
+            Value::Bool(b) => write!(w, "{b}")?,
             Value::Field(f) => write!(w, "#f{}m{}", f.i(), f.modulus())?,
-            Value::Int(i) if i >= &Integer::new() => write!(w, "{}", i)?,
+            Value::Int(i) if i >= &Integer::new() => write!(w, "{i}")?,
             Value::Int(i) => write!(w, "(- 0 {})", *i.as_neg())?,
-            Value::BitVector(b) => write!(w, "{}", b)?,
+            Value::BitVector(b) => write!(w, "{b}")?,
             Value::F32(f) => {
                 let (sign, exp, mant) = f.decompose_raw();
                 write!(w, "(fp #b{} #b", sign as u8)?;
@@ -109,7 +109,7 @@ impl Expr2Smt<()> for Term {
     fn expr_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
         let s_expr_children = match &self.op() {
             Op::Var(n, _) => {
-                write!(w, "{}", n)?;
+                write!(w, "{n}")?;
                 false
             }
             Op::Eq => {
@@ -133,7 +133,7 @@ impl Expr2Smt<()> for Term {
                 true
             }
             Op::BvUext(s) => {
-                write!(w, "((_ zero_extend {})", s)?;
+                write!(w, "((_ zero_extend {s})")?;
                 true
             }
             Op::Const(c) => {
@@ -153,7 +153,7 @@ impl Expr2Smt<()> for Term {
                 true
             }
             Op::Field(i) => {
-                write!(w, "((_ tupSel {})", i)?;
+                write!(w, "((_ tupSel {i})")?;
                 true
             }
             Op::PfNaryOp(PfNaryOp::Mul) => {
@@ -177,7 +177,7 @@ impl Expr2Smt<()> for Term {
                 true
             }
             Op::IntBinPred(o) => {
-                write!(w, "({}", o)?;
+                write!(w, "({o}")?;
                 true
             }
             o => panic!("Cannot give {} to SMT solver", o),
@@ -195,7 +195,7 @@ impl Expr2Smt<()> for Term {
 impl Sort2Smt for Sort {
     fn sort_to_smt2<W: Write>(&self, w: &mut W) -> SmtRes<()> {
         match self {
-            Sort::BitVector(b) => write!(w, "(_ BitVec {})", b)?,
+            Sort::BitVector(b) => write!(w, "(_ BitVec {b})")?,
             Sort::Array(k, v, _size) => {
                 write!(w, "(Array {} {})", SmtSortDisp(&**k), SmtSortDisp(&**v))?;
             }

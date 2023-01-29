@@ -123,8 +123,8 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     if let FieldToBv::Panic = cfg().ir.field_to_bv {
                         assert!(
                             (i.significant_bits() as usize) <= *w,
-                            "oversized input to Op::PfToBv({})",
-                            w
+                            "{}",
+                            "oversized input to Op::PfToBv({w})",
                         );
                     }
                     bv_lit(i % (Integer::from(1) << *w), *w)
@@ -614,7 +614,7 @@ mod test {
         let tt = fold(&t, &[]);
         let orig = eval(&t, &vs);
         let new = eval(&tt, &vs);
-        assert!(orig == new, "{} ({}) vs {} ({})", t, orig, tt, new);
+        assert!(orig == new, "{}", "{t} ({orig}) vs {tt} ({new})");
     }
 
     #[test]

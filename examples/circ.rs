@@ -149,7 +149,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
             } else if p.ends_with(".c") || p.ends_with(".cpp") || p.ends_with(".cc") {
                 DeterminedLanguage::C
             } else {
-                println!("Could not deduce the input language from path '{}', please set the language manually", p);
+                println!("Could not deduce the input language from path '{p}', please set the language manually");
                 std::process::exit(2)
             }
         }
@@ -165,7 +165,7 @@ fn main() {
     let options = Options::parse();
     circ::cfg::set(&options.circ);
     let path_buf = options.path.clone();
-    println!("{:?}", options);
+    println!("{options:?}");
     let mode = match options.backend {
         Backend::R1cs { .. } => match options.frontend.value_threshold {
             Some(t) => Mode::ProofOfHighValue(t),
@@ -321,8 +321,8 @@ fn main() {
                 DeterminedLanguage::Zsharp => "zok".to_string(),
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
-            println!("Cost model: {}", cost_model);
-            println!("Selection scheme: {}", selection_scheme);
+            println!("Cost model: {cost_model}");
+            println!("Selection scheme: {selection_scheme}");
             to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
         }
         #[cfg(not(feature = "aby"))]
@@ -368,7 +368,7 @@ fn main() {
                     Some(m) => {
                         println!("Not primitive recursive!");
                         for (var, val) in m {
-                            println!("{} -> {}", var, val);
+                            println!("{var} -> {val}");
                         }
                         std::process::exit(1)
                     }

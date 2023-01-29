@@ -273,8 +273,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                         }
                     } else {
                         Err(format!(
-                            "ZExpressionTyper: Spread expression: expected array, got {:?}",
-                            ty
+                            "ZExpressionTyper: Spread expression: expected array, got {ty:?}"
                         ))
                     }?;
 
@@ -291,8 +290,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     Ok(())
                 } else {
                     Err(ZVisitorError(format!(
-                        "ZExpressionTyper: Could not type SpreadOrExpression::Spread {:#?}",
-                        soe
+                        "ZExpressionTyper: Could not type SpreadOrExpression::Spread {soe:#?}",
                     )))
                 }
             })?;
@@ -303,7 +301,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                 ast::Expression::Literal(ast::LiteralExpression::HexLiteral(
                     ast::HexLiteralExpression {
                         value: ast::HexNumberExpression::U32(ast::U32NumberExpression {
-                            value: format!("{:04x}", acc_len),
+                            value: format!("{acc_len:04x}"),
                             span: iae.span,
                         }),
                         span: iae.span,

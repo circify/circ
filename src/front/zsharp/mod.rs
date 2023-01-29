@@ -180,9 +180,9 @@ impl<'ast> ZGen<'ast> {
 
     /// Unwrap a result with a span-dependent error
     fn err<E: Display>(&self, e: E, s: &ast::Span) -> ! {
-        println!("Error: {}", e);
+        println!("Error: {e}");
         println!("In: {}", self.cur_path().canonicalize().unwrap().display());
-        s.lines().for_each(|l| print!("  {}", l));
+        s.lines().for_each(|l| print!("  {l}"));
         std::process::exit(1)
     }
 
@@ -329,7 +329,7 @@ impl<'ast> ZGen<'ast> {
                     Ok(uint_lit(cfg().field().modulus().significant_bits(), 32))
                 }
             }
-            _ => Err(format!("Unknown or unimplemented builtin '{}'", f_name)),
+            _ => Err(format!("Unknown or unimplemented builtin '{f_name}'")),
         }
     }
 
@@ -343,10 +343,10 @@ impl<'ast> ZGen<'ast> {
         let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
         let old = if IS_CNST {
             self.cvar_lookup(name)
-                .ok_or_else(|| format!("Assignment failed: no const variable {}", name))?
+                .ok_or_else(|| format!("Assignment failed: no const variable {name}"))?
         } else {
             self.circ_get_value(Loc::local(name.to_string()))
-                .map_err(|e| format!("{}", e))?
+                .map_err(|e| format!("{e}"))?
                 .unwrap_term()
         };
         let new =
@@ -357,7 +357,7 @@ impl<'ast> ZGen<'ast> {
             self.cvar_assign(name, new)
         } else {
             self.circ_assign(Loc::local(name.to_string()), Val::Term(new))
-                .map_err(|e| format!("{}", e))
+                .map_err(|e| format!("{e}"))
                 .map(|_| ())
         }
     }
@@ -580,7 +580,7 @@ impl<'ast> ZGen<'ast> {
                     self.cvar_declare_init(p.id.value, &ty, a)?;
                 } else {
                     self.circ_declare_init(p.id.value, ty, Val::Term(a))
-                        .map_err(|e| format!("{}", e))?;
+                        .map_err(|e| format!("{e}"))?;
                 }
             }
 
@@ -776,15 +776,14 @@ impl<'ast> ZGen<'ast> {
                     let num_val = num_str.value[1..num_str.value.len() - 1]
                         .parse::<u8>()
                         .unwrap_or_else(|e| {
-                            self.err(format!("Bad party number: {}", e), &private.span)
+                            self.err(format!("Bad party number: {e}"), &private.span)
                         });
                     if num_val <= n_parties {
                         Some(num_val - 1)
                     } else {
                         self.err(
                             format!(
-                                "Party number {} greater than the number of parties ({})",
-                                num_val, n_parties
+                                "Party number {num_val} greater than the number of parties ({n_parties})"
                             ),
                             &private.span,
                         )
@@ -867,7 +866,7 @@ impl<'ast> ZGen<'ast> {
             }),
             _ => match self
                 .circ_get_value(Loc::local(i.value.clone()))
-                .map_err(|e| format!("{}", e))?
+                .map_err(|e| format!("{e}"))?
             {
                 Val::Term(t) => Ok(t),
                 _ => Err(format!("Non-Term identifier {}", &i.value)),
@@ -1039,13 +1038,13 @@ impl<'ast> ZGen<'ast> {
     fn canon_struct(&self, id: &str) -> Result<String, String> {
         match self
             .get_struct_or_type(id)
-            .ok_or_else(|| format!("No such struct or type {} canonicalizing InlineStruct", id))?
+            .ok_or_else(|| format!("No such struct or type {id} canonicalizing InlineStruct"))?
             .0
         {
             Ok(_) => Ok(id.to_string()),
             Err(t) => match &t.ty {
                 ast::Type::Struct(s) => self.canon_struct(&s.id.value),
-                _ => Err(format!("Found non-Struct canonicalizing struct {}", id,)),
+                _ => Err(format!("Found non-Struct canonicalizing struct {id}")),
             },
         }
     }
@@ -1066,7 +1065,7 @@ impl<'ast> ZGen<'ast> {
             self.circ
                 .borrow_mut()
                 .declare_uninit(name, ty)
-                .map_err(|e| format!("{}", e))
+                .map_err(|e| format!("{e}"))
         }
     }
 
@@ -1081,7 +1080,7 @@ impl<'ast> ZGen<'ast> {
         } else {
             self.circ_declare_init(name, ty, Val::Term(val))
                 .map(|_| ())
-                .map_err(|e| format!("{}", e))
+                .map_err(|e| format!("{e}"))
         }
     }
 
@@ -1103,7 +1102,7 @@ impl<'ast> ZGen<'ast> {
                 } else {
                     self.ret_impl_::<IS_CNST>(None)
                 }
-                .map_err(|e| format!("{}", e))
+                .map_err(|e| format!("{e}"))
             }
             ast::Statement::Assertion(e) => {
                 match self.expr_impl_::<true>(&e.expression).and_then(|v| {
@@ -1141,8 +1140,7 @@ impl<'ast> ZGen<'ast> {
                     Ty::Uint(64) => T::new_u64,
                     _ => {
                         return Err(format!(
-                            "Iteration variable must be Field or Uint, got {:?}",
-                            ty
+                            "Iteration variable must be Field or Uint, got {ty}"
                         ));
                     }
                 };
@@ -1186,8 +1184,7 @@ impl<'ast> ZGen<'ast> {
                             let ty = e.type_();
                             if &decl_ty != ty {
                                 return Err(format!(
-                                    "Assignment type mismatch: {} annotated vs {} actual",
-                                    decl_ty, ty,
+                                    "Assignment type mismatch: {decl_ty} annotated vs {ty} actual",
                                 ));
                             }
                             self.declare_init_impl_::<IS_CNST>(
@@ -1249,16 +1246,16 @@ impl<'ast> ZGen<'ast> {
                                 ast::RangeOrExpression::Expression(_) => Ok(*ity),
                                 ast::RangeOrExpression::Range(_) => Ok(Ty::Array(sz, ity)),
                             },
-                            ty => Err(format!("Attempted array access on non-Array type {}", ty)),
+                            ty => Err(format!("Attempted array access on non-Array type {ty}")),
                         },
                         ast::AssigneeAccess::Member(sa) => match ty {
                             Ty::Struct(nm, map) => map
                                 .search(&sa.id.value)
                                 .map(|r| r.1.clone())
                                 .ok_or_else(|| {
-                                    format!("No such member {} of struct {}", &sa.id.value, nm)
+                                    format!("No such member {} of struct {nm}", &sa.id.value)
                                 }),
-                            ty => Err(format!("Attempted member access on non-Struct type {}", ty)),
+                            ty => Err(format!("Attempted member access on non-Struct type {ty}")),
                         },
                     })
                 })
@@ -1326,7 +1323,7 @@ impl<'ast> ZGen<'ast> {
             .map(|old_val| {
                 *old_val = val;
             })
-            .ok_or_else(|| format!("Const assign failed: no variable {} in scope", name))
+            .ok_or_else(|| format!("Const assign failed: no variable {name} in scope"))
     }
 
     fn cvar_declare_init(&self, name: String, ty: &Ty, val: T) -> Result<(), String> {
@@ -1592,7 +1589,7 @@ impl<'ast> ZGen<'ast> {
                         .zip(dst_names.into_iter())
                         .for_each(|(sn, dn)| {
                             if imap.contains_key(&dn) {
-                                self.err(format!("Import {} redeclared", dn), i_span);
+                                self.err(format!("Import {dn} redeclared"), i_span);
                             }
                             assert!(imap.insert(dn, (abs_src_path.clone(), sn)).is_none());
                         });

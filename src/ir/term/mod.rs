@@ -1300,8 +1300,8 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             if let FieldToBv::Panic = cfg().ir.field_to_bv {
                 assert!(
                     (i.significant_bits() as usize) <= *w,
-                    "oversized input to Op::PfToBv({})",
-                    w
+                    "{}",
+                    "oversized input to Op::PfToBv({w})",
                 );
             }
             BitVector::new(i % (Integer::from(1) << *w), *w)

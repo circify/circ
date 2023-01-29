@@ -328,7 +328,7 @@ pub fn uint_to_field(s: &T) -> Result<T> {
 /// Uint to field
 pub fn array_idx(a: &T, i: &T) -> Result<T> {
     match (&a.ty, &i.ty) {
-        (&Ty::Array(_, ref elem_ty), &Ty::Field) => Ok(T::new(
+        (Ty::Array(_, elem_ty), &Ty::Field) => Ok(T::new(
             term![Op::Select; a.ir.clone(), i.ir.clone()],
             (**elem_ty).clone(),
         )),

@@ -136,7 +136,7 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
         }
         for (i, (a, b, c)) in self.0.constraints.iter().enumerate() {
             cs.enforce(
-                || format!("con{}", i),
+                || format!("con{i}"),
                 |z| lc_to_bellman::<F, CS>(&vars, a, z),
                 |z| lc_to_bellman::<F, CS>(&vars, b, z),
                 |z| lc_to_bellman::<F, CS>(&vars, c, z),
@@ -300,8 +300,7 @@ where
         let sort2 = value.sort();
         assert_eq!(
             sort, &sort2,
-            "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-            input, sort, sort2
+            "Sort mismatch for {input}. Expected\n\t{sort} but got\n\t{sort2}",
         );
     }
     let new_map = prover_data.precompute.eval(inputs_map);
@@ -362,13 +361,13 @@ mod test {
     #[quickcheck]
     fn int_to_ff_random(BlsScalar(i): BlsScalar) -> bool {
         let by_fn = int_to_ff::<Scalar>(i.clone());
-        let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
+        let by_str = Scalar::from_str_vartime(&format!("{i}")).unwrap();
         by_fn == by_str
     }
 
     fn convert(i: Integer) {
         let by_fn = int_to_ff::<Scalar>(i.clone());
-        let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
+        let by_str = Scalar::from_str_vartime(&format!("{i}")).unwrap();
         assert_eq!(by_fn, by_str);
     }
 

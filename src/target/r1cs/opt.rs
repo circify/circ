@@ -206,7 +206,7 @@ mod test {
             let m = 101;
             let field = FieldT::from(Integer::from(m));
             let n_vars = g.size() + 1;
-            let vars: Vec<_> = (0..n_vars).map(|i| format!("v{}", i)).collect();
+            let vars: Vec<_> = (0..n_vars).map(|i| format!("v{i}")).collect();
             let mut values: FxHashMap<String, Value> = Default::default();
             let mut r1cs = R1cs::new(field.clone());
             let mut rng = rand::rngs::StdRng::seed_from_u64(u64::arbitrary(g));
