@@ -52,6 +52,10 @@ macro_rules! generate_hashcons_hashconsing {
                 "hashconsing"
             }
 
+            fn for_each(f: impl FnMut(&$Op, &[Self::Node])) {
+                panic!()
+            }
+
             fn reserve(num_nodes: usize) {
                 FACTORY.reserve(num_nodes);
             }

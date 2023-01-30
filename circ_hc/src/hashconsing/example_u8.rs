@@ -49,6 +49,10 @@ impl crate::Table<u8> for Table {
         "hashconsing"
     }
 
+    fn for_each(f: impl FnMut(&u8, &[Self::Node])) {
+        panic!()
+    }
+
     fn reserve(num_nodes: usize) {
         FACTORY.reserve(num_nodes);
     }
