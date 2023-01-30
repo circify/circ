@@ -36,8 +36,6 @@ use circ::target::aby::trans::to_aby;
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "spartan")]
 use circ::target::r1cs::spartan::write_data;
-#[cfg(feature = "spartan")]
-use circ::target::r1cs::spartan::write_data;
 #[cfg(feature = "bellman")]
 use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
 #[cfg(feature = "r1cs")]
