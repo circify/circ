@@ -161,3 +161,35 @@ pub fn array_elements(t: &Term) -> Vec<Term> {
 pub fn array_to_tuple(t: &Term) -> Term {
     term(Op::Tuple, array_elements(t))
 }
+
+/// Print operator stats
+pub fn dump_op_stats() {
+    use std::mem::size_of;
+    println!("Op size: {}bytes", size_of::<Op>());
+    let mut counts: FxHashMap<Op, usize> = FxHashMap::default();
+    let mut children: FxHashMap<Op, usize> = FxHashMap::default();
+    let add = |map: &mut FxHashMap<Op, usize>, key: &Op, value: usize| {
+        if let Some(present_value) = map.get_mut(key) {
+            *present_value += value;
+        } else {
+            map.insert(key.clone(), value);
+        }
+    };
+    hc::Table::for_each(|op, cs| {
+        add(&mut counts, op, 1);
+        add(&mut children, op, cs.len());
+    });
+    let mut vector = Vec::new();
+    for k in counts.keys() {
+        let ct = *counts.get(k).unwrap();
+        let cs_ct = *children.get(k).unwrap();
+        let ave = cs_ct as f64 / ct as f64;
+        vector.push((k.clone(), ct, cs_ct, ave));
+    }
+    vector.sort_by_key(|t| t.1);
+    for (k, ct, cs_ct, ave) in vector {
+        let mem = size_of::<Op>() * ct + size_of::<Vec<Term>>() * ct + size_of::<Term>() * cs_ct;
+        let s: String = format!("{k}");
+        println!("Op {s:>20}, Count {ct:>8}, Children {cs_ct:>8}, Ave {ave:>8.2}, Mem {mem:>20}");
+    }
+}
