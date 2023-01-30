@@ -203,6 +203,8 @@ fn main() {
             let inputs = c::Inputs {
                 file: options.path,
                 mode,
+                sv_functions: options.circ.c.sv_functions,
+                assert_no_ub: options.circ.c.assert_no_ub,
             };
             C::gen(inputs)
         }
@@ -361,10 +363,11 @@ fn main() {
         }
         #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
+            let main_comp = cs.get("main").clone();
+            assert_eq!(main_comp.outputs.len(), 1);
+            let model = find_model(&main_comp.outputs[0]);
             if options.circ.datalog.lint_prim_rec {
-                let main_comp = cs.get("main").clone();
-                assert_eq!(main_comp.outputs.len(), 1);
-                match find_model(&main_comp.outputs[0]) {
+                match model {
                     Some(m) => {
                         println!("Not primitive recursive!");
                         for (var, val) in m {
@@ -377,7 +380,18 @@ fn main() {
                     }
                 }
             } else {
-                todo!()
+                match model {
+                    Some(m) => {
+                        println!("Property does not hold!\nCounterexample:");
+                        for (var, val) in m {
+                            println!("{var} -> {val}");
+                        }
+                        std::process::exit(1)
+                    }
+                    None => {
+                        println!("Property holds");
+                    }
+                }
             }
         }
         #[cfg(not(feature = "smt"))]

@@ -69,6 +69,23 @@ Options:
           [env: FIELD_CUSTOM_MODULUS=]
           [default: ]
 
+      --ir-field-to-bv <FIELD_TO_BV>
+          Which field to use
+          
+          [env: IR_FIELD_TO_BV=]
+          [default: wrap]
+
+          Possible values:
+          - wrap:  x % 2^b
+          - panic: a panic
+
+      --fmt-use-default-field <USE_DEFAULT_FIELD>
+          Which field to use
+          
+          [env: FMT_USE_DEFAULT_FIELD=]
+          [default: true]
+          [possible values: true, false]
+
       --zsharp-isolate-asserts <ISOLATE_ASSERTS>
           In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take effect if that branch is active.
           
@@ -90,6 +107,16 @@ Options:
           [env: DATALOG_LINT_PRIM_REC=]
           [default: false]
           [possible values: true, false]
+
+      --c-sv-functions
+          Enable SV competition builtin functions
+          
+          [env: C_SV_FUNCTIONS=]
+
+      --c-assert-no-ub
+          Assert no undefined behavior
+          
+          [env: C_ASSERT_NO_UB=]
 
   -h, --help
           Print help information (use `-h` for a summary)
@@ -113,12 +140,20 @@ Options:
           Which field to use [env: FIELD_BUILTIN=] [default: bls12381] [possible values: bls12381, bn254]
       --field-custom-modulus <CUSTOM_MODULUS>
           Which modulus to use (overrides [FieldOpt::builtin]) [env: FIELD_CUSTOM_MODULUS=] [default: ]
+      --ir-field-to-bv <FIELD_TO_BV>
+          Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
+      --fmt-use-default-field <USE_DEFAULT_FIELD>
+          Which field to use [env: FMT_USE_DEFAULT_FIELD=] [default: true] [possible values: true, false]
       --zsharp-isolate-asserts <ISOLATE_ASSERTS>
           In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take effect if that branch is active [env: ZSHARP_ISOLATE_ASSERTS=] [default: false] [possible values: true, false]
       --datalog-rec-limit <N>
           How many recursions to allow [env: DATALOG_REC_LIMIT=] [default: 5]
       --datalog-lint-prim-rec <LINT_PRIM_REC>
           Lint recursions that are allegedly primitive recursive [env: DATALOG_LINT_PRIM_REC=] [default: false] [possible values: true, false]
+      --c-sv-functions
+          Enable SV competition builtin functions [env: C_SV_FUNCTIONS=]
+      --c-assert-no-ub
+          Assert no undefined behavior [env: C_ASSERT_NO_UB=]
   -h, --help
           Print help information (use `--help` for more detail)
 
@@ -139,12 +174,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -166,12 +211,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -191,12 +246,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -216,12 +281,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -241,12 +316,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -266,12 +351,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -291,12 +386,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -316,12 +421,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -344,12 +459,22 @@ BinaryOpt {
             builtin: Bn254,
             custom_modulus: "7",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -370,12 +495,22 @@ BinaryOpt {
             builtin: Bn254,
             custom_modulus: "7",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -398,12 +533,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: true,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -424,12 +569,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: true,
         },
         datalog: DatalogOpt {
             rec_limit: 5,
             lint_prim_rec: false,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -452,12 +607,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 10,
             lint_prim_rec: true,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }
@@ -478,12 +643,22 @@ BinaryOpt {
             builtin: Bls12381,
             custom_modulus: "",
         },
+        ir: IrOpt {
+            field_to_bv: Wrap,
+        },
+        fmt: FmtOpt {
+            use_default_field: true,
+        },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
         },
         datalog: DatalogOpt {
             rec_limit: 15,
             lint_prim_rec: true,
+        },
+        c: COpt {
+            sv_functions: false,
+            assert_no_ub: false,
         },
     },
 }

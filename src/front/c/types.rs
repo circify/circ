@@ -79,7 +79,7 @@ impl fmt::Debug for Ty {
 impl Ty {
     pub fn sort(&self) -> Sort {
         match self {
-            Self::Void => unimplemented!("Void not implemented"),
+            Self::Void => Sort::Bool,
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
             Self::Array(n, _, b) => {
@@ -102,27 +102,27 @@ impl Ty {
                 unimplemented!("Void not implemented");
             }
             Self::Bool => CTerm {
-                term: CTermData::CBool(self.default_ir_term()),
-                udef: false,
+                term: CTermData::Bool(self.default_ir_term()),
+                udef: bool_lit(false),
             },
             Self::Int(s, w) => CTerm {
-                term: CTermData::CInt(*s, *w, self.default_ir_term()),
-                udef: false,
+                term: CTermData::Int(*s, *w, self.default_ir_term()),
+                udef: bool_lit(false),
             },
             Self::Array(s, _, ty) => {
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
-                    term: CTermData::CArray(self.clone(), Some(id)),
-                    udef: false,
+                    term: CTermData::Array(self.clone(), Some(id)),
+                    udef: bool_lit(false),
                 }
             }
             Self::Ptr(s, ty) => {
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(*s, 32, ty.num_bits());
                 CTerm {
-                    term: CTermData::CStackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
-                    udef: false,
+                    term: CTermData::StackPtr(*ty.clone(), bv_lit(0, *s), Some(id)),
+                    udef: bool_lit(false),
                 }
             }
             Self::Struct(_name, fs) => {
@@ -131,8 +131,8 @@ impl Ty {
                     .map(|(f_name, f_ty)| (f_name.clone(), f_ty.default(ctx)))
                     .collect();
                 CTerm {
-                    term: CTermData::CStruct(self.clone(), FieldList::new(fields)),
-                    udef: false,
+                    term: CTermData::Struct(self.clone(), FieldList::new(fields)),
+                    udef: bool_lit(false),
                 }
             }
         }
@@ -174,10 +174,10 @@ impl Ty {
         }
     }
 
-    pub fn _total_num_bits(&self, ty: Ty) -> usize {
-        match ty {
+    pub fn total_num_bits(&self) -> usize {
+        match self {
             Ty::Void => 0,
-            Ty::Int(_, w) => w,
+            Ty::Int(_, w) => *w,
             Ty::Bool => 1,
             Ty::Array(s, _, t) => s * t.num_bits(),
             Ty::Ptr(s, t) => s * t.num_bits(),

@@ -10,21 +10,21 @@ use std::fmt::{self, Display, Formatter};
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
 pub enum CTermData {
-    CBool(Term),
-    CInt(bool, usize, Term),
-    CArray(Ty, Option<AllocId>),
-    CStackPtr(Ty, Term, Option<AllocId>),
-    CStruct(Ty, FieldList<CTerm>),
+    Bool(Term),
+    Int(bool, usize, Term),
+    Array(Ty, Option<AllocId>),
+    StackPtr(Ty, Term, Option<AllocId>),
+    Struct(Ty, FieldList<CTerm>),
 }
 
 impl CTermData {
     pub fn type_(&self) -> Ty {
         match self {
-            Self::CBool(_) => Ty::Bool,
-            Self::CInt(s, w, _) => Ty::Int(*s, *w),
-            Self::CArray(t, _) => t.clone(),
-            Self::CStackPtr(t, _o, _) => t.clone(),
-            Self::CStruct(ty, _) => ty.clone(),
+            Self::Bool(_) => Ty::Bool,
+            Self::Int(s, w, _) => Ty::Int(*s, *w),
+            Self::Array(t, _) => t.clone(),
+            Self::StackPtr(t, _o, _) => t.clone(),
+            Self::Struct(ty, _) => ty.clone(),
         }
     }
     /// Get all IR terms inside this value, as a list.
@@ -32,9 +32,9 @@ impl CTermData {
         let mut output: Vec<Term> = Vec::new();
         fn terms_tail(term_: &CTermData, output: &mut Vec<Term>, inner_ctx: &CirCtx) {
             match term_ {
-                CTermData::CBool(t) => output.push(t.clone()),
-                CTermData::CInt(_, _, t) => output.push(t.clone()),
-                CTermData::CArray(t, a) => {
+                CTermData::Bool(t) => output.push(t.clone()),
+                CTermData::Int(_, _, t) => output.push(t.clone()),
+                CTermData::Array(t, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
                     if let Ty::Array(l, _, _) = t {
                         for i in 0..*l {
@@ -44,7 +44,7 @@ impl CTermData {
                         }
                     }
                 }
-                CTermData::CStackPtr(t, _o, a) => {
+                CTermData::StackPtr(t, _o, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
                     if let Ty::Array(l, _, _) = t {
                         for i in 0..*l {
@@ -56,7 +56,7 @@ impl CTermData {
                         panic!("Unsupported type for stack pointer: {:#?}", t);
                     }
                 }
-                CTermData::CStruct(_, fs) => {
+                CTermData::Struct(_, fs) => {
                     for (_name, ct) in fs.fields() {
                         let mut ts = ct.term.terms(inner_ctx);
                         output.append(&mut ts);
@@ -76,33 +76,21 @@ impl CTermData {
 
     pub fn simple_term(&self) -> Term {
         match self {
-            CTermData::CBool(b) => b.clone(),
-            CTermData::CInt(_, _, b) => b.clone(),
+            CTermData::Bool(b) => b.clone(),
+            CTermData::Int(_, _, b) => b.clone(),
             _ => panic!(),
         }
     }
-
-    // pub fn term(&self, circ: &Circify<Ct>) -> Term {
-    //     match self {
-    //         CTermData::CBool(b) => b.clone(),
-    //         CTermData::CInt(_, _, b) => b.clone(),
-    //         CTermData::CArray(_, b) => {
-    //             // TODO: load all of the array
-    //             let i = b.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", self));
-    //             circ.load(i, bv_lit(0, 32))
-    //         }
-    //     }
-    // }
 }
 
 impl Display for CTermData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            CTermData::CBool(x) => write!(f, "Bool({x})"),
-            CTermData::CInt(_, _, x) => write!(f, "Int({x})"),
-            CTermData::CArray(t, _) => write!(f, "Array({t:#?})"),
-            CTermData::CStackPtr(t, s, _) => write!(f, "Ptr{s:#?}({t:#?})"),
-            CTermData::CStruct(t, _) => write!(f, "Struct({t})"),
+            CTermData::Bool(x) => write!(f, "Bool({x})"),
+            CTermData::Int(_, _, x) => write!(f, "Int({x})"),
+            CTermData::Array(t, _) => write!(f, "Array({t:#?})"),
+            CTermData::StackPtr(t, s, _) => write!(f, "Ptr{s:#?}({t:#?})"),
+            CTermData::Struct(t, _) => write!(f, "Struct({t})"),
         }
     }
 }
@@ -116,7 +104,8 @@ impl fmt::Debug for CTermData {
 #[derive(Clone, Debug)]
 pub struct CTerm {
     pub term: CTermData,
-    pub udef: bool,
+    /// A boolean term indicating whether this term is undefined.
+    pub udef: Term,
 }
 
 impl Display for CTerm {
@@ -132,7 +121,7 @@ fn field_name(struct_name: &str, field_name: &str) -> String {
 pub fn cterm(data: CTermData) -> CTerm {
     CTerm {
         term: data,
-        udef: false,
+        udef: bool_lit(false),
     }
 }
 
@@ -163,22 +152,22 @@ pub fn cterm(data: CTermData) -> CTerm {
 pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
     let ty = t.term.type_();
     match t.term {
-        CTermData::CBool(ref term) => match to_ty {
+        CTermData::Bool(ref term) => match to_ty {
             Some(Ty::Int(s, w)) => CTerm {
-                term: CTermData::CInt(
+                term: CTermData::Int(
                     s,
                     w,
                     term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]],
                 ),
-                udef: t.udef,
+                udef: t.udef.clone(),
             },
             Some(Ty::Bool) => t.clone(),
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
         },
-        CTermData::CInt(_s, w, ref term) => match to_ty {
+        CTermData::Int(_s, w, ref term) => match to_ty {
             Some(Ty::Bool) => CTerm {
-                term: CTermData::CBool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
-                udef: t.udef,
+                term: CTermData::Bool(term![Op::Not; term![Op::Eq; bv_lit(0, w), term.clone()]]),
+                udef: t.udef.clone(),
             },
             // P 6.3.1.3.3 of the C11 standard says this is "implementation
             // defined", not "undefined"
@@ -190,36 +179,40 @@ pub fn cast(to_ty: Option<Ty>, t: CTerm) -> CTerm {
                 // TODO: add int resize
                 // let term_ = int_resize(s, w, to_s, to_w, term.clone());
                 CTerm {
-                    term: CTermData::CInt(to_s, to_w, term.clone()),
+                    term: CTermData::Int(to_s, to_w, term.clone()),
                     udef: t.udef,
                 }
             }
             _ => panic!("Bad cast from {} to {:?}", ty, to_ty),
         },
-        CTermData::CArray(ref ty, id) => match to_ty {
+        CTermData::Array(ref ty, id) => match to_ty {
             Some(Ty::Ptr(_, _)) => {
                 let offset = bv_lit(0, 32);
                 CTerm {
-                    term: CTermData::CStackPtr(ty.clone(), offset, id),
+                    term: CTermData::StackPtr(ty.clone(), offset, id),
                     udef: t.udef,
                 }
             }
             Some(Ty::Array(_, _, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
-        CTermData::CStruct(ref ty, ref _term) => match to_ty {
+        CTermData::Struct(ref ty, ref _term) => match to_ty {
             Some(Ty::Struct(_, _)) => t.clone(),
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
-        CTermData::CStackPtr(ref ty, _, id) => match to_ty {
+        CTermData::StackPtr(ref ty, _, id) => match to_ty {
             Some(Ty::Ptr(_, _)) => t.clone(),
             Some(Ty::Array(_, _, a_ty)) => CTerm {
-                term: CTermData::CArray(*a_ty, id),
+                term: CTermData::Array(*a_ty, id),
                 udef: t.udef,
             },
             _ => panic!("Bad cast from {:#?} to {:?}", ty, to_ty),
         },
     }
+}
+
+pub fn cast_to_bool(t: CTerm) -> Term {
+    cast(Some(Ty::Bool), t).term.simple_term()
 }
 
 /// Implementation of integer promotion (C11, 6.3.1.1.3)
@@ -229,18 +222,18 @@ fn int_promotion(t: &CTerm) -> CTerm {
         match &t.term {
             // "If an int can represent all values ... converted to an int ...
             // otherwise an unsigned int"
-            CTermData::CInt(s, w, v) => {
+            CTermData::Int(s, w, v) => {
                 let width = w - *s as usize;
                 let max_val: u32 = u32::pow(2, width as u32) - 1;
                 let signed = max_val < u32::pow(2u32, 31u32) - 1;
                 CTerm {
-                    term: CTermData::CInt(signed, 32, v.clone()),
-                    udef: t.udef,
+                    term: CTermData::Int(signed, 32, v.clone()),
+                    udef: t.udef.clone(),
                 }
             }
-            CTermData::CBool(v) => CTerm {
-                term: CTermData::CInt(false, 32, v.clone()),
-                udef: t.udef,
+            CTermData::Bool(v) => CTerm {
+                term: CTermData::Int(false, 32, v.clone()),
+                udef: t.udef.clone(),
             },
             _ => t.clone(),
         }
@@ -313,27 +306,24 @@ fn wrap_bin_arith(
 ) -> Result<CTerm, String> {
     let (a_arith, b_arith) = usual_arith_conversions(a, b);
     match (a_arith.term, b_arith.term, fu, fb) {
-        (CTermData::CInt(sx, nx, x), CTermData::CInt(sy, ny, y), Some(fu), _) if nx == ny => {
+        (CTermData::Int(sx, nx, x), CTermData::Int(sy, ny, y), Some(fu), _) if nx == ny => {
             Ok(CTerm {
-                term: CTermData::CInt(sx && sy, nx, fu(x, y)),
-                udef: false,
+                term: CTermData::Int(sx && sy, nx, fu(x, y)),
+                udef: bool_lit(false),
             })
         }
-        (CTermData::CBool(x), CTermData::CBool(y), _, Some(fb)) => Ok(CTerm {
-            term: CTermData::CBool(fb(x, y)),
-            udef: false,
+        (CTermData::Bool(x), CTermData::Bool(y), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::Bool(fb(x, y)),
+            udef: bool_lit(false),
         }),
-        (CTermData::CArray(ty, aid), CTermData::CInt(_, _, y), Some(fu), _) => Ok(CTerm {
-            term: CTermData::CStackPtr(ty, fu(bv_lit(0, 32), y), aid),
-            udef: false,
+        (CTermData::Array(ty, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
+            term: CTermData::StackPtr(ty, fu(bv_lit(0, 32), y), aid),
+            udef: bool_lit(false),
         }),
-        (CTermData::CStackPtr(ty, offset, aid), CTermData::CInt(_, _, y), Some(fu), _) => {
-            Ok(CTerm {
-                term: CTermData::CStackPtr(ty, fu(offset, y), aid),
-                udef: false,
-            })
-        }
-
+        (CTermData::StackPtr(ty, offset, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
+            term: CTermData::StackPtr(ty, fu(offset, y), aid),
+            udef: bool_lit(false),
+        }),
         (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
@@ -412,9 +402,9 @@ fn wrap_bin_logical(
     let a_bool = cast(Some(Ty::Bool), a);
     let b_bool = cast(Some(Ty::Bool), b);
     match (a_bool.term, b_bool.term, fu, fb) {
-        (CTermData::CBool(a), CTermData::CBool(b), _, Some(fb)) => Ok(CTerm {
-            term: CTermData::CBool(fb(a, b)),
-            udef: false,
+        (CTermData::Bool(a), CTermData::Bool(b), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::Bool(fb(a, b)),
+            udef: bool_lit(false),
         }),
         (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
@@ -445,15 +435,15 @@ fn wrap_bin_cmp(
 ) -> Result<CTerm, String> {
     let (a_arith, b_arith) = usual_arith_conversions(a, b);
     match (a_arith.term, b_arith.term, fu, fb) {
-        (CTermData::CInt(_, nx, x), CTermData::CInt(_, ny, y), Some(fu), _) if nx == ny => {
+        (CTermData::Int(_, nx, x), CTermData::Int(_, ny, y), Some(fu), _) if nx == ny => {
             Ok(CTerm {
-                term: CTermData::CBool(fu(x, y)),
-                udef: false,
+                term: CTermData::Bool(fu(x, y)),
+                udef: bool_lit(false),
             })
         }
-        (CTermData::CBool(x), CTermData::CBool(y), _, Some(fb)) => Ok(CTerm {
-            term: CTermData::CBool(fb(x, y)),
-            udef: false,
+        (CTermData::Bool(x), CTermData::Bool(y), _, Some(fb)) => Ok(CTerm {
+            term: CTermData::Bool(fb(x, y)),
+            udef: bool_lit(false),
         }),
         (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
@@ -509,7 +499,7 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 
 pub fn const_int(a: CTerm) -> Integer {
     let s = match &a.term {
-        CTermData::CInt(s, _, i) => match &i.op() {
+        CTermData::Int(s, _, i) => match &i.op() {
             Op::Const(Value::BitVector(f)) => {
                 if *s {
                     f.as_sint()
@@ -529,16 +519,38 @@ pub fn const_int(a: CTerm) -> Integer {
 fn wrap_shift(name: &str, op: BvBinOp, a: CTerm, b: CTerm) -> Result<CTerm, String> {
     let bc = const_int(b);
     match &a.term {
-        CTermData::CInt(s, na, a) => Ok(CTerm {
-            term: CTermData::CInt(*s, *na, term![Op::BvBinOp(op); a.clone(), bv_lit(bc, *na)]),
-            udef: false,
+        CTermData::Int(s, na, a) => Ok(CTerm {
+            term: CTermData::Int(*s, *na, term![Op::BvBinOp(op); a.clone(), bv_lit(bc, *na)]),
+            udef: bool_lit(false),
         }),
         x => Err(format!("Cannot perform op '{name}' on {x} and {bc}")),
     }
 }
 
 pub fn shl(a: CTerm, b: CTerm) -> Result<CTerm, String> {
-    wrap_shift("<<", BvBinOp::Shl, a, b)
+    let l = int_promotion(&a);
+    let r = int_promotion(&b);
+    if !l.type_().is_integer_type() {
+        return Err(format!("non-integer {a} in shift"));
+    }
+    if !r.type_().is_integer_type() {
+        return Err(format!("non-integer {b} in shift"));
+    }
+    let l_bits = l.type_().total_num_bits();
+    let r_bits = r.type_().total_num_bits();
+    let r_signed = r.type_().is_signed_int();
+    let r_in_range = if r_signed {
+        term![AND; term![BV_SGE; r.term.simple_term(), bv_lit(0, r_bits)], term![BV_SLT; r.term.simple_term(), bv_lit(l_bits, r_bits)]]
+    } else {
+        term![BV_ULT; r.term.simple_term(), bv_lit(l_bits, r_bits)]
+    };
+    // missing: result must be in-range.
+    // see C11 6.5.7.3
+    let res = term![BV_SHL; l.term.simple_term(), r.term.simple_term()];
+    Ok(CTerm {
+        term: CTermData::Int(l.type_().is_signed_int(), l_bits, res),
+        udef: term![OR; a.udef, b.udef, term![NOT; r_in_range]],
+    })
 }
 
 pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
@@ -576,16 +588,16 @@ impl Embeddable for Ct {
     ) -> Self::T {
         match ty {
             Ty::Bool => Self::T {
-                term: CTermData::CBool(ctx.cs.borrow_mut().new_var(
+                term: CTermData::Bool(ctx.cs.borrow_mut().new_var(
                     &name,
                     Sort::Bool,
                     visibility,
                     precompute.map(|p| p.term.simple_term()),
                 )),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Int(s, w) => Self::T {
-                term: CTermData::CInt(
+                term: CTermData::Int(
                     *s,
                     *w,
                     ctx.cs.borrow_mut().new_var(
@@ -595,7 +607,7 @@ impl Embeddable for Ct {
                         precompute.map(|p| p.term.simple_term()),
                     ),
                 ),
-                udef: false,
+                udef: bool_lit(false),
             },
             Ty::Array(n, _, ty) => {
                 assert!(precompute.is_none());
@@ -605,8 +617,8 @@ impl Embeddable for Ct {
                 let mut mem = ctx.mem.borrow_mut();
                 let id = mem.zero_allocate(*n, 32, ty.num_bits());
                 let arr = Self::T {
-                    term: CTermData::CArray(*ty.clone(), Some(id)),
-                    udef: false,
+                    term: CTermData::Array(*ty.clone(), Some(id)),
+                    udef: bool_lit(false),
                 };
                 for (i, t) in v.iter().enumerate() {
                     let val = t.term.term(ctx);
@@ -632,7 +644,7 @@ impl Embeddable for Ct {
                     })
                     .collect();
 
-                cterm(CTermData::CStruct(
+                cterm(CTermData::Struct(
                     Ty::Struct(n.to_string(), fs.clone()),
                     FieldList::new(fields),
                 ))
@@ -642,15 +654,15 @@ impl Embeddable for Ct {
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
         match (t.term, f.term) {
-            (CTermData::CBool(a), CTermData::CBool(b)) => Self::T {
-                term: CTermData::CBool(term![Op::Ite; cond, a, b]),
-                udef: false,
+            (CTermData::Bool(a), CTermData::Bool(b)) => Self::T {
+                term: CTermData::Bool(term![Op::Ite; cond, a, b]),
+                udef: bool_lit(false),
             },
-            (CTermData::CInt(sa, wa, a), CTermData::CInt(sb, wb, b)) if wa == wb => Self::T {
-                term: CTermData::CInt(sa && sb, wa, term![Op::Ite; cond, a, b]),
-                udef: false,
+            (CTermData::Int(sa, wa, a), CTermData::Int(sb, wb, b)) if wa == wb => Self::T {
+                term: CTermData::Int(sa && sb, wa, term![Op::Ite; cond, a, b]),
+                udef: bool_lit(false),
             },
-            (CTermData::CStruct(ta, fa), CTermData::CStruct(tb, fb)) if ta == tb => {
+            (CTermData::Struct(ta, fa), CTermData::Struct(tb, fb)) if ta == tb => {
                 let fields: Vec<(String, CTerm)> = fa
                     .fields()
                     .zip(fb.fields())
@@ -663,8 +675,8 @@ impl Embeddable for Ct {
                     .collect();
 
                 Self::T {
-                    term: CTermData::CStruct(ta, FieldList::new(fields)),
-                    udef: false,
+                    term: CTermData::Struct(ta, FieldList::new(fields)),
+                    udef: bool_lit(false),
                 }
             }
             (t, f) => panic!("Cannot ITE {} and {}", t, f),
@@ -677,20 +689,17 @@ impl Embeddable for Ct {
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
         match ty {
-            Ty::Void => {
-                unimplemented!("Void not implemented")
-            }
-            Ty::Bool => CTerm {
-                term: CTermData::CBool(Sort::Bool.default_term()),
-                udef: false,
+            Ty::Void | Ty::Bool => CTerm {
+                term: CTermData::Bool(Sort::Bool.default_term()),
+                udef: bool_lit(false),
             },
             Ty::Int(s, w) => CTerm {
-                term: CTermData::CInt(*s, *w, Sort::BitVector(*w).default_term()),
-                udef: false,
+                term: CTermData::Int(*s, *w, Sort::BitVector(*w).default_term()),
+                udef: bool_lit(false),
             },
             Ty::Array(_s, _, ty) => CTerm {
-                term: CTermData::CArray(*ty.clone(), None),
-                udef: false,
+                term: CTermData::Array(*ty.clone(), None),
+                udef: bool_lit(false),
             },
             Ty::Struct(_name, fs) => {
                 let fields: Vec<(String, CTerm)> = fs
@@ -698,17 +707,13 @@ impl Embeddable for Ct {
                     .map(|(f_name, f_ty)| (f_name.clone(), self.initialize_return(f_ty, f_name)))
                     .collect();
                 CTerm {
-                    term: CTermData::CStruct(ty.clone(), FieldList::new(fields)),
-                    udef: false,
+                    term: CTermData::Struct(ty.clone(), FieldList::new(fields)),
+                    udef: bool_lit(false),
                 }
             }
             Ty::Ptr(size, ty) => CTerm {
-                term: CTermData::CStackPtr(
-                    *ty.clone(),
-                    Sort::BitVector(*size).default_term(),
-                    None,
-                ),
-                udef: false,
+                term: CTermData::StackPtr(*ty.clone(), Sort::BitVector(*size).default_term(), None),
+                udef: bool_lit(false),
             },
         }
     }
