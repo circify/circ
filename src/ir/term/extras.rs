@@ -189,14 +189,7 @@ pub fn dump_op_stats() {
     vector.sort_by_key(|t| t.1);
     for (k, ct, cs_ct, ave) in vector {
         let mem = size_of::<Op>() * ct + size_of::<Vec<Term>>() * ct + size_of::<Term>() * cs_ct;
-        let s: String = format!("{}", k);
-        println!(
-            "Op {:>20}, Count {:>8}, Children {:>8}, Ave {:>8.2}, Mem {:>20}",
-            s,
-            ct,
-            cs_ct,
-            ave,
-            mem
-        );
+        let s: String = format!("{k}");
+        println!("Op {s:>20}, Count {ct:>8}, Children {cs_ct:>8}, Ave {ave:>8.2}, Mem {mem:>20}");
     }
 }

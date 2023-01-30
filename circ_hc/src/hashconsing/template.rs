@@ -54,7 +54,6 @@ impl crate::Table<TemplateOp> for Table {
         panic!()
     }
 
-
     fn reserve(num_nodes: usize) {
         FACTORY.reserve(num_nodes);
     }

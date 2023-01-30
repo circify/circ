@@ -49,7 +49,6 @@ impl crate::Table<TemplateOp> for Table {
         MANAGER.with(|man| man.table.borrow().keys().for_each(|n| f(&n.op, &n.cs)));
     }
 
-
     fn reserve(num_nodes: usize) {
         MANAGER.with(|man| man.table.borrow_mut().reserve(num_nodes))
     }
