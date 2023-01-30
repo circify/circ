@@ -207,7 +207,7 @@ mod test {
             let m = 101;
             let field = FieldT::from(Integer::from(m));
             let n_vars = g.size() + 1;
-            let vars: Vec<_> = (0..n_vars).map(|i| format!("v{}", i)).collect();
+            let vars: Vec<_> = (0..n_vars).map(|i| format!("v{i}")).collect();
             let mut values: FxHashMap<String, Value> = Default::default();
             let mut var_values: FxHashMap<Var, FieldV> = Default::default();
             let mut r1cs = R1cs::new(field.clone(), Default::default());

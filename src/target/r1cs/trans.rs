@@ -145,7 +145,7 @@ impl<'cfg> ToR1cs<'cfg> {
             .map(|i| {
                 self.fresh_bit(
                     // We get the right repr here because of infinite two's complement.
-                    &format!("{}_b{}", d, i),
+                    &format!("{d}_b{i}"),
                     term![Op::BvBit(i); term![Op::PfToBv(n); x.0.clone()]],
                 )
             })
@@ -314,7 +314,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.embed_bool(c);
                     }
                     Sort::BitVector(_) => {
-                        self.embed_bv(c);
+                        self.embed_bv_lit(c);
                     }
                     Sort::Field(_) => {
                         self.embed_pf(c);
@@ -590,7 +590,7 @@ impl<'cfg> ToR1cs<'cfg> {
         (some_high_bit, shift_amt)
     }
 
-    fn embed_bv(&mut self, bv: Term) {
+    fn embed_bv_lit(&mut self, bv: Term) {
         //println!("Embed: {}", bv);
         //let bv2=  bv.clone();
         if let Sort::BitVector(n) = check(&bv) {

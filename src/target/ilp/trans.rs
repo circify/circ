@@ -151,7 +151,7 @@ impl ToMilp {
     /// Returns a bit decomposition of e, with the ones place in index 0.
     fn bit_decomp(&mut self, e: &Expression, n_bits: usize) -> Vec<Expression> {
         let bits: Vec<_> = (0..n_bits)
-            .map(|i| self.fresh_bit(&format!("bit{}", i)))
+            .map(|i| self.fresh_bit(&format!("bit{i}")))
             .collect();
         let sum = bits
             .iter()

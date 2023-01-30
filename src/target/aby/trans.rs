@@ -182,13 +182,13 @@ impl<'a> ToABY<'a> {
                 Op::Const(Value::BitVector(b)) => {
                     let value = b.as_sint();
                     let bitlen = 32;
-                    let line = format!("2 1 {} {} {} {}\n", value, bitlen, output_share, op);
+                    let line = format!("2 1 {value} {bitlen} {output_share} {op}\n");
                     self.const_output.push(line);
                 }
                 Op::Const(Value::Bool(b)) => {
                     let value = *b as i32;
                     let bitlen = 1;
-                    let line = format!("2 1 {} {} {} {}\n", value, bitlen, output_share, op);
+                    let line = format!("2 1 {value} {bitlen} {output_share} {op}\n");
                     self.const_output.push(line);
                 }
                 _ => todo!(),
@@ -206,7 +206,7 @@ impl<'a> ToABY<'a> {
 
     fn write_share(&mut self, t: &Term, s: i32) {
         let share_type = self.get_term_share_type(t).char();
-        let line = format!("{} {}\n", s, share_type);
+        let line = format!("{s} {share_type}\n");
         self.share_output.push(line);
     }
 
@@ -269,7 +269,7 @@ impl<'a> ToABY<'a> {
         let s = self.get_share(t, to_share_type);
         if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone()) {
             e.insert(s);
-            let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+            let line = format!("2 1 {a} {b} {s} {op}\n");
             self.bytecode_output.push(line);
         } else {
             let s = *self.cache.get(&key).unwrap();
@@ -289,10 +289,10 @@ impl<'a> ToABY<'a> {
 
                     if vis == PUBLIC {
                         let bitlen = 1;
-                        let line = format!("3 1 {} {} {} {} {}\n", name, vis, bitlen, s, op);
+                        let line = format!("3 1 {name} {vis} {bitlen} {s} {op}\n");
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {} {} {} {}\n", name, vis, s, op);
+                        let line = format!("2 1 {name} {vis} {s} {op}\n");
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -316,7 +316,7 @@ impl<'a> ToABY<'a> {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
                     e.insert(s);
-                    let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s, op);
+                    let line = format!("3 1 {sel} {a} {b} {s} {op}\n");
                     self.bytecode_output.push(line);
                 } else {
                     let s = *self.cache.get(&key).unwrap();
@@ -332,7 +332,7 @@ impl<'a> ToABY<'a> {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
                     e.insert(s);
-                    let line = format!("1 1 {} {} {}\n", a, s, op);
+                    let line = format!("1 1 {a} {s} {op}\n");
                     self.bytecode_output.push(line);
                 } else {
                     let s = *self.cache.get(&key).unwrap();
@@ -368,7 +368,7 @@ impl<'a> ToABY<'a> {
                         self.cache.entry(key.clone())
                     {
                         e.insert(s);
-                        let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+                        let line = format!("2 1 {a} {b} {s} {op}\n");
                         self.bytecode_output.push(line);
                     } else {
                         let s = *self.cache.get(&key).unwrap();
@@ -393,7 +393,7 @@ impl<'a> ToABY<'a> {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
                     e.insert(s);
-                    let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+                    let line = format!("2 1 {a} {b} {s} {op}\n");
                     self.bytecode_output.push(line);
                 } else {
                     let s = *self.cache.get(&key).unwrap();
@@ -416,10 +416,10 @@ impl<'a> ToABY<'a> {
 
                     if vis == PUBLIC {
                         let bitlen = 32;
-                        let line = format!("3 1 {} {} {} {} {}\n", name, vis, bitlen, s, op);
+                        let line = format!("3 1 {name} {vis} {bitlen} {s} {op}\n");
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {} {} {} {}\n", name, vis, s, op);
+                        let line = format!("2 1 {name} {vis} {s} {op}\n");
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -440,7 +440,7 @@ impl<'a> ToABY<'a> {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
                     e.insert(s);
-                    let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, s, op);
+                    let line = format!("3 1 {sel} {a} {b} {s} {op}\n");
                     self.bytecode_output.push(line);
                 } else {
                     let s = *self.cache.get(&key).unwrap();
@@ -463,7 +463,7 @@ impl<'a> ToABY<'a> {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.cache.entry(key.clone())
                 {
                     e.insert(s);
-                    let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+                    let line = format!("2 1 {a} {b} {s} {op}\n");
                     self.bytecode_output.push(line);
                 } else {
                     let s = *self.cache.get(&key).unwrap();
@@ -491,7 +491,7 @@ impl<'a> ToABY<'a> {
                             self.cache.entry(key.clone())
                         {
                             e.insert(s);
-                            let line = format!("2 1 {} {} {} {}\n", a, b, s, op);
+                            let line = format!("2 1 {a} {b} {s} {op}\n");
                             self.bytecode_output.push(line);
                         } else {
                             let s = *self.cache.get(&key).unwrap();
@@ -513,7 +513,7 @@ impl<'a> ToABY<'a> {
                             self.cache.entry(key.clone())
                         {
                             e.insert(s);
-                            let line = format!("2 1 {} {} {} {}\n", a, const_shift_amount, s, op);
+                            let line = format!("2 1 {a} {const_shift_amount} {s} {op}\n");
                             self.bytecode_output.push(line);
                         } else {
                             let s = *self.cache.get(&key).unwrap();
@@ -528,7 +528,7 @@ impl<'a> ToABY<'a> {
                 let tuple_share = self.get_share(&t.cs()[0], to_share_type);
                 let field_share = self.get_share(&t, to_share_type);
                 let op = "FIELD";
-                let line = format!("2 1 {} {} {} {}\n", tuple_share, i, field_share, op);
+                let line = format!("2 1 {tuple_share} {i} {field_share} {op}\n");
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), field_share);
             }
@@ -541,15 +541,12 @@ impl<'a> ToABY<'a> {
                     let op = "SELECT_CONS";
                     let idx = bv.uint().to_usize().unwrap();
                     let len = self.get_sort_len(&check(&t.cs()[0]));
-                    assert!(idx < len, "idx: {}, len: {}", idx, len);
-                    format!("2 1 {} {} {} {}\n", array_share, idx, select_share, op)
+                    assert!(idx < len, "{}", "idx: {idx}, len: {len}");
+                    format!("2 1 {array_share} {idx} {select_share} {op}\n")
                 } else {
                     let op = "SELECT";
                     let idx_share = self.get_share(&t.cs()[1], to_share_type);
-                    format!(
-                        "2 1 {} {} {} {}\n",
-                        array_share, idx_share, select_share, op
-                    )
+                    format!("2 1 {array_share} {idx_share} {select_share} {op}\n",)
                 };
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), select_share);
@@ -639,7 +636,7 @@ impl<'a> ToABY<'a> {
                 let a = self.get_share(&t.cs()[1], to_share_type);
                 let b = self.get_share(&t.cs()[2], to_share_type);
 
-                let line = format!("3 1 {} {} {} {} {}\n", sel, a, b, mux_share, op);
+                let line = format!("3 1 {sel} {a} {b} {mux_share} {op}\n");
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), mux_share);
             }
@@ -655,18 +652,12 @@ impl<'a> ToABY<'a> {
                     let op = "STORE_CONS";
                     let idx = bv.uint().to_usize().unwrap();
                     let len = self.get_sort_len(&check(&t.cs()[0]));
-                    assert!(idx < len, "idx: {}, len: {}", idx, len);
-                    format!(
-                        "3 1 {} {} {} {} {}\n",
-                        array_share, idx, value_share, store_share, op
-                    )
+                    assert!(idx < len, "{}", "idx: {idx}, len: {len}");
+                    format!("3 1 {array_share} {idx} {value_share} {store_share} {op}\n",)
                 } else {
                     let op = "STORE";
                     let index_share = self.get_share(&t.cs()[1], to_share_type);
-                    format!(
-                        "3 1 {} {} {} {} {}\n",
-                        array_share, index_share, value_share, store_share, op
-                    )
+                    format!("3 1 {array_share} {index_share} {value_share} {store_share} {op}\n",)
                 };
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), store_share);
@@ -699,10 +690,7 @@ impl<'a> ToABY<'a> {
                     _ => panic!("Field op on non-tuple"),
                 };
 
-                let line = format!(
-                    "3 1 {} {} {} {} {}\n",
-                    tuple_share, offset, len, field_share, op
-                );
+                let line = format!("3 1 {tuple_share} {offset} {len} {field_share} {op}\n");
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), field_share);
             }
@@ -714,10 +702,7 @@ impl<'a> ToABY<'a> {
                 let update_share = self.get_share(&t, to_share_type);
 
                 let op = "UPDATE";
-                let line = format!(
-                    "3 1 {} {} {} {} {}\n",
-                    tuple_share, i, value_share, update_share, op
-                );
+                let line = format!("3 1 {tuple_share} {i} {value_share} {update_share} {op}\n",);
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), update_share);
             }
@@ -742,7 +727,7 @@ impl<'a> ToABY<'a> {
             }
             Op::Call(name, ..) => {
                 let call_share = self.get_share(&t, to_share_type);
-                let op = format!("CALL({})", name);
+                let op = format!("CALL({name})");
 
                 let mut arg_shares: Vec<i32> = Vec::new();
                 for c in t.cs().iter() {
@@ -806,7 +791,7 @@ impl<'a> ToABY<'a> {
             get_path(
                 self.path,
                 &self.lang,
-                &format!("{}_bytecode_output", name),
+                &format!("{name}_bytecode_output"),
                 true,
             );
 
@@ -816,7 +801,7 @@ impl<'a> ToABY<'a> {
                 let op = "OUT";
                 let to_share_type = self.get_term_share_type(t);
                 let share = self.get_share(t, to_share_type);
-                let line = format!("1 0 {} {}\n", share, op);
+                let line = format!("1 0 {share} {op}\n");
                 outputs.push(line);
             }
             self.bytecode_output.append(&mut outputs);
@@ -845,15 +830,14 @@ impl<'a> ToABY<'a> {
             self.bytecode_input = inputs;
 
             // write input bytecode
-            let bytecode_path =
-                get_path(self.path, &self.lang, &format!("{}_bytecode", name), true);
+            let bytecode_path = get_path(self.path, &self.lang, &format!("{name}_bytecode"), true);
             write_lines(&bytecode_path, &self.bytecode_input);
 
             // write output bytecode
             let bytecode_output_path = get_path(
                 self.path,
                 &self.lang,
-                &format!("{}_bytecode_output", name),
+                &format!("{name}_bytecode_output"),
                 false,
             );
             write_lines(&bytecode_output_path, &self.bytecode_output);

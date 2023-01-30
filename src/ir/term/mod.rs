@@ -1302,8 +1302,8 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             if let FieldToBv::Panic = cfg().ir.field_to_bv {
                 assert!(
                     (i.significant_bits() as usize) <= *w,
-                    "oversized input to Op::PfToBv({})",
-                    w
+                    "{}",
+                    "oversized input to Op::PfToBv({w})",
                 );
             }
             BitVector::new(i % (Integer::from(1) << *w), *w)

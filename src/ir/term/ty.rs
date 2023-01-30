@@ -114,8 +114,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
             Ok(Sort::BitVector(32)) => Ok(Sort::F32),
             Ok(Sort::BitVector(64)) => Ok(Sort::F64),
             Ok(s) => Err(TypeErrorReason::Custom(format!(
-                "Cannot convert {} to floating-point",
-                s
+                "Cannot convert {s} to floating-point"
             ))),
             Err(e) => Err(e),
         },
@@ -141,8 +140,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 Ok(sorts[*i].clone())
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
-                    "index {} in tuple of sort {}",
-                    i, sort
+                    "index {i} in tuple of sort {sort}"
                 )))
             }
         }
@@ -185,7 +183,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         }
         Op::Call(_, _, ret) => Ok(ret.clone()),
         Op::Rot(_) => Ok(get_ty(&t.cs()[0]).clone()),
-        o => Err(TypeErrorReason::Custom(format!("other operator: {}", o))),
+        o => Err(TypeErrorReason::Custom(format!("other operator: {o}"))),
     }
 }
 
@@ -265,8 +263,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(Sort::BitVector(high - low + 1))
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
-                    "Cannot slice from {} to {} in a bit-vector of width {}",
-                    high, low, w
+                    "Cannot slice from {high} to {low} in a bit-vector of width {w}"
                 )))
             }
         }
@@ -298,8 +295,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(Sort::Bool)
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
-                    "Cannot get bit {} of a {}-bit bit-vector",
-                    i, w
+                    "Cannot get bit {i} of a {w}-bit bit-vector"
                 )))
             }
         }
@@ -359,8 +355,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(t[*i].clone())
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
-                    "index {} in tuple of sort {}",
-                    i, a
+                    "index {i} in tuple of sort {a}"
                 )))
             }
         }),
@@ -370,8 +365,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 Ok(a.clone())
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
-                    "index {} in tuple of sort {}",
-                    i, a
+                    "index {i} in tuple of sort {a}"
                 )))
             }
         }),

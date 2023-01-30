@@ -57,7 +57,7 @@ bls12_381 = "0.7"
 approx = "0.5.0"
 
 [features]
-default = ["r1cs"]
+default = []
 # frontends
 c = ["lang-c"]
 zok = ["zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]

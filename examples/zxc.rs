@@ -84,7 +84,7 @@ fn main() {
         .init();
     let options = Options::parse();
     circ::cfg::set(&options.circ);
-    println!("{:?}", options);
+    println!("{options:?}");
 
     let cs = {
         let inputs = zsharp::Inputs {

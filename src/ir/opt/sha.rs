@@ -227,7 +227,7 @@ mod test {
     fn catch_all_case() {
         let abc_term_rewrites = |t: &str| -> bool {
             contains_ite(&sha_rewrites(&parse_term(
-                format!("(declare ((a (bv 4))(b (bv 4))(c (bv 4))) {})", t).as_bytes(),
+                format!("(declare ((a (bv 4))(b (bv 4))(c (bv 4))) {t})").as_bytes(),
             )))
         };
         assert!(abc_term_rewrites("(bvor (bvand a b) (bvand (bvnot a) c))"));

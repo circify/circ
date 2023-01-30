@@ -1,5 +1,14 @@
 #![allow(unused_imports)]
 #[cfg(feature = "bellman")]
+use bellman::{
+    gadgets::test::TestConstraintSystem,
+    groth16::{
+        create_random_proof, generate_parameters, generate_random_parameters,
+        prepare_verifying_key, verify_proof, Parameters, Proof, VerifyingKey,
+    },
+    Circuit,
+};
+#[cfg(feature = "bellman")]
 use bls12_381::{Bls12, Scalar};
 use circ::cfg::{
     cfg,
@@ -29,6 +38,8 @@ use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 use circ::target::r1cs::spartan::write_data;
 #[cfg(feature = "bellman")]
 use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
+#[cfg(feature = "spartan")]
+use circ::target::r1cs::spartan::write_data;
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs};
 #[cfg(feature = "smt")]
@@ -148,7 +159,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
             } else if p.ends_with(".c") || p.ends_with(".cpp") || p.ends_with(".cc") {
                 DeterminedLanguage::C
             } else {
-                println!("Could not deduce the input language from path '{}', please set the language manually", p);
+                println!("Could not deduce the input language from path '{p}', please set the language manually");
                 std::process::exit(2)
             }
         }
@@ -164,7 +175,7 @@ fn main() {
     let options = Options::parse();
     circ::cfg::set(&options.circ);
     let path_buf = options.path.clone();
-    println!("{:?}", options);
+    println!("{options:?}");
     let mode = match options.backend {
         Backend::R1cs { .. } => match options.frontend.value_threshold {
             Some(t) => Mode::ProofOfHighValue(t),
@@ -202,6 +213,8 @@ fn main() {
             let inputs = c::Inputs {
                 file: options.path,
                 mode,
+                sv_functions: options.circ.c.sv_functions,
+                assert_no_ub: options.circ.c.assert_no_ub,
             };
             C::gen(inputs)
         }
@@ -319,8 +332,8 @@ fn main() {
                 DeterminedLanguage::Zsharp => "zok".to_string(),
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
-            println!("Cost model: {}", cost_model);
-            println!("Selection scheme: {}", selection_scheme);
+            println!("Cost model: {cost_model}");
+            println!("Selection scheme: {selection_scheme}");
             to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
         }
         #[cfg(not(feature = "aby"))]
@@ -359,14 +372,15 @@ fn main() {
         }
         #[cfg(feature = "smt")]
         Backend::Smt { .. } => {
+            let main_comp = cs.get("main").clone();
+            assert_eq!(main_comp.outputs.len(), 1);
+            let model = find_model(&main_comp.outputs[0]);
             if options.circ.datalog.lint_prim_rec {
-                let main_comp = cs.get("main").clone();
-                assert_eq!(main_comp.outputs.len(), 1);
-                match find_model(&main_comp.outputs[0]) {
+                match model {
                     Some(m) => {
                         println!("Not primitive recursive!");
                         for (var, val) in m {
-                            println!("{} -> {}", var, val);
+                            println!("{var} -> {val}");
                         }
                         std::process::exit(1)
                     }
@@ -375,7 +389,18 @@ fn main() {
                     }
                 }
             } else {
-                todo!()
+                match model {
+                    Some(m) => {
+                        println!("Property does not hold!\nCounterexample:");
+                        for (var, val) in m {
+                            println!("{var} -> {val}");
+                        }
+                        std::process::exit(1)
+                    }
+                    None => {
+                        println!("Property holds");
+                    }
+                }
             }
         }
         #[cfg(not(feature = "smt"))]
