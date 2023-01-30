@@ -288,6 +288,10 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
+                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(
+                    self.ident_string(name),
+                    FieldT::from(self.int(field)),
+                )),
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
@@ -957,5 +961,13 @@ mod test {
         let s = serialize_precompute(&c);
         let c2 = parse_precompute(s.as_bytes());
         assert_eq!(c, c2);
+    }
+
+    #[test]
+    fn challenge_roundtrip() {
+        let t = parse_term(b"(declare ((a bool) (b bool)) ((challenge hithere 17) a b))");
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
     }
 }

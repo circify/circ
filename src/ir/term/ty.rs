@@ -59,6 +59,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::IntNaryOp(_) => Vec::new(),
         Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
+        Op::PfChallenge(_, _) => Vec::new(),
         Op::Select => vec![t.cs()[0].clone()],
         Op::Store => vec![t.cs()[0].clone()],
         Op::Tuple => t.cs().to_vec(),
@@ -128,6 +129,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::IntNaryOp(_) => Ok(Sort::Int),
         Op::IntBinPred(_) => Ok(Sort::Bool),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
+        Op::PfChallenge(_, m) => Ok(Sort::Field(m.clone())),
         Op::Select => array_or(get_ty(&t.cs()[0]), "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs()[0]).clone()),
         Op::Tuple => Ok(Sort::Tuple(t.cs().iter().map(get_ty).cloned().collect())),
@@ -332,6 +334,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 .map(|a| a.clone())
         }
         (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
+        (Op::PfChallenge(_, m), _) => Ok(Sort::Field(m.clone())),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
         (Op::IntNaryOp(_), a) => {
             let ctx = "int nary op";
