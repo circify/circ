@@ -18,9 +18,7 @@ use rug::integer::{IsPrime, Order};
 use rug::Integer;
 
 use super::proof;
-use super::{
-    wit_comp::StagedWitCompEvaluator, Lc, ProverDataNew, Var, VarType, VerifierDataNew,
-};
+use super::{wit_comp::StagedWitCompEvaluator, Lc, ProverDataNew, Var, VarType, VerifierDataNew};
 use crate::ir::term::Value;
 
 /// Convert a (rug) integer to a prime field element.

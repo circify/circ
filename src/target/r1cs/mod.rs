@@ -515,7 +515,11 @@ impl<S: Hash + Eq + Clone + Debug, T: Hash + Eq + Clone + Debug> BiMap<S, T> {
             "Duplicate key {:?}",
             s
         );
-        assert!(self.rev.insert(t.clone(), s).is_none(), "Duplicate value {:?}", t);
+        assert!(
+            self.rev.insert(t.clone(), s).is_none(),
+            "Duplicate value {:?}",
+            t
+        );
     }
     fn contains_key<Q>(&self, s: &Q) -> bool
     where

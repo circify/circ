@@ -56,14 +56,17 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a> {
         );
         let mut vars = HashMap::with_capacity(self.0.r1cs.vars.len());
         // (assignment values, evaluator, next evaluator inputs)
-        let mut wit_comp: Option<(Vec<Value>, StagedWitCompEvaluator<'a>, FxHashMap<String, Value>)> =
-            self.1.map(|inputs| {
-                (
-                    Vec::new(),
-                    StagedWitCompEvaluator::new(&self.0.precompute),
-                    inputs.clone(),
-                )
-            });
+        let mut wit_comp: Option<(
+            Vec<Value>,
+            StagedWitCompEvaluator<'a>,
+            FxHashMap<String, Value>,
+        )> = self.1.map(|inputs| {
+            (
+                Vec::new(),
+                StagedWitCompEvaluator::new(&self.0.precompute),
+                inputs.clone(),
+            )
+        });
         let mut var_idx = 0;
         let num_stages = self.0.precompute.stage_sizes().count();
         for (i, num_vars) in self.0.precompute.stage_sizes().enumerate() {
@@ -99,19 +102,20 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a> {
                     VarType::Chall => {
                         let (v, val) = cs.alloc_random(name_f)?;
                         if let Some((ref mut values, _, ref mut inputs)) = wit_comp.as_mut() {
-                            let val = Value::Field(self.0.r1cs.field.new_v(ff_to_int(val.unwrap())));
+                            let val =
+                                Value::Field(self.0.r1cs.field.new_v(ff_to_int(val.unwrap())));
                             values.push(val.clone());
                             let name = self.0.r1cs.names.get(&var).unwrap();
                             inputs.insert(name.to_owned(), val);
                         }
                         v
-                    },
+                    }
                     VarType::CWit => unimplemented!(),
                 };
                 vars.insert(var, v);
                 var_idx += 1;
                 if j + 1 == num_vars && num_challs > 0 {
-                    cs.end_aux_block(|| format!("block {}", i-1))?;
+                    cs.end_aux_block(|| format!("block {}", i - 1))?;
                 }
             }
         }

@@ -50,7 +50,7 @@ enum ProofAction {
 /// Whether to use Groth16 or Mirage
 enum ProofImpl {
     Groth16,
-    Mirage
+    Mirage,
 }
 
 fn main() {
