@@ -185,6 +185,7 @@ impl DisplayIr for Op {
             Op::IntNaryOp(a) => write!(f, "{a}"),
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
+            Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),

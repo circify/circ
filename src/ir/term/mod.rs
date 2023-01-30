@@ -125,6 +125,13 @@ pub enum Op {
     ///
     /// Takes the modulus.
     UbvToPf(FieldT),
+    /// A random value, sampled uniformly and independently of its arguments.
+    ///
+    /// Takes a name (if deterministically sampled, challenges of different names are sampled
+    /// differentely) and a field to sample from.
+    ///
+    /// In IR evaluation, we sample deterministically based on a hash of the name.
+    PfChallenge(String, FieldT),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -272,6 +279,7 @@ impl Op {
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
+            Op::PfChallenge(_, _) => None,
             Op::IntNaryOp(_) => None,
             Op::IntBinPred(_) => Some(2),
             Op::UbvToPf(_) => Some(1),
@@ -1367,6 +1375,21 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             )
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
+        Op::PfChallenge(name, field) => {
+            use rand::SeedableRng;
+            use rand_chacha::ChaChaRng;
+            use std::hash::{Hash, Hasher};
+            // hash the string
+            let mut hasher = fxhash::FxHasher::default();
+            name.hash(&mut hasher);
+            let hash: u64 = hasher.finish();
+            // seed ChaCha with the hash
+            let mut seed = [0u8; 32];
+            seed[0..8].copy_from_slice(&hash.to_le_bytes());
+            let mut rng = ChaChaRng::from_seed(seed);
+            // sample from ChaCha
+            Value::Field(field.random_v(&mut rng))
+        }
         // tuple
         Op::Tuple => Value::Tuple(args.iter().map(|a| (*a).clone()).collect()),
         Op::Field(i) => {
