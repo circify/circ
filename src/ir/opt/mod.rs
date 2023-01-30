@@ -72,7 +72,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 Opt::FlattenAssertions => {
                     let mut new_outputs = Vec::new();
                     for a in std::mem::take(&mut c.outputs) {
-                        assert_eq!(check(&a), Sort::Bool, "Non-bool in {:?}", i);
+                        assert_eq!(check(&a), Sort::Bool, "Non-bool in {i:?}");
                         if a.op() == &Op::BoolNaryOp(BoolNaryOp::And) {
                             new_outputs.extend(a.cs().iter().cloned());
                         } else {

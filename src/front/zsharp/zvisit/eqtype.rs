@@ -16,8 +16,7 @@ pub(super) fn eq_type<'ast>(
         (Array(aty), Array(aty2)) => eq_array_type(aty, aty2, zgen),
         (Struct(sty), Struct(sty2)) => eq_struct_type(sty, sty2, zgen),
         _ => Err(ZVisitorError(format!(
-            "type mismatch: expected {:?}, found {:?}",
-            ty, ty2,
+            "type mismatch: expected {ty:?}, found {ty2:?}"
         ))),
     }
 }
@@ -32,8 +31,7 @@ fn eq_basic_type<'ast>(ty: &ast::BasicType<'ast>, ty2: &ast::BasicType<'ast>) ->
         (U32(_), U32(_)) => Ok(()),
         (U64(_), U64(_)) => Ok(()),
         _ => Err(ZVisitorError(format!(
-            "basic type mismatch: expected {:?}, found {:?}",
-            ty, ty2,
+            "basic type mismatch: expected {ty:?}, found {ty2:?}"
         ))),
     }
 }
@@ -79,7 +77,7 @@ fn eq_struct_type<'ast>(
     }
 }
 
-fn is_struct<'ast>(id: &str, zgen: &ZGen<'ast>) -> bool {
+fn is_struct(id: &str, zgen: &ZGen<'_>) -> bool {
     zgen.get_struct_or_type(id)
         .map(|(s, _)| s.is_ok())
         .unwrap_or(false)

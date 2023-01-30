@@ -120,7 +120,7 @@ impl FixedSizeDist {
             }
             Sort::BitVector(w) => vec![
                 self.sample_value(sort, rng),
-                Op::Var(self.sample_ident(&format!("bv{}", w), rng), sort.clone()),
+                Op::Var(self.sample_ident(&format!("bv{w}"), rng), sort.clone()),
                 Op::BvUnOp(BvUnOp::Neg),
                 Op::BvUnOp(BvUnOp::Not),
                 Op::BvUext(rng.gen_range(0..*w)),
@@ -152,7 +152,7 @@ impl FixedSizeDist {
                     // No variables!
                     Op::Var(
                         self.sample_ident(
-                            &format!("tp_{}", sort)
+                            &format!("tp_{sort}")
                                 .replace('(', "[")
                                 .replace(')', "]")
                                 .replace(' ', "_"),

@@ -20,8 +20,8 @@ impl Display for Ty {
         match &self {
             Ty::Bool => write!(f, "bool"),
             Ty::Field => write!(f, "field"),
-            Ty::Uint(w) => write!(f, "u{}", w),
-            Ty::Array(l, t) => write!(f, "{}[{}]", t, l),
+            Ty::Uint(w) => write!(f, "u{w}"),
+            Ty::Array(l, t) => write!(f, "{t}[{l}]"),
         }
     }
 }

@@ -21,7 +21,7 @@ fn create_vars(
                 .enumerate()
                 .map(|(i, sort)| {
                     create_vars(
-                        &format!("{}.{}", prefix, i),
+                        &format!("{prefix}.{i}"),
                         term![Op::Field(i); prefix_term.clone()],
                         sort,
                         new_var_requests,
@@ -39,7 +39,7 @@ fn create_vars(
                     .zip(array_elements)
                     .map(|(i, element)| {
                         create_vars(
-                            &format!("{}.{}", prefix, i),
+                            &format!("{prefix}.{i}"),
                             element,
                             val_s,
                             new_var_requests,

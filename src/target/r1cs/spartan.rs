@@ -90,8 +90,7 @@ pub fn r1cs_to_spartan(
     .unwrap();
     assert_eq!(
         &s_mod, f_mod,
-        "\nR1CS has modulus \n{},\n but Spartan CS expects \n{}",
-        s_mod, f_mod
+        "\nR1CS has modulus \n{s_mod},\n but Spartan CS expects \n{f_mod}",
     );
 
     let values = eval_inputs(inputs_map, prover_data);
@@ -195,8 +194,7 @@ fn eval_inputs(
         let sort2 = value.sort();
         assert_eq!(
             sort, &sort2,
-            "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-            input, sort, sort2
+            "Sort mismatch for {input}. Expected\n\t{sort} but got\n\t{sort2}",
         );
     }
     let new_map = prover_data.precompute.eval(inputs_map);

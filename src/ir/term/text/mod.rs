@@ -92,7 +92,7 @@ impl<'src> Display for TokTree<'src> {
                     } else {
                         write!(f, " ")?;
                     }
-                    write!(f, "{}", tt)?;
+                    write!(f, "{tt}")?;
                 }
                 write!(f, ")")
             }
@@ -460,8 +460,7 @@ impl<'src> IrInterp<'src> {
                         assert_eq!(
                             tts.len(),
                             3,
-                            "A decl should have 2 arguments: (declare ((v1 s1) ... (vn sn)) t), found {:#?}",
-                            tts
+                            "A decl should have 2 arguments: (declare ((v1 s1) ... (vn sn)) t), found {tts:#?}",
                         );
                         let bindings = self.decl_list(&tts[1]);
                         let t = self.term(&tts[2]);
@@ -756,7 +755,7 @@ pub fn serialize_value_map(src: &HashMap<String, Value>) -> String {
     let mut out = String::new();
     writeln!(&mut out, "(let (").unwrap();
     for (var, val) in src {
-        writeln!(&mut out, "  ({} {})", var, val).unwrap();
+        writeln!(&mut out, "  ({var} {val})").unwrap();
     }
     writeln!(&mut out, ") true;ignored \n)").unwrap();
     out
@@ -786,11 +785,11 @@ pub fn serialize_precompute(p: &precomp::PreComp) -> String {
     let mut out = String::new();
     writeln!(&mut out, "(precompute (").unwrap();
     for (name, sort) in p.inputs() {
-        writeln!(&mut out, " ({} {})", name, sort).unwrap();
+        writeln!(&mut out, " ({name} {sort})").unwrap();
     }
     writeln!(&mut out, ")(").unwrap();
     for (name, sort) in p.sequence() {
-        writeln!(&mut out, " ({} {})", name, sort).unwrap();
+        writeln!(&mut out, " ({name} {sort})").unwrap();
     }
     writeln!(&mut out, ")").unwrap();
     writeln!(&mut out, "\n  {}", serialize_term(&p.tuple())).unwrap();
@@ -880,7 +879,7 @@ mod test {
                 ((field 0) (#t false false #b0000 true)))))",
         );
         let s = serialize_term(&t);
-        println!("{}", s);
+        println!("{s}");
         let t2 = parse_term(s.as_bytes());
         assert_eq!(t, t2);
     }

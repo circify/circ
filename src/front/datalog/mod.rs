@@ -385,7 +385,7 @@ impl FrontEnd for Datalog {
         let ast = match ast {
             Ok(ast) => ast,
             Err(e) => {
-                println!("{}", e);
+                println!("{e}");
                 panic!("parse error!")
             }
         };
@@ -397,7 +397,7 @@ impl FrontEnd for Datalog {
             g.entry_rule("main")
         };
         if let Err(e) = r {
-            eprintln!("{}", e);
+            eprintln!("{e}");
             panic!()
         }
         let mut cs = Computations::new();

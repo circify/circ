@@ -47,43 +47,35 @@ impl<'a> Inliner<'a> {
             for child in PostOrderIter::new(value.clone()) {
                 assert!(
                     !keys.contains(&child),
-                    "Substituted variable {} is in the substitution for {}, {}",
-                    child,
-                    key,
-                    value
+                    "{}",
+                    "Substituted variable {child} is in the substitution for {key}, {value}"
                 );
                 if child.is_var() {
                     assert!(
                         self.stale_vars.contains(&child),
-                        "Variable {} in the substitution for {}, {} is not marked stale",
-                        child,
-                        key,
-                        value
+                        "{}",
+                        "Variable {child} in the substitution for {key}, {value} is not marked stale"
                     );
                 }
             }
             assert!(
                 self.stale_vars.contains(key),
-                "Variable {}, which is being susbstituted",
-                key
+                "{}",
+                "Variable {key}, which is being susbstituted",
             );
         }
         for (key, value) in &self.subst_cache {
             for child in PostOrderIter::new(value.clone()) {
                 assert!(
                     !keys.contains(&child),
-                    "Substituted variable {} is in the cache for {}, {}",
-                    child,
-                    key,
-                    value
+                    "{}",
+                    format!("Substituted variable {child} is in the cache for {key}, {value}"),
                 );
                 if child.is_var() {
                     assert!(
                         self.stale_vars.contains(&child),
-                        "Variable {} in the substitution cache for {}, {} is not marked stale",
-                        child,
-                        key,
-                        value
+                        "{}",
+                        format!("Variable {child} in the substitution cache for {key}, {value} is not marked stale")
                     );
                 }
             }

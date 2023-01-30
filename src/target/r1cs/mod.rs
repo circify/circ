@@ -472,8 +472,7 @@ impl VerifierData {
             let sort2 = value.sort();
             assert_eq!(
                 sort, &sort2,
-                "Sort mismatch for {}. Expected\n\t{} but got\n\t{}",
-                input, sort, sort2
+                "Sort mismatch for {input}. Expected\n\t{sort} but got\n\t{sort2}",
             );
         }
         let new_map = self.precompute.eval(value_map);
