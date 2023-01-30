@@ -1228,6 +1228,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, t: Term) ->
 }
 
 /// Helper function for eval function. Handles a single op
+#[allow(clippy::uninlined_format_args)]
 pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) -> Value {
     match op {
         Op::Var(n, _) => var_vals

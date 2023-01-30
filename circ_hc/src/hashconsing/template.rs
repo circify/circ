@@ -50,6 +50,10 @@ impl crate::Table<TemplateOp> for Table {
         "hashconsing"
     }
 
+    fn for_each(f: impl FnMut(&TemplateOp, &[Self::Node])) {
+        panic!()
+    }
+
     fn reserve(num_nodes: usize) {
         FACTORY.reserve(num_nodes);
     }
