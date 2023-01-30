@@ -324,11 +324,6 @@ fn wrap_bin_arith(
             term: CTermData::StackPtr(ty, fu(offset, y), aid),
             udef: bool_lit(false),
         }),
-        (CTermData::StackPtr(ty, offset, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
-            term: CTermData::StackPtr(ty, fu(offset, y), aid),
-            udef: false,
-        }),
-
         (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
@@ -536,10 +531,10 @@ pub fn shl(a: CTerm, b: CTerm) -> Result<CTerm, String> {
     let l = int_promotion(&a);
     let r = int_promotion(&b);
     if !l.type_().is_integer_type() {
-        return Err(format!("non-integer {} in shift", a));
+        return Err(format!("non-integer {a} in shift"));
     }
     if !r.type_().is_integer_type() {
-        return Err(format!("non-integer {} in shift", b));
+        return Err(format!("non-integer {b} in shift"));
     }
     let l_bits = l.type_().total_num_bits();
     let r_bits = r.type_().total_num_bits();

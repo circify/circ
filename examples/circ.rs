@@ -384,7 +384,7 @@ fn main() {
                     Some(m) => {
                         println!("Property does not hold!\nCounterexample:");
                         for (var, val) in m {
-                            println!("{} -> {}", var, val);
+                            println!("{var} -> {val}");
                         }
                         std::process::exit(1)
                     }
