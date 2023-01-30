@@ -86,6 +86,13 @@ Options:
           [default: true]
           [possible values: true, false]
 
+      --fmt-hide-field <HIDE_FIELD>
+          Always hide the field
+          
+          [env: FMT_HIDE_FIELD=]
+          [default: false]
+          [possible values: true, false]
+
       --zsharp-isolate-asserts <ISOLATE_ASSERTS>
           In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take effect if that branch is active.
           
@@ -144,6 +151,8 @@ Options:
           Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use [env: FMT_USE_DEFAULT_FIELD=] [default: true] [possible values: true, false]
+      --fmt-hide-field <HIDE_FIELD>
+          Always hide the field [env: FMT_HIDE_FIELD=] [default: false] [possible values: true, false]
       --zsharp-isolate-asserts <ISOLATE_ASSERTS>
           In Z#, "isolate" assertions. That is, assertions in if/then/else expressions only take effect if that branch is active [env: ZSHARP_ISOLATE_ASSERTS=] [default: false] [possible values: true, false]
       --datalog-rec-limit <N>
@@ -179,6 +188,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -216,6 +226,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -251,6 +262,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -286,6 +298,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -321,6 +334,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -356,6 +370,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -391,6 +406,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -426,6 +442,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -464,6 +481,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -500,6 +518,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -538,6 +557,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: true,
@@ -574,6 +594,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: true,
@@ -612,6 +633,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,
@@ -648,6 +670,7 @@ BinaryOpt {
         },
         fmt: FmtOpt {
             use_default_field: true,
+            hide_field: false,
         },
         zsharp: ZsharpOpt {
             isolate_asserts: false,

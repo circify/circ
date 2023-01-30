@@ -48,7 +48,7 @@ pub mod ty;
 pub use bv::BitVector;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// An operator
 pub enum Op {
     /// a variable
@@ -635,7 +635,7 @@ impl<'de> Deserialize<'de> for Term {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 /// An IR value (aka literal)
 pub enum Value {
     /// Bit-vector
@@ -776,7 +776,7 @@ impl std::hash::Hash for Value {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 /// The "type" of an IR term
 pub enum Sort {
     /// bit-vectors of this width
