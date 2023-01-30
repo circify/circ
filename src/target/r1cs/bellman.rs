@@ -114,12 +114,12 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
                 "Bellman doesn't support rounds"
             );
             let public = matches!(var.ty(), VarType::Inst);
-            let name_f = || format!("{:?}", var);
+            let name_f = || format!("{var:?}");
             let val_f = || {
                 Ok({
                     let i_val = &values.as_ref().expect("missing values")[i];
                     let ff_val = int_to_ff(i_val.as_pf().into());
-                    debug!("value : {:?} -> {:?} ({})", var, ff_val, i_val);
+                    debug!("value : {var:?} -> {ff_val:?} ({i_val})");
                     ff_val
                 })
             };

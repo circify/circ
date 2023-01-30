@@ -83,12 +83,12 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a> {
             };
             for j in 0..(num_vars + num_challs) {
                 let var = self.0.r1cs.vars[var_idx];
-                let name_f = || format!("{:?}", var);
+                let name_f = || format!("{var:?}");
                 let val_f = || {
                     Ok({
                         let i_val = &wit_comp.as_ref().expect("missing values").0[var_idx];
                         let ff_val = int_to_ff(i_val.as_pf().into());
-                        debug!("value : {:?} -> {:?} ({})", var, ff_val, i_val);
+                        debug!("value : {var:?} -> {ff_val:?} ({i_val})");
                         ff_val
                     })
                 };
@@ -118,7 +118,7 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a> {
 
         for (i, (a, b, c)) in self.0.r1cs.constraints.iter().enumerate() {
             cs.enforce(
-                || format!("con{}", i),
+                || format!("con{i}"),
                 |z| lc_to_bellman::<F, CS>(&vars, a, z),
                 |z| lc_to_bellman::<F, CS>(&vars, b, z),
                 |z| lc_to_bellman::<F, CS>(&vars, c, z),
@@ -302,7 +302,7 @@ mod test {
     #[quickcheck]
     fn int_to_ff_random(BlsScalar(i): BlsScalar) -> bool {
         let by_fn = int_to_ff::<Scalar>(i.clone());
-        let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
+        let by_str = Scalar::from_str_vartime(&format!("{i}")).unwrap();
         by_fn == by_str
     }
 
@@ -315,7 +315,7 @@ mod test {
 
     fn convert(i: Integer) {
         let by_fn = int_to_ff::<Scalar>(i.clone());
-        let by_str = Scalar::from_str_vartime(&format!("{}", i)).unwrap();
+        let by_str = Scalar::from_str_vartime(&format!("{i}")).unwrap();
         assert_eq!(by_fn, by_str);
     }
 

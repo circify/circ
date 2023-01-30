@@ -508,17 +508,14 @@ impl<S: Hash + Eq + Clone + Debug, T: Hash + Eq + Clone + Debug> BiMap<S, T> {
         debug_assert_eq!(self.fwd.len(), self.rev.len());
         self.fwd.len()
     }
+    #[allow(clippy::uninlined_format_args)]
     fn insert(&mut self, s: S, t: T) {
         assert!(
             self.fwd.insert(s.clone(), t.clone()).is_none(),
             "Duplicate key {:?}",
             s
         );
-        assert!(
-            self.rev.insert(t.clone(), s).is_none(),
-            "Duplicate value {:?}",
-            t
-        );
+        assert!(self.rev.insert(t.clone(), s).is_none(), "Duplicate value {:?}", t);
     }
     fn contains_key<Q>(&self, s: &Q) -> bool
     where

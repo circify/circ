@@ -34,6 +34,7 @@ pub struct Stage {
 /// Builder interface
 impl StagedWitComp {
     /// Add a new stage.
+    #[allow(clippy::uninlined_format_args)]
     pub fn add_stage(&mut self, inputs: HashMap<String, Sort>, output_values: Vec<Term>) {
         let stage = Stage {
             inputs,
@@ -195,7 +196,7 @@ mod test {
         let ex_output: &[usize] = &[0];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         assert!(evaluator.is_done());
@@ -219,28 +220,28 @@ mod test {
         let ex_output: &[usize] = &[0];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         let output = evaluator.eval_stage(Default::default());
         let ex_output: &[usize] = &[1, 4];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         let output = evaluator.eval_stage(Default::default());
         let ex_output: &[usize] = &[6];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         let output = evaluator.eval_stage(Default::default());
         let ex_output: &[usize] = &[0];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         assert!(evaluator.is_done());
@@ -269,7 +270,7 @@ mod test {
         let ex_output: &[usize] = &[5, 1];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         assert!(evaluator.is_done());
@@ -306,7 +307,7 @@ mod test {
         let ex_output: &[usize] = &[5, 1];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         let output = evaluator.eval_stage(
@@ -317,7 +318,7 @@ mod test {
         let ex_output: &[usize] = &[1, 1, 0];
         assert_eq!(output.len(), ex_output.len());
         for i in 0..ex_output.len() {
-            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{}", i);
+            assert_eq!(output[i], &Value::Field(field.new_v(ex_output[i])), "{i}");
         }
 
         assert!(evaluator.is_done());

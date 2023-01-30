@@ -72,14 +72,14 @@ impl<'cfg> ToR1cs<'cfg> {
     /// `comp` is a term that computes the value.
     fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, ty: VarType) -> TermLc {
         let n = if matches!(ty, VarType::Chall) {
-            format!("{}", ctx)
+            format!("{ctx}")
         } else {
-            format!("{}_n{}", ctx, self.next_idx)
+            format!("{ctx}_n{}", self.next_idx)
         };
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
         self.r1cs.add_var(n.clone(), comp.clone(), ty);
-        debug!("fresh: {}", n);
+        debug!("fresh: {n}");
         TermLc(comp, self.r1cs.signal_lc(&n))
     }
 
