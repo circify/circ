@@ -625,7 +625,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     fn get_function(&self, id: &str) -> ZResult<&ast::FunctionDefinition<'ast>> {
         self.zgen
             .get_function(id)
-            .ok_or_else(|| ZVisitorError(format!("ZStatementWalker: undeclared function {}", id)))
+            .ok_or_else(|| ZVisitorError(format!("ZStatementWalker: undeclared function {id}")))
     }
 
     fn get_struct_or_type(
@@ -682,13 +682,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     {
         if self.generic_defined(nm) {
             Err(ZVisitorError(format!(
-                "ZStatementWalker: attempted to shadow generic {}",
-                nm,
+                "ZStatementWalker: attempted to shadow generic {nm}"
             )))
         } else if self.const_defined(nm) {
             Err(ZVisitorError(format!(
-                "ZStatementWalker: attempted to shadow const {}",
-                nm,
+                "ZStatementWalker: attempted to shadow const {nm}"
             )))
         } else {
             Ok(f(self, nm))

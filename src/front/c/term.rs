@@ -86,18 +86,18 @@ impl CTermData {
 impl Display for CTermData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            CTermData::Bool(x) => write!(f, "Bool({})", x),
-            CTermData::Int(_, _, x) => write!(f, "Int({})", x),
-            CTermData::Array(t, _) => write!(f, "Array({:#?})", t),
-            CTermData::StackPtr(t, s, _) => write!(f, "Ptr{:#?}({:#?})", s, t),
-            CTermData::Struct(t, _) => write!(f, "Struct({})", t),
+            CTermData::Bool(x) => write!(f, "Bool({x})"),
+            CTermData::Int(_, _, x) => write!(f, "Int({x})"),
+            CTermData::Array(t, _) => write!(f, "Array({t:#?})"),
+            CTermData::StackPtr(t, s, _) => write!(f, "Ptr{s:#?}({t:#?})"),
+            CTermData::Struct(t, _) => write!(f, "Struct({t})"),
         }
     }
 }
 
 impl fmt::Debug for CTermData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -115,7 +115,7 @@ impl Display for CTerm {
 }
 
 fn field_name(struct_name: &str, field_name: &str) -> String {
-    format!("{}.{}", struct_name, field_name)
+    format!("{struct_name}.{field_name}")
 }
 
 pub fn cterm(data: CTermData) -> CTerm {
@@ -324,7 +324,12 @@ fn wrap_bin_arith(
             term: CTermData::StackPtr(ty, fu(offset, y), aid),
             udef: bool_lit(false),
         }),
-        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+        (CTermData::StackPtr(ty, offset, aid), CTermData::Int(_, _, y), Some(fu), _) => Ok(CTerm {
+            term: CTermData::StackPtr(ty, fu(offset, y), aid),
+            udef: false,
+        }),
+
+        (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -406,7 +411,7 @@ fn wrap_bin_logical(
             term: CTermData::Bool(fb(a, b)),
             udef: bool_lit(false),
         }),
-        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+        (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -445,7 +450,7 @@ fn wrap_bin_cmp(
             term: CTermData::Bool(fb(x, y)),
             udef: bool_lit(false),
         }),
-        (x, y, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+        (x, y, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -523,7 +528,7 @@ fn wrap_shift(name: &str, op: BvBinOp, a: CTerm, b: CTerm) -> Result<CTerm, Stri
             term: CTermData::Int(*s, *na, term![Op::BvBinOp(op); a.clone(), bv_lit(bc, *na)]),
             udef: bool_lit(false),
         }),
-        x => Err(format!("Cannot perform op '{}' on {} and {}", name, x, bc)),
+        x => Err(format!("Cannot perform op '{name}' on {x} and {bc}")),
     }
 }
 
@@ -560,7 +565,7 @@ pub fn shr(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 pub struct Ct {}
 
 fn idx_name(struct_name: &str, idx: usize) -> String {
-    format!("{}.{}", struct_name, idx)
+    format!("{struct_name}.{idx}")
 }
 
 impl Ct {

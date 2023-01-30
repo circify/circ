@@ -40,7 +40,7 @@ impl<'ast> Display for Error<'ast> {
         if let Some(s) = &self.span {
             writeln!(f, "\nLocation:")?;
             for l in s.lines() {
-                writeln!(f, "  {}", l)?;
+                writeln!(f, "  {l}")?;
             }
         }
         Ok(())

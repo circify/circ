@@ -62,8 +62,8 @@ pub type Result<T> = std::result::Result<T, CircError>;
 impl<T: Display> Display for Val<T> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Val::Term(t) => write!(f, "{}", t),
-            Val::Ref(l) => write!(f, "&{}", l),
+            Val::Term(t) => write!(f, "{t}"),
+            Val::Ref(l) => write!(f, "&{l}"),
         }
     }
 }
@@ -160,9 +160,7 @@ impl<Ty: Display> LexScope<Ty> {
     fn declare(&mut self, name: VarName, ty: Ty) -> Result<&SsaName> {
         let p = &self.prefix;
         match self.entries.entry(name.clone()) {
-            Entry::Vacant(v) => Ok(&v
-                .insert(LexEntry::new(format!("{}_{}", p, name), ty))
-                .ssa_name),
+            Entry::Vacant(v) => Ok(&v.insert(LexEntry::new(format!("{p}_{name}"), ty)).ssa_name),
             Entry::Occupied(o) => Err(CircError::Rebind(name, format!("{}", o.get().ty))),
         }
     }
@@ -595,8 +593,8 @@ impl<E: Embeddable> Circify<E> {
                 let new_ty = new.type_();
                 assert_eq!(
                     ty, new_ty,
-                    "Term {} has type {} but was assigned to {} of type {}",
-                    new, new_ty, loc, ty
+                    "{}",
+                    "Term {new} has type {new_ty} but was assigned to {loc} of type {ty}",
                 );
                 // get condition under which assignment happens
                 let guard = self.condition.clone();
@@ -617,9 +615,9 @@ impl<E: Embeddable> Circify<E> {
                 Ok(v)
             }
             (_, v) => Err(CircError::MisTypedAssign(
-                format!("{}", v),
-                format!("{}", loc),
-                format!("{}", old_val),
+                format!("{v}"),
+                format!("{loc}"),
+                format!("{old_val}"),
             )),
         }
     }
@@ -879,8 +877,8 @@ mod test {
         impl Display for T {
             fn fmt(&self, f: &mut Formatter) -> fmt::Result {
                 match self {
-                    T::Base(t) => write!(f, "{}", t),
-                    T::Pair(a, b) => write!(f, "({}, {})", a, b),
+                    T::Base(t) => write!(f, "{t}"),
+                    T::Pair(a, b) => write!(f, "({a}, {b})"),
                 }
             }
         }
@@ -895,7 +893,7 @@ mod test {
             fn fmt(&self, f: &mut Formatter) -> fmt::Result {
                 match self {
                     Ty::Bool => write!(f, "bool"),
-                    Ty::Pair(a, b) => write!(f, "({}, {})", a, b),
+                    Ty::Pair(a, b) => write!(f, "({a}, {b})"),
                 }
             }
         }
@@ -968,14 +966,14 @@ mod test {
                             Box::new(self.declare_input(
                                 ctx,
                                 a,
-                                format!("{}.0", name),
+                                format!("{name}.0"),
                                 visibility,
                                 p_1,
                             )),
                             Box::new(self.declare_input(
                                 ctx,
                                 b,
-                                format!("{}.1", name),
+                                format!("{name}.1"),
                                 visibility,
                                 p_2,
                             )),

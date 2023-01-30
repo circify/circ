@@ -41,9 +41,9 @@ impl Display for Ty {
             Ty::Bool => write!(f, "bool"),
             Ty::Int(s, w) => {
                 if *s {
-                    write!(f, "s{}", w)
+                    write!(f, "s{w}")
                 } else {
-                    write!(f, "u{}", w)
+                    write!(f, "u{w}")
                 }
             }
             Ty::Struct(n, fields) => {
@@ -60,11 +60,11 @@ impl Display for Ty {
                     bb = b.as_ref();
                     dims.push(n);
                 }
-                write!(f, "{}", bb)?;
-                dims.iter().try_for_each(|d| write!(f, "[{}]", d))
+                write!(f, "{bb}")?;
+                dims.iter().try_for_each(|d| write!(f, "[{d}]"))
             }
             Ty::Ptr(s, t) => {
-                write!(f, "ptr{}({})", s, t)
+                write!(f, "ptr{s}({t})")
             }
         }
     }
@@ -72,7 +72,7 @@ impl Display for Ty {
 
 impl fmt::Debug for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 

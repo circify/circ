@@ -23,7 +23,7 @@ impl Display for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Ty::Bool => write!(f, "bool"),
-            Ty::Uint(w) => write!(f, "u{}", w),
+            Ty::Uint(w) => write!(f, "u{w}"),
             Ty::Field => write!(f, "field"),
             Ty::Struct(n, fields) => {
                 let mut o = f.debug_struct(n);
@@ -39,8 +39,8 @@ impl Display for Ty {
                     bb = b.as_ref();
                     dims.push(n);
                 }
-                write!(f, "{}", bb)?;
-                dims.iter().try_for_each(|d| write!(f, "[{}]", d))
+                write!(f, "{bb}")?;
+                dims.iter().try_for_each(|d| write!(f, "[{d}]"))
             }
         }
     }
@@ -48,7 +48,7 @@ impl Display for Ty {
 
 impl fmt::Debug for Ty {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -130,7 +130,7 @@ impl T {
             Ty::Array(size, _sort) => Ok((0..*size)
                 .map(|i| term![Op::Select; self.term.clone(), pf_lit_ir(i)])
                 .collect()),
-            s => Err(format!("Not an array: {}", s)),
+            s => Err(format!("Not an array: {s}")),
         }
     }
     pub fn unwrap_array(self) -> Result<Vec<T>, String> {
@@ -143,7 +143,7 @@ impl T {
                     .map(|t| T::new(sort.clone(), t))
                     .collect())
             }
-            s => Err(format!("Not an array: {}", s)),
+            s => Err(format!("Not an array: {s}")),
         }
     }
     pub fn new_array(v: Vec<T>) -> Result<T, String> {
@@ -209,7 +209,7 @@ impl T {
             _ => Err(Error::new(ErrorKind::Other, "not a const val")),
         }?;
         match val {
-            Value::Bool(b) => write!(f, "{}", b),
+            Value::Bool(b) => write!(f, "{b}"),
             Value::Field(fe) => write!(f, "{}f", fe.i()),
             Value::BitVector(bv) => match bv.width() {
                 8 => write!(f, "0x{:02x}", bv.uint()),
@@ -227,9 +227,9 @@ impl T {
                         "expected struct, got something else",
                     ))
                 }?;
-                write!(f, "{} {{ ", n)?;
+                write!(f, "{n} {{ ")?;
                 fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
-                    write!(f, "{}: ", n)?;
+                    write!(f, "{n}: ")?;
                     T::new(ty.clone(), leaf_term(Op::Const(v.clone()))).pretty(f)?;
                     write!(f, ", ")
                 })?;
@@ -287,7 +287,7 @@ fn wrap_bin_op(
         (Ty::Field, Ty::Field, _, Some(ff), _) => {
             Ok(T::new(Ty::Field, ff(a.term.clone(), b.term.clone())))
         }
-        (x, y, _, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+        (x, y, _, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -309,7 +309,7 @@ fn wrap_bin_pred(
         (Ty::Field, Ty::Field, _, Some(ff), _) => {
             Ok(T::new(Ty::Bool, ff(a.term.clone(), b.term.clone())))
         }
-        (x, y, _, _, _) => Err(format!("Cannot perform op '{}' on {} and {}", name, x, y)),
+        (x, y, _, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -495,10 +495,7 @@ pub fn uge(a: T, b: T) -> Result<T, String> {
 
 pub fn pow(a: T, b: T) -> Result<T, String> {
     if a.ty != Ty::Field || b.ty != Ty::Uint(32) {
-        return Err(format!(
-            "Cannot compute {} ** {} : must be Field ** U32",
-            a, b
-        ));
+        return Err(format!("Cannot compute {a} ** {b} : must be Field ** U32"));
     }
 
     let a = a.term;
@@ -531,7 +528,7 @@ fn wrap_un_op(
         (Ty::Uint(_), Some(fu), _, _) => Ok(T::new(a.ty.clone(), fu(a.term.clone()))),
         (Ty::Bool, _, _, Some(fb)) => Ok(T::new(Ty::Bool, fb(a.term.clone()))),
         (Ty::Field, _, Some(ff), _) => Ok(T::new(Ty::Field, ff(a.term.clone()))),
-        (x, _, _, _) => Err(format!("Cannot perform op '{}' on {}", name, x)),
+        (x, _, _, _) => Err(format!("Cannot perform op '{name}' on {x}")),
     }
 }
 
@@ -564,7 +561,7 @@ pub fn const_int(a: T) -> Result<Integer, String> {
     match const_value(&a.term) {
         Some(Value::Field(f)) => Ok(f.i()),
         Some(Value::BitVector(f)) => Ok(f.uint().clone()),
-        _ => Err(format!("{} is not a constant integer", a)),
+        _ => Err(format!("{a} is not a constant integer")),
     }
 }
 
@@ -593,7 +590,7 @@ fn const_value(t: &Term) -> Option<Value> {
 pub fn bool(a: T) -> Result<Term, String> {
     match &a.ty {
         Ty::Bool => Ok(a.term),
-        a => Err(format!("{} is not a boolean", a)),
+        a => Err(format!("{a} is not a boolean")),
     }
 }
 
@@ -601,7 +598,7 @@ fn wrap_shift(name: &str, op: BvBinOp, a: T, b: T) -> Result<T, String> {
     let bc = const_int(b)?;
     match &a.ty {
         &Ty::Uint(na) => Ok(T::new(a.ty, term![Op::BvBinOp(op); a.term, bv_lit(bc, na)])),
-        x => Err(format!("Cannot perform op '{}' on {} and {}", name, x, bc)),
+        x => Err(format!("Cannot perform op '{name}' on {x} and {bc}")),
     }
 }
 
@@ -615,7 +612,7 @@ pub fn shr(a: T, b: T) -> Result<T, String> {
 
 fn ite(c: Term, a: T, b: T) -> Result<T, String> {
     if a.ty != b.ty {
-        Err(format!("Cannot perform ITE on {} and {}", a, b))
+        Err(format!("Cannot perform ITE on {a} and {b}"))
     } else {
         Ok(T::new(a.ty.clone(), term![Op::Ite; c, a.term, b.term]))
     }
@@ -664,7 +661,7 @@ pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, Stri
             let end = end.unwrap_or(*size);
             array(arr.unwrap_array()?.drain(start..end))
         }
-        a => Err(format!("Cannot slice {}", a)),
+        a => Err(format!("Cannot slice {a}")),
     }
 }
 
@@ -677,10 +674,10 @@ pub fn field_select(struct_: &T, field: &str) -> Result<T, String> {
                     term![Op::Field(idx); struct_.term.clone()],
                 ))
             } else {
-                Err(format!("No field '{}'", field))
+                Err(format!("No field '{field}'"))
             }
         }
-        a => Err(format!("{} is not a struct", a)),
+        a => Err(format!("{a} is not a struct")),
     }
 }
 
@@ -695,17 +692,15 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
                     ))
                 } else {
                     Err(format!(
-                        "term {} assigned to field {} of type {}",
-                        val,
-                        field,
+                        "term {val} assigned to field {field} of type {}",
                         map.get(idx).1
                     ))
                 }
             } else {
-                Err(format!("No field '{}'", field))
+                Err(format!("No field '{field}'"))
             }
         }
-        a => Err(format!("{} is not a struct", a)),
+        a => Err(format!("{a} is not a struct")),
     }
 }
 
@@ -792,15 +787,15 @@ pub fn uint_to_field(u: T) -> Result<T, String> {
             Ty::Field,
             term![Op::UbvToPf(cfg().field().clone()); u.term],
         )),
-        u => Err(format!("Cannot do uint-to-field on {}", u)),
+        u => Err(format!("Cannot do uint-to-field on {u}")),
     }
 }
 
 pub fn uint_to_uint(u: T, w: usize) -> Result<T, String> {
     match &u.ty {
         Ty::Uint(n) if *n <= w => Ok(T::new(Ty::Uint(w), term![Op::BvUext(w - n); u.term])),
-        Ty::Uint(n) => Err(format!("Tried narrowing uint{}-to-uint{} attempted", n, w)),
-        u => Err(format!("Cannot do uint-to-uint on {}", u)),
+        Ty::Uint(n) => Err(format!("Tried narrowing uint{n}-to-uint{w} attempted")),
+        u => Err(format!("Cannot do uint-to-uint on {u}")),
     }
 }
 
@@ -813,7 +808,7 @@ pub fn uint_to_bits(u: T) -> Result<T, String> {
                 (0..*n).rev().map(|i| term![Op::BvBit(i); u.term.clone()]),
             ),
         )),
-        u => Err(format!("Cannot do uint-to-bits on {}", u)),
+        u => Err(format!("Cannot do uint-to-bits on {u}")),
     }
 }
 
@@ -831,16 +826,16 @@ pub fn uint_from_bits(u: T) -> Result<T, String> {
                         .collect(),
                 ),
             )),
-            l => Err(format!("Cannot do uint-from-bits on len {} array", l,)),
+            l => Err(format!("Cannot do uint-from-bits on len {l} array")),
         },
-        u => Err(format!("Cannot do uint-from-bits on {}", u)),
+        u => Err(format!("Cannot do uint-from-bits on {u}")),
     }
 }
 
 pub fn field_to_bits(f: T, n: usize) -> Result<T, String> {
     match &f.ty {
         Ty::Field => uint_to_bits(T::new(Ty::Uint(n), term![Op::PfToBv(n); f.term])),
-        u => Err(format!("Cannot do uint-to-bits on {}", u)),
+        u => Err(format!("Cannot do uint-to-bits on {u}")),
     }
 }
 
@@ -860,13 +855,11 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
                 Err("bit-array-le must be called on arrays of Bools".to_string())
             } else if la != lb {
                 Err(format!(
-                    "bit-array-le called on arrays with lengths {} != {}",
-                    la, lb
+                    "bit-array-le called on arrays with lengths {la} != {lb}"
                 ))
             } else if *la != n {
                 Err(format!(
-                    "bit-array-le::<{}> called on arrays with length {}",
-                    n, la
+                    "bit-array-le::<{n}> called on arrays with length {la}"
                 ))
             } else {
                 Ok(())
@@ -886,11 +879,11 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
 pub struct ZSharp {}
 
 fn field_name(struct_name: &str, field_name: &str) -> String {
-    format!("{}.{}", struct_name, field_name)
+    format!("{struct_name}.{field_name}")
 }
 
 fn idx_name(struct_name: &str, idx: usize) -> String {
-    format!("{}.{}", struct_name, idx)
+    format!("{struct_name}.{idx}")
 }
 
 impl ZSharp {

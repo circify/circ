@@ -146,7 +146,7 @@ impl<'cfg> ToR1cs<'cfg> {
             .map(|i| {
                 self.fresh_bit(
                     // We get the right repr here because of infinite two's complement.
-                    &format!("{}_b{}", d, i),
+                    &format!("{d}_b{i}"),
                     term![Op::BvBit(i); term![Op::PfToBv(n); x.0.clone()]],
                 )
             })

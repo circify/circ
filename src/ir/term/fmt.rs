@@ -89,7 +89,7 @@ impl<'a, 'b> IrFormatter<'a, 'b> {
         }
     }
     fn write_def(&mut self, id: usize) -> FmtResult {
-        write!(self.writer, "'{}", id)
+        write!(self.writer, "'{id}")
     }
     /// returns whether the term was def'd and written.
     fn term_write_if_def(&mut self, t: &Term) -> Result<bool, FmtError> {
@@ -121,7 +121,7 @@ impl DisplayIr for Sort {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         match self {
             Sort::Bool => write!(f, "bool"),
-            Sort::BitVector(n) => write!(f, "(bv {})", n),
+            Sort::BitVector(n) => write!(f, "(bv {n})"),
             Sort::Int => write!(f, "int"),
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
@@ -132,7 +132,7 @@ impl DisplayIr for Sort {
                 k.ir_fmt(f)?;
                 write!(f, " ")?;
                 v.ir_fmt(f)?;
-                write!(f, " {})", n)
+                write!(f, " {n})")
             }
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
@@ -151,48 +151,48 @@ impl DisplayIr for Op {
         match self {
             Op::Ite => write!(f, "ite"),
             Op::Eq => write!(f, "="),
-            Op::Var(n, _) => write!(f, "{}", n),
+            Op::Var(n, _) => write!(f, "{n}"),
             Op::Const(c) => c.ir_fmt(f),
-            Op::BvBinOp(a) => write!(f, "{}", a),
-            Op::BvBinPred(a) => write!(f, "{}", a),
-            Op::BvNaryOp(a) => write!(f, "{}", a),
-            Op::BvUnOp(a) => write!(f, "{}", a),
+            Op::BvBinOp(a) => write!(f, "{a}"),
+            Op::BvBinPred(a) => write!(f, "{a}"),
+            Op::BvNaryOp(a) => write!(f, "{a}"),
+            Op::BvUnOp(a) => write!(f, "{a}"),
             Op::BoolToBv => write!(f, "bool2bv"),
-            Op::BvExtract(a, b) => write!(f, "(extract {} {})", a, b),
+            Op::BvExtract(a, b) => write!(f, "(extract {a} {b})"),
             Op::BvConcat => write!(f, "concat"),
-            Op::BvUext(a) => write!(f, "(uext {})", a),
-            Op::BvSext(a) => write!(f, "(sext {})", a),
-            Op::PfToBv(a) => write!(f, "(pf2bv {})", a),
+            Op::BvUext(a) => write!(f, "(uext {a})"),
+            Op::BvSext(a) => write!(f, "(sext {a})"),
+            Op::PfToBv(a) => write!(f, "(pf2bv {a})"),
             Op::Implies => write!(f, "=>"),
-            Op::BoolNaryOp(a) => write!(f, "{}", a),
+            Op::BoolNaryOp(a) => write!(f, "{a}"),
             Op::Not => write!(f, "not"),
-            Op::BvBit(a) => write!(f, "(bit {})", a),
+            Op::BvBit(a) => write!(f, "(bit {a})"),
             Op::BoolMaj => write!(f, "maj"),
-            Op::FpBinOp(a) => write!(f, "{}", a),
-            Op::FpBinPred(a) => write!(f, "{}", a),
-            Op::FpUnPred(a) => write!(f, "{}", a),
-            Op::FpUnOp(a) => write!(f, "{}", a),
+            Op::FpBinOp(a) => write!(f, "{a}"),
+            Op::FpBinPred(a) => write!(f, "{a}"),
+            Op::FpUnPred(a) => write!(f, "{a}"),
+            Op::FpUnOp(a) => write!(f, "{a}"),
             Op::BvToFp => write!(f, "bv2fp"),
-            Op::UbvToFp(a) => write!(f, "(ubv2fp {})", a),
-            Op::SbvToFp(a) => write!(f, "(sbv2fp {})", a),
-            Op::FpToFp(a) => write!(f, "(fp2fp {})", a),
-            Op::PfUnOp(a) => write!(f, "{}", a),
-            Op::PfNaryOp(a) => write!(f, "{}", a),
-            Op::IntNaryOp(a) => write!(f, "{}", a),
-            Op::IntBinPred(a) => write!(f, "{}", a),
+            Op::UbvToFp(a) => write!(f, "(ubv2fp {a})"),
+            Op::SbvToFp(a) => write!(f, "(sbv2fp {a})"),
+            Op::FpToFp(a) => write!(f, "(fp2fp {a})"),
+            Op::PfUnOp(a) => write!(f, "{a}"),
+            Op::PfNaryOp(a) => write!(f, "{a}"),
+            Op::IntNaryOp(a) => write!(f, "{a}"),
+            Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::Tuple => write!(f, "tuple"),
-            Op::Field(i) => write!(f, "(field {})", i),
-            Op::Update(i) => write!(f, "(update {})", i),
+            Op::Field(i) => write!(f, "(field {i})"),
+            Op::Update(i) => write!(f, "(update {i})"),
             Op::Map(op) => {
                 write!(f, "(map(")?;
                 op.ir_fmt(f)?;
                 write!(f, "))")
             }
-            Op::Call(name, _, _) => write!(f, "fn:{}", name),
-            Op::Rot(i) => write!(f, "(rot {})", i),
+            Op::Call(name, _, _) => write!(f, "fn:{name}"),
+            Op::Rot(i) => write!(f, "(rot {i})"),
         }
     }
 }
@@ -200,12 +200,12 @@ impl DisplayIr for Op {
 impl DisplayIr for Value {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         match self {
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::F32(b) => write!(f, "{}", b),
-            Value::F64(b) => write!(f, "{}", b),
-            Value::Int(b) => write!(f, "{}", b),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::F32(b) => write!(f, "{b}"),
+            Value::F64(b) => write!(f, "{b}"),
+            Value::Int(b) => write!(f, "{b}"),
             Value::Field(b) => b.ir_fmt(f),
-            Value::BitVector(b) => write!(f, "{}", b),
+            Value::BitVector(b) => write!(f, "{b}"),
             Value::Tuple(fields) => {
                 write!(f, "(#t ")?;
                 for field in fields.iter() {
@@ -253,7 +253,7 @@ impl DisplayIr for FieldV {
         if i.significant_bits() + 1 >= mod_bits {
             i -= self.modulus();
         }
-        write!(f, "#f{}", i)?;
+        write!(f, "#f{i}")?;
         if !omit_field {
             write!(f, "m{}", self.modulus())?;
         }
@@ -286,7 +286,7 @@ impl DisplayIr for VariableMetadata {
         write!(f, "({} ", self.name)?;
         self.sort.ir_fmt(f)?;
         if let Some(v) = self.vis.as_ref() {
-            write!(f, " (party {})", v)?;
+            write!(f, " (party {v})")?;
         }
         if 0 != self.round {
             write!(f, " (round {})", self.round)?;
@@ -308,7 +308,7 @@ impl DisplayIr for ComputationMetadata {
             .collect();
         for id in 0..self.party_ids.len() as u8 {
             let party = ids_to_parties.get(&id).unwrap();
-            write!(f, " {}", party)?;
+            write!(f, " {party}")?;
         }
         writeln!(f, ")")?;
         write!(f, "\n  (inputs")?;
@@ -353,7 +353,7 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
             *parent_counts.entry(c).or_insert(0) += 1;
         }
         if let Op::Var(name, sort) = &t.op() {
-            write!(f, "  ({} ", name)?;
+            write!(f, "  ({name} ")?;
             sort.ir_fmt(f)?;
             writeln!(f, ")")?;
         }
@@ -382,7 +382,7 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
 
 impl<'a> Display for IrWrapper<'a, Term> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -404,7 +404,7 @@ impl Debug for Term {
 
 impl Display for Term {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

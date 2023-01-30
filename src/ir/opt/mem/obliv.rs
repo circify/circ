@@ -240,7 +240,7 @@ impl RewritePass for Replacer {
             Op::Var(name, Sort::Array(..)) => {
                 if self.should_replace(orig) {
                     let precomp = extras::array_to_tuple(orig);
-                    let new_name = format!("{}.tup", name);
+                    let new_name = format!("{name}.tup");
                     let new_sort = check(&precomp);
                     computation.extend_precomputation(new_name.clone(), precomp);
                     Some(leaf_term(Op::Var(new_name, new_sort)))

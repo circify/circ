@@ -215,8 +215,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                 .type_impl_::<IS_CNST>(&ast::Type::Basic(bas_ty.clone()))?
         {
             Err(format!(
-                "Type mismatch unifying generics: got {}, decl was {:?}",
-                arg_ty, bas_ty
+                "Type mismatch unifying generics: got {arg_ty}, decl was {bas_ty:?}"
             ))
         } else {
             Ok(())
@@ -230,8 +229,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
     ) -> Result<(), String> {
         if !matches!(arg_ty, Ty::Array(_, _)) {
             return Err(format!(
-                "Type mismatch unifying generics: got {}, decl was Array",
-                arg_ty
+                "Type mismatch unifying generics: got {arg_ty}, decl was Array",
             ));
         }
 
@@ -359,12 +357,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                         Ok(aty_map.into_map())
                     }
                     Ty::Struct(aty_n, _) => Err(format!(
-                        "Type mismatch: got struct {}, decl was struct {}",
-                        &aty_n, &def_ty.id.value
+                        "Type mismatch: got struct {aty_n}, decl was struct {}",
+                        &def_ty.id.value
                     )),
                     arg_ty => Err(format!(
-                        "Type mismatch unifying generics: got {}, decl was Struct",
-                        arg_ty
+                        "Type mismatch unifying generics: got {arg_ty}, decl was Struct",
                     )),
                 }?;
                 for ast::StructField { ty, id, .. } in strdef.fields.iter() {
@@ -452,8 +449,7 @@ fn u32_term(t: T) -> Result<Term, String> {
     match t.ty {
         Ty::Uint(32) => Ok(t.term),
         ty => Err(format!(
-            "ZGenericInf: got {} for expr, expected T::Uint(32)",
-            ty
+            "ZGenericInf: got {ty} for expr, expected T::Uint(32)"
         )),
     }
 }
