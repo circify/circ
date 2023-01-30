@@ -23,6 +23,8 @@ struct IrFormatter<'a, 'b> {
 pub struct IrCfg {
     /// Whether to introduce a default modulus.
     pub use_default_field: bool,
+    /// Whether to show any moduli
+    pub hide_field: bool,
 }
 
 impl IrCfg {
@@ -33,6 +35,7 @@ impl IrCfg {
         if is_cfg_set() {
             Self {
                 use_default_field: cfg().fmt.use_default_field,
+                hide_field: cfg().fmt.hide_field,
             }
         } else {
             Self::parseable()
@@ -42,6 +45,7 @@ impl IrCfg {
     pub fn parseable() -> Self {
         Self {
             use_default_field: true,
+            hide_field: false,
         }
     }
 }
@@ -244,10 +248,10 @@ impl DisplayIr for Array {
 
 impl DisplayIr for FieldV {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
-        let omit_field = f
-            .default_field
-            .as_ref()
-            .map_or(false, |field| field == &self.ty());
+        let omit_field = f.cfg.hide_field
+            || f.default_field
+                .as_ref()
+                .map_or(false, |field| field == &self.ty());
         let mut i = self.i();
         let mod_bits = self.modulus().significant_bits();
         if i.significant_bits() + 1 >= mod_bits {
@@ -333,7 +337,7 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
                 }
             })
             .collect();
-        if fields.len() == 1 {
+        if fields.len() == 1 && !f.cfg.hide_field {
             f.default_field = fields.into_iter().next();
             let i = f.default_field.clone().unwrap();
             writeln!(f, "(set-default-modulus {}", i.modulus())?;
@@ -408,26 +412,20 @@ impl Display for Term {
     }
 }
 
-impl Display for Sort {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
-    }
+macro_rules! fmt_impl {
+    ($trait:ty, $ty:ty) => {
+        impl $trait for $ty {
+            fn fmt(&self, f: &mut Formatter) -> FmtResult {
+                self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
+            }
+        }
+    };
 }
 
-impl Display for Value {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
-    }
-}
-
-impl Display for Op {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
-    }
-}
-
-impl Display for ComputationMetadata {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        self.ir_fmt(&mut IrFormatter::new(f, &IrCfg::from_circ_cfg()))
-    }
-}
+fmt_impl!(Display, Sort);
+fmt_impl!(Display, Value);
+fmt_impl!(Display, Op);
+fmt_impl!(Display, ComputationMetadata);
+fmt_impl!(Debug, Value);
+fmt_impl!(Debug, Sort);
+fmt_impl!(Debug, Op);
