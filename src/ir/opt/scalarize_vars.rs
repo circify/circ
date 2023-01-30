@@ -73,7 +73,6 @@ impl RewritePass for Pass {
             for (name, term) in new_var_reqs {
                 computation.extend_precomputation(name, term);
             }
-            //computation.metadata.remove_var(name);
             Some(new)
         } else {
             None
