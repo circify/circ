@@ -73,7 +73,7 @@ pub fn verify<P: AsRef<Path>>(
 
 /// circ R1cs -> spartan R1CSInstance
 pub fn r1cs_to_spartan(
-    prover_data: &ProverDataNew,
+    prover_data: &ProverData,
     inputs_map: &HashMap<String, Value>,
 ) -> (Instance, Assignment, Assignment, usize, usize, usize) {
     // spartan format mapper: CirC -> Spartan
@@ -165,7 +165,7 @@ pub fn r1cs_to_spartan(
     )
 }
 
-fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverDataNew) -> Vec<Value> {
+fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) -> Vec<Value> {
     let mut evaluator = StagedWitCompEvaluator::new(&prover_data.precompute);
     let mut ffs = Vec::new();
     ffs.extend(
@@ -235,34 +235,34 @@ fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<Var, usize>) -> Vec<Variabl
 pub fn write_data<P1: AsRef<Path>, P2: AsRef<Path>>(
     p_path: P1,
     v_path: P2,
-    p_data: &ProverDataNew,
-    v_data: &VerifierDataNew,
+    p_data: &ProverData,
+    v_data: &VerifierData,
 ) -> io::Result<()> {
     write_prover_data(p_path, p_data)?;
     write_verifier_data(v_path, v_data)?;
     Ok(())
 }
 
-fn write_prover_data<P: AsRef<Path>>(path: P, data: &ProverDataNew) -> io::Result<()> {
+fn write_prover_data<P: AsRef<Path>>(path: P, data: &ProverData) -> io::Result<()> {
     let mut file = File::create(path)?;
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
-fn read_prover_data<P: AsRef<Path>>(path: P) -> io::Result<ProverDataNew> {
+fn read_prover_data<P: AsRef<Path>>(path: P) -> io::Result<ProverData> {
     let mut file = File::open(path)?;
-    let data: ProverDataNew = deserialize_from(&mut file).unwrap();
+    let data: ProverData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }
 
-fn write_verifier_data<P: AsRef<Path>>(path: P, data: &VerifierDataNew) -> io::Result<()> {
+fn write_verifier_data<P: AsRef<Path>>(path: P, data: &VerifierData) -> io::Result<()> {
     let mut file = File::create(path)?;
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
-fn read_verifier_data<P: AsRef<Path>>(path: P) -> io::Result<VerifierDataNew> {
+fn read_verifier_data<P: AsRef<Path>>(path: P) -> io::Result<VerifierData> {
     let mut file = File::open(path)?;
-    let data: VerifierDataNew = deserialize_from(&mut file).unwrap();
+    let data: VerifierData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }

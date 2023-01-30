@@ -19,7 +19,7 @@ use std::str::FromStr;
 use rug::Integer;
 
 use super::proof;
-use super::{wit_comp::StagedWitCompEvaluator, ProverDataNew, VarType, VerifierDataNew};
+use super::{wit_comp::StagedWitCompEvaluator, ProverData, VarType, VerifierData};
 use crate::ir::term::Value;
 
 use super::bellman::{get_modulus, int_to_ff, lc_to_bellman};
@@ -38,7 +38,7 @@ fn ff_to_int<F: PrimeFieldBits>(f: F) -> Integer {
 ///
 /// Optionally contains a variable value map. This must be populated to use the
 /// bellman prover.
-pub struct SynthInput<'a>(&'a ProverDataNew, Option<&'a FxHashMap<String, Value>>);
+pub struct SynthInput<'a>(&'a ProverData, Option<&'a FxHashMap<String, Value>>);
 
 impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a> {
     #[track_caller]
@@ -220,14 +220,14 @@ pub struct Mirage<E: Engine>(PhantomData<E>);
 /// The pk for [mirage]
 #[derive(Serialize, Deserialize)]
 pub struct ProvingKey<E: Engine>(
-    ProverDataNew,
+    ProverData,
     #[serde(with = "serde_pk")] mirage::Parameters<E>,
 );
 
 /// The vk for [mirage]
 #[derive(Serialize, Deserialize)]
 pub struct VerifyingKey<E: Engine>(
-    VerifierDataNew,
+    VerifierData,
     #[serde(with = "serde_vk")] mirage::VerifyingKey<E>,
 );
 
@@ -248,10 +248,7 @@ where
 
     type Proof = Proof<E>;
 
-    fn setup(
-        p_data: ProverDataNew,
-        v_data: VerifierDataNew,
-    ) -> (Self::ProvingKey, Self::VerifyingKey) {
+    fn setup(p_data: ProverData, v_data: VerifierData) -> (Self::ProvingKey, Self::VerifyingKey) {
         let rng = &mut rand::thread_rng();
         let params =
             mirage::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();

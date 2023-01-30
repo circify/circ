@@ -7,7 +7,7 @@ use bincode::{deserialize_from, serialize_into};
 use fxhash::FxHashMap as HashMap;
 use serde::{Deserialize, Serialize};
 
-use super::{ProverDataNew, VerifierDataNew};
+use super::{ProverData, VerifierData};
 use crate::ir::term::text::parse_value_map;
 use crate::ir::term::Value;
 
@@ -20,10 +20,7 @@ pub trait ProofSystem {
     /// A proof
     type Proof: Serialize + for<'a> Deserialize<'a>;
     /// Setup
-    fn setup(
-        p_data: ProverDataNew,
-        v_data: VerifierDataNew,
-    ) -> (Self::ProvingKey, Self::VerifyingKey);
+    fn setup(p_data: ProverData, v_data: VerifierData) -> (Self::ProvingKey, Self::VerifyingKey);
     /// Proving
     fn prove(pk: &Self::ProvingKey, witness: &HashMap<String, Value>) -> Self::Proof;
     /// Verification
@@ -31,8 +28,8 @@ pub trait ProofSystem {
 
     /// Setup to files
     fn setup_fs<P1, P2>(
-        p_data: ProverDataNew,
-        v_data: VerifierDataNew,
+        p_data: ProverData,
+        v_data: VerifierData,
         pk_path: P1,
         vk_path: P2,
     ) -> std::io::Result<()>

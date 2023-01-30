@@ -452,7 +452,7 @@ impl R1csFinal {
     }
 }
 
-impl ProverDataNew {
+impl ProverData {
     /// Check all assertions. Puts in 1 for challenges.
     pub fn check_all(&self, values: &HashMap<String, Value>) {
         // we need to evaluate all R1CS variables
@@ -842,7 +842,7 @@ impl R1cs {
     }
 
     /// Prover Data
-    fn prover_data(self, cs: &Computation) -> ProverDataNew {
+    fn prover_data(self, cs: &Computation) -> ProverData {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, false);
         // we still need to remove the non-r1cs variables
@@ -887,7 +887,7 @@ impl R1cs {
             var_sequence.extend(computed_in_stage);
             var_sequence.extend(challs);
         }
-        ProverDataNew {
+        ProverData {
             r1cs: R1csFinal {
                 field: self.modulus.clone(),
                 names: var_sequence
@@ -902,7 +902,7 @@ impl R1cs {
     }
 
     /// Prover Data
-    fn verifier_data(&self, cs: &Computation) -> VerifierDataNew {
+    fn verifier_data(&self, cs: &Computation) -> VerifierData {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, true);
         let public_inputs = cs.metadata.get_inputs_for_party(None);
@@ -931,7 +931,7 @@ impl R1cs {
             .collect();
         let mut comp = wit_comp::StagedWitComp::default();
         comp.add_stage(vars, terms);
-        VerifierDataNew { precompute: comp }
+        VerifierData { precompute: comp }
     }
 
     /// Add the signals of this R1CS instance to the precomputation.
@@ -949,7 +949,7 @@ impl R1cs {
     }
 
     /// Split this R1CS into prover (Proving, Setup) and verifier (Verifying) information.
-    pub fn finalize(self, cs: &Computation) -> (ProverDataNew, VerifierDataNew) {
+    pub fn finalize(self, cs: &Computation) -> (ProverData, VerifierData) {
         let vd = self.verifier_data(cs);
         let pd = self.prover_data(cs);
         (pd, vd)
@@ -969,7 +969,7 @@ impl R1cs {
     }
 }
 
-impl VerifierDataNew {
+impl VerifierData {
     /// Given verifier inputs, compute a vector of field values to feed to the proof system.
     pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<FieldV> {
         let mut eval = wit_comp::StagedWitCompEvaluator::new(&self.precompute);
@@ -982,7 +982,7 @@ impl VerifierDataNew {
 
 /// Relation-related data that a prover needs to make a proof.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ProverDataNew {
+pub struct ProverData {
     /// R1cs
     pub r1cs: R1csFinal,
     /// Witness computation
@@ -991,7 +991,7 @@ pub struct ProverDataNew {
 
 /// Relation-related data that a verifier needs to check a proof.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct VerifierDataNew {
+pub struct VerifierData {
     /// Instance computation
     pub precompute: wit_comp::StagedWitComp,
 }

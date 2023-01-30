@@ -18,7 +18,7 @@ use rug::integer::{IsPrime, Order};
 use rug::Integer;
 
 use super::proof;
-use super::{wit_comp::StagedWitCompEvaluator, Lc, ProverDataNew, Var, VarType, VerifierDataNew};
+use super::{wit_comp::StagedWitCompEvaluator, Lc, ProverData, Var, VarType, VerifierData};
 use crate::ir::term::Value;
 
 /// Convert a (rug) integer to a prime field element.
@@ -73,7 +73,7 @@ pub(super) fn get_modulus<F: Field + PrimeField>() -> Integer {
 ///
 /// Optionally contains a variable value map. This must be populated to use the
 /// bellman prover.
-pub struct SynthInput<'a>(&'a ProverDataNew, Option<&'a FxHashMap<String, Value>>);
+pub struct SynthInput<'a>(&'a ProverData, Option<&'a FxHashMap<String, Value>>);
 
 impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
     #[track_caller]
@@ -225,14 +225,14 @@ pub struct Bellman<E: Engine>(PhantomData<E>);
 /// The pk for [Bellman]
 #[derive(Serialize, Deserialize)]
 pub struct ProvingKey<E: Engine>(
-    ProverDataNew,
+    ProverData,
     #[serde(with = "serde_pk")] groth16::Parameters<E>,
 );
 
 /// The vk for [Bellman]
 #[derive(Serialize, Deserialize)]
 pub struct VerifyingKey<E: Engine>(
-    VerifierDataNew,
+    VerifierData,
     #[serde(with = "serde_vk")] groth16::VerifyingKey<E>,
 );
 
@@ -253,10 +253,7 @@ where
 
     type Proof = Proof<E>;
 
-    fn setup(
-        p_data: ProverDataNew,
-        v_data: VerifierDataNew,
-    ) -> (Self::ProvingKey, Self::VerifyingKey) {
+    fn setup(p_data: ProverData, v_data: VerifierData) -> (Self::ProvingKey, Self::VerifyingKey) {
         let rng = &mut rand::thread_rng();
         let params =
             groth16::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();
