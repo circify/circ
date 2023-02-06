@@ -693,6 +693,10 @@ impl<'src> IrInterp<'src> {
             let outputs = self.var_decl_list(&tts[2]);
             let tuple_term = self.term(&tts[3]);
             assert!(
+                matches!(check(&tuple_term), Sort::Tuple(..)),
+                "precompute output term must be a tuple"
+            );
+            assert!(
                 outputs.len() == tuple_term.cs().len(),
                 "output list has {} items, tuple has {}",
                 outputs.len(),

@@ -140,7 +140,7 @@ def test(features, extra_args):
     if load_mode() == "release":
         log_run_check(test_cmd_release)
 
-    if "r1cs" in features and "smt" in features:
+    if "r1cs" in features and "smt" in features and "datalog" in features:
         log_run_check(["./scripts/test_datalog.zsh"])
 
     if "zok" in features and "smt" in features:

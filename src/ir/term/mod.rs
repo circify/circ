@@ -1570,6 +1570,17 @@ impl PostOrderIter {
             visited: TermSet::default(),
         }
     }
+    /// Make an iterator over the descendents of `roots`, stopping at `skips`.
+    pub fn from_roots_and_skips(roots: impl IntoIterator<Item = Term>, skips: TermSet) -> Self {
+        Self {
+            stack: roots
+                .into_iter()
+                .filter(|t| !skips.contains(t))
+                .map(|t| (false, t))
+                .collect(),
+            visited: skips,
+        }
+    }
 }
 
 impl std::iter::Iterator for PostOrderIter {
@@ -1717,6 +1728,47 @@ impl ComputationMetadata {
         out
     }
 
+    /// Get the interactive structure of the variables. See [InteractiveVars].
+    pub fn interactive_vars(&self) -> InteractiveVars {
+        let final_round = self.vars.values().map(|m| m.round).max().unwrap_or(0);
+        let mut instances = Vec::new();
+        let mut rounds = vec![RoundVars::default(); final_round as usize + 1];
+        for meta in self.vars.values() {
+            if meta.random {
+                // is this a challenge?, if so it must be public
+                assert!(meta.vis.is_none());
+                rounds[meta.round as usize].challenges.push(meta.term());
+            } else if meta.vis.is_none() {
+                // is it a public non-challenge? if so, it must be round 0
+                assert!(meta.round == 0);
+                instances.push(meta.term());
+            } else {
+                // this is a witness
+                rounds[meta.round as usize].witnesses.push(meta.term());
+            }
+        }
+        // If there no final challenges, distinguish the last round of witnesses
+        let final_witnesses = if rounds.last().unwrap().challenges.is_empty() {
+            rounds.pop().unwrap().witnesses
+        } else {
+            Vec::new()
+        };
+        let mut ret = InteractiveVars {
+            instances,
+            rounds,
+            final_witnesses,
+        };
+        // sort!
+        let cmp_name = |a: &Term, b: &Term| a.as_var_name().cmp(b.as_var_name());
+        ret.instances.sort_by(cmp_name);
+        for round in &mut ret.rounds {
+            round.witnesses.sort_by(cmp_name);
+            round.challenges.sort_by(cmp_name);
+        }
+        ret.final_witnesses.sort_by(cmp_name);
+        ret
+    }
+
     /// Get a round after the rounds of these variables
     pub fn future_round<'a, Q: Borrow<str> + 'a>(
         &self,
@@ -1763,6 +1815,29 @@ impl ComputationMetadata {
     pub fn remove_var(&mut self, name: &str) {
         self.vars.remove(name);
     }
+}
+
+/// A structured collection of variables that indicates the round structure: e.g., orderings,
+/// challenges.
+///
+/// It represents the variables themselves as terms.
+#[derive(Default)]
+pub struct InteractiveVars {
+    /// Instance vars
+    pub instances: Vec<Term>,
+    /// Rounds
+    pub rounds: Vec<RoundVars>,
+    /// Final witnesses
+    pub final_witnesses: Vec<Term>,
+}
+
+/// Witnesses, followed by a challenge.
+#[derive(Default, Clone)]
+pub struct RoundVars {
+    /// witnesses
+    pub witnesses: Vec<Term>,
+    /// followed by challenges
+    pub challenges: Vec<Term>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

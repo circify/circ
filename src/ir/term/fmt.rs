@@ -299,6 +299,12 @@ impl DisplayIr for VariableMetadata {
         if self.random {
             write!(f, " (random)")?;
         }
+        if 0 != self.round {
+            write!(f, " (round {})", self.round)?;
+        }
+        if self.random {
+            write!(f, " (random)")?;
+        }
         write!(f, ")")
     }
 }

@@ -2,34 +2,561 @@
 
 use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use log::debug;
+use log::{debug, trace};
 use paste::paste;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::Entry;
-use std::fmt::Display;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use crate::ir::term::*;
 
 #[cfg(feature = "bellman")]
 pub mod bellman;
+#[cfg(feature = "bellman")]
+pub mod mirage;
 pub mod opt;
+pub mod proof;
 #[cfg(feature = "spartan")]
 pub mod spartan;
 pub mod trans;
+pub mod wit_comp;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A Rank 1 Constraint System.
-pub struct R1cs<S: Hash + Eq> {
+///
+/// Extended to comprehend witness commitments and verifier challenges.
+///
+/// We view the R1CS relation as R(x, cw_0 .. cw_C, w_0, r_0, w_1, r_1, .. w), where all
+/// variables are vectors of field elements and
+/// * x is the instance
+/// * cw_i is a committed witness
+///   * i.e., the commitment is part of the instance, but the data is part of the witness
+/// * i from 0 to R is a "round number":
+///   * w_i is a witness set by the prover in round i
+///   * r_i is a random challenge, sampled as round i ends and round i+1 begins
+/// * w is the final round of witnesses
+///
+/// ## Operations
+///
+/// To interface with a proof system, it must be able to: (mapping to MIRAGE impl)
+/// * get all instance variables (create inputs)
+/// * get all committed witness vectors (create witnesses, end blocks)
+/// * for each round
+///   * get the witness variables (create witnesses, end block)
+///   * followed by the challenge variables (create challenges)
+/// * get all constraints, and create them
+///
+/// To interface with a compiler, its must be able to: (mapping to Computation interface)
+/// * describe all instance variables in a fixed order (get public variables, fixed order)
+/// * describe all committed witness vectors in a fixed order (get witness arrays, fixed order)
+/// * for each round
+///   * describe the witness variables in that round
+///     * (tricky?
+///       * since we have deterministic semantics, it suffices to declare the [Computation]
+///         witness variables of that round (intermediates are not needed)
+///     * )
+///   * describe the challenge variables after that round (immediate)
+/// * then, we embed the intermediates in w
+///
+/// To interface with an optimizer, it must be able to
+/// * build a variable use-site cache
+/// * change constraints/remove them
+/// * test whether a variable can be eliminated
+///   * x cannot
+///   * cw_i cannot
+///   * r_i cannot
+///   * w_i cannot
+///   * w can
+/// * since only w variable can be eliminated, there is room for optimizating the contents of w_i
+///   * For now, we'll assume that putting the computation witness inputs is sufficient
+///
+/// Design conclusions:
+/// * Since contraints are defined uniformly w.r.t. different kinds of variables, it makes sense
+///   for variables to have uniform identifiers. We'll use a [usize].
+/// * The compiler seems capable of meeting a very restricted, stateful builder interface.
+/// * The optimizer will be happy as long as
+///   * there is a uniform variable representation and
+///   * it can test that representation for eliminatability
+///
+/// So, our ultimate data structure is:
+/// * a next var counter
+/// * a (bi) mapping between variable numbers and names
+/// * the builder round we're in
+/// * indices defining the blocks:
+///   * end of x
+///   * for each cw_i: end of i
+///   * for each round:
+///     * end of w_i
+///     * end of r_i
+///     * no entry for w
+/// * constraints!
+/// * terms
+///   * variables include:
+///     * verifier inputs
+///     * prover inputs
+///     * challenges
+///
+/// I'll skip the build interface: it'll map directly to the above.
+///
+/// The optimizer won't have an interface. It *will* be allowed to remove variables, leaving unused
+/// variable numbers.
+///
+/// The proof system interface:
+/// * Setup:
+///   * get x: names and numbers (numbers needed to interpret LCs)
+///   * for i: get cw_i: "
+///   * for i: get w_i and r_i: "
+///   * get w
+/// * Proving:
+///   * Details TBD.
+///   * Probably: build an evaluator
+///   * evaluator:
+///     * submit values (inputs, challenges)
+///     * get values
+pub struct R1cs {
     modulus: FieldT,
-    signal_idxs: HashMap<S, usize>,
-    idxs_signals: HashMap<usize, S>,
-    next_idx: usize,
-    public_idxs: HashSet<usize>,
+    idx_to_sig: BiMap<Var, String>,
+    num_insts: usize,
+    num_cwits: Vec<usize>,
+    next_cwit: usize,
+    round_wit_ends: Vec<usize>,
+    next_round_wit: usize,
+    round_chall_ends: Vec<usize>,
+    next_round_chall: usize,
+    num_final_wits: usize,
+
+    challenge_names: Vec<String>,
+
+    /// The contraints themselves
     constraints: Vec<(Lc, Lc, Lc)>,
-    #[serde(with = "crate::ir::term::serde_mods::vec")]
-    terms: Vec<Term>,
+
+    /// Terms for computing them.
+    #[serde(with = "crate::ir::term::serde_mods::map")]
+    terms: HashMap<Var, Term>,
+    precompute: precomp::PreComp,
+}
+
+/// An assembled R1CS relation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct R1csFinal {
+    field: FieldT,
+    vars: Vec<Var>,
+    constraints: Vec<(Lc, Lc, Lc)>,
+    names: HashMap<Var, String>,
+    // chall_precompute_names: HashMap<Var, String>,
+}
+
+/// A variable
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct Var(usize);
+
+impl Var {
+    const NUMBER_BITS: u32 = usize::BITS - 3;
+    const NUMBER_MASK: usize = !(0b111 << Self::NUMBER_BITS);
+    fn new(ty: VarType, number: usize) -> Self {
+        assert!(!Self::NUMBER_MASK & number == 0);
+        let ty_repr = match ty {
+            VarType::Inst => 0b000,
+            VarType::CWit => 0b001,
+            VarType::RoundWit => 0b010,
+            VarType::Chall => 0b011,
+            VarType::FinalWit => 0b100,
+        };
+        Var(ty_repr << Self::NUMBER_BITS | number)
+    }
+    fn ty(&self) -> VarType {
+        match self.0 >> Self::NUMBER_BITS {
+            0b000 => VarType::Inst,
+            0b001 => VarType::CWit,
+            0b010 => VarType::RoundWit,
+            0b011 => VarType::Chall,
+            0b100 => VarType::FinalWit,
+            c => panic!("Bad type code {}", c),
+        }
+    }
+    fn number(&self) -> usize {
+        self.0 & Self::NUMBER_MASK
+    }
+}
+
+impl std::fmt::Debug for Var {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}({})", self.ty(), self.number())
+    }
+}
+
+#[derive(Debug)]
+/// A variable type
+pub enum VarType {
+    /// x
+    Inst,
+    /// cw_i
+    CWit,
+    /// w_i
+    RoundWit,
+    /// r_i
+    Chall,
+    /// w
+    FinalWit,
+}
+
+/// Builder interface
+impl R1cs {
+    /// Make an empty constraint system, mod `modulus`.
+    /// If `values`, then this constraint system will track & expect concrete values.
+    pub fn new(modulus: FieldT, precompute: precomp::PreComp) -> Self {
+        R1cs {
+            modulus,
+            idx_to_sig: BiMap::new(),
+            num_insts: Default::default(),
+            num_cwits: Default::default(),
+            next_cwit: Default::default(),
+            round_wit_ends: Default::default(),
+            next_round_wit: Default::default(),
+            round_chall_ends: Default::default(),
+            next_round_chall: Default::default(),
+            num_final_wits: Default::default(),
+            challenge_names: Default::default(),
+            constraints: Vec::new(),
+            terms: Default::default(),
+            precompute,
+        }
+    }
+
+    fn var(&mut self, s: String, t: Term, ty: VarType) -> Var {
+        let id = match ty {
+            VarType::Inst => {
+                self.num_insts += 1;
+                self.num_insts - 1
+            }
+            VarType::CWit => {
+                self.next_cwit += 1;
+                self.next_cwit - 1
+            }
+            VarType::RoundWit => {
+                self.next_round_wit += 1;
+                self.next_round_wit - 1
+            }
+            VarType::Chall => {
+                self.next_round_chall += 1;
+                self.next_round_chall - 1
+            }
+            VarType::FinalWit => {
+                self.num_final_wits += 1;
+                self.num_final_wits - 1
+            }
+        };
+        if let VarType::Chall = ty {
+            self.challenge_names.push(s.clone());
+        }
+        let var = Var::new(ty, id);
+        // could check `t` dependents
+        self.idx_to_sig.insert(var, s);
+        self.terms.insert(var, t);
+        var
+    }
+
+    /// End a round of witnesses and challenges. The challenges will be set after the witnesses.
+    pub fn end_round(&mut self) {
+        self.round_wit_ends.push(self.next_round_wit);
+        self.round_chall_ends.push(self.next_round_chall);
+    }
+
+    /// Add a (uncommitted) witness variable.
+    #[track_caller]
+    pub fn add_var(&mut self, s: String, t: Term, ty: VarType) -> Var {
+        assert!(!matches!(ty, VarType::CWit));
+        self.var(s, t, ty)
+    }
+
+    /// The total number of variables
+    pub fn num_vars(&self) -> usize {
+        self.num_insts
+            + self.next_cwit
+            + self.next_round_wit
+            + self.next_round_chall
+            + self.num_final_wits
+    }
+
+    /// Add a vector of committed witness variables
+    pub fn add_committed_witness(&mut self, names_and_terms: Vec<(String, Term)>) {
+        let n = names_and_terms.len();
+        for (name, value) in names_and_terms {
+            self.var(name, value, VarType::CWit);
+        }
+        self.num_cwits.push(n);
+    }
+
+    /// Get the zero combination for this system.
+    pub fn zero(&self) -> Lc {
+        Lc {
+            modulus: self.modulus.clone(),
+            constant: self.modulus.zero(),
+            monomials: HashMap::default(),
+        }
+    }
+    /// Get a constant constraint for this system.
+    #[track_caller]
+    pub fn constant(&self, c: FieldV) -> Lc {
+        assert_eq!(c.ty(), self.modulus);
+        Lc {
+            modulus: self.modulus.clone(),
+            constant: c,
+            monomials: HashMap::default(),
+        }
+    }
+    /// Get combination which is just the wire `s`.
+    pub fn signal_lc(&self, s: &str) -> Lc {
+        let idx = self
+            .idx_to_sig
+            .get_rev(s)
+            .expect("Missing signal in signal_lc");
+        let mut lc = self.zero();
+        lc.monomials.insert(*idx, self.modulus.new_v(1));
+        lc
+    }
+    /// Make `a * b = c` a constraint.
+    pub fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
+        assert_eq!(&self.modulus, &a.modulus);
+        assert_eq!(&self.modulus, &b.modulus);
+        assert_eq!(&self.modulus, &c.modulus);
+        debug!(
+            "Constraint:\n    {}\n  * {}\n  = {}",
+            self.format_lc(&a),
+            self.format_lc(&b),
+            self.format_lc(&c)
+        );
+        self.constraints.push((a, b, c));
+    }
+
+    /// Get a nice string represenation of the combination `a`.
+    pub fn format_lc(&self, a: &Lc) -> String {
+        let mut s = String::new();
+
+        let half_m: Integer = self.modulus().clone() / 2;
+        let abs = |i: Integer| {
+            if i <= half_m {
+                i
+            } else {
+                self.modulus() - i
+            }
+        };
+        let sign = |i: &Integer| if i < &half_m { "+" } else { "-" };
+        let format_i = |i: &FieldV| {
+            let ii: Integer = i.into();
+            format!("{}{}", sign(&ii), abs(ii))
+        };
+
+        s.push_str(&format_i(&a.constant));
+        for (idx, coeff) in &a.monomials {
+            s.extend(
+                format!(
+                    " {} {}",
+                    self.idx_to_sig.get_fwd(idx).unwrap(),
+                    format_i(coeff),
+                )
+                .chars(),
+            );
+        }
+        s
+    }
+
+    /// Can this variable be eliminated?
+    pub fn can_eliminate(&self, var: Var) -> bool {
+        matches!(var.ty(), VarType::RoundWit)
+    }
+
+    /// Get a nice string represenation of the tuple.
+    pub fn format_qeq(&self, (a, b, c): &(Lc, Lc, Lc)) -> String {
+        format!(
+            "({})({}) = {}",
+            self.format_lc(a),
+            self.format_lc(b),
+            self.format_lc(c)
+        )
+    }
+
+    fn modulus(&self) -> &Integer {
+        self.modulus.modulus()
+    }
+
+    /// Access the raw constraints.
+    pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
+        &self.constraints
+    }
+}
+
+impl R1csFinal {
+    /// Check `a * b = c` in this constraint system.
+    pub fn check(&self, a: &Lc, b: &Lc, c: &Lc, values: &HashMap<Var, FieldV>) {
+        let av = self.eval(a, values);
+        let bv = self.eval(b, values);
+        let cv = self.eval(c, values);
+        if (av.clone() * &bv) != cv {
+            panic!(
+                "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
+                self.format_lc(a),
+                av,
+                self.format_lc(b),
+                bv,
+                self.format_lc(c),
+                cv
+            )
+        }
+    }
+
+    /// Get a nice string represenation of the combination `a`.
+    fn format_lc(&self, a: &Lc) -> String {
+        let mut s = String::new();
+
+        let half_m: Integer = self.field.modulus().clone() / 2;
+        let abs = |i: Integer| {
+            if i <= half_m {
+                i
+            } else {
+                self.field.modulus() - i
+            }
+        };
+        let sign = |i: &Integer| if i < &half_m { "+" } else { "-" };
+        let format_i = |i: &FieldV| {
+            let ii: Integer = i.into();
+            format!("{}{}", sign(&ii), abs(ii))
+        };
+
+        s.push_str(&format_i(&a.constant));
+        for (idx, coeff) in &a.monomials {
+            s.extend(format!(" {} {}", self.names.get(idx).unwrap(), format_i(coeff),).chars());
+        }
+        s
+    }
+
+    fn eval(&self, lc: &Lc, values: &HashMap<Var, FieldV>) -> FieldV {
+        let mut acc = lc.constant.clone();
+        for (var, coeff) in &lc.monomials {
+            let val = values
+                .get(var)
+                .unwrap_or_else(|| panic!("Missing value in R1cs::eval for variable {:?}", var))
+                .clone();
+            acc += val * coeff;
+        }
+        acc
+    }
+
+    /// Check all assertions
+    fn check_all(&self, values: &HashMap<Var, FieldV>) {
+        for (a, b, c) in &self.constraints {
+            self.check(a, b, c, values)
+        }
+    }
+}
+
+impl ProverData {
+    /// Check all assertions. Puts in 1 for challenges.
+    pub fn check_all(&self, values: &HashMap<String, Value>) {
+        // we need to evaluate all R1CS variables
+        let mut var_values: HashMap<Var, FieldV> = Default::default();
+        let mut eval = wit_comp::StagedWitCompEvaluator::new(&self.precompute);
+        // this will hold inputs to the multi-round evaluator.
+        let mut inputs = values.clone();
+        while var_values.len() < self.r1cs.vars.len() {
+            trace!(
+                "Have {}/{} values, doing another round",
+                var_values.len(),
+                self.r1cs.vars.len()
+            );
+            // do a round of evaluation
+            let value_vec = eval.eval_stage(std::mem::take(&mut inputs));
+            for value in value_vec {
+                var_values.insert(self.r1cs.vars[var_values.len()], value.as_pf().clone());
+            }
+            // fill the challenges with 1s
+            if var_values.len() < self.r1cs.vars.len() {
+                for next_var_i in var_values.len()..self.r1cs.vars.len() {
+                    if !matches!(self.r1cs.vars[next_var_i].ty(), VarType::Chall) {
+                        break;
+                    }
+                    let var = self.r1cs.vars[next_var_i];
+                    let name = self.r1cs.names.get(&var).unwrap().clone();
+                    let val = self.r1cs.field.new_v(1);
+                    var_values.insert(var, val.clone());
+                    inputs.insert(name, Value::Field(val));
+                }
+            }
+        }
+        self.r1cs.check_all(&var_values);
+    }
+}
+
+/// A bidirectional map.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BiMap<S: Hash + Eq + Clone, T: Hash + Eq + Clone> {
+    fwd: HashMap<S, T>,
+    rev: HashMap<T, S>,
+}
+
+#[allow(dead_code)]
+impl<S: Hash + Eq + Clone + Debug, T: Hash + Eq + Clone + Debug> BiMap<S, T> {
+    fn new() -> Self {
+        Self {
+            fwd: Default::default(),
+            rev: Default::default(),
+        }
+    }
+    fn len(&self) -> usize {
+        debug_assert_eq!(self.fwd.len(), self.rev.len());
+        self.fwd.len()
+    }
+    #[allow(clippy::uninlined_format_args)]
+    fn insert(&mut self, s: S, t: T) {
+        assert!(
+            self.fwd.insert(s.clone(), t.clone()).is_none(),
+            "Duplicate key {:?}",
+            s
+        );
+        assert!(
+            self.rev.insert(t.clone(), s).is_none(),
+            "Duplicate value {:?}",
+            t
+        );
+    }
+    fn contains_key<Q>(&self, s: &Q) -> bool
+    where
+        S: std::borrow::Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.fwd.contains_key(s)
+    }
+    fn get_fwd<Q>(&self, s: &Q) -> Option<&T>
+    where
+        S: std::borrow::Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.fwd.get(s)
+    }
+    fn get_rev<Q>(&self, t: &Q) -> Option<&S>
+    where
+        T: std::borrow::Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.rev.get(t)
+    }
+    fn remove_fwd<Q: std::borrow::Borrow<S>>(&mut self, s: &Q) {
+        let t = self.fwd.remove(s.borrow()).unwrap();
+        self.rev.remove(&t).unwrap();
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// The type of a signal
+pub enum SigTy {
+    /// Known by all parties, initially
+    Instance,
+    /// Known by the prover
+    Witness,
+    /// Randomly sampled
+    Challenge,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +564,7 @@ pub struct R1cs<S: Hash + Eq> {
 pub struct Lc {
     modulus: FieldT,
     constant: FieldV,
-    monomials: HashMap<usize, FieldV>,
+    monomials: HashMap<Var, FieldV>,
 }
 
 impl Lc {
@@ -87,13 +614,13 @@ macro_rules! arith_impl {
                     }
                     for (i, v) in &other.monomials {
                         match self.monomials.entry(*i) {
-                            Entry::Occupied(mut e) => {
+                            std::collections::hash_map::Entry::Occupied(mut e) => {
                                 e.get_mut().[<$fn _assign>](v);
                                 if e.get().is_zero() {
                                     e.remove_entry();
                                 }
                             }
-                            Entry::Vacant(e) => {
+                            std::collections::hash_map::Entry::Vacant(e) => {
                                 let mut m = self.modulus.zero();
                                 m.[<$fn _assign>](v);
                                 e.insert(m);
@@ -197,135 +724,9 @@ impl MulAssign<isize> for Lc {
     }
 }
 
-impl<S: Clone + Hash + Eq + Display> R1cs<S> {
-    /// Make an empty constraint system, mod `modulus`.
-    /// If `values`, then this constraint system will track & expect concrete values.
-    pub fn new(modulus: FieldT) -> Self {
-        R1cs {
-            modulus,
-            signal_idxs: HashMap::default(),
-            idxs_signals: HashMap::default(),
-            next_idx: 0,
-            public_idxs: HashSet::default(),
-            constraints: Vec::new(),
-            terms: Vec::new(),
-        }
-    }
-    /// Get the zero combination for this system.
-    pub fn zero(&self) -> Lc {
-        Lc {
-            modulus: self.modulus.clone(),
-            constant: self.modulus.zero(),
-            monomials: HashMap::default(),
-        }
-    }
-    /// Get a constant constraint for this system.
-    #[track_caller]
-    pub fn constant(&self, c: FieldV) -> Lc {
-        assert_eq!(c.ty(), self.modulus);
-        Lc {
-            modulus: self.modulus.clone(),
-            constant: c,
-            monomials: HashMap::default(),
-        }
-    }
-    /// Get combination which is just the wire `s`.
-    pub fn signal_lc(&self, s: &S) -> Lc {
-        let idx = self
-            .signal_idxs
-            .get(s)
-            .expect("Missing signal in signal_lc");
-        let mut lc = self.zero();
-        lc.monomials.insert(*idx, self.modulus.new_v(1));
-        lc
-    }
-    /// Create a new wire, `s`. If this system is tracking concrete values, you must provide the
-    /// value, `v`.
-    ///
-    /// You must also provide `term`, that computes the signal value from *some* inputs.
-    pub fn add_signal(&mut self, s: S, term: Term) {
-        let n = self.next_idx;
-        self.next_idx += 1;
-        self.signal_idxs.insert(s.clone(), n);
-        self.idxs_signals.insert(n, s);
-        assert_eq!(n, self.terms.len());
-        self.terms.push(term);
-    }
-    /// Make `s` a public wire in the system
-    pub fn publicize(&mut self, s: &S) {
-        self.signal_idxs
-            .get(s)
-            .cloned()
-            .map(|i| self.public_idxs.insert(i));
-    }
-    /// Make `a * b = c` a constraint.
-    pub fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
-        assert_eq!(&self.modulus, &a.modulus);
-        assert_eq!(&self.modulus, &b.modulus);
-        assert_eq!(&self.modulus, &c.modulus);
-        debug!(
-            "Constraint:\n    {}\n  * {}\n  = {}",
-            self.format_lc(&a),
-            self.format_lc(&b),
-            self.format_lc(&c)
-        );
-        self.constraints.push((a, b, c));
-    }
-    /// Get a nice string represenation of the combination `a`.
-    pub fn format_lc(&self, a: &Lc) -> String {
-        let mut s = String::new();
-
-        let half_m: Integer = self.modulus().clone() / 2;
-        let abs = |i: Integer| {
-            if i <= half_m {
-                i
-            } else {
-                self.modulus() - i
-            }
-        };
-        let sign = |i: &Integer| if i < &half_m { "+" } else { "-" };
-        let format_i = |i: &FieldV| {
-            let ii: Integer = i.into();
-            format!("{}{}", sign(&ii), abs(ii))
-        };
-
-        s.push_str(&format_i(&a.constant));
-        for (idx, coeff) in &a.monomials {
-            s.extend(
-                format!(
-                    " {} {}",
-                    self.idxs_signals.get(idx).unwrap(),
-                    format_i(coeff),
-                )
-                .chars(),
-            );
-        }
-        s
-    }
-
-    /// Get a nice string represenation of the tuple.
-    pub fn format_qeq(&self, (a, b, c): &(Lc, Lc, Lc)) -> String {
-        format!(
-            "({})({}) = {}",
-            self.format_lc(a),
-            self.format_lc(b),
-            self.format_lc(c)
-        )
-    }
-
-    fn modulus(&self) -> &Integer {
-        self.modulus.modulus()
-    }
-
-    /// Access the raw constraints.
-    pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
-        &self.constraints
-    }
-}
-
-impl R1cs<String> {
+impl R1cs {
     /// Check `a * b = c` in this constraint system.
-    pub fn check(&self, a: &Lc, b: &Lc, c: &Lc, values: &HashMap<String, Value>) {
+    pub fn check(&self, a: &Lc, b: &Lc, c: &Lc, values: &HashMap<Var, FieldV>) {
         let av = self.eval(a, values);
         let bv = self.eval(b, values);
         let cv = self.eval(c, values);
@@ -342,105 +743,222 @@ impl R1cs<String> {
         }
     }
 
-    fn eval(&self, lc: &Lc, values: &HashMap<String, Value>) -> FieldV {
+    fn eval(&self, lc: &Lc, values: &HashMap<Var, FieldV>) -> FieldV {
         let mut acc = lc.constant.clone();
         for (var, coeff) in &lc.monomials {
-            let name = self.idxs_signals.get(var).unwrap();
             let val = values
-                .get(name)
-                .unwrap_or_else(|| panic!("Missing value in R1cs::eval for variable {}", name))
-                .as_pf()
+                .get(var)
+                .unwrap_or_else(|| panic!("Missing value in R1cs::eval for variable {:?}", var))
                 .clone();
             acc += val * coeff;
         }
         acc
     }
 
-    /// Check all assertions, if values are being tracked.
-    pub fn check_all(&self, values: &HashMap<String, Value>) {
-        for (a, b, c) in &self.constraints {
-            self.check(a, b, c, values)
-        }
-    }
-
-    /// Add the signals of this R1CS instance to the precomputation.
-    fn extend_precomputation(&self, precompute: &mut precomp::PreComp, public_signals_only: bool) {
-        for i in 0..self.next_idx {
-            let sig_name = self.idxs_signals.get(&i).unwrap();
-            if (!public_signals_only || self.public_idxs.contains(&i))
-                && !precompute.outputs().contains_key(sig_name)
-            {
-                let term = self.terms[i].clone();
-                precompute.add_output(sig_name.clone(), term);
-            }
-        }
-    }
-
-    /// Compute the verifier data for this R1CS relation, given a precomputation
-    /// that computes the variables that are relation inputs
-    pub fn verifier_data(&self, cs: &Computation) -> VerifierData {
-        let mut precompute = cs.precomputes.clone();
-        self.extend_precomputation(&mut precompute, true);
-        let public_inputs = cs.metadata.get_inputs_for_party(None);
-        precompute.restrict_to_inputs(public_inputs);
-        let pf_input_order: Vec<String> = (0..self.next_idx)
-            .filter(|i| self.public_idxs.contains(i))
-            .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
-            .collect();
-        let mut precompute_inputs = HashMap::default();
-        for input in &pf_input_order {
-            if let Some(output_term) = precompute.outputs().get(input) {
-                for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
-                    precompute_inputs.insert(v, s);
+    fn eval_all_vars(&self, inputs: &HashMap<String, Value>) -> HashMap<Var, FieldV> {
+        let after_precompute = self.precompute.eval(inputs);
+        let mut cache = Default::default();
+        self.terms
+            .iter()
+            .map(|(var, term)| {
+                let val = eval_cached(term, &after_precompute, &mut cache);
+                if let Value::Field(f) = val {
+                    (*var, f.clone())
+                } else {
+                    panic!("Non-field");
                 }
-            } else {
-                precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
-            }
-        }
-        VerifierData {
-            precompute_inputs,
-            precompute,
-            pf_input_order,
+            })
+            .collect()
+    }
+
+    /// Check all assertions, if values are being tracked.
+    pub fn check_all(&self, inputs: &HashMap<String, Value>) {
+        let var_values = self.eval_all_vars(inputs);
+        for (a, b, c) in &self.constraints {
+            self.check(a, b, c, &var_values)
         }
     }
 
-    /// Compute the verifier data for this R1CS relation, given a precomputation
-    /// that computes the variables that are relation inputs
-    pub fn prover_data(self, cs: &Computation) -> ProverData {
+    fn insts_iter(&self) -> impl Iterator<Item = Var> + '_ {
+        (0..self.num_insts)
+            .map(|i| Var::new(VarType::Inst, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
+    }
+
+    fn final_wits_iter(&self) -> impl Iterator<Item = Var> + '_ {
+        (0..self.num_final_wits)
+            .map(|i| Var::new(VarType::FinalWit, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
+    }
+
+    fn cwits_iter(&self) -> impl Iterator<Item = Var> + '_ {
+        (0..self.next_cwit)
+            .map(|i| Var::new(VarType::CWit, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
+    }
+
+    fn challs_iter(&self, round: usize) -> impl Iterator<Item = Var> + '_ {
+        let start = if round == 0 {
+            0
+        } else {
+            self.round_chall_ends[round - 1]
+        };
+        let end = self.round_chall_ends[round];
+        (start..end)
+            .map(|i| Var::new(VarType::Chall, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
+    }
+
+    fn round_wits_iter(&self, round: usize) -> impl Iterator<Item = Var> + '_ {
+        let start = if round == 0 {
+            0
+        } else {
+            self.round_wit_ends[round - 1]
+        };
+        let end = self.round_wit_ends[round];
+        (start..end)
+            .map(|i| Var::new(VarType::RoundWit, i))
+            .filter(move |v| self.idx_to_sig.contains_key(v))
+    }
+
+    /// Returns a list of (signal list, challenge list) pairs.
+    /// The prove computes the values of signals.
+    /// The proof system computes the values of challenges.
+    /// All signals are computed from (a) prover inputs and (b) challenge values.
+    fn stage_vars(&self) -> Vec<(Vec<Var>, Vec<Var>)> {
+        let mut out = Vec::new();
+        out.push((
+            self.insts_iter().chain(self.cwits_iter()).collect(),
+            Vec::new(),
+        ));
+        for round_idx in 0..self.round_chall_ends.len() {
+            out.push((
+                self.round_wits_iter(round_idx).collect(),
+                self.challs_iter(round_idx).collect(),
+            ));
+        }
+        out.push((self.final_wits_iter().collect(), Vec::new()));
+        out
+    }
+
+    /// Prover Data
+    fn prover_data(self, cs: &Computation) -> ProverData {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, false);
         // we still need to remove the non-r1cs variables
         use crate::ir::proof::PROVER_ID;
         let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
         precompute.restrict_to_inputs(all_inputs);
-        let pf_input_order: Vec<String> = (0..self.next_idx)
-            .filter(|i| self.public_idxs.contains(i))
-            .map(|i| self.idxs_signals.get(&i).cloned().unwrap())
-            .collect();
-        let mut precompute_inputs = HashMap::default();
-        for input in &pf_input_order {
-            if let Some(output_term) = precompute.outputs().get(input) {
-                for (v, s) in extras::free_variables_with_sorts(output_term.clone()) {
-                    precompute_inputs.insert(v, s);
-                }
-            } else {
-                precompute_inputs.insert(input.clone(), Sort::Field(self.modulus.clone()));
-            }
+        let mut vars: HashMap<String, Sort> = {
+            PostOrderIter::new(precompute.tuple())
+                .filter_map(|t| {
+                    if let Op::Var(n, s) = t.op() {
+                        Some((n.clone(), s.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+        for c in &self.challenge_names {
+            vars.remove(c);
         }
-        for o in precompute.outputs().keys() {
-            precompute_inputs.remove(o);
+        let mut precompute_map = precompute.flatten();
+        let mut comp = wit_comp::StagedWitComp::default();
+        let mut var_sequence = Vec::new();
+        for (computed_in_stage, challs) in self.stage_vars() {
+            let terms = computed_in_stage
+                .iter()
+                .map(|v| {
+                    let name = self.idx_to_sig.get_fwd(v).unwrap();
+                    precompute_map.remove(name).unwrap()
+                })
+                .collect();
+            comp.add_stage(std::mem::take(&mut vars), terms);
+            vars = challs
+                .iter()
+                .map(|cvar| {
+                    (
+                        self.idx_to_sig.get_fwd(cvar).unwrap().clone(),
+                        Sort::Field(self.modulus.clone()),
+                    )
+                })
+                .collect();
+            var_sequence.extend(computed_in_stage);
+            var_sequence.extend(challs);
         }
         ProverData {
-            precompute_inputs,
-            precompute,
-            r1cs: self,
+            r1cs: R1csFinal {
+                field: self.modulus.clone(),
+                names: var_sequence
+                    .iter()
+                    .map(|v| (*v, self.idx_to_sig.get_fwd(v).unwrap().clone()))
+                    .collect(),
+                vars: var_sequence,
+                constraints: self.constraints,
+            },
+            precompute: comp,
         }
+    }
+
+    /// Prover Data
+    fn verifier_data(&self, cs: &Computation) -> VerifierData {
+        let mut precompute = cs.precomputes.clone();
+        self.extend_precomputation(&mut precompute, true);
+        let public_inputs = cs.metadata.get_inputs_for_party(None);
+        precompute.restrict_to_inputs(public_inputs);
+        let vars: HashMap<String, Sort> = {
+            PostOrderIter::new(precompute.tuple())
+                .filter_map(|t| {
+                    if let Op::Var(n, s) = t.op() {
+                        Some((n.clone(), s.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+        for c in &self.challenge_names {
+            assert!(!vars.contains_key(c));
+        }
+        let mut precompute_map = precompute.flatten();
+        let terms = self
+            .insts_iter()
+            .map(|v| {
+                let name = self.idx_to_sig.get_fwd(&v).unwrap();
+                precompute_map.remove(name).unwrap()
+            })
+            .collect();
+        let mut comp = wit_comp::StagedWitComp::default();
+        comp.add_stage(vars, terms);
+        VerifierData { precompute: comp }
+    }
+
+    /// Add the signals of this R1CS instance to the precomputation.
+    fn extend_precomputation(&self, precompute: &mut precomp::PreComp, public_signals_only: bool) {
+        for (var, term) in &self.terms {
+            if !matches!(var.ty(), VarType::Chall)
+                && (!public_signals_only || matches!(var.ty(), VarType::Inst))
+            {
+                let sig_name = self.idx_to_sig.get_fwd(var).unwrap();
+                if !precompute.outputs().contains_key(sig_name) {
+                    precompute.add_output(sig_name.clone(), term.clone());
+                }
+            }
+        }
+    }
+
+    /// Split this R1CS into prover (Proving, Setup) and verifier (Verifying) information.
+    pub fn finalize(self, cs: &Computation) -> (ProverData, VerifierData) {
+        let vd = self.verifier_data(cs);
+        let pd = self.prover_data(cs);
+        (pd, vd)
     }
 
     /// Get an IR term that represents this system.
     pub fn lc_ir_term(&self, lc: &Lc) -> Term {
         term(PF_ADD,
-            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), leaf_term(Op::Var(self.idxs_signals.get(i).unwrap().into(), Sort::Field(self.modulus.clone())))])).collect())
+            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), leaf_term(Op::Var(self.idx_to_sig.get_fwd(i).unwrap().into(), Sort::Field(self.modulus.clone())))])).collect())
     }
 
     /// Get an IR term that represents this system.
@@ -451,53 +969,31 @@ impl R1cs<String> {
     }
 }
 
-/// Relation-related data that a verifier needs to check a proof.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VerifierData {
-    /// Inputs that the verifier must have
-    pub precompute_inputs: HashMap<String, Sort>,
-    /// A precomputation to perform on those inputs
-    pub precompute: precomp::PreComp,
-    /// The order in which the outputs must be fed into the proof system
-    pub pf_input_order: Vec<String>,
-}
-
 impl VerifierData {
-    /// Given verifier inputs, compute a vector of integers to feed to the proof system.
-    pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<rug::Integer> {
-        for (input, sort) in &self.precompute_inputs {
-            let value = value_map
-                .get(input)
-                .unwrap_or_else(|| panic!("No input for {}", input));
-            let sort2 = value.sort();
-            assert_eq!(
-                sort, &sort2,
-                "Sort mismatch for {input}. Expected\n\t{sort} but got\n\t{sort2}",
-            );
-        }
-        let new_map = self.precompute.eval(value_map);
-        self.pf_input_order
-            .iter()
-            .map(|input| {
-                new_map
-                    .get(input)
-                    .unwrap_or_else(|| panic!("Missing input {}", input))
-                    .as_pf()
-                    .i()
-            })
+    /// Given verifier inputs, compute a vector of field values to feed to the proof system.
+    pub fn eval(&self, value_map: &HashMap<String, Value>) -> Vec<FieldV> {
+        let mut eval = wit_comp::StagedWitCompEvaluator::new(&self.precompute);
+        eval.eval_stage(value_map.clone())
+            .into_iter()
+            .map(|v| v.as_pf().clone())
             .collect()
     }
 }
 
-/// Relation-related data that a prover needs to check a proof.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Relation-related data that a prover needs to make a proof.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProverData {
-    /// The R1CS instance.
-    pub r1cs: R1cs<String>,
-    /// Inputs that the verifier must have
-    pub precompute_inputs: HashMap<String, Sort>,
-    /// A precomputation to perform on those inputs
-    pub precompute: precomp::PreComp,
+    /// R1cs
+    pub r1cs: R1csFinal,
+    /// Witness computation
+    pub precompute: wit_comp::StagedWitComp,
+}
+
+/// Relation-related data that a verifier needs to check a proof.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerifierData {
+    /// Instance computation
+    pub precompute: wit_comp::StagedWitComp,
 }
 
 #[derive(Clone, Debug)]
