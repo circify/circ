@@ -1,5 +1,6 @@
 (let (
+; each line defines a prover input
     (x #x04)
 )
-    false
+    false ; ignored
 )
