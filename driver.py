@@ -37,6 +37,14 @@ def install(features):
                     ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE]
                 )
                 subprocess.run(["./scripts/build_aby.zsh"])
+        if f == "kahip":
+            if verify_path_empty(KAHIP_SOURCE):
+                # TODO: we can pull from their main repository instead of fork also long as we
+                # remove their parallel (ParHIP) cmake dependency
+                subprocess.run(
+                    ["git", "clone", "https://github.com/edwjchen/KaHIP.git", KAHIP_SOURCE]
+                )
+                subprocess.run(["./scripts/build_kahip.zsh"])
 
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
@@ -53,9 +61,8 @@ def check(features):
     """
 
     cmd = ["cargo", "check", "--tests", "--examples", "--benches", "--bins"]
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        cmd = cmd + ["--features"] + cargo_features
+    if features:
+        cmd = cmd + ["--features"] + [",".join(features)]
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
@@ -92,9 +99,8 @@ def build(features):
         cmd += ["--release"]
     cmd += ["--examples"]
 
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        cmd = cmd + ["--features"] + cargo_features
+    if features:
+        cmd = cmd + ["--features"] + features
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
 
@@ -125,10 +131,9 @@ def test(features, extra_args):
 
     test_cmd = ["cargo", "test"]
     test_cmd_release = ["cargo", "test", "--release"]
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        test_cmd += ["--features"] + cargo_features
-        test_cmd_release += ["--features"] + cargo_features
+    if features:
+        test_cmd += ["--features"] + features
+        test_cmd_release += ["--features"] + features
         if "ristretto255" in features:
             test_cmd += ["--no-default-features"]
             test_cmd_release += ["--no-default-features"]
@@ -178,9 +183,8 @@ def benchmark(features):
         cmd += ["--release"]
     cmd += ["--examples"]
 
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        cmd = cmd + ["--features"] + cargo_features
+    if features:
+        cmd = cmd + ["--features"] + features
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
@@ -203,9 +207,8 @@ def lint():
     print("linting!")
 
     cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        cmd = cmd + ["--features"] + cargo_features
+    if features:
+        cmd = cmd + ["--features"] + features
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
@@ -213,9 +216,8 @@ def lint():
 
 def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
-    cargo_features = filter_cargo_features(features)
-    if cargo_features:
-        cmd = cmd + ["--features"] + cargo_features
+    if features:
+        cmd = cmd + ["--features"] + features
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     cmd += extra
@@ -258,7 +260,7 @@ def set_features(features):
         features = set()
 
     def verify_feature(f):
-        if f in valid_features | {"ristretto255"}:
+        if f in cargo_features | {"ristretto255"}:
             return True
         return False
 
@@ -397,7 +399,7 @@ if __name__ == "__main__":
             set_mode(args.mode)
 
         if args.all_features:
-            features = set_features(valid_features)
+            features = set_features(cargo_features)
 
         if args.list_features:
             print("Feature set:", sorted(list(features)))
