@@ -45,6 +45,13 @@ def install(features):
                     ["git", "clone", "https://github.com/edwjchen/KaHIP.git", KAHIP_SOURCE]
                 )
                 subprocess.run(["./scripts/build_kahip.zsh"])
+        if f == "kahypar":
+            if verify_path_empty(KAHYPAR_SOURCE):
+                subprocess.run(
+                    ["git", "clone", "--depth=1", "--recursive",
+                        "git@github.com:SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
+                )
+                subprocess.run(["./scripts/build_kahypar.zsh"])
 
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])

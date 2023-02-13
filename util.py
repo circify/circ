@@ -5,11 +5,12 @@ from os import path
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
 cargo_features = {"aby", "c", "lp", "r1cs",
-                  "smt", "zok", "datalog", "bellman", "spartan", "kahip"}
+                  "smt", "zok", "datalog", "bellman", "spartan", "kahip", "kahypar"}
 
 # Environment variables
 ABY_SOURCE = "./../ABY"
 KAHIP_SOURCE = "./../KaHIP"
+KAHYPAR_SOURCE = "./../kahypar"
 
 
 def set_env(features):
@@ -20,6 +21,9 @@ def set_env(features):
         if f == "kahip":
             if not os.getenv("KAHIP_SOURCE"):
                 os.environ["KAHIP_SOURCE"] = KAHIP_SOURCE
+        if f == "kahypar":
+            if not os.getenv("KAHYPAR_SOURCE"):
+                os.environ["KAHYPAR_SOURCE"] = KAHYPAR_SOURCE
 
 
 def save_mode(mode):
