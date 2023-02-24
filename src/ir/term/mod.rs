@@ -1008,14 +1008,10 @@ impl TermTable {
             }
         });
         while let Some(t) = to_check.pop() {
-            let okv = self.map.get_key_value(&*t.elm);
-            std::mem::drop(t);
-            if let Some((key, _)) = okv {
-                if Arc::strong_count(key) <= 1 {
-                    to_check.extend(key.cs.iter().cloned());
-                    let key = key.clone();
-                    self.map.remove(&key);
-                }
+            // If t.elm and the table's Arc are the only two...
+            if Arc::strong_count(&t.elm) <= 2 {
+                to_check.extend(t.cs.iter().cloned());
+                self.map.remove(&t.elm);
             }
         }
         let new_size = self.map.len();
