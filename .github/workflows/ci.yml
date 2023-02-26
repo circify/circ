@@ -32,13 +32,10 @@ jobs:
             - name: Cache third_party build
               uses: actions/cache@v2
               with:
-                  path: ${ABY_SOURCE}/build
-                  key: ${{ runner.os }}
-              with:
-                  path: ${KAHIP_SOURCE}/deploy
-                  key: ${{ runner.os }}
-              with:
-                  path: ${KAHYPAR_SOURCE}/build
+                  path: |
+                  ${ABY_SOURCE}/build
+                  ${KAHIP_SOURCE}/deploy
+                  ${KAHYPAR_SOURCE}/build
                   key: ${{ runner.os }}
             - name: Check
               run: python3 driver.py --check
