@@ -17,7 +17,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v2
+            - uses: actions/checkout@v3
             - name: Install dependencies
               if: runner.os == 'Linux'
               run: sudo apt-get update; sudo apt-get install zsh cvc4 libboost-all-dev libssl-dev coinor-cbc coinor-libcbc-dev
@@ -30,7 +30,7 @@ jobs:
             - name: Install third_party libraries
               run: python3 driver.py --install
             - name: Cache third_party build
-              uses: actions/cache@v2
+              uses: actions/cache@v3
               with:
                   path: |
                       ${ABY_SOURCE}/build

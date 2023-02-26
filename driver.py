@@ -47,7 +47,7 @@ def install(features):
             if verify_path_empty(KAHYPAR_SOURCE):
                 subprocess.run(
                     ["git", "clone", "--depth=1", "--recursive",
-                        "git@github.com:SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
+                        "https://github.com/SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
                 )
                 subprocess.run(["./scripts/build_kahypar.zsh"])
 
