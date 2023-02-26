@@ -36,7 +36,7 @@ jobs:
                       ${ABY_SOURCE}/build
                       ${KAHIP_SOURCE}/deploy
                       ${KAHYPAR_SOURCE}/build
-                  key: ${{ runner.os }}
+                  key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
             - name: Format
