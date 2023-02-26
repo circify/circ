@@ -1,4 +1,5 @@
 //! Symbolic Z# terms
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 
@@ -90,6 +91,24 @@ impl Ty {
     }
 }
 
+#[derive(Default)]
+pub struct PfLitCache {
+    terms: Vec<Term>,
+}
+
+impl PfLitCache {
+    fn get(&mut self, i: usize) -> &Term {
+        while self.terms.len() <= i {
+            self.terms.push(pf_lit_ir(self.terms.len()));
+        }
+        &self.terms[i]
+    }
+}
+
+thread_local! {
+    pub static PF_LIT_CACHE: RefCell<PfLitCache> = Default::default();
+}
+
 #[derive(Clone, Debug)]
 pub struct T {
     pub ty: Ty,
@@ -128,7 +147,7 @@ impl T {
     fn unwrap_array_ir(self) -> Result<Vec<Term>, String> {
         match &self.ty {
             Ty::Array(size, _sort) => Ok((0..*size)
-                .map(|i| term![Op::Select; self.term.clone(), pf_lit_ir(i)])
+                .map(|i| term![Op::Select; self.term.clone(), PF_LIT_CACHE.with(|c| c.borrow_mut().get(i).clone())])
                 .collect()),
             s => Err(format!("Not an array: {}", s)),
         }
