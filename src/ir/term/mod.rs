@@ -140,6 +140,8 @@ pub enum Op {
     ///
     /// Makes an array equal to `array`, but with `value` at `index`.
     Store,
+    /// Create an array from (contiguous) values.
+    Array(Sort, Sort),
 
     /// Assemble n things into a tuple
     Tuple,
@@ -278,6 +280,7 @@ impl Op {
             Op::UbvToPf(_) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
+            Op::Array(..) => None,
             Op::Tuple => None,
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
@@ -716,6 +719,25 @@ impl Array {
             Default::default(),
             size,
         )
+    }
+
+    /// Create an array from a vector. Requires key and value sorts.
+    ///
+    /// Sets the array default element (which does not matter since the array is dense) to the
+    /// default value for the value sort.
+    pub fn from_vec(key_sort: Sort, value_sort: Sort, values: Vec<Value>) -> Self {
+        let size = values.len();
+        let map: BTreeMap<Value, Value> = values
+            .into_iter()
+            .zip(key_sort.elems_iter_values())
+            .map(|(v, i)| (i, v))
+            .collect();
+        Self {
+            key_sort,
+            default: Box::new(value_sort.default_value()),
+            size,
+            map,
+        }
     }
 
     // consistency check for index
@@ -1526,6 +1548,11 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
             let v = vs.get(&c.cs[2]).unwrap().clone();
             Value::Array(a.store(i, v))
         }
+        Op::Array(key, value) => Value::Array(Array::from_vec(
+            key.clone(),
+            value.clone(),
+            c.cs.iter().map(|c| vs.get(c).unwrap().clone()).collect(),
+        )),
         Op::Select => {
             let a = vs.get(&c.cs[0]).unwrap().as_array().clone();
             let i = vs.get(&c.cs[1]).unwrap();
@@ -1600,10 +1627,7 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, c: Term) ->
 /// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
 /// * a value sort, for the array's default
 pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
-    let d = Sort::Array(Box::new(key_sort.clone()), Box::new(value_sort), i.len()).default_term();
-    i.into_iter()
-        .zip(key_sort.elems_iter())
-        .fold(d, |arr, (val, idx)| term(Op::Store, vec![arr, idx, val]))
+    term(Op::Array(key_sort, value_sort), i)
 }
 
 /// Make a term with no arguments, just an operator.

@@ -138,6 +138,20 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 }
                 progress
             }
+            Op::Array(..) => {
+                let mut progress = false;
+                if term.cs.len() > 1 {
+                    progress = self.bi_implicate(&term, &term.cs[0]) || progress;
+                    for i in 0..term.cs.len() - 1 {
+                        progress = self.bi_implicate(&term.cs[i], &term.cs[i + 1]) || progress;
+                    }
+                    for i in (0..term.cs.len() - 1).rev() {
+                        progress = self.bi_implicate(&term.cs[i], &term.cs[i + 1]) || progress;
+                    }
+                    progress = self.bi_implicate(&term, &term.cs[0]) || progress;
+                }
+                progress
+            }
             Op::Select => {
                 // Even though the selected value may not have array sort, we still flag it as
                 // non-oblivious so we know whether to replace it or not.
@@ -265,6 +279,13 @@ impl RewritePass for Replacer {
                     debug_assert_eq!(cs.len(), 3);
                     let k_const = get_const(&cs.remove(1));
                     Some(term(Op::Update(k_const), cs))
+                } else {
+                    None
+                }
+            }
+            Op::Array(..) => {
+                if self.should_replace(orig) {
+                    Some(term(Op::Tuple, get_cs()))
                 } else {
                     None
                 }

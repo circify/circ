@@ -60,6 +60,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::UbvToPf(_) => Vec::new(),
         Op::Select => vec![t.cs[0].clone()],
         Op::Store => vec![t.cs[0].clone()],
+        Op::Array(..) => Vec::new(),
         Op::Tuple => t.cs.clone(),
         Op::Field(_) => vec![t.cs[0].clone()],
         Op::Update(_i) => vec![t.cs[0].clone()],
@@ -130,6 +131,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
         Op::Select => array_or(get_ty(&t.cs[0]), "select").map(|(_, v)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs[0]).clone()),
+        Op::Array(k, v) => Ok(Sort::Array(Box::new(k.clone()), Box::new(v.clone()), t.cs.len())),
         Op::Tuple => Ok(Sort::Tuple(t.cs.iter().map(get_ty).cloned().collect())),
         Op::Field(i) => {
             let sort = get_ty(&t.cs[0]);
@@ -348,6 +350,11 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
             .and_then(|_| eq_or(v, b, "store"))
             .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
+        (Op::Array(k, v), a) => {
+            let ctx = "array op";
+            a.iter().try_fold((), |(), ai| eq_or(v, ai, ctx)).map(|_|
+                Sort::Array(Box::new(k.clone()), Box::new(v.clone()), a.len()))
+        }
         (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
         (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
             if i < &t.len() {

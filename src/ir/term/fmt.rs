@@ -180,6 +180,13 @@ impl DisplayIr for Op {
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
+            Op::Array(k, v) => {
+                write!(f, "(array ")?;
+                k.ir_fmt(f)?;
+                write!(f, " ")?;
+                v.ir_fmt(f)?;
+                write!(f, ")")
+            }
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "(field {})", i),
             Op::Update(i) => write!(f, "(update {})", i),

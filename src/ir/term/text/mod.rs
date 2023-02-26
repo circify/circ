@@ -281,6 +281,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
+                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(self.sort(k), self.sort(v))),
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
@@ -805,6 +806,23 @@ mod test {
                  (B (store A a b))
          ) (xor (select B a)
                 (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))",
+        );
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn arr_op_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (a bool)
+         (b bool)
+         (A (array bool bool 1))
+         )
+         (= A ((array bool bool) a))
+         )",
         );
         let s = serialize_term(&t);
         let t2 = parse_term(s.as_bytes());
