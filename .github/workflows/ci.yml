@@ -27,7 +27,7 @@ jobs:
             - uses: Swatinem/rust-cache@v1
             - name: Set all features on
               run: python3 driver.py --all_features
-            - name: Restore third_party libraries in cache
+            - name: Restore third_party libraries from cache
               uses: actions/cache/restore@v3
               with:
                   path: |
@@ -38,7 +38,7 @@ jobs:
             - name: Install third_party libraries
               run: python3 driver.py --install
             - name: Cache third_party build
-              uses: actions/cache@v3
+              uses: actions/cache/save@v3
               with:
                   path: |
                       ${ABY_SOURCE}/build
