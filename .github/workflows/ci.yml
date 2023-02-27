@@ -37,11 +37,14 @@ jobs:
             - name: Debugging print
               run: |
                   pwd
+                  echo ${GITHUB_WORKSPACE}
+                  cd ${GITHUB_WORKSPACE} && pwd
+
             - name: Save third_party libraries to cache
               uses: actions/cache/save@v3
               with:
                   path: |
-                      ../ABY
+                      /home/runner/work/circ/ABY
                   key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
