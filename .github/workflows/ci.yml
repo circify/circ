@@ -40,7 +40,7 @@ jobs:
               uses: actions/cache/save@v3
               with:
                   path: |
-                      ${ABY_SOURCE}/build
+                      ${ABY_CACHE}/build
                   key: ${{ steps.cache-restore.outputs.cache-primary-key }}
             - name: Check
               run: python3 driver.py --check
