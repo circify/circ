@@ -9,7 +9,7 @@ on:
 env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
-    ABY_CACHE: "/home/runner/work/ABY"
+    ABY_CACHE: "/home/runner/work/circ/ABY"
 
 jobs:
     build:
