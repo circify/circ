@@ -9,7 +9,7 @@ on:
 env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
-    ABY_CACHE: "/home/runner/work/circ/ABY"
+    ABY_CACHE: "../ABY"
 
 jobs:
     build:
@@ -37,9 +37,14 @@ jobs:
               run: python3 driver.py --install
             - name: Debugging print
               run: |
+                  echo
                   echo ${GITHUB_WORKSPACE} 
+                  echo
                   ls
+                  echo
                   ls ..
+                  echo
+                  ls ../ABY
             - name: Save third_party libraries to cache
               id: cache-save
               uses: actions/cache/save@v3
