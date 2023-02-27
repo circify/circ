@@ -34,6 +34,9 @@ jobs:
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
+            - name: Debugging print
+              run: |
+                  pwd
             - name: Save third_party libraries to cache
               uses: actions/cache/save@v3
               with:
