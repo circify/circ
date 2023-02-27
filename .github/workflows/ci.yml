@@ -8,7 +8,8 @@ on:
 
 env:
     CARGO_TERM_COLOR: always
-    ABY_SOURCE: "~/ABY"
+    ABY_SOURCE: "./../ABY"
+    ABY_CACHE: "~/ABY"
 
 jobs:
     build:
@@ -30,7 +31,7 @@ jobs:
               uses: actions/cache/restore@v3
               with:
                   path: |
-                      ${ABY_SOURCE}/build
+                      ${ABY_CACHE}/build
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
