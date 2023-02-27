@@ -27,7 +27,6 @@ jobs:
             - name: Set all features on
               run: python3 driver.py --all_features
             - name: Restore third_party libraries from cache
-              id: cache-restore
               uses: actions/cache/restore@v3
               with:
                   path: |
@@ -35,23 +34,12 @@ jobs:
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
-            - name: Debugging print
-              run: |
-                  echo
-                  echo ${GITHUB_WORKSPACE} 
-                  echo
-                  ls
-                  echo
-                  ls ..
-                  echo
-                  ls ../ABY
             - name: Save third_party libraries to cache
-              id: cache-save
               uses: actions/cache/save@v3
               with:
                   path: |
-                      ${ABY_CACHE}/build
-                  key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+                      ../ABY
+                  key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
             - name: Format
