@@ -9,6 +9,7 @@ on:
 env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
+    ABY_CACHE: /home/runner/work/circ/ABY
 
 jobs:
     build:
@@ -29,22 +30,18 @@ jobs:
               uses: actions/cache/restore@v3
               with:
                   path: |
-                      "/home/runner/work/circ/ABY"
+                      ${ABY_CACHE}
                   key: ${{ runner.os }}-third_party
                   restore-keys: |
                       ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
-            - name: Debugging print
-              run: |
-                  ls /home/runner/work/circ/
-                  echo "========="
-                  ls /home/runner/work/circ/ABY
+
             - name: Save third_party libraries to cache
               uses: actions/cache/save@v3
               with:
                   path: |
-                      "/home/runner/work/circ/ABY"
+                      ${ABY_CACHE}
                   key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
