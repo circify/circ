@@ -8,7 +8,7 @@ on:
 
 env:
     CARGO_TERM_COLOR: always
-    ABY_SOURCE: "./../ABY"
+    ABY_SOURCE: "~/ABY"
 
 jobs:
     build:
@@ -34,7 +34,7 @@ jobs:
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
-            - name: Cache third_party build
+            - name: Save third_party libraries to cache
               id: cache-save
               uses: actions/cache/save@v3
               with:
