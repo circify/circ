@@ -44,7 +44,7 @@ jobs:
               uses: actions/cache/save@v3
               with:
                   path: |
-                      "/home/runner/work/circ/ABY/build"
+                      "/home/runner/work/circ/ABY/build/"
                   key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
