@@ -10,7 +10,7 @@ env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
     KAHIP_SOURCE: "./../KaHIP"
-    KAHYPAR_SOURCE: "./../KAHYPAR"
+    KAHYPAR_SOURCE: "./../kahypar"
 
 jobs:
     build:
