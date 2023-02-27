@@ -9,8 +9,6 @@ on:
 env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
-    KAHIP_SOURCE: "./../KaHIP"
-    KAHYPAR_SOURCE: "./../kahypar"
 
 jobs:
     build:
@@ -32,8 +30,6 @@ jobs:
               with:
                   path: |
                       ${ABY_SOURCE}/build
-                      ${KAHIP_SOURCE}/deploy
-                      ${KAHYPAR_SOURCE}/build
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
@@ -42,8 +38,6 @@ jobs:
               with:
                   path: |
                       ${ABY_SOURCE}/build
-                      ${KAHIP_SOURCE}/deploy
-                      ${KAHYPAR_SOURCE}/build
                   key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
