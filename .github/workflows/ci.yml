@@ -35,6 +35,11 @@ jobs:
                       ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
+            - name: Debugging print
+              run: |
+                  ls /home/runner/work/circ/
+                  echo "========="
+                  ls /home/runner/work/circ/ABY
             - name: Save third_party libraries to cache
               uses: actions/cache/save@v3
               with:
