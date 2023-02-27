@@ -35,6 +35,11 @@ jobs:
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
+            - name: Debugging print
+              run: |
+                  echo ${GITHUB_WORKSPACE} 
+                  ls
+                  ls ..
             - name: Save third_party libraries to cache
               id: cache-save
               uses: actions/cache/save@v3
