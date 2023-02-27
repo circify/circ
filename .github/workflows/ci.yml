@@ -1,43 +1,47 @@
 name: Build & Test
 
 on:
-  push:
-    branches: [ master, ci ]
-  pull_request:
-    branches: [ master, ci ]
+    push:
+        branches: [master, ci]
+    pull_request:
+        branches: [master, ci]
 
 env:
-  CARGO_TERM_COLOR: always
-  ABY_SOURCE: "./../ABY"
+    CARGO_TERM_COLOR: always
+    ABY_SOURCE: "./../ABY"
+    KAHIP_SOURCE: "./../KaHIP"
+    KAHYPAR_SOURCE: "./../kahypar"
 
 jobs:
-  build:
+    build:
+        runs-on: ubuntu-latest
 
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-    - name: Install dependencies
-      if: runner.os == 'Linux'
-      run: sudo apt-get update; sudo apt-get install zsh cvc4 libboost-all-dev libssl-dev coinor-cbc coinor-libcbc-dev
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-    - uses: Swatinem/rust-cache@v1
-    - name: Set all features on 
-      run: python3 driver.py --all_features
-    - name: Install third_party libraries
-      run: python3 driver.py --install
-    - name: Cache third_party build
-      uses: actions/cache@v2
-      with:
-        path: ${ABY_SOURCE}/build
-        key: ${{ runner.os }}
-    - name: Check
-      run: python3 driver.py --check
-    - name: Format
-      run: cargo fmt -- --check
-    - name: Lint
-      run: python3 driver.py --lint
-    - name: Build, then Test
-      run: python3 driver.py --test
+        steps:
+            - uses: actions/checkout@v3
+            - name: Install dependencies
+              if: runner.os == 'Linux'
+              run: sudo apt-get update; sudo apt-get install zsh cvc4 libboost-all-dev libssl-dev coinor-cbc coinor-libcbc-dev
+            - uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+            - uses: Swatinem/rust-cache@v2
+            - name: Set all features on
+              run: python3 driver.py --all_features
+            - name: Cache third_party libraries
+              uses: actions/cache@v3
+              with:
+                  path: |
+                      /home/runner/work/circ/ABY
+                      /home/runner/work/circ/KaHIP
+                      /home/runner/work/circ/kahypar
+                  key: ${{ runner.os }}-third_party
+            - name: Install third_party libraries
+              run: python3 driver.py --install
+            - name: Check
+              run: python3 driver.py --check
+            - name: Format
+              run: cargo fmt -- --check
+            - name: Lint
+              run: python3 driver.py --lint
+            - name: Build, then Test
+              run: python3 driver.py --test
