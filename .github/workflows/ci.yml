@@ -9,6 +9,8 @@ on:
 env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
+    KAHIP_SOURCE: "./../KaHIP"
+    KAHYPAR_SOURCE: "./../KAHYPAR"
 
 jobs:
     build:
@@ -25,25 +27,16 @@ jobs:
             - uses: Swatinem/rust-cache@v2
             - name: Set all features on
               run: python3 driver.py --all_features
-            - name: Restore third_party libraries from cache
-              id: cache-restore
-              uses: actions/cache/restore@v3
+            - name: Cache third_party libraries
+              uses: actions/cache/cache@v3
               with:
                   path: |
                       /home/runner/work/circ/ABY/build
-                  key: ${{ runner.os }}-third_party
-                  restore-keys: |
-                      ${{ runner.os }}-third_party
+                      /home/runner/work/circ/KaHIP/build
+                      /home/runner/work/circ/kahypar/build
+                  key: ${{ runner.os }}-third_party_libs
             - name: Install third_party libraries
               run: python3 driver.py --install
-
-            - name: Save third_party libraries to cache
-              id: cache-save
-              uses: actions/cache/save@v3
-              with:
-                  path: |
-                      /home/runner/work/circ/ABY/build
-                  key: ${{ steps.cache-restore.outputs.cache-primary-key }}
             - name: Check
               run: python3 driver.py --check
             - name: Format
