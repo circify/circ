@@ -34,7 +34,7 @@ jobs:
                       /home/runner/work/circ/ABY
                       /home/runner/work/circ/KaHIP
                       /home/runner/work/circ/kahypar
-                  key: ${{ runner.os }}-third_party
+                  key: ${{ runner.os }}-third_party_libs
             - name: Install third_party libraries
               run: python3 driver.py --install
             - name: Check
