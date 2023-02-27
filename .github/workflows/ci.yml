@@ -9,7 +9,6 @@ on:
 env:
     CARGO_TERM_COLOR: always
     ABY_SOURCE: "./../ABY"
-    ABY_CACHE: "/home/runner/work/circ/ABY/build"
 
 jobs:
     build:
@@ -30,7 +29,7 @@ jobs:
               uses: actions/cache/restore@v3
               with:
                   path: |
-                      ${ABY_CACHE}
+                      "/home/runner/work/circ/ABY/build"
                   key: ${{ runner.os }}-third_party
                   restore-keys: |
                       ${{ runner.os }}-third_party
@@ -40,7 +39,7 @@ jobs:
               uses: actions/cache/save@v3
               with:
                   path: |
-                      ${ABY_CACHE}
+                      "/home/runner/work/circ/ABY/build"
                   key: ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
