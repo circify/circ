@@ -42,8 +42,6 @@ jobs:
                   path: |
                       ${ABY_CACHE}
                   key: ${{ runner.os }}-third_party
-                  restore-keys: |
-                      ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
             - name: Format
