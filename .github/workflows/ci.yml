@@ -32,6 +32,8 @@ jobs:
                   path: |
                       ${ABY_CACHE}
                   key: ${{ runner.os }}-third_party
+                  restore-keys: |
+                      ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install
             - name: Save third_party libraries to cache
@@ -40,6 +42,8 @@ jobs:
                   path: |
                       ${ABY_CACHE}
                   key: ${{ runner.os }}-third_party
+                  restore-keys: |
+                      ${{ runner.os }}-third_party
             - name: Check
               run: python3 driver.py --check
             - name: Format
