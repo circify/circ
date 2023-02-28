@@ -198,12 +198,20 @@ pub struct FmtOpt {
         action = ArgAction::Set,
         default_value = "true")]
     pub use_default_field: bool,
+    /// Always hide the field
+    #[arg(
+        long = "fmt-hide-field",
+        env = "FMT_HIDE_FIELD",
+        action = ArgAction::Set,
+        default_value = "false")]
+    pub hide_field: bool,
 }
 
 impl Default for FmtOpt {
     fn default() -> Self {
         Self {
             use_default_field: true,
+            hide_field: false,
         }
     }
 }

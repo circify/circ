@@ -1,6 +1,5 @@
 import os
 from subprocess import Popen, PIPE
-import sys
 from typing import List
 from tqdm import tqdm
 

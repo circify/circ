@@ -39,6 +39,9 @@ pub trait Table<Op> {
     /// The name of the implementation
     fn name() -> &'static str;
 
+    /// Fun a function on every node
+    fn for_each(f: impl FnMut(&Op, &[Self::Node]));
+
     /// When the table garbage-collects a node with ID `id`, it will call `f(id)`. `f(id)` might
     /// clear caches, etc., but instead of droping `Node`s, it should return them.
     ///

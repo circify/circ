@@ -20,14 +20,14 @@ use ff::Field;
 use paste::paste;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use std::sync::Arc;
 
 // TODO: rework this using macros?
 
 /// Field element type
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum FieldT {
     /// BLS12-381 scalar field as `ff`
     FBls12381,
@@ -44,6 +44,12 @@ impl Display for FieldT {
             Self::FBn254 => write!(f, "FieldT::FBn254"),
             Self::IntField(m) => write!(f, "FieldT::(mod {})", m),
         }
+    }
+}
+
+impl Debug for FieldT {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -128,7 +134,7 @@ impl FieldT {
 }
 
 /// Field element value
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum FieldV {
     /// BLS12-381 scalar field element as `ff`
     FBls12381(FBls12381),
@@ -272,15 +278,37 @@ impl FieldV {
             ty.new_v(self.i())
         }
     }
+
+    /// Get this field element as an SMT-LIB string.
+    #[inline]
+    pub fn as_smtlib(&self) -> String {
+        match self {
+            Self::FBls12381(pf) => format!("#f{}m{}", Integer::from(pf), &*F_BLS12381_FMOD),
+            Self::FBn254(pf) => format!("#f{}m{}", Integer::from(pf), &*F_BN254_FMOD),
+            Self::IntField(i) => format!("{}", i),
+        }
+    }
+
+    /// Get this field element as a signed integer. No particular cut-off is guaranteed.
+    #[inline]
+    pub fn signed_int(&self) -> Integer {
+        let mut i = self.i();
+        if i.significant_bits() >= self.ty().modulus().significant_bits() - 1 {
+            i -= self.ty().modulus();
+        }
+        i
+    }
 }
 
 impl Display for FieldV {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::FBls12381(pf) => write!(f, "#f{}m{}", Integer::from(pf), &*F_BLS12381_FMOD),
-            Self::FBn254(pf) => write!(f, "#f{}m{}", Integer::from(pf), &*F_BN254_FMOD),
-            Self::IntField(i) => i.fmt(f),
-        }
+        write!(f, "{}", self.signed_int())
+    }
+}
+
+impl Debug for FieldV {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} (in {})", self.signed_int(), self.ty())
     }
 }
 

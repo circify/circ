@@ -14,6 +14,7 @@ rug = { version = "1.11", features = ["serde"] }
 gmp-mpfr-sys = { version = "1.4", optional = true }
 lazy_static = { version = "1.4", optional = true }
 rand = "0.8"
+rand_chacha = "0.3"
 rsmt2 = { version = "0.14", optional = true }
 ieee754 = { version = "0.2", optional = true}
 zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser", optional = true }
@@ -65,8 +66,8 @@ datalog = ["pest", "pest-ast", "pest_derive", "from-pest", "lazy_static"]
 smt = ["rsmt2", "ieee754"]
 lp = ["good_lp", "lp-solvers"]
 aby = ["lp"]
-kahip = ["lp"]
-kahypar = ["lp"]
+kahip = []
+kahypar = []
 r1cs = []
 spartan = ["r1cs", "dep:spartan", "merlin", "curve25519-dalek", "bincode", "gmp-mpfr-sys"]
 bellman = ["r1cs", "dep:bellman", "ff", "group", "pairing", "serde_bytes", "bincode", "gmp-mpfr-sys"]

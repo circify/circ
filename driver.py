@@ -39,17 +39,15 @@ def install(features):
                 subprocess.run(["./scripts/build_aby.zsh"])
         if f == "kahip":
             if verify_path_empty(KAHIP_SOURCE):
-                # TODO: we can pull from their main repository instead of fork also long as we
-                # remove their parallel (ParHIP) cmake dependency
                 subprocess.run(
-                    ["git", "clone", "https://github.com/edwjchen/KaHIP.git", KAHIP_SOURCE]
+                    ["git", "clone", "https://github.com/KaHIP/KaHIP.git", KAHIP_SOURCE]
                 )
                 subprocess.run(["./scripts/build_kahip.zsh"])
         if f == "kahypar":
             if verify_path_empty(KAHYPAR_SOURCE):
                 subprocess.run(
                     ["git", "clone", "--depth=1", "--recursive",
-                        "git@github.com:SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
+                        "https://github.com/SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
                 )
                 subprocess.run(["./scripts/build_kahypar.zsh"])
 
@@ -107,7 +105,7 @@ def build(features):
     cmd += ["--examples"]
 
     if features:
-        cmd = cmd + ["--features"] + features
+        cmd = cmd + ["--features"] + [",".join(features)]
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
 
@@ -139,8 +137,8 @@ def test(features, extra_args):
     test_cmd = ["cargo", "test"]
     test_cmd_release = ["cargo", "test", "--release"]
     if features:
-        test_cmd += ["--features"] + features
-        test_cmd_release += ["--features"] + features
+        test_cmd += ["--features"] + [",".join(features)]
+        test_cmd_release += ["--features"] + [",".join(features)]
         if "ristretto255" in features:
             test_cmd += ["--no-default-features"]
             test_cmd_release += ["--no-default-features"]
@@ -152,7 +150,7 @@ def test(features, extra_args):
     if load_mode() == "release":
         log_run_check(test_cmd_release)
 
-    if "r1cs" in features and "smt" in features:
+    if "r1cs" in features and "smt" in features and "datalog" in features:
         log_run_check(["./scripts/test_datalog.zsh"])
 
     if "zok" in features and "smt" in features:
@@ -191,7 +189,7 @@ def benchmark(features):
     cmd += ["--examples"]
 
     if features:
-        cmd = cmd + ["--features"] + features
+        cmd = cmd + ["--features"] + [",".join(features)]
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
@@ -215,7 +213,7 @@ def lint():
 
     cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
     if features:
-        cmd = cmd + ["--features"] + features
+        cmd = cmd + ["--features"] + [",".join(features)]
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
@@ -224,7 +222,7 @@ def lint():
 def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
     if features:
-        cmd = cmd + ["--features"] + features
+        cmd = cmd + ["--features"] + [",".join(features)]
         if "ristretto255" in features:
             cmd = cmd + ["--no-default-features"]
     cmd += extra

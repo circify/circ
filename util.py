@@ -4,8 +4,8 @@ from os import path
 # Gloable variables
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
-cargo_features = {"aby", "c", "lp", "r1cs",
-                  "smt", "zok", "datalog", "bellman", "spartan", "kahip", "kahypar"}
+cargo_features = {"aby", "c", "lp", "r1cs", "kahip", "kahypar",
+                  "smt", "zok", "datalog", "bellman", "spartan"}
 
 # Environment variables
 ABY_SOURCE = "./../ABY"

@@ -1,4 +1,5 @@
 //! Export circ R1cs to Spartan
+use crate::target::r1cs::wit_comp::StagedWitCompEvaluator;
 use crate::target::r1cs::*;
 use bincode::{deserialize_from, serialize_into};
 use curve25519_dalek::scalar::Scalar;
@@ -55,7 +56,7 @@ pub fn verify<P: AsRef<Path>>(
 
     let mut inp = Vec::new();
     for v in &values {
-        let scalar = int_to_scalar(v);
+        let scalar = int_to_scalar(&v.i());
         inp.push(scalar.to_bytes());
     }
     let inputs = InputsAssignment::new(&inp).unwrap();
@@ -78,11 +79,11 @@ pub fn r1cs_to_spartan(
     // spartan format mapper: CirC -> Spartan
     let mut wit = Vec::new();
     let mut inp = Vec::new();
-    let mut trans: HashMap<usize, usize> = HashMap::default(); // Circ -> spartan ids
-    let mut itrans: HashMap<usize, usize> = HashMap::default(); // Circ -> spartan ids
+    let mut trans: HashMap<Var, usize> = HashMap::default(); // Circ -> spartan ids
+    let mut itrans: HashMap<usize, Var> = HashMap::default(); // spartan ids -> Circ
 
     // check modulus
-    let f_mod = prover_data.r1cs.modulus.modulus();
+    let f_mod = prover_data.r1cs.field.modulus();
     let s_mod = Integer::from_str_radix(
         "7237005577332262213973186563042994240857116359379907606001950938285454250989",
         10,
@@ -95,37 +96,22 @@ pub fn r1cs_to_spartan(
 
     let values = eval_inputs(inputs_map, prover_data);
 
-    let pf_input_order: Vec<usize> = (0..prover_data.r1cs.next_idx)
-        .filter(|i| prover_data.r1cs.public_idxs.contains(i))
-        .collect();
+    assert_eq!(values.len(), prover_data.r1cs.vars.len());
 
-    for idx in &pf_input_order {
-        let sig = prover_data.r1cs.idxs_signals.get(idx).cloned().unwrap();
-
-        let scalar = match values.get(&sig.to_string()) {
-            Some(v) => val_to_scalar(v),
-            None => panic!("Input/witness variable does not have matching evaluation"),
-        };
+    for (var, val) in prover_data.r1cs.vars.iter().zip(&values) {
+        let scalar = val_to_scalar(val);
 
         // input
-        itrans.insert(*idx, inp.len());
-        inp.push(scalar.to_bytes());
-    }
-
-    for (sig, idx) in &prover_data.r1cs.signal_idxs {
-        let scalar = match values.get(&sig.to_string()) {
-            Some(v) => val_to_scalar(v),
-            None => panic!("Input/witness variable does not have matching evaluation"),
-        };
-
-        if !prover_data.r1cs.public_idxs.contains(idx) {
-            // witness
-            trans.insert(*idx, wit.len());
+        itrans.insert(inp.len(), *var);
+        trans.insert(*var, inp.len());
+        if let VarType::Inst = var.ty() {
+            inp.push(scalar.to_bytes());
+        } else {
             wit.push(scalar.to_bytes());
         }
     }
 
-    assert_eq!(wit.len() + inp.len(), prover_data.r1cs.next_idx);
+    assert_eq!(wit.len() + inp.len(), prover_data.r1cs.vars.len());
 
     let num_vars = wit.len();
     let const_id = wit.len();
@@ -134,10 +120,6 @@ pub fn r1cs_to_spartan(
 
     let num_inputs = inp.len();
     let assn_inputs = InputsAssignment::new(&inp).unwrap();
-
-    for (cid, sid) in itrans {
-        trans.insert(cid, sid + const_id + 1);
-    }
 
     // circuit
     let mut m_a: Vec<(usize, usize, [u8; 32])> = Vec::new();
@@ -183,24 +165,22 @@ pub fn r1cs_to_spartan(
     )
 }
 
-fn eval_inputs(
-    inputs_map: &HashMap<String, Value>,
-    prover_data: &ProverData,
-) -> HashMap<String, Value> {
-    for (input, sort) in &prover_data.precompute_inputs {
-        let value = inputs_map
-            .get(input)
-            .unwrap_or_else(|| panic!("No input for {}", input));
-        let sort2 = value.sort();
-        assert_eq!(
-            sort, &sort2,
-            "Sort mismatch for {input}. Expected\n\t{sort} but got\n\t{sort2}",
-        );
-    }
-    let new_map = prover_data.precompute.eval(inputs_map);
-    prover_data.r1cs.check_all(&new_map);
-
-    new_map
+fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) -> Vec<Value> {
+    let mut evaluator = StagedWitCompEvaluator::new(&prover_data.precompute);
+    let mut ffs = Vec::new();
+    ffs.extend(
+        evaluator
+            .eval_stage(inputs_map.clone())
+            .into_iter()
+            .cloned(),
+    );
+    ffs.extend(
+        evaluator
+            .eval_stage(Default::default())
+            .into_iter()
+            .cloned(),
+    );
+    ffs
 }
 
 fn val_to_scalar(v: &Value) -> Scalar {
@@ -228,7 +208,7 @@ fn int_to_scalar(i: &Integer) -> Scalar {
 }
 
 // circ Lc (const, monomials <Integer>) -> Vec<Variable>
-fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<usize, usize>) -> Vec<Variable> {
+fn lc_to_v(lc: &Lc, const_id: usize, trans: &HashMap<Var, usize>) -> Vec<Variable> {
     let mut v: Vec<Variable> = Vec::new();
 
     for (k, m) in &lc.monomials {

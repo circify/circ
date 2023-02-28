@@ -4,14 +4,12 @@
 //! thesis](https://github.com/circify/circ/tree/master/doc/resources/braun-bs-thesis.pdf)
 //! is a good intro to how this process works.
 use crate::cfg::CircCfg;
-use crate::ir::term::precomp::PreComp;
 use crate::ir::term::*;
 use crate::target::bitsize;
 use crate::target::r1cs::*;
 
 use circ_fields::FieldT;
 use circ_opt::FieldDivByZero;
-use fxhash::FxHashSet;
 use log::debug;
 use rug::ops::Pow;
 use rug::Integer;
@@ -39,29 +37,27 @@ enum EmbeddedTerm {
 }
 
 struct ToR1cs<'cfg> {
-    r1cs: R1cs<String>,
+    r1cs: R1cs,
     cache: TermMap<EmbeddedTerm>,
-    wit_ext: PreComp,
-    public_inputs: FxHashSet<String>,
     next_idx: usize,
     zero: TermLc,
     one: TermLc,
     cfg: &'cfg CircCfg,
     field: FieldT,
+    used_vars: HashSet<String>,
 }
 
 impl<'cfg> ToR1cs<'cfg> {
-    fn new(cfg: &'cfg CircCfg, public_inputs: FxHashSet<String>) -> Self {
+    fn new(cfg: &'cfg CircCfg, precompute: precomp::PreComp, used_vars: HashSet<String>) -> Self {
         let field = cfg.field().clone();
         debug!("Starting R1CS back-end, field: {}", field);
-        let r1cs = R1cs::new(field.clone());
+        let r1cs = R1cs::new(field.clone(), precompute);
         let zero = TermLc(pf_lit(field.new_v(0u8)), r1cs.zero());
         let one = zero.clone() + 1;
         Self {
             r1cs,
             cache: TermMap::default(),
-            wit_ext: precomp::PreComp::new(),
-            public_inputs,
+            used_vars,
             next_idx: 0,
             zero,
             one,
@@ -74,17 +70,22 @@ impl<'cfg> ToR1cs<'cfg> {
     /// If values are being recorded, `value` must be provided.
     ///
     /// `comp` is a term that computes the value.
-    fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, public: bool) -> TermLc {
-        let n = format!("{}_n{}", ctx, self.next_idx);
+    fn fresh_var<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term, ty: VarType) -> TermLc {
+        let n = if matches!(ty, VarType::Chall) {
+            format!("{ctx}")
+        } else {
+            format!("{ctx}_n{}", self.next_idx)
+        };
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
-        self.r1cs.add_signal(n.clone(), comp.clone());
-        self.wit_ext.add_output(n.clone(), comp.clone());
-        if public {
-            self.r1cs.publicize(&n);
-        }
-        debug!("fresh: {}", n);
+        self.r1cs.add_var(n.clone(), comp.clone(), ty);
+        debug!("fresh: {n}");
         TermLc(comp, self.r1cs.signal_lc(&n))
+    }
+
+    /// Get a new witness. See [ToR1cs::fresh_var].
+    fn fresh_wit<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term) -> TermLc {
+        self.fresh_var(ctx, comp, VarType::FinalWit)
     }
 
     /// Enforce `x` to be bit-valued
@@ -98,7 +99,7 @@ impl<'cfg> ToR1cs<'cfg> {
     fn fresh_bit<D: Display + ?Sized>(&mut self, ctx: &D, comp: Term) -> TermLc {
         debug_assert!(matches!(check(&comp), Sort::Bool));
         let comp = term![Op::Ite; comp, self.one.0.clone(), self.zero.0.clone()];
-        let v = self.fresh_var(ctx, comp, false);
+        let v = self.fresh_var(ctx, comp, VarType::FinalWit);
         //debug!("Fresh bit: {}", self.r1cs.format_lc(&v));
         self.enforce_bit(v.clone());
         v
@@ -110,15 +111,13 @@ impl<'cfg> ToR1cs<'cfg> {
         let eqz = term![Op::Eq; x.0.clone(), self.zero.0.clone()];
         // m * x - 1 + is_zero == 0
         // is_zero * x == 0
-        let m = self.fresh_var(
+        let m = self.fresh_wit(
             "is_zero_inv",
             term![Op::Ite; eqz.clone(), self.zero.0.clone(), term![PF_RECIP; x.0.clone()]],
-            false,
         );
-        let is_zero = self.fresh_var(
+        let is_zero = self.fresh_wit(
             "is_zero",
             term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
-            false,
         );
         self.r1cs
             .constraint(m.1, x.1.clone(), -is_zero.1.clone() + 1);
@@ -208,7 +207,7 @@ impl<'cfg> ToR1cs<'cfg> {
     /// Return the product of `a` and `b`.
     fn mul(&mut self, a: TermLc, b: TermLc) -> TermLc {
         let mul_val = term![PF_MUL; a.0, b.0];
-        let c = self.fresh_var("mul", mul_val, false);
+        let c = self.fresh_wit("mul", mul_val);
         self.r1cs.constraint(a.1, b.1, c.1.clone());
         c
     }
@@ -253,6 +252,48 @@ impl<'cfg> ToR1cs<'cfg> {
     /// `f`.
     fn ite(&mut self, c: TermLc, t: TermLc, f: &TermLc) -> TermLc {
         self.mul(c, t - f) + f
+    }
+
+    /// Embed this variable as
+    fn embed_var(&mut self, var: &Term, ty: VarType) {
+        assert!(
+            !self.cache.contains_key(var),
+            "already have var {}",
+            var.op()
+        );
+        assert!(!matches!(ty, VarType::CWit), "Unimplemented");
+        if !self.used_vars.contains(var.as_var_name()) {
+            return;
+        }
+        let public = matches!(ty, VarType::Inst);
+        match var.op() {
+            Op::Var(name, Sort::Bool) => {
+                let comp = term![Op::Ite; var.clone(), self.one.0.clone(), self.zero.0.clone()];
+                let lc = self.fresh_var(name, comp, ty);
+                if !public {
+                    self.enforce_bit(lc.clone());
+                }
+                self.cache.insert(var.clone(), EmbeddedTerm::Bool(lc));
+            }
+            Op::Var(name, Sort::BitVector(n_bits)) => {
+                let public = matches!(ty, VarType::Inst);
+                let lc = self.fresh_var(
+                    name,
+                    term![Op::UbvToPf(self.field.clone()); var.clone()],
+                    ty,
+                );
+                self.set_bv_uint(var.clone(), lc, *n_bits);
+                if !public {
+                    self.get_bv_bits(var);
+                }
+            }
+            Op::Var(name, Sort::Field(f)) => {
+                assert_eq!(f, &self.field);
+                let lc = self.fresh_var(name, var.clone(), ty);
+                self.cache.insert(var.clone(), EmbeddedTerm::Field(lc));
+            }
+            o => unreachable!("Unhandled variable operator {}", o),
+        }
     }
 
     fn embed(&mut self, t: Term) {
@@ -352,15 +393,7 @@ impl<'cfg> ToR1cs<'cfg> {
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
             let lc = match &c.op() {
-                Op::Var(name, Sort::Bool) => {
-                    let public = self.public_inputs.contains(name);
-                    let comp = term![Op::Ite; c.clone(), self.one.0.clone(), self.zero.0.clone()];
-                    let v = self.fresh_var(name, comp, public);
-                    if !public {
-                        self.enforce_bit(v.clone());
-                    }
-                    v
-                }
+                Op::Var(..) => panic!("call embed_var instead"),
                 Op::Const(Value::Bool(b)) => self.zero.clone() + *b as isize,
                 Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
@@ -563,18 +596,7 @@ impl<'cfg> ToR1cs<'cfg> {
         if let Sort::BitVector(n) = check(&bv) {
             if !self.cache.contains_key(&bv) {
                 match &bv.op() {
-                    Op::Var(name, Sort::BitVector(_)) => {
-                        let public = self.public_inputs.contains(name);
-                        let var = self.fresh_var(
-                            name,
-                            term![Op::UbvToPf(self.field.clone()); bv.clone()],
-                            public,
-                        );
-                        self.set_bv_uint(bv.clone(), var, n);
-                        if !public {
-                            self.get_bv_bits(&bv);
-                        }
-                    }
+                    Op::Var(..) => panic!("call embed_var instead"),
                     Op::Const(Value::BitVector(b)) => {
                         let bit_lcs = (0..b.width())
                             .map(|i| self.zero.clone() + b.uint().get_bit(i as u32) as isize)
@@ -708,8 +730,8 @@ impl<'cfg> ToR1cs<'cfg> {
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
                                 let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
                                 let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
-                                let q = self.fresh_var("div_q", q_term, false);
-                                let r = self.fresh_var("div_r", r_term, false);
+                                let q = self.fresh_wit("div_q", q_term);
+                                let r = self.fresh_wit("div_r", r_term);
                                 let qb = self.bitify("div_q", &q, n, false);
                                 let rb = self.bitify("div_r", &r, n, false);
                                 self.r1cs.constraint(q.1.clone(), b.1.clone(), (a - &r).1);
@@ -880,10 +902,7 @@ impl<'cfg> ToR1cs<'cfg> {
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
             let lc = match &c.op() {
-                Op::Var(name, Sort::Field(_)) => {
-                    let public = self.public_inputs.contains(name);
-                    self.fresh_var(name, c.clone(), public)
-                }
+                Op::Var(..) => panic!("call embed_var instead"),
                 Op::Const(Value::Field(r)) => TermLc(
                     c.clone(),
                     self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
@@ -914,7 +933,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     FieldDivByZero::Incomplete => {
                         // ix = 1
                         let x = self.get_pf(&c.cs()[0]).clone();
-                        let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
+                        let inv_x = self.fresh_wit("recip", term![PF_RECIP; x.0.clone()]);
                         self.r1cs
                             .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                         inv_x
@@ -923,7 +942,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         // ixx = x
                         let x = self.get_pf(&c.cs()[0]).clone();
                         let x2 = self.mul(x.clone(), x.clone());
-                        let inv_x = self.fresh_var("recip", term![PF_RECIP; x.0.clone()], false);
+                        let inv_x = self.fresh_wit("recip", term![PF_RECIP; x.0.clone()]);
                         self.r1cs.constraint(x2.1, inv_x.1.clone(), x.1);
                         inv_x
                     }
@@ -933,15 +952,13 @@ impl<'cfg> ToR1cs<'cfg> {
                         // zi = 0
                         let x = self.get_pf(&c.cs()[0]).clone();
                         let eqz = term![Op::Eq; x.0.clone(), self.zero.0.clone()];
-                        let i = self.fresh_var(
+                        let i = self.fresh_wit(
                             "is_zero_inv",
                             term![Op::Ite; eqz.clone(), self.zero.0.clone(), term![PF_RECIP; x.0.clone()]],
-                            false,
                         );
-                        let z = self.fresh_var(
+                        let z = self.fresh_wit(
                             "is_zero",
                             term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
-                            false,
                         );
                         self.r1cs
                             .constraint(i.1.clone(), x.1.clone(), -z.1.clone() + 1);
@@ -974,34 +991,40 @@ impl<'cfg> ToR1cs<'cfg> {
 ///
 /// * Prover data (including the R1CS instance)
 /// * Verifier data
-pub fn to_r1cs(mut cs: Computation, cfg: &CircCfg) -> (ProverData, VerifierData) {
-    let assertions = cs.outputs.clone();
-    let metadata = cs.metadata.clone();
-    let public_inputs = metadata.public_input_names_set();
+pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
+    let public_inputs = cs.metadata.public_input_names_set();
     debug!("public inputs: {:?}", public_inputs);
-    let mut converter = ToR1cs::new(cfg, public_inputs);
+    let used_vars = extras::free_variables(term(Op::Tuple, cs.outputs.clone()));
+    let mut converter = ToR1cs::new(cfg, cs.precomputes.clone(), used_vars);
     debug!(
         "Term count: {}",
-        assertions
+        cs.outputs
             .iter()
             .map(|c| PostOrderIter::new(c.clone()).count())
             .sum::<usize>()
     );
     debug!("declaring inputs");
-    for i in metadata.ordered_public_inputs() {
-        debug!("input {}", i);
-        converter.embed(i);
+    let vars = cs.metadata.interactive_vars();
+    for i in &vars.instances {
+        converter.embed_var(i, VarType::Inst);
+    }
+    for round in &vars.rounds {
+        for w in &round.witnesses {
+            converter.embed_var(w, VarType::RoundWit);
+        }
+        for c in &round.challenges {
+            converter.embed_var(c, VarType::Chall);
+        }
+        converter.r1cs.end_round()
+    }
+    for w in &vars.final_witnesses {
+        converter.embed_var(w, VarType::FinalWit);
     }
     debug!("Printing assertions");
-    for c in assertions {
-        converter.assert(c);
+    for c in &cs.outputs {
+        converter.assert(c.clone());
     }
-    debug!("r1cs public inputs: {:?}", converter.r1cs.public_idxs,);
-    cs.precomputes = cs.precomputes.sequential_compose(&converter.wit_ext);
-    let r1cs = converter.r1cs;
-    let verifier_data = r1cs.verifier_data(&cs);
-    let prover_data = r1cs.prover_data(&cs);
-    (prover_data, verifier_data)
+    converter.r1cs
 }
 
 #[cfg(test)]
@@ -1015,14 +1038,14 @@ pub mod test {
     use fxhash::FxHashMap;
     use quickcheck_macros::quickcheck;
 
-    fn to_r1cs_dflt(cs: Computation) -> (ProverData, VerifierData) {
-        to_r1cs(cs, &CircCfg::default())
+    fn to_r1cs_dflt(cs: Computation) -> R1cs {
+        to_r1cs(&cs, &CircCfg::default())
     }
 
-    fn to_r1cs_mod17(cs: Computation) -> (ProverData, VerifierData) {
+    fn to_r1cs_mod17(cs: Computation) -> R1cs {
         let mut opt = crate::cfg::CircOpt::default();
         opt.field.custom_modulus = "17".into();
-        to_r1cs(cs, &CircCfg::from(opt))
+        to_r1cs(&cs, &CircCfg::from(opt))
     }
 
     fn init() {
@@ -1048,10 +1071,8 @@ pub mod test {
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
             ],
         );
-        let (pd, _) = to_r1cs_mod17(cs);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
+        let r1cs = to_r1cs_mod17(cs);
+        r1cs.check_all(&values);
     }
 
     #[quickcheck]
@@ -1062,10 +1083,8 @@ pub mod test {
             term![Op::Not; t]
         };
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
-        let (pd, _) = to_r1cs_dflt(cs);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
+        let r1cs = to_r1cs_dflt(cs);
+        r1cs.check_all(&values);
     }
 
     #[quickcheck]
@@ -1076,10 +1095,8 @@ pub mod test {
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let cfg = CircCfg::default();
-        let (pd, _) = to_r1cs(cs, &cfg);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
+        let r1cs = to_r1cs(&cs, &cfg);
+        r1cs.check_all(&values);
     }
 
     #[quickcheck]
@@ -1088,12 +1105,10 @@ pub mod test {
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         let cfg = CircCfg::default();
-        let (pd, _) = to_r1cs(cs, &cfg);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
-        let r1cs2 = reduce_linearities(pd.r1cs, &cfg);
-        r1cs2.check_all(&extended_values);
+        let r1cs = to_r1cs(&cs, &cfg);
+        r1cs.check_all(&values);
+        let r1cs2 = reduce_linearities(r1cs, &cfg);
+        r1cs2.check_all(&values);
     }
 
     #[quickcheck]
@@ -1104,12 +1119,10 @@ pub mod test {
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let cfg = CircCfg::default();
-        let (pd, _) = to_r1cs(cs, &cfg);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
-        let r1cs2 = reduce_linearities(pd.r1cs, &cfg);
-        r1cs2.check_all(&extended_values);
+        let r1cs = to_r1cs(&cs, &cfg);
+        r1cs.check_all(&values);
+        let r1cs2 = reduce_linearities(r1cs, &cfg);
+        r1cs2.check_all(&values);
     }
 
     #[test]
@@ -1126,10 +1139,8 @@ pub mod test {
                               term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
             vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
         );
-        let (pd, _) = to_r1cs_dflt(cs);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
+        let r1cs = to_r1cs_dflt(cs);
+        r1cs.check_all(&values);
     }
 
     #[test]
@@ -1143,12 +1154,10 @@ pub mod test {
         let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
         let cfg = CircCfg::default();
-        let (pd, _) = to_r1cs(cs, &cfg);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
-        let r1cs2 = reduce_linearities(pd.r1cs, &cfg);
-        r1cs2.check_all(&extended_values);
+        let r1cs = to_r1cs(&cs, &cfg);
+        r1cs.check_all(&values);
+        let r1cs2 = reduce_linearities(r1cs, &cfg);
+        r1cs2.check_all(&values);
     }
 
     fn pf_dflt(i: isize) -> Term {
@@ -1158,10 +1167,8 @@ pub mod test {
     fn const_test(term: Term) {
         let mut cs = Computation::new();
         cs.assert(term);
-        let (pd, _) = to_r1cs_dflt(cs);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&Default::default());
-        pd.r1cs.check_all(&extended_values);
+        let r1cs = to_r1cs_dflt(cs);
+        r1cs.check_all(&Default::default());
     }
 
     #[test]
@@ -1246,6 +1253,7 @@ pub mod test {
 
     #[test]
     fn pf2bv_lit() {
+        init();
         const_test(term![
             Op::Eq;
             term![Op::PfToBv(4); pf_dflt(8)],
@@ -1282,9 +1290,7 @@ pub mod test {
             ],
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
-        let (pd, _) = to_r1cs_mod17(cs);
-        let precomp = pd.precompute;
-        let extended_values = precomp.eval(&values);
-        pd.r1cs.check_all(&extended_values);
+        let r1cs = to_r1cs_mod17(cs);
+        r1cs.check_all(&values);
     }
 }

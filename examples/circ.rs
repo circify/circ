@@ -34,10 +34,10 @@ use circ::ir::{
 use circ::target::aby::trans::to_aby;
 #[cfg(feature = "lp")]
 use circ::target::ilp::{assignment_to_values, trans::to_ilp};
-#[cfg(feature = "bellman")]
-use circ::target::r1cs::bellman::gen_params;
 #[cfg(feature = "spartan")]
 use circ::target::r1cs::spartan::write_data;
+#[cfg(feature = "bellman")]
+use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs};
 #[cfg(feature = "smt")]
@@ -96,6 +96,8 @@ enum Backend {
         lc_elimination_thresh: usize,
         #[arg(long, default_value = "count")]
         action: ProofAction,
+        #[arg(long, default_value = "groth16")]
+        proof_impl: ProofImpl,
     },
     Smt {},
     Ilp {},
@@ -133,6 +135,12 @@ enum ProofAction {
     Count,
     Setup,
     SpartanSetup,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, ValueEnum)]
+enum ProofImpl {
+    Groth16,
+    Mirage,
 }
 
 fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
@@ -275,25 +283,24 @@ fn main() {
             ..
         } => {
             println!("Converting to r1cs");
-            let (mut prover_data, verifier_data) = to_r1cs(cs.get("main").clone(), cfg());
+            let cs = cs.get("main");
+            let mut r1cs = to_r1cs(cs, cfg());
 
-            println!(
-                "Pre-opt R1cs size: {}",
-                prover_data.r1cs.constraints().len()
-            );
-            prover_data.r1cs = reduce_linearities(prover_data.r1cs, cfg());
+            println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
+            r1cs = reduce_linearities(r1cs, cfg());
 
-            println!("Final R1cs size: {}", prover_data.r1cs.constraints().len());
+            println!("Final R1cs size: {}", r1cs.constraints().len());
+            let (prover_data, verifier_data) = r1cs.finalize(cs);
             match action {
                 ProofAction::Count => (),
                 #[cfg(feature = "bellman")]
                 ProofAction::Setup => {
                     println!("Generating Parameters");
-                    gen_params::<Bls12, _, _>(
+                    Bellman::<Bls12>::setup_fs(
+                        prover_data,
+                        verifier_data,
                         prover_key,
                         verifier_key,
-                        &prover_data,
-                        &verifier_data,
                     )
                     .unwrap();
                 }
