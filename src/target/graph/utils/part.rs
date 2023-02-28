@@ -23,6 +23,7 @@ impl Partitioner {
             Ok(val) => val,
             Err(e) => panic!("Missing env variable: KAHIP_SOURCE, {}", e),
         };
+        /// Get kahypar source directory
         let kahypar_source = match env::var("KAHYPAR_SOURCE") {
             Ok(val) => val,
             Err(e) => panic!("Missing env variable: KAHYPAR_SOURCE, {}", e),
@@ -37,11 +38,43 @@ impl Partitioner {
         graph
     }
 
+    pub fn do_refinement(
+        &self,
+        graph_path: &String,
+        input_part_path: &String,
+        output_part_path: &String,
+        num_parts: &usize,
+    ) -> HashMap<usize, usize> {
+        if self.hyper_mode {
+            let part_path = format!(
+                "{}.part{}.epsilon{}.seed-1.KaHyPar",
+                graph_path,
+                num_parts,
+                self.imbalance_f32.to_string()
+            );
+            self.call_hyper_graph_refiner(graph_path, input_part_path, num_parts);
+            self.parse_partition(&part_path)
+        } else {
+            unimplemented!("Refinement using KaHIP not implemented. ");
+        }
+    }
+
     pub fn do_partition(&self, graph_path: &String, num_parts: &usize) -> HashMap<usize, usize> {
-        self.check_graph(graph_path);
-        let part_path = format!("{}.part", graph_path);
-        self.call_graph_partitioner(graph_path, &part_path, num_parts);
-        self.parse_partition(&part_path)
+        if self.hyper_mode {
+            let part_path = format!(
+                "{}.part{}.epsilon{}.seed-1.KaHyPar",
+                graph_path,
+                num_parts,
+                self.imbalance_f32.to_string()
+            );
+            self.call_hyper_graph_partitioner(graph_path, num_parts);
+            self.parse_partition(&part_path)
+        } else {
+            self.check_graph(graph_path);
+            let part_path = format!("{}.part", graph_path);
+            self.call_graph_partitioner(graph_path, &part_path, num_parts);
+            self.parse_partition(&part_path)
+        }
     }
 
     // Read a file line by line
@@ -64,6 +97,32 @@ impl Partitioner {
             }
         }
         part_map
+    }
+
+    // Call hyper graph partitioning algorithm on input hyper graph
+    fn call_hyper_graph_partitioner(&self, graph_path: &String, num_parts: &usize) {
+        let output = Command::new(format!(
+            "{}/build/kahypar/application/KaHyPar",
+            self.kahypar_source
+        ))
+        .arg("-h")
+        .arg(graph_path)
+        .arg("-k")
+        .arg(num_parts.to_string()) //TODO: make this a function on the number of terms
+        .arg("-e")
+        .arg(self.imbalance_f32.to_string())
+        .arg("--objective=cut")
+        .arg("--mode=direct")
+        .arg(format!(
+            "--preset={}/config/cut_kKaHyPar_sea20.ini",
+            self.kahypar_source
+        ))
+        .arg("--write-partition=true")
+        .stdout(Stdio::piped())
+        .output()
+        .unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        // println!("stdout: {}", stdout);
     }
 
     // Call graph partitioning algorithm on input graph
@@ -105,7 +164,10 @@ impl Partitioner {
         .arg(self.imbalance_f32.to_string())
         .arg("--objective=cut")
         .arg("--mode=direct")
-        .arg("--preset=../kahypar/config/cut_kKaHyPar_sea20.ini")
+        .arg(format!(
+            "--preset={}/config/cut_kKaHyPar_sea20.ini",
+            self.kahypar_source
+        ))
         .arg(input_part_arg)
         .arg("--vcycles=3")
         .arg("--write-partition=true")
@@ -114,7 +176,6 @@ impl Partitioner {
         .unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
         // println!("stdout: {}", stdout);
-        assert!(stdout.contains(&format!("writing partition to {}", &self.part_path)));
     }
 
     // Check if input graph is formatted correctly

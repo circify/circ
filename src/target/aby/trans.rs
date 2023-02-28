@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::time::Instant;
 
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
@@ -878,31 +879,32 @@ impl<'a> ToABY<'a> {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(cs: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
-    // Protocol Assignments
-    let mut s_map: HashMap<String, SharingMap> = HashMap::new();
-
-    // TODO: change ILP to take in Functions instead of individual computations
-    for (name, comp) in cs.comps.iter() {
-        let assignments = match ss {
-            "b" => assign_all_boolean(comp, cm),
-            "y" => assign_all_yao(comp, cm),
-            "a+b" => assign_arithmetic_and_boolean(comp, cm),
-            "a+y" => assign_arithmetic_and_yao(comp, cm),
-            "greedy" => assign_greedy(comp, cm),
-            #[cfg(feature = "lp")]
-            "lp" => assign(comp, cm),
-            #[cfg(feature = "lp")]
-            "glp" => assign(comp, cm),
-            _ => {
-                panic!("Unsupported sharing scheme: {}", ss);
+pub fn to_aby(ir: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
+    let now = Instant::now();
+    match ss {
+        _ => {
+            // Protocal Assignments
+            let mut s_map: HashMap<String, SharingMap> = HashMap::new();
+            for (name, comp) in ir.comps.iter() {
+                let assignments = match ss {
+                    "b" => assign_all_boolean(&comp, cm),
+                    "y" => assign_all_yao(&comp, cm),
+                    "a+b" => assign_arithmetic_and_boolean(&comp, cm),
+                    "a+y" => assign_arithmetic_and_yao(&comp, cm),
+                    "greedy" => assign_greedy(&comp, cm),
+                    #[cfg(feature = "lp")]
+                    "lp" => assign(comp, cm),
+                    #[cfg(feature = "lp")]
+                    "glp" => assign(comp, cm),
+                    _ => {
+                        panic!("Unsupported sharing scheme: {}", ss);
+                    }
+                };
+                s_map.insert(name.to_string(), assignments);
             }
-        };
-        #[cfg(feature = "bench")]
-        println!("LOG: Assignment {}: {:?}", name, now.elapsed());
-        s_map.insert(name.to_string(), assignments);
-    }
-
-    let mut converter = ToABY::new(cs, s_map, path, lang);
-    converter.lower();
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(ir, s_map, path, lang);
+            converter.lower();
+        }
+    };
 }

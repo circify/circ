@@ -45,6 +45,9 @@ pub fn assign(c: &Computation, cm: &str) -> SharingMap {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
+        "empirical" => "empirical",
+        "empirical_wan" => "empirical_wan",
+        "synth" => "synthetic",
         _ => panic!("Unknown cost model type: {}", cm),
     };
     let p = format!(

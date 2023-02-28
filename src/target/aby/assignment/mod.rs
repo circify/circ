@@ -4,6 +4,7 @@ use fxhash::FxHashMap;
 use serde_json::Value;
 use std::{env::var, fs::File, path::Path};
 
+pub mod def_uses;
 #[cfg(feature = "lp")]
 pub mod ilp;
 
