@@ -882,6 +882,26 @@ impl<'a> ToABY<'a> {
 pub fn to_aby(ir: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
     let now = Instant::now();
     match ss {
+        #[cfg(feature = "lp")]
+        "css" => {
+            let mut css = CallSiteSimilarity::new(&ir, &ml);
+            let (fs, dugs) = css.call_site_similarity_smart();
+            let s_map = css_partition_with_mut_smart(
+                &fs,
+                &dugs,
+                cm,
+                path,
+                lang,
+                ps,
+                *hyper == 1,
+                ml,
+                mss,
+                imbalance,
+            );
+            println!("LOG: Assignment time: {:?}", now.elapsed());
+            let mut converter = ToABY::new(fs, s_map, path, lang);
+            converter.lower();
+        }
         _ => {
             // Protocal Assignments
             let mut s_map: HashMap<String, SharingMap> = HashMap::new();
