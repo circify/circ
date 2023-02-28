@@ -1,4 +1,5 @@
 //! Symbolic Z# terms
+use fxhash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
@@ -109,6 +110,10 @@ thread_local! {
     pub static PF_LIT_CACHE: RefCell<PfLitCache> = Default::default();
 }
 
+thread_local! {
+    pub static UNWRAP_ARRAY_IR_CACHE: RefCell<FxHashMap<Term, Vec<Term>>> = Default::default();
+}
+
 #[derive(Clone, Debug)]
 pub struct T {
     pub ty: Ty,
@@ -146,9 +151,16 @@ impl T {
     }
     fn unwrap_array_ir(self) -> Result<Vec<Term>, String> {
         match &self.ty {
-            Ty::Array(size, _sort) => Ok((0..*size)
-                .map(|i| term![Op::Select; self.term.clone(), PF_LIT_CACHE.with(|c| c.borrow_mut().get(i).clone())])
-                .collect()),
+            Ty::Array(size, _sort) => {
+                UNWRAP_ARRAY_IR_CACHE.with(|c| {
+                    let mut c = c.borrow_mut();
+                    Ok(c.entry(self.term.clone()).or_insert_with(||
+                        (0..*size)
+                        .map(|i| term![Op::Select; self.term.clone(), PF_LIT_CACHE.with(|c| c.borrow_mut().get(i).clone())])
+                        .collect()
+                    ).clone())
+                })
+            }
             s => Err(format!("Not an array: {}", s)),
         }
     }
