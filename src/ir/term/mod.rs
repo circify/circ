@@ -709,6 +709,14 @@ impl Array {
             size,
         )
     }
+    /// Create a new array from a vector
+    pub fn from_vec(key_sort: Sort, value_sort: Sort, items: Vec<Value>) -> Self {
+        assert!(!items.is_empty());
+        let default = value_sort.default_value();
+        let size = items.len();
+        let map = key_sort.elems_iter_values().zip(items).collect();
+        Self::new(key_sort, Box::new(default), map, size)
+    }
 
     // consistency check for index
     fn check_idx(&self, idx: &Value) {
@@ -753,6 +761,15 @@ impl Array {
         self.check_idx(idx);
         self.map.get(idx).unwrap_or(&*self.default).clone()
     }
+
+    /// All values
+    pub fn values(&self) -> Vec<Value> {
+        self.key_sort
+            .elems_iter_values()
+            .take(self.size)
+            .map(|i| self.select(&i))
+            .collect()
+    }
 }
 
 impl std::cmp::Eq for Value {}
@@ -766,7 +783,7 @@ impl std::cmp::Ord for Value {
 }
 // We walk in danger here, intentionally. One day we may fix it.
 // FP is the heart of the problem.
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
@@ -1375,21 +1392,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             )
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
-        Op::PfChallenge(name, field) => {
-            use rand::SeedableRng;
-            use rand_chacha::ChaChaRng;
-            use std::hash::{Hash, Hasher};
-            // hash the string
-            let mut hasher = fxhash::FxHasher::default();
-            name.hash(&mut hasher);
-            let hash: u64 = hasher.finish();
-            // seed ChaCha with the hash
-            let mut seed = [0u8; 32];
-            seed[0..8].copy_from_slice(&hash.to_le_bytes());
-            let mut rng = ChaChaRng::from_seed(seed);
-            // sample from ChaCha
-            Value::Field(field.random_v(&mut rng))
-        }
+        Op::PfChallenge(name, field) => Value::Field(pf_challenge(name, field)),
         // tuple
         Op::Tuple => Value::Tuple(args.iter().map(|a| (*a).clone()).collect()),
         Op::Field(i) => {
@@ -1629,11 +1632,13 @@ pub struct VariableMetadata {
     pub round: Round,
     /// Whether this is random
     pub random: bool,
+    /// Whether this is committed
+    pub committed: bool,
 }
 
 impl VariableMetadata {
     /// term (cached)
-    fn term(&self) -> Term {
+    pub fn term(&self) -> Term {
         leaf_term(Op::Var(self.name.clone(), self.sort.clone()))
     }
 }
@@ -1645,6 +1650,10 @@ pub struct ComputationMetadata {
     vars: FxHashMap<String, VariableMetadata>,
     /// A map from party names to numbers assigned to them.
     party_ids: FxHashMap<String, PartyId>,
+    /// Committments.
+    ///
+    /// Each commitment is a vector of variables.
+    commitments: Vec<Vec<String>>,
 }
 
 impl ComputationMetadata {
@@ -1663,6 +1672,24 @@ impl ComputationMetadata {
             ..Default::default()
         };
         self.new_input_from_meta(var_md);
+    }
+
+    /// Make this list of variables a commitment.
+    pub fn add_commitment(&mut self, names: Vec<String>) {
+        for n in &names {
+            let md = self
+                .vars
+                .get_mut(n)
+                .unwrap_or_else(|| panic!("Cannot commit to {}; it is not a variable", n));
+            assert!(
+                !md.committed,
+                "Cannot commit to {}: it is already commited",
+                n
+            );
+            assert_ne!(md.vis, None, "Cannot commit to {}: it is public", n);
+            md.committed = true;
+        }
+        self.commitments.push(names);
     }
 
     /// Add a new input to the computation.
@@ -1742,7 +1769,7 @@ impl ComputationMetadata {
                 // is it a public non-challenge? if so, it must be round 0
                 assert!(meta.round == 0);
                 instances.push(meta.term());
-            } else {
+            } else if !meta.committed {
                 // this is a witness
                 rounds[meta.round as usize].witnesses.push(meta.term());
             }
@@ -1753,8 +1780,19 @@ impl ComputationMetadata {
         } else {
             Vec::new()
         };
+        // get the committed witness variables
+        let committed_wit_vecs: Vec<Vec<Term>> = self
+            .commitments
+            .iter()
+            .map(|cmt| {
+                cmt.iter()
+                    .map(|w| self.vars.get(w).unwrap().term())
+                    .collect()
+            })
+            .collect();
         let mut ret = InteractiveVars {
             instances,
+            committed_wit_vecs,
             rounds,
             final_witnesses,
         };
@@ -1821,10 +1859,12 @@ impl ComputationMetadata {
 /// challenges.
 ///
 /// It represents the variables themselves as terms.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct InteractiveVars {
     /// Instance vars
     pub instances: Vec<Term>,
+    /// Committed witness vectors
+    pub committed_wit_vecs: Vec<Vec<Term>>,
     /// Rounds
     pub rounds: Vec<RoundVars>,
     /// Final witnesses
@@ -1832,7 +1872,7 @@ pub struct InteractiveVars {
 }
 
 /// Witnesses, followed by a challenge.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct RoundVars {
     /// witnesses
     pub witnesses: Vec<Term>,
@@ -1976,6 +2016,23 @@ impl Computations {
             None => panic!("Unknown computation: {}", name),
         }
     }
+}
+
+/// Compute a (deterministic) prime-field challenge.
+pub fn pf_challenge(name: &str, field: &FieldT) -> FieldV {
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
+    use std::hash::{Hash, Hasher};
+    // hash the string
+    let mut hasher = fxhash::FxHasher::default();
+    name.hash(&mut hasher);
+    let hash: u64 = hasher.finish();
+    // seed ChaCha with the hash
+    let mut seed = [0u8; 32];
+    seed[0..8].copy_from_slice(&hash.to_le_bytes());
+    let mut rng = ChaChaRng::from_seed(seed);
+    // sample from ChaCha
+    field.random_v(&mut rng)
 }
 
 #[cfg(test)]

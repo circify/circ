@@ -36,6 +36,13 @@ Options:
           [default: false]
           [possible values: true, false]
 
+      --r1cs-profile <PROFILE>
+          Profile the R1CS lowering pass: attributing cosntraints and vars to terms
+          
+          [env: R1CS_PROFILE=]
+          [default: false]
+          [possible values: true, false]
+
       --r1cs-div-by-zero <DIV_BY_ZERO>
           Which field division-by-zero semantics to encode in R1cs
           
@@ -139,6 +146,8 @@ Usage: parser [OPTIONS]
 Options:
       --r1cs-verified <VERIFIED>
           Use the verified field-blaster [env: R1CS_VERIFIED=] [default: false] [possible values: true, false]
+      --r1cs-profile <PROFILE>
+          Profile the R1CS lowering pass: attributing cosntraints and vars to terms [env: R1CS_PROFILE=] [default: false] [possible values: true, false]
       --r1cs-div-by-zero <DIV_BY_ZERO>
           Which field division-by-zero semantics to encode in R1cs [env: R1CS_DIV_BY_ZERO=] [default: incomplete] [possible values: incomplete, zero, non-det]
       --r1cs-lc-elim-thresh <LC_ELIM_THRESH>
@@ -176,6 +185,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -214,6 +224,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: true,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -250,6 +261,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -286,6 +298,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: NonDet,
             lc_elim_thresh: 50,
         },
@@ -322,6 +335,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -358,6 +372,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Zero,
             lc_elim_thresh: 50,
         },
@@ -394,6 +409,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: NonDet,
             lc_elim_thresh: 11,
         },
@@ -430,6 +446,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: true,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 10,
         },
@@ -469,6 +486,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -506,6 +524,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -545,6 +564,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -582,6 +602,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -621,6 +642,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -658,6 +680,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
