@@ -578,11 +578,17 @@ impl DefUsesGraph {
                         // self.add_term(&t);
                     }
                 }
-                Op::Call(callee, _, ret_sorts) => {
+                Op::Call(callee, _, ret_sort) => {
                     // Use call term itself as the placeholder
                     // Call term will be ignore by the ilp solver later
                     let mut ret_terms: Vec<(Term, usize)> = Vec::new();
-                    let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                    let mut num_rets: usize = 0;
+                    // ret_sort must be a tuple
+                    if let Sort::Tuple(sorts) = ret_sort {
+                        num_rets = sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                    } else {
+                        panic!("call term return sort is not a tuple.")
+                    }
 
                     // call site
                     let mut args: Vec<FxHashSet<usize>> = Vec::new();
@@ -882,11 +888,17 @@ impl DefUsesGraph {
                         // self.add_term(&t);
                     }
                 }
-                Op::Call(_, _, ret_sorts) => {
+                Op::Call(_, _, ret_sort) => {
                     // Use call term itself as the placeholder
                     // Call term will be ignore by the ilp solver later
                     let mut ret_terms: Vec<(Term, usize, usize, usize)> = Vec::new();
-                    let num_rets: usize = ret_sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                    let mut num_rets: usize = 0;
+                    // ret_sort must be a tuple
+                    if let Sort::Tuple(sorts) = ret_sort {
+                        num_rets = sorts.iter().map(|ret| get_sort_len(ret)).sum();
+                    } else {
+                        panic!("call term return sort is not a tuple.")
+                    }
                     let mut args: Vec<FxHashSet<usize>> = Vec::new();
                     let mut rets: Vec<FxHashSet<usize>> = Vec::new();
                     let mut args_t: Vec<Vec<Term>> = Vec::new();
@@ -1046,17 +1058,18 @@ impl DefUsesGraph {
     }
 
     pub fn gen_in_out(&mut self, c: &Computation) {
-        for n in c.metadata.computation_arg_names.iter() {
-            // n is already a ssa name here
-            let s = c.metadata.input_sort(n).clone();
-            let t = leaf_term(Op::Var(n.clone(), s));
-            if let Some(uses) = self.def_uses.get(&t) {
-                self.self_ins.push(uses.clone());
-            } else {
-                // This argument is not being used at all!
-                self.self_ins.push(FxHashSet::default());
-            }
-        }
+        todo!();
+        // for n in c.metadata.computation_arg_names.iter() {
+        //     // n is already a ssa name here
+        //     let s = c.metadata.input_sort(n).clone();
+        //     let t = leaf_term(Op::Var(n.to_string(), s));
+        //     if let Some(uses) = self.def_uses.get(&t) {
+        //         self.self_ins.push(uses.clone());
+        //     } else {
+        //         // This argument is not being used at all!
+        //         self.self_ins.push(FxHashSet::default());
+        //     }
+        // }
     }
 
     /// Out put the call site from this function's computation
@@ -1107,7 +1120,6 @@ impl DefUsesGraph {
     /// insert the caller's context
     pub fn insert_context(
         &mut self,
-        arg_names: &Vec<String>,
         arg_values: &Vec<Vec<Term>>,
         rets: &Vec<Vec<Term>>,
         caller_dug: &DefUsesGraph,
@@ -1116,51 +1128,52 @@ impl DefUsesGraph {
     ) {
         let mut input_set: TermSet = TermSet::default();
         let mut output_set: TermSet = TermSet::default();
+        todo!();
         // insert def of args
-        for (n, v) in arg_names.into_iter().zip(arg_values) {
-            let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
-            for (sname, index) in ssa_names.iter() {
-                let s = callee.metadata.input_sort(&sname).clone();
-                // println!("Def: {}, Use: {}", v.get(*index).unwrap(), leaf_term(Op::Var(sname.clone(), s.clone())));
-                let def_t = v.get(*index).unwrap().clone();
-                let use_t = leaf_term(Op::Var(sname.clone(), s));
-                if let Op::Call(..) = def_t.op {
-                    continue;
-                }
-                if let Op::Var(..) = def_t.op {
-                    continue;
-                }
-                if let Op::Const(_) = def_t.op {
-                    continue;
-                }
-                // if !self.good_terms.contains(&use_t) {
-                //     // println!("FIX: {}", use_t.op);
-                //     // This is because the function doesn't use this arg
-                //     //todo!("Fix this...");
-                //     continue;
-                // }
-                if let Some(actual_used) = self.var_used.clone().get(&use_t) {
-                    for actual_t in actual_used.iter() {
-                        self.add_term(&def_t);
-                        self.def_use.insert((def_t.clone(), actual_t.clone()));
-                        input_set.insert(def_t.clone());
-                    }
-                }
-            }
-        }
+        // for (n, v) in arg_names.into_iter().zip(arg_values) {
+            // let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
+            // for (sname, index) in ssa_names.iter() {
+            //     let s = callee.metadata.input_sort(&sname).clone();
+            //     // println!("Def: {}, Use: {}", v.get(*index).unwrap(), leaf_term(Op::Var(sname.clone(), s.clone())));
+            //     let def_t = v.get(*index).unwrap().clone();
+            //     let use_t = leaf_term(Op::Var(sname.to_string(), s));
+            //     if let Op::Call(..) = def_t.op {
+            //         continue;
+            //     }
+            //     if let Op::Var(..) = def_t.op {
+            //         continue;
+            //     }
+            //     if let Op::Const(_) = def_t.op {
+            //         continue;
+            //     }
+            //     // if !self.good_terms.contains(&use_t) {
+            //     //     // println!("FIX: {}", use_t.op);
+            //     //     // This is because the function doesn't use this arg
+            //     //     //todo!("Fix this...");
+            //     //     continue;
+            //     // }
+            //     if let Some(actual_used) = self.var_used.clone().get(&use_t) {
+            //         for actual_t in actual_used.iter() {
+            //             self.add_term(&def_t);
+            //             self.def_use.insert((def_t.clone(), actual_t.clone()));
+            //             input_set.insert(def_t.clone());
+            //         }
+            //     }
+            // }
+        // }
 
-        // insert use of rets
-        let outs = self.ret_good_terms.clone();
+        // // insert use of rets
+        // let outs = self.ret_good_terms.clone();
 
-        assert_eq!(outs.len(), rets.len());
-        for (d, uses) in outs.into_iter().zip(rets) {
-            for u in uses.iter() {
-                // TODO: so weird
-                self.add_term(&d);
-                self.add_term(u);
-                self.def_use.insert((d.clone(), u.clone()));
-            }
-        }
+        // assert_eq!(outs.len(), rets.len());
+        // for (d, uses) in outs.into_iter().zip(rets) {
+        //     for u in uses.iter() {
+        //         // TODO: so weird
+        //         self.add_term(&d);
+        //         self.add_term(u);
+        //         self.def_use.insert((d.clone(), u.clone()));
+        //     }
+        // }
 
         // kind of mutation?
         // for i in 1..extra_level {
@@ -1184,7 +1197,8 @@ impl DefUsesGraph {
         //         }
         //     }
         // }
-        self.construct_mapping();
+        
+        // self.construct_mapping();
     }
 
     fn add_term(&mut self, t: &Term) {

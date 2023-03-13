@@ -25,6 +25,12 @@ use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
 use super::assignment::ShareType;
 
+
+#[cfg(feature = "lp")]
+use crate::target::graph::trans::*;
+
+use super::call_site_similarity::CallSiteSimilarity;
+
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
 
@@ -879,15 +885,26 @@ impl<'a> ToABY<'a> {
 }
 
 /// Convert this (IR) `ir` to ABY.
-pub fn to_aby(ir: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
+pub fn to_aby(
+    ir: Computations,
+    path: &Path,
+    lang: &str,
+    cm: &str,
+    ss: &str,
+    #[allow(unused_variables)] ps: &usize,
+    #[allow(unused_variables)] ml: &usize,
+    #[allow(unused_variables)] mss: &usize,
+    #[allow(unused_variables)] hyper: &usize,
+    #[allow(unused_variables)] imbalance: &usize,
+) {
     let now = Instant::now();
     match ss {
         #[cfg(feature = "lp")]
         "css" => {
             let mut css = CallSiteSimilarity::new(&ir, &ml);
-            let (fs, dugs) = css.call_site_similarity_smart();
+            let (comps, dugs) = css.call_site_similarity_smart();
             let s_map = css_partition_with_mut_smart(
-                &fs,
+                &comps,
                 &dugs,
                 cm,
                 path,
@@ -899,7 +916,7 @@ pub fn to_aby(ir: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
                 imbalance,
             );
             println!("LOG: Assignment time: {:?}", now.elapsed());
-            let mut converter = ToABY::new(fs, s_map, path, lang);
+            let mut converter = ToABY::new(comps, s_map, path, lang);
             converter.lower();
         }
         _ => {

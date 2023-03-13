@@ -134,7 +134,7 @@ impl CostModel {
     }
 }
 
-fn get_cost_model(cm: &str) -> CostModel {
+pub fn get_cost_model(cm: &str) -> CostModel {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",

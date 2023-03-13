@@ -106,6 +106,16 @@ enum Backend {
         cost_model: String,
         #[arg(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
+        #[arg(long, default_value = "4000", name = "partition_size")]
+        partition_size: usize,
+        #[arg(long, default_value = "4", name = "mutation_level")]
+        mutation_level: String,
+        #[arg(long, default_value = "1", name = "mutation_step_size")]
+        mutation_step_size: String,
+        #[arg(long, default_value = "1", name = "hyper")]
+        hyper: String,
+        #[arg(long, default_value = "3", name = "imbalance")]
+        imbalance: usize,
     },
 }
 
@@ -323,6 +333,11 @@ fn main() {
         Backend::Mpc {
             cost_model,
             selection_scheme,
+            partition_size,
+            mutation_level,
+            mutation_step_size,
+            hyper,
+            imbalance,
         } => {
             println!("Converting to aby");
             let lang_str = match language {
@@ -332,7 +347,18 @@ fn main() {
             };
             println!("Cost model: {cost_model}");
             println!("Selection scheme: {selection_scheme}");
-            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
+            to_aby(
+                cs,
+                &path_buf,
+                &lang_str,
+                &cost_model,
+                &selection_scheme,
+                &partition_size,
+                &mutation_level,
+                &mutation_step_size,
+                &hyper,
+                &imbalance,
+            );
         }
         #[cfg(not(feature = "aby"))]
         Backend::Mpc { .. } => {

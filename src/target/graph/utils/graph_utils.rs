@@ -75,7 +75,7 @@ impl GraphWriter {
     ) {
         self.num_nodes = num_nodes;
         for t in cs.terms_postorder() {
-            match &t.op {
+            match &t.op() {
                 Op::Ite
                 | Op::Not
                 | Op::Eq
@@ -88,7 +88,7 @@ impl GraphWriter {
                 | Op::BvBinPred(_)
                 | Op::BoolNaryOp(_) => {
                     let t_id = coarse_map_get(coarsen_map, &t, level);
-                    for cs in t.cs.iter() {
+                    for cs in t.cs().iter() {
                         let cs_id = coarse_map_get(coarsen_map, &cs, level);
                         if cs_id != t_id {
                             if self.hyper_mode {
@@ -100,7 +100,7 @@ impl GraphWriter {
                         }
                     }
                 }
-                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", t, t.op),
+                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", t, t.op()),
             }
         }
     }

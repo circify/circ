@@ -1,7 +1,11 @@
 use crate::ir::term::*;
 
+use crate::target::aby::assignment::def_uses::*;
+use crate::target::aby::assignment::get_cost_model;
+use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::ShareType;
 use crate::target::aby::assignment::SharingMap;
+use crate::target::graph::tp::TrivialPartition;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -28,7 +32,7 @@ fn get_graph_path(path: &Path, lang: &str) -> String {
 
 /// inline all function into main
 pub fn partition_with_mut(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
     path: &Path,
     lang: &str,
@@ -37,9 +41,9 @@ pub fn partition_with_mut(
     ml: &usize,
     mss: &usize,
     imbalance: &usize,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
+    let mut tp = TrivialPartition::new(comps, 0, imbalance.clone(), hyper_mode);
     let main = "main";
     let graph_path = get_graph_path(path, lang, hyper_mode);
     let (c, d, partition, num_parts) = tp.run(&main.to_string(), &graph_path, *ps);
@@ -82,7 +86,7 @@ pub fn partition_with_mut(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn css_partition_with_mut_smart(
-    fs: &Functions,
+    comps: &Computations,
     dugs: &HashMap<String, DefUsesGraph>,
     cm: &str,
     path: &Path,
@@ -98,10 +102,10 @@ pub fn css_partition_with_mut_smart(
     let mut part_duration: Duration = Duration::ZERO;
     let mut ilp_duration: Duration = Duration::ZERO;
 
-    for (fname, comp) in fs.computations.iter() {
+    for (fname, comp) in comps.comps.iter() {
         let mut now = Instant::now();
         println!("Partitioning: {}", fname);
-        let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
+        let mut tp = TrivialPartition::new(comp, 0, imbalance.clone(), hyper_mode);
         let graph_path = get_graph_path(path, lang, hyper_mode);
         let d = dugs.get(fname).unwrap();
         let (partition, num_parts) = tp.run_from_dug(fname, d, &graph_path, *ps);
@@ -153,7 +157,7 @@ pub fn css_partition_with_mut_smart(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn partition_with_mut_smart(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
     path: &Path,
     lang: &str,
@@ -162,9 +166,9 @@ pub fn partition_with_mut_smart(
     ml: &usize,
     mss: &usize,
     imbalance: &usize,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, imbalance.clone(), hyper_mode);
+    let mut tp = TrivialPartition::new(comps, 0, imbalance.clone(), hyper_mode);
     let main = "main";
     let graph_path = get_graph_path(path, lang, hyper_mode);
     let (c, d, partition, num_parts) = tp.run(&main.to_string(), &graph_path, *ps);
@@ -225,10 +229,10 @@ pub fn partition_with_mut_smart(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_glp(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
-) -> (Functions, HashMap<String, SharingMap>) {
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+) -> (Computations, HashMap<String, SharingMap>) {
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
@@ -249,11 +253,11 @@ pub fn inline_all_and_assign_glp(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_smart_glp(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
@@ -283,11 +287,11 @@ pub fn inline_all_and_assign_smart_glp(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_y(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
@@ -319,11 +323,11 @@ pub fn inline_all_and_assign_y(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_b(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
@@ -355,11 +359,11 @@ pub fn inline_all_and_assign_b(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_a_y(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
@@ -416,11 +420,11 @@ pub fn inline_all_and_assign_a_y(
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_a_b(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
 
@@ -464,20 +468,20 @@ pub fn inline_all_and_assign_a_b(
 
     let mut s_map: HashMap<String, SharingMap> = HashMap::new();
     s_map.insert(main.to_string(), assignment);
-    let mut fs = Functions::new();
-    fs.insert(main.to_string(), c);
-    (fs, s_map)
+    let mut new_comps = Computations::new();
+    new_comps.comps.insert(main.to_string(), c);
+    (new_comps, s_map)
 }
 
 #[cfg(feature = "lp")]
 /// inline all function into main
 pub fn inline_all_and_assign_opa(
-    fs: &Functions,
+    comps: &Computations,
     cm: &str,
     share_types: &[ShareType; 2],
-) -> (Functions, HashMap<String, SharingMap>) {
+) -> (Computations, HashMap<String, SharingMap>) {
     let mut now = Instant::now();
-    let mut tp = TrivialPartition::new(fs, 0, 0, false);
+    let mut tp = TrivialPartition::new(comps, 0, 0, false);
     let main = "main";
     let (c, dug) = tp.inline_all(&main.to_string());
     let k_map = dug.get_k();
