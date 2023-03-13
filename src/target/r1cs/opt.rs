@@ -133,6 +133,8 @@ impl LinReducer {
                             self.queue.push(use_id);
                         }
                     }
+                    self.r1cs.idx_to_sig.remove_fwd(&var);
+                    self.r1cs.terms.remove(&var);
                     debug_assert_eq!(0, self.uses[&var].len());
                 }
             }

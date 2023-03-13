@@ -144,7 +144,8 @@ pub struct R1csFinal {
     vars: Vec<Var>,
     constraints: Vec<(Lc, Lc, Lc)>,
     names: HashMap<Var, String>,
-    // chall_precompute_names: HashMap<Var, String>,
+
+    commitments: Vec<Vec<Var>>,
 }
 
 /// A variable
@@ -354,8 +355,8 @@ impl R1cs {
             s.extend(
                 format!(
                     " {} {}",
-                    self.idx_to_sig.get_fwd(idx).unwrap(),
                     format_i(coeff),
+                    self.idx_to_sig.get_fwd(idx).unwrap(),
                 )
                 .chars(),
             );
@@ -365,7 +366,7 @@ impl R1cs {
 
     /// Can this variable be eliminated?
     pub fn can_eliminate(&self, var: Var) -> bool {
-        matches!(var.ty(), VarType::RoundWit)
+        matches!(var.ty(), VarType::FinalWit)
     }
 
     /// Get a nice string represenation of the tuple.
@@ -479,13 +480,18 @@ impl ProverData {
                     }
                     let var = self.r1cs.vars[next_var_i];
                     let name = self.r1cs.names.get(&var).unwrap().clone();
-                    let val = self.r1cs.field.new_v(1);
+                    let val = pf_challenge(&name, &self.r1cs.field);
                     var_values.insert(var, val.clone());
                     inputs.insert(name, Value::Field(val));
                 }
             }
         }
         self.r1cs.check_all(&var_values);
+    }
+
+    /// How many commitments?
+    pub fn num_commitments(&self) -> usize {
+        self.r1cs.commitments.len()
     }
 }
 
@@ -797,6 +803,21 @@ impl R1cs {
             .filter(move |v| self.idx_to_sig.contains_key(v))
     }
 
+    fn cwits(&self) -> Vec<Vec<Var>> {
+        let mut i = 0;
+        self.num_cwits
+            .iter()
+            .map(|len| {
+                (0..*len)
+                    .map(|_| {
+                        i += 1;
+                        Var::new(VarType::CWit, i - 1)
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
     fn challs_iter(&self, round: usize) -> impl Iterator<Item = Var> + '_ {
         let start = if round == 0 {
             0
@@ -846,24 +867,26 @@ impl R1cs {
         let mut precompute = cs.precomputes.clone();
         self.extend_precomputation(&mut precompute, false);
         // we still need to remove the non-r1cs variables
-        use crate::ir::proof::PROVER_ID;
-        let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
-        precompute.restrict_to_inputs(all_inputs);
+        //use crate::ir::proof::PROVER_ID;
+        //let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
+        let mut precompute_map = precompute.flatten();
         let mut vars: HashMap<String, Sort> = {
-            PostOrderIter::new(precompute.tuple())
-                .filter_map(|t| {
-                    if let Op::Var(n, s) = t.op() {
-                        Some((n.clone(), s.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
+            PostOrderIter::from_roots_and_skips(
+                precompute_map.values().cloned(),
+                Default::default(),
+            )
+            .filter_map(|t| {
+                if let Op::Var(n, s) = t.op() {
+                    Some((n.clone(), s.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
         };
         for c in &self.challenge_names {
             vars.remove(c);
         }
-        let mut precompute_map = precompute.flatten();
         let mut comp = wit_comp::StagedWitComp::default();
         let mut var_sequence = Vec::new();
         for (computed_in_stage, challs) in self.stage_vars() {
@@ -887,6 +910,7 @@ impl R1cs {
             var_sequence.extend(computed_in_stage);
             var_sequence.extend(challs);
         }
+
         ProverData {
             r1cs: R1csFinal {
                 field: self.modulus.clone(),
@@ -895,6 +919,7 @@ impl R1cs {
                     .map(|v| (*v, self.idx_to_sig.get_fwd(v).unwrap().clone()))
                     .collect(),
                 vars: var_sequence,
+                commitments: self.cwits(),
                 constraints: self.constraints,
             },
             precompute: comp,
@@ -931,14 +956,17 @@ impl R1cs {
             .collect();
         let mut comp = wit_comp::StagedWitComp::default();
         comp.add_stage(vars, terms);
-        VerifierData { precompute: comp }
+        VerifierData {
+            precompute: comp,
+            num_commitments: self.num_cwits.len(),
+        }
     }
 
     /// Add the signals of this R1CS instance to the precomputation.
     fn extend_precomputation(&self, precompute: &mut precomp::PreComp, public_signals_only: bool) {
         for (var, term) in &self.terms {
             if !matches!(var.ty(), VarType::Chall)
-                && (!public_signals_only || matches!(var.ty(), VarType::Inst))
+                && (!public_signals_only || matches!(var.ty(), VarType::Inst | VarType::CWit))
             {
                 let sig_name = self.idx_to_sig.get_fwd(var).unwrap();
                 if !precompute.outputs().contains_key(sig_name) {
@@ -978,6 +1006,11 @@ impl VerifierData {
             .map(|v| v.as_pf().clone())
             .collect()
     }
+
+    /// How many commitments?
+    pub fn num_commitments(&self) -> usize {
+        self.num_commitments
+    }
 }
 
 /// Relation-related data that a prover needs to make a proof.
@@ -994,6 +1027,8 @@ pub struct ProverData {
 pub struct VerifierData {
     /// Instance computation
     pub precompute: wit_comp::StagedWitComp,
+    /// How many commitments in this predicate?
+    num_commitments: usize,
 }
 
 #[derive(Clone, Debug)]

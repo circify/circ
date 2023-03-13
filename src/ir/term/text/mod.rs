@@ -15,12 +15,15 @@
 //!   * `I`: integer (arbitrary-precision)
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
-//!   * Computation `C`: `(computation M P T)`
-//!     * Metadata `M`: `(metadata PARTIES INPUTS)`
+//!   * Computation `C`: `(computation M P ARRAYS T)`
+//!     * Metadata `M`: `(metadata PARTIES INPUTS COMMITMENTS)`
 //!       * PARTIES is `(parties X1 .. Xn)`
 //!       * INPUTS is `(inputs INPUT1 .. INPUTn)`
-//!       * INPUT is `(X S PARTY)`
-//!       * PARTY is `(party X)` or nothing (public)
+//!         * INPUT is `(X S PARTY)`
+//!         * PARTY is `(party X)` or nothing (public)
+//!       * COMMITMENTS is `(commitments COMMITMENT1 .. COMMITMENTn)`
+//!         * COMMITMENT is `(commitment X1 .. Xn)`
+//!       * ARRAYS is `(commitments COMMITMENT1 .. COMMITMENTn)`
 //!     * Precompute `P`: `(precompute INPUTS OUTPUTS TUPLE_TERM)`
 //!       * INPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * OUTPUTS is `((X1 S1) .. (Xn Sn))`
@@ -41,6 +44,8 @@
 //!       * In the former case, an ambient modulus must be set.
 //!     * tuple: `(#t V1 ... Vn)`
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
+//!     * list: `(#l Sk (V1 ... Vn))`
+//!       * gives an array with default value sort, length n, and increasing keys for the values
 //!   * Term `T`:
 //!     * value: `V`
 //!     * let: `(let ((X1 T1) ... (Xn Tn)) T)`
@@ -159,12 +164,14 @@ enum CtrlOp {
     Declare,
     TupleValue,
     ArrayValue,
+    ListValue,
     SetDefaultModulus,
 }
 
 enum VariableMetadataItem {
     Party(PartyId),
     Round(Round),
+    Committed,
     Random,
 }
 
@@ -210,6 +217,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"declare") => Err(CtrlOp::Declare),
             Leaf(Ident, b"#t") => Err(CtrlOp::TupleValue),
             Leaf(Ident, b"#a") => Err(CtrlOp::ArrayValue),
+            Leaf(Ident, b"#l") => Err(CtrlOp::ListValue),
             Leaf(Ident, b"set_default_modulus") => Err(CtrlOp::SetDefaultModulus),
             Leaf(Ident, b"ite") => Ok(Op::Ite),
             Leaf(Ident, b"=") => Ok(Op::Eq),
@@ -378,6 +386,13 @@ impl<'src> IrInterp<'src> {
             panic!("Expected let list, found: {}", tt)
         }
     }
+    /// Parse a value list
+    fn value_list(&mut self, tt: &TokTree<'src>) -> Vec<Value> {
+        self.unwrap_list(tt, "value list")
+            .iter()
+            .map(|tti| self.value(tti))
+            .collect()
+    }
     /// Parse associative value list
     fn value_alist(&mut self, tt: &TokTree<'src>) -> Vec<(Value, Value)> {
         if let List(tts) = tt {
@@ -484,6 +499,16 @@ impl<'src> IrInterp<'src> {
                             size,
                         ))))
                     }
+                    Err(CtrlOp::ListValue) => {
+                        assert_eq!(tts.len(), 3);
+                        let key_sort = self.sort(&tts[1]);
+                        let vals = self.value_list(&tts[2]);
+                        leaf_term(Op::Const(Value::Array(Array::from_vec(
+                            key_sort,
+                            vals.first().unwrap().sort(),
+                            vals,
+                        ))))
+                    }
                     Err(CtrlOp::TupleValue) => leaf_term(Op::Const(Value::Tuple(
                         tts[1..]
                             .iter()
@@ -576,6 +601,7 @@ impl<'src> IrInterp<'src> {
                 VariableMetadataItem::Round(id)
             }
             b"random" => VariableMetadataItem::Random,
+            b"committed" => VariableMetadataItem::Committed,
             i => {
                 panic!(
                     "Expected variable metadata item, got {}",
@@ -604,9 +630,22 @@ impl<'src> IrInterp<'src> {
                 VariableMetadataItem::Random => {
                     md.random = true;
                 }
+                VariableMetadataItem::Committed => {
+                    md.committed = true;
+                }
             }
         }
         (name_bytes, md)
+    }
+
+    fn commitment(&mut self, tt: &TokTree<'src>) -> Vec<String> {
+        let tts = self.unwrap_prefix_list(tt, "commitment");
+        tts.iter().map(|tti| self.ident_string(tti)).collect()
+    }
+
+    fn commitments(&mut self, tt: &TokTree<'src>) -> Vec<Vec<String>> {
+        let tts = self.unwrap_prefix_list(tt, "commitments");
+        tts.iter().map(|tti| self.commitment(tti)).collect()
     }
 
     /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
@@ -621,7 +660,7 @@ impl<'src> IrInterp<'src> {
                 )
             }
             match &tts[1..] {
-                [parties, inputs] => {
+                [parties, inputs, commitments] => {
                     let parties = self.string_list(parties);
                     for p in parties.into_iter().skip(1) {
                         md.add_party(p);
@@ -632,6 +671,10 @@ impl<'src> IrInterp<'src> {
                         self.bind(name_bytes, v_md.term());
                         unbind.push(name_bytes.to_owned());
                         md.new_input_from_meta(v_md);
+                    }
+                    let parsed_commitments = self.commitments(commitments);
+                    for c in parsed_commitments {
+                        md.add_commitment(c);
                     }
                     (md, unbind)
                 }
@@ -644,25 +687,17 @@ impl<'src> IrInterp<'src> {
 
     /// Parse a computation.
     pub fn computation(&mut self, tt: &TokTree<'src>) -> Computation {
-        if let List(tts) = tt {
-            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"computation") {
-                panic!(
-                    "Expected computation, but list did not start with 'computation': {}",
-                    tt
-                )
-            }
-            assert!(tts.len() > 3);
-            let (metadata, input_names) = self.metadata(&tts[1]);
-            let precomputes = self.precompute(&tts[2]);
-            let outputs = tts[3..].iter().map(|tti| self.term(tti)).collect();
-            self.unbind(input_names);
-            Computation {
-                outputs,
-                metadata,
-                precomputes,
-            }
-        } else {
-            panic!("Expected computation, found {}", tt)
+        let tts = self.unwrap_prefix_list(tt, "computation");
+        assert!(tts.len() >= 3);
+        let (metadata, input_names) = self.metadata(&tts[0]);
+        let precomputes = self.precompute(&tts[1]);
+        let iter = tts.iter().skip(2);
+        let outputs = iter.map(|tti| self.term(tti)).collect();
+        self.unbind(input_names);
+        Computation {
+            outputs,
+            metadata,
+            precomputes,
         }
     }
 
@@ -928,7 +963,13 @@ mod test {
             (computation
                 (metadata
                     (parties P V)
-                    (inputs (a bool (party 0) (random) (round 1)) (b bool) (A (tuple bool bool)))
+                    (inputs
+                        (a bool (party 0) (random) (round 1))
+                        (b bool)
+                        (A (tuple bool bool))
+                        (x bool (party 0) (committed))
+                    )
+                    (commitments)
                 )
                 (precompute
                     ((c bool) (d bool))
@@ -941,7 +982,7 @@ mod test {
                         ((field 0) (#t false false #b0000 true))))
             )",
         );
-        assert_eq!(c.metadata.vars.len(), 3);
+        assert_eq!(c.metadata.vars.len(), 4);
         assert!(!c.metadata.is_input_public("a"));
         assert!(c.metadata.is_input_public("b"));
         assert!(c.metadata.is_input_public("A"));

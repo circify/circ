@@ -78,6 +78,10 @@ pub struct R1csOpt {
     #[arg(long = "r1cs-verified", env = "R1CS_VERIFIED", action = ArgAction::Set, default_value = "false")]
     pub verified: bool,
 
+    /// Profile the R1CS lowering pass: attributing cosntraints and vars to terms
+    #[arg(long = "r1cs-profile", env = "R1CS_PROFILE", action = ArgAction::Set, default_value = "false")]
+    pub profile: bool,
+
     /// Which field division-by-zero semantics to encode in R1cs
     #[arg(
         long = "r1cs-div-by-zero",
@@ -100,6 +104,7 @@ impl Default for R1csOpt {
     fn default() -> Self {
         Self {
             verified: false,
+            profile: false,
             div_by_zero: FieldDivByZero::Incomplete,
             lc_elim_thresh: 50,
         }

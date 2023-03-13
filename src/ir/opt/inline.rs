@@ -147,10 +147,8 @@ impl<'a> Inliner<'a> {
 
             None
         } else {
-            self.stale_vars.extend(
-                PostOrderIter::new(t.clone())
-                    .filter(|t| t.is_var()),
-            );
+            self.stale_vars
+                .extend(PostOrderIter::new(t.clone()).filter(|t| t.is_var()));
             let subst_t = self.apply(t);
             Some(subst_t)
         }

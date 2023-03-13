@@ -8,5 +8,3 @@ pub mod lin;
 ///
 /// Replace arrays that are accessed at constant indices with tuples.
 pub mod obliv;
-/// RAM extraction machinery
-pub mod ram;

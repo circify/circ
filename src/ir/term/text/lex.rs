@@ -22,7 +22,7 @@ pub enum Token {
     // TODO: Float
 
     // Identifiers
-    #[regex(br"#t|#a|[^()0-9#; \t\n\f][^(); \t\n\f#]*")]
+    #[regex(br"#t|#a|#l|[^()0-9#; \t\n\f][^(); \t\n\f#]*")]
     Ident,
 
     // Logos requires one token variant to handle errors,
