@@ -65,14 +65,12 @@ pub fn substitute_single(t: &Term, from: Term, to: Term) -> Term {
 /// Is `needle` not in `haystack`?
 pub fn does_not_contain(haystack: Term, needle: &Term) -> bool {
     PostOrderIter::new(haystack)
-        .into_iter()
         .all(|descendent| &descendent != needle)
 }
 
 /// Is `needle` in `haystack`?
 pub fn contains(haystack: Term, needle: &Term) -> bool {
     PostOrderIter::new(haystack)
-        .into_iter()
         .any(|descendent| &descendent == needle)
 }
 

@@ -140,7 +140,7 @@ impl<'a> Inliner<'a> {
             // marked stale.
             self.stale_vars.insert(var);
             self.stale_vars
-                .extend(PostOrderIter::new(val).into_iter().filter(|t| t.is_var()));
+                .extend(PostOrderIter::new(val).filter(|t| t.is_var()));
 
             // Comment out?
             //self.check_substs();
@@ -149,7 +149,6 @@ impl<'a> Inliner<'a> {
         } else {
             self.stale_vars.extend(
                 PostOrderIter::new(t.clone())
-                    .into_iter()
                     .filter(|t| t.is_var()),
             );
             let subst_t = self.apply(t);

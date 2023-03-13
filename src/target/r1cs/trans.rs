@@ -193,7 +193,7 @@ impl<'cfg> ToR1cs<'cfg> {
     fn nary_xor<I: ExactSizeIterator<Item = TermLc>>(&mut self, mut xs: I) -> TermLc {
         let n = xs.len();
         if n > 3 {
-            let sum = xs.into_iter().fold(self.zero.clone(), |s, i| s + &i);
+            let sum = xs.fold(self.zero.clone(), |s, i| s + &i);
             let sum_bits = self.bitify("sum", &sum, bitsize(n), false);
             assert!(n > 0);
             assert!(self.r1cs.modulus() > &n);
