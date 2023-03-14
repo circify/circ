@@ -196,6 +196,7 @@ pub fn walk_visibility<'ast, Z: ZVisitorMut<'ast>>(
     use ast::Visibility::*;
     match vis {
         Public(pu) => visitor.visit_public_visibility(pu),
+        Committed(c) => visitor.visit_commited_visibility(c),
         Private(pr) => visitor.visit_private_visibility(pr),
     }
 }
@@ -708,6 +709,7 @@ pub fn walk_statement<'ast, Z: ZVisitorMut<'ast>>(
         Return(r) => visitor.visit_return_statement(r),
         Definition(d) => visitor.visit_definition_statement(d),
         Assertion(a) => visitor.visit_assertion_statement(a),
+        CondStore(a) => visitor.visit_cond_store_statement(a),
         Iteration(i) => visitor.visit_iteration_statement(i),
     }
 }
@@ -784,6 +786,17 @@ pub fn walk_assertion_statement<'ast, Z: ZVisitorMut<'ast>>(
         visitor.visit_any_string(s)?;
     }
     visitor.visit_span(&mut asrt.span)
+}
+
+pub fn walk_cond_store_statement<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    s: &mut ast::CondStoreStatement<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_identifier_expression(&mut s.array)?;
+    visitor.visit_array_index_expression(&mut s.index)?;
+    visitor.visit_array_index_expression(&mut s.value)?;
+    visitor.visit_expression(&mut s.condition)?;
+    visitor.visit_span(&mut s.span)
 }
 
 pub fn walk_iteration_statement<'ast, Z: ZVisitorMut<'ast>>(

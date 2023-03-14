@@ -375,6 +375,11 @@ pub trait Embeddable {
     // Because the type alias may change.
     #[allow(clippy::ptr_arg)]
     fn initialize_return(&self, ty: &Self::Ty, ssa_name: &SsaName) -> Self::T;
+
+    /// Wrap an IR field->field array as a language-level persistent array.
+    fn wrap_persistent_array(&self, _t: Term) -> Self::T {
+        unimplemented!("wrap_persistent_array")
+    }
 }
 
 /// Manager for circuit-embedded state.
@@ -836,6 +841,11 @@ impl<E: Embeddable> Circify<E> {
         self.cir_ctx.mem.borrow_mut().load(id, offset)
     }
 
+    /// Conditional store to an AllocId based on an explicit condition
+    pub fn cond_store(&mut self, id: AllocId, offset: Term, val: Term, cond: Term) {
+        self.cir_ctx.mem.borrow_mut().store(id, offset, val, cond);
+    }
+
     /// Conditional store to an AllocId based on current path condition
     pub fn store(&mut self, id: AllocId, offset: Term, val: Term) {
         let cond = self.condition();
@@ -853,6 +863,36 @@ impl<E: Embeddable> Circify<E> {
             .mem
             .borrow_mut()
             .zero_allocate(size, addr_width, val_width)
+    }
+
+    /// Create a new persistent array.
+    pub fn start_persistent_array(
+        &mut self,
+        var: &str,
+        size: usize,
+        field: circ_fields::FieldT,
+        party: PartyId,
+    ) -> E::T {
+        let ir = self
+            .cir_ctx
+            .cs
+            .borrow_mut()
+            .start_persistent_array(var, size, field, party);
+        let t = self.e.wrap_persistent_array(ir);
+        let ssa_name = self
+            .declare_env_name(var.into(), &t.type_())
+            .unwrap()
+            .clone();
+        assert!(self.vals.insert(ssa_name, Val::Term(t.clone())).is_none());
+        t
+    }
+
+    /// Record the final state
+    pub fn end_persistent_array(&mut self, var: &str, final_state: Term) {
+        self.cir_ctx
+            .cs
+            .borrow_mut()
+            .end_persistent_array(var, final_state)
     }
 }
 

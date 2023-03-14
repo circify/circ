@@ -83,6 +83,10 @@ name = "zk"
 required-features = ["r1cs"]
 
 [[example]]
+name = "cp"
+required-features = ["bellman"]
+
+[[example]]
 name = "zxi"
 required-features = ["smt", "zok"]
 

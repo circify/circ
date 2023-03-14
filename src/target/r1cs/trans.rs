@@ -148,6 +148,18 @@ impl<'cfg> ToR1cs<'cfg> {
         }
     }
 
+    /// Create a committed witness vector. Each input is a (name, term) pair.
+    fn committed_wit(&mut self, elements: Vec<(String, Term)>) {
+        self.r1cs.add_committed_witness(elements.clone());
+        for (name, value) in elements {
+            let lc = self.r1cs.signal_lc(&name);
+            let var = leaf_term(Op::Var(name, check(&value)));
+            self.embed.borrow_mut().insert(var.clone());
+            self.cache
+                .insert(var, EmbeddedTerm::Field(TermLc(value, lc)));
+        }
+    }
+
     /// Get a new variable, with name dependent on `d`.
     /// If values are being recorded, `value` must be provided.
     ///
@@ -558,6 +570,10 @@ impl<'cfg> ToR1cs<'cfg> {
                         Ult => self.bv_cmp(n, false, true, &c.cs()[1], &c.cs()[0]),
                     }
                 }
+                Op::PfToBoolTrusted => {
+                    // we trust that this is zero or one
+                    self.get_pf(&c.cs()[0]).clone()
+                }
                 _ => panic!("Non-boolean in embed_bool: {}", c),
             };
             self.cache.insert(c.clone(), EmbeddedTerm::Bool(lc));
@@ -582,6 +598,8 @@ impl<'cfg> ToR1cs<'cfg> {
             for c in t.cs() {
                 self.assert_bool(c);
             }
+        } else if let Op::PfFitsInBits(n) = t.op() {
+            self.embed(term![Op::PfToBv(*n); t.cs()[0].clone()]);
         } else {
             self.embed(t.clone());
             let lc = self.get_bool(t).clone();
@@ -1115,6 +1133,13 @@ pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
     for i in &vars.instances {
         converter.embed_var(i, VarType::Inst);
     }
+    for terms in &vars.committed_wit_vecs {
+        let names_and_terms = terms
+            .iter()
+            .map(|t| (t.as_var_name().to_owned(), t.clone()))
+            .collect();
+        converter.committed_wit(names_and_terms);
+    }
     for round in &vars.rounds {
         for w in &round.witnesses {
             converter.embed_var(w, VarType::RoundWit);
@@ -1396,6 +1421,35 @@ pub mod test {
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
             ],
+        );
+        crate::ir::opt::tuple::eliminate_tuples(&mut cs);
+        let r1cs = to_r1cs_mod17(cs);
+        r1cs.check_all(&values);
+    }
+
+    #[test]
+    fn pf_fits_in_bits() {
+        let mut cs = text::parse_computation(
+            b"
+            (computation
+                (metadata (parties P) (inputs (a (mod 17)) (b (mod 17)) (c (mod 17))) (commitments))
+                (precompute () () (#t ))
+                (and
+                    ((pf_fits_in_bits 1) a)
+                    ((pf_fits_in_bits 2) (+ b c))
+                    (= (+ b c) (+ c b))
+                    ((pf_fits_in_bits 2) #f1m17)
+                )
+            )
+        ",
+        );
+        let values = text::parse_value_map(
+            b"(let(
+            (a #f1m17)
+            (b #f4m17)
+            (c #f-1m17)
+            ) false; ignored
+            )",
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs_mod17(cs);
