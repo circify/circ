@@ -117,7 +117,7 @@ impl NonOblivComputer {
 impl ProgressAnalysisPass for NonOblivComputer {
     fn visit(&mut self, term: &Term) -> bool {
         match &term.op() {
-            Op::Store => {
+            Op::Store | Op::CStore => {
                 let a = &term.cs()[0];
                 let i = &term.cs()[1];
                 let v = &term.cs()[2];
@@ -138,6 +138,32 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 }
                 progress
             }
+            Op::Array(..) => {
+                let mut progress = false;
+                if !term.cs().is_empty() {
+                    if let Sort::Array(..) = check(&term.cs()[0]) {
+                        progress = self.bi_implicate(term, &term.cs()[0]) || progress;
+                        for i in 0..term.cs().len() - 1 {
+                            progress =
+                                self.bi_implicate(&term.cs()[i], &term.cs()[i + 1]) || progress;
+                        }
+                        for i in (0..term.cs().len() - 1).rev() {
+                            progress =
+                                self.bi_implicate(&term.cs()[i], &term.cs()[i + 1]) || progress;
+                        }
+                        progress = self.bi_implicate(term, &term.cs()[0]) || progress;
+                    }
+                }
+                progress
+            }
+            Op::Fill(..) => {
+                let v = &term.cs()[0];
+                if let Sort::Array(..) = check(v) {
+                    self.bi_implicate(term, &term.cs()[0])
+                } else {
+                    false
+                }
+            }
             Op::Select => {
                 // Even though the selected value may not have array sort, we still flag it as
                 // non-oblivious so we know whether to replace it or not.
@@ -152,6 +178,13 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 }
                 progress = self.bi_implicate(term, a) || progress;
                 progress
+            }
+            Op::Var(..) => {
+                if let Sort::Array(..) = check(term) {
+                    self.mark(term)
+                } else {
+                    false
+                }
             }
             Op::Ite => {
                 let t = &term.cs()[1];
@@ -265,6 +298,32 @@ impl RewritePass for Replacer {
                     debug_assert_eq!(cs.len(), 3);
                     let k_const = get_const(&cs.remove(1));
                     Some(term(Op::Update(k_const), cs))
+                } else {
+                    None
+                }
+            }
+            Op::CStore => {
+                if self.should_replace(orig) {
+                    let mut cs = get_cs();
+                    debug_assert_eq!(cs.len(), 4);
+                    let cond = cs.remove(3);
+                    let k_const = get_const(&cs.remove(1));
+                    let orig = cs[0].clone();
+                    Some(term![ITE; cond, term(Op::Update(k_const), cs), orig])
+                } else {
+                    None
+                }
+            }
+            Op::Array(..) => {
+                if self.should_replace(orig) {
+                    Some(term(Op::Tuple, get_cs()))
+                } else {
+                    None
+                }
+            }
+            Op::Fill(_, size) => {
+                if self.should_replace(orig) {
+                    Some(term(Op::Tuple, vec![get_cs().pop().unwrap(); *size]))
                 } else {
                     None
                 }

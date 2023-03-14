@@ -291,6 +291,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rsmt2",
  "rug",
+ "rug-polynomial",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -656,6 +657,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "flint-sys"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd39a21fba2a1dd249af52d118f5b6cc8f1a98c87732de386dc5e8e53d22a24b"
+dependencies = [
+ "gmp-mpfr-sys",
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -735,12 +747,12 @@ checksum = "ad0a93d233ebf96623465aad4046a8d3aa4da22d4f4beba5388838c8a434bbb4"
 
 [[package]]
 name = "gmp-mpfr-sys"
-version = "1.5.1"
+version = "1.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a32868092c26fb25bb33c5ca7d8a937647979dfaa12f1f4f464beb57d726662c"
+checksum = "781d258743e6e07d38c5bcd7468cfaa068d56789d10e8de0d3836d5bb338b5d7"
 dependencies = [
  "libc",
- "windows-sys 0.42.0",
+ "winapi",
 ]
 
 [[package]]
@@ -1403,13 +1415,35 @@ dependencies = [
 
 [[package]]
 name = "rug"
-version = "1.19.1"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a465f6576b9f0844bd35749197576d68e3db169120532c4e0f868ecccad3d449"
+checksum = "55313a5bab6820d1439c0266db37f8084e50618d35d16d81f692eee14d8b01b9"
 dependencies = [
  "az",
  "gmp-mpfr-sys",
  "libc",
+ "serde",
+]
+
+[[package]]
+name = "rug-fft"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "333f0e04ec25ccaee0885a94377702d00d6fa631023464ff38bec2efe7247d90"
+dependencies = [
+ "rug",
+]
+
+[[package]]
+name = "rug-polynomial"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e78837d2c84bd38a3c9e666f802e21837df9f46d8413f4787a823c9b448d392d"
+dependencies = [
+ "flint-sys",
+ "gmp-mpfr-sys",
+ "rug",
+ "rug-fft",
  "serde",
 ]
 

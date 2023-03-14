@@ -37,6 +37,11 @@ impl RewritePass for Linearizer {
                 computation.extend_precomputation(new_name.clone(), precomp);
                 Some(leaf_term(Op::Var(new_name, new_sort)))
             }
+            Op::Array(..) => Some(term(Op::Tuple, rewritten_children())),
+            Op::Fill(_, size) => Some(term(
+                Op::Tuple,
+                vec![rewritten_children().pop().unwrap(); *size],
+            )),
             Op::Select => {
                 let cs = rewritten_children();
                 let idx = &cs[1];

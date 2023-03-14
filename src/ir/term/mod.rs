@@ -26,17 +26,17 @@ use circ_fields::{FieldT, FieldV};
 pub use circ_hc::{Node, Table, Weak};
 use circ_opt::FieldToBv;
 use fxhash::{FxHashMap, FxHashSet};
-use log::debug;
+use log::{debug, trace};
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
-use std::sync::Arc;
 
 pub mod bv;
 pub mod dist;
+pub mod ext;
 pub mod extras;
 pub mod fmt;
 pub mod lin;
@@ -46,6 +46,7 @@ pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
+pub use ext::ExtOp;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -132,6 +133,8 @@ pub enum Op {
     ///
     /// In IR evaluation, we sample deterministically based on a hash of the name.
     PfChallenge(String, FieldT),
+    /// Requires the input pf element to fit in this many (unsigned) bits.
+    PfFitsInBits(usize),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -146,6 +149,15 @@ pub enum Op {
     ///
     /// Makes an array equal to `array`, but with `value` at `index`.
     Store,
+    /// Quad-operator, with arguments (array, index, value, cond).
+    ///
+    /// If `cond`, outputs an array equal to `array`, but with `value` at `index`.
+    /// Otherwise, oupputs `array`.
+    CStore,
+    /// Makes an array of the indicated key sort with the indicated size, filled with the argument.
+    Fill(Sort, usize),
+    /// Create an array from (contiguous) values.
+    Array(Sort, Sort),
 
     /// Assemble n things into a tuple
     Tuple,
@@ -163,6 +175,12 @@ pub enum Op {
     /// Cyclic right rotation of an array
     /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
     Rot(usize),
+
+    /// Assume that the field element is 0 or 1, and treat it as a boolean.
+    PfToBoolTrusted,
+
+    /// Extension operators. Used in compilation, but not externally supported
+    ExtOp(ext::ExtOp),
 }
 
 /// Boolean AND
@@ -280,17 +298,23 @@ impl Op {
             Op::PfUnOp(_) => Some(1),
             Op::PfNaryOp(_) => None,
             Op::PfChallenge(_, _) => None,
+            Op::PfFitsInBits(..) => Some(1),
             Op::IntNaryOp(_) => None,
             Op::IntBinPred(_) => Some(2),
             Op::UbvToPf(_) => Some(1),
             Op::Select => Some(2),
             Op::Store => Some(3),
+            Op::CStore => Some(4),
+            Op::Fill(..) => Some(1),
+            Op::Array(..) => None,
             Op::Tuple => None,
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
             Op::Call(_, args, _) => Some(args.len()),
             Op::Rot(_) => Some(1),
+            Op::ExtOp(o) => o.arity(),
+            Op::PfToBoolTrusted => Some(1),
         }
     }
 }
@@ -843,9 +867,9 @@ impl Sort {
 
     #[track_caller]
     /// Unwrap the modulus of this prime field, panicking otherwise.
-    pub fn as_pf(&self) -> Arc<Integer> {
+    pub fn as_pf(&self) -> &FieldT {
         if let Sort::Field(fty) = self {
-            fty.modulus_arc()
+            fty
         } else {
             panic!("{} is not a field", self)
         }
@@ -858,6 +882,42 @@ impl Sort {
             w
         } else {
             panic!("{} is not a tuple", self)
+        }
+    }
+
+    #[track_caller]
+    /// Unwrap the constituent sorts of this array, panicking otherwise.
+    pub fn as_array(&self) -> (&Sort, &Sort, usize) {
+        if let Sort::Array(k, v, s) = self {
+            (k, v, *s)
+        } else {
+            panic!("{} is not an array", self)
+        }
+    }
+
+    /// Is this an array?
+    pub fn is_array(&self) -> bool {
+        matches!(self, Sort::Array(..))
+    }
+
+    /// The nth element of this sort.
+    /// Only defined for booleans, bit-vectors, and field elements.
+    #[track_caller]
+    pub fn nth_elem(&self, n: usize) -> Term {
+        match self {
+            Sort::Bool => {
+                assert!(n < 2);
+                bool_lit([false, true][n])
+            }
+            Sort::BitVector(w) => {
+                assert!(n < (1 << w));
+                bv_lit(n, *w)
+            }
+            Sort::Field(f) => {
+                debug_assert!(&Integer::from(n) < f.modulus());
+                pf_lit(f.new_v(n))
+            }
+            _ => panic!("Can't get nth element of sort {}", self),
         }
     }
 
@@ -1238,8 +1298,15 @@ pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
 /// Helper function for eval function. Handles a single term
 fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, t: Term) -> Value {
     let args: Vec<&Value> = t.cs().iter().map(|c| vs.get(c).unwrap()).collect();
+    trace!("Eval {} on {:?}", t.op(), args);
     let v = eval_op(t.op(), &args, h);
-    debug!("Eval {}\nAs   {}", t, v);
+    trace!("=> {}", v);
+    if let Value::Bool(false) = &v {
+        trace!("term {}", t);
+        for v in extras::free_variables(t.clone()) {
+            trace!("  {} = {}", v, h.get(&v).unwrap());
+        }
+    }
     vs.insert(t, v.clone());
     v
 }
@@ -1393,6 +1460,9 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
         Op::PfChallenge(name, field) => Value::Field(pf_challenge(name, field)),
+        Op::PfFitsInBits(n_bits) => {
+            Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
+        }
         // tuple
         Op::Tuple => Value::Tuple(args.iter().map(|a| (*a).clone()).collect()),
         Op::Field(i) => {
@@ -1415,6 +1485,31 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             let v = args[2].clone();
             Value::Array(a.store(i, v))
         }
+        Op::CStore => {
+            let a = args[0].as_array().clone();
+            let i = args[1].clone();
+            let v = args[2].clone();
+            let c = args[3].as_bool();
+            if c {
+                Value::Array(a.store(i, v))
+            } else {
+                Value::Array(a)
+            }
+        }
+        Op::Fill(key_sort, size) => {
+            let v = args[0].clone();
+            Value::Array(Array::new(
+                key_sort.clone(),
+                Box::new(v),
+                Default::default(),
+                *size,
+            ))
+        }
+        Op::Array(key, value) => Value::Array(Array::from_vec(
+            key.clone(),
+            value.clone(),
+            args.iter().cloned().cloned().collect(),
+        )),
         Op::Select => {
             let a = args[0].as_array().clone();
             let i = args[1];
@@ -1476,6 +1571,12 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             }
             Value::Array(res)
         }
+        Op::PfToBoolTrusted => {
+            let v = args[0].as_pf().i();
+            assert!(v == 0 || v == 1);
+            Value::Bool(v == 1)
+        }
+        Op::ExtOp(o) => o.eval(args),
 
         o => unimplemented!("eval: {:?}", o),
     }
@@ -1488,10 +1589,22 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
 /// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
 /// * a value sort, for the array's default
 pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
-    let d = Sort::Array(Box::new(key_sort.clone()), Box::new(value_sort), i.len()).default_term();
-    i.into_iter()
-        .zip(key_sort.elems_iter())
-        .fold(d, |arr, (val, idx)| term(Op::Store, vec![arr, idx, val]))
+    term(Op::Array(key_sort, value_sort), i)
+}
+
+/// Make a sequence of terms from an array.
+///
+/// Requires
+///
+/// * an array term
+pub fn unmake_array(a: Term) -> Vec<Term> {
+    let sort = check(&a);
+    let (key_sort, _, size) = sort.as_array();
+    key_sort
+        .elems_iter()
+        .take(size)
+        .map(|idx| term(Op::Select, vec![a.clone(), idx]))
+        .collect()
 }
 
 /// Make a term with no arguments, just an operator.
@@ -1544,6 +1657,29 @@ macro_rules! term {
     };
     ($x:expr; $($y:expr),+) => {
         term($x, vec![$($y),+])
+    };
+}
+
+#[macro_export]
+/// Make a term, with clones.
+///
+/// Syntax:
+///
+///    * without children: `term![OP]`
+///    * with children: `term![OP; ARG0, ARG1, ... ]`
+///       * Note the semi-colon
+macro_rules! term_c {
+    ($x:expr; $($y:expr),+) => {
+        {
+            let mut args = Vec::new();
+            #[allow(clippy::vec_init_then_push)]
+            {
+                $(
+                    args.push(($y).clone());
+                )+
+            }
+            term($x, args)
+        }
     };
 }
 
@@ -1703,12 +1839,25 @@ impl ComputationMetadata {
         self.vars.insert(metadata.name.clone(), metadata);
     }
 
+    /// Lookup metadata
     #[track_caller]
-    fn lookup<Q: std::borrow::Borrow<str> + ?Sized>(&self, name: &Q) -> &VariableMetadata {
+    pub fn lookup<Q: std::borrow::Borrow<str> + ?Sized>(&self, name: &Q) -> &VariableMetadata {
         let n = name.borrow();
         self.vars
             .get(n)
             .unwrap_or_else(|| panic!("Missing input {} in inputs{:#?}", n, self.vars))
+    }
+
+    /// Lookup metadata
+    #[track_caller]
+    pub fn lookup_mut<Q: std::borrow::Borrow<str> + ?Sized>(
+        &mut self,
+        name: &Q,
+    ) -> &mut VariableMetadata {
+        let n = name.borrow();
+        self.vars
+            .get_mut(n)
+            .unwrap_or_else(|| panic!("Missing input {}", n))
     }
 
     /// Returns None if the value is public. Otherwise, the unique party that knows it.
@@ -1890,6 +2039,11 @@ pub struct Computation {
     pub metadata: ComputationMetadata,
     /// Pre-computations
     pub precomputes: precomp::PreComp,
+    /// Persistent Arrays. [(name, term)]
+    /// where:
+    /// * name: a variable name (array type) indicating the input state
+    /// * name: a term indicating the output state
+    pub persistent_arrays: Vec<(String, Term)>,
 }
 
 impl Computation {
@@ -1911,13 +2065,44 @@ impl Computation {
         party: Option<PartyId>,
         precompute: Option<Term>,
     ) -> Term {
-        debug!("Var: {} : {} (visibility: {:?})", name, s, party);
+        debug!(
+            "Var: {} : {} (visibility: {:?}) (precompute: {})",
+            name,
+            s,
+            party,
+            precompute.is_some()
+        );
         self.metadata.new_input(name.to_owned(), party, s.clone());
         if let Some(p) = precompute {
             assert_eq!(&s, &check(&p));
             self.precomputes.add_output(name.to_owned(), p);
         }
         leaf_term(Op::Var(name.to_owned(), s))
+    }
+
+    /// Create a new variable with the given metadata.
+    ///
+    /// If `precompute` is set, that precomputation is added to give a value for this variable.
+    /// Otherwise, the variable is assumed to be an input.
+    pub fn new_var_metadata(
+        &mut self,
+        metadata: VariableMetadata,
+        precompute: Option<Term>,
+    ) -> Term {
+        debug!(
+            "Var: {} : {:?} (precompute {})",
+            metadata.name,
+            metadata,
+            precompute.is_some()
+        );
+        let sort = metadata.sort.clone();
+        let name = metadata.name.clone();
+        self.metadata.new_input_from_meta(metadata);
+        if let Some(p) = precompute {
+            assert_eq!(&sort, &check(&p));
+            self.precomputes.add_output(name.clone(), p);
+        }
+        leaf_term(Op::Var(name, sort))
     }
 
     /// Add a new input `new_input_var` to this computation,
@@ -1946,6 +2131,49 @@ impl Computation {
         self.new_var(&new_input_var, sort, vis, Some(precomp));
     }
 
+    /// Intialize a new persistent array.
+    pub fn start_persistent_array(
+        &mut self,
+        var: &str,
+        size: usize,
+        field: FieldT,
+        party: PartyId,
+    ) -> Term {
+        let f = Sort::Field(field);
+        let s = Sort::Array(Box::new(f.clone()), Box::new(f), size);
+        let md = VariableMetadata {
+            name: var.to_owned(),
+            vis: Some(party),
+            sort: s,
+            committed: true,
+            ..Default::default()
+        };
+        let term = self.new_var_metadata(md, None);
+
+        // we'll replace dummy later
+        let dummy = bool_lit(true);
+        self.persistent_arrays.push((var.into(), dummy));
+        term
+    }
+
+    /// Record the final state of a persistent array. Should be called once per array, with the
+    /// same name as [Computation::start_persistent_array].
+    pub fn end_persistent_array(&mut self, var: &str, final_state: Term) {
+        for (name, t) in &mut self.persistent_arrays {
+            if name == var {
+                assert_eq!(*t, bool_lit(true));
+                *t = final_state;
+                return;
+            }
+        }
+        panic!("No existing persistent memory {}", var)
+    }
+
+    /// Make a vector of existing variables a commitment.
+    pub fn add_commitment(&mut self, names: Vec<String>) {
+        self.metadata.add_commitment(names);
+    }
+
     /// Change the sort of a variables
     pub fn remove_var(&mut self, var: &str) {
         self.metadata.remove_var(var);
@@ -1964,6 +2192,7 @@ impl Computation {
             outputs: Vec::new(),
             metadata: ComputationMetadata::default(),
             precomputes: Default::default(),
+            persistent_arrays: Default::default(),
         }
     }
 
@@ -1991,6 +2220,29 @@ impl Computation {
         // drop the top-level tuple term.
         terms.pop();
         terms.into_iter()
+    }
+
+    /// Evaluate the precompute, then this computation.
+    pub fn eval_all(&self, values: &FxHashMap<String, Value>) -> Vec<Value> {
+        let mut values = values.clone();
+
+        // set all challenges to 1.
+        for v in self.metadata.vars.values() {
+            if v.random {
+                let field = v.sort.as_pf();
+                let value = Value::Field(pf_challenge(&v.name, field));
+                values.insert(v.name.clone(), value);
+            }
+        }
+
+        values = self.precomputes.eval(&values);
+
+        let mut cache = Default::default();
+        let mut outputs = Vec::new();
+        for o in &self.outputs {
+            outputs.push(eval_cached(o, &values, &mut cache).clone());
+        }
+        outputs
     }
 }
 
