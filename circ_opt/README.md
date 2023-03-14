@@ -86,6 +86,26 @@ Options:
           - wrap:  x % 2^b
           - panic: a panic
 
+      --ram-range <RANGE>
+          How to argue that values are in a range
+          
+          [env: RAM_RANGE=]
+          [default: sort]
+
+          Possible values:
+          - bit-split: Bit-split them
+          - sort:      Add the whole range & sort all values
+
+      --ram-index <INDEX>
+          How to argue that indices are only repeated in blocks
+          
+          [env: RAM_INDEX=]
+          [default: uniqueness]
+
+          Possible values:
+          - sort:       Check that the blocks are sorted
+          - uniqueness: Use the GCD-derivative uniqueness argument
+
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use
           
@@ -158,6 +178,10 @@ Options:
           Which modulus to use (overrides [FieldOpt::builtin]) [env: FIELD_CUSTOM_MODULUS=] [default: ]
       --ir-field-to-bv <FIELD_TO_BV>
           Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
+      --ram-range <RANGE>
+          How to argue that values are in a range [env: RAM_RANGE=] [default: sort] [possible values: bit-split, sort]
+      --ram-index <INDEX>
+          How to argue that indices are only repeated in blocks [env: RAM_INDEX=] [default: uniqueness] [possible values: sort, uniqueness]
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use [env: FMT_USE_DEFAULT_FIELD=] [default: true] [possible values: true, false]
       --fmt-hide-field <HIDE_FIELD>
@@ -195,6 +219,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -235,6 +263,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -271,6 +303,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -309,6 +345,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -345,6 +385,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -383,6 +427,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -420,6 +468,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -456,6 +508,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -497,6 +553,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -534,6 +594,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -575,6 +639,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -612,6 +680,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -653,6 +725,10 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
         },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
+        },
         fmt: FmtOpt {
             use_default_field: true,
             hide_field: false,
@@ -690,6 +766,10 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,

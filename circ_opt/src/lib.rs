@@ -57,6 +57,9 @@ pub struct CircOpt {
     /// Options for the IR itself
     #[command(flatten)]
     pub ir: IrOpt,
+    /// Options for RAM optimization
+    #[command(flatten)]
+    pub ram: RamOpt,
     /// Options for term formatting
     #[command(flatten)]
     pub fmt: FmtOpt,
@@ -190,6 +193,57 @@ pub enum FieldToBv {
 impl Default for FieldToBv {
     fn default() -> Self {
         FieldToBv::Wrap
+    }
+}
+
+/// Options related to memory.
+#[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
+pub struct RamOpt {
+    /// How to argue that values are in a range
+    #[arg(
+        long = "ram-range",
+        env = "RAM_RANGE",
+        value_enum,
+        default_value = "sort"
+    )]
+    pub range: RangeStrategy,
+    /// How to argue that indices are only repeated in blocks.
+    #[arg(
+        long = "ram-index",
+        env = "RAM_INDEX",
+        value_enum,
+        default_value = "uniqueness"
+    )]
+    pub index: IndexStrategy,
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that values are in a range
+pub enum RangeStrategy {
+    /// Bit-split them.
+    BitSplit,
+    /// Add the whole range & sort all values.
+    Sort,
+}
+
+impl Default for RangeStrategy {
+    fn default() -> Self {
+        RangeStrategy::Sort
+    }
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that indices are only repeated in blocks.
+pub enum IndexStrategy {
+    /// Check that the blocks are sorted
+    Sort,
+    /// Use the GCD-derivative uniqueness argument
+    Uniqueness,
+}
+
+impl Default for IndexStrategy {
+    fn default() -> Self {
+        IndexStrategy::Uniqueness
     }
 }
 
