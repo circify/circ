@@ -658,12 +658,13 @@ dependencies = [
 
 [[package]]
 name = "flint-sys"
-version = "0.5.1"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67a8f39d4c16c1b3c57b161924e2be625862dca1341559e6e9ef376e2c2c9fc8"
+checksum = "cd39a21fba2a1dd249af52d118f5b6cc8f1a98c87732de386dc5e8e53d22a24b"
 dependencies = [
+ "gmp-mpfr-sys",
  "libc",
- "pkg-config",
+ "winapi",
 ]
 
 [[package]]
@@ -1435,7 +1436,9 @@ dependencies = [
 
 [[package]]
 name = "rug-polynomial"
-version = "0.2.4"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e78837d2c84bd38a3c9e666f802e21837df9f46d8413f4787a823c9b448d392d"
 dependencies = [
  "flint-sys",
  "gmp-mpfr-sys",

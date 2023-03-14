@@ -106,6 +106,17 @@ impl TupleTree {
     fn bimap(&self, mut f: impl FnMut(Term, Term) -> Term, other: &Self) -> Self {
         self.structure(itertools::zip_eq(self.flatten(), other.flatten()).map(|(a, b)| f(a, b)))
     }
+    fn transpose_map(vs: Vec<Self>, f: impl FnMut(Vec<Term>) -> Term) -> Self {
+        assert!(!vs.is_empty());
+        let n = vs[0].flatten().count();
+        let mut ts = vec![Vec::new(); n];
+        for v in &vs {
+            for (i, t) in v.flatten().enumerate() {
+                ts[i].push(t);
+            }
+        }
+        vs[0].structure(ts.into_iter().map(f))
+    }
     fn get(&self, i: usize) -> Self {
         match self {
             TupleTree::NonTuple(cs) => {
@@ -249,6 +260,15 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 let a = cs.pop().unwrap();
                 debug_assert!(cs.is_empty());
                 a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v)
+            }
+            Op::Array(k, _v) => TupleTree::transpose_map(cs, |children| {
+                assert!(!children.is_empty());
+                let v_s = check(&children[0]);
+                term(Op::Array(k.clone(), v_s), children)
+            }),
+            Op::Fill(key_sort, size) => {
+                let values = cs.pop().unwrap();
+                values.map(|v| term![Op::Fill(key_sort.clone(), *size); v])
             }
             Op::Select => {
                 let i = cs.pop().unwrap().unwrap_non_tuple();
