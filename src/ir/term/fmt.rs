@@ -1,6 +1,6 @@
 //! Machinery for formatting IR types
 use super::{
-    Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
+    ext, Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
     VariableMetadata,
 };
 use crate::cfg::{cfg, is_cfg_set};
@@ -186,8 +186,22 @@ impl DisplayIr for Op {
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
+            Op::PfFitsInBits(n) => write!(f, "(pf_fits_in_bits {})", n),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
+            Op::CStore => write!(f, "cstore"),
+            Op::Fill(key_sort, size) => {
+                write!(f, "(fill ")?;
+                key_sort.ir_fmt(f)?;
+                write!(f, " {})", *size)
+            }
+            Op::Array(k, v) => {
+                write!(f, "(array ")?;
+                k.ir_fmt(f)?;
+                write!(f, " ")?;
+                v.ir_fmt(f)?;
+                write!(f, ")")
+            }
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "(field {i})"),
             Op::Update(i) => write!(f, "(update {i})"),
@@ -198,6 +212,18 @@ impl DisplayIr for Op {
             }
             Op::Call(name, _, _) => write!(f, "fn:{name}"),
             Op::Rot(i) => write!(f, "(rot {i})"),
+            Op::PfToBoolTrusted => write!(f, "pf2bool_trusted"),
+            Op::ExtOp(o) => o.ir_fmt(f),
+        }
+    }
+}
+
+impl DisplayIr for ext::ExtOp {
+    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
+        match self {
+            ext::ExtOp::PersistentRamSplit => write!(f, "persistent_ram_split"),
+            ext::ExtOp::UniqDeriGcd => write!(f, "uniq_deri_gcd"),
+            ext::ExtOp::Sort => write!(f, "sort"),
         }
     }
 }

@@ -626,3 +626,11 @@ pub fn bv_sub_tests() -> Vec<Term> {
         ],
     ]
 }
+
+#[test]
+fn pf2bool_eval() {
+    let t = text::parse_term(b"(declare () (pf2bool_trusted (ite false #f1m11 #f0m11)))");
+    let actual_output = eval(&t, &Default::default());
+    let expected_output = text::parse_value_map(b"(let ((output false)) false)");
+    assert_eq!(&actual_output, expected_output.get("output").unwrap());
+}
