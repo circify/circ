@@ -343,7 +343,7 @@ fn main() {
                     };
                 }
                 #[cfg(not(feature = "bellman"))]
-                ProofAction::Setup => panic!("Missing feature: bellman"),
+                ProofAction::CpSetup => panic!("Missing feature: bellman"),
                 #[cfg(feature = "spartan")]
                 ProofAction::SpartanSetup => {
                     write_data::<_, _>(prover_key, verifier_key, &prover_data, &verifier_data)
