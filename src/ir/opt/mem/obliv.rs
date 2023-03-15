@@ -354,7 +354,7 @@ pub fn elim_obliv(t: &mut Computation) {
     let mut replace_pass = Replacer {
         not_obliv: prop_pass.not_obliv,
     };
-    <Replacer as RewritePass>::traverse(&mut replace_pass, t)
+    <Replacer as RewritePass>::traverse_full(&mut replace_pass, t, false, false)
 }
 
 #[cfg(test)]
