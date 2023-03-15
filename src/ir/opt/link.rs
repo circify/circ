@@ -18,7 +18,7 @@ struct Linker<'f> {
 /// ## Arguments
 ///
 /// * `callee`: the called function
-/// * `arg_values`: the argument values, in the same order
+/// * `arg_values`: the argument values, sorted by variable names
 ///
 /// ## Returns
 ///
