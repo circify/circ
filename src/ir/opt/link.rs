@@ -17,9 +17,8 @@ struct Linker<'f> {
 ///
 /// ## Arguments
 ///
-/// * `arg_names`: the argument names, in order
-/// * `arg_values`: the argument values, in the same order
 /// * `callee`: the called function
+/// * `arg_values`: the argument values, in the same order
 ///
 /// ## Returns
 ///
@@ -35,19 +34,6 @@ pub fn link_one(callee: &Computation, values: Vec<Term>) -> Term {
     for (name, value) in names.into_iter().zip(values) {
         let sort = callee.metadata.input_sort(&name).clone();
         substitution_map.insert(leaf_term(Op::Var(name, sort)), value);
-        // let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
-        // if ssa_names.len() == 1 {
-        //     let s = callee.metadata.input_sort(&ssa_names[0].0).clone();
-        //     substitution_map.insert(leaf_term(Op::Var(ssa_names[0].0.clone(), s)), v);
-        // } else {
-        //     for (s_name, index) in ssa_names {
-        //         let s = callee.metadata.input_sort(&s_name).clone();
-        //         substitution_map.insert(
-        //             leaf_term(Op::Var(s_name, s)),
-        //             term![Op::Select; v.clone(), bv_lit(index, 32)],
-        //         );
-        //     }
-        // }
     }
     term(
         Op::Tuple,
