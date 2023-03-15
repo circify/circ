@@ -2015,10 +2015,7 @@ impl ComputationMetadata {
             .iter()
             .map(|name| args.get(name).expect("Argument not found: {}").clone())
             .collect::<Vec<Term>>();
-        let ordered_sorts = ordered_args
-            .iter()
-            .map(|arg| check(arg))
-            .collect::<Vec<Sort>>();
+        let ordered_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
 
         term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
     }

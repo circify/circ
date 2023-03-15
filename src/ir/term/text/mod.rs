@@ -756,7 +756,7 @@ impl<'src> IrInterp<'src> {
     /// Parse a computation set.
     pub fn computations(&mut self, tt: &TokTree<'src>) -> Computations {
         if let List(tts) = tt {
-            if tts.len() == 0 || &tts[0] != &Leaf(Token::Ident, b"computations") {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"computations") {
                 panic!(
                     "Expected computation set, but list did not start with 'computations': {}",
                     tt
@@ -1173,8 +1173,8 @@ mod test {
             )",
         );
         assert_eq!(c.comps.len(), 2);
-        assert_eq!(c.comps.contains_key("myxor"), true);
-        assert_eq!(c.comps.contains_key("main"), true);
+        assert!(c.comps.contains_key("myxor"));
+        assert!(c.comps.contains_key("main"));
         let s = serialize_computations(&c);
         let c2 = parse_computations(s.as_bytes());
         assert_eq!(c, c2);

@@ -66,7 +66,7 @@ impl<'f> Linker<'f> {
             let mut c = self.cs.get(name).clone();
             for t in c.terms_postorder() {
                 if let Op::Call(callee_name, ..) = &t.op() {
-                    self.link_all(&callee_name);
+                    self.link_all(callee_name);
                 }
             }
 
