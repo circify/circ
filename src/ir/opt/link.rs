@@ -123,14 +123,14 @@ mod test {
             (computations
                 (myxor
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         (xor a b false false)
                     )
                 )
                 (main
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         (and false ((field 0) ((call myxor (bool bool) (tuple bool)) a b)))
                     )
@@ -140,7 +140,7 @@ mod test {
         let expected = text::parse_computation(
             b"
                 (computation
-                    (metadata (parties ) (inputs (a bool) (b bool)))
+                    (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                     (precompute () () (#t ))
                     (and false ((field 0) (tuple (xor a b false false))))
                 )
@@ -158,14 +158,14 @@ mod test {
                 (computations
                     (myxor
                         (computation
-                            (metadata (parties ) (inputs (a bool) (b (bv 4))))
+                            (metadata (parties ) (inputs (a bool) (b (bv 4))) (commitments))
                             (precompute () () (#t ))
                             (bvxor (ite a #x0 #x1) b)
                         )
                     )
                     (main
                         (computation
-                            (metadata (parties ) (inputs (c bool)))
+                            (metadata (parties ) (inputs (c bool)) (commitments))
                             (precompute () () (#t ))
                             (bvand #xf ((field 0) ((call myxor (bool (bv 4)) (tuple (bv 4))) c #x4 )))
                         )
@@ -176,7 +176,7 @@ mod test {
         let expected = text::parse_computation(
             b"
                     (computation
-                        (metadata (parties ) (inputs (c bool)))
+                        (metadata (parties ) (inputs (c bool)) (commitments))
                         (precompute () () (#t ))
                         (bvand #xf ((field 0) (tuple (bvxor (ite c #x0 #x1) #x4))))
                     )
@@ -194,21 +194,21 @@ mod test {
                 (computations
                     (foo
                         (computation
-                            (metadata (parties ) (inputs (a bool)))
+                            (metadata (parties ) (inputs (a bool)) (commitments))
                             (precompute () () (#t ))
                             (not a)
                         )
                     )
                     (bar
                         (computation
-                            (metadata (parties ) (inputs (a bool)))
+                            (metadata (parties ) (inputs (a bool)) (commitments))
                             (precompute () () (#t ))
                             (xor ((field 0) ((call foo (bool) (tuple bool)) a)) true)
                         )
                     )
                     (main
                         (computation
-                            (metadata (parties ) (inputs (a bool) (b bool)))
+                            (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                             (precompute () () (#t ))
                             ((field 0) ((call bar (bool) (tuple bool)) a))
                         )
@@ -219,7 +219,7 @@ mod test {
         let expected = text::parse_computation(
             b"
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         ((field 0) (tuple (xor ((field 0) (tuple (not a))) true)))
                     )
@@ -238,21 +238,21 @@ mod test {
 
                     (foo
                         (computation
-                            (metadata (parties ) (inputs (a bool)))
+                            (metadata (parties ) (inputs (a bool)) (commitments))
                             (precompute () () (#t ))
                             (not a)
                         )
                     )
                     (bar
                         (computation
-                            (metadata (parties ) (inputs (a bool)))
+                            (metadata (parties ) (inputs (a bool)) (commitments))
                             (precompute () () (#t ))
                             (xor ((field 0) ((call foo (bool) (tuple bool)) a)) true)
                         )
                     )
                     (main
                         (computation
-                            (metadata (parties ) (inputs (a bool) (b bool)))
+                            (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                             (precompute () () (#t ))
                             (and
                                 ((field 0) ((call foo (bool) (tuple bool)) a))
@@ -267,7 +267,7 @@ mod test {
         let expected = text::parse_computation(
             b"
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         (and
                             ((field 0) (tuple (not a)))
@@ -289,14 +289,14 @@ mod test {
                 (computations
                     (myxor
                         (computation
-                            (metadata (parties ) (inputs (a bool) (b bool)))
+                            (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                             (precompute () () (#t ))
                             (xor a b false false)
                         )
                     )
                     (main
                         (computation
-                            (metadata (parties ) (inputs (a bool) (b bool)))
+                            (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                             (precompute () () (#t ))
                             (and false ((field 0) ( (call myxor (bool bool) (tuple bool)) a b )))
                         )
@@ -306,7 +306,7 @@ mod test {
         let expected = text::parse_computation(
             b"
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         (and false ((field 0) (tuple (xor a b false false))))
                     )

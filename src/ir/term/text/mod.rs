@@ -1158,14 +1158,14 @@ mod test {
             (computations
                 (myxor
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         (xor a b false false)
                     )
                 )
                 (main
                     (computation
-                        (metadata (parties ) (inputs (a bool) (b bool)))
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
                         (precompute () () (#t ))
                         (and false ((field 0) ((call myxor (bool bool) (tuple bool)) a b)))
                     )
