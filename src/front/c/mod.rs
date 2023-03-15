@@ -876,6 +876,7 @@ impl CGen {
                     }
                     let ret_sort = Sort::Tuple(ret_sorts.into());
 
+                    // Create ordered list of arguments based on argument names
                     let metadata = self.circ_metadata();
                     let arg_names = metadata.ordered_input_names();
                     let mut args_map: FxHashMap<String, Term> = FxHashMap::default();
