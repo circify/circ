@@ -21,6 +21,7 @@ use lang_c::ast::*;
 use lang_c::span::Node;
 use log::debug;
 
+use fxhash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -875,12 +876,19 @@ impl CGen {
                     }
                     let ret_sort = Sort::Tuple(ret_sorts.into());
 
-                    let call_term = term(
-                        Op::Call(fname.clone(), arg_sorts.clone(), ret_sort),
-                        args.iter()
-                            .flat_map(|e| e.term.terms(self.circ.borrow().cir_ctx()))
-                            .collect::<Vec<_>>(),
-                    );
+                    let metadata = self.circ_metadata();
+                    let arg_names = metadata.ordered_input_names();
+                    let mut args_map: FxHashMap<String, Term> = FxHashMap::default();
+                    for (name, arg) in arg_names.iter().zip(args.iter()) {
+                        args_map.insert(
+                            name.to_string(),
+                            arg.term.term(self.circ.borrow().cir_ctx()),
+                        );
+                    }
+
+                    let call_term = self
+                        .circ_metadata()
+                        .ordered_call_term(fname, args_map, ret_sort);
 
                     // Add function to queue
                     if !self.function_cache.contains(call_term.op()) {
@@ -1315,6 +1323,16 @@ impl CGen {
 
     fn ret_ty_take(&self) -> Option<Ty> {
         self.ret_ty.clone()
+    }
+
+    fn circ_metadata(&self) -> ComputationMetadata {
+        self.circ
+            .borrow_mut()
+            .cir_ctx()
+            .cs
+            .borrow_mut()
+            .metadata
+            .clone()
     }
 
     fn circ_assign(&self, loc: Loc, val: Val<CTerm>) -> Result<Val<CTerm>, CircError> {

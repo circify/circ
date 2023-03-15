@@ -62,6 +62,7 @@
 //!   * Operator `O`:
 //!     * Plain operators: (`bvmul`, `and`, ...)
 //!     * Composite operators: `(field N)`, `(update N)`, `(sext N)`, `(uext N)`, `(bit N)`, ...
+//!       * call operator: `(call X (X1 ... XN) (S1 ... SN) (RS1 ... RSN))`
 
 use circ_fields::{FieldT, FieldV};
 
@@ -319,6 +320,12 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
+                [Leaf(Ident, b"call"), Leaf(Ident, name), arg_sorts, ret_sort] => {
+                    let name = from_utf8(name).unwrap().to_owned();
+                    let arg_sorts = self.sorts(arg_sorts);
+                    let ret_sort = self.sort(ret_sort);
+                    Ok(Op::Call(name, arg_sorts, ret_sort))
+                }
                 [Leaf(Ident, b"fill"), key_sort, size] => {
                     Ok(Op::Fill(self.sort(key_sort), self.usize(size)))
                 }
@@ -358,6 +365,14 @@ impl<'src> IrInterp<'src> {
                 }
             }
             _ => panic!("Expected sort, found {}", tt),
+        }
+    }
+    /// Parse sorts, in-order
+    fn sorts(&mut self, tt: &TokTree<'src>) -> Vec<Sort> {
+        if let List(tts) = tt {
+            tts.iter().map(|tti| self.sort(tti)).collect()
+        } else {
+            panic!("Expected sort list, found: {}", tt)
         }
     }
 
@@ -738,6 +753,36 @@ impl<'src> IrInterp<'src> {
         }
     }
 
+    /// Parse a computation set.
+    pub fn computations(&mut self, tt: &TokTree<'src>) -> Computations {
+        if let List(tts) = tt {
+            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"computations") {
+                panic!(
+                    "Expected computation set, but list did not start with 'computations': {}",
+                    tt
+                )
+            }
+            let mut comps: HashMap<String, Computation> = HashMap::default();
+            for tt in &tts[1..] {
+                if let List(ls) = tt {
+                    match &ls[..] {
+                        [Leaf(Token::Ident, var), ctree] => {
+                            let name = from_utf8(var).unwrap().to_owned();
+                            let c = self.computation(ctree);
+                            comps.insert(name, c);
+                        }
+                        _ => panic!("Expected named computation, found {}", tt),
+                    }
+                } else {
+                    panic!("Expected named computation, found {}", tt);
+                }
+            }
+            Computations { comps }
+        } else {
+            panic!("Expected computation set, found {}", tt)
+        }
+    }
+
     fn var_decl_list(&mut self, tt: &TokTree<'src>) -> Vec<(String, Sort)> {
         let input_names = self.decl_list(tt);
         input_names
@@ -863,6 +908,24 @@ pub fn serialize_computation(c: &Computation) -> String {
     }
     for o in &c.outputs {
         writeln!(&mut out, "\n  {}", serialize_term(o)).unwrap();
+    }
+    writeln!(&mut out, "\n)").unwrap();
+    out
+}
+
+/// Parse a computation set.
+pub fn parse_computations(src: &[u8]) -> Computations {
+    let tree = parse_tok_tree(src);
+    let mut i = IrInterp::new();
+    i.computations(&tree)
+}
+
+/// Serialize a computations set.
+pub fn serialize_computations(comps: &Computations) -> String {
+    let mut out = String::new();
+    writeln!(&mut out, "(computations ").unwrap();
+    for (n, c) in &comps.comps {
+        writeln!(&mut out, "\n({} {}\n)\n", n, serialize_computation(c)).unwrap();
     }
     writeln!(&mut out, "\n)").unwrap();
     out
@@ -1004,7 +1067,6 @@ mod test {
                 ((field 0) (#t false false #b0000 true)))))",
         );
         let s = serialize_term(&t);
-        println!("{s}");
         let t2 = parse_term(s.as_bytes());
         assert_eq!(t, t2);
     }
@@ -1072,6 +1134,57 @@ mod test {
         assert_eq!(check(&c.outputs()[0]), Sort::Bool);
         let s = serialize_computation(&c);
         let c2 = parse_computation(s.as_bytes());
+        assert_eq!(c, c2);
+    }
+
+    #[test]
+    fn call_roundtrip() {
+        let t = parse_term(
+            b"
+            (declare ((a bool))
+                ((field 0) ((call myxor (bool bool) (tuple bool)) a a))
+            )",
+        );
+        assert_eq!(check(&t), Sort::Bool);
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn computations_roundtrip() {
+        let c = parse_computations(
+            b"
+            (computations
+                (myxor
+                    (computation
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
+                        (precompute () () (#t ))
+                        (xor a b false false)
+                    )
+                )
+                (main
+                    (computation
+                        (metadata (parties ) (inputs (a bool) (b bool)) (commitments))
+                        (precompute () () (#t ))
+                        (and false ((field 0) ((call myxor (bool bool) (tuple bool)) a b)))
+                    )
+                )
+            )",
+        );
+        assert_eq!(c.comps.len(), 2);
+        assert!(c.comps.contains_key("myxor"));
+        assert!(c.comps.contains_key("main"));
+        let s = serialize_computations(&c);
+        let c2 = parse_computations(s.as_bytes());
+        assert_eq!(c, c2);
+    }
+
+    #[test]
+    fn empty_precompute_roundtrip() {
+        let c = parse_precompute(b"(precompute () () (#t ))");
+        let s = serialize_precompute(&c);
+        let c2 = parse_precompute(s.as_bytes());
         assert_eq!(c, c2);
     }
 

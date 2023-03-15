@@ -8,6 +8,7 @@ use crate::cfg::{cfg, is_cfg_set};
 use circ_fields::{FieldT, FieldV};
 
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use itertools::Itertools;
 
 use std::fmt::{Debug, Display, Error as FmtError, Formatter, Result as FmtResult, Write};
 
@@ -210,7 +211,10 @@ impl DisplayIr for Op {
                 op.ir_fmt(f)?;
                 write!(f, "))")
             }
-            Op::Call(name, _, _) => write!(f, "fn:{name}"),
+            Op::Call(name, a, r) => {
+                let arg_sorts = a.iter().map(|x| x.to_string()).join(" ");
+                write!(f, "(call {name} ({arg_sorts}) {r})")
+            }
             Op::Rot(i) => write!(f, "(rot {i})"),
             Op::PfToBoolTrusted => write!(f, "pf2bool_trusted"),
             Op::ExtOp(o) => o.ir_fmt(f),
@@ -312,7 +316,12 @@ impl DisplayIr for Term {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         let written = f.term_write_if_def(self)?;
         if !written {
-            if !self.cs().is_empty() {
+            let use_parenthesis = match self.op().arity() {
+                Some(0) => false,
+                Some(_) => true,
+                None => true,
+            };
+            if use_parenthesis {
                 write!(f, "(")?;
             }
             self.op().ir_fmt(f)?;
@@ -320,7 +329,7 @@ impl DisplayIr for Term {
                 write!(f, " ")?;
                 c.ir_fmt(f)?;
             }
-            if !self.cs().is_empty() {
+            if use_parenthesis {
                 write!(f, ")")?;
             }
         }
