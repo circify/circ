@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+#![allow(clippy::vec_init_then_push)]
 #[cfg(feature = "bellman")]
 use bellman::{
     gadgets::test::TestConstraintSystem,
@@ -257,31 +258,33 @@ fn main() {
                 // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
             )
         }
-        Mode::Proof | Mode::ProofOfHighValue(_) => opt(
-            cs,
-            vec![
-                Opt::ScalarizeVars,
-                Opt::Flatten,
-                Opt::Sha,
-                Opt::ConstantFold(Box::new([])),
-                Opt::ParseCondStores,
-                // Tuples must be eliminated before oblivious array elim
-                Opt::Tuple,
-                Opt::ConstantFold(Box::new([])),
-                Opt::Tuple,
-                Opt::Obliv,
-                // The obliv elim pass produces more tuples, that must be eliminated
-                Opt::Tuple,
-                Opt::PersistentRam,
-                Opt::VolatileRam,
-                Opt::SkolemizeChallenges,
-                Opt::LinearScan,
-                // The linear scan pass produces more tuples, that must be eliminated
-                Opt::Tuple,
-                Opt::Flatten,
-                Opt::ConstantFold(Box::new([])),
-            ],
-        ),
+        Mode::Proof | Mode::ProofOfHighValue(_) => {
+            let mut opts = Vec::new();
+
+            opts.push(Opt::ScalarizeVars);
+            opts.push(Opt::Flatten);
+            opts.push(Opt::Sha);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opts.push(Opt::ParseCondStores);
+            // Tuples must be eliminated before oblivious array elim
+            opts.push(Opt::Tuple);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opts.push(Opt::Tuple);
+            opts.push(Opt::Obliv);
+            // The obliv elim pass produces more tuples, that must be eliminated
+            opts.push(Opt::Tuple);
+            if options.circ.ram.enabled {
+                opts.push(Opt::PersistentRam);
+                opts.push(Opt::VolatileRam);
+                opts.push(Opt::SkolemizeChallenges);
+            }
+            opts.push(Opt::LinearScan);
+            // The linear scan pass produces more tuples, that must be eliminated
+            opts.push(Opt::Tuple);
+            opts.push(Opt::Flatten);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opt(cs, opts)
+        }
     };
     println!("Done with IR optimization");
 

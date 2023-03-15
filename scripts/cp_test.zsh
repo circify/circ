@@ -19,7 +19,7 @@ function com_wit_test {
     fin_rand=$(mktemp /tmp/tmp.circ.fin_rand.XXXXXXXXXX)
     init_commit=$(mktemp /tmp/tmp.circ.init_commit.XXXXXXXXXX)
     fin_commit=$(mktemp /tmp/tmp.circ.fin_commit.XXXXXXXXXX)
-    $BIN $ex_name r1cs --action cp-setup --proof-impl mirage
+    $BIN --ram true $ex_name r1cs --action cp-setup --proof-impl mirage
     $CP_BIN --action sample-rand --rands $init_rand
     $CP_BIN --action sample-rand --rands $fin_rand
     $CP_BIN --action commit --inputs $ex_name.array.init --rands $init_rand --commits $init_commit
@@ -34,11 +34,11 @@ function com_wit_test {
 function pf_test {
     proof_impl=mirage
     ex_name=$1
-    $BIN $ex_name r1cs --action setup --proof-impl $proof_impl
+    $BIN --ram true $ex_name r1cs --action setup --proof-impl $proof_impl
     $ZK_BIN --inputs $ex_name.pin --action prove --proof-impl $proof_impl
     $ZK_BIN --inputs $ex_name.vin --action verify --proof-impl $proof_impl
     rm -rf P V pi
 }
 
-com_wit_test ./examples/ZoKrates/pf/mem/tiny.zok 
+com_wit_test ./examples/ZoKrates/pf/mem/tiny.zok
 pf_test ./examples/ZoKrates/pf/mem/volatile.zok

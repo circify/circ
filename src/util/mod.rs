@@ -1,6 +1,7 @@
 //! Various data structures, etc.
 
 pub mod hc;
+pub mod ns;
 pub mod once;
 
 #[cfg(test)]
