@@ -110,8 +110,8 @@ pub trait ProgressAnalysisPass {
         let mut progress = true;
         let mut order = Vec::new();
         let mut visited = TermSet::default();
-        let mut stack = Vec::new();
-        stack.extend(computation.outputs.iter().cloned());
+        let mut stack: Vec<Term> = computation.outputs.clone();
+
         while let Some(top) = stack.pop() {
             stack.extend(top.cs().iter().filter(|c| !visited.contains(c)).cloned());
             // was it missing?

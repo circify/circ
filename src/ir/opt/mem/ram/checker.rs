@@ -2,10 +2,18 @@
 use super::hash::{MsHasher, UniversalHasher};
 use super::*;
 use crate::front::PROVER_VIS;
+use crate::util::ns::Namespace;
 use circ_fields::FieldT;
+use log::trace;
 
 /// Check a RAM
 pub fn check_ram(c: &mut Computation, ram: Ram) {
+    trace!(
+        "Checking RAM {}, size {}, {} accesses",
+        ram.id,
+        ram.size,
+        ram.accesses.len()
+    );
     let f = ram.cfg.field.clone();
     let (only_init, default) = match &ram.boundary_conditions {
         BoundaryConditions::Default(d) => (false, d.clone()),
@@ -13,10 +21,10 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         BoundaryConditions::Persistent(..) => panic!(),
     };
     let id = ram.id;
+    let ns = Namespace::new().subspace(&format!("ram{id}"));
     let f_s = Sort::Field(f.clone());
-    let var_name = |name: &str| format!("__ram{id}_{name}");
     let mut new_var =
-        |name: &str, val: Term| c.new_var(&var_name(name), f_s.clone(), PROVER_VIS, Some(val));
+        |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
 
     // (1) sort the transcript
     let field_tuples: Vec<Term> = ram
@@ -42,8 +50,8 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         .into_iter()
         .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(&ram.cfg)))
         .collect();
-    let uhf = UniversalHasher::new(var_name("uhf_key"), &f, uhf_inputs.clone(), ram.cfg.len());
-    let msh = MsHasher::new(var_name("ms_hash_key"), &f, uhf_inputs);
+    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), &f, uhf_inputs.clone(), ram.cfg.len());
+    let msh = MsHasher::new(ns.fqn("ms_hash_key"), &f, uhf_inputs);
 
     // (2) permutation argument
     let univ_hashes_unsorted: Vec<Term> = ram
@@ -130,6 +138,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
                 c,
                 accs.iter().map(|a| a.idx.clone()).collect(),
                 accs.iter().map(|a| a.create.b.clone()).collect(),
+                &ns,
                 &mut assertions,
                 &f,
             );
@@ -140,7 +149,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     assertions.push(c.outputs[0].clone());
     #[allow(clippy::type_complexity)]
     let range_checker: Box<
-        dyn Fn(&mut Computation, Vec<Term>, &str, &mut Vec<Term>, usize, &FieldT),
+        dyn Fn(&mut Computation, Vec<Term>, &Namespace, &mut Vec<Term>, usize, &FieldT),
     > = if ram.cfg.split_times {
         Box::new(&bit_split_range_check)
     } else {
@@ -149,7 +158,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     range_checker(
         c,
         deltas,
-        &format!("__ram{}_time", ram.id),
+        &ns.subspace("time"),
         &mut assertions,
         ram.next_time + 1,
         &f,
@@ -165,11 +174,12 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
 fn range_check(
     c: &mut Computation,
     mut values: Vec<Term>,
-    range_name: &str,
+    ns: &Namespace,
     assertions: &mut Vec<Term>,
     n: usize,
     f: &FieldT,
 ) {
+    let ns = ns.subspace("range");
     let f_sort = Sort::Field(f.clone());
     debug_assert!(values.iter().all(|v| check(v) == f_sort));
     let mut ms_hash_inputs = values.clone();
@@ -181,14 +191,14 @@ fn range_check(
         .into_iter()
         .enumerate()
         .map(|(i, t)| {
-            let full_name = format!("__range{range_name}.{i}");
+            let full_name = ns.fqn(i);
             c.new_var(&full_name, f_sort.clone(), PROVER_VIS, Some(t))
         })
         .collect();
 
     // permutation argument
     ms_hash_inputs.extend(sorted.iter().cloned());
-    let msh = MsHasher::new(format!("__range_{range_name}_key"), f, ms_hash_inputs);
+    let msh = MsHasher::new(ns.fqn("key"), f, ms_hash_inputs);
     assertions.push(term![EQ; msh.hash(values), msh.hash(sorted.clone())]);
 
     // delta: 0 or 1
@@ -218,7 +228,7 @@ fn range_check(
 fn bit_split_range_check(
     _c: &mut Computation,
     values: Vec<Term>,
-    _range_name: &str,
+    _ns: &Namespace,
     assertions: &mut Vec<Term>,
     n: usize,
     f: &FieldT,
@@ -241,9 +251,11 @@ fn derivative_gcd(
     comp: &mut Computation,
     values: Vec<Term>,
     conditions: Vec<Term>,
+    ns: &Namespace,
     assertions: &mut Vec<Term>,
     f: &FieldT,
 ) {
+    let ns = ns.subspace("uniq");
     let fs = Sort::Field(f.clone());
     let pairs = term(
         Op::Array(fs.clone(), Sort::Tuple(Box::new([fs.clone(), Sort::Bool]))),
@@ -257,13 +269,13 @@ fn derivative_gcd(
     let two_polys = term![Op::ExtOp(ExtOp::UniqDeriGcd); pairs];
     let s_coeffs = unmake_array(term![Op::Field(0); two_polys.clone()]);
     let t_coeffs = unmake_array(term![Op::Field(1); two_polys]);
-    let mut decl_poly = |coeffs: Vec<Term>, name: &str| -> Vec<Term> {
+    let mut decl_poly = |coeffs: Vec<Term>, poly_name: &str| -> Vec<Term> {
         coeffs
             .into_iter()
             .enumerate()
             .map(|(i, coeff)| {
                 comp.new_var(
-                    &format!("__uniq_{name}_c{i}"),
+                    &ns.fqn(format!("{poly_name}{i}")),
                     fs.clone(),
                     PROVER_VIS,
                     Some(coeff),
@@ -281,7 +293,7 @@ fn derivative_gcd(
     terms_that_define_all_polys.extend(t_coeffs_skolem.iter().cloned());
     let n = values.len();
     let x = term(
-        Op::PfChallenge("__uniq_key".into(), f.clone()),
+        Op::PfChallenge(ns.fqn("x"), f.clone()),
         terms_that_define_all_polys,
     );
     let r = values;
@@ -302,7 +314,7 @@ fn derivative_gcd(
         .enumerate()
         .map(|(i, d)| {
             let recip = comp.new_var(
-                &format!("__uniq_recip{i}"),
+                &ns.fqn(format!("recip{i}")),
                 fs.clone(),
                 PROVER_VIS,
                 Some(term![PF_RECIP; d.clone()]),

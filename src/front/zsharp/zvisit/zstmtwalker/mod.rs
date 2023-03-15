@@ -757,6 +757,15 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         walk_assertion_statement(self, asrt)
     }
 
+    fn visit_cond_store_statement(
+        &mut self,
+        s: &mut ast::CondStoreStatement<'ast>,
+    ) -> ZVisitorResult {
+        let bool_ty = ast::Type::Basic(ast::BasicType::Boolean(ast::BooleanType { span: s.span }));
+        self.unify(Some(bool_ty), &mut s.condition)?;
+        walk_cond_store_statement(self, s)
+    }
+
     fn visit_iteration_statement(
         &mut self,
         iter: &mut ast::IterationStatement<'ast>,
@@ -848,15 +857,17 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         use ast::RangeOrExpression::*;
         match roe {
             Range(r) => self.visit_range(r),
-            Expression(e) => {
-                let mut zty = ZExpressionTyper::new(self);
-                if self.type_expression(e, &mut zty)?.is_none() {
-                    let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Field));
-                    zrw.visit_expression(e)?;
-                }
-                self.visit_expression(e)
-            }
+            Expression(e) => self.visit_array_index_expression(e),
         }
+    }
+
+    fn visit_array_index_expression(&mut self, e: &mut ast::Expression<'ast>) -> ZVisitorResult {
+        let mut zty = ZExpressionTyper::new(self);
+        if self.type_expression(e, &mut zty)?.is_none() {
+            let mut zrw = ZConstLiteralRewriter::new(Some(Ty::Field));
+            zrw.visit_expression(e)?;
+        }
+        self.visit_expression(e)
     }
 
     fn visit_range(&mut self, rng: &mut ast::Range<'ast>) -> ZVisitorResult {

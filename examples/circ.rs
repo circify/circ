@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+#![allow(clippy::vec_init_then_push)]
 #[cfg(feature = "bellman")]
 use bellman::{
     gadgets::test::TestConstraintSystem,
@@ -37,7 +38,11 @@ use circ::target::ilp::{assignment_to_values, trans::to_ilp};
 #[cfg(feature = "spartan")]
 use circ::target::r1cs::spartan::write_data;
 #[cfg(feature = "bellman")]
-use circ::target::r1cs::{bellman::Bellman, proof::ProofSystem};
+use circ::target::r1cs::{
+    bellman::Bellman,
+    mirage::Mirage,
+    proof::{CommitProofSystem, ProofSystem},
+};
 #[cfg(feature = "r1cs")]
 use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs};
 #[cfg(feature = "smt")]
@@ -46,6 +51,7 @@ use circ_fields::FieldT;
 use fxhash::FxHashMap as HashMap;
 #[cfg(feature = "lp")]
 use good_lp::default_solver;
+use log::trace;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
@@ -134,6 +140,7 @@ pub enum CostModelType {
 enum ProofAction {
     Count,
     Setup,
+    CpSetup,
     SpartanSetup,
 }
 
@@ -251,26 +258,33 @@ fn main() {
                 // vec![Opt::Sha, Opt::ConstantFold, Opt::Mem, Opt::ConstantFold],
             )
         }
-        Mode::Proof | Mode::ProofOfHighValue(_) => opt(
-            cs,
-            vec![
-                Opt::ScalarizeVars,
-                Opt::Flatten,
-                Opt::Sha,
-                Opt::ConstantFold(Box::new([])),
-                // Tuples must be eliminated before oblivious array elim
-                Opt::Tuple,
-                Opt::ConstantFold(Box::new([])),
-                Opt::Obliv,
-                // The obliv elim pass produces more tuples, that must be eliminated
-                Opt::Tuple,
-                Opt::LinearScan,
-                // The linear scan pass produces more tuples, that must be eliminated
-                Opt::Tuple,
-                Opt::Flatten,
-                Opt::ConstantFold(Box::new([])),
-            ],
-        ),
+        Mode::Proof | Mode::ProofOfHighValue(_) => {
+            let mut opts = Vec::new();
+
+            opts.push(Opt::ScalarizeVars);
+            opts.push(Opt::Flatten);
+            opts.push(Opt::Sha);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opts.push(Opt::ParseCondStores);
+            // Tuples must be eliminated before oblivious array elim
+            opts.push(Opt::Tuple);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opts.push(Opt::Tuple);
+            opts.push(Opt::Obliv);
+            // The obliv elim pass produces more tuples, that must be eliminated
+            opts.push(Opt::Tuple);
+            if options.circ.ram.enabled {
+                opts.push(Opt::PersistentRam);
+                opts.push(Opt::VolatileRam);
+                opts.push(Opt::SkolemizeChallenges);
+            }
+            opts.push(Opt::LinearScan);
+            // The linear scan pass produces more tuples, that must be eliminated
+            opts.push(Opt::Tuple);
+            opts.push(Opt::Flatten);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opt(cs, opts)
+        }
     };
     println!("Done with IR optimization");
 
@@ -280,10 +294,12 @@ fn main() {
             action,
             prover_key,
             verifier_key,
+            proof_impl,
             ..
         } => {
             println!("Converting to r1cs");
             let cs = cs.get("main");
+            trace!("IR: {}", circ::ir::term::text::serialize_computation(cs));
             let mut r1cs = to_r1cs(cs, cfg());
 
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
@@ -296,16 +312,41 @@ fn main() {
                 #[cfg(feature = "bellman")]
                 ProofAction::Setup => {
                     println!("Generating Parameters");
-                    Bellman::<Bls12>::setup_fs(
-                        prover_data,
-                        verifier_data,
-                        prover_key,
-                        verifier_key,
-                    )
-                    .unwrap();
+                    match proof_impl {
+                        ProofImpl::Groth16 => Bellman::<Bls12>::setup_fs(
+                            prover_data,
+                            verifier_data,
+                            prover_key,
+                            verifier_key,
+                        )
+                        .unwrap(),
+                        ProofImpl::Mirage => Mirage::<Bls12>::setup_fs(
+                            prover_data,
+                            verifier_data,
+                            prover_key,
+                            verifier_key,
+                        )
+                        .unwrap(),
+                    };
                 }
                 #[cfg(not(feature = "bellman"))]
                 ProofAction::Setup => panic!("Missing feature: bellman"),
+                #[cfg(feature = "bellman")]
+                ProofAction::CpSetup => {
+                    println!("Generating Parameters");
+                    match proof_impl {
+                        ProofImpl::Groth16 => panic!("Groth16 is not CP"),
+                        ProofImpl::Mirage => Mirage::<Bls12>::cp_setup_fs(
+                            prover_data,
+                            verifier_data,
+                            prover_key,
+                            verifier_key,
+                        )
+                        .unwrap(),
+                    };
+                }
+                #[cfg(not(feature = "bellman"))]
+                ProofAction::CpSetup => panic!("Missing feature: bellman"),
                 #[cfg(feature = "spartan")]
                 ProofAction::SpartanSetup => {
                     write_data::<_, _>(prover_key, verifier_key, &prover_data, &verifier_data)

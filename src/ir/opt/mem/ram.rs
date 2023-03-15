@@ -397,7 +397,7 @@ impl Ram {
         self.end_of_time = true;
         let time = self.next_time_term();
         trace!(
-            "write: ops: idx {}, val {}, time {}",
+            "final read: ops: idx {}, val {}, time {}",
             idx.op(),
             val.op(),
             time.op()

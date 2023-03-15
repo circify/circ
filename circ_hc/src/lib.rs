@@ -88,10 +88,16 @@ pub trait Weak<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
 
 /// A unique term ID.
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Id(pub u64);
 
 impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "id{}", self.0)
+    }
+}
+
+impl std::fmt::Debug for Id {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "id{}", self.0)
     }

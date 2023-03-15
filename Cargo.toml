@@ -70,7 +70,7 @@ lp = ["good_lp", "lp-solvers"]
 aby = ["lp"]
 kahip = ["aby"]
 kahypar = ["aby"]
-r1cs = []
+r1cs = ["bincode"]
 poly = ["rug-polynomial"]
 spartan = ["r1cs", "dep:spartan", "merlin", "curve25519-dalek", "bincode", "gmp-mpfr-sys"]
 bellman = ["r1cs", "dep:bellman", "ff", "group", "pairing", "serde_bytes", "bincode", "gmp-mpfr-sys", "byteorder"]
@@ -81,6 +81,10 @@ name = "circ"
 [[example]]
 name = "zk"
 required-features = ["r1cs"]
+
+[[example]]
+name = "cp"
+required-features = ["bellman", "poly"]
 
 [[example]]
 name = "zxi"

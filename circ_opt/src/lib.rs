@@ -199,6 +199,14 @@ impl Default for FieldToBv {
 /// Options related to memory.
 #[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
 pub struct RamOpt {
+    /// Whether to use advanced RAM techniques
+    #[arg(
+        long = "ram",
+        env = "RAM",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub enabled: bool,
     /// How to argue that values are in a range
     #[arg(
         long = "ram-range",

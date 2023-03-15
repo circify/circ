@@ -298,6 +298,19 @@ impl FieldV {
         }
         i
     }
+
+    /// Raise this element to a power.
+    #[inline]
+    pub fn pow(&self, u: u64) -> Self {
+        match self {
+            FieldV::FBls12381(f) => FieldV::FBls12381(f.pow_vartime(&[u])),
+            FieldV::FBn254(f) => FieldV::FBn254(f.pow_vartime(&[u])),
+            FieldV::IntField(i) => FieldV::IntField(IntField::new(
+                i.i.clone().pow_mod(&Integer::from(u), i.modulus()).unwrap(),
+                i.modulus_arc(),
+            )),
+        }
+    }
 }
 
 impl Display for FieldV {

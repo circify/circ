@@ -129,7 +129,7 @@ pub fn skolemize_challenges(comp: &mut Computation) {
     }
     for name in comp.metadata.ordered_input_names() {
         let md = comp.metadata.lookup_mut(&name);
-        md.round = *actual_round.get(&md.term()).unwrap();
+        md.round = *actual_round.get(&md.term()).unwrap_or(&0);
     }
 
     let mut challs = TermMap::default();

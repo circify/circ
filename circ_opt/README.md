@@ -86,6 +86,13 @@ Options:
           - wrap:  x % 2^b
           - panic: a panic
 
+      --ram <ENABLED>
+          Whether to use advanced RAM techniques
+          
+          [env: RAM=]
+          [default: false]
+          [possible values: true, false]
+
       --ram-range <RANGE>
           How to argue that values are in a range
           
@@ -178,6 +185,8 @@ Options:
           Which modulus to use (overrides [FieldOpt::builtin]) [env: FIELD_CUSTOM_MODULUS=] [default: ]
       --ir-field-to-bv <FIELD_TO_BV>
           Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
+      --ram <ENABLED>
+          Whether to use advanced RAM techniques [env: RAM=] [default: false] [possible values: true, false]
       --ram-range <RANGE>
           How to argue that values are in a range [env: RAM_RANGE=] [default: sort] [possible values: bit-split, sort]
       --ram-index <INDEX>
@@ -221,6 +230,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -264,6 +274,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -305,6 +316,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -346,6 +358,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -387,6 +400,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -428,6 +442,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -469,6 +484,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -510,6 +526,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -554,6 +571,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -596,6 +614,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -640,6 +659,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -682,6 +702,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -726,6 +747,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
@@ -768,6 +790,7 @@ BinaryOpt {
             field_to_bv: Wrap,
         },
         ram: RamOpt {
+            enabled: false,
             range: Sort,
             index: Uniqueness,
         },
