@@ -57,10 +57,8 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
     for i in optimizations {
         debug!("Applying: {:?}", i);
 
-        let mut opt_cs: Computations = cs.clone();
         if let Opt::Link = i {
-            link::link_all_function_calls(&mut opt_cs);
-            cs = opt_cs;
+            link::link_all_function_calls(&mut cs);
             continue;
         }
 
