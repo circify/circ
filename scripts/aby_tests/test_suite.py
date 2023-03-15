@@ -382,6 +382,11 @@ function_tests = [
         "2pc_function_add",
         "./scripts/aby_tests/test_inputs/add_2.txt",
     ],
+    [
+        "Subtract two numbers",
+        "function_arg_order",
+        "./scripts/aby_tests/test_inputs/sub_1.txt",
+    ],
 ]
 
 struct_tests = [

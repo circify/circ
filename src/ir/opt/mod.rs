@@ -3,6 +3,7 @@ pub mod binarize;
 pub mod cfold;
 pub mod flat;
 pub mod inline;
+pub mod link;
 pub mod mem;
 pub mod scalarize_vars;
 pub mod sha;
@@ -37,12 +38,22 @@ pub enum Opt {
     Inline,
     /// Eliminate tuples
     Tuple,
+    /// Link function calls
+    Link,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for i in optimizations {
         debug!("Applying: {:?}", i);
+
+        let mut opt_cs: Computations = cs.clone();
+        if let Opt::Link = i {
+            link::link_all_function_calls(&mut opt_cs);
+            cs = opt_cs;
+            continue;
+        }
+
         for (_, c) in cs.comps.iter_mut() {
             match i.clone() {
                 Opt::ScalarizeVars => {
@@ -100,6 +111,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 Opt::Tuple => {
                     tuple::eliminate_tuples(c);
                 }
+                Opt::Link => unreachable!(),
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());
             trace!("After {:?}: {}", i, c.outputs[0]);

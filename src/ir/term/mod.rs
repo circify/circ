@@ -1815,6 +1815,26 @@ impl ComputationMetadata {
     pub fn remove_var(&mut self, name: &str) {
         self.vars.remove(name);
     }
+
+    /// Create a call term, given the input arguments in a fixed order.
+    pub fn ordered_call_term(
+        &self,
+        name: String,
+        args: FxHashMap<String, Term>,
+        ret_sort: Sort,
+    ) -> Term {
+        let ordered_arg_names = self.ordered_input_names();
+        let ordered_args = ordered_arg_names
+            .iter()
+            .map(|name| args.get(name).expect("Argument not found: {}").clone())
+            .collect::<Vec<Term>>();
+        let ordered_sorts = ordered_args
+            .iter()
+            .map(|arg| check(arg))
+            .collect::<Vec<Sort>>();
+
+        term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
+    }
 }
 
 /// A structured collection of variables that indicates the round structure: e.g., orderings,
@@ -1954,7 +1974,7 @@ impl Computation {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 /// A map of IR computations.
 pub struct Computations {
     /// A map of function name --> function computation

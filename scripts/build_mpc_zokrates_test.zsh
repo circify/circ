@@ -70,6 +70,7 @@ mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/loop_tests/2pc_loop_sum.zok
 
 # build function tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/2pc_function_add.zok
+mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/function_tests/function_arg_order.zok
 
 # build mpc misc tests
 mpc_test 2 ./examples/ZoKrates/mpc/unit_tests/2pc_millionaires.zok
