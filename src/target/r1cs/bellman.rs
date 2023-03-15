@@ -254,6 +254,7 @@ where
     type Proof = Proof<E>;
 
     fn setup(p_data: ProverData, v_data: VerifierData) -> (Self::ProvingKey, Self::VerifyingKey) {
+        assert_eq!(p_data.r1cs.commitments.len(), 0);
         let rng = &mut rand::thread_rng();
         let params =
             groth16::generate_random_parameters::<E, _, _>(SynthInput(&p_data, None), rng).unwrap();

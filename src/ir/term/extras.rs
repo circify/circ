@@ -64,16 +64,12 @@ pub fn substitute_single(t: &Term, from: Term, to: Term) -> Term {
 
 /// Is `needle` not in `haystack`?
 pub fn does_not_contain(haystack: Term, needle: &Term) -> bool {
-    PostOrderIter::new(haystack)
-        .into_iter()
-        .all(|descendent| &descendent != needle)
+    PostOrderIter::new(haystack).all(|descendent| &descendent != needle)
 }
 
 /// Is `needle` in `haystack`?
 pub fn contains(haystack: Term, needle: &Term) -> bool {
-    PostOrderIter::new(haystack)
-        .into_iter()
-        .any(|descendent| &descendent == needle)
+    PostOrderIter::new(haystack).any(|descendent| &descendent == needle)
 }
 
 /// Is `v` free in `t`? Wrong in the presence of lets.
@@ -191,5 +187,46 @@ pub fn dump_op_stats() {
         let mem = size_of::<Op>() * ct + size_of::<Vec<Term>>() * ct + size_of::<Term>() * cs_ct;
         let s: String = format!("{k}");
         println!("Op {s:>20}, Count {ct:>8}, Children {cs_ct:>8}, Ave {ave:>8.2}, Mem {mem:>20}");
+    }
+}
+
+/// Iterator over descendents in child-first order.
+pub struct PostOrderSkipIter<'a, F: Fn(&Term) -> bool + 'a> {
+    // (cs stacked, term)
+    stack: Vec<(bool, Term)>,
+    visited: TermSet,
+    skip_if: &'a F,
+}
+
+impl<'a, F: Fn(&Term) -> bool + 'a> PostOrderSkipIter<'a, F> {
+    /// Make an iterator over the descendents of `root`.
+    pub fn new(root: Term, skip_if: &'a F) -> Self {
+        Self {
+            stack: vec![(false, root)],
+            visited: TermSet::default(),
+            skip_if,
+        }
+    }
+}
+
+impl<'a, F: Fn(&Term) -> bool + 'a> std::iter::Iterator for PostOrderSkipIter<'a, F> {
+    type Item = Term;
+    fn next(&mut self) -> Option<Term> {
+        while let Some((children_pushed, t)) = self.stack.last() {
+            if self.visited.contains(t) || (self.skip_if)(t) {
+                self.stack.pop();
+            } else if !children_pushed {
+                self.stack.last_mut().unwrap().0 = true;
+                let last = self.stack.last().unwrap().1.clone();
+                self.stack
+                    .extend(last.cs().iter().map(|c| (false, c.clone())));
+            } else {
+                break;
+            }
+        }
+        self.stack.pop().map(|(_, t)| {
+            self.visited.insert(t.clone());
+            t
+        })
     }
 }

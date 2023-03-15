@@ -27,8 +27,7 @@ fn main() {
     }
     let cs = Computation {
         outputs: vec![term![Op::Eq; t, v]],
-        metadata: ComputationMetadata::default(),
-        precomputes: Default::default(),
+        ..Default::default()
     };
     let _assignment = ilp::assign(&cs, "hycc");
     //dbg!(&assignment);

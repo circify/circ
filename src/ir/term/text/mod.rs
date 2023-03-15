@@ -15,16 +15,24 @@
 //!   * `I`: integer (arbitrary-precision)
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
-//!   * Computation `C`: `(computation M P T)`
-//!     * Metadata `M`: `(metadata PARTIES INPUTS)`
+//!   * Computation `C`: `(computation M P ARRAYS T)`
+//!     * Metadata `M`: `(metadata PARTIES INPUTS COMMITMENTS)`
 //!       * PARTIES is `(parties X1 .. Xn)`
 //!       * INPUTS is `(inputs INPUT1 .. INPUTn)`
-//!       * INPUT is `(X S PARTY)`
-//!       * PARTY is `(party X)` or nothing (public)
+//!         * INPUT is `(X S PARTY)`
+//!         * PARTY is `(party X)` or nothing (public)
+//!       * COMMITMENTS is `(commitments COMMITMENT1 .. COMMITMENTn)`
+//!         * COMMITMENT is `(commitment X1 .. Xn)`
+//!       * ARRAYS is `(commitments COMMITMENT1 .. COMMITMENTn)`
 //!     * Precompute `P`: `(precompute INPUTS OUTPUTS TUPLE_TERM)`
 //!       * INPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * OUTPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * TUPLE_TERM is a tuple of the same arity as the output
+//!     * ARRAYS (optional): `(persistent_arrays ARRAY*)`:
+//!       * ARRAY is `(X S T)`
+//!         * X is the name of the inital state
+//!         * S is the size
+//!         * T is the state (final)
 //!   * Sort `S`:
 //!     * `bool`
 //!     * `f32`
@@ -41,6 +49,8 @@
 //!       * In the former case, an ambient modulus must be set.
 //!     * tuple: `(#t V1 ... Vn)`
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
+//!     * list: `(#l Sk (V1 ... Vn))`
+//!       * gives an array with default value sort, length n, and increasing keys for the values
 //!   * Term `T`:
 //!     * value: `V`
 //!     * let: `(let ((X1 T1) ... (Xn Tn)) T)`
@@ -160,12 +170,14 @@ enum CtrlOp {
     Declare,
     TupleValue,
     ArrayValue,
+    ListValue,
     SetDefaultModulus,
 }
 
 enum VariableMetadataItem {
     Party(PartyId),
     Round(Round),
+    Committed,
     Random,
 }
 
@@ -211,6 +223,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"declare") => Err(CtrlOp::Declare),
             Leaf(Ident, b"#t") => Err(CtrlOp::TupleValue),
             Leaf(Ident, b"#a") => Err(CtrlOp::ArrayValue),
+            Leaf(Ident, b"#l") => Err(CtrlOp::ListValue),
             Leaf(Ident, b"set_default_modulus") => Err(CtrlOp::SetDefaultModulus),
             Leaf(Ident, b"ite") => Ok(Op::Ite),
             Leaf(Ident, b"=") => Ok(Op::Eq),
@@ -279,12 +292,22 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"intmul") => Ok(INT_MUL),
             Leaf(Ident, b"select") => Ok(Op::Select),
             Leaf(Ident, b"store") => Ok(Op::Store),
+            Leaf(Ident, b"cstore") => Ok(Op::CStore),
             Leaf(Ident, b"tuple") => Ok(Op::Tuple),
+            Leaf(Ident, b"pf2bool_trusted") => Ok(Op::PfToBoolTrusted),
+            Leaf(Ident, bytes) => {
+                if let Some(e) = ext::ExtOp::parse(bytes) {
+                    Ok(Op::ExtOp(e))
+                } else {
+                    todo!("Unparsed op: {}", tt)
+                }
+            }
             List(tts) => match &tts[..] {
                 [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.usize(a), self.usize(b))),
                 [Leaf(Ident, b"uext"), a] => Ok(Op::BvUext(self.usize(a))),
                 [Leaf(Ident, b"sext"), a] => Ok(Op::BvSext(self.usize(a))),
                 [Leaf(Ident, b"pf2bv"), a] => Ok(Op::PfToBv(self.usize(a))),
+                [Leaf(Ident, b"pf_fits_in_bits"), a] => Ok(Op::PfFitsInBits(self.usize(a))),
                 [Leaf(Ident, b"bit"), a] => Ok(Op::BvBit(self.usize(a))),
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
@@ -293,6 +316,7 @@ impl<'src> IrInterp<'src> {
                     self.ident_string(name),
                     FieldT::from(self.int(field)),
                 )),
+                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(self.sort(k), self.sort(v))),
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
@@ -301,6 +325,8 @@ impl<'src> IrInterp<'src> {
                     let arg_sorts = self.sorts(arg_sorts);
                     let ret_sort = self.sort(ret_sort);
                     Ok(Op::Call(name, arg_sorts, ret_sort))
+                [Leaf(Ident, b"fill"), key_sort, size] => {
+                    Ok(Op::Fill(self.sort(key_sort), self.usize(size)))
                 }
                 _ => todo!("Unparsed op: {}", tt),
             },
@@ -392,6 +418,13 @@ impl<'src> IrInterp<'src> {
         } else {
             panic!("Expected let list, found: {}", tt)
         }
+    }
+    /// Parse a value list
+    fn value_list(&mut self, tt: &TokTree<'src>) -> Vec<Value> {
+        self.unwrap_list(tt, "value list")
+            .iter()
+            .map(|tti| self.value(tti))
+            .collect()
     }
     /// Parse associative value list
     fn value_alist(&mut self, tt: &TokTree<'src>) -> Vec<(Value, Value)> {
@@ -499,6 +532,16 @@ impl<'src> IrInterp<'src> {
                             size,
                         ))))
                     }
+                    Err(CtrlOp::ListValue) => {
+                        assert_eq!(tts.len(), 3);
+                        let key_sort = self.sort(&tts[1]);
+                        let vals = self.value_list(&tts[2]);
+                        leaf_term(Op::Const(Value::Array(Array::from_vec(
+                            key_sort,
+                            vals.first().unwrap().sort(),
+                            vals,
+                        ))))
+                    }
                     Err(CtrlOp::TupleValue) => leaf_term(Op::Const(Value::Tuple(
                         tts[1..]
                             .iter()
@@ -591,6 +634,7 @@ impl<'src> IrInterp<'src> {
                 VariableMetadataItem::Round(id)
             }
             b"random" => VariableMetadataItem::Random,
+            b"committed" => VariableMetadataItem::Committed,
             i => {
                 panic!(
                     "Expected variable metadata item, got {}",
@@ -619,9 +663,22 @@ impl<'src> IrInterp<'src> {
                 VariableMetadataItem::Random => {
                     md.random = true;
                 }
+                VariableMetadataItem::Committed => {
+                    md.committed = true;
+                }
             }
         }
         (name_bytes, md)
+    }
+
+    fn commitment(&mut self, tt: &TokTree<'src>) -> Vec<String> {
+        let tts = self.unwrap_prefix_list(tt, "commitment");
+        tts.iter().map(|tti| self.ident_string(tti)).collect()
+    }
+
+    fn commitments(&mut self, tt: &TokTree<'src>) -> Vec<Vec<String>> {
+        let tts = self.unwrap_prefix_list(tt, "commitments");
+        tts.iter().map(|tti| self.commitment(tti)).collect()
     }
 
     /// Returns a [ComputationMetadata] and a list of sort bindings to un-bind.
@@ -636,7 +693,7 @@ impl<'src> IrInterp<'src> {
                 )
             }
             match &tts[1..] {
-                [parties, inputs] => {
+                [parties, inputs, commitments] => {
                     let parties = self.string_list(parties);
                     for p in parties.into_iter().skip(1) {
                         md.add_party(p);
@@ -647,6 +704,10 @@ impl<'src> IrInterp<'src> {
                         self.bind(name_bytes, v_md.term());
                         unbind.push(name_bytes.to_owned());
                         md.new_input_from_meta(v_md);
+                    }
+                    let parsed_commitments = self.commitments(commitments);
+                    for c in parsed_commitments {
+                        md.add_commitment(c);
                     }
                     (md, unbind)
                 }
@@ -659,25 +720,35 @@ impl<'src> IrInterp<'src> {
 
     /// Parse a computation.
     pub fn computation(&mut self, tt: &TokTree<'src>) -> Computation {
-        if let List(tts) = tt {
-            if tts.is_empty() || tts[0] != Leaf(Token::Ident, b"computation") {
-                panic!(
-                    "Expected computation, but list did not start with 'computation': {}",
-                    tt
-                )
+        let tts = self.unwrap_prefix_list(tt, "computation");
+        assert!(tts.len() >= 3);
+        let (metadata, input_names) = self.metadata(&tts[0]);
+        let precomputes = self.precompute(&tts[1]);
+        let mut persistent_arrays = Vec::new();
+        let mut skip_one = false;
+        if let List(tts_inner) = &tts[2] {
+            if tts_inner[0] == Leaf(Token::Ident, b"persistent_arrays") {
+                skip_one = true;
+                for tti in tts_inner.iter().skip(1) {
+                    let ttis = self.unwrap_list(tti, "persistent_arrays");
+                    let id = self.ident_string(&ttis[0]);
+                    let _size = self.usize(&ttis[1]);
+                    let term = self.term(&ttis[2]);
+                    persistent_arrays.push((id, term));
+                }
             }
-            assert!(tts.len() > 3);
-            let (metadata, input_names) = self.metadata(&tts[1]);
-            let precomputes = self.precompute(&tts[2]);
-            let outputs = tts[3..].iter().map(|tti| self.term(tti)).collect();
-            self.unbind(input_names);
-            Computation {
-                outputs,
-                metadata,
-                precomputes,
-            }
-        } else {
-            panic!("Expected computation, found {}", tt)
+        }
+        let mut iter = tts.iter().skip(2);
+        if skip_one {
+            iter.next();
+        }
+        let outputs = iter.map(|tti| self.term(tti)).collect();
+        self.unbind(input_names);
+        Computation {
+            outputs,
+            metadata,
+            precomputes,
+            persistent_arrays,
         }
     }
 
@@ -826,6 +897,14 @@ pub fn serialize_computation(c: &Computation) -> String {
     let mut out = String::new();
     writeln!(&mut out, "(computation \n{}", c.metadata).unwrap();
     writeln!(&mut out, "{}", serialize_precompute(&c.precomputes)).unwrap();
+    if !c.persistent_arrays.is_empty() {
+        writeln!(&mut out, "(persistent_arrays").unwrap();
+        for (name, term) in &c.persistent_arrays {
+            let size = check(term).as_array().2;
+            writeln!(&mut out, "  ({name} {size} {})", serialize_term(term)).unwrap();
+        }
+        writeln!(&mut out, "\n)").unwrap();
+    }
     for o in &c.outputs {
         writeln!(&mut out, "\n  {}", serialize_term(o)).unwrap();
     }
@@ -936,6 +1015,43 @@ mod test {
     }
 
     #[test]
+    fn arr_cstore_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (a bool)
+         (b bool)
+         (c bool)
+         (A (array bool bool 1))
+         )
+         (let (
+                 (B (cstore A a b c))
+         ) (xor (select B a)
+                (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))",
+        );
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn arr_op_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (a bool)
+         (b bool)
+         (A (array bool bool 1))
+         )
+         (= A ((array bool bool) a))
+         )",
+        );
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
     fn tup_roundtrip() {
         let t = parse_term(
             b"
@@ -990,7 +1106,13 @@ mod test {
             (computation
                 (metadata
                     (parties P V)
-                    (inputs (a bool (party 0) (random) (round 1)) (b bool) (A (tuple bool bool)))
+                    (inputs
+                        (a bool (party 0) (random) (round 1))
+                        (b bool)
+                        (A (tuple bool bool))
+                        (x bool (party 0) (committed))
+                    )
+                    (commitments)
                 )
                 (precompute
                     ((c bool) (d bool))
@@ -1003,7 +1125,7 @@ mod test {
                         ((field 0) (#t false false #b0000 true))))
             )",
         );
-        assert_eq!(c.metadata.vars.len(), 3);
+        assert_eq!(c.metadata.vars.len(), 4);
         assert!(!c.metadata.is_input_public("a"));
         assert!(c.metadata.is_input_public("b"));
         assert!(c.metadata.is_input_public("A"));
@@ -1081,9 +1203,110 @@ mod test {
     }
 
     #[test]
+    fn computation_roundtrip_persistent_arrays() {
+        let c = parse_computation(
+            b"
+            (computation
+                (metadata
+                    (parties P V)
+                    (inputs
+                        (a bool (party 0) (random) (round 1))
+                        (b bool)
+                        (A (tuple bool bool))
+                        (x bool (party 0) (committed))
+                    )
+                    (commitments)
+                )
+                (precompute
+                    ((c bool) (d bool))
+                    ((a bool))
+                    (tuple (not (and c d)))
+                )
+                (persistent_arrays (AA 2 (#a (bv 4) false 4 ((#b0000 true)))))
+                (let (
+                        (B ((update 1) A b))
+                ) (xor ((field 1) B)
+                        ((field 0) (#t false false #b0000 true))))
+            )",
+        );
+        let s = serialize_computation(&c);
+        let c2 = parse_computation(s.as_bytes());
+        assert_eq!(c, c2);
+    }
+
+    #[test]
     fn challenge_roundtrip() {
         let t = parse_term(b"(declare ((a bool) (b bool)) ((challenge hithere 17) a b))");
         let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn persistent_ram_split_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (entries (array (mod 17) (tuple (mod 17) (mod 17)) 5))
+         (indices (array (mod 17) (mod 17) 3))
+        )
+         (persistent_ram_split entries indices))",
+        );
+        let s = serialize_term(&t);
+        println!("{s}");
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn list_value_equiv_to_array() {
+        let t_array = parse_term(b"(declare () (#a (bv 4) #x0 3 ((#x0 #x0) (#x1 #x1) (#x2 #x4))))");
+        let t_list = parse_term(b"(declare () (#l (bv 4) (#x0 #x1 #x4)))");
+        assert_eq!(t_array, t_list);
+        let s = serialize_term(&t_array);
+        let t_roundtripped = parse_term(s.as_bytes());
+        assert_eq!(t_array, t_roundtripped);
+    }
+
+    #[test]
+    fn pf2bool_trusted_rountrip() {
+        let t = parse_term(b"(declare ((a bool)) (pf2bool_trusted (ite a #f1m11 #f0m11)))");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn op_sort_rountrip() {
+        let t = parse_term(b"(declare () (sort (#l (mod 3) ((#t true true) (#t true false)))))");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn fill_roundtrip() {
+        let t = parse_term(b"(declare () ((fill (bv 4) 3) #x00))");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn pf_fits_in_bits_rountrip() {
+        let t = parse_term(b"(declare ((a bool)) ((pf_fits_in_bits 4) (ite a #f1m11 #f0m11)))");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn uniq_deri_gcd_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (pairs (array (mod 17) (tuple (mod 17) bool) 5))
+        )
+         (uniq_deri_gcd pairs))",
+        );
+        let s = serialize_term(&t);
+        println!("{s}");
         let t2 = parse_term(s.as_bytes());
         assert_eq!(t, t2);
     }

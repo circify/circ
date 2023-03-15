@@ -1,6 +1,6 @@
 //! Machinery for formatting IR types
 use super::{
-    Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
+    ext, Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
     VariableMetadata,
 };
 use crate::cfg::{cfg, is_cfg_set};
@@ -187,8 +187,22 @@ impl DisplayIr for Op {
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
+            Op::PfFitsInBits(n) => write!(f, "(pf_fits_in_bits {})", n),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
+            Op::CStore => write!(f, "cstore"),
+            Op::Fill(key_sort, size) => {
+                write!(f, "(fill ")?;
+                key_sort.ir_fmt(f)?;
+                write!(f, " {})", *size)
+            }
+            Op::Array(k, v) => {
+                write!(f, "(array ")?;
+                k.ir_fmt(f)?;
+                write!(f, " ")?;
+                v.ir_fmt(f)?;
+                write!(f, ")")
+            }
             Op::Tuple => write!(f, "tuple"),
             Op::Field(i) => write!(f, "(field {i})"),
             Op::Update(i) => write!(f, "(update {i})"),
@@ -202,6 +216,18 @@ impl DisplayIr for Op {
                 write!(f, "(call {name} ({arg_sorts}) {r})")
             }
             Op::Rot(i) => write!(f, "(rot {i})"),
+            Op::PfToBoolTrusted => write!(f, "pf2bool_trusted"),
+            Op::ExtOp(o) => o.ir_fmt(f),
+        }
+    }
+}
+
+impl DisplayIr for ext::ExtOp {
+    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
+        match self {
+            ext::ExtOp::PersistentRamSplit => write!(f, "persistent_ram_split"),
+            ext::ExtOp::UniqDeriGcd => write!(f, "uniq_deri_gcd"),
+            ext::ExtOp::Sort => write!(f, "sort"),
         }
     }
 }
@@ -216,7 +242,7 @@ impl DisplayIr for Value {
             Value::Field(b) => b.ir_fmt(f),
             Value::BitVector(b) => write!(f, "{b}"),
             Value::Tuple(fields) => {
-                write!(f, "(#t ")?;
+                write!(f, "(#t")?;
                 for field in fields.iter() {
                     write!(f, " ")?;
                     field.ir_fmt(f)?;
@@ -230,24 +256,40 @@ impl DisplayIr for Value {
 
 impl DisplayIr for Array {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
-        write!(f, "(#a ")?;
-        self.key_sort.ir_fmt(f)?;
-        write!(f, " ")?;
-        self.default.ir_fmt(f)?;
-        write!(f, " {} (", self.size)?;
-        let mut first = true;
-        for (k, v) in &self.map {
-            if first {
-                write!(f, " ")?;
+        if self.map.len() == self.size && *self.default == self.default.sort().default_value() {
+            write!(f, "(#l ")?;
+            self.key_sort.ir_fmt(f)?;
+            write!(f, " (")?;
+            let mut first = true;
+            for ((k, v), expected_k) in self.map.iter().zip(self.key_sort.elems_iter_values()) {
+                assert_eq!(k, &expected_k, "Expected key {expected_k}, got {k}");
+                if !first {
+                    write!(f, " ")?;
+                }
+                v.ir_fmt(f)?;
+                first = false;
             }
-            write!(f, "(")?;
-            k.ir_fmt(f)?;
+            write!(f, "))")
+        } else {
+            write!(f, "(#a ")?;
+            self.key_sort.ir_fmt(f)?;
             write!(f, " ")?;
-            v.ir_fmt(f)?;
-            write!(f, ")")?;
-            first = false;
+            self.default.ir_fmt(f)?;
+            write!(f, " {} (", self.size)?;
+            let mut first = true;
+            for (k, v) in &self.map {
+                if !first {
+                    write!(f, " ")?;
+                }
+                write!(f, "(")?;
+                k.ir_fmt(f)?;
+                write!(f, " ")?;
+                v.ir_fmt(f)?;
+                write!(f, ")")?;
+                first = false;
+            }
+            write!(f, "))")
         }
-        write!(f, "))")
     }
 }
 
@@ -308,11 +350,8 @@ impl DisplayIr for VariableMetadata {
         if self.random {
             write!(f, " (random)")?;
         }
-        if 0 != self.round {
-            write!(f, " (round {})", self.round)?;
-        }
-        if self.random {
-            write!(f, " (random)")?;
+        if self.committed {
+            write!(f, " (committed)")?;
         }
         write!(f, ")")
     }
@@ -337,6 +376,15 @@ impl DisplayIr for ComputationMetadata {
             v.ir_fmt(f)?;
         }
         write!(f, "\n  )")?;
+        write!(f, "\n  (commitments")?;
+        for c in &self.commitments {
+            write!(f, "\n    (commitment")?;
+            for n in c {
+                write!(f, " {n}")?;
+            }
+            write!(f, ")")?;
+        }
+        write!(f, "\n  )")?;
         write!(f, "\n)")
     }
 }
@@ -356,7 +404,7 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
         if fields.len() == 1 && !f.cfg.hide_field {
             f.default_field = fields.into_iter().next();
             let i = f.default_field.clone().unwrap();
-            writeln!(f, "(set-default-modulus {}", i.modulus())?;
+            writeln!(f, "(set_default_modulus {}", i.modulus())?;
             true
         } else {
             false
@@ -365,12 +413,18 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
         false
     };
 
+    let mut n_bindings = 0;
     let mut parent_counts = TermMap::<usize>::default();
     writeln!(f, "(declare")?;
     writeln!(f, " (")?;
     for t in PostOrderIter::new(t.clone()) {
         for c in t.cs().iter().cloned() {
-            *parent_counts.entry(c).or_insert(0) += 1;
+            let has_children = !c.cs().is_empty();
+            let count = parent_counts.entry(c).or_insert(0);
+            *count += 1;
+            if *count == 2 && has_children {
+                n_bindings += 1;
+            }
         }
         if let Op::Var(name, sort) = &t.op() {
             write!(f, "  ({name} ")?;
@@ -379,21 +433,25 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
         }
     }
     writeln!(f, " )")?;
-    writeln!(f, " (let")?;
-    writeln!(f, "  (")?;
-    for t in PostOrderIter::new(t.clone()) {
-        if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs().is_empty() {
-            write!(f, "   ('{} ", f.defs.next_id.clone(),)?;
-            t.ir_fmt(f)?;
-            writeln!(f, ")")?;
-            f.term_def(t);
+    if n_bindings > 0 {
+        writeln!(f, " (let")?;
+        writeln!(f, "  (")?; // let binding list
+        for t in PostOrderIter::new(t.clone()) {
+            if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs().is_empty() {
+                write!(f, "   ('{} ", f.defs.next_id.clone(),)?;
+                t.ir_fmt(f)?;
+                writeln!(f, ")")?;
+                f.term_def(t);
+            }
         }
+        writeln!(f, "  )")?; // let binding list
+        writeln!(f, "  ")?;
+        t.ir_fmt(f)?;
+        writeln!(f, ")")?; // let
+    } else {
+        t.ir_fmt(f)?;
     }
-    writeln!(f, "  )")?;
-    writeln!(f, "  ")?;
-    t.ir_fmt(f)?;
-    writeln!(f, ")")?;
-    writeln!(f, ")")?;
+    writeln!(f, ")")?; // declare
     if close_dft_f {
         writeln!(f, ")")?;
     }
@@ -418,7 +476,11 @@ impl Debug for Term {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let cfg = IrCfg::from_circ_cfg();
         let f = &mut IrFormatter::new(f, &cfg);
-        fmt_term_with_bindings(self, f)
+        if let Op::Const(c) = self.op() {
+            c.ir_fmt(f)
+        } else {
+            fmt_term_with_bindings(self, f)
+        }
     }
 }
 

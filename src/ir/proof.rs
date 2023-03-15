@@ -76,6 +76,7 @@ impl Constraints for Computation {
             outputs: assertions,
             metadata,
             precomputes: Default::default(),
+            persistent_arrays: Default::default(),
         }
     }
 }

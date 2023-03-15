@@ -310,6 +310,26 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     _ => None,
                 }
             }
+            Op::Array(k, v) => t
+                .cs()
+                .iter()
+                .map(|c| c_get(c).as_value_opt().cloned())
+                .collect::<Option<_>>()
+                .map(|cs| {
+                    leaf_term(Op::Const(Value::Array(Array::from_vec(
+                        k.clone(),
+                        v.clone(),
+                        cs,
+                    ))))
+                }),
+            Op::Fill(k, s) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
+                leaf_term(Op::Const(Value::Array(Array::new(
+                    k.clone(),
+                    Box::new(v.clone()),
+                    Default::default(),
+                    *s,
+                ))))
+            }),
             Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
                 (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
                 _ => None,

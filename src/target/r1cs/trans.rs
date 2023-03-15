@@ -36,15 +36,32 @@ enum EmbeddedTerm {
     Tuple(Vec<EmbeddedTerm>),
 }
 
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Metric {
+    n_constraints: u32,
+    n_vars: u32,
+}
+
+impl std::ops::AddAssign<&Metric> for Metric {
+    fn add_assign(&mut self, rhs: &Metric) {
+        self.n_vars += rhs.n_vars;
+        self.n_constraints += rhs.n_constraints;
+    }
+}
+
 struct ToR1cs<'cfg> {
     r1cs: R1cs,
     cache: TermMap<EmbeddedTerm>,
+    embed: Rc<RefCell<TermSet>>,
     next_idx: usize,
     zero: TermLc,
     one: TermLc,
     cfg: &'cfg CircCfg,
     field: FieldT,
     used_vars: HashSet<String>,
+    profiling_data: TermMap<Metric>,
+    metric: Metric,
+    term_in_progress: Option<Term>,
 }
 
 impl<'cfg> ToR1cs<'cfg> {
@@ -57,12 +74,77 @@ impl<'cfg> ToR1cs<'cfg> {
         Self {
             r1cs,
             cache: TermMap::default(),
+            embed: Default::default(),
             used_vars,
             next_idx: 0,
             zero,
             one,
             field,
             cfg,
+            profiling_data: Default::default(),
+            term_in_progress: None,
+            metric: Default::default(),
+        }
+    }
+
+    fn profile_start_term(&mut self, t: Term) {
+        if self.cfg.r1cs.profile {
+            assert!(self.term_in_progress.is_none());
+            self.term_in_progress = Some(t);
+            self.metric = Default::default();
+        }
+    }
+
+    fn profile_end_term(&mut self) {
+        if self.cfg.r1cs.profile {
+            assert!(self.term_in_progress.is_some());
+            let t = self.term_in_progress.take().unwrap();
+            *self.profiling_data.entry(t).or_default() += &self.metric;
+            self.metric = Default::default();
+        }
+    }
+
+    fn profile_print(&self) {
+        if self.cfg.r1cs.profile {
+            let terms: TermSet = self.profiling_data.keys().cloned().collect();
+            let mut cum_metrics: TermMap<Metric> = Default::default();
+            for t in PostOrderIter::from_roots_and_skips(terms, Default::default()) {
+                let mut cum = Metric::default();
+                if let Some(d) = self.profiling_data.get(&t) {
+                    cum += d;
+                }
+                for c in t.cs() {
+                    cum += cum_metrics.get(c).unwrap();
+                }
+                cum_metrics.insert(t, cum);
+            }
+            let mut data: Vec<(Term, Metric, Metric)> = cum_metrics
+                .into_iter()
+                .map(|(term, cum)| {
+                    let indiv = self
+                        .profiling_data
+                        .get(&term)
+                        .cloned()
+                        .unwrap_or(Default::default());
+                    (term, cum, indiv)
+                })
+                .collect();
+            data.sort_by(|(t0, c0, i0), (t1, c1, i1)| i0.cmp(i1).then(c0.cmp(c1)).then(t0.cmp(t1)));
+            data.reverse();
+            for (t, c, i) in data {
+                if c.n_constraints != 0 {
+                    println!(
+                        "{:>8}: {:>8}cs cum, {:>8}vs cum, {:>8}cs, {:>8}vs;   {} {:?}",
+                        format!("{}", t.id()),
+                        c.n_constraints,
+                        c.n_vars,
+                        i.n_constraints,
+                        i.n_vars,
+                        t.op(),
+                        t.cs().iter().map(|c| c.id()).collect::<Vec<_>>(),
+                    )
+                }
+            }
         }
     }
 
@@ -79,7 +161,8 @@ impl<'cfg> ToR1cs<'cfg> {
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
         self.r1cs.add_var(n.clone(), comp.clone(), ty);
-        debug!("fresh: {n}");
+        self.metric.n_vars += 1;
+        debug!("fresh: {n:?}");
         TermLc(comp, self.r1cs.signal_lc(&n))
     }
 
@@ -88,10 +171,15 @@ impl<'cfg> ToR1cs<'cfg> {
         self.fresh_var(ctx, comp, VarType::FinalWit)
     }
 
+    /// Create a constraint
+    fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
+        self.metric.n_constraints += 1;
+        self.r1cs.constraint(a, b, c);
+    }
+
     /// Enforce `x` to be bit-valued
     fn enforce_bit(&mut self, b: TermLc) {
-        self.r1cs
-            .constraint(b.1.clone(), (b - 1).1, self.r1cs.zero());
+        self.constraint(b.1.clone(), (b - 1).1, self.r1cs.zero());
     }
 
     /// Get a new bit-valued variable, with name dependent on `d`.
@@ -119,10 +207,8 @@ impl<'cfg> ToR1cs<'cfg> {
             "is_zero",
             term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
         );
-        self.r1cs
-            .constraint(m.1, x.1.clone(), -is_zero.1.clone() + 1);
-        self.r1cs
-            .constraint(is_zero.1.clone(), x.1, self.r1cs.zero());
+        self.constraint(m.1, x.1.clone(), -is_zero.1.clone() + 1);
+        self.constraint(is_zero.1.clone(), x.1, self.r1cs.zero());
         is_zero
     }
 
@@ -193,7 +279,7 @@ impl<'cfg> ToR1cs<'cfg> {
     fn nary_xor<I: ExactSizeIterator<Item = TermLc>>(&mut self, mut xs: I) -> TermLc {
         let n = xs.len();
         if n > 3 {
-            let sum = xs.into_iter().fold(self.zero.clone(), |s, i| s + &i);
+            let sum = xs.fold(self.zero.clone(), |s, i| s + &i);
             let sum_bits = self.bitify("sum", &sum, bitsize(n), false);
             assert!(n > 0);
             assert!(self.r1cs.modulus() > &n);
@@ -205,11 +291,19 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     /// Return the product of `a` and `b`.
-    fn mul(&mut self, a: TermLc, b: TermLc) -> TermLc {
+    fn mul(&mut self, mut a: TermLc, mut b: TermLc) -> TermLc {
+        if b.1.as_const().is_some() {
+            std::mem::swap(&mut a, &mut b);
+        }
         let mul_val = term![PF_MUL; a.0, b.0];
-        let c = self.fresh_wit("mul", mul_val);
-        self.r1cs.constraint(a.1, b.1, c.1.clone());
-        c
+        if let Some(c) = a.1.as_const() {
+            let lc = b.1 * c;
+            TermLc(mul_val, lc)
+        } else {
+            let c = self.fresh_wit("mul", mul_val);
+            self.constraint(a.1, b.1, c.1.clone());
+            c
+        }
     }
 
     /// Given a bit-values `a`, returns its (boolean) not.
@@ -265,6 +359,7 @@ impl<'cfg> ToR1cs<'cfg> {
         if !self.used_vars.contains(var.as_var_name()) {
             return;
         }
+        self.profile_start_term(var.clone());
         let public = matches!(ty, VarType::Inst);
         match var.op() {
             Op::Var(name, Sort::Bool) => {
@@ -274,6 +369,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     self.enforce_bit(lc.clone());
                 }
                 self.cache.insert(var.clone(), EmbeddedTerm::Bool(lc));
+                self.embed.borrow_mut().insert(var.clone());
             }
             Op::Var(name, Sort::BitVector(n_bits)) => {
                 let public = matches!(ty, VarType::Inst);
@@ -291,14 +387,20 @@ impl<'cfg> ToR1cs<'cfg> {
                 assert_eq!(f, &self.field);
                 let lc = self.fresh_var(name, var.clone(), ty);
                 self.cache.insert(var.clone(), EmbeddedTerm::Field(lc));
+                self.embed.borrow_mut().insert(var.clone());
             }
             o => unreachable!("Unhandled variable operator {}", o),
         }
+        self.profile_end_term();
     }
 
     fn embed(&mut self, t: Term) {
         debug!("Embed: {}", t);
-        for c in PostOrderIter::new(t) {
+        let visited_set_rc = self.embed.clone();
+        for c in
+            extras::PostOrderSkipIter::new(t, &move |s: &Term| visited_set_rc.borrow().contains(s))
+        {
+            assert!(!self.embed.borrow().contains(&c));
             debug!("Embed op: {}", c.op());
             // Handle field access once and for all
             if let Op::Field(i) = &c.op() {
@@ -306,9 +408,11 @@ impl<'cfg> ToR1cs<'cfg> {
                 #[allow(clippy::map_entry)]
                 if !self.cache.contains_key(&c) {
                     let t = self.get_field(&c.cs()[0], *i);
+                    self.embed.borrow_mut().insert(c.clone());
                     self.cache.insert(c, t);
                 }
             } else {
+                self.profile_start_term(c.clone());
                 match check(&c) {
                     Sort::Bool => {
                         self.embed_bool(c);
@@ -325,6 +429,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     }
                     s => panic!("Unsupported sort in embed: {:?}", s),
                 }
+                self.profile_end_term();
             }
         }
     }
@@ -470,7 +575,9 @@ impl<'cfg> ToR1cs<'cfg> {
         // TODO: skip if already embedded
         if t.op() == &Op::Eq {
             t.cs().iter().for_each(|c| self.embed(c.clone()));
+            self.profile_start_term(t.clone());
             self.assert_eq(&t.cs()[0], &t.cs()[1]);
+            self.profile_end_term();
         } else if t.op() == &AND {
             for c in t.cs() {
                 self.assert_bool(c);
@@ -478,7 +585,9 @@ impl<'cfg> ToR1cs<'cfg> {
         } else {
             self.embed(t.clone());
             let lc = self.get_bool(t).clone();
+            self.profile_start_term(t.clone());
             self.assert_zero(lc - 1);
+            self.profile_end_term();
         }
     }
 
@@ -734,7 +843,7 @@ impl<'cfg> ToR1cs<'cfg> {
                                 let r = self.fresh_wit("div_r", r_term);
                                 let qb = self.bitify("div_q", &q, n, false);
                                 let rb = self.bitify("div_r", &r, n, false);
-                                self.r1cs.constraint(q.1.clone(), b.1.clone(), (a - &r).1);
+                                self.constraint(q.1.clone(), b.1.clone(), (a - &r).1);
                                 // b == 0 -> q == M   //  b != 0 or q == M
                                 // b != 0 -> r < b    //  b == 0 or r < b
                                 // so, since we don't care about b == 0,
@@ -744,7 +853,7 @@ impl<'cfg> ToR1cs<'cfg> {
                                 let max = self.r1cs.modulus.new_v((Integer::from(1) << n) - 1);
                                 let q_eq_max = self.is_zero(q - &max);
                                 let q_ne_max = self.bool_not(&q_eq_max);
-                                self.r1cs.constraint(r_ge_b.1, q_ne_max.1, self.r1cs.zero());
+                                self.constraint(r_ge_b.1, q_ne_max.1, self.r1cs.zero());
                                 let bits = match o {
                                     BvBinOp::Udiv => qb,
                                     BvBinOp::Urem => rb,
@@ -897,10 +1006,10 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn embed_pf(&mut self, c: Term) -> &TermLc {
-        debug!("embed_pf {}", c);
         //println!("Embed: {}", c);
         // TODO: skip if already embedded
         if !self.cache.contains_key(&c) {
+            debug!("embed_pf {}", c);
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
                 Op::Const(Value::Field(r)) => TermLc(
@@ -934,8 +1043,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         // ix = 1
                         let x = self.get_pf(&c.cs()[0]).clone();
                         let inv_x = self.fresh_wit("recip", term![PF_RECIP; x.0.clone()]);
-                        self.r1cs
-                            .constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
+                        self.constraint(x.1, inv_x.1.clone(), self.r1cs.zero() + 1);
                         inv_x
                     }
                     FieldDivByZero::NonDet => {
@@ -943,7 +1051,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         let x = self.get_pf(&c.cs()[0]).clone();
                         let x2 = self.mul(x.clone(), x.clone());
                         let inv_x = self.fresh_wit("recip", term![PF_RECIP; x.0.clone()]);
-                        self.r1cs.constraint(x2.1, inv_x.1.clone(), x.1);
+                        self.constraint(x2.1, inv_x.1.clone(), x.1);
                         inv_x
                     }
                     FieldDivByZero::Zero => {
@@ -960,10 +1068,9 @@ impl<'cfg> ToR1cs<'cfg> {
                             "is_zero",
                             term![Op::Ite; eqz, self.one.0.clone(), self.zero.0.clone()],
                         );
-                        self.r1cs
-                            .constraint(i.1.clone(), x.1.clone(), -z.1.clone() + 1);
-                        self.r1cs.constraint(z.1.clone(), x.1, self.r1cs.zero());
-                        self.r1cs.constraint(z.1, i.1.clone(), self.r1cs.zero());
+                        self.constraint(i.1.clone(), x.1.clone(), -z.1.clone() + 1);
+                        self.constraint(z.1.clone(), x.1, self.r1cs.zero());
+                        self.constraint(z.1, i.1.clone(), self.r1cs.zero());
                         i
                     }
                 },
@@ -975,8 +1082,7 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     fn assert_zero(&mut self, x: TermLc) {
-        self.r1cs
-            .constraint(self.r1cs.zero(), self.r1cs.zero(), x.1);
+        self.constraint(self.r1cs.zero(), self.r1cs.zero(), x.1);
     }
     fn assert(&mut self, t: Term) {
         debug!("Assert: {}", t);
@@ -1005,6 +1111,7 @@ pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
     );
     debug!("declaring inputs");
     let vars = cs.metadata.interactive_vars();
+    trace!("interactive_vars: {:#?}", vars);
     for i in &vars.instances {
         converter.embed_var(i, VarType::Inst);
     }
@@ -1024,6 +1131,7 @@ pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
     for c in &cs.outputs {
         converter.assert(c.clone());
     }
+    converter.profile_print();
     converter.r1cs
 }
 

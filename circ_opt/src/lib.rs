@@ -57,6 +57,9 @@ pub struct CircOpt {
     /// Options for the IR itself
     #[command(flatten)]
     pub ir: IrOpt,
+    /// Options for RAM optimization
+    #[command(flatten)]
+    pub ram: RamOpt,
     /// Options for term formatting
     #[command(flatten)]
     pub fmt: FmtOpt,
@@ -77,6 +80,10 @@ pub struct R1csOpt {
     /// Use the verified field-blaster
     #[arg(long = "r1cs-verified", env = "R1CS_VERIFIED", action = ArgAction::Set, default_value = "false")]
     pub verified: bool,
+
+    /// Profile the R1CS lowering pass: attributing cosntraints and vars to terms
+    #[arg(long = "r1cs-profile", env = "R1CS_PROFILE", action = ArgAction::Set, default_value = "false")]
+    pub profile: bool,
 
     /// Which field division-by-zero semantics to encode in R1cs
     #[arg(
@@ -100,6 +107,7 @@ impl Default for R1csOpt {
     fn default() -> Self {
         Self {
             verified: false,
+            profile: false,
             div_by_zero: FieldDivByZero::Incomplete,
             lc_elim_thresh: 50,
         }
@@ -185,6 +193,57 @@ pub enum FieldToBv {
 impl Default for FieldToBv {
     fn default() -> Self {
         FieldToBv::Wrap
+    }
+}
+
+/// Options related to memory.
+#[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
+pub struct RamOpt {
+    /// How to argue that values are in a range
+    #[arg(
+        long = "ram-range",
+        env = "RAM_RANGE",
+        value_enum,
+        default_value = "sort"
+    )]
+    pub range: RangeStrategy,
+    /// How to argue that indices are only repeated in blocks.
+    #[arg(
+        long = "ram-index",
+        env = "RAM_INDEX",
+        value_enum,
+        default_value = "uniqueness"
+    )]
+    pub index: IndexStrategy,
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that values are in a range
+pub enum RangeStrategy {
+    /// Bit-split them.
+    BitSplit,
+    /// Add the whole range & sort all values.
+    Sort,
+}
+
+impl Default for RangeStrategy {
+    fn default() -> Self {
+        RangeStrategy::Sort
+    }
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that indices are only repeated in blocks.
+pub enum IndexStrategy {
+    /// Check that the blocks are sorted
+    Sort,
+    /// Use the GCD-derivative uniqueness argument
+    Uniqueness,
+}
+
+impl Default for IndexStrategy {
+    fn default() -> Self {
+        IndexStrategy::Uniqueness
     }
 }
 
