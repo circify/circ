@@ -2003,7 +2003,18 @@ impl ComputationMetadata {
         self.vars.remove(name);
     }
 
-    /// Create a call term, given the input arguments in a fixed order.
+    /// Create a call term, given the input arguments in sorted order by argument names.
+    ///
+    /// ## Arguments
+    ///
+    /// * `name`: function name
+    /// * `args`: map of argument name (String) to argument term (Term)
+    /// * `ret_sort`: return sort of the function
+    ///
+    /// ## Returns
+    ///
+    /// A call term with the input arguments in sorted order by argument names.
+    ///
     pub fn ordered_call_term(
         &self,
         name: String,
