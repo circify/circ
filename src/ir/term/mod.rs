@@ -26,12 +26,9 @@ use crate::util::once::OnceQueue;
 use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap, FxHashSet};
 use hashconsing::{HConsed, WHConsed};
-use im::OrdMap;
 use lazy_static::lazy_static;
 use log::debug;
 use rug::Integer;
-use serde::de::{SeqAccess, self};
-use serde::ser::SerializeStruct;
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
@@ -671,56 +668,37 @@ pub struct TermData {
     pub cs: Vec<Term>,
 }
 
+/// implements the serialize for SmallVec
+pub mod smallvec_serde {
+    use serde::{Deserialize, Serialize};
+    use smallvec::SmallVec;
+
+    /// serialize a smallvec
+    pub fn serialize<S>(small_vec: &SmallVec<[usize; 3]>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        small_vec.to_vec().serialize(serializer)
+    }
+
+    /// deserialize a smallvec
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SmallVec<[usize; 3]>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let vec: Vec<usize> = Vec::deserialize(deserializer)?;
+        Ok(SmallVec::<[usize; 3]>::from(vec))
+    }
+}
+
 /// Num Term Data to avoid HashTable lookup
+#[derive(Serialize, Deserialize)]
 pub struct NumTerm {
     /// the operator
     pub op: NumOp,
     /// Term has at most 3 children
+    #[serde(with = "smallvec_serde")]
     pub cs: SmallVec<[usize; 3]>,
-}
-
-impl Serialize for NumTerm {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut s = serializer.serialize_struct("NumTerm", 3)?;
-        s.serialize_field("op", &self.op)?;
-        s.serialize_field("op", &self.cs.to_vec())?;
-        s.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for NumTerm {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct NumTermVisitor;
-
-        impl<'de> Visitor<'de> for NumTermVisitor {
-            type Value = NumTerm;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct Duration")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let op = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let vec_cs: Vec<usize> = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let cs = SmallVec::<[usize; 3]>::from(vec_cs);
-                Ok(NumTerm {op, cs})
-            }
-        }
-
-        const FIELDS: &[&str] = &["op", "cs"];
-        deserializer.deserialize_struct("NumTerm", FIELDS, NumTermVisitor)
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -815,7 +793,35 @@ pub enum Value {
     Tuple(Box<[Value]>),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Hash)]
+/// implements the serialize for OrdMap
+pub mod ordmap_serde {
+    use serde::{Deserialize, Serialize};
+
+    /// serialize a ordmap
+    pub fn serialize<S, T>(ordmap: &im::OrdMap<T, T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer, T: Serialize + Ord + Clone
+    {
+        let map_vec: Vec<(T, T)> = ordmap.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        map_vec.serialize(serializer)
+    }
+
+    /// deserialize a ordmap
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<im::OrdMap<T, T>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+        T: Deserialize<'de> + Ord + Clone
+    {
+        let vec: Vec<(T, T)> = Vec::deserialize(deserializer)?;
+        let mut map = im::OrdMap::<T, T>::new();
+        for (k, v) in vec {
+            map.insert(k, v);
+        }
+        Ok(map)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Hash, Serialize, Deserialize)]
 /// An IR array value.
 ///
 /// A sized, space array.
@@ -825,64 +831,10 @@ pub struct Array {
     /// Default (fill) value. What is stored when a key is missing from the next member
     pub default: Box<Value>,
     /// Key-> Value map
-    // pub map: BTreeMap<Value, Value>,
+    #[serde(with = "ordmap_serde")]
     pub map: im::OrdMap<Value, Value>,
     /// Size of array. There are this many valid keys.
     pub size: usize,
-}
-
-impl Serialize for Array {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = serializer.serialize_struct("Array", 4)?;
-        s.serialize_field("key_sort", &self.key_sort)?;
-        s.serialize_field("default", &self.default)?;
-        let map_vec: Vec<(Value, Value)> = self.map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        s.serialize_field("map", &map_vec)?;
-        s.serialize_field("size", &self.size)?;
-        s.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Array {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct ArrayVisitor;
-
-        impl<'de> Visitor<'de> for ArrayVisitor {
-            type Value = Array;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct Duration")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let key_sort = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let default = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let map_vec: Vec<(Value, Value)> = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let size = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(3, &self))?; 
-                let mut map = OrdMap::<Value, Value>::new();
-                for (k, v) in map_vec {
-                    map.insert(k, v);
-                }
-                Ok(Array {key_sort, default, map, size})
-            }
-        }
-
-        const FIELDS: &[&str] = &["key_sort", "default", "map", "size"];
-        deserializer.deserialize_struct("Array", FIELDS, ArrayVisitor)
-    }
 }
 
 impl Array {
@@ -899,7 +851,6 @@ impl Array {
                 key_sort
             );
         }
-        let map = map;
         let map = im::OrdMap::from(map);
         Self {
             key_sort,

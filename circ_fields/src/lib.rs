@@ -52,7 +52,7 @@ pub enum FieldT {
 
 lazy_static! {
     /// Field modulus
-    pub static ref F_CURVE25519_FMOD: Integer = bigint_to_int(Fr::MODULUS);
+    pub static ref F_CURVE25519_FMOD: Integer = Integer::from_digits(&Fr::MODULUS.to_bytes_be(), Order::MsfBe);
     /// Field modulus arc
     pub static ref F_CURVE25519_FMOD_ARC: Arc<Integer> = Arc::new(F_CURVE25519_FMOD.clone());
 }
@@ -470,14 +470,4 @@ impl Into<Integer> for &FieldV {
             FieldV::IntField(i) => i.i.clone(),
         }
     }
-}
-
-/// convert BigInt from ark to Integer from rug
-pub fn bigint_to_int<const N: usize>(i: BigInt<N>) -> Integer {
-    Integer::from_digits(&i.to_bytes_be(), Order::MsfBe)
-}
-
-/// convert Integer from rug to BigInt from ark
-pub fn int_to_bigint<const N: usize>(i: Integer) -> BigInt<N> {
-    BigInt::from_bits_be(&i.to_digits(Order::MsfBe))
 }

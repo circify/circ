@@ -262,12 +262,14 @@ where
     Ok(())
 }
 
-/// document
+/// Given
+/// * a r1cs instance
+/// * an assignment of the r1cs instance
+/// test the generation of a proof for this r1cs instance
 pub fn test_prove<E: Engine>(r1cs: &R1cs<String>, map: &FxHashMap<String, Value>)
 where
     E::Fr: PrimeFieldBits,
-    E::G1: WnafGroup,
-    E::G2: WnafGroup,
+    E::G1: WnafGroup,    E::G2: WnafGroup,
 {
     let rng = &mut rand::thread_rng();
     let pk = generate_random_parameters::<E, _, _>(SynthInput(r1cs, &None), rng).unwrap();
