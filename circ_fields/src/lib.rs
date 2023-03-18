@@ -5,6 +5,7 @@
 
 mod ff_field;
 mod int_field;
+pub mod size;
 
 /// Exports for moduli defined in this crate, as ARCs
 pub mod moduli {
@@ -16,6 +17,7 @@ use ff_field::{F_BLS12381_FMOD, F_BN254_FMOD};
 use ff_field::{F_BLS12381_FMOD_ARC, F_BN254_FMOD_ARC};
 use int_field::IntField;
 
+use datasize::DataSize;
 use ff::Field;
 use paste::paste;
 use rug::Integer;
@@ -27,7 +29,7 @@ use std::sync::Arc;
 // TODO: rework this using macros?
 
 /// Field element type
-#[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize, DataSize)]
 pub enum FieldT {
     /// BLS12-381 scalar field as `ff`
     FBls12381,
@@ -134,7 +136,7 @@ impl FieldT {
 }
 
 /// Field element value
-#[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize, DataSize)]
 pub enum FieldV {
     /// BLS12-381 scalar field element as `ff`
     FBls12381(FBls12381),

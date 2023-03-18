@@ -9,10 +9,11 @@ macro_rules! def_field {
         paste! { pub use $name::FMOD_ARC as [<$name:upper _FMOD_ARC>]; }
         pub mod $name {
             #![allow(warnings, clippy::derive_hash_xor_eq)]
+            use datasize::DataSize;
             use ff_derive::PrimeField;
             use ff_derive_num::Num;
             use serde::{Deserialize, Serialize};
-            #[derive(PrimeField, Num, Deserialize, Serialize, Hash)]
+            #[derive(PrimeField, Num, Deserialize, Serialize, Hash, DataSize)]
             #[PrimeFieldModulus = $mod]
             #[PrimeFieldGenerator = $gen]
             #[PrimeFieldReprEndianness = "little"]

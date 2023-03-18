@@ -1,6 +1,7 @@
 //! Integer-based fields for use in CirC
 // based on Alex's original FieldElem impl
 
+use datasize::DataSize;
 use paste::paste;
 use rug::{
     ops::{RemRounding, RemRoundingAssign},
@@ -11,8 +12,9 @@ use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
 
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, Serialize, Deserialize, DataSize)]
 pub struct IntField {
+    #[data_size(with = super::size::estimate_heap_size_integer)]
     pub(crate) i: Integer,
     m: Arc<Integer>,
 }
