@@ -306,6 +306,7 @@ dependencies = [
 name = "circ_fields"
 version = "0.1.0"
 dependencies = [
+ "datasize",
  "ff",
  "ff-derive-num",
  "ff_derive",
@@ -488,6 +489,27 @@ dependencies = [
  "serde",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "datasize"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c88ad90721dc8e2ebe1430ac2f59c5bdcd74478baa68da26f30f33b0fe997f11"
+dependencies = [
+ "datasize_derive",
+ "serde",
+]
+
+[[package]]
+name = "datasize_derive"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b0415ec81945214410892a00d4b5dd4566f6263205184248e018a3fe384a61e"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.109",
 ]
 
 [[package]]

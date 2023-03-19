@@ -147,6 +147,15 @@ macro_rules! arith_impl {
                 }
             }
         }
+
+        paste! {
+            impl [<$Trait Assign>]<i64> for IntField {
+                fn [<$fn _assign>](&mut self, other: i64) {
+                    self.i.[<$fn _assign>](&other);
+                    self.i.rem_floor_assign(&*self.m);
+                }
+            }
+        }
     };
 }
 
