@@ -344,7 +344,9 @@ impl FieldV {
 impl Clone for FieldV {
     #[inline]
     fn clone(&self) -> Self {
-        self.either_ref().map(|i| i.into()).unwrap_or_else(|full| Self::from(full.clone()))
+        self.either_ref()
+            .map(|i| i.into())
+            .unwrap_or_else(|full| Self::from(full.clone()))
     }
 }
 
@@ -625,7 +627,9 @@ impl FieldV {
     /// Raise this element to a power.
     #[inline]
     pub fn pow(&self, u: u64) -> Self {
-        if !self.is_full() && (self.inline().signed_bits() as u64).saturating_mul(u) < 64 - N_TAG_BITS as u64 {
+        if !self.is_full()
+            && (self.inline().signed_bits() as u64).saturating_mul(u) < 64 - N_TAG_BITS as u64
+        {
             let InlineFieldV(i, t) = self.inline();
             let i = i.pow(u as u32);
             assert!(InlineFieldV::i64_in_range(i));
