@@ -154,6 +154,17 @@ impl FieldT {
 }
 
 /// Field element value
+///
+/// ## Implementation Notes
+///
+/// The contents are either:
+/// * a pointer to an enum [FullFieldV] or
+/// * a i62 with a type-tag
+///
+/// The tag can be:
+/// * 00: pointer
+/// * 01, 10: different fields
+/// * 11: invalid (for now)
 #[derive(Serialize, Deserialize)]
 #[serde(into = "FullFieldV", from = "FullFieldV")]
 pub struct FieldV(i64);
