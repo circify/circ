@@ -69,15 +69,14 @@ impl RewritePass for Linearizer {
                         let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
                         Some(term![Op::Update(idx_usize); tup.clone(), val.clone()])
                     } else {
-                        let arr_idxs = (0..size).into_iter();
-                        let mut tulpe_entries= Vec::with_capacity(size);        
-                        for element in key_sort.elems_iter().take(size).zip(arr_idxs){
-                            tulpe_entries.push(
-                                term![Op::Ite; term![Op::Eq; idx.clone(), element.0], 
+                        let mut tuple_entries = Vec::with_capacity(size);        
+                        for (term, tup_idx) in key_sort.elems_iter().take(size).zip(0..size){
+                            tuple_entries.push(
+                                term![Op::Ite; term![Op::Eq; idx.clone(), term], 
                                     val.clone(),
-                                    term![Op::Field(element.1);tup.clone()]]);
+                                    term![Op::Field(tup_idx);tup.clone()]]);
                         }
-                        Some(term(Op::Tuple, tulpe_entries))
+                        Some(term(Op::Tuple, tuple_entries))
                     }
                 } else {
                     unreachable!()
