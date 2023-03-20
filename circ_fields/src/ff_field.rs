@@ -2,6 +2,16 @@
 
 use paste::paste;
 
+macro_rules! i64_impl {
+    ($Trait: ident, $fn: ident, $Ty: ident) => {
+        impl $Trait<i64> for $Ty {
+            fn $fn(&mut self, other: i64) {
+                self.$fn($Ty::from(other));
+            }
+        }
+    };
+}
+
 macro_rules! def_field {
     ($name: ident, $mod: literal, $gen: literal, $limbs: literal) => {
         paste! { pub use $name::Ft as [<$name:camel>]; }
@@ -9,10 +19,11 @@ macro_rules! def_field {
         paste! { pub use $name::FMOD_ARC as [<$name:upper _FMOD_ARC>]; }
         pub mod $name {
             #![allow(warnings, clippy::derive_hash_xor_eq)]
+            use datasize::DataSize;
             use ff_derive::PrimeField;
             use ff_derive_num::Num;
             use serde::{Deserialize, Serialize};
-            #[derive(PrimeField, Num, Deserialize, Serialize, Hash)]
+            #[derive(PrimeField, Num, Deserialize, Serialize, Hash, DataSize)]
             #[PrimeFieldModulus = $mod]
             #[PrimeFieldGenerator = $gen]
             #[PrimeFieldReprEndianness = "little"]
@@ -68,6 +79,24 @@ macro_rules! def_field {
                     Self::from_repr_vartime(FtRepr(bytes)).unwrap()
                 }
             }
+
+            impl std::convert::From<i64> for Ft {
+                #[track_caller]
+                fn from(mut i: i64) -> Self {
+                    let u = i.abs_diff(0);
+                    let neg = i < 0;
+                    if neg {
+                        -Ft::from(u)
+                    } else {
+                        Ft::from(u)
+                    }
+                }
+            }
+
+            use std::ops::{AddAssign, MulAssign, SubAssign};
+            i64_impl! { AddAssign, add_assign, Ft }
+            i64_impl! { SubAssign, sub_assign, Ft }
+            i64_impl! { MulAssign, mul_assign, Ft }
 
             #[cfg(test)]
             mod test {
