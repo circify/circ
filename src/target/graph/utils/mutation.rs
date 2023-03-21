@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 use crate::target::aby::assignment::def_uses::*;
 
-use std::thread;
+// use std::thread;
 
 fn get_outer_n(cs: &ComputationSubgraph, n: usize) -> ComputationSubgraph {
     let mut last_cs = cs.clone();
@@ -25,7 +25,7 @@ fn get_outer_n(cs: &ComputationSubgraph, n: usize) -> ComputationSubgraph {
             mut_cs.insert_node(&node);
         }
         for node in last_cs.ins.clone() {
-            for outer_node in node.cs.iter() {
+            for outer_node in node.cs().iter() {
                 mut_cs.insert_node(&outer_node)
             }
         }
@@ -56,24 +56,31 @@ fn mutate_partitions_mp_step(
         }
     }
 
-    let mut children = vec![];
+    // let mut children = vec![];
     let _cm = cm.to_string();
+
+    // for ((i, j), (c, c_ref)) in mut_sets.iter() {
+    //     let costm = _cm.clone();
+    //     let i = i.clone();
+    //     let j = j.clone();
+    //     let c = c.clone();
+    //     let c_ref = c_ref.clone();
+    //     children.push(thread::spawn(move || (i, j, assign_mut(&c, &costm, &c_ref))));
+    // }
+
+    // for child in children {
+    //     let (i, j, smap) = child.join().unwrap();
+    //     mut_smaps.get_mut(&i).unwrap().insert(j, smap);
+    // }
 
     for ((i, j), (c, c_ref)) in mut_sets.iter() {
         let costm = _cm.clone();
-        let i = i.clone();
-        let j = j.clone();
-        let c = c.clone();
-        let c_ref = c_ref.clone();
-        children.push(thread::spawn(move || {
-            (i, j, assign_mut(&c, &costm, &c_ref))
-        }));
+        mut_smaps
+            .get_mut(&i)
+            .unwrap()
+            .insert(*j, assign_mut(&c, &costm, &c_ref));
     }
 
-    for child in children {
-        let (i, j, smap) = child.join().unwrap();
-        mut_smaps.get_mut(&i).unwrap().insert(j, smap);
-    }
     mut_smaps
 }
 
@@ -101,26 +108,35 @@ fn mutate_partitions_mp_step_smart(
         }
     }
 
-    let mut children = vec![];
+    // let mut children = vec![];
     let _cm = cm.to_string();
     let k_map = dug.get_k();
 
+    // for ((i, j), (du, du_ref)) in mut_sets.iter() {
+    //     let costm = _cm.clone();
+    //     let i = i.clone();
+    //     let j = j.clone();
+    //     let du = du.clone();
+    //     let du_ref = du_ref.clone();
+    //     let k_map = k_map.clone();
+    //     children.push(thread::spawn(move || {
+    //         (i, j, assign_mut_smart(&du, &costm, &du_ref, &k_map))
+    //     }));
+    // }
+
+    // for child in children {
+    //     let (i, j, smap) = child.join().unwrap();
+    //     mut_smaps.get_mut(&i).unwrap().insert(j, smap);
+    // }
+
     for ((i, j), (du, du_ref)) in mut_sets.iter() {
         let costm = _cm.clone();
-        let i = i.clone();
-        let j = j.clone();
-        let du = du.clone();
-        let du_ref = du_ref.clone();
-        let k_map = k_map.clone();
-        children.push(thread::spawn(move || {
-            (i, j, assign_mut_smart(&du, &costm, &du_ref, &k_map))
-        }));
+        mut_smaps
+            .get_mut(&i)
+            .unwrap()
+            .insert(*j, assign_mut_smart(&du, &costm, &du_ref, &k_map));
     }
 
-    for child in children {
-        let (i, j, smap) = child.join().unwrap();
-        mut_smaps.get_mut(&i).unwrap().insert(j, smap);
-    }
     mut_smaps
 }
 
@@ -129,7 +145,7 @@ fn get_global_assignments(
     term_to_part: &TermMap<usize>,
     local_smaps: &HashMap<usize, SharingMap>,
 ) -> SharingMap {
-    let mut global_smap: SharingMap = SharingMap::new();
+    let mut global_smap: SharingMap = SharingMap::default();
 
     let Computation { outputs, .. } = cs.clone();
     for term_ in &outputs {
@@ -154,7 +170,7 @@ fn get_global_assignments_smart(
     term_to_part: &TermMap<usize>,
     local_smaps: &HashMap<usize, SharingMap>,
 ) -> SharingMap {
-    let mut global_smap: SharingMap = SharingMap::new();
+    let mut global_smap: SharingMap = SharingMap::default();
     for t in dug.good_terms.iter() {
         // get term partition assignment
         let part = term_to_part.get(&t).unwrap();

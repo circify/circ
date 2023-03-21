@@ -25,7 +25,6 @@ use super::assignment::assign_arithmetic_and_yao;
 use super::assignment::assign_greedy;
 use super::assignment::ShareType;
 
-
 #[cfg(feature = "lp")]
 use crate::target::graph::trans::*;
 
@@ -930,9 +929,9 @@ pub fn to_aby(
                     "a+y" => assign_arithmetic_and_yao(&comp, cm),
                     "greedy" => assign_greedy(&comp, cm),
                     #[cfg(feature = "lp")]
-                    "lp" => assign(comp, cm),
+                    "lp" => assign(&comp.to_cs(), cm),
                     #[cfg(feature = "lp")]
-                    "glp" => assign(comp, cm),
+                    "glp" => assign(&comp.to_cs(), cm),
                     _ => {
                         panic!("Unsupported sharing scheme: {}", ss);
                     }

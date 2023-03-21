@@ -115,11 +115,11 @@ enum Backend {
         #[arg(long, default_value = "4000", name = "partition_size")]
         partition_size: usize,
         #[arg(long, default_value = "4", name = "mutation_level")]
-        mutation_level: String,
+        mutation_level: usize,
         #[arg(long, default_value = "1", name = "mutation_step_size")]
-        mutation_step_size: String,
+        mutation_step_size: usize,
         #[arg(long, default_value = "1", name = "hyper")]
-        hyper: String,
+        hyper: usize,
         #[arg(long, default_value = "3", name = "imbalance")]
         imbalance: usize,
     },

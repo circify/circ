@@ -1,29 +1,28 @@
-use crate::ir::term::*;
-
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::time::Instant;
+// use std::time::Instant;
 
 pub struct Partitioner {
     time_limit: usize,
     imbalance: usize,
     imbalance_f32: f32,
+    hyper_mode: bool,
     kahip_source: String,
     kahypar_source: String,
 }
 
 impl Partitioner {
-    pub fn new(time_limit: usize, imbalance: usize) -> Self {
-        /// Get KaHIP source directory
+    pub fn new(time_limit: usize, imbalance: usize, hyper_mode: bool) -> Self {
+        // Get KaHIP source directory
         let kahip_source = match env::var("KAHIP_SOURCE") {
             Ok(val) => val,
             Err(e) => panic!("Missing env variable: KAHIP_SOURCE, {}", e),
         };
-        /// Get kahypar source directory
+        //  Get kahypar source directory
         let kahypar_source = match env::var("KAHYPAR_SOURCE") {
             Ok(val) => val,
             Err(e) => panic!("Missing env variable: KAHYPAR_SOURCE, {}", e),
@@ -32,6 +31,7 @@ impl Partitioner {
             time_limit: time_limit,
             imbalance: imbalance,
             imbalance_f32: imbalance as f32 / 100.0,
+            hyper_mode: hyper_mode,
             kahip_source,
             kahypar_source,
         };

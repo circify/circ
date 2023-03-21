@@ -2259,7 +2259,7 @@ impl Computation {
         cs.insert_edges();
         cs
     }
-    
+
     /// Evaluate the precompute, then this computation.
     pub fn eval_all(&self, values: &FxHashMap<String, Value>) -> Vec<Value> {
         let mut values = values.clone();
@@ -2373,6 +2373,23 @@ impl ComputationSubgraph {
         // println!("LOG: Input nodes of partition: {}", self.ins.len());
         // println!("LOG: Output nodes of partition: {}", self.outs.len());
     }
+}
+
+/// Compute a (deterministic) prime-field challenge.
+pub fn pf_challenge(name: &str, field: &FieldT) -> FieldV {
+    use rand::SeedableRng;
+    use rand_chacha::ChaChaRng;
+    use std::hash::{Hash, Hasher};
+    // hash the string
+    let mut hasher = fxhash::FxHasher::default();
+    name.hash(&mut hasher);
+    let hash: u64 = hasher.finish();
+    // seed ChaCha with the hash
+    let mut seed = [0u8; 32];
+    seed[0..8].copy_from_slice(&hash.to_le_bytes());
+    let mut rng = ChaChaRng::from_seed(seed);
+    // sample from ChaCha
+    field.random_v(&mut rng)
 }
 
 #[cfg(test)]

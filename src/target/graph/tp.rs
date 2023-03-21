@@ -14,16 +14,21 @@ use std::collections::HashMap;
 pub struct TrivialPartition {
     partitioner: Partitioner,
     gwriter: GraphWriter,
-    fs: Functions,
+    comps: Computations,
     comp_history: HashMap<String, Computation>,
 }
 
 impl TrivialPartition {
-    pub fn new(fs: &Functions, time_limit: usize, imbalance: usize, hyper_mode: bool) -> Self {
+    pub fn new(
+        comps: &Computations,
+        time_limit: usize,
+        imbalance: usize,
+        hyper_mode: bool,
+    ) -> Self {
         let mut tp = Self {
             partitioner: Partitioner::new(time_limit, imbalance, hyper_mode),
             gwriter: GraphWriter::new(hyper_mode),
-            fs: fs.clone(),
+            comps: comps.clone(),
             comp_history: HashMap::new(),
         };
         // for fname in fs.computations.keys() {
@@ -35,21 +40,21 @@ impl TrivialPartition {
     /// traverse the comp and combine
     fn traverse(&mut self, fname: &String) {
         if !self.comp_history.contains_key(fname) {
-            let mut c = self.fs.get_comp(fname).unwrap().clone();
+            let mut c = self.comps.get(fname).clone();
             let mut cnt = 0;
             for t in c.terms_postorder() {
-                if let Op::Call(callee, ..) = &t.op {
-                    self.traverse(callee);
+                if let Op::Call(callee, ..) = &t.op() {
+                    self.traverse(&callee);
                 }
             }
             self.merge(&mut c);
-            self.comp_history.insert(fname.into(), c);
+            self.comp_history.insert(fname.into(), c.clone());
         }
     }
 
     fn merge(&mut self, computation: &mut Computation) {
-        let mut cache = TermMap::<Term>::new();
-        let mut children_added = TermSet::new();
+        let mut cache = TermMap::<Term>::default();
+        let mut children_added = TermSet::default();
         let mut stack = Vec::new();
         stack.extend(computation.outputs.iter().cloned());
         while let Some(top) = stack.pop() {
@@ -57,17 +62,17 @@ impl TrivialPartition {
                 // was it missing?
                 if children_added.insert(top.clone()) {
                     stack.push(top.clone());
-                    stack.extend(top.cs.iter().filter(|c| !cache.contains_key(c)).cloned());
+                    stack.extend(top.cs().iter().filter(|c| !cache.contains_key(c)).cloned());
                 } else {
                     let get_children = || -> Vec<Term> {
-                        top.cs
+                        top.cs()
                             .iter()
                             .map(|c| cache.get(c).unwrap())
                             .cloned()
                             .collect()
                     };
                     let new_t_opt = self.visit(computation, &top, get_children);
-                    let new_t = new_t_opt.unwrap_or_else(|| term(top.op.clone(), get_children()));
+                    let new_t = new_t_opt.unwrap_or_else(|| term(top.op().clone(), get_children()));
                     cache.insert(top.clone(), new_t);
                 }
             }
@@ -85,21 +90,25 @@ impl TrivialPartition {
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
-        if let Op::Call(fn_name, arg_names, _, _) = &orig.op {
+        if let Op::Call(fn_name, _, _) = &orig.op() {
             // println!("Rewritten children: {:?}", rewritten_children());
             let callee = self
                 .comp_history
                 .get(fn_name)
                 .expect("missing inlined callee");
-            let term = link_one(arg_names, rewritten_children(), callee);
+            let term = link_one(callee, rewritten_children());
             Some(term)
         } else {
             None
         }
     }
 
-    pub fn inline_all(&mut self, fname: &String) -> (Computation, DefUsesGraph) {
-        for fname in self.fs.computations.clone().keys() {
+    pub fn inline_all(
+        &mut self,
+        fname: &String,
+        fnames: Vec<&String>,
+    ) -> (Computation, DefUsesGraph) {
+        for fname in fnames {
             self.traverse(fname);
         }
         let c = self.comp_history.get(fname).unwrap().clone();
@@ -113,7 +122,7 @@ impl TrivialPartition {
         path: &String,
         ps: usize,
     ) -> (Computation, DefUsesGraph, TermMap<usize>, usize) {
-        let mut part_map = TermMap::new();
+        let mut part_map = TermMap::default();
         self.traverse(fname);
         let c = self.comp_history.get(fname).unwrap();
         let dug = DefUsesGraph::new(&c);
@@ -142,8 +151,8 @@ impl TrivialPartition {
         path: &String,
         ps: usize,
     ) -> (TermMap<usize>, usize) {
-        let mut part_map = TermMap::new();
-        let c = self.fs.get_comp(fname);
+        let mut part_map = TermMap::default();
+        let c = self.comps.get(fname);
         let num_parts = dug.good_terms.len() / ps + 1;
         println!("LOG: Number of Partitions: {}", num_parts);
         if num_parts > 1 {

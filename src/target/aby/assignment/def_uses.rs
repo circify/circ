@@ -581,8 +581,8 @@ impl DefUsesGraph {
                 Op::Call(callee, _, ret_sort) => {
                     // Use call term itself as the placeholder
                     // Call term will be ignore by the ilp solver later
-                    let mut ret_terms: Vec<(Term, usize)> = Vec::new();
-                    let mut num_rets: usize = 0;
+                    let mut num_rets = 0;
+
                     // ret_sort must be a tuple
                     if let Sort::Tuple(sorts) = ret_sort {
                         num_rets = sorts.iter().map(|ret| get_sort_len(ret)).sum();
@@ -1057,7 +1057,7 @@ impl DefUsesGraph {
         }
     }
 
-    pub fn gen_in_out(&mut self, c: &Computation) {
+    pub fn gen_in_out(&mut self, _c: &Computation) {
         todo!();
         // for n in c.metadata.computation_arg_names.iter() {
         //     // n is already a ssa name here
@@ -1126,40 +1126,40 @@ impl DefUsesGraph {
         callee: &Computation,
         extra_level: usize,
     ) {
-        let mut input_set: TermSet = TermSet::default();
-        let mut output_set: TermSet = TermSet::default();
+        let mut _input_set: TermSet = TermSet::default();
+        let mut _output_set: TermSet = TermSet::default();
         todo!();
         // insert def of args
         // for (n, v) in arg_names.into_iter().zip(arg_values) {
-            // let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
-            // for (sname, index) in ssa_names.iter() {
-            //     let s = callee.metadata.input_sort(&sname).clone();
-            //     // println!("Def: {}, Use: {}", v.get(*index).unwrap(), leaf_term(Op::Var(sname.clone(), s.clone())));
-            //     let def_t = v.get(*index).unwrap().clone();
-            //     let use_t = leaf_term(Op::Var(sname.to_string(), s));
-            //     if let Op::Call(..) = def_t.op {
-            //         continue;
-            //     }
-            //     if let Op::Var(..) = def_t.op {
-            //         continue;
-            //     }
-            //     if let Op::Const(_) = def_t.op {
-            //         continue;
-            //     }
-            //     // if !self.good_terms.contains(&use_t) {
-            //     //     // println!("FIX: {}", use_t.op);
-            //     //     // This is because the function doesn't use this arg
-            //     //     //todo!("Fix this...");
-            //     //     continue;
-            //     // }
-            //     if let Some(actual_used) = self.var_used.clone().get(&use_t) {
-            //         for actual_t in actual_used.iter() {
-            //             self.add_term(&def_t);
-            //             self.def_use.insert((def_t.clone(), actual_t.clone()));
-            //             input_set.insert(def_t.clone());
-            //         }
-            //     }
-            // }
+        // let ssa_names = callee.metadata.input_ssa_name_from_nice_name(n);
+        // for (sname, index) in ssa_names.iter() {
+        //     let s = callee.metadata.input_sort(&sname).clone();
+        //     // println!("Def: {}, Use: {}", v.get(*index).unwrap(), leaf_term(Op::Var(sname.clone(), s.clone())));
+        //     let def_t = v.get(*index).unwrap().clone();
+        //     let use_t = leaf_term(Op::Var(sname.to_string(), s));
+        //     if let Op::Call(..) = def_t.op {
+        //         continue;
+        //     }
+        //     if let Op::Var(..) = def_t.op {
+        //         continue;
+        //     }
+        //     if let Op::Const(_) = def_t.op {
+        //         continue;
+        //     }
+        //     // if !self.good_terms.contains(&use_t) {
+        //     //     // println!("FIX: {}", use_t.op);
+        //     //     // This is because the function doesn't use this arg
+        //     //     //todo!("Fix this...");
+        //     //     continue;
+        //     // }
+        //     if let Some(actual_used) = self.var_used.clone().get(&use_t) {
+        //         for actual_t in actual_used.iter() {
+        //             self.add_term(&def_t);
+        //             self.def_use.insert((def_t.clone(), actual_t.clone()));
+        //             input_set.insert(def_t.clone());
+        //         }
+        //     }
+        // }
         // }
 
         // // insert use of rets
@@ -1197,7 +1197,7 @@ impl DefUsesGraph {
         //         }
         //     }
         // }
-        
+
         // self.construct_mapping();
     }
 

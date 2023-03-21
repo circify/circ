@@ -3,8 +3,6 @@
 use crate::ir::term::*;
 use crate::target::aby::assignment::def_uses::*;
 
-use fxhash::{FxHashMap, FxHashSet};
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -162,7 +160,6 @@ impl CallSiteSimilarity {
     }
 }
 
-
 /// Rewriting the call term to new call
 fn rewrite_call(c: &mut Computation, call_map: &TermMap<usize>, duplicate_set: &HashSet<String>) {
     let mut cache = TermMap::<Term>::default();
@@ -299,6 +296,7 @@ fn remap(
                     outputs: ncomp.outputs().clone(),
                     metadata: rewrite_metadata(&ncomp.metadata, fname, &new_n),
                     precomputes: ncomp.precomputes.clone(),
+                    persistent_arrays: Default::default(),
                 };
                 rewrite_var(&mut dup_comp, fname, cid);
                 n_comps.comps.insert(new_n.clone(), dup_comp);
