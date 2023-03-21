@@ -7,6 +7,8 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use crate::ir::term::*;
 
+use log::trace;
+
 /// A "precomputation".
 ///
 /// Expresses a computation to be run in advance by a single party.
@@ -47,6 +49,10 @@ impl PreComp {
         let old = self.outputs.insert(name, value);
         assert!(old.is_none());
     }
+    /// Overwrite a step
+    pub fn change_output(&mut self, name: &str, value: Term) {
+        *self.outputs.get_mut(name).unwrap() = value;
+    }
     /// Retain only the parts of this precomputation that can be evaluated from
     /// the `known` inputs.
     pub fn restrict_to_inputs(&mut self, known: FxHashSet<String>) {
@@ -84,7 +90,9 @@ impl PreComp {
         for (o_name, _o_sort) in &self.sequence {
             let o = self.outputs.get(o_name).unwrap();
             eval_cached(o, &env, &mut value_cache);
-            env.insert(o_name.clone(), value_cache.get(o).unwrap().clone());
+            let value = value_cache.get(o).unwrap().clone();
+            trace!("pre {o_name} => {value}");
+            env.insert(o_name.clone(), value);
         }
         env
     }

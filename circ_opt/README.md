@@ -36,6 +36,13 @@ Options:
           [default: false]
           [possible values: true, false]
 
+      --r1cs-profile <PROFILE>
+          Profile the R1CS lowering pass: attributing cosntraints and vars to terms
+          
+          [env: R1CS_PROFILE=]
+          [default: false]
+          [possible values: true, false]
+
       --r1cs-div-by-zero <DIV_BY_ZERO>
           Which field division-by-zero semantics to encode in R1cs
           
@@ -78,6 +85,33 @@ Options:
           Possible values:
           - wrap:  x % 2^b
           - panic: a panic
+
+      --ram <ENABLED>
+          Whether to use advanced RAM techniques
+          
+          [env: RAM=]
+          [default: false]
+          [possible values: true, false]
+
+      --ram-range <RANGE>
+          How to argue that values are in a range
+          
+          [env: RAM_RANGE=]
+          [default: sort]
+
+          Possible values:
+          - bit-split: Bit-split them
+          - sort:      Add the whole range & sort all values
+
+      --ram-index <INDEX>
+          How to argue that indices are only repeated in blocks
+          
+          [env: RAM_INDEX=]
+          [default: uniqueness]
+
+          Possible values:
+          - sort:       Check that the blocks are sorted
+          - uniqueness: Use the GCD-derivative uniqueness argument
 
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use
@@ -139,6 +173,8 @@ Usage: parser [OPTIONS]
 Options:
       --r1cs-verified <VERIFIED>
           Use the verified field-blaster [env: R1CS_VERIFIED=] [default: false] [possible values: true, false]
+      --r1cs-profile <PROFILE>
+          Profile the R1CS lowering pass: attributing cosntraints and vars to terms [env: R1CS_PROFILE=] [default: false] [possible values: true, false]
       --r1cs-div-by-zero <DIV_BY_ZERO>
           Which field division-by-zero semantics to encode in R1cs [env: R1CS_DIV_BY_ZERO=] [default: incomplete] [possible values: incomplete, zero, non-det]
       --r1cs-lc-elim-thresh <LC_ELIM_THRESH>
@@ -149,6 +185,12 @@ Options:
           Which modulus to use (overrides [FieldOpt::builtin]) [env: FIELD_CUSTOM_MODULUS=] [default: ]
       --ir-field-to-bv <FIELD_TO_BV>
           Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
+      --ram <ENABLED>
+          Whether to use advanced RAM techniques [env: RAM=] [default: false] [possible values: true, false]
+      --ram-range <RANGE>
+          How to argue that values are in a range [env: RAM_RANGE=] [default: sort] [possible values: bit-split, sort]
+      --ram-index <INDEX>
+          How to argue that indices are only repeated in blocks [env: RAM_INDEX=] [default: uniqueness] [possible values: sort, uniqueness]
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use [env: FMT_USE_DEFAULT_FIELD=] [default: true] [possible values: true, false]
       --fmt-hide-field <HIDE_FIELD>
@@ -176,6 +218,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -185,6 +228,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -214,6 +262,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: true,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -223,6 +272,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -250,6 +304,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -259,6 +314,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -286,6 +346,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: NonDet,
             lc_elim_thresh: 50,
         },
@@ -295,6 +356,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -322,6 +388,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -331,6 +398,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -358,6 +430,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Zero,
             lc_elim_thresh: 50,
         },
@@ -367,6 +440,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -394,6 +472,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: NonDet,
             lc_elim_thresh: 11,
         },
@@ -403,6 +482,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -430,6 +514,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: true,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 10,
         },
@@ -439,6 +524,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -469,6 +559,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -478,6 +569,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -506,6 +602,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -515,6 +612,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -545,6 +647,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -554,6 +657,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -582,6 +690,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -591,6 +700,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -621,6 +735,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -630,6 +745,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -658,6 +778,7 @@ BinaryOpt {
     circ: CircOpt {
         r1cs: R1csOpt {
             verified: false,
+            profile: false,
             div_by_zero: Incomplete,
             lc_elim_thresh: 50,
         },
@@ -667,6 +788,11 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+        },
+        ram: RamOpt {
+            enabled: false,
+            range: Sort,
+            index: Uniqueness,
         },
         fmt: FmtOpt {
             use_default_field: true,

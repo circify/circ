@@ -113,6 +113,10 @@ pub trait ZVisitorMut<'ast>: Sized {
         Ok(())
     }
 
+    fn visit_commited_visibility(&mut self, _c: &mut ast::CommittedVisibility) -> ZVisitorResult {
+        Ok(())
+    }
+
     fn visit_private_visibility(
         &mut self,
         pr: &mut ast::PrivateVisibility<'ast>,
@@ -343,6 +347,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_array_access(self, aa)
     }
 
+    fn visit_array_index_expression(
+        &mut self,
+        index: &mut ast::Expression<'ast>,
+    ) -> ZVisitorResult {
+        walk_expression(self, index)
+    }
+
     fn visit_range_or_expression(
         &mut self,
         roe: &mut ast::RangeOrExpression<'ast>,
@@ -444,6 +455,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         asrt: &mut ast::AssertionStatement<'ast>,
     ) -> ZVisitorResult {
         walk_assertion_statement(self, asrt)
+    }
+
+    fn visit_cond_store_statement(
+        &mut self,
+        s: &mut ast::CondStoreStatement<'ast>,
+    ) -> ZVisitorResult {
+        walk_cond_store_statement(self, s)
     }
 
     fn visit_iteration_statement(

@@ -1,5 +1,5 @@
 //! Symbolic Z# terms
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 
 use rug::Integer;
@@ -17,6 +17,7 @@ pub enum Ty {
     Field,
     Struct(String, FieldList<Ty>),
     Array(usize, Box<Ty>),
+    MutArray(usize),
 }
 
 impl Display for Ty {
@@ -42,6 +43,7 @@ impl Display for Ty {
                 write!(f, "{bb}")?;
                 dims.iter().try_for_each(|d| write!(f, "[{d}]"))
             }
+            Ty::MutArray(n) => write!(f, "MutArray({n})"),
         }
     }
 }
@@ -52,15 +54,26 @@ impl fmt::Debug for Ty {
     }
 }
 
+pub fn default_field() -> circ_fields::FieldT {
+    cfg().field().clone()
+}
+
+fn default_field_sort() -> Sort {
+    Sort::Field(default_field())
+}
+
 impl Ty {
     fn sort(&self) -> Sort {
         match self {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w),
-            Self::Field => Sort::Field(cfg().field().clone()),
-            Self::Array(n, b) => Sort::Array(
-                Box::new(Sort::Field(cfg().field().clone())),
-                Box::new(b.sort()),
+            Self::Field => default_field_sort(),
+            Self::Array(n, b) => {
+                Sort::Array(Box::new(default_field_sort()), Box::new(b.sort()), *n)
+            }
+            Self::MutArray(n) => Sort::Array(
+                Box::new(default_field_sort()),
+                Box::new(default_field_sort()),
                 *n,
             ),
             Self::Struct(_name, fs) => {
@@ -85,6 +98,7 @@ impl Ty {
     pub fn array_val_ty(&self) -> &Self {
         match self {
             Self::Array(_, b) => b,
+            // TODO: MutArray?
             _ => panic!("Not an array type: {:?}", self),
         }
     }
@@ -130,6 +144,9 @@ impl T {
             Ty::Array(size, _sort) => Ok((0..*size)
                 .map(|i| term![Op::Select; self.term.clone(), pf_lit_ir(i)])
                 .collect()),
+            Ty::MutArray(size) => Ok((0..*size)
+                .map(|i| term![Op::Select; self.term.clone(), pf_lit_ir(i)])
+                .collect()),
             s => Err(format!("Not an array: {s}")),
         }
     }
@@ -143,6 +160,11 @@ impl T {
                     .map(|t| T::new(sort.clone(), t))
                     .collect())
             }
+            Ty::MutArray(_size) => Ok(self
+                .unwrap_array_ir()?
+                .into_iter()
+                .map(|t| T::new(Ty::Field, t))
+                .collect()),
             s => Err(format!("Not an array: {s}")),
         }
     }
@@ -365,7 +387,7 @@ fn rem_field(a: Term, b: Term) -> Term {
     let len = cfg().field().modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
-    term![Op::UbvToPf(cfg().field().clone()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
+    term![Op::UbvToPf(default_field()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
 }
 
 fn rem_uint(a: Term, b: Term) -> Term {
@@ -661,6 +683,11 @@ pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, Stri
             let end = end.unwrap_or(*size);
             array(arr.unwrap_array()?.drain(start..end))
         }
+        Ty::MutArray(size) => {
+            let start = start.unwrap_or(0);
+            let end = end.unwrap_or(*size);
+            array(arr.unwrap_array()?.drain(start..end))
+        }
         a => Err(format!("Cannot slice {a}")),
     }
 }
@@ -704,25 +731,44 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
     }
 }
 
+fn coerce_to_field(i: T) -> Result<Term, String> {
+    match &i.ty {
+        Ty::Uint(_) => Ok(term![Op::UbvToPf(default_field()); i.term]),
+        Ty::Field => Ok(i.term),
+        _ => Err(format!("Cannot coerce {} to a field element", &i)),
+    }
+}
+
 pub fn array_select(array: T, idx: T) -> Result<T, String> {
     match array.ty {
         Ty::Array(_, elem_ty) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
-            let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-                term![Op::UbvToPf(cfg().field().clone()); idx.term]
-            } else {
-                idx.term
-            };
+            let iterm = coerce_to_field(idx).unwrap();
             Ok(T::new(*elem_ty, term![Op::Select; array.term, iterm]))
+        }
+        Ty::MutArray(_) if matches!(idx.ty, Ty::Uint(_) | Ty::Field) => {
+            let iterm = coerce_to_field(idx).unwrap();
+            Ok(T::new(Ty::Field, term![Op::Select; array.term, iterm]))
         }
         _ => Err(format!("Cannot index {} using {}", &array.ty, &idx.ty)),
     }
+}
+
+pub fn mut_array_store(array: T, idx: T, val: T, cond: Term) -> Result<T, String> {
+    if !matches!(array.ty, Ty::MutArray(_) | Ty::Array(..)) {
+        return Err(format!(
+            "Can only call mut_array_store on arrays, not {array}"
+        ));
+    }
+    let i = coerce_to_field(idx).map_err(|s| format!("{s}: mutable array index"))?;
+    let v = coerce_to_field(val).map_err(|s| format!("{s}: mutable array value"))?;
+    Ok(T::new(array.ty, term![Op::CStore; array.term, i, v, cond]))
 }
 
 pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-            term![Op::UbvToPf(cfg().field().clone()); idx.term]
+            term![Op::UbvToPf(default_field()); idx.term]
         } else {
             idx.term
         };
@@ -735,34 +781,17 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     }
 }
 
-fn ir_array<I: IntoIterator<Item = Term>>(sort: Sort, elems: I) -> Term {
-    let mut values = HashMap::new();
-    let to_insert = elems
-        .into_iter()
-        .enumerate()
-        .filter_map(|(i, t)| {
-            let i_val = pf_val(i);
-            match const_value(&t) {
-                Some(v) => {
-                    values.insert(i_val, v);
-                    None
-                }
-                None => Some((leaf_term(Op::Const(i_val)), t)),
-            }
-        })
-        .collect::<Vec<(Term, Term)>>();
-    let len = values.len() + to_insert.len();
-    let arr = leaf_term(Op::Const(Value::Array(Array::new(
-        Sort::Field(cfg().field().clone()),
-        Box::new(sort.default_value()),
-        values.into_iter().collect::<BTreeMap<_, _>>(),
-        len,
-    ))));
-    to_insert
-        .into_iter()
-        .fold(arr, |arr, (idx, val)| term![Op::Store; arr, idx, val])
+fn ir_array<I: IntoIterator<Item = Term>>(value_sort: Sort, elems: I) -> Term {
+    let key_sort = Sort::Field(cfg().field().clone());
+    term(Op::Array(key_sort, value_sort), elems.into_iter().collect())
 }
 
+pub fn fill_array(value: T, size: usize) -> Result<T, String> {
+    Ok(T::new(
+        Ty::Array(size, Box::new(value.ty)),
+        term![Op::Fill(default_field_sort(), size); value.term],
+    ))
+}
 pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
     let v: Vec<T> = elems.into_iter().collect();
     if let Some(e) = v.first() {
@@ -785,7 +814,7 @@ pub fn uint_to_field(u: T) -> Result<T, String> {
     match &u.ty {
         Ty::Uint(_) => Ok(T::new(
             Ty::Field,
-            term![Op::UbvToPf(cfg().field().clone()); u.term],
+            term![Op::UbvToPf(default_field()); u.term],
         )),
         u => Err(format!("Cannot do uint-to-field on {u}")),
     }
@@ -923,7 +952,7 @@ impl Embeddable for ZSharp {
                 Ty::Field,
                 ctx.cs.borrow_mut().new_var(
                     &name,
-                    Sort::Field(cfg().field().clone()),
+                    default_field_sort(),
                     visibility,
                     precompute.map(|p| p.term),
                 ),
@@ -947,6 +976,20 @@ impl Embeddable for ZSharp {
                 array(
                     ps.into_iter().enumerate().map(|(i, p)| {
                         self.declare_input(ctx, ty, idx_name(&name, i), visibility, p)
+                    }),
+                )
+                .unwrap()
+            }
+            Ty::MutArray(n) => {
+                let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
+                    Some(Ok(v)) => v.into_iter().map(Some).collect(),
+                    Some(Err(e)) => panic!("{}", e),
+                    None => std::iter::repeat(None).take(*n).collect(),
+                };
+                debug_assert_eq!(*n, ps.len());
+                array(
+                    ps.into_iter().enumerate().map(|(i, p)| {
+                        self.declare_input(ctx, &Ty::Field, idx_name(&name, i), visibility, p)
                     }),
                 )
                 .unwrap()
@@ -979,5 +1022,10 @@ impl Embeddable for ZSharp {
 
     fn initialize_return(&self, ty: &Self::Ty, _ssa_name: &String) -> Self::T {
         ty.default()
+    }
+
+    fn wrap_persistent_array(&self, t: Term) -> Self::T {
+        let size = check(&t).as_array().2;
+        T::new(Ty::MutArray(size), t)
     }
 }

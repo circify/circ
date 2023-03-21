@@ -10,10 +10,10 @@ extern crate lazy_static;
 pub use ast::{
     Access, AnyString, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType,
     AssertionStatement, Assignee, AssigneeAccess, BasicOrStructType, BasicType, BinaryExpression,
-    BinaryOperator, BooleanLiteralExpression, BooleanType, CallAccess, ConstantDefinition,
-    ConstantGenericValue, Curve, DecimalLiteralExpression, DecimalNumber, DecimalSuffix,
-    DefinitionStatement, ExplicitGenerics, Expression, FieldSuffix, FieldType, File,
-    FromExpression, FromImportDirective, FunctionDefinition, HexLiteralExpression,
+    BinaryOperator, BooleanLiteralExpression, BooleanType, CallAccess, CommittedVisibility,
+    CondStoreStatement, ConstantDefinition, ConstantGenericValue, Curve, DecimalLiteralExpression,
+    DecimalNumber, DecimalSuffix, DefinitionStatement, ExplicitGenerics, Expression, FieldSuffix,
+    FieldType, File, FromExpression, FromImportDirective, FunctionDefinition, HexLiteralExpression,
     HexNumberExpression, IdentifierExpression, ImportDirective, ImportSymbol,
     InlineArrayExpression, InlineStructExpression, InlineStructMember, IterationStatement,
     LiteralExpression, MainImportDirective, MemberAccess, NegOperator, NotOperator, Parameter,
@@ -353,6 +353,7 @@ mod ast {
     #[pest_ast(rule(Rule::vis))]
     pub enum Visibility<'ast> {
         Public(PublicVisibility),
+        Committed(CommittedVisibility),
         Private(PrivateVisibility<'ast>),
     }
 
@@ -370,6 +371,10 @@ mod ast {
     pub struct PublicVisibility {}
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::vis_committed))]
+    pub struct CommittedVisibility {}
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::vis_private))]
     pub struct PrivateVisibility<'ast> {
         pub number: Option<PrivateNumber<'ast>>,
@@ -384,6 +389,7 @@ mod ast {
         Return(ReturnStatement<'ast>),
         Definition(DefinitionStatement<'ast>),
         Assertion(AssertionStatement<'ast>),
+        CondStore(CondStoreStatement<'ast>),
         Iteration(IterationStatement<'ast>),
     }
 
@@ -393,6 +399,7 @@ mod ast {
                 Statement::Return(x) => &x.span,
                 Statement::Definition(x) => &x.span,
                 Statement::Assertion(x) => &x.span,
+                Statement::CondStore(x) => &x.span,
                 Statement::Iteration(x) => &x.span,
             }
         }
@@ -412,6 +419,17 @@ mod ast {
     pub struct AssertionStatement<'ast> {
         pub expression: Expression<'ast>,
         pub message: Option<AnyString<'ast>>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::cond_store_statement))]
+    pub struct CondStoreStatement<'ast> {
+        pub array: IdentifierExpression<'ast>,
+        pub index: Expression<'ast>,
+        pub value: Expression<'ast>,
+        pub condition: Expression<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }

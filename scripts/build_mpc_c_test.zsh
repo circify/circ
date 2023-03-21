@@ -92,6 +92,8 @@ mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
 
 # build function tests
 mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/2pc_function_add.c
+mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/function_arg_order.c
+
 
 # build struct tests 
 mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_add.c

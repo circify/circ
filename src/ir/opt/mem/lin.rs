@@ -37,6 +37,11 @@ impl RewritePass for Linearizer {
                 computation.extend_precomputation(new_name.clone(), precomp);
                 Some(leaf_term(Op::Var(new_name, new_sort)))
             }
+            Op::Array(..) => Some(term(Op::Tuple, rewritten_children())),
+            Op::Fill(_, size) => Some(term(
+                Op::Tuple,
+                vec![rewritten_children().pop().unwrap(); *size],
+            )),
             Op::Select => {
                 let cs = rewritten_children();
                 let idx = &cs[1];
@@ -115,7 +120,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata (parties ) (inputs (a (bv 4)) (b (bv 4)) (c (bv 4))))
+                (metadata (parties ) (inputs (a (bv 4)) (b (bv 4)) (c (bv 4))) (commitments))
                 (precompute () () (#t ))
                 (let
                     (
@@ -138,7 +143,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata (parties ) (inputs (a (mod 5)) (b (mod 5)) (c (mod 5))))
+                (metadata (parties ) (inputs (a (mod 5)) (b (mod 5)) (c (mod 5))) (commitments))
                 (precompute () () (#t ))
                 (let
                     (
@@ -161,7 +166,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata (parties ) (inputs (a (bv 4)) (b (bv 4)) (c (bv 4))))
+                (metadata (parties ) (inputs (a (bv 4)) (b (bv 4)) (c (bv 4))) (commitments))
                 (precompute () () (#t ))
                 (let
                     (
@@ -184,7 +189,7 @@ mod test {
         let mut c = text::parse_computation(
             b"
             (computation
-                (metadata (parties ) (inputs (a (mod 5)) (b (mod 5)) (c (mod 5))))
+                (metadata (parties ) (inputs (a (mod 5)) (b (mod 5)) (c (mod 5))) (commitments))
                 (precompute () () (#t ))
                 (let
                     (

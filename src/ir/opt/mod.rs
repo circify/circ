@@ -1,8 +1,11 @@
 //! Optimizations
 pub mod binarize;
 pub mod cfold;
+pub mod chall;
+pub mod cstore;
 pub mod flat;
 pub mod inline;
+pub mod link;
 pub mod mem;
 pub mod scalarize_vars;
 pub mod sha;
@@ -25,6 +28,8 @@ pub enum Opt {
     Flatten,
     /// Binarize n-ary operators
     Binarize,
+    /// Find conditional stores.
+    ParseCondStores,
     /// SHA-2 peephole optimizations
     Sha,
     /// Replace oblivious arrays with tuples
@@ -37,14 +42,31 @@ pub enum Opt {
     Inline,
     /// Eliminate tuples
     Tuple,
+    /// Link function calls
+    Link,
+    /// Eliminate persistent RAM
+    PersistentRam,
+    /// Eliminate volatile RAM
+    VolatileRam,
+    /// Replace challenge terms with random variables
+    SkolemizeChallenges,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for i in optimizations {
         debug!("Applying: {:?}", i);
+
+        if let Opt::Link = i {
+            link::link_all_function_calls(&mut cs);
+            continue;
+        }
+
         for (_, c) in cs.comps.iter_mut() {
             match i.clone() {
+                Opt::ParseCondStores => {
+                    cstore::parse(c);
+                }
                 Opt::ScalarizeVars => {
                     scalarize_vars::scalarize_inputs(c);
                 }
@@ -99,6 +121,18 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::Tuple => {
                     tuple::eliminate_tuples(c);
+                }
+                Opt::Link => unreachable!(),
+                Opt::PersistentRam => {
+                    let cfg = mem::ram::AccessCfg::from_cfg();
+                    mem::ram::persistent::apply(c, &cfg);
+                }
+                Opt::VolatileRam => {
+                    let cfg = mem::ram::AccessCfg::from_cfg();
+                    mem::ram::volatile::apply(c, &cfg);
+                }
+                Opt::SkolemizeChallenges => {
+                    chall::skolemize_challenges(c);
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());

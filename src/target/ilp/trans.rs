@@ -708,8 +708,7 @@ mod test {
                 leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
                 leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
             ],
-            metadata: ComputationMetadata::default(),
-            precomputes: Default::default(),
+            ..Default::default()
         };
         let ilp = to_ilp(cs);
         let r = ilp.solve(default_solver).unwrap().1;
@@ -850,8 +849,7 @@ mod test {
     fn trivial_bv_opt() {
         let cs = Computation {
             outputs: vec![leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))],
-            metadata: ComputationMetadata::default(),
-            precomputes: Default::default(),
+            ..Default::default()
         };
         let ilp = to_ilp(cs);
         let (max, vars) = ilp.solve(default_solver).unwrap();
@@ -866,8 +864,7 @@ mod test {
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
                 bv_lit(1,4)
             ]],
-            metadata: ComputationMetadata::default(),
-            precomputes: Default::default(),
+            ..Default::default()
         };
         let ilp = to_ilp(cs);
         let (max, vars) = ilp.solve(default_solver).unwrap();
@@ -877,12 +874,11 @@ mod test {
     #[test]
     fn mul2_bv_opt() {
         let cs = Computation {
-            precomputes: Default::default(),
             outputs: vec![term![BV_MUL;
                 leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
                 bv_lit(2,4)
             ]],
-            metadata: ComputationMetadata::default(),
+            ..Default::default()
         };
         let ilp = to_ilp(cs);
         let (max, _vars) = ilp.solve(default_solver).unwrap();
@@ -891,7 +887,6 @@ mod test {
     #[test]
     fn mul2_plus_bv_opt() {
         let cs = Computation {
-            precomputes: Default::default(),
             outputs: vec![term![BV_ADD;
                 term![BV_MUL;
                     leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
@@ -900,7 +895,7 @@ mod test {
 
                     leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))
             ]],
-            metadata: ComputationMetadata::default(),
+            ..Default::default()
         };
         let ilp = to_ilp(cs);
         let (max, vars) = ilp.solve(default_solver).unwrap();
@@ -912,12 +907,11 @@ mod test {
         let a = leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)));
         let c = leaf_term(Op::Var("c".to_owned(), Sort::Bool));
         let cs = Computation {
-            precomputes: Default::default(),
             outputs: vec![term![BV_ADD;
             term![ITE; c, bv_lit(2,4), bv_lit(1,4)],
             term![BV_MUL; a, bv_lit(2,4)]
             ]],
-            metadata: ComputationMetadata::default(),
+            ..Default::default()
         };
         let ilp = to_ilp(cs);
         let (max, vars) = ilp.solve(default_solver).unwrap();
