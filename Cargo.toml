@@ -58,7 +58,7 @@ structopt = "0.3"
 approx = "0.5.0"
 
 [features]
-default = ["bls12381", "ff_dfl", "r1cs", "lp", "smt", "zok"]
+default = ["bls12381", "ff_dfl"]
 bls12381 = []
 ff_dfl = []
 dalek = []
@@ -101,7 +101,5 @@ opt-level = 3
 ark-ec = { git = "https://github.com/arkworks-rs/algebra" }
 ark-ff = { git = "https://github.com/arkworks-rs/algebra" }
 ark-serialize = { git = "https://github.com/arkworks-rs/algebra" }
-ark-algebra-bench-templates = { git = "https://github.com/arkworks-rs/algebra" }
-ark-algebra-test-templates = { git = "https://github.com/arkworks-rs/algebra" }
 ark-r1cs-std = { git = "https://github.com/arkworks-rs/r1cs-std" }
 ark-std = { git = "https://github.com/arkworks-rs/std" }

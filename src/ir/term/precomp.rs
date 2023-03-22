@@ -151,7 +151,7 @@ impl PreComp {
         let t1 = Instant::now();
         let mut val_arr = vec![Option::None; term_arr.len()];
         for term_idx in 0..term_arr.len() {
-            eval_value_efficient(term_idx, term_arr, &mut val_arr, env);
+            eval_value(&mut EvalMode::Preprocessed(term_arr, &mut val_arr, term_idx), env);
         }
         println!("real eval take {}", t1.elapsed().as_millis());
         let mut map = FxHashMap::default();

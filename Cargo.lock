@@ -1760,16 +1760,6 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "ark-algebra-bench-templates"
-version = "0.3.0"
-source = "git+https://github.com/arkworks-rs/algebra#3835af548d929d08f3ff1771c4349ed49c698efd"
-
-[[patch.unused]]
-name = "ark-algebra-test-templates"
-version = "0.3.0"
-source = "git+https://github.com/arkworks-rs/algebra#3835af548d929d08f3ff1771c4349ed49c698efd"
-
-[[patch.unused]]
 name = "ark-r1cs-std"
 version = "0.3.1"
 source = "git+https://github.com/arkworks-rs/r1cs-std#4fbdc2b6a5c27aebd7210b34fa25575309494cdf"
