@@ -217,11 +217,19 @@ impl<'cfg> ToR1cs<'cfg> {
     }
 
     /// Return the product of `a` and `b`.
-    fn mul(&mut self, a: TermLc, b: TermLc) -> TermLc {
+    fn mul(&mut self, mut a: TermLc, mut b: TermLc) -> TermLc {
+        if b.1.as_const().is_some() {
+            std::mem::swap(&mut a, &mut b);
+        }
         let mul_val = term![PF_MUL; a.0, b.0];
-        let c = self.fresh_var("mul", mul_val, false);
-        self.r1cs.constraint(a.1, b.1, c.1.clone());
-        c
+        if let Some(c) = a.1.as_const() {
+            let lc = b.1 * c;
+            TermLc(mul_val, lc)
+        } else {
+            let c = self.fresh_var("mul", mul_val, false);
+            self.r1cs.constraint(a.1, b.1, c.1.clone());
+            c
+        }
     }
 
     /// Given a bit-values `a`, returns its (boolean) not.
