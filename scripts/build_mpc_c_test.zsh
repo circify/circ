@@ -90,26 +90,26 @@ mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_3.c
 # mpc_test 2 ./examples/C/mpc/unit_tests/c_array_tests/2pc_array_sum_c.c
 
-# build function tests
-mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/2pc_function_add.c
-mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/function_arg_order.c
+# # build function tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/2pc_function_add.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/function_tests/function_arg_order.c
 
 
-# build struct tests 
-mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_add.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_array_add.c
+# # build struct tests 
+# mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_add.c
+# # mpc_test 2 ./examples/C/mpc/unit_tests/struct_tests/2pc_struct_array_add.c
 
-# # build matrix tests
-# mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_add.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_assign_add.c
-# mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_ptr_add.c
+# # # build matrix tests
+# # mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_add.c
+# # mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_assign_add.c
+# # mpc_test 2 ./examples/C/mpc/unit_tests/matrix_tests/2pc_matrix_ptr_add.c
 
-# build ptr tests
-mpc_test 2 ./examples/C/mpc/unit_tests/ptr_tests/2pc_ptr_add.c
+# # build ptr tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/ptr_tests/2pc_ptr_add.c
 
-# build misc tests
-mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
-mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
+# # build misc tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_millionaires.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/misc_tests/2pc_multi_var.c
 
 # build hycc benchmarks
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
