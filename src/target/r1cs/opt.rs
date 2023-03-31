@@ -34,7 +34,7 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
         let mut uses: HashMap<usize, HashSet<usize>> =
             HashMap::with_capacity_and_hasher(r1cs.next_idx, Default::default());
         let mut add = |i: usize, y: &Lc| {
-            for x in y.monomials.keys() {
+            for (x, _) in &y.monomials {
                 uses.get_mut(x).map(|m| m.insert(i)).or_else(|| {
                     let mut m: HashSet<usize> = Default::default();
                     m.insert(i);
@@ -57,29 +57,18 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
     fn sub_in(&mut self, var: usize, val: &Lc, con_id: usize) -> bool {
         let (a, b, c) = &mut self.r1cs.constraints[con_id];
         let uses = &mut self.uses;
+        
         let mut do_in = |a: &mut Lc| {
-            if let Some(sc) = a.monomials.remove(&var) {
-                assert_eq!(&a.modulus, &val.modulus);
+            if let Some(sc) = a.remove(var) {
+                assert_eq!(&a.field(), &val.field());
                 a.constant += sc.clone() * &val.constant;
                 let tot = a.monomials.len() + val.monomials.len();
                 if tot > a.monomials.capacity() {
                     a.monomials.reserve(tot - a.monomials.capacity());
                 }
                 for (i, v) in &val.monomials {
-                    match a.monomials.entry(*i) {
-                        Entry::Occupied(mut e) => {
-                            let m = e.get_mut();
-                            *m += sc.clone() * v;
-                            if e.get().is_zero() {
-                                uses.get_mut(i).unwrap().remove(&con_id);
-                                e.remove_entry();
-                            }
-                        }
-                        Entry::Vacant(e) => {
-                            e.insert(sc.clone() * v);
-                            uses.get_mut(i).unwrap().insert(con_id);
-                        }
-                    }
+                    a.insert(i.clone(), v.clone() * &sc);
+                    uses.get_mut(i).unwrap().insert(con_id);
                 }
                 true
             } else {
@@ -98,16 +87,16 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
     }
 
     fn clear_constraint(&mut self, i: usize) {
-        for v in self.r1cs.constraints[i].0.monomials.keys() {
-            self.uses.get_mut(v).unwrap().remove(&i);
+        for (v, _) in &self.r1cs.constraints[i].0.monomials {
+            self.uses.get_mut(&v).unwrap().remove(&i);
         }
         self.r1cs.constraints[i].0.clear();
-        for v in self.r1cs.constraints[i].1.monomials.keys() {
-            self.uses.get_mut(v).unwrap().remove(&i);
+        for (v, _) in &self.r1cs.constraints[i].1.monomials {
+            self.uses.get_mut(&v).unwrap().remove(&i);
         }
         self.r1cs.constraints[i].1.clear();
-        for v in self.r1cs.constraints[i].2.monomials.keys() {
-            self.uses.get_mut(v).unwrap().remove(&i);
+        for (v, _) in &self.r1cs.constraints[i].2.monomials {
+            self.uses.get_mut(&v).unwrap().remove(&i);
         }
         self.r1cs.constraints[i].2.clear();
     }
@@ -143,10 +132,10 @@ impl<S: Eq + Hash + Display + Clone> LinReducer<S> {
 
 fn as_linear_sub((a, b, c): &(Lc, Lc, Lc), public: &HashSet<usize>) -> Option<(usize, Lc)> {
     if a.is_zero() || b.is_zero() {
-        for i in c.monomials.keys() {
+        for (j, (i, _)) in c.monomials.iter().enumerate() {
             if !public.contains(i) {
                 let mut lc = c.clone();
-                let v = lc.monomials.remove(i).unwrap();
+                let v = lc.monomials.remove(j).1;
                 lc *= v.recip();
                 return Some((*i, -lc));
             }

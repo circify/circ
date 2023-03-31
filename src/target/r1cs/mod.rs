@@ -6,8 +6,8 @@ use log::debug;
 use paste::paste;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::Entry;
 use std::fmt::Display;
+use smallvec::SmallVec;
 use std::hash::Hash;
 
 use crate::ir::term::*;
@@ -48,14 +48,11 @@ pub struct R1cs<S: Hash + Eq> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A linear combination
 pub struct Lc {
-    /// The modulus of this constraint
-    pub modulus: FieldT,
-
     /// The constant value associated with this constraint
     pub constant: FieldV,
 
     /// Sparse representation of the linear combination
-    pub monomials: HashMap<usize, FieldV>,
+    pub monomials: SmallVec<[(usize, FieldV); 1]>,
 }
 
 impl Lc {
@@ -63,17 +60,21 @@ impl Lc {
     pub fn is_zero(&self) -> bool {
         self.monomials.is_empty() && self.constant.is_zero()
     }
+    /// Get the field for this Lc.
+    pub fn field(&self) -> FieldT {
+        self.constant.ty()
+    }
     /// Make this the zero combination.
     pub fn clear(&mut self) {
         self.monomials.clear();
-        self.constant = self.modulus.zero();
+        self.constant = self.field().zero();
     }
     /// Take this linear combination, leaving zero in its place.
     pub fn take(&mut self) -> Self {
         let monomials = std::mem::take(&mut self.monomials);
-        let constant = std::mem::replace(&mut self.constant, self.modulus.zero());
+        let z = self.field().zero();
+        let constant = std::mem::replace(&mut self.constant, z);
         Self {
-            modulus: self.modulus.clone(),
             constant,
             monomials,
         }
@@ -82,79 +83,107 @@ impl Lc {
     pub fn as_const(&self) -> Option<&FieldV> {
         self.monomials.is_empty().then_some(&self.constant)
     }
+    /// Remove `var` from this combination, returning its coefficient.
+    ///
+    /// Postcondition: `var` does not occur in the combination.
+    /// If `var`'s occurances summed to 0, then returns None.
+    pub fn remove(&mut self, v: usize) -> Option<FieldV> {
+        let mut sum = self.field().zero();
+        self.monomials.retain(|(var, val)| {
+            if var == &v {
+                sum += &*val;
+                false
+            } else {
+                true
+            }
+        });
+        if sum.is_zero() {
+            None
+        } else {
+            Some(sum)
+        }
+    }
+    /// Insert a new variable and value.
+    ///
+    /// If the combination is small enough: deduplicates.
+    pub fn insert(&mut self, var: usize, val: FieldV) {
+        if self.monomials.len() < LC_SCAN_THRESH {
+            for (k, v) in &mut self.monomials {
+                if k == &var {
+                    *v += &val;
+                    return
+                }
+            }
+            self.monomials.push((var, val));
+        } else {
+            self.monomials.push((var, val));
+        }
+
+    }
 }
+
+
+const LC_SCAN_THRESH: usize = 4;
 
 macro_rules! arith_impl {
     ($Trait: ident, $fn: ident) => {
         paste! {
-            impl $Trait<&Lc> for Lc {
-                type Output = Self;
-                fn $fn(mut self, other: &Self) -> Self {
-                    self.[<$fn _assign>](other);
-                    self
-                }
-            }
-
-            impl [<$Trait Assign>]<&Lc> for Lc {
-                fn [<$fn _assign>](&mut self, other: &Self) {
-                    assert_eq!(&self.modulus, &other.modulus);
-                    self.constant.[<$fn _assign>](&other.constant);
-                    let tot = self.monomials.len() + other.monomials.len();
-                    if tot > self.monomials.capacity() {
-                        self.monomials.reserve(tot - self.monomials.capacity());
+                    impl $Trait<&Lc> for Lc {
+                        type Output = Self;
+                        fn $fn(mut self, other: &Self) -> Self {
+                            self.[<$fn _assign>](other);
+                            self
+                        }
                     }
-                    for (i, v) in &other.monomials {
-                        match self.monomials.entry(*i) {
-                            Entry::Occupied(mut e) => {
-                                e.get_mut().[<$fn _assign>](v);
-                                if e.get().is_zero() {
-                                    e.remove_entry();
-                                }
+
+                    impl [<$Trait Assign>]<&Lc> for Lc {
+                        fn [<$fn _assign>](&mut self, other: &Self) {
+                            debug_assert_eq!(self.field(), other.field());
+                            self.constant.[<$fn _assign>](&other.constant);
+                            let tot = self.monomials.len() + other.monomials.len();
+                            if tot > self.monomials.capacity() {
+                                self.monomials.reserve(tot - self.monomials.capacity());
                             }
-                            Entry::Vacant(e) => {
-                                let mut m = self.modulus.zero();
-                                m.[<$fn _assign>](v);
-                                e.insert(m);
+                            for (i, v) in &other.monomials {
+                                self.monomials.push((i.clone(), v.clone()));
                             }
                         }
                     }
-                }
-            }
 
-            impl $Trait<&FieldV> for Lc {
-                type Output = Self;
-                fn $fn(mut self, other: &FieldV) -> Self {
-                    self.[<$fn _assign>](other);
-                    self
-                }
-            }
+                    impl $Trait<&FieldV> for Lc {
+                        type Output = Self;
+                        fn $fn(mut self, other: &FieldV) -> Self {
+                            self.[<$fn _assign>](other);
+                            self
+                        }
+                    }
 
-            impl [<$Trait Assign>]<&FieldV> for Lc {
-                fn [<$fn _assign>](&mut self, other: &FieldV) {
-                    self.constant.[<$fn _assign>](other);
-                }
-            }
+                    impl [<$Trait Assign>]<&FieldV> for Lc {
+                        fn [<$fn _assign>](&mut self, other: &FieldV) {
+                            self.constant.[<$fn _assign>](other);
+                        }
+                    }
 
-            impl [<$Trait Assign>]<FieldV> for Lc {
-                fn [<$fn _assign>](&mut self, other: FieldV) {
-                    self.[<$fn _assign>](&other);
-                }
-            }
+                    impl [<$Trait Assign>]<FieldV> for Lc {
+                        fn [<$fn _assign>](&mut self, other: FieldV) {
+                            self.[<$fn _assign>](&other);
+                        }
+                    }
 
-            impl $Trait<isize> for Lc {
-                type Output = Self;
-                fn $fn(mut self, other: isize) -> Self {
-                    self.[<$fn _assign>](other);
-                    self
-                }
-            }
+                    impl $Trait<isize> for Lc {
+                        type Output = Self;
+                        fn $fn(mut self, other: isize) -> Self {
+                            self.[<$fn _assign>](other);
+                            self
+                        }
+                    }
 
-            impl [<$Trait Assign>]<isize> for Lc {
-                fn [<$fn _assign>](&mut self, other: isize) {
-                    self.constant.[<$fn _assign>](self.modulus.new_v(other));
+                    impl [<$Trait Assign>]<isize> for Lc {
+                        fn [<$fn _assign>](&mut self, other: isize) {
+                            self.constant.[<$fn _assign>](self.field().new_v(other));
+                        }
+                    }
                 }
-            }
-        }
     };
 }
 
@@ -164,7 +193,7 @@ impl Neg for Lc {
     type Output = Lc;
     fn neg(mut self) -> Lc {
         self.constant = -self.constant;
-        for v in &mut self.monomials.values_mut() {
+        for (_, v) in &mut self.monomials {
             *v = -v.clone();
         }
         self
@@ -194,7 +223,7 @@ impl MulAssign<&FieldV> for Lc {
         if other.is_zero() {
             self.monomials.clear();
         } else {
-            for v in &mut self.monomials.values_mut() {
+            for (_, v) in &mut self.monomials {
                 *v *= other;
             }
         }
@@ -211,9 +240,10 @@ impl Mul<isize> for Lc {
 
 impl MulAssign<isize> for Lc {
     fn mul_assign(&mut self, other: isize) {
-        self.mul_assign(self.modulus.new_v(other));
+        self.mul_assign(self.field().new_v(other));
     }
 }
+
 
 impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     /// Make an empty constraint system, mod `modulus`.
@@ -232,9 +262,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     /// Get the zero combination for this system.
     pub fn zero(&self) -> Lc {
         Lc {
-            modulus: self.modulus.clone(),
             constant: self.modulus.zero(),
-            monomials: HashMap::default(),
+            monomials: Default::default(),
         }
     }
     /// Get a constant constraint for this system.
@@ -242,9 +271,8 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     pub fn constant(&self, c: FieldV) -> Lc {
         assert_eq!(c.ty(), self.modulus);
         Lc {
-            modulus: self.modulus.clone(),
             constant: c,
-            monomials: HashMap::default(),
+            monomials: Default::default(),
         }
     }
     /// Get combination which is just the wire `s`.
@@ -254,7 +282,7 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
             .get(s)
             .expect("Missing signal in signal_lc");
         let mut lc = self.zero();
-        lc.monomials.insert(*idx, self.modulus.new_v(1));
+        lc.monomials.push((*idx, self.modulus.new_v(1)));
         lc
     }
     /// Create a new wire, `s`. If this system is tracking concrete values, you must provide the
@@ -278,9 +306,9 @@ impl<S: Clone + Hash + Eq + Display> R1cs<S> {
     }
     /// Make `a * b = c` a constraint.
     pub fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
-        assert_eq!(&self.modulus, &a.modulus);
-        assert_eq!(&self.modulus, &b.modulus);
-        assert_eq!(&self.modulus, &c.modulus);
+        assert_eq!(&self.modulus, &a.field());
+        assert_eq!(&self.modulus, &b.field());
+        assert_eq!(&self.modulus, &c.field());
         debug!(
             "Constraint:\n    {}\n  * {}\n  = {}",
             self.format_lc(&a),
@@ -563,101 +591,74 @@ impl TermLc {
     }
     /// Get the field type for this term & linear combination.
     pub fn field(&self) -> FieldT {
-        self.1.modulus.clone()
+        self.1.field()
     }
 }
 
-impl std::ops::Add<&TermLc> for TermLc {
-    type Output = TermLc;
-    fn add(mut self, other: &TermLc) -> TermLc {
-        self += other;
-        self
-    }
+
+
+fn pf_add(a: Term, b: Term) -> Term {
+    term![PF_ADD; a, b]
 }
 
-impl std::ops::AddAssign<&TermLc> for TermLc {
-    fn add_assign(&mut self, other: &TermLc) {
-        self.1 += &other.1;
-        self.0 = term![PF_ADD; self.0.clone(), other.0.clone()];
-    }
+fn pf_sub(a: Term, b: Term) -> Term {
+    term![PF_ADD; a, term![PF_NEG; b]]
 }
 
-impl std::ops::Add<&FieldV> for TermLc {
-    type Output = TermLc;
-    fn add(mut self, other: &FieldV) -> TermLc {
-        self.0 = term![PF_ADD; self.0.clone(), pf_lit(other.clone())];
-        self.1 += other;
-        self
-    }
+macro_rules! arith_op_termlc {
+    ($Trait: ident, $fn: ident, $term_fn: ident) => {
+        paste! {
+            impl $Trait<&TermLc> for TermLc {
+                type Output = TermLc;
+                fn $fn(mut self, other: &TermLc) -> TermLc {
+                    self.[<$fn _assign>](other);
+                    self
+                }
+            }
+
+            impl [<$Trait Assign>]<&TermLc> for TermLc {
+                fn [<$fn _assign>](&mut self, other: &Self) {
+                    self.1.[<$fn _assign>](&other.1);
+                    self.0 = $term_fn(self.0.clone(), other.0.clone());
+                }
+            }
+
+            impl $Trait<&FieldV> for TermLc {
+                type Output = TermLc;
+                fn $fn(mut self, other: &FieldV) -> TermLc {
+                    self.0 = $term_fn(self.0.clone(), pf_lit(other.clone()));
+                    self.1.[<$fn _assign>](other);
+                    self
+                }
+            }
+
+            impl [<$Trait Assign>]<&FieldV> for TermLc {
+                fn [<$fn _assign>](&mut self, other: &FieldV) {
+                    self.0 = $term_fn(self.0.clone(), pf_lit(other.clone()));
+                    self.1.[<$fn _assign>](other);
+                }
+            }
+
+            impl $Trait<isize> for TermLc {
+                type Output = TermLc;
+                fn $fn(mut self, other: isize) -> TermLc {
+                    self.[<$fn _assign>](other);
+                    self
+                }
+            }
+
+            impl [<$Trait Assign>]<isize> for TermLc {
+                fn [<$fn _assign>](&mut self, other: isize) {
+                    self.1.[<$fn _assign>](other);
+                    self.0 = $term_fn(self.0.clone(), pf_lit(self.field().new_v(other)));
+                }
+            }
+        }
+    };
 }
 
-impl std::ops::AddAssign<&FieldV> for TermLc {
-    fn add_assign(&mut self, other: &FieldV) {
-        self.0 = term![PF_ADD; self.0.clone(), pf_lit(other.clone())];
-        self.1 += other;
-    }
-}
-
-impl std::ops::Add<isize> for TermLc {
-    type Output = TermLc;
-    fn add(mut self, other: isize) -> TermLc {
-        self += other;
-        self
-    }
-}
-
-impl std::ops::AddAssign<isize> for TermLc {
-    fn add_assign(&mut self, other: isize) {
-        self.1 += other;
-        self.0 = term![PF_ADD; self.0.clone(), pf_lit(self.field().new_v(other))];
-    }
-}
-
-impl std::ops::Sub<&TermLc> for TermLc {
-    type Output = TermLc;
-    fn sub(mut self, other: &TermLc) -> TermLc {
-        self -= other;
-        self
-    }
-}
-
-impl std::ops::SubAssign<&TermLc> for TermLc {
-    fn sub_assign(&mut self, other: &TermLc) {
-        self.1 -= &other.1;
-        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; other.0.clone()]];
-    }
-}
-
-impl std::ops::Sub<&FieldV> for TermLc {
-    type Output = TermLc;
-    fn sub(mut self, other: &FieldV) -> TermLc {
-        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; pf_lit(other.clone())]];
-        self.1 -= other;
-        self
-    }
-}
-
-impl std::ops::SubAssign<&FieldV> for TermLc {
-    fn sub_assign(&mut self, other: &FieldV) {
-        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; pf_lit(other.clone())]];
-        self.1 -= other;
-    }
-}
-
-impl std::ops::Sub<isize> for TermLc {
-    type Output = TermLc;
-    fn sub(mut self, other: isize) -> TermLc {
-        self -= other;
-        self
-    }
-}
-
-impl std::ops::SubAssign<isize> for TermLc {
-    fn sub_assign(&mut self, other: isize) {
-        self.1 -= other;
-        self.0 = term![PF_ADD; self.0.clone(), term![PF_NEG; pf_lit(self.field().new_v(other))]];
-    }
-}
+arith_op_termlc! { Add, add, pf_add }
+arith_op_termlc! { Sub, sub, pf_sub }
 
 impl std::ops::Neg for TermLc {
     type Output = TermLc;

@@ -95,7 +95,7 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
         let mut uses = HashMap::with_capacity(self.0.next_idx);
         for (a, b, c) in self.0.constraints.iter() {
             [a, b, c].iter().for_each(|y| {
-                y.monomials.keys().for_each(|k| {
+                y.monomials.iter().for_each(|(k, _)| {
                     uses.get_mut(k)
                         .map(|i| {
                             *i += 1;
