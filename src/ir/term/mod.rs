@@ -2375,49 +2375,6 @@ impl ComputationSubgraph {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
-/// A map of IR computations.
-pub struct Functions {
-    /// The computation for each function
-    pub computations: BTreeMap<String, Computation>,
-}
-
-/// The canonical name of the entry function.
-pub const ENTRY_NAME: &str = "main";
-
-impl Functions {
-    /// Create new empty computations.
-    pub fn new() -> Self {
-        Self {
-            computations: BTreeMap::new(),
-        }
-    }
-
-    /// Insert computation
-    pub fn insert(&mut self, name: String, comp: Computation) {
-        self.computations.insert(name, comp);
-    }
-
-    /// Get the first computation by function name
-    pub fn get_comp(&self, name: &str) -> Option<&Computation> {
-        self.computations.get(name)
-    }
-
-    /// Create a computation with a single entry function
-    pub fn from_computation(comp: Computation) -> Self {
-        let mut this = Self::new();
-        this.insert(ENTRY_NAME.into(), comp);
-        this
-    }
-
-    /// Get the entry function (named [ENTRY_NAME]) or panic
-    pub fn get_entry(&self) -> &Computation {
-        self.computations
-            .get(ENTRY_NAME)
-            .unwrap_or_else(|| panic!("No entry function: {}", ENTRY_NAME))
-    }
-}
-
 /// Compute a (deterministic) prime-field challenge.
 pub fn pf_challenge(name: &str, field: &FieldT) -> FieldV {
     use rand::SeedableRng;
