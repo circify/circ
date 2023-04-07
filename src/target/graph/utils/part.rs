@@ -17,6 +17,7 @@ pub struct Partitioner {
 
 impl Partitioner {
     pub fn new(time_limit: usize, imbalance: usize, hyper_mode: bool) -> Self {
+        // TODO: Allow only kahip or kahypar
         // Get KaHIP source directory
         let kahip_source = match env::var("KAHIP_SOURCE") {
             Ok(val) => val,
