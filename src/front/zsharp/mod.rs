@@ -1353,8 +1353,7 @@ impl<'ast> ZGen<'ast> {
         assert!(!self.cvars_stack.borrow().last().unwrap().is_empty());
         self.cvars_stack
             .borrow_mut()
-            .last_mut()
-            .unwrap()
+            .last_mut()?
             .iter_mut()
             .rev()
             .find_map(|v| v.get_mut(name))
@@ -1376,10 +1375,8 @@ impl<'ast> ZGen<'ast> {
         }
         self.cvars_stack
             .borrow_mut()
-            .last_mut()
-            .unwrap()
-            .last_mut()
-            .unwrap()
+            .last_mut()?
+            .last_mut()?
             .insert(name, val);
         Ok(())
     }
