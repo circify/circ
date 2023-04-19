@@ -199,15 +199,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         ai: &mut ast::ArrayInitializerExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::Type::*;
-        let mut at = if let Array(at) = ty {
-            at
-        } else {
-            return Err(ZVisitorError(format!(
+        let Array(mut at) = ty else { return Err(ZVisitorError(format!(
                 "ZStatementWalker: array initializer expression wanted type {:?}:\n{}",
                 &ty,
                 span_to_string(&ai.span),
-            )));
-        };
+            ))); };
         assert!(!at.dimensions.is_empty());
 
         // XXX(unimpl) does not check array lengths, just unifies ai.count with U32!
@@ -229,15 +225,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         is: &mut ast::InlineStructExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::Type::*;
-        let st = if let Struct(st) = ty {
-            st
-        } else {
-            return Err(ZVisitorError(format!(
+        let Struct(st) = ty else { return Err(ZVisitorError(format!(
                 "ZStatementWalker: inline struct wanted type {:?}:\n{}",
                 &ty,
                 span_to_string(&is.span),
-            )));
-        };
+            ))); };
 
         let mut sm_types = self
             .get_struct_or_type(&st.id.value)?
@@ -278,15 +270,11 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         ia: &mut ast::InlineArrayExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::{SpreadOrExpression::*, Type::*};
-        let at = if let Array(at) = ty {
-            at
-        } else {
-            return Err(ZVisitorError(format!(
+        let Array(at) = ty else { return Err(ZVisitorError(format!(
                 "ZStatementWalker: inline array wanted type {:?}:\n{}",
                 &ty,
                 span_to_string(&ia.span),
-            )));
-        };
+            ))); };
 
         // XXX(unimpl) does not check array lengths, just checks contained types!
         let exp_ty = if at.dimensions.len() == 1 {
@@ -330,14 +318,10 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         be: &mut ast::BinaryExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::{BasicType::*, BinaryOperator::*, Type::*};
-        let bt = if let Basic(bt) = ty {
-            bt
-        } else {
-            return Err(ZVisitorError(format!(
+        let Basic(bt) = ty else { return Err(ZVisitorError(format!(
                 "ZStatementWalker: binary operators require Basic operands:\n{}",
                 span_to_string(&be.span),
-            )));
-        };
+            ))); };
 
         let (lt, rt) = match &be.op {
             BitXor | BitAnd | BitOr => match &bt {
@@ -436,14 +420,10 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         }
 
         // remaining unary operators can only take Basic types
-        let bt = if let Basic(bt) = ty {
-            bt
-        } else {
-            return Err(ZVisitorError(format!(
+        let Basic(bt) = ty else { return Err(ZVisitorError(format!(
                 "ZStatementWalker: unary operators require Basic operands:\n{}",
                 span_to_string(&ue.span),
-            )));
-        };
+            ))); };
 
         let ety = match &ue.op {
             Pos(_) | Neg(_) => match &bt {
@@ -471,14 +451,10 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         le: &mut ast::LiteralExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::{BasicType::*, LiteralExpression::*, Type::*};
-        let bt = if let Basic(bt) = ty {
-            bt
-        } else {
-            return Err(ZVisitorError(format!(
+        let Basic(bt) = ty else { return Err(ZVisitorError(format!(
                 "ZStatementWalker: literal expressions must yield basic types:\n{}",
                 span_to_string(le.span()),
-            )));
-        };
+            ))); };
 
         match le {
             BooleanLiteral(_) => {
