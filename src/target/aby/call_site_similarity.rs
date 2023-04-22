@@ -82,28 +82,25 @@ impl CallSiteSimilarity {
             println!("Building dug for {}", fname);
             let mut dug = DefUsesGraph::for_call_site(&c, &self.dugs, fname);
             dug.gen_in_out(&c);
-            let cs: Vec<(
-                String,
-                Vec<usize>,
-                Vec<Vec<Term>>,
-                Vec<usize>,
-                Vec<Vec<Term>>,
-                Term,
-            )> = dug.get_call_site();
-            for (callee, args, args_t, rets, rets_t, t) in cs.iter() {
-                let key: (String, Vec<usize>, Vec<usize>) =
-                    (callee.clone(), args.clone(), rets.clone());
-                if self.call_sites.contains_key(&key) {
-                    self.call_sites.get_mut(&key).unwrap().insert(t);
-                } else {
-                    // Use the first context
-                    if let Op::Call(_, _, _) = &t.op() {
-                        let cs = CallSite::new(fname, callee, args_t, rets_t, t, &dug);
-                        self.call_sites.insert(key, cs);
+            let cs: Vec<(Term, Vec<Vec<Term>>, Vec<Vec<Term>>)> = dug.get_call_site();
+            for (t, args_t, rets_t) in cs.iter() {
+                if let Op::Call(callee, _, _) = t.op() {
+                    // convert term to op id
+                    
+                    let key: (String, Vec<usize>, Vec<usize>) =
+                    (callee.clone(), to_key(args_t), to_key(rets_t));
+                    if self.call_sites.contains_key(&key) {
+                        self.call_sites.get_mut(&key).unwrap().insert(t);
+                    } else {
+                        // Use the first context
+                        if let Op::Call(_, _, _) = &t.op() {
+                            let cs = CallSite::new(fname, callee, args_t, rets_t, t, &dug);
+                            self.call_sites.insert(key, cs);
+                        }
                     }
+                    // recording callee-caller
+                    self.callee_caller.insert((callee.clone(), fname.clone()));
                 }
-                // recording callee-caller
-                self.callee_caller.insert((callee.clone(), fname.clone()));
             }
             self.dugs.insert(fname.clone(), dug);
             self.dup_per_func.insert(fname.clone(), 0);
@@ -115,7 +112,6 @@ impl CallSiteSimilarity {
     pub fn call_site_similarity_smart(&mut self) -> (Computations, HashMap<String, DefUsesGraph>) {
         let main = "main".to_string();
         self.traverse(&main);
-        // todo!("Testing");
 
         // Functions that have more than one call site
         let mut duplicated_f: HashSet<String> = HashSet::new();
@@ -186,16 +182,17 @@ fn rewrite_call(c: &mut Computation, call_map: &TermMap<usize>, duplicate_set: &
                         if duplicate_set.contains(name) {
                             if let Some(cid) = call_map.get(&top) {
                                 let new_n = format_dup_call(name, cid);
-                                let mut new_arg_names: Vec<String> = Vec::new();
-                                todo!();
+                                // let mut new_arg_names: Vec<String> = Vec::new();
+                                // todo!();
                                 // for an in arg_names.iter() {
                                 //     new_arg_names.push(an.replace(name, &new_n));
                                 // }
-                                // new_t = Op::Call(
-                                //     new_n,
-                                //     arg_sorts.clone(),
-                                //     ret_sorts.clone(),
-                                // );
+                                // TODO: maybe wrong
+                                new_t = Op::Call(
+                                    new_n,
+                                    arg_sorts.clone(),
+                                    ret_sorts.clone(),
+                                );
                             }
                         }
                         new_t
@@ -294,7 +291,7 @@ fn remap(
                 let new_n: String = format_dup_call(fname, cid);
                 let mut dup_comp: Computation = Computation {
                     outputs: ncomp.outputs().clone(),
-                    metadata: rewrite_metadata(&ncomp.metadata, fname, &new_n),
+                    metadata: ncomp.metadata.clone(),
                     precomputes: ncomp.precomputes.clone(),
                     persistent_arrays: Default::default(),
                 };
@@ -318,7 +315,8 @@ fn remap(
         let mut dug = n_dugs.get_mut(fname).unwrap();
         let comp = n_comps.get(fname);
         dug.set_num_calls(css_call_cnt.get(fname).unwrap());
-        dug.insert_context(&cs.args, &cs.rets, &cs.caller_dug, comp, ml);
+        // TODO: enable this
+        // dug.insert_context(&cs.args, &cs.rets, &cs.caller_dug, comp, ml);
     }
 
     (n_comps, n_dugs)
@@ -328,39 +326,33 @@ fn format_dup_call(fname: &String, cid: &usize) -> String {
     format!("{}_circ_v_{}", fname, cid).clone()
 }
 
-fn rewrite_metadata(
-    md: &ComputationMetadata,
-    fname: &String,
-    n_fname: &String,
-) -> ComputationMetadata {
-    todo!()
-    // let mut input_vis: FxHashMap<String, (Term, Option<PartyId>)> = FxHashMap::default();
-    // let mut computation_inputs: FxHashSet<String> = FxHashSet::default();
-    // let mut computation_arg_names: Vec<String> = Vec::new();
+fn to_key(vterms: &Vec<Vec<Term>>) -> Vec<usize> {
+    let mut key: Vec<usize> = Vec::new();
+    for terms in vterms{
+        let mut v: Vec<usize> = Vec::new();
+        for t in terms{
+            v.push(get_op_id(t.op()));
+        }
+        v.sort();
+        key.extend(v);
+    }
+    key
+}
 
-    // for (s, tu) in md.input_vis.iter() {
-    //     let s = s.clone();
-    //     let new_s = s.replace(fname, n_fname);
-    //     input_vis.insert(new_s, tu.clone());
-    // }
-
-    // for s in md.computation_inputs.iter() {
-    //     let s = s.clone();
-    //     let new_s = s.replace(fname, n_fname);
-    //     computation_inputs.insert(new_s);
-    // }
-
-    // for s in md.computation_arg_names.iter() {
-    //     let s = s.clone();
-    //     let new_s = s.replace(fname, n_fname);
-    //     computation_arg_names.push(new_s);
-    // }
-
-    // ComputationMetadata {
-    //     party_ids: md.party_ids.clone(),
-    //     next_party_id: md.next_party_id.clone(),
-    //     input_vis,
-    //     computation_inputs,
-    //     computation_arg_names,
-    // }
+fn get_op_id(op: &Op) -> usize {
+    match op {
+        Op::Var(..) => 1,
+        Op::Const(_) => 2,
+        Op::Eq => 3,
+        Op::Ite => 4,
+        Op::Not => 5,
+        Op::BoolNaryOp(o) => 6,
+        Op::BvBinPred(o) => 7,
+        Op::BvNaryOp(o) => 8,
+        Op::BvBinOp(o) => 9,
+        Op::Select => 10,
+        Op::Store => 11,
+        Op::Call(..) => 12,
+        _ => todo!("What op?"),
+    }
 }
