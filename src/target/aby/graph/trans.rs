@@ -6,8 +6,8 @@ use crate::target::aby::assignment::ilp::*;
 use crate::target::aby::assignment::ilp_opa::opa_smart_global_assign;
 use crate::target::aby::assignment::ShareType;
 use crate::target::aby::assignment::SharingMap;
-use crate::target::graph::tp::TrivialPartition;
-use crate::target::graph::utils::mutation::*;
+use crate::target::aby::graph::tp::TrivialPartition;
+use crate::target::aby::graph::utils::mutation::*;
 
 use std::collections::HashMap;
 use std::path::Path;

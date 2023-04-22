@@ -27,7 +27,7 @@ use super::assignment::assign_greedy;
 use super::assignment::ShareType;
 
 #[cfg(feature = "lp")]
-use crate::target::graph::trans::*;
+use crate::target::aby::graph::trans::*;
 
 use super::call_site_similarity::CallSiteSimilarity;
 

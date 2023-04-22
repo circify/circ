@@ -2,8 +2,6 @@
 
 #[cfg(feature = "aby")]
 pub mod aby;
-#[cfg(any(feature = "kahip", feature = "kahypar"))]
-pub mod graph;
 #[cfg(feature = "lp")]
 pub mod ilp;
 #[cfg(feature = "r1cs")]

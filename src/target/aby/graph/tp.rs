@@ -6,8 +6,8 @@ use crate::ir::opt::link::link_one;
 use crate::ir::term::*;
 
 use crate::target::aby::assignment::def_uses::*;
-use crate::target::graph::utils::graph_utils::*;
-use crate::target::graph::utils::part::*;
+use crate::target::aby::graph::utils::graph_utils::*;
+use crate::target::aby::graph::utils::part::*;
 
 use std::collections::HashMap;
 
