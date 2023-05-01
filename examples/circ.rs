@@ -248,17 +248,17 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    Opt::ScalarizeVars,
+                    // Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
                     // Function calls return tuples
-                    Opt::Tuple,
-                    Opt::Obliv,
+                    // Opt::Tuple,
+                    // Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
-                    Opt::LinearScan,
+                    // Opt::Tuple,
+                    // Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore)),

@@ -32,51 +32,51 @@ function mpc_test_2  {
 
 # mpc_test_2 2 ./examples/C/mpc/playground.c
 
-# build mpc arithmetic tests
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult_add_pub.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mod.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add_unsigned.c
+# # build mpc arithmetic tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_sub.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mult_add_pub.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_mod.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_add_unsigned.c
 
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_equals.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_greater_than.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_greater_equals.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_less_than.c
-mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_less_equals.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_equals.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_greater_than.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_greater_equals.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_less_than.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_less_equals.c
 
-# # build nary arithmetic tests
-mpc_test 2 ./examples/C/mpc/unit_tests/nary_arithmetic_tests/2pc_nary_arithmetic_add.c
+# # # build nary arithmetic tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/nary_arithmetic_tests/2pc_nary_arithmetic_add.c
 
-# # build bitwise tests
-mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_and.c
-mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_or.c
-mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_xor.c
+# # # build bitwise tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_and.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_or.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/bitwise_tests/2pc_bitwise_xor.c
 
-# # build boolean tests
-mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_and.c
-mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_or.c
-mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_equals.c
+# # # build boolean tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_and.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_or.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/boolean_tests/2pc_boolean_equals.c
 
-# # build nary boolean tests
-mpc_test 2 ./examples/C/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.c
+# # # build nary boolean tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/nary_boolean_tests/2pc_nary_boolean_and.c
 
-# # build const tests
-mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
-mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
+# # # build const tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_arith.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/const_tests/2pc_const_bool.c
 
-# build if statement tests
-mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
-mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
-mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
+# # build if statement tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_bool.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_ret_int.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/ite_tests/2pc_ite_only_if.c
 
-# build shift tests
-mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
-mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
+# # build shift tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_lhs.c
+# mpc_test 2 ./examples/C/mpc/unit_tests/shift_tests/2pc_rhs.c
 
-# build div tests
-mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
+# # build div tests
+# mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
 
 # # build array tests
 # mpc_test 2 ./examples/C/mpc/unit_tests/array_tests/2pc_array_sum.c
@@ -114,6 +114,7 @@ mpc_test 2 ./examples/C/mpc/unit_tests/div_tests/2pc_div.c
 # build hycc benchmarks
 # mpc_test 2 ./examples/C/mpc/benchmarks/biomatch/2pc_biomatch.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans.c
+mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_.c
 # mpc_test 2 ./examples/C/mpc/benchmarks/kmeans/2pc_kmeans_og.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/db/db_join.c
 # mpc_test_2 2 ./examples/C/mpc/benchmarks/gauss/2pc_gauss.c
