@@ -10,35 +10,16 @@ use std::collections::HashSet;
 /// A structure that stores the context and all the call terms in one call site
 struct CallSite {
     // Context's fname
-    pub caller: String,
-    pub callee: String,
-    pub args: Vec<Vec<Term>>,
-    pub rets: Vec<Vec<Term>>,
     pub calls: Vec<Term>,
-    pub caller_dug: DefUsesGraph,
 }
 
 impl CallSite {
     pub fn new(
-        caller: &String,
-        callee: &String,
-        args: &Vec<Vec<Term>>,
-        rets: &Vec<Vec<Term>>,
         t: &Term,
-        caller_dug: &DefUsesGraph,
     ) -> Self {
         Self {
-            caller: caller.clone(),
-            callee: callee.clone(),
-            args: args.clone(),
-            rets: rets.clone(),
             calls: vec![t.clone()],
-            caller_dug: caller_dug.clone(),
         }
-    }
-
-    pub fn insert(&mut self, t: &Term) {
-        self.calls.push(t.clone());
     }
 }
 
@@ -86,15 +67,14 @@ impl CallSiteSimilarity {
             for (t, args_t, rets_t) in cs.iter() {
                 if let Op::Call(callee, _, _) = t.op() {
                     // convert term to op id
-                    
                     let key: (String, Vec<usize>, Vec<usize>) =
                     (callee.clone(), to_key(args_t), to_key(rets_t));
                     if self.call_sites.contains_key(&key) {
-                        self.call_sites.get_mut(&key).unwrap().insert(t);
+                        self.call_sites.get_mut(&key).unwrap().calls.push(t.clone());
                     } else {
                         // Use the first context
                         if let Op::Call(_, _, _) = &t.op() {
-                            let cs = CallSite::new(fname, callee, args_t, rets_t, t, &dug);
+                            let cs = CallSite::new(t);
                             self.call_sites.insert(key, cs);
                         }
                     }

@@ -871,17 +871,3 @@ impl DefUsesGraph {
         }
     }
 }
-
-pub fn is_good_term(t: &Term) -> bool {
-    match t.op() {
-        Op::Const(Value::Tuple(_))
-        | Op::Tuple
-        | Op::Field(_)
-        | Op::Update(_)
-        | Op::Const(Value::Array(_))
-        | Op::Store
-        | Op::Select
-        | Op::Call(..) => false,
-        _ => true,
-    }
-}

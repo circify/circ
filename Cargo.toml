@@ -26,7 +26,7 @@ bellman = { git = "https://github.com/alex-ozdemir/bellman.git", branch = "mirag
 rug-polynomial = { version = "0.2.5", optional = true }
 ff = { version = "0.12", optional = true }
 fxhash = "0.2"
-good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
+good_lp = {git = "https://github.com/Clive2312/good_lp.git", features = ["lp-solvers", "coin_cbc"], optional = true }
 group = { version = "0.12", optional = true }
 lp-solvers = { version = "0.0.4", optional = true }
 serde_json = "1.0"
