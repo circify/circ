@@ -2002,34 +2002,6 @@ impl ComputationMetadata {
     pub fn remove_var(&mut self, name: &str) {
         self.vars.remove(name);
     }
-
-    /// Create a call term, given the input arguments in sorted order by argument names.
-    ///
-    /// ## Arguments
-    ///
-    /// * `name`: function name
-    /// * `args`: map of argument name (String) to argument term (Term)
-    /// * `ret_sort`: return sort of the function
-    ///
-    /// ## Returns
-    ///
-    /// A call term with the input arguments in sorted order by argument names.
-    ///
-    pub fn ordered_call_term(
-        &self,
-        name: String,
-        args: FxHashMap<String, Term>,
-        ret_sort: Sort,
-    ) -> Term {
-        let ordered_arg_names = self.ordered_input_names();
-        let ordered_args = ordered_arg_names
-            .iter()
-            .map(|name| args.get(name).expect("Argument not found: {}").clone())
-            .collect::<Vec<Term>>();
-        let ordered_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
-
-        term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
-    }
 }
 
 /// A structured collection of variables that indicates the round structure: e.g., orderings,

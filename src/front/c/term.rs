@@ -30,35 +30,54 @@ impl CTermData {
     /// Get all IR terms inside this value, as a list.
     pub fn terms(&self, ctx: &CirCtx) -> Vec<Term> {
         let mut output: Vec<Term> = Vec::new();
-        fn terms_tail(term_: &CTermData, output: &mut Vec<Term>, inner_ctx: &CirCtx) {
+        fn terms_tail(term_: &CTermData, output: &mut Vec<Term>, ctx: &CirCtx) {
             match term_ {
                 CTermData::Bool(t) => output.push(t.clone()),
                 CTermData::Int(_, _, t) => output.push(t.clone()),
                 CTermData::Array(t, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
-                    if let Ty::Array(l, _, _) = t {
-                        for i in 0..*l {
-                            let offset = bv_lit(i, 32);
-                            let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
-                            output.push(idx_term);
-                        }
-                    }
+                    if let Ty::Array(_, _, _) = t {
+                        output.push(ctx.mem.borrow_mut().term(alloc_id));
+                    } else {
+                        panic!("CTermData::Array does not hold Array type");
+                    };
                 }
                 CTermData::StackPtr(t, _o, a) => {
                     let alloc_id = a.unwrap_or_else(|| panic!("Unknown AllocID: {:#?}", a));
-                    if let Ty::Array(l, _, _) = t {
-                        for i in 0..*l {
-                            let offset = bv_lit(i, 32);
-                            let idx_term = inner_ctx.mem.borrow_mut().load(alloc_id, offset);
-                            output.push(idx_term);
+                    match t {
+                        Ty::Array(l, _, ty) => {
+                            let mut base = term![Op::Const(Value::Array(Array::default(
+                                Sort::BitVector(32),
+                                &(*ty).sort(),
+                                l.clone()
+                            )))];
+                            for i in 0..*l {
+                                let offset = bv_lit(i, 32);
+                                let idx_term = ctx.mem.borrow_mut().load(alloc_id, offset);
+                                base = term![Op::Store; base, bv_lit(i, 32), idx_term];
+                            }
+                            output.push(base);
                         }
-                    } else {
-                        panic!("Unsupported type for stack pointer: {:#?}", t);
+                        Ty::Int(_, s) => {
+                            let size = ctx.mem.borrow_mut().get_size(alloc_id);
+                            let mut base = term![Op::Const(Value::Array(Array::default(
+                                Sort::BitVector(32),
+                                &Sort::BitVector(*s),
+                                size.clone()
+                            )))];
+                            for i in 0..size {
+                                let offset = bv_lit(i, 32);
+                                let idx_term = ctx.mem.borrow_mut().load(alloc_id, offset);
+                                base = term![Op::Store; base, bv_lit(i, 32), idx_term];
+                            }
+                            output.push(base);
+                        }
+                        _ => panic!("Unsupported type for stack pointer: {:#?}", t),
                     }
                 }
                 CTermData::Struct(_, fs) => {
                     for (_name, ct) in fs.fields() {
-                        let mut ts = ct.term.terms(inner_ctx);
+                        let mut ts = ct.term.terms(ctx);
                         output.append(&mut ts);
                     }
                 }
@@ -609,15 +628,17 @@ impl Embeddable for Ct {
                 ),
                 udef: bool_lit(false),
             },
-            Ty::Array(n, _, ty) => {
+            Ty::Array(n, _, inner_ty) => {
                 assert!(precompute.is_none());
                 let v: Vec<Self::T> = (0..*n)
-                    .map(|i| self.declare_input(ctx, ty, idx_name(&name, i), visibility, None))
+                    .map(|i| {
+                        self.declare_input(ctx, inner_ty, idx_name(&name, i), visibility, None)
+                    })
                     .collect();
                 let mut mem = ctx.mem.borrow_mut();
-                let id = mem.zero_allocate(*n, 32, ty.num_bits());
+                let id = mem.zero_allocate(*n, 32, inner_ty.num_bits());
                 let arr = Self::T {
-                    term: CTermData::Array(*ty.clone(), Some(id)),
+                    term: CTermData::Array(ty.clone(), Some(id)),
                     udef: bool_lit(false),
                 };
                 for (i, t) in v.iter().enumerate() {

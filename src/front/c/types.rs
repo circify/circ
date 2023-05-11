@@ -88,7 +88,7 @@ impl Ty {
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
-            Self::Ptr(_, _) => panic!("Ptrs don't have a CirC sort"),
+            Self::Ptr(_, _) => panic!("Cannot infer CirC sort"),
         }
     }
 
