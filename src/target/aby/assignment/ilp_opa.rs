@@ -12,9 +12,6 @@ use crate::ir::term::*;
 use crate::target::aby::assignment::CostModel;
 use crate::target::ilp::{variable, Expression, Ilp, Variable};
 
-use crate::target::aby::assignment::def_uses::*;
-
-use std::collections::HashMap;
 use std::env::var;
 
 /// Uses an ILP to assign...

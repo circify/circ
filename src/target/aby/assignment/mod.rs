@@ -8,6 +8,9 @@ use std::{env::var, fs::File, path::Path};
 pub mod ilp;
 
 #[cfg(feature = "lp")]
+pub mod ilp_dug;
+
+#[cfg(feature = "lp")]
 pub mod ilp_opa;
 
 pub mod def_uses;
@@ -146,6 +149,7 @@ impl CostModel {
         CostModel::new(conversions, ops)
     }
 
+    /// Get the cost of certain op
     pub fn get(&self, op: &Op) -> Option<&FxHashMap<ShareType, f64>> {
         match op {
             Op::Var(..)
@@ -204,6 +208,7 @@ impl CostModel {
     }
 }
 
+/// Parse cost model from a file
 pub fn get_cost_model(cm: &str) -> CostModel {
     let base_dir = match cm {
         "opa" => "opa",

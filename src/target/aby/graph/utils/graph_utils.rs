@@ -1,9 +1,5 @@
 //! Translation from IR to Chaco file input format
 //! This input format can be found in [Jostle User Guide](https://chriswalshaw.co.uk/jostle/jostle-exe.pdf)
-//!
-//!
-//!
-//!
 
 use crate::ir::term::*;
 use crate::target::aby::assignment::def_uses::*;
@@ -12,11 +8,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct Node {
-    idx: usize,
-}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct HyperEdge {
@@ -38,11 +29,6 @@ impl<T: PartialEq> Edges<T> {
     }
 }
 
-fn coarse_map_get(cm: &HashMap<Term, Vec<usize>>, t: &Term, level: usize) -> usize {
-    let v = cm.get(t).unwrap();
-    *(v.get(level).unwrap_or_else(|| v.last().unwrap()))
-}
-
 ///
 pub struct GraphWriter {
     num_nodes: usize,
@@ -52,11 +38,11 @@ pub struct GraphWriter {
     edges: HashMap<usize, Edges<usize>>,
     hyper_edges: HashMap<HyperEdge, Edges<usize>>,
     node_to_hyper_edge: HashMap<usize, HyperEdge>,
-    id_to_part: HashMap<usize, usize>,
     hyper_mode: bool,
 }
 
 impl GraphWriter {
+    /// Create a GraphWriter
     pub fn new(hyper_mode: bool) -> Self {
         let gw = Self {
             num_nodes: 0,
@@ -65,131 +51,13 @@ impl GraphWriter {
             term_to_id: HashMap::new(),
             edges: HashMap::new(),
             hyper_edges: HashMap::new(),
-            id_to_part: HashMap::new(),
             node_to_hyper_edge: HashMap::new(),
             hyper_mode: hyper_mode,
         };
         gw
     }
 
-    pub fn build(
-        &mut self,
-        cs: &Computation,
-        coarsen_map: &HashMap<Term, Vec<usize>>,
-        level: usize,
-        num_nodes: usize,
-    ) {
-        self.num_nodes = num_nodes;
-        for t in cs.terms_postorder() {
-            match &t.op {
-                Op::Ite
-                | Op::Not
-                | Op::Eq
-                | Op::Store
-                | Op::Select
-                | Op::Tuple
-                | Op::Field(_)
-                | Op::BvBinOp(_)
-                | Op::BvNaryOp(_)
-                | Op::BvBinPred(_)
-                | Op::BoolNaryOp(_) => {
-                    let t_id = coarse_map_get(coarsen_map, &t, level);
-                    for cs in t.cs.iter() {
-                        let cs_id = coarse_map_get(coarsen_map, &cs, level);
-                        if cs_id != t_id {
-                            if self.hyper_mode {
-                                self.insert_hyper_edge(&cs_id, &t_id);
-                            } else {
-                                self.insert_edge(&cs_id, &t_id);
-                                self.insert_edge(&t_id, &cs_id);
-                            }
-                        }
-                    }
-                }
-                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", t, t.op),
-            }
-        }
-    }
-
-    pub fn build_from_tm(&mut self, cs: &Computation, tm: &TermMap<usize>, num_nodes: usize) {
-        self.num_nodes = num_nodes;
-        for t in cs.terms_postorder() {
-            match &t.op {
-                Op::Ite
-                | Op::Not
-                | Op::Eq
-                | Op::Store
-                | Op::Select
-                | Op::Tuple
-                | Op::Field(_)
-                | Op::BvBinOp(_)
-                | Op::BvNaryOp(_)
-                | Op::BvBinPred(_)
-                | Op::BoolNaryOp(_) => {
-                    let t_id = tm.get(&t).unwrap();
-                    for cs in t.cs.iter() {
-                        let cs_id = tm.get(&cs).unwrap();
-                        if cs_id != t_id {
-                            if self.hyper_mode {
-                                self.insert_hyper_edge(&cs_id, &t_id);
-                            } else {
-                                self.insert_edge(&cs_id, &t_id);
-                                self.insert_edge(&t_id, &cs_id);
-                            }
-                        }
-                    }
-                }
-                _ => unimplemented!("Haven't  implemented conversion of {:#?}, {:#?}", t, t.op),
-            }
-        }
-    }
-
-    fn get_tid_or_assign(&mut self, t: &Term) -> usize {
-        if self.term_to_id.contains_key(t) {
-            return *(self.term_to_id.get(t).unwrap());
-        } else {
-            self.num_nodes += 1;
-            self.term_to_id.insert(t.clone(), self.num_nodes);
-            return self.num_nodes;
-        }
-    }
-
-    pub fn build_from_cs(&mut self, cs: &Computation) -> HashMap<Term, usize> {
-        for t in cs.terms_postorder() {
-            match &t.op {
-                Op::Var(_, _) | Op::Const(_) => {
-                    self.get_tid_or_assign(&t);
-                }
-                Op::Ite
-                | Op::Not
-                | Op::Eq
-                | Op::Store
-                | Op::Select
-                | Op::Tuple
-                | Op::Field(_)
-                | Op::BvBinOp(_)
-                | Op::BvNaryOp(_)
-                | Op::BvBinPred(_)
-                | Op::BoolNaryOp(_) => {
-                    let t_id = self.get_tid_or_assign(&t);
-                    for cs in t.cs.iter() {
-                        let cs_id = self.get_tid_or_assign(&cs);
-                        if cs_id != t_id {
-                            if self.hyper_mode {
-                                self.insert_hyper_edge(&cs_id, &t_id);
-                            } else {
-                                self.insert_edge(&cs_id, &t_id);
-                                self.insert_edge(&t_id, &cs_id);
-                            }
-                        }
-                    }
-                }
-                _ => unimplemented!("Haven't  implemented conversion of {:#?}", t.op),
-            }
-        }
-        self.term_to_id.clone()
-    }
-
+    /// Build the graph from a DefUseGraph
     pub fn build_from_dug(&mut self, dug: &DefUsesGraph) -> HashMap<Term, usize> {
         for t in dug.good_terms.iter() {
             match &t.op {
@@ -226,6 +94,17 @@ impl GraphWriter {
         self.term_to_id.clone()
     }
 
+    fn get_tid_or_assign(&mut self, t: &Term) -> usize {
+        if self.term_to_id.contains_key(t) {
+            return *(self.term_to_id.get(t).unwrap());
+        } else {
+            self.num_nodes += 1;
+            self.term_to_id.insert(t.clone(), self.num_nodes);
+            return self.num_nodes;
+        }
+    }
+
+    /// Write the graph to path
     pub fn write(&mut self, path: &String) {
         if self.hyper_mode {
             self.write_hyper_graph(path);
@@ -275,7 +154,6 @@ impl GraphWriter {
     // Write Chaco graph to file
     fn write_graph(&mut self, path: &String) {
         if !Path::new(path).exists() {
-            println!("graph_path: {}", path);
             fs::File::create(path).expect("Failed to create graph file");
         }
         let mut file = fs::OpenOptions::new()
@@ -291,7 +169,6 @@ impl GraphWriter {
         // for Nodes 1..N, write their neighbors
         for i in 0..(self.num_nodes) {
             let id = i + 1;
-
             match self.edges.get(&id) {
                 Some(edges) => {
                     let line = edges
@@ -334,7 +211,6 @@ impl GraphWriter {
         // for Nodes 1..N, write their neighbors
         for i in 0..(self.num_hyper_edges) {
             let hyper_edge = HyperEdge { idx: i + 1 };
-
             match self.hyper_edges.get(&hyper_edge) {
                 Some(nodes) => {
                     let line = nodes
@@ -356,24 +232,5 @@ impl GraphWriter {
             file.write_all("\n".as_bytes())
                 .expect("Failed to write to graph file");
         }
-    }
-}
-
-pub fn write_partition(path: &String, partition: &HashMap<usize, usize>) {
-    if !Path::new(path).exists() {
-        println!("partition_path: {}", path);
-        fs::File::create(path).expect("Failed to create hyper graph file");
-    }
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(path)
-        .expect("Failed to open hyper graph file");
-
-    // for Nodes 1..N, write their neighbors
-    for i in 0..partition.keys().len() {
-        let line = format!("{}\n", partition.get(&i).unwrap());
-        file.write_all(line.as_bytes())
-            .expect("Failed to write to graph file");
     }
 }

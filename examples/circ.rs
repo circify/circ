@@ -177,9 +177,6 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
 }
 
 fn main() {
-    let start = Instant::now();
-    let mut now = Instant::now();
-
     env_logger::Builder::from_default_env()
         .format_level(false)
         .format_timestamp(None)
@@ -240,7 +237,6 @@ fn main() {
     #[cfg(feature = "bench")]
     println!("LOG: Frontend: {:?}", now.elapsed());
 
-    now = Instant::now();
     cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -304,14 +300,6 @@ fn main() {
     println!("LOG: Optimizations: {:#?}", now.elapsed());
     println!("Done with IR optimization");
 
-    // for (name, c) in &cs.computations {
-    //     println!("name: {}", name);
-    //     for t in c.terms_postorder() {
-    //         println!("t: {}", t);
-    //     }
-    // }
-
-    now = Instant::now();
     match options.backend {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {

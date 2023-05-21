@@ -6,24 +6,20 @@
 
 use rug::Integer;
 
-use fxhash::FxHashSet;
-
 use crate::ir::opt::cfold::fold;
 use crate::ir::term::*;
-use crate::target::aby::assignment::def_uses::PostOrderIterV2;
+
 #[cfg(feature = "lp")]
-use crate::target::aby::assignment::ilp::assign;
 use crate::target::aby::assignment::SharingMap;
 use crate::target::aby::utils::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
 
 #[cfg(feature = "lp")]
-use crate::target::graph::trans::*;
+use crate::target::aby::graph::trans::*;
 
 use super::assignment::assign_all_boolean;
 use super::assignment::assign_all_yao;
@@ -40,32 +36,6 @@ use crate::target::aby::assignment::def_uses::*;
 const PUBLIC: u8 = 2;
 const WRITE_SIZE: usize = 65536;
 
-#[derive(Clone)]
-enum EmbeddedTerm {
-    Bool,
-    Bv,
-    Array,
-    Tuple,
-}
-
-impl fmt::Display for EmbeddedTerm {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            EmbeddedTerm::Bool => {
-                write!(f, "bool")
-            }
-            EmbeddedTerm::Bv => {
-                write!(f, "bv")
-            }
-            EmbeddedTerm::Array => {
-                write!(f, "array")
-            }
-            EmbeddedTerm::Tuple => {
-                write!(f, "tuple")
-            }
-        }
-    }
-}
 struct ToABY<'a> {
     fs: Functions,
     s_map: HashMap<String, SharingMap>,
@@ -211,12 +181,6 @@ impl<'a> ToABY<'a> {
             let share_type = self.get_term_share_type(t).char();
             let line = format!("{} {}\n", s, share_type);
             self.share_output.push(line);
-            match t.op {
-                Op::Var(..) | Op::Call(..) => {}
-                _ => {
-                    let line2 = format!("{} {}\n", t.op, share_type);
-                }
-            }
         }
     }
 
@@ -233,28 +197,6 @@ impl<'a> ToABY<'a> {
     }
 
     // TODO: Rust ENTRY api on maps
-    fn get_new_share(&mut self, t: &Term, p: &Term) -> i32 {
-        match self.term_to_shares.get(t) {
-            Some(v) => {
-                assert!(v.len() == 1);
-                v[0]
-            }
-            None => {
-                let s = self.share_cnt;
-                self.term_to_shares.insert(t.clone(), [s].to_vec());
-                self.share_cnt += 1;
-
-                // Write share
-                let share_type = self.get_term_share_type(t).char();
-                let line = format!("{} {}\n", s, share_type);
-                self.share_output.push(line);
-
-                s
-            }
-        }
-    }
-
-    // TODO: Rust ENTRY api on maps
     fn get_share(&mut self, t: &Term) -> i32 {
         match self.term_to_shares.get(t) {
             Some(v) => {
@@ -264,7 +206,6 @@ impl<'a> ToABY<'a> {
             None => {
                 match &t.op {
                     Op::Const(Value::BitVector(b)) => {
-                        let sort = check(t);
                         let bi = b.as_sint();
                         let share_type = self.get_term_share_type(t).char();
                         let key = (bi, share_type);
@@ -594,7 +535,6 @@ impl<'a> ToABY<'a> {
                     let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
                     self.const_output.push(line);
                 }
-                // self.cache.insert(t.clone(), EmbeddedTerm::Bv);
             }
             Op::Ite => {
                 let op = "MUX";
@@ -759,7 +699,6 @@ impl<'a> ToABY<'a> {
                                     let line = format!("2 1 {} 32 {} {}\n", b.as_sint(), s, op);
                                     self.const_output.push(line);
                                 }
-                                // self.cache.insert(t.clone(), EmbeddedTerm::Bv);
                             }
                             _ => todo!(),
                         }
@@ -941,7 +880,7 @@ impl<'a> ToABY<'a> {
     }
 
     fn embed(&mut self, t: Term) {
-        for c in PostOrderIterV2::new(t) {
+        for c in PostOrderIter::new(t) {
             if self.term_to_shares.contains_key(&c) {
                 continue;
             }
@@ -1231,10 +1170,6 @@ pub fn to_aby(
                     "a+b" => assign_arithmetic_and_boolean(&comp, cm),
                     "a+y" => assign_arithmetic_and_yao(&comp, cm),
                     "greedy" => assign_greedy(&comp, cm),
-                    #[cfg(feature = "lp")]
-                    "lp" => assign(&(comp.to_cs()), cm),
-                    #[cfg(feature = "lp")]
-                    "glp" => assign(&comp.to_cs(), cm),
                     _ => {
                         panic!("Unsupported sharing scheme: {}", ss);
                     }

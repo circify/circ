@@ -1,6 +1,6 @@
 //! The stack-allocation memory manager
 
-use crate::ir::{term::*, opt::cfold::fold};
+use crate::ir::{term::*};
 use std::collections::HashMap;
 
 /// Identifier for an Allocation block in memory

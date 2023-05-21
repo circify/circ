@@ -1,16 +1,16 @@
 //! Multi-level Partitioning Implementation
 //!
-//!
 
 use crate::ir::opt::link::link_one;
 use crate::ir::term::*;
 
 use crate::target::aby::assignment::def_uses::*;
-use crate::target::graph::utils::graph_utils::*;
-use crate::target::graph::utils::part::*;
+use crate::target::aby::graph::utils::graph_utils::*;
+use crate::target::aby::graph::utils::part::*;
 
 use std::collections::HashMap;
 
+/// A trivial partitioner 
 pub struct TrivialPartition {
     partitioner: Partitioner,
     gwriter: GraphWriter,
@@ -19,8 +19,9 @@ pub struct TrivialPartition {
 }
 
 impl TrivialPartition {
+    /// Initialize a partitioner given partition parameters
     pub fn new(fs: &Functions, time_limit: usize, imbalance: usize, hyper_mode: bool) -> Self {
-        let mut tp = Self {
+        let tp = Self {
             partitioner: Partitioner::new(time_limit, imbalance, hyper_mode),
             gwriter: GraphWriter::new(hyper_mode),
             fs: fs.clone(),
@@ -36,7 +37,6 @@ impl TrivialPartition {
     fn traverse(&mut self, fname: &String) {
         if !self.comp_history.contains_key(fname) {
             let mut c = self.fs.get_comp(fname).unwrap().clone();
-            let mut cnt = 0;
             for t in c.terms_postorder() {
                 if let Op::Call(callee, ..) = &t.op {
                     self.traverse(callee);
@@ -98,6 +98,7 @@ impl TrivialPartition {
         }
     }
 
+    /// Inline all the functions into main
     pub fn inline_all(&mut self, fname: &String) -> (Computation, DefUsesGraph) {
         for fname in self.fs.computations.clone().keys() {
             self.traverse(fname);
@@ -107,6 +108,7 @@ impl TrivialPartition {
         (c, dug)
     }
 
+    /// Partition from cs
     pub fn run(
         &mut self,
         fname: &String,
@@ -135,15 +137,14 @@ impl TrivialPartition {
         )
     }
 
+    /// Partition from given DefUseGraph
     pub fn run_from_dug(
         &mut self,
-        fname: &String,
         dug: &DefUsesGraph,
         path: &String,
         ps: usize,
     ) -> (TermMap<usize>, usize) {
         let mut part_map = TermMap::new();
-        let c = self.fs.get_comp(fname);
         let num_parts = dug.good_terms.len() / ps + 1;
         println!("LOG: Number of Partitions: {}", num_parts);
         if num_parts > 1 {

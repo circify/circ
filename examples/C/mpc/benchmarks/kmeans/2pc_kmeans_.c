@@ -184,7 +184,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 }
 
 
-Output main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
+Output main(__attribute__((private(0))) int a[NA*D], __attribute__((private(1))) int b[NA*D])
 {
     // init data
     int data[LEN * D];
