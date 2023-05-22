@@ -1,9 +1,12 @@
 //!
+//! 
 use std::collections::HashMap;
+use std::env;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::process::{Command, Stdio};
+// use std::time::Instant;
 
 /// Partition using Kahip / kahypar
 pub struct Partitioner {
@@ -11,16 +14,21 @@ pub struct Partitioner {
     imbalance: usize,
     imbalance_f32: f32,
     hyper_mode: bool,
+    // kahip_source: String,
+    // kahypar_source: String,
 }
 
 impl Partitioner {
     /// Initialize a partitioner
     pub fn new(time_limit: usize, imbalance: usize, hyper_mode: bool) -> Self {
+        // TODO: Allow only kahip or kahypar
         let graph = Self {
             time_limit: time_limit,
             imbalance: imbalance,
             imbalance_f32: imbalance as f32 / 100.0,
             hyper_mode: hyper_mode,
+            // kahip_source,
+            // kahypar_source,
         };
         graph
     }
@@ -68,30 +76,43 @@ impl Partitioner {
 
     // Call hyper graph partitioning algorithm on input hyper graph
     fn call_hyper_graph_partitioner(&self, graph_path: &String, num_parts: &usize) {
-        //TODO: fix path
-        let output = Command::new("../kahypar/build/kahypar/application/KaHyPar")
-            .arg("-h")
-            .arg(graph_path)
-            .arg("-k")
-            .arg(num_parts.to_string()) //TODO: make this a function on the number of terms
-            .arg("-e")
-            .arg(self.imbalance_f32.to_string())
-            .arg("--objective=cut")
-            .arg("--mode=direct")
-            .arg("--preset=../kahypar/config/cut_kKaHyPar_sea20.ini")
-            .arg("--write-partition=true")
-            .stdout(Stdio::piped())
-            .output()
-            .unwrap();
+        //  Get kahypar source directory
+        let kahypar_source = match env::var("KAHYPAR_SOURCE") {
+            Ok(val) => val,
+            Err(e) => panic!("Missing env variable: KAHYPAR_SOURCE, {}", e),
+        };
+        let output = Command::new(format!(
+            "{}/build/kahypar/application/KaHyPar",
+            kahypar_source
+        ))
+        .arg("-h")
+        .arg(graph_path)
+        .arg("-k")
+        .arg(num_parts.to_string()) //TODO: make this a function on the number of terms
+        .arg("-e")
+        .arg(self.imbalance_f32.to_string())
+        .arg("--objective=cut")
+        .arg("--mode=direct")
+        .arg(format!(
+            "--preset={}/config/cut_kKaHyPar_sea20.ini",
+            kahypar_source
+        ))
+        .arg("--write-partition=true")
+        .stdout(Stdio::piped())
+        .output()
+        .unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
         println!("stdout: {}", stdout);
-        // assert!(stdout.contains(&format!("writing partition to {}", &self.part_path)));
     }
 
     // Call graph partitioning algorithm on input graph
     fn call_graph_partitioner(&self, graph_path: &String, part_path: &String, num_parts: &usize) {
-        //TODO: fix path
-        let output = Command::new("../KaHIP/deploy/kaffpa")
+        // Get KaHIP source directory
+        let kahip_source = match env::var("KAHIP_SOURCE") {
+            Ok(val) => val,
+            Err(e) => panic!("Missing env variable: KAHIP_SOURCE, {}", e),
+        };
+        let output = Command::new(format!("{}/deploy/kaffpa", kahip_source))
             .arg(graph_path)
             .arg("--k")
             .arg(num_parts.to_string()) //TODO: make this a function on the number of terms
@@ -105,14 +126,16 @@ impl Partitioner {
             .output()
             .unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
-        println!("stdout: {}", stdout);
         assert!(stdout.contains(&format!("writing partition to {}", part_path)));
     }
-    
+
     // Check if input graph is formatted correctly
     fn check_graph(&self, graph_path: &String) {
-        //TODO: fix path
-        let output = Command::new("../KaHIP/deploy/graphchecker")
+        let kahip_source = match env::var("KAHIP_SOURCE") {
+            Ok(val) => val,
+            Err(e) => panic!("Missing env variable: KAHIP_SOURCE, {}", e),
+        };
+        let output = Command::new(format!("{}/deploy/graphchecker", kahip_source))
             .arg(graph_path)
             .stdout(Stdio::piped())
             .output()

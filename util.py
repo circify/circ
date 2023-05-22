@@ -9,7 +9,8 @@ cargo_features = {"bench", "c", "lp", "r1cs", "smt", "zok"}
 
 # Environment variables
 ABY_SOURCE = "./../ABY"
-EZPC_SOURCE = "./../EZPC"
+KAHIP_SOURCE = "./../KaHIP"
+KAHYPAR_SOURCE = "./../kahypar"
 
 
 def set_env(features):
@@ -17,8 +18,10 @@ def set_env(features):
         if f == 'aby':
             if not os.getenv("ABY_SOURCE"):
                 os.environ["ABY_SOURCE"] = ABY_SOURCE
-            if not os.getenv("EZPC_SOURCE"):
-                os.environ["EZPC_SOURCE"] = EZPC_SOURCE
+            if not os.getenv("KAHIP_SOURCE"):
+                os.environ["KAHIP_SOURCE"] = KAHIP_SOURCE
+            if not os.getenv("KAHYPAR_SOURCE"):
+                os.environ["KAHYPAR_SOURCE"] = KAHYPAR_SOURCE
 
 
 def save_mode(mode):

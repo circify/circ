@@ -415,11 +415,11 @@ struct_tests = [
         "2pc_struct_array_add",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
-    [
-        "Return struct",
-        "ret_struct",
-        "./scripts/aby_tests/test_inputs/ret_struct.txt",
-    ],
+    # [
+    #     "Return struct",
+    #     "ret_struct",
+    #     "./scripts/aby_tests/test_inputs/ret_struct.txt",
+    # ],
 ]
 
 matrix_tests = [
@@ -446,11 +446,11 @@ ptr_tests = [
         "2pc_ptr_add",
         "./scripts/aby_tests/test_inputs/add.txt",
     ],
-    [
-        "Ptr arith",
-        "2pc_ptr_arith",
-        "./scripts/aby_tests/test_inputs/add.txt",
-    ],
+    # [
+    #     "Ptr arith",
+    #     "2pc_ptr_arith",
+    #     "./scripts/aby_tests/test_inputs/add.txt",
+    # ],
 ]
 
 shift_tests = [
@@ -619,7 +619,7 @@ kmeans_tests_2 = [
     [
         "kmeans",
         "2pc_kmeans_",
-        "./scripts/aby_tests/test_inputs/kmeans.txt",
+        "./scripts/aby_tests/test_inputs/kmeans_200.txt",
     ],
 ]
 

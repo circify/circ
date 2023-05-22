@@ -26,7 +26,18 @@ def install(features):
                 subprocess.run(
                     ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE])
                 subprocess.run(["./scripts/build_aby.zsh"])
-
+            if verify_path_empty(KAHIP_SOURCE):
+                subprocess.run(
+                    ["git", "clone", "https://github.com/KaHIP/KaHIP.git", KAHIP_SOURCE]
+                )
+                subprocess.run(["./scripts/build_kahip.zsh"])
+            if verify_path_empty(KAHYPAR_SOURCE):
+                subprocess.run(
+                    ["git", "clone", "--depth=1", "--recursive",
+                        "https://github.com/SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
+                )
+                # subprocess.run(["./scripts/build_kahypar.zsh"])
+    
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
 

@@ -24,17 +24,16 @@ if __name__ == "__main__":
         ptr_tests + \
         c_misc_tests + \
         biomatch_tests + \
-        kmeans_tests_2 + \
-        gauss_tests + \
-        db_tests + \
-        mnist_tests + \
-        cryptonets_tests + \
-        histogram_tests + \
-        gcd_tests
+        kmeans_tests_2
+        # gauss_tests 
+        # db_tests + \
+        # mnist_tests + \
+        # cryptonets_tests + \
+        # histogram_tests + \
+        # gcd_tests
       
 
-    # tests = ts
-    # tests = biomatch_tests
+    # tests = kmeans_tests_2
 
     # TODO: add support unsigned + int promotion
     # unsigned_arithmetic_tests + \

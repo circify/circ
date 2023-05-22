@@ -1,6 +1,6 @@
 #define D 2 // Dimension (fix)
-#define NA 10 // Number of data points from Party A
-#define NB 10 // Number of data points from Party B
+#define NA 100 // Number of data points from Party A
+#define NB 100 // Number of data points from Party B
 #define NC 5 // Number of clusters
 #define PRECISION 4
 
