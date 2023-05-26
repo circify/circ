@@ -1511,7 +1511,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             args.iter().cloned().cloned().collect(),
         )),
         Op::Select => {
-            let a = args[0].as_array().clone();
+            let a = args[0].as_array();
             let i = args[1];
             a.select(i)
         }
