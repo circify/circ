@@ -2002,34 +2002,6 @@ impl ComputationMetadata {
     pub fn remove_var(&mut self, name: &str) {
         self.vars.remove(name);
     }
-
-    /// Create a call term, given the input arguments in sorted order by argument names.
-    ///
-    /// ## Arguments
-    ///
-    /// * `name`: function name
-    /// * `args`: map of argument name (String) to argument term (Term)
-    /// * `ret_sort`: return sort of the function
-    ///
-    /// ## Returns
-    ///
-    /// A call term with the input arguments in sorted order by argument names.
-    ///
-    pub fn ordered_call_term(
-        &self,
-        name: String,
-        args: FxHashMap<String, Term>,
-        ret_sort: Sort,
-    ) -> Term {
-        let ordered_arg_names = self.ordered_input_names();
-        let ordered_args = ordered_arg_names
-            .iter()
-            .map(|name| args.get(name).expect("Argument not found: {}").clone())
-            .collect::<Vec<Term>>();
-        let ordered_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
-
-        term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
-    }
 }
 
 /// A structured collection of variables that indicates the round structure: e.g., orderings,
@@ -2250,6 +2222,16 @@ impl Computation {
         terms.into_iter()
     }
 
+    /// convert Computation to ComputationSubgraph
+    pub fn to_cs(&self) -> ComputationSubgraph {
+        let mut cs = ComputationSubgraph::new();
+        for t in self.terms_postorder() {
+            cs.insert_node(&t);
+        }
+        cs.insert_edges();
+        cs
+    }
+
     /// Evaluate the precompute, then this computation.
     pub fn eval_all(&self, values: &FxHashMap<String, Value>) -> Vec<Value> {
         let mut values = values.clone();
@@ -2295,6 +2277,73 @@ impl Computations {
             Some(c) => c,
             None => panic!("Unknown computation: {}", name),
         }
+    }
+}
+
+/// A graph representation of a Computation
+#[derive(Clone)]
+pub struct ComputationSubgraph {
+    /// List of terms in subgraph
+    pub nodes: TermSet,
+    /// Adjacency list of edges in subgraph
+    pub edges: TermMap<TermSet>,
+    /// Output leaf nodes
+    pub outs: TermSet,
+    /// Input leaf nodes
+    pub ins: TermSet,
+}
+
+impl Default for ComputationSubgraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ComputationSubgraph {
+    /// default constructor
+    pub fn new() -> Self {
+        Self {
+            nodes: TermSet::default(),
+            edges: TermMap::default(),
+            outs: TermSet::default(),
+            ins: TermSet::default(),
+        }
+    }
+
+    /// Insert nodes into ComputationSubgraph
+    pub fn insert_node(&mut self, node: &Term) {
+        if !self.nodes.contains(node) {
+            self.nodes.insert(node.clone());
+        }
+    }
+
+    /// Insert edges based on nodes in the subgraph
+    pub fn insert_edges(&mut self) {
+        let mut defs: FxHashSet<Term> = FxHashSet::default();
+        for t in self.nodes.iter() {
+            self.edges.insert(t.clone(), TermSet::default());
+            let mut flag = true;
+            for c in t.cs().iter() {
+                if self.nodes.contains(c) {
+                    self.edges.get_mut(t).unwrap().insert(c.clone());
+                    defs.insert(c.clone());
+                    flag = false;
+                }
+            }
+            if flag {
+                self.ins.insert(t.clone());
+            }
+        }
+
+        // Find the leaf node in each subgraph
+        // TODO: defs.difference(&_uses) ?
+        for t in self.nodes.iter() {
+            if !defs.contains(t) {
+                self.outs.insert(t.clone());
+            }
+        }
+        // println!("LOG: Input nodes of partition: {}", self.ins.len());
+        // println!("LOG: Output nodes of partition: {}", self.outs.len());
     }
 }
 

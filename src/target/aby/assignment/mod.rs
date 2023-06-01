@@ -4,8 +4,10 @@ use fxhash::FxHashMap;
 use serde_json::Value;
 use std::{env::var, fs::File, path::Path};
 
+pub mod def_uses;
 #[cfg(feature = "lp")]
 pub mod ilp;
+pub mod ilp_opa;
 
 /// The sharing scheme used for an operation
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -16,6 +18,8 @@ pub enum ShareType {
     Boolean,
     /// Yao sharing (one party holds `k_a`, `k_b`, other knows the `{k_a, k_b} <-> {0, 1}` mapping)
     Yao,
+    /// None type, reserved for terms without circuit representation
+    None,
 }
 
 /// List of share types.
@@ -28,6 +32,7 @@ impl ShareType {
             ShareType::Arithmetic => 'a',
             ShareType::Boolean => 'b',
             ShareType::Yao => 'y',
+            ShareType::None => 'n',
         }
     }
 }
@@ -40,15 +45,34 @@ pub type SharingMap = TermMap<ShareType>;
 pub struct CostModel {
     #[allow(dead_code)]
     /// Conversion costs: maps (from, to) pairs to cost
-    conversions: FxHashMap<(ShareType, ShareType), f64>,
+    pub conversions: FxHashMap<(ShareType, ShareType), f64>,
 
     /// Operator costs: maps (op, type) to cost
-    ops: FxHashMap<Op, FxHashMap<ShareType, f64>>,
+    pub ops: FxHashMap<String, FxHashMap<ShareType, f64>>,
+
+    /// Zero costs
+    pub zero: FxHashMap<ShareType, f64>,
 }
 
 impl CostModel {
+    /// Cost model constructor
+    pub fn new(
+        conversions: FxHashMap<(ShareType, ShareType), f64>,
+        ops: FxHashMap<String, FxHashMap<ShareType, f64>>,
+    ) -> CostModel {
+        let mut zero: FxHashMap<ShareType, f64> = FxHashMap::default();
+        zero.insert(ShareType::Arithmetic, 0.0);
+        zero.insert(ShareType::Boolean, 0.0);
+        zero.insert(ShareType::Yao, 0.0);
+        CostModel {
+            conversions,
+            ops,
+            zero,
+        }
+    }
+
     /// Create a cost model from an OPA json file, like [this](https://github.com/ishaq/OPA/blob/d613c15ff715fa62c03e37b673548f94c16bfe0d/solver/sample-costs.json)
-    pub fn from_opa_cost_file(p: &impl AsRef<Path>) -> CostModel {
+    pub fn from_opa_cost_file(p: &impl AsRef<Path>, k: FxHashMap<String, f64>) -> CostModel {
         use ShareType::*;
         let get_cost_opt =
             |share_name: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
@@ -72,6 +96,18 @@ impl CostModel {
             )
             .unwrap()
         };
+        let get_depth =
+            |share_type: &str, obj: &serde_json::map::Map<String, Value>| -> Option<f64> {
+                let o = obj
+                    .get("depth")
+                    .unwrap_or_else(|| panic!("Missing {} in {:#?}", "depth", obj));
+                Some(
+                    o.get(share_type)
+                        .unwrap_or_else(|| panic!("Missing {} entry in {:#?}", share_type, o))
+                        .as_f64()
+                        .expect("not a number"),
+                )
+            };
         let mut conversions = FxHashMap::default();
         let mut ops = FxHashMap::default();
         let f = File::open(p).expect("Missing file");
@@ -85,55 +121,32 @@ impl CostModel {
         conversions.insert((Yao, Arithmetic), get_cost("y2a", costs));
         conversions.insert((Arithmetic, Yao), get_cost("a2y", costs));
 
-        let ops_from_name = |name: &str| {
-            match name {
-                // assume comparisions are unsigned
-                "ge" => vec![BV_UGE],
-                "le" => vec![BV_ULE],
-                "gt" => vec![BV_UGT],
-                "lt" => vec![BV_ULT],
-                // assume n-ary ops apply to BVs
-                "add" => vec![BV_ADD],
-                "mul" => vec![BV_MUL],
-                "and" => vec![BV_AND],
-                "or" => vec![BV_OR],
-                "xor" => vec![BV_XOR],
-                // assume eq applies to BVs
-                "eq" => vec![Op::Eq],
-                "shl" => vec![BV_SHL],
-                // assume shr is logical, not arithmetic
-                "shr" => vec![BV_LSHR],
-                "sub" => vec![BV_SUB],
-                "mux" => vec![ITE],
-                "ne" => vec![Op::Not, Op::Eq],
-                "div" => vec![BV_UDIV],
-                "rem" => vec![BV_UREM],
-                // added to pass test case
-                "&&" => vec![AND],
-                "||" => vec![OR],
-                _ => panic!("Unknown operator name: {}", name),
-            }
-        };
         for (op_name, cost) in costs {
             // HACK: assumes the presence of 2 partitions names into conversion and otherwise.
-            if !op_name.contains('2') {
-                for op in ops_from_name(op_name) {
-                    for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")]
-                    {
-                        if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
-                            ops.entry(op.clone())
-                                .or_insert_with(FxHashMap::default)
-                                .insert(*share_type, c);
+            if !op_name.contains('2') && !op_name.contains("depth") {
+                for (share_type, share_name) in &[(Arithmetic, "a"), (Boolean, "b"), (Yao, "y")] {
+                    if let Some(c) = get_cost_opt(share_name, cost.as_object().unwrap()) {
+                        let mut cost_depth: f64 = 0.0;
+                        if *share_type != Yao {
+                            if let Some(d) = get_depth(share_name, cost.as_object().unwrap()) {
+                                cost_depth += k.get(share_name.clone()).unwrap_or_else(|| &1.0)
+                                    * d
+                                    * get_depth(share_name, costs).unwrap();
+                            }
                         }
+                        ops.entry(op_name.clone())
+                            .or_insert_with(FxHashMap::default)
+                            .insert(*share_type, c + cost_depth);
+                        // println!("Insert cost model:{}, {}, {}", op_name, share_name, c + cost_depth);
                     }
                 }
             }
         }
-        CostModel { conversions, ops }
+        CostModel::new(conversions, ops)
     }
 }
 
-fn get_cost_model(cm: &str) -> CostModel {
+pub fn get_cost_model(cm: &str) -> CostModel {
     let base_dir = match cm {
         "opa" => "opa",
         "hycc" => "hycc",
@@ -144,7 +157,7 @@ fn get_cost_model(cm: &str) -> CostModel {
         var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR"),
         base_dir
     );
-    CostModel::from_opa_cost_file(&p)
+    CostModel::from_opa_cost_file(&p, FxHashMap::default())
 }
 
 /// Assigns boolean sharing to all terms
@@ -174,7 +187,7 @@ pub fn assign_arithmetic_and_boolean(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.ops.get(term.op()) {
+                    if let Some(costs) = cost_model.ops.get(&term.op().to_string()) {
                         let mut min_ty: ShareType = ShareType::Boolean;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic] {
@@ -204,7 +217,7 @@ pub fn assign_arithmetic_and_yao(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.ops.get(term.op()) {
+                    if let Some(costs) = cost_model.ops.get(&term.op().to_string()) {
                         let mut min_ty: ShareType = ShareType::Yao;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic] {
@@ -234,7 +247,7 @@ pub fn assign_greedy(c: &Computation, cm: &str) -> SharingMap {
             PostOrderIter::new(output.clone()).map(|term| {
                 (
                     term.clone(),
-                    if let Some(costs) = cost_model.ops.get(term.op()) {
+                    if let Some(costs) = cost_model.ops.get(&term.op().to_string()) {
                         let mut min_ty: ShareType = ShareType::Yao;
                         let mut min_cost: f64 = costs[&min_ty];
                         for ty in &[ShareType::Arithmetic, ShareType::Boolean] {

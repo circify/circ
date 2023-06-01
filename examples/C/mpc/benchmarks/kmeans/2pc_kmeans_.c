@@ -1,12 +1,15 @@
 #define D 2 // Dimension (fix)
-#define NA 10 // Number of data points from Party A
-#define NB 10 // Number of data points from Party B
+#define NA 100 // Number of data points from Party A
+#define NB 100 // Number of data points from Party B
 #define NC 5 // Number of clusters
 #define PRECISION 4
 
 #define LEN (NA+NB)
 #define LEN_OUTER 10
 #define LEN_INNER (LEN/LEN_OUTER)
+
+
+typedef int coord_t;
 
 struct input_a{
 	int dataA[D*NA];
@@ -16,9 +19,10 @@ struct input_b {
 	int dataB[D*NA];
 };
 
-struct output {
-	int cluster[D*NC];
-};
+typedef struct
+{
+	coord_t cluster[D*NC];
+} Output;
 
 
 int dist2(int x1, int y1, int x2, int y2) {
@@ -34,13 +38,13 @@ int min_with_aux(int *data, int *aux, int len, int stride) {
 	// 		if(data[i+stride] < data[i]) {
 	// 			data[i] = data[i+stride];
 	// 			aux[i] = aux[i+stride];
-	// 		}
+	// 		}std::cout
 	// 	}
 	// 	return min_with_aux(data, aux, len, stride<<1);
 	// }
 	int min = data[0];
 	int res = 0;
-	for(int i = 1; i < len; i++){
+	for(int i = 1; i < NC; i++){
 		if(data[i] < min) {
 			min = data[i];
 			res = i;
@@ -58,28 +62,27 @@ int min_with_aux(int *data, int *aux, int len, int stride) {
 /**
  * Iteration loop unrolled and depth minimized by computing minimum over tree structure
  */ 
-void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_cluster, int *OUTPUT_count, int len_inner, int num_cluster) {
+void iteration_unrolled_inner_depth(int *data_inner, int *cluster, int *OUTPUT_cluster, int *OUTPUT_count) {
 	int i,c;
-	int dist[num_cluster];
-	int pos[num_cluster];
-	int bestMap_inner[len_inner];
+	int dist[NC];
+	int pos[NC];
+	int bestMap_inner[LEN_INNER];
 	
-	for(c = 0; c < num_cluster; c++) {
+	for(c = 0; c < NC; c++) {
 		OUTPUT_cluster[c*D] = 0;
 		OUTPUT_cluster[c*D+1] = 0;
 		OUTPUT_count[c] = 0;
 	}	
 	
 	// Compute nearest clusters for Data item i
-	for(i = 0; i < len_inner; i++) {
-	  int dx = data_inner[i*D];
-	  int dy = data_inner[i*D+1];
-  
-	  for(c = 0; c < num_cluster; c++) {
+	for(i = 0; i < LEN_INNER; i++) {
+		int dx = data_inner[i*D];
+		int dy = data_inner[i*D+1];
+		for(c = 0; c < NC; c++) {
 			pos[c]=c;
 			dist[c] = dist2(cluster[D*c], cluster[D*c+1], dx, dy);
 		}
-		bestMap_inner[i] = min_with_aux(dist, pos, num_cluster, 1);
+		bestMap_inner[i] = min_with_aux(dist, pos, NC, 1);
 		int cc = bestMap_inner[i];
 		OUTPUT_cluster[cc*D] += data_inner[i*D];
 		OUTPUT_cluster[cc*D+1] += data_inner[i*D+1];
@@ -126,7 +129,7 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 		// int count_inner[NC];
 		int count_inner[NC];
 		
-		iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner, LEN_INNER, NC);
+		iteration_unrolled_inner_depth(data_inner, cluster, cluster_inner, count_inner);
 
 		// Depth: num_cluster Addition
 		for(c = 0; c < NC; c++) {
@@ -145,14 +148,12 @@ void iteration_unrolled_outer(int *data, int *cluster, int *OUTPUT_cluster) {
 	// Recompute cluster Pos
 	// Compute mean
 	for(c = 0; c < NC; c++) {  
-	  if(count[c] >0 ) {
+	  if(count[c] > 0) {
 			OUTPUT_cluster[c*D] /= count[c];
 			OUTPUT_cluster[c*D+1] /= count[c];
 	  } 
 	}
 }
-
-
 
 void kmeans(int *data, int *OUTPUT_res) {
 	// int c, p;
@@ -171,7 +172,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 		// iteration(data, cluster, new_cluster, len, num_cluster);
 		
 		// We need to copy inputs to outputs
-		for(c = 0; c < NC*D; c++) {
+		for( c = 0; c < NC*D; c++) {
 			cluster[c] = new_cluster[c];
 		}
 	}
@@ -183,7 +184,7 @@ void kmeans(int *data, int *OUTPUT_res) {
 }
 
 
-int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int b[20])
+Output main(__attribute__((private(0))) int a[200], __attribute__((private(1))) int b[200])
 {
     // init data
     int data[LEN * D];
@@ -196,14 +197,9 @@ int main(__attribute__((private(0))) int a[20], __attribute__((private(1))) int 
     {
         data[i + offset] = b[i];
     }
-    struct output output;	
- 
+
+    Output output;
     kmeans(data, output.cluster);
    
-    int sum = 0;
-    for (int i = 0; i < D * NC; i++)
-    {
-        sum += output.cluster[i];
-    }
-    return sum;
+    return output;
 }

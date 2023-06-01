@@ -2,7 +2,7 @@
 
 if [[ ! -z ${KAHYPAR_SOURCE} ]]; then 
     cd ${KAHYPAR_SOURCE}
-    mkdir build && cd build
+    mkdir -p build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=RELEASE
     make
 else

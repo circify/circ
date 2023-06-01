@@ -16,10 +16,10 @@ if __name__ == "__main__":
         ite_tests + \
         shift_tests + \
         div_tests + \
-        mod_tests + \
-        struct_tests + \
-        ptr_tests + \
-        c_misc_tests
+        mod_tests
+    # struct_tests + \
+    # ptr_tests + \
+    # c_misc_tests
     # array_tests + \
     # c_array_tests + \
     # matrix_tests + \

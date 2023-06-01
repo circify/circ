@@ -112,6 +112,16 @@ enum Backend {
         cost_model: String,
         #[arg(long, default_value = "lp", name = "selection_scheme")]
         selection_scheme: String,
+        #[arg(long, default_value = "4000", name = "partition_size")]
+        partition_size: usize,
+        #[arg(long, default_value = "4", name = "mutation_level")]
+        mutation_level: usize,
+        #[arg(long, default_value = "1", name = "mutation_step_size")]
+        mutation_step_size: usize,
+        #[arg(long, default_value = "1", name = "hyper")]
+        hyper: usize,
+        #[arg(long, default_value = "3", name = "imbalance")]
+        imbalance: usize,
     },
 }
 
@@ -238,17 +248,17 @@ fn main() {
             opt(
                 cs,
                 vec![
-                    Opt::ScalarizeVars,
+                    // Opt::ScalarizeVars,
                     Opt::Flatten,
                     Opt::Sha,
                     Opt::ConstantFold(Box::new(ignore.clone())),
                     Opt::Flatten,
                     // Function calls return tuples
-                    Opt::Tuple,
-                    Opt::Obliv,
+                    // Opt::Tuple,
+                    // Opt::Obliv,
                     // The obliv elim pass produces more tuples, that must be eliminated
-                    Opt::Tuple,
-                    Opt::LinearScan,
+                    // Opt::Tuple,
+                    // Opt::LinearScan,
                     // The linear scan pass produces more tuples, that must be eliminated
                     Opt::Tuple,
                     Opt::ConstantFold(Box::new(ignore)),
@@ -364,6 +374,11 @@ fn main() {
         Backend::Mpc {
             cost_model,
             selection_scheme,
+            partition_size,
+            mutation_level,
+            mutation_step_size,
+            hyper,
+            imbalance,
         } => {
             println!("Converting to aby");
             let lang_str = match language {
@@ -373,7 +388,18 @@ fn main() {
             };
             println!("Cost model: {cost_model}");
             println!("Selection scheme: {selection_scheme}");
-            to_aby(cs, &path_buf, &lang_str, &cost_model, &selection_scheme);
+            to_aby(
+                cs,
+                &path_buf,
+                &lang_str,
+                &cost_model,
+                &selection_scheme,
+                &partition_size,
+                &mutation_level,
+                &mutation_step_size,
+                &hyper,
+                &imbalance,
+            );
         }
         #[cfg(not(feature = "aby"))]
         Backend::Mpc { .. } => {

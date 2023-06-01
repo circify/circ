@@ -15,13 +15,13 @@ KAHYPAR_SOURCE = "./../kahypar"
 
 def set_env(features):
     for f in features:
-        if f == 'aby':
+        if f == "aby":
             if not os.getenv("ABY_SOURCE"):
                 os.environ["ABY_SOURCE"] = ABY_SOURCE
-        if f == 'kahip':
+        if f == "kahip":
             if not os.getenv("KAHIP_SOURCE"):
                 os.environ["KAHIP_SOURCE"] = KAHIP_SOURCE
-        if f == 'kahypar':
+        if f == "kahypar":
             if not os.getenv("KAHYPAR_SOURCE"):
                 os.environ["KAHYPAR_SOURCE"] = KAHYPAR_SOURCE
 
