@@ -10,7 +10,7 @@ use crate::target::r1cs::*;
 
 use circ_fields::FieldT;
 use circ_opt::FieldDivByZero;
-use log::debug;
+use log::{debug, trace};
 use rug::ops::Pow;
 use rug::Integer;
 
@@ -371,6 +371,7 @@ impl<'cfg> ToR1cs<'cfg> {
         if !self.used_vars.contains(var.as_var_name()) {
             return;
         }
+        debug!("Embed var: {}", var.op());
         self.profile_start_term(var.clone());
         let public = matches!(ty, VarType::Inst);
         match var.op() {
@@ -430,7 +431,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.embed_bool(c);
                     }
                     Sort::BitVector(_) => {
-                        self.embed_bv_lit(c);
+                        self.embed_bv(c);
                     }
                     Sort::Field(_) => {
                         self.embed_pf(c);
@@ -528,7 +529,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     //   where i = ab
                     // m = i + c(b + a - 2i)
                     let i = self.mul(a.clone(), b.clone());
-                    self.mul(c, b + &a - &(i.clone() * 2)) - &i
+                    self.mul(c, b + &a - &(i.clone() * 2)) + &i
                 }
                 Op::Not => {
                     let a = self.get_bool(&c.cs()[0]);
@@ -718,7 +719,7 @@ impl<'cfg> ToR1cs<'cfg> {
         (some_high_bit, shift_amt)
     }
 
-    fn embed_bv_lit(&mut self, bv: Term) {
+    fn embed_bv(&mut self, bv: Term) {
         //println!("Embed: {}", bv);
         //let bv2=  bv.clone();
         if let Sort::BitVector(n) = check(&bv) {
@@ -1455,5 +1456,49 @@ pub mod test {
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs_mod17(cs);
         r1cs.check_all(&values);
+    }
+
+    fn add_test_instance(args: &[u64], res: u64, bits: usize) {
+        let sum: u64 = args.iter().sum::<u64>() & ((1 << bits) - 1);
+        assert_eq!(sum, res);
+        const_test(
+            term![Op::Eq; term(BV_ADD, args.iter().map(|a| bv_lit(*a, bits)).collect()), bv_lit(res, bits)],
+        );
+    }
+
+    #[test]
+    fn add_test() {
+        init();
+        add_test_instance(&[0b0, 0b0, 0b0, 0b0], 0b0, 1);
+        add_test_instance(&[0b1, 0b0, 0b0, 0b0], 0b1, 1);
+        add_test_instance(&[0b1, 0b1, 0b1, 0b0], 0b1, 1);
+        add_test_instance(&[0b1, 0b1, 0b1, 0b1], 0b0, 1);
+        add_test_instance(&[0b11, 0b11, 0b11, 0b11], 0b00, 2);
+        add_test_instance(&[0b11, 0b11, 0b11, 0b11, 0b11], 0b11, 2);
+    }
+
+    #[test]
+    fn concat_test() {
+        init();
+        const_test(term![
+            Op::Eq;
+            term![BV_CONCAT; bv_lit(0b10,2), bv_lit(0b01,2)],
+            bv_lit(0b1001, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![BV_CONCAT; bv_lit(0b11,2), bv_lit(0b01,2)],
+            bv_lit(0b1101, 4)
+        ]);
+    }
+
+    #[test]
+    fn maj_test() {
+        init();
+        const_test(term![
+            Op::Eq;
+            term![Op::BoolMaj; bool_lit(true), bool_lit(true), bool_lit(true)],
+            bool_lit(true)
+        ]);
     }
 }

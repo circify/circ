@@ -45,6 +45,17 @@ function pf_test {
     done
 }
 
+# Test setup + prove, given an example name (does not test verification)
+function pf_test_only_pf {
+    for proof_impl in mirage
+    do
+        ex_name=$1
+        $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup --proof-impl $proof_impl
+        $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove --proof-impl $proof_impl
+        rm -rf P V pi
+    done
+}
+
 # Test prove workflow with --z-isolate-asserts, given an example name
 function pf_test_isolate {
     for proof_impl in groth16 mirage
@@ -71,6 +82,12 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/utils/casts/bool_128_to_
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
+
+pf_test_only_pf sha_temp1
+pf_test_only_pf sha_rot
+pf_test_only_pf maj
+pf_test_only_pf sha_temp2
+#pf_test_only_pf test_sha256
 
 pf_test assert
 pf_test_isolate isolate_assert

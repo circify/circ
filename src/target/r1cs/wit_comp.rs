@@ -147,6 +147,9 @@ impl<'a> StagedWitCompEvaluator<'a> {
         debug_assert!(self.stages_evaluated < self.comp.stages.len());
         let stage = &self.comp.stages[self.stages_evaluated];
         let num_outputs = stage.num_outputs;
+        for (k, v) in &inputs {
+            trace!("Input {}: {}", k, v,);
+        }
         self.variable_values.extend(inputs);
         if num_outputs > 0 {
             let max_step = (0..num_outputs)
