@@ -87,6 +87,7 @@ pf_test_only_pf sha_temp1
 pf_test_only_pf sha_rot
 pf_test_only_pf maj
 pf_test_only_pf sha_temp2
+#pf_test_only_pf test_sha256
 
 pf_test assert
 pf_test_isolate isolate_assert

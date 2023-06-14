@@ -1,0 +1,40 @@
+(set_default_modulus 52435875175126190479447740508185965837690552500527637822603658699938581184513
+
+(let (
+
+(padded_message.0.0 #x01020304)
+
+(padded_message.0.1 #x80000000)
+
+(padded_message.0.2 #x00000000)
+
+(padded_message.0.3 #x00000000)
+
+(padded_message.0.4 #x00000000)
+
+(padded_message.0.5 #x00000000)
+
+(padded_message.0.6 #x00000000)
+
+(padded_message.0.7 #x00000000)
+
+(padded_message.0.8 #x00000000)
+
+(padded_message.0.9 #x00000000)
+
+(padded_message.0.10 #x00000000)
+
+(padded_message.0.11 #x00000000)
+
+(padded_message.0.12 #x00000000)
+
+(padded_message.0.13 #x00000000)
+
+(padded_message.0.14 #x00000000)
+
+(padded_message.0.15 #x00000020)
+
+
+) true; ignored
+
+))
