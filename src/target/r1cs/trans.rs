@@ -615,7 +615,8 @@ impl<'cfg> ToR1cs<'cfg> {
         let tweak = if strict { -1 } else { 0 };
         let shift = self.r1cs.modulus.new_v(Integer::from(1) << n);
         let sum = a - &b + &shift + tweak;
-        self.decomp("cmp", &sum, n + 1).pop().unwrap()
+        // unwrap does not panic because the length is n + 1
+        self.bitify("cmp", &sum, n + 1, false).pop().unwrap()
     }
 
     /// Returns whether `a` is (`strict`ly) (`signed`ly) greater than `b`.

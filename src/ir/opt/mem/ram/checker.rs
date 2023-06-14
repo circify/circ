@@ -14,7 +14,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         ram.size,
         ram.accesses.len()
     );
-    let f = ram.cfg.field.clone();
+    let f = &ram.cfg.field;
     let (only_init, default) = match &ram.boundary_conditions {
         BoundaryConditions::Default(d) => (false, d.clone()),
         BoundaryConditions::OnlyInit => (true, ram.cfg.zero.clone()),
@@ -50,8 +50,8 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         .into_iter()
         .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(&ram.cfg)))
         .collect();
-    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), &f, uhf_inputs.clone(), ram.cfg.len());
-    let msh = MsHasher::new(ns.fqn("ms_hash_key"), &f, uhf_inputs);
+    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), f, uhf_inputs.clone(), ram.cfg.len());
+    let msh = MsHasher::new(ns.fqn("ms_hash_key"), f, uhf_inputs);
 
     // (2) permutation argument
     let univ_hashes_unsorted: Vec<Term> = ram
@@ -140,7 +140,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
                 accs.iter().map(|a| a.create.b.clone()).collect(),
                 &ns,
                 &mut assertions,
-                &f,
+                f,
             );
         }
     }
@@ -161,7 +161,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         &ns.subspace("time"),
         &mut assertions,
         ram.next_time + 1,
-        &f,
+        f,
     );
     c.outputs[0] = term(AND, assertions);
 }
