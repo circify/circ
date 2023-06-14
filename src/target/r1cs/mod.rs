@@ -397,9 +397,9 @@ impl R1csFinal {
         let cv = self.eval(c, values);
         if (av.clone() * &bv) != cv {
             let mut vars: HashSet<Var> = Default::default();
-            vars.extend(a.monomials.iter().map(|(k, _)| k.clone()));
-            vars.extend(b.monomials.iter().map(|(k, _)| k.clone()));
-            vars.extend(c.monomials.iter().map(|(k, _)| k.clone()));
+            vars.extend(a.monomials.keys().copied());
+            vars.extend(b.monomials.keys().copied());
+            vars.extend(c.monomials.keys().copied());
             for (k, v) in values {
                 if vars.contains(k) {
                     eprintln!("  {} -> {}", self.names.get(k).unwrap(), v);
@@ -479,7 +479,14 @@ impl ProverData {
             // do a round of evaluation
             let value_vec = eval.eval_stage(std::mem::take(&mut inputs));
             for value in value_vec {
-                trace!("var {} : {}", self.r1cs.names.get(&self.r1cs.vars[var_values.len()]).unwrap(), value.as_pf());
+                trace!(
+                    "var {} : {}",
+                    self.r1cs
+                        .names
+                        .get(&self.r1cs.vars[var_values.len()])
+                        .unwrap(),
+                    value.as_pf()
+                );
                 var_values.insert(self.r1cs.vars[var_values.len()], value.as_pf().clone());
             }
             // fill the challenges with 1s

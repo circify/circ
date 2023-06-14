@@ -148,11 +148,7 @@ impl<'a> StagedWitCompEvaluator<'a> {
         let stage = &self.comp.stages[self.stages_evaluated];
         let num_outputs = stage.num_outputs;
         for (k, v) in &inputs {
-            trace!(
-                "Input {}: {}",
-                k,
-                v,
-            );
+            trace!("Input {}: {}", k, v,);
         }
         self.variable_values.extend(inputs);
         if num_outputs > 0 {

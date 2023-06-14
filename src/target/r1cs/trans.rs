@@ -1459,9 +1459,11 @@ pub mod test {
     }
 
     fn add_test_instance(args: &[u64], res: u64, bits: usize) {
-        let sum: u64 = args.iter().sum::<u64>() & ((1 <<  bits) - 1);
+        let sum: u64 = args.iter().sum::<u64>() & ((1 << bits) - 1);
         assert_eq!(sum, res);
-        const_test(term![Op::Eq; term(BV_ADD, args.iter().map(|a| bv_lit(*a, bits)).collect()), bv_lit(res, bits)]);
+        const_test(
+            term![Op::Eq; term(BV_ADD, args.iter().map(|a| bv_lit(*a, bits)).collect()), bv_lit(res, bits)],
+        );
     }
 
     #[test]
