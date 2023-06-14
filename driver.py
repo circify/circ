@@ -27,9 +27,6 @@ def install(features):
             set of features required
     """
 
-    def verify_path_empty(path) -> bool:
-        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
-
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
 
