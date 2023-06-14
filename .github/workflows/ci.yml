@@ -32,8 +32,6 @@ jobs:
               with:
                   path: |
                       /home/runner/work/circ/ABY
-                      /home/runner/work/circ/KaHIP
-                      /home/runner/work/circ/kahypar
                   key: ${{ runner.os }}-third_party
             - name: Install third_party libraries
               run: python3 driver.py --install

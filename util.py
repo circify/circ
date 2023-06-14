@@ -4,8 +4,10 @@ from os import path
 # Gloable variables
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
-cargo_features = {"aby", "c", "lp", "r1cs", "kahip", "kahypar",
-                  "smt", "zok", "datalog", "bellman", "spartan", "poly"}
+
+# TODO: add in "kahip", "kahypar" dependencies when adding new MPC changes
+cargo_features = {"aby", "c", "lp", "r1cs", "smt",
+                  "zok", "datalog", "bellman", "spartan", "poly"}
 
 # Environment variables
 ABY_SOURCE = "./../ABY"
