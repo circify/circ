@@ -1,0 +1,4 @@
+from "hashes/sha256/shaRound" import temp1
+
+def main(u32 e, u32 f, u32 g, u32 h, u32 k, u32 w) -> u32:
+    return temp1(e, f, g, h, k, w)

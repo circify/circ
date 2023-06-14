@@ -396,6 +396,15 @@ impl R1csFinal {
         let bv = self.eval(b, values);
         let cv = self.eval(c, values);
         if (av.clone() * &bv) != cv {
+            let mut vars: HashSet<Var> = Default::default();
+            vars.extend(a.monomials.iter().map(|(k, _)| k.clone()));
+            vars.extend(b.monomials.iter().map(|(k, _)| k.clone()));
+            vars.extend(c.monomials.iter().map(|(k, _)| k.clone()));
+            for (k, v) in values {
+                if vars.contains(k) {
+                    eprintln!("  {} -> {}", self.names.get(k).unwrap(), v);
+                }
+            }
             panic!(
                 "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
                 self.format_lc(a),
@@ -428,7 +437,7 @@ impl R1csFinal {
 
         s.push_str(&format_i(&a.constant));
         for (idx, coeff) in &a.monomials {
-            s.extend(format!(" {} {}", self.names.get(idx).unwrap(), format_i(coeff),).chars());
+            s.extend(format!(" {} {}", format_i(coeff), self.names.get(idx).unwrap()).chars());
         }
         s
     }
@@ -470,6 +479,7 @@ impl ProverData {
             // do a round of evaluation
             let value_vec = eval.eval_stage(std::mem::take(&mut inputs));
             for value in value_vec {
+                trace!("var {} : {}", self.r1cs.names.get(&self.r1cs.vars[var_values.len()]).unwrap(), value.as_pf());
                 var_values.insert(self.r1cs.vars[var_values.len()], value.as_pf().clone());
             }
             // fill the challenges with 1s

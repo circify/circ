@@ -1,0 +1,7 @@
+(let (
+    (a #xFD)
+    (b #xC9)
+    (c #xD0)
+)
+    false
+)

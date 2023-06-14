@@ -732,6 +732,7 @@ impl<'ast> ZGen<'ast> {
                         assertions.push(ret_eq);
                         term(AND, assertions)
                     };
+                    debug!("Assertion: {}", to_assert);
                     self.circ.borrow_mut().assert(to_assert);
                 }
                 Mode::Opt => {
