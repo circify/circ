@@ -14,7 +14,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         ram.size,
         ram.accesses.len()
     );
-    let f = ram.cfg.field.clone();
+    let f = &ram.cfg.field;
     let (only_init, default) = match &ram.boundary_conditions {
         BoundaryConditions::Default(d) => (false, d.clone()),
         BoundaryConditions::OnlyInit => (true, ram.cfg.zero.clone()),
