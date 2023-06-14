@@ -27,30 +27,6 @@ def install(features):
             set of features required
     """
 
-    def verify_path_empty(path) -> bool:
-        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
-
-    for f in features:
-        if f == "aby":
-            if verify_path_empty(ABY_SOURCE):
-                subprocess.run(
-                    ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE]
-                )
-                subprocess.run(["./scripts/build_aby.zsh"])
-        if f == "kahip":
-            if verify_path_empty(KAHIP_SOURCE):
-                subprocess.run(
-                    ["git", "clone", "https://github.com/KaHIP/KaHIP.git", KAHIP_SOURCE]
-                )
-                subprocess.run(["./scripts/build_kahip.zsh"])
-        if f == "kahypar":
-            if verify_path_empty(KAHYPAR_SOURCE):
-                subprocess.run(
-                    ["git", "clone", "--depth=1", "--recursive",
-                        "https://github.com/SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
-                )
-                subprocess.run(["./scripts/build_kahypar.zsh"])
-
     # install python requirements
     subprocess.run(["pip3", "install", "-r", "requirements.txt"])
 
@@ -116,7 +92,6 @@ def build(features):
             log_run_check(["./scripts/build_mpc_c_test.zsh"])
         if "smt" in features and "zok" in features:
             log_run_check(["./scripts/build_mpc_zokrates_test.zsh"])
-        log_run_check(["./scripts/build_aby.zsh"])
 
 
 def test(features, extra_args):
@@ -368,7 +343,6 @@ if __name__ == "__main__":
         verify_extra_implies_flamegraph_or_test(args)
 
         features = load_features()
-        set_env(features)
 
         if args.flamegraph:
             if len(args.extra) > 0 and args.extra[0] == "--":

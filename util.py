@@ -4,26 +4,10 @@ from os import path
 # Gloable variables
 feature_path = ".features.txt"
 mode_path = ".mode.txt"
-cargo_features = {"aby", "c", "lp", "r1cs", "kahip", "kahypar",
-                  "smt", "zok", "datalog", "bellman", "spartan", "poly"}
 
-# Environment variables
-ABY_SOURCE = "./../ABY"
-KAHIP_SOURCE = "./../KaHIP"
-KAHYPAR_SOURCE = "./../kahypar"
-
-
-def set_env(features):
-    for f in features:
-        if f == 'aby':
-            if not os.getenv("ABY_SOURCE"):
-                os.environ["ABY_SOURCE"] = ABY_SOURCE
-        if f == 'kahip':
-            if not os.getenv("KAHIP_SOURCE"):
-                os.environ["KAHIP_SOURCE"] = KAHIP_SOURCE
-        if f == 'kahypar':
-            if not os.getenv("KAHYPAR_SOURCE"):
-                os.environ["KAHYPAR_SOURCE"] = KAHYPAR_SOURCE
+# TODO: add in "kahip", "kahypar" binaries dependencies when adding new MPC changes
+cargo_features = {"aby", "c", "lp", "r1cs", "smt",
+                  "zok", "datalog", "bellman", "spartan", "poly"}
 
 
 def save_mode(mode):
