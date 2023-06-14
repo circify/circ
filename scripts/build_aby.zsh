@@ -2,7 +2,7 @@
 
 if [[ ! -z ${ABY_SOURCE} ]]; then 
     cd ${ABY_SOURCE}
-    git checkout functions 
+    git checkout public
     mkdir -p -- build
     cd build
     cmake .. -DABY_BUILD_EXE=On
