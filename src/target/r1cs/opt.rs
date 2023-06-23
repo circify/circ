@@ -133,14 +133,38 @@ impl LinReducer {
                             self.queue.push(use_id);
                         }
                     }
-                    self.r1cs.idx_to_sig.remove_fwd(&var);
-                    self.r1cs.terms.remove(&var);
+                    self.remove_var(var);
                     debug_assert_eq!(0, self.uses[&var].len());
                 }
             }
         }
         self.r1cs.constraints.retain(|c| !constantly_true(c));
+        self.remove_dead_variables();
         self.r1cs
+    }
+
+    fn remove_var(&mut self, var: Var) {
+        self.r1cs.idx_to_sig.remove_fwd(&var);
+        self.r1cs.terms.remove(&var);
+    }
+
+    /// Remove any private dead variables. Run this at the end of optimization.
+    fn remove_dead_variables(&mut self) {
+        let used: HashSet<Var> = self
+            .r1cs
+            .constraints
+            .iter()
+            .flat_map(|c| {
+                c.0.monomials
+                    .keys()
+                    .chain(c.1.monomials.keys().chain(c.2.monomials.keys()))
+            })
+            .copied()
+            .collect();
+        let present: HashSet<Var> = self.r1cs.terms.keys().copied().collect();
+        for to_remove in present.difference(&used) {
+            self.remove_var(*to_remove);
+        }
     }
 }
 
