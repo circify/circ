@@ -90,6 +90,7 @@ pf_test_only_pf sha_temp2
 #pf_test_only_pf test_sha256
 
 pf_test assert
+pf_test assert2
 pf_test_isolate isolate_assert
 pf_test 3_plus
 pf_test xor
