@@ -183,20 +183,11 @@ impl Manager {
             let mut to_collect = self.to_collect.borrow_mut();
             let mut gc_hooks = self.gc_hooks.borrow_mut();
             let mut collected = 0;
-            //let mut to_collect: Vec<Node> = Vec::new();
-            //        table.retain(|_, value| {
-            //            if Rc::strong_count(&value.data) > 2 {
-            //                true
-            //            } else {
-            //                to_collect.push(value.clone());
-            //                false
-            //            }
-            //        });
             while let Some(t) = to_collect.pop() {
                 collected += 1;
                 let id = t.id;
                 if t.data.strong_count() != 2 {
-                    continue
+                    continue;
                 }
                 let strong_data = t.data.upgrade().expect("missing from table");
                 table.remove(&strong_data).expect("missing from table");
