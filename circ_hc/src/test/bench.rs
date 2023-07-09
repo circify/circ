@@ -69,7 +69,41 @@ struct Times {
     gc: Duration,
 }
 
-fn run_u8_steps<T: Table<u8>>(steps: &[Step<u8>]) -> Times {
+fn gc_every_step<T: Table<u8>>(steps: &[Step<u8>]) -> Times {
+    T::reserve(steps.len());
+    let mut mem = vec![];
+    let start_run = Instant::now();
+    let mut gc = std::time::Duration::ZERO;
+    for s in steps {
+        match s {
+            Step::New(t, args) => {
+                let new_t = T::create_ref(t, args.iter().map(|i| &mem[*i]));
+                mem.push(new_t);
+            }
+            Step::Dup(i) => {
+                let prev = &mem[*i];
+                let new_t = T::create_ref(prev.op(), prev.cs().iter());
+                mem.push(new_t);
+            }
+            Step::Del(i) => {
+                if *i > 0 {
+                    mem[*i] = mem[i - 1].clone();
+                }
+            }
+        }
+        let start_gc = Instant::now();
+        T::gc();
+        gc += start_gc.elapsed();
+    }
+    let run = start_run.elapsed();
+    let start_gc = Instant::now();
+    std::mem::drop(mem);
+    T::gc();
+    gc += start_gc.elapsed();
+    Times { run, gc }
+}
+
+fn gc_at_end<T: Table<u8>>(steps: &[Step<u8>]) -> Times {
     T::reserve(steps.len());
     let mut mem = vec![];
     let start_run = Instant::now();
@@ -103,13 +137,25 @@ pub fn bench_test<T: Table<u8>>(num_steps: usize) {
     T::gc();
     assert_eq!(T::table_size(), 0);
     let steps = sample_u8_steps(num_steps);
-    let times = run_u8_steps::<T>(&steps);
+    let times = gc_at_end::<T>(&steps);
     T::gc();
     assert_eq!(T::table_size(), 0);
     println!("");
-    println!("name,steps,time,gc_time");
+    println!("workload,name,steps,time,gc_time");
     println!(
-        "{},{},{:?},{:?}",
+        "gc_at_end,{},{},{:?},{:?}",
+        T::name(),
+        num_steps,
+        times.run / num_steps as u32,
+        times.gc / num_steps as u32
+    );
+    let times = gc_every_step::<T>(&steps);
+    T::gc();
+    assert_eq!(T::table_size(), 0);
+    println!("");
+    println!("workload,name,steps,time,gc_time");
+    println!(
+        "gc_every_step,{},{},{:?},{:?}",
         T::name(),
         num_steps,
         times.run / num_steps as u32,
