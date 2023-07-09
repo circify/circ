@@ -13,6 +13,7 @@ default = ["hashconsing", "lru", "raw", "rc"]
 [dependencies]
 fxhash = "0.2.1"
 hashconsing = { git = "https://github.com/alex-ozdemir/hashconsing.git", branch = "phash", optional = true }
+log = "0.4"
 lru = { version = "0.7.2", optional = true }
 
 [dev-dependencies]
