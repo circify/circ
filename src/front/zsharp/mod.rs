@@ -1278,25 +1278,23 @@ impl<'ast> ZGen<'ast> {
         match tya {
             Assignee(a) => {
                 let t = self.identifier_impl_::<IS_CNST>(&a.id)?;
-                a.accesses.iter().try_fold(t.ty, |ty, acc| {
-                    match acc {
-                        ast::AssigneeAccess::Select(aa) => match ty {
-                            Ty::Array(sz, ity) => match &aa.expression {
-                                ast::RangeOrExpression::Expression(_) => Ok(*ity),
-                                ast::RangeOrExpression::Range(_) => Ok(Ty::Array(sz, ity)),
-                            },
-                            ty => Err(format!("Attempted array access on non-Array type {ty}")),
+                a.accesses.iter().try_fold(t.ty, |ty, acc| match acc {
+                    ast::AssigneeAccess::Select(aa) => match ty {
+                        Ty::Array(sz, ity) => match &aa.expression {
+                            ast::RangeOrExpression::Expression(_) => Ok(*ity),
+                            ast::RangeOrExpression::Range(_) => Ok(Ty::Array(sz, ity)),
                         },
-                        ast::AssigneeAccess::Member(sa) => match ty {
-                            Ty::Struct(nm, map) => map
-                                .search(&sa.id.value)
-                                .map(|r| r.1.clone())
-                                .ok_or_else(|| {
-                                    format!("No such member {} of struct {nm}", &sa.id.value)
-                                }),
-                            ty => Err(format!("Attempted member access on non-Struct type {ty}")),
-                        },
-                    }
+                        ty => Err(format!("Attempted array access on non-Array type {ty}")),
+                    },
+                    ast::AssigneeAccess::Member(sa) => match ty {
+                        Ty::Struct(nm, map) => map
+                            .search(&sa.id.value)
+                            .map(|r| r.1.clone())
+                            .ok_or_else(|| {
+                                format!("No such member {} of struct {nm}", &sa.id.value)
+                            }),
+                        ty => Err(format!("Attempted member access on non-Struct type {ty}")),
+                    },
                 })
             }
             TypedIdentifier(t) => self.type_impl_::<IS_CNST>(&t.ty),
@@ -1623,15 +1621,12 @@ impl<'ast> ZGen<'ast> {
                         abs_src_path.display(),
                         dst_names
                     );
-                    src_names
-                        .into_iter()
-                        .zip(dst_names)
-                        .for_each(|(sn, dn)| {
-                            if imap.contains_key(&dn) {
-                                self.err(format!("Import {dn} redeclared"), i_span);
-                            }
-                            assert!(imap.insert(dn, (abs_src_path.clone(), sn)).is_none());
-                        });
+                    src_names.into_iter().zip(dst_names).for_each(|(sn, dn)| {
+                        if imap.contains_key(&dn) {
+                            self.err(format!("Import {dn} redeclared"), i_span);
+                        }
+                        assert!(imap.insert(dn, (abs_src_path.clone(), sn)).is_none());
+                    });
 
                     // add included -> includer edge for later toposort
                     if !gn.contains_key(&abs_src_path) {

@@ -380,8 +380,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     .and_then(|x| x.upgrade())
                     .expect("postorder cache")
             };
-            new_t_opt
-                .unwrap_or_else(|| term(t.op().clone(), t.cs().iter().map(cc_get).collect()))
+            new_t_opt.unwrap_or_else(|| term(t.op().clone(), t.cs().iter().map(cc_get).collect()))
         };
         cache.put(t.downgrade(), new_t.downgrade());
     }
