@@ -178,6 +178,14 @@ pub struct IrOpt {
         default_value = "wrap"
     )]
     pub field_to_bv: FieldToBv,
+    /// Garbage collection after each optimization pass.
+    #[arg(
+        long = "ir-frequent-gc",
+        env = "IR_FREQUENT_GC",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub frequent_gc: bool,
 }
 
 #[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
