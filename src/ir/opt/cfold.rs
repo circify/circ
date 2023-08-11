@@ -79,7 +79,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         };
 
         if ignore.contains(t.op()) {
-            let new_t = term(t.op().clone(), t.cs().iter().map(|c| c_get(c)).collect());
+            let new_t = term(t.op().clone(), t.cs().iter().map(c_get).collect());
             cache.put(t.downgrade(), new_t.downgrade());
             continue;
         }
@@ -101,11 +101,11 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 _ => None,
             },
             Op::BoolNaryOp(o) => match o {
-                BoolNaryOp::Xor => Some((*o).flatten(t.cs().iter().map(|c| c_get(c)))),
+                BoolNaryOp::Xor => Some((*o).flatten(t.cs().iter().map(c_get))),
                 BoolNaryOp::Or => {
                     // (a || a) = a
                     // (a || !a) = true
-                    let flattened = (*o).flatten(t.cs().iter().map(|c| c_get(c)));
+                    let flattened = (*o).flatten(t.cs().iter().map(c_get));
                     Some(if *flattened.op() == OR {
                         let mut dedup_children = TermSet::default();
                         for t in flattened.cs().iter() {
@@ -128,7 +128,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 BoolNaryOp::And => {
                     // (a && a) = a
                     // (a && !a) = false
-                    let flattened = (*o).flatten(t.cs().iter().map(|c| c_get(c)));
+                    let flattened = (*o).flatten(t.cs().iter().map(c_get));
                     let mut dedup_children = TermSet::default();
                     Some(if *flattened.op() == AND {
                         for t in flattened.cs().iter() {
@@ -225,7 +225,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     _ => None,
                 }
             }
-            Op::BvNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
+            Op::BvNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
             Op::BvBinPred(p) => {
                 if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
                     Some(leaf_term(Op::Const(Value::Bool(match p {
@@ -274,14 +274,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     }
                 }
             }
-            Op::PfNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
+            Op::PfNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
             Op::PfUnOp(o) => get(0).as_pf_opt().map(|pf| {
                 leaf_term(Op::Const(Value::Field(match o {
                     PfUnOp::Recip => pf.clone().recip(),
                     PfUnOp::Neg => -pf.clone(),
                 })))
             }),
-            Op::IntNaryOp(o) => Some(o.flatten(t.cs().iter().map(|c| c_get(c)))),
+            Op::IntNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
             Op::IntBinPred(p) => {
                 if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
                     Some(leaf_term(Op::Const(Value::Bool(match p {
@@ -374,14 +374,13 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
             _ => None,
         };
         let new_t = {
-            let mut cc_get = |x: &Term| -> Term {
+            let cc_get = |x: &Term| -> Term {
                 cache
                     .get(&x.downgrade())
                     .and_then(|x| x.upgrade())
                     .expect("postorder cache")
             };
-            new_t_opt
-                .unwrap_or_else(|| term(t.op().clone(), t.cs().iter().map(|c| cc_get(c)).collect()))
+            new_t_opt.unwrap_or_else(|| term(t.op().clone(), t.cs().iter().map(cc_get).collect()))
         };
         cache.put(t.downgrade(), new_t.downgrade());
     }

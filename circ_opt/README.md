@@ -86,6 +86,13 @@ Options:
           - wrap:  x % 2^b
           - panic: a panic
 
+      --ir-frequent-gc <FREQUENT_GC>
+          Garbage collection after each optimization pass
+          
+          [env: IR_FREQUENT_GC=]
+          [default: false]
+          [possible values: true, false]
+
       --ram <ENABLED>
           Whether to use advanced RAM techniques
           
@@ -185,6 +192,8 @@ Options:
           Which modulus to use (overrides [FieldOpt::builtin]) [env: FIELD_CUSTOM_MODULUS=] [default: ]
       --ir-field-to-bv <FIELD_TO_BV>
           Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
+      --ir-frequent-gc <FREQUENT_GC>
+          Garbage collection after each optimization pass [env: IR_FREQUENT_GC=] [default: false] [possible values: true, false]
       --ram <ENABLED>
           Whether to use advanced RAM techniques [env: RAM=] [default: false] [possible values: true, false]
       --ram-range <RANGE>
@@ -228,6 +237,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -272,6 +282,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -314,6 +325,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -356,6 +368,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -398,6 +411,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -440,6 +454,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -482,6 +497,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -524,6 +540,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -569,6 +586,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -612,6 +630,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -657,6 +676,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -700,6 +720,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -745,6 +766,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,
@@ -788,6 +810,7 @@ BinaryOpt {
         },
         ir: IrOpt {
             field_to_bv: Wrap,
+            frequent_gc: false,
         },
         ram: RamOpt {
             enabled: false,

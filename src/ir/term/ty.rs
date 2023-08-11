@@ -203,7 +203,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::Rot(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfToBoolTrusted => Ok(Sort::Bool),
         Op::ExtOp(o) => {
-            let args_sorts: Vec<&Sort> = t.cs().iter().map(|c| get_ty(c)).collect();
+            let args_sorts: Vec<&Sort> = t.cs().iter().map(get_ty).collect();
             o.check(&args_sorts)
         }
         o => Err(TypeErrorReason::Custom(format!("other operator: {o}"))),

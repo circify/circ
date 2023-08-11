@@ -202,10 +202,7 @@ impl<'src> IrInterp<'src> {
 
     /// Takes bindings in order bound, and unbinds
     fn bind(&mut self, key: &'src [u8], value: Term) {
-        self.bindings
-            .entry(key)
-            .or_insert_with(Vec::new)
-            .push(value)
+        self.bindings.entry(key).or_default().push(value)
     }
 
     /// Takes bindings in order bound, and unbinds
