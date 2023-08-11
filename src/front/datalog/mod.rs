@@ -53,7 +53,7 @@ impl<'ast> Gen<'ast> {
     /// Attempt to enter a funciton.
     /// Returns `false` if doing so would violate the recursion limit.
     fn enter_function(&mut self, name: &'ast str, dec_value: Option<Integer>) -> bool {
-        let e = self.stack_by_fn.entry(name).or_insert_with(Vec::new);
+        let e = self.stack_by_fn.entry(name).or_default();
         //assert_eq!(e.last().and_then(|l| l.as_ref()).is_some(), dec_value.is_some());
         let do_enter = if let (Some(last_val), Some(this_val)) =
             (e.last().and_then(|l| l.as_ref()), dec_value.as_ref())

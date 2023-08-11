@@ -303,7 +303,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
                 .collect();
             let excess = self.size.saturating_sub(1 + dists.len());
             let ns = Sum(dists.len(), excess).sample(rng);
-            for (dist, n) in dists.iter_mut().zip(ns.into_iter()) {
+            for (dist, n) in dists.iter_mut().zip(ns) {
                 *dist = dist.clone().with_size(n + 1);
             }
             let children: Vec<Term> = dists.into_iter().map(|d| d.sample(rng)).collect();

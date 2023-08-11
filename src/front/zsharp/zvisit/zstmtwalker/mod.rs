@@ -26,7 +26,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         prms: &'ret [ast::Parameter<'ast>],
         rets: &'ret [ast::Type<'ast>],
         gens: &'ret [ast::IdentifierExpression<'ast>],
-        zgen: &'ret mut ZGen<'ast>,
+        zgen: &'ret ZGen<'ast>,
     ) -> Self {
         let vars = vec![prms
             .iter()
@@ -307,7 +307,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     fn unify_identifier(
         &self,
         ty: ast::Type<'ast>,
-        ie: &mut ast::IdentifierExpression<'ast>,
+        ie: &ast::IdentifierExpression<'ast>,
     ) -> ZVisitorResult {
         self.lookup_type(ie).and_then(|ity| self.eq_type(&ty, &ity))
     }
