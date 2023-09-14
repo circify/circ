@@ -1158,10 +1158,10 @@ impl<'ast> ZGen<'ast> {
                 if IS_CNST {
                     return Err("cannot evaluate a const CondStore".into());
                 }
-                let a = self.identifier_impl_::<false>(&e.array)?;
-                let i = self.expr_impl_::<false>(&e.index)?;
-                let v = self.expr_impl_::<false>(&e.value)?;
-                let c = self.expr_impl_::<false>(&e.condition)?;
+                let a = self.identifier_impl_::<IS_CNST>(&e.array)?;
+                let i = self.expr_impl_::<IS_CNST>(&e.index)?;
+                let v = self.expr_impl_::<IS_CNST>(&e.value)?;
+                let c = self.expr_impl_::<IS_CNST>(&e.condition)?;
                 let cbool = bool(c)?;
                 let new = mut_array_store(a, i, v, cbool)?;
                 trace!("Cond store: {} to {}", e.array.value, new);
