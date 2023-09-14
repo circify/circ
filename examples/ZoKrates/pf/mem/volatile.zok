@@ -5,7 +5,7 @@ const field ACC = 10
 def main(private field x, private field y, private bool b) -> field:
     field[LEN] array = [0; LEN]
     for field i in 0..ACC do
-        cond_store(array, x+i, 1, b)
+        cond_store(array, x+i, 1f, b)
     endfor
     return array[y]
 

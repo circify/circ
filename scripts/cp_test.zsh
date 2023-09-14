@@ -42,3 +42,4 @@ function pf_test {
 
 com_wit_test ./examples/ZoKrates/pf/mem/tiny.zok
 pf_test ./examples/ZoKrates/pf/mem/volatile.zok
+pf_test ./examples/ZoKrates/pf/mem/volatile_struct.zok

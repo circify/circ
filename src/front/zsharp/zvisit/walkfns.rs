@@ -794,7 +794,7 @@ pub fn walk_cond_store_statement<'ast, Z: ZVisitorMut<'ast>>(
 ) -> ZVisitorResult {
     visitor.visit_identifier_expression(&mut s.array)?;
     visitor.visit_array_index_expression(&mut s.index)?;
-    visitor.visit_array_index_expression(&mut s.value)?;
+    visitor.visit_expression(&mut s.value)?;
     visitor.visit_expression(&mut s.condition)?;
     visitor.visit_span(&mut s.span)
 }
