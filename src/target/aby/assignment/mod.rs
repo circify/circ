@@ -64,13 +64,10 @@ impl CostModel {
             let o = obj
                 .get(op_name)
                 .unwrap_or_else(|| panic!("Missing op {} in {:#?}", op_name, obj));
-            Some(
-                o.get("32")
-                    .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
-                    .as_f64()
-                    .expect("not a number"),
-            )
-            .unwrap()
+            o.get("32")
+                .unwrap_or_else(|| panic!("Missing op '32' entry in {:#?}", o))
+                .as_f64()
+                .expect("not a number")
         };
         let mut conversions = FxHashMap::default();
         let mut ops = FxHashMap::default();
