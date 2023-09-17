@@ -3,13 +3,30 @@
 //! This module attempts to identify *oblivious* arrays: those that are only accessed at constant
 //! indices. These arrays can be replaced with tuples. Then, a tuple elimination pass can be run.
 //!
+//! It operates in a single IO (inputs->outputs) pass, that computes three maps:
+//!
+//!    * `R`: the rewrite map
+//!    * `T`: the map from a term, to one whose sort has arrays replaced with tuples.
+//!
+//! terms *if possible*:
+//!
+//!    * `r = ite(c, a, b)`: tuple `r` iff `a` and `b` are tupled
+//!    * `r = a[i\v]`: tuple `r` iff `i` is contant and `a` is tupled
+//!    * `r = a[i]`:
+//!       * if `i` is contant and
+//!       * if `r` is a
+//!
+//! If
+//!
 //! It operates in two passes:
 //!
 //!    1. determine which arrays are oblivious
-//!    2. replace oblivious arrays with tuples
-//!
+//!    2. replace those oblivious arrays with tuples
 //!
 //! ## Pass 1: Identifying oblivious arrays
+//!
+//! First, we compute which array terms have all their values at known positions. This is a IO
+//! traversal.
 //!
 //! We maintain a set of non-oblivious arrays, initially empty. We traverse the whole computation
 //! system, performing the following inferences:
@@ -72,31 +89,115 @@
 use super::super::visit::*;
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
+use std::fmt::Display;
 
 use log::debug;
+
+struct OblivRewriter {
+    tups: TermMap<Term>,
+    terms: TermMap<Term>,
+}
+
+fn suitable_const(t: &Term) -> bool {
+    t.is_const() && matches!(check(t), Sort::BitVector(_) | Sort::Field(_) | Sort::Bool)
+}
+
+impl OblivRewriter {
+    fn get_t(&self, t: &Term) -> &Term {
+        self.tups.get(t).unwrap_or(self.terms.get(t).unwrap())
+    }
+    fn get(&self, t: &Term) -> &Term {
+        self.terms.get(t).unwrap()
+    }
+    fn visit(&mut self, t: &Term) {
+        match t.op() {
+            Op::Array(_k, _v) => {
+                self.terms.insert(
+                    t.clone(),
+                    term(
+                        Op::Tuple,
+                        t.cs().iter().map(|c| self.get(c)).cloned().collect(),
+                    ),
+                );
+                self.tups.insert(
+                    t.clone(),
+                    term(
+                        Op::Tuple,
+                        t.cs().iter().map(|c| self.get_t(c)).cloned().collect(),
+                    ),
+                );
+            }
+            Op::Store => {
+                let a = &t.cs()[0];
+                let i = &t.cs()[1];
+                let v = &t.cs()[2];
+                if let Some(aa) = self.tups.get(a) {
+                    if suitable_const(i) {
+                        term![Op::Update(get_const(i)); aa, v];
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl RewritePass for OblivRewriter {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        match orig.op() {
+            Op::Array(key_s, val_s) => {
+                let cs = rewritten_children();
+                for (i, orig_c) in orig.cs().iter().enumerate() {}
+            }
+        }
+
+        todo!()
+    }
+}
+
+// fn replacable(s: &Term) -> bool {
+//     if let Sort::Array(k, _v, _size) = check(s) {
+//         if k.is_scalar()
+//         {
+//
+//         }
+//         else
+//         {
+//         }
+//     } else {
+//         false
+//     }
+// }
 
 struct NonOblivComputer {
     not_obliv: TermSet,
 }
 
 impl NonOblivComputer {
-    fn mark(&mut self, a: &Term) -> bool {
+    fn mark(&mut self, a: &Term, reason: &(impl Display + ?Sized)) -> bool {
+        assert!(check(a).is_array());
         if !a.is_const() && self.not_obliv.insert(a.clone()) {
-            debug!("Not obliv: {}", a);
+            debug!("Not obliv b/c {}: {}", reason, a);
             true
         } else {
             false
         }
     }
 
-    fn bi_implicate(&mut self, a: &Term, b: &Term) -> bool {
+    fn bi_implicate(&mut self, a: &Term, b: &Term, reason: &(impl Display + ?Sized)) -> bool {
         if !a.is_const() && !b.is_const() {
             match (self.not_obliv.contains(a), self.not_obliv.contains(b)) {
                 (false, true) => {
+                    debug!("Not obliv b/c bimplication {}: {}", reason, a);
                     self.not_obliv.insert(a.clone());
                     true
                 }
                 (true, false) => {
+                    debug!("Not obliv b/c bimplication {}: {}", reason, b);
                     self.not_obliv.insert(b.clone());
                     true
                 }
@@ -124,47 +225,50 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let mut progress = false;
                 if let Sort::Array(..) = check(v) {
                     // Imprecisely, mark v as non-obliv iff the array is.
-                    progress = self.bi_implicate(term, v) || progress;
+                    // progress = self.bi_implicate(term, v) || progress;
                 }
                 if let Op::Const(_) = i.op() {
-                    progress = self.bi_implicate(term, a) || progress;
+                    progress = self.bi_implicate(term, a, "store") || progress;
                 } else {
-                    progress = self.mark(a) || progress;
-                    progress = self.mark(term) || progress;
+                    progress = self.mark(a, "store child") || progress;
+                    progress = self.mark(term, "store parent") || progress;
                 }
                 if let Sort::Array(..) = check(v) {
                     // Imprecisely, mark v as non-obliv iff the array is.
-                    progress = self.bi_implicate(term, v) || progress;
+                    // progress = self.bi_implicate(term, v) || progress;
                 }
                 progress
             }
             Op::Array(..) => {
-                let mut progress = false;
-                if !term.cs().is_empty() {
-                    if let Sort::Array(..) = check(&term.cs()[0]) {
-                        progress = self.bi_implicate(term, &term.cs()[0]) || progress;
-                        for i in 0..term.cs().len() - 1 {
-                            progress =
-                                self.bi_implicate(&term.cs()[i], &term.cs()[i + 1]) || progress;
-                        }
-                        for i in (0..term.cs().len() - 1).rev() {
-                            progress =
-                                self.bi_implicate(&term.cs()[i], &term.cs()[i + 1]) || progress;
-                        }
-                        progress = self.bi_implicate(term, &term.cs()[0]) || progress;
-                    }
-                }
-                progress
+                //                let mut progress = false;
+                //                if !term.cs().is_empty() {
+                //                    if let Sort::Array(..) = check(&term.cs()[0]) {
+                //                        progress = self.bi_implicate(term, &term.cs()[0]) || progress;
+                //                        for i in 0..term.cs().len() - 1 {
+                //                            progress =
+                //                                self.bi_implicate(&term.cs()[i], &term.cs()[i + 1]) || progress;
+                //                        }
+                //                        for i in (0..term.cs().len() - 1).rev() {
+                //                            progress =
+                //                                self.bi_implicate(&term.cs()[i], &term.cs()[i + 1]) || progress;
+                //                        }
+                //                        progress = self.bi_implicate(term, &term.cs()[0]) || progress;
+                //                    }
+                //                }
+                //                progress
+                false
             }
             Op::Fill(..) => {
-                let v = &term.cs()[0];
-                if let Sort::Array(..) = check(v) {
-                    self.bi_implicate(term, &term.cs()[0])
-                } else {
-                    false
-                }
+                //                let v = &term.cs()[0];
+                //                if let Sort::Array(..) = check(v) {
+                //                    self.bi_implicate(term, &term.cs()[0])
+                //                } else {
+                //                    false
+                //                }
+                false
             }
             Op::Select => {
+                println!("sel {}", term);
                 // Even though the selected value may not have array sort, we still flag it as
                 // non-oblivious so we know whether to replace it or not.
                 let a = &term.cs()[0];
@@ -173,15 +277,16 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 if let Op::Const(_) = i.op() {
                     // pass
                 } else {
-                    progress = self.mark(a) || progress;
-                    progress = self.mark(term) || progress;
+                    println!("go");
+                    progress = self.mark(a, "select child") || progress;
+                    // progress = self.mark(term) || progress;
                 }
-                progress = self.bi_implicate(term, a) || progress;
+                // progress = self.bi_implicate(term, a) || progress;
                 progress
             }
             Op::Var(..) => {
                 if let Sort::Array(..) = check(term) {
-                    self.mark(term)
+                    self.mark(term, "variable")
                 } else {
                     false
                 }
@@ -190,9 +295,9 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let t = &term.cs()[1];
                 let f = &term.cs()[2];
                 if let Sort::Array(..) = check(t) {
-                    let mut progress = self.bi_implicate(term, t);
-                    progress = self.bi_implicate(t, f) || progress;
-                    progress = self.bi_implicate(term, f) || progress;
+                    let mut progress = self.bi_implicate(term, t, "ite t");
+                    progress = self.bi_implicate(t, f, "ite f") || progress;
+                    progress = self.bi_implicate(term, f, "ite t") || progress;
                     progress
                 } else {
                     false
@@ -202,7 +307,7 @@ impl ProgressAnalysisPass for NonOblivComputer {
                 let a = &term.cs()[0];
                 let b = &term.cs()[1];
                 if let Sort::Array(..) = check(a) {
-                    self.bi_implicate(a, b)
+                    self.bi_implicate(a, b, "eq")
                 } else {
                     false
                 }
@@ -262,7 +367,7 @@ impl RewritePass for Replacer {
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
-        //debug!("Visit {}", extras::Letified(orig.clone()));
+        debug!("Visit {}", orig.clone());
         let get_cs = || -> Vec<Term> {
             rewritten_children()
                 .into_iter()
@@ -282,8 +387,7 @@ impl RewritePass for Replacer {
                 }
             }
             Op::Select => {
-                // we mark the selected term as non-obliv...
-                if self.should_replace(orig) {
+                if self.should_replace(&orig.cs()[0]) {
                     let mut cs = get_cs();
                     debug_assert_eq!(cs.len(), 2);
                     let k_const = get_const(&cs.pop().unwrap());
