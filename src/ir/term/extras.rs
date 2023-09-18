@@ -110,6 +110,7 @@ pub fn as_uint_constant(t: &Term) -> Option<Integer> {
     match &t.op() {
         Op::Const(Value::BitVector(bv)) => Some(bv.uint().clone()),
         Op::Const(Value::Field(f)) => Some(f.i()),
+        Op::Const(Value::Bool(b)) => Some((*b).into()),
         _ => None,
     }
 }
