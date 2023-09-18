@@ -86,7 +86,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     }
                 }
                 Opt::Obliv => {
-                    mem::obliv::new_elim_obliv(c);
+                    mem::obliv::elim_obliv(c);
                 }
                 Opt::LinearScan => {
                     mem::lin::linearize(c);
