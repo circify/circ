@@ -318,8 +318,8 @@ impl RewritePass for Extactor {
         let term_refs: HashSet<&Term> = terms.iter().collect();
         let mut cache = TermMap::<Term>::default();
         for top in array_order(term_refs) {
-            debug_assert!(!cache.contains_key(&top));
-            let new_t_opt = self.visit_cache(computation, &top, &cache);
+            debug_assert!(!cache.contains_key(top));
+            let new_t_opt = self.visit_cache(computation, top, &cache);
             let new_t = new_t_opt.unwrap_or_else(|| {
                 term(
                     top.op().clone(),
