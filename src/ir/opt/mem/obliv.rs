@@ -3,88 +3,16 @@
 //! This module attempts to identify *oblivious* arrays: those that are only accessed at constant
 //! indices. These arrays can be replaced with tuples. Then, a tuple elimination pass can be run.
 //!
-//! It operates in a single IO (inputs->outputs) pass, that computes three maps:
+//! It operates in a single IO (inputs->outputs) pass, that computes two maps:
 //!
-//!    * `R`: the rewrite map
-//!    * `T`: the map from a term, to one whose sort has arrays replaced with tuples.
+//!    * `R`: the rewrite map; keys map to values of the same sort. This is the canonical rewrite map.
+//!    * `T`: the map from a term, to one whose sort has arrays replaced with tuples at the top of the sort tree
+//!       * if some select has a constant index and is against an entry of T, then:
+//!           * we add ((field i) T_ENTRY) to T for that select
+//!           * if the above has scalar sort, we add it to R
 //!
-//! terms *if possible*:
-//!
-//!    * `r = ite(c, a, b)`: tuple `r` iff `a` and `b` are tupled
-//!    * `r = a[i\v]`: tuple `r` iff `i` is contant and `a` is tupled
-//!    * `r = a[i]`:
-//!       * if `i` is contant and
-//!       * if `r` is a
-//!
-//! If
-//!
-//! It operates in two passes:
-//!
-//!    1. determine which arrays are oblivious
-//!    2. replace those oblivious arrays with tuples
-//!
-//! ## Pass 1: Identifying oblivious arrays
-//!
-//! First, we compute which array terms have all their values at known positions. This is a IO
-//! traversal.
-//!
-//! We maintain a set of non-oblivious arrays, initially empty. We traverse the whole computation
-//! system, performing the following inferences:
-//!
-//!    * If `a[i]` for non-constant `i`, then `a` and `a[i]` are not oblivious;
-//!    * If `a[i]`, `a` and `a[i]`  are equi-oblivious
-//!    * If `a[i\v]` for non-constant `i`, then neither `a[i\v]` nor `a` are oblivious
-//!    * If `a[i\v]`, then `a[i\v]` and `a` are equi-oblivious
-//!    * If `ite(c,a,b)`, then `ite(c,a,b)`, `a`, and `b` are equi-oblivious
-//!    * If `a=b`, then `a` and `b` are equi-oblivious
-//!
-//! This procedure is iterated to fixpoint.
-//!
-//! Notice that we flag some *array* terms as non-oblivious, and we also flag their derived select
-//! terms as non-oblivious. This makes it easy to see which selects should be replaced later.
-//!
-//! ### Sharing & Constant Arrays
-//!
-//! This pass is effective given the somewhat naive assumption that array terms in the term graph
-//! can be separated into different "threads", which are not connected. Sometimes they are,
-//! especially by constant arrays.
-//!
-//! For example, consider code like this:
-//!
-//! ```ignore
-//! x = [0, 0, 0, 0]
-//! y = [0, 0, 0, 0]
-//! // oblivious modifications to x
-//! // non-oblivious modifications to y
-//! ```
-//!
-//! In this situation, we would hope that x and its derived arrays will be identified as
-//! "oblivious" while y will not.
-//!
-//! However, because of term sharing, the constant array [0,0,0,0] happens to be the root of both
-//! x's and y's store chains. If the constant array is `c`, then the first store to x might be
-//! `c[0\v1]` while the first store to y might be `c[i2\v2]`. The "store" rule for non-oblivious
-//! analysis would say that `c` is non-oblivious (b/c of the second store) and therefore the whole
-//! x store chain would b too...
-//!
-//! The problem isn't just with constants. If any non-oblivious stores branch off an otherwise
-//! oblivious store chain, the same thing happens.
-//!
-//! Since constants are a pervasive problem, we special-case them, omitting them from the analysis.
-//!
-//! We probably want a better idea of what this pass does (and how to handle arrays) at some
-//! point...
-//!
-//! ## Pass 2: Replacing oblivious arrays with term lists.
-//!
-//! In this pass, the goal is to
-//!
-//!    * map array terms to tuple terms
-//!    * map array selections to tuple field gets
-//!
-//! In both cases we look at the non-oblivious array/select set to see whether to do the
-//! replacement.
-//!
+//! So, essentially, what's going on is that T maps each term t to an (approximate) analysis of t
+//! that indicates which accesses can be perfectly resolved.
 
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
