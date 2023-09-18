@@ -91,8 +91,9 @@ use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
 use std::fmt::Display;
 
-use log::debug;
+use log::{debug, trace};
 
+#[derive(Default)]
 struct OblivRewriter {
     tups: TermMap<Term>,
     terms: TermMap<Term>,
@@ -110,52 +111,103 @@ impl OblivRewriter {
         self.terms.get(t).unwrap()
     }
     fn visit(&mut self, t: &Term) {
-        match t.op() {
-            Op::Array(_k, _v) => {
-                self.terms.insert(
-                    t.clone(),
-                    term(
-                        Op::Tuple,
-                        t.cs().iter().map(|c| self.get(c)).cloned().collect(),
-                    ),
-                );
-                self.tups.insert(
-                    t.clone(),
-                    term(
-                        Op::Tuple,
-                        t.cs().iter().map(|c| self.get_t(c)).cloned().collect(),
-                    ),
-                );
-            }
+        let (tup_opt, term_opt) = match t.op() {
+            Op::Array(_k, _v) => (
+                Some(term(
+                    Op::Tuple,
+                    t.cs().iter().map(|c| self.get_t(c)).cloned().collect(),
+                )),
+                None,
+            ),
+            Op::Fill(_k, size) => (
+                Some(term(Op::Tuple, vec![self.get_t(&t.cs()[0]).clone(); *size])),
+                None,
+            ),
             Op::Store => {
                 let a = &t.cs()[0];
                 let i = &t.cs()[1];
                 let v = &t.cs()[2];
+                (
+                    if let Some(aa) = self.tups.get(a) {
+                        if suitable_const(i) {
+                            debug!("simplify store {}", i);
+                            Some(term![Op::Update(get_const(i)); aa.clone(), self.get_t(v).clone()])
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    },
+                    None,
+                )
+            }
+            Op::Select => {
+                let a = &t.cs()[0];
+                let i = &t.cs()[1];
                 if let Some(aa) = self.tups.get(a) {
                     if suitable_const(i) {
-                        term![Op::Update(get_const(i)); aa, v];
+                        debug!("simplify select {}", i);
+                        let tt = term![Op::Field(get_const(i)); aa.clone()];
+                        (Some(tt.clone()), Some(tt))
+                    } else {
+                        (None, None)
                     }
+                } else {
+                    (None, None)
                 }
             }
+            Op::Ite => {
+                let cond = &t.cs()[0];
+                let case_t = &t.cs()[1];
+                let case_f = &t.cs()[2];
+                (
+                    if let (Some(tt), Some(ff)) = (self.tups.get(case_t), self.tups.get(case_f)) {
+                        Some(term![Op::Ite; self.get(cond).clone(), tt.clone(), ff.clone()])
+                    } else {
+                        None
+                    },
+                    None,
+                )
+            }
+            Op::Eq => {
+                let a = &t.cs()[0];
+                let b = &t.cs()[1];
+                (
+                    None,
+                    if let (Some(aa), Some(bb)) = (self.tups.get(a), self.tups.get(b)) {
+                        Some(term![Op::Eq; aa.clone(), bb.clone()])
+                    } else {
+                        None
+                    },
+                )
+            }
+            Op::Tuple => panic!("Tuple in obliv"),
+            _ => (None, None),
+        };
+        if let Some(tup) = tup_opt {
+            trace!("Tuple rw: {}", tup);
+            self.tups.insert(t.clone(), tup);
         }
+        let new_t = term_opt.unwrap_or_else(|| {
+            term(
+                t.op().clone(),
+                t.cs().iter().map(|c| self.get(c)).cloned().collect(),
+            )
+        });
+
+        self.terms.insert(t.clone(), new_t);
     }
 }
 
-impl RewritePass for OblivRewriter {
-    fn visit<F: Fn() -> Vec<Term>>(
-        &mut self,
-        computation: &mut Computation,
-        orig: &Term,
-        rewritten_children: F,
-    ) -> Option<Term> {
-        match orig.op() {
-            Op::Array(key_s, val_s) => {
-                let cs = rewritten_children();
-                for (i, orig_c) in orig.cs().iter().enumerate() {}
-            }
-        }
-
-        todo!()
+/// Eliminate oblivious arrays. See module documentation.
+pub fn new_elim_obliv(c: &mut Computation) {
+    let mut pass = OblivRewriter::default();
+    for t in c.terms_postorder() {
+        pass.visit(&t);
+    }
+    for o in &mut c.outputs {
+        debug_assert!(check(o).is_scalar());
+        *o = pass.get(o).clone();
     }
 }
 
