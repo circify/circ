@@ -141,6 +141,7 @@ def test(features, extra_args):
                 log_run_check(["./scripts/zokrates_test.zsh"])
                 if "poly" in features:
                     log_run_check(["./scripts/cp_test.zsh"])
+                    log_run_check(["./scripts/ram_test.zsh"])
         if "lp" in features and "r1cs" in features:
             log_run_check(["./scripts/test_zok_to_ilp_pf.zsh"])
 

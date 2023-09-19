@@ -228,6 +228,7 @@ impl DisplayIr for ext::ExtOp {
             ext::ExtOp::PersistentRamSplit => write!(f, "persistent_ram_split"),
             ext::ExtOp::UniqDeriGcd => write!(f, "uniq_deri_gcd"),
             ext::ExtOp::Sort => write!(f, "sort"),
+            ext::ExtOp::Waksman => write!(f, "Waksman"),
         }
     }
 }

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 mod poly;
 mod ram;
 mod sort;
+mod waksman;
 
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// An extension operator. Not externally supported.
@@ -20,6 +21,8 @@ pub enum ExtOp {
     Sort,
     /// See [poly].
     UniqDeriGcd,
+    /// See [waksman].
+    Waksman,
 }
 
 impl ExtOp {
@@ -27,7 +30,8 @@ impl ExtOp {
     pub fn arity(&self) -> Option<usize> {
         match self {
             ExtOp::PersistentRamSplit => Some(2),
-            ExtOp::Sort => Some(2),
+            ExtOp::Sort => Some(1),
+            ExtOp::Waksman => Some(1),
             ExtOp::UniqDeriGcd => Some(1),
         }
     }
@@ -36,6 +40,7 @@ impl ExtOp {
         match self {
             ExtOp::PersistentRamSplit => ram::check(arg_sorts),
             ExtOp::Sort => sort::check(arg_sorts),
+            ExtOp::Waksman => waksman::check(arg_sorts),
             ExtOp::UniqDeriGcd => poly::check(arg_sorts),
         }
     }
@@ -44,6 +49,7 @@ impl ExtOp {
         match self {
             ExtOp::PersistentRamSplit => ram::eval(args),
             ExtOp::Sort => sort::eval(args),
+            ExtOp::Waksman => waksman::eval(args),
             ExtOp::UniqDeriGcd => poly::eval(args),
         }
     }
@@ -57,6 +63,7 @@ impl ExtOp {
             b"persistent_ram_split" => Some(ExtOp::PersistentRamSplit),
             b"uniq_deri_gcd" => Some(ExtOp::UniqDeriGcd),
             b"sort" => Some(ExtOp::Sort),
+            b"waksman" => Some(ExtOp::Waksman),
             _ => None,
         }
     }
