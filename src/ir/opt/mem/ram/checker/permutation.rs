@@ -14,7 +14,7 @@ pub fn waksman(
     let f_s = Sort::Field(f.clone());
     // (1) sort the transcript
     let field_tuples: Vec<Term> = accesses
-        .into_iter()
+        .iter()
         .map(|a| a.to_field_tuple(cfg))
         .collect();
     let switch_settings_tuple = term![Op::ExtOp(ExtOp::Waksman); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())];
@@ -66,7 +66,7 @@ pub fn msh(
     let f_s = Sort::Field(f.clone());
     // (1) sort the transcript
     let field_tuples: Vec<Term> = accesses
-        .into_iter()
+        .iter()
         .map(|a| a.to_field_tuple(cfg))
         .collect();
     let sorted_field_tuple_values: Vec<Term> = unmake_array(
@@ -85,7 +85,7 @@ pub fn msh(
         .collect();
     let uhf_inputs: Vec<Term> = field_tuples
         .into_iter()
-        .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(&cfg)))
+        .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(cfg)))
         .collect();
     let uhf = UniversalHasher::new(ns.fqn("uhf_key"), f, uhf_inputs.clone(), cfg.len());
     let msh = MsHasher::new(ns.fqn("ms_hash_key"), f, uhf_inputs);
