@@ -13,10 +13,7 @@ pub fn waksman(
     let f = &cfg.field;
     let f_s = Sort::Field(f.clone());
     // (1) sort the transcript
-    let field_tuples: Vec<Term> = accesses
-        .iter()
-        .map(|a| a.to_field_tuple(cfg))
-        .collect();
+    let field_tuples: Vec<Term> = accesses.iter().map(|a| a.to_field_tuple(cfg)).collect();
     let switch_settings_tuple = term![Op::ExtOp(ExtOp::Waksman); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())];
     let n = check(&switch_settings_tuple).as_tuple().len();
     let mut switch_settings: VecDeque<Term> = (0..n)
@@ -65,10 +62,7 @@ pub fn msh(
     let f = &cfg.field;
     let f_s = Sort::Field(f.clone());
     // (1) sort the transcript
-    let field_tuples: Vec<Term> = accesses
-        .iter()
-        .map(|a| a.to_field_tuple(cfg))
-        .collect();
+    let field_tuples: Vec<Term> = accesses.iter().map(|a| a.to_field_tuple(cfg)).collect();
     let sorted_field_tuple_values: Vec<Term> = unmake_array(
         term![Op::ExtOp(ExtOp::Sort); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())],
     );

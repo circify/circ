@@ -4,8 +4,8 @@
 
 use crate::ir::term::ty::*;
 use crate::ir::term::*;
-use std::iter::FromIterator;
 use circ_waksman::{n_switches, Config};
+use std::iter::FromIterator;
 
 /// Type-check [super::ExtOp::Waksman].
 pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
