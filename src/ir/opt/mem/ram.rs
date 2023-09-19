@@ -67,12 +67,13 @@ pub struct AccessCfg {
     create: bool,
     sort_indices: bool,
     split_times: bool,
+    waksman: bool,
 }
 
 impl AccessCfg {
     /// Create a new configuration
     pub fn new(field: FieldT, opt: RamOpt, create: bool) -> Self {
-        use circ_opt::{IndexStrategy, RangeStrategy};
+        use circ_opt::{IndexStrategy, PermutationStrategy, RangeStrategy};
         Self {
             false_: bool_lit(false),
             true_: bool_lit(true),
@@ -82,6 +83,7 @@ impl AccessCfg {
             create,
             sort_indices: opt.index == IndexStrategy::Sort,
             split_times: opt.range == RangeStrategy::BitSplit,
+            waksman: opt.permutation == PermutationStrategy::Waksman,
         }
     }
     /// Create a default configuration, with this field.
@@ -95,6 +97,7 @@ impl AccessCfg {
             create: false,
             sort_indices: false,
             split_times: false,
+            waksman: false,
         }
     }
     /// Create a new default configuration

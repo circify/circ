@@ -10,6 +10,7 @@ edition = "2018"
 circ_fields = { path = "circ_fields" }
 circ_opt = { path = "circ_opt" }
 circ_hc = { path = "circ_hc", default-features = false, features = ["rc", "lru"]}
+circ_waksman = { path = "circ_waksman" }
 rug = { version = "1.11", features = ["serde"] }
 gmp-mpfr-sys = { version = "1.4", optional = true }
 lazy_static = { version = "1.4", optional = true }

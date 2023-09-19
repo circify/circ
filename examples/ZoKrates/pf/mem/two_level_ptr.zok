@@ -1,0 +1,18 @@
+const u32 LEN = 4
+const u32 ACCESSES = 2
+
+struct Pt {
+    field x
+    field y
+}
+const Pt [LEN] array = [Pt {x: 0, y:0}, ...[Pt {x: 100, y: 0} ; LEN-1]]
+
+def main(private field[ACCESSES] y) -> field:
+    field result = 0
+
+    for u32 i in 0..ACCESSES do
+        assert(array[y[i]].x == 0)
+    endfor
+    return result
+
+

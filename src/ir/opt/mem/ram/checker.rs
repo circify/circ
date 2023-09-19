@@ -1,10 +1,12 @@
 //! RAM checking
-use super::hash::{MsHasher, UniversalHasher};
+use super::hash::MsHasher;
 use super::*;
 use crate::front::PROVER_VIS;
 use crate::util::ns::Namespace;
 use circ_fields::FieldT;
 use log::trace;
+
+mod permutation;
 
 /// Check a RAM
 pub fn check_ram(c: &mut Computation, ram: Ram) {
@@ -26,47 +28,17 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     let mut new_var =
         |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
 
-    // (1) sort the transcript
-    let field_tuples: Vec<Term> = ram
-        .accesses
-        .iter()
-        .map(|a| a.to_field_tuple(&ram.cfg))
-        .collect();
-    let sorted_field_tuple_values: Vec<Term> = unmake_array(
-        term![Op::ExtOp(ExtOp::Sort); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())],
-    );
-    let sorted_accesses: Vec<Access> = sorted_field_tuple_values
-        .into_iter()
-        .enumerate()
-        .map(|(i, v)| {
-            Access::declare_trusted(
-                &ram.cfg,
-                |name: &str, term: Term| new_var(&format!("sort_a{i}_{name}"), term),
-                v,
-            )
-        })
-        .collect();
-    let uhf_inputs: Vec<Term> = field_tuples
-        .into_iter()
-        .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(&ram.cfg)))
-        .collect();
-    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), f, uhf_inputs.clone(), ram.cfg.len());
-    let msh = MsHasher::new(ns.fqn("ms_hash_key"), f, uhf_inputs);
+    let mut assertions = Vec::new();
+    // (1) sort the transcript, checking only that we've applied a permutation.
+    let sorted_accesses = if ram.cfg.waksman {
+        let mut new_bit_var =
+            |name: &str, val: Term| c.new_var(&ns.fqn(name), Sort::Bool, PROVER_VIS, Some(val));
+        permutation::waksman(&ram.accesses, &ram.cfg, &mut new_bit_var)
+    } else {
+        permutation::msh(&ram.accesses, &ns, &ram.cfg, &mut new_var, &mut assertions)
+    };
 
-    // (2) permutation argument
-    let univ_hashes_unsorted: Vec<Term> = ram
-        .accesses
-        .iter()
-        .map(|a| a.universal_hash(&ram.cfg, &uhf))
-        .collect();
-    let univ_hashes_sorted: Vec<Term> = sorted_accesses
-        .iter()
-        .map(|a| a.universal_hash(&ram.cfg, &uhf))
-        .collect();
-    let ms_hash_passes = term![EQ; msh.hash(univ_hashes_unsorted), msh.hash(univ_hashes_sorted)];
-
-    // (3) check the sorted transcript
-    let mut assertions = vec![ms_hash_passes];
+    // (2) check the sorted transcript
     let n = sorted_accesses.len();
     let mut accs = sorted_accesses;
 

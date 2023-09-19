@@ -231,6 +231,14 @@ pub struct RamOpt {
         default_value = "uniqueness"
     )]
     pub index: IndexStrategy,
+    /// How to argue that indices are only repeated in blocks.
+    #[arg(
+        long = "ram-permutation",
+        env = "RAM_PERMUTATION",
+        value_enum,
+        default_value = "msh"
+    )]
+    pub permutation: PermutationStrategy,
 }
 
 #[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
@@ -260,6 +268,21 @@ pub enum IndexStrategy {
 impl Default for IndexStrategy {
     fn default() -> Self {
         IndexStrategy::Uniqueness
+    }
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that accesses have been permuted
+pub enum PermutationStrategy {
+    /// Use the AS-Waksman network
+    Waksman,
+    /// Use the (keyed) multi-set hash
+    Msh,
+}
+
+impl Default for PermutationStrategy {
+    fn default() -> Self {
+        PermutationStrategy::Msh
     }
 }
 
