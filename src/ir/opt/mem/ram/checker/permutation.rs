@@ -5,7 +5,7 @@ use crate::util::ns::Namespace;
 use std::collections::VecDeque;
 
 /// Permute the accesses into sorted order using a Waksman network.
-pub fn waksman(
+pub(super) fn waksman(
     accesses: &VecDeque<Access>,
     cfg: &AccessCfg,
     new_var: &mut impl FnMut(&str, Term) -> Term,
@@ -52,7 +52,7 @@ fn crossbar(top: &Term, bot: &Term, switch: Term) -> (Term, Term) {
 }
 
 /// Permute the accesses into sorted order using a multi-set hash argument.
-pub fn msh(
+pub(super) fn msh(
     accesses: &VecDeque<Access>,
     ns: &Namespace,
     cfg: &AccessCfg,
