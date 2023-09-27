@@ -186,6 +186,14 @@ pub struct IrOpt {
         default_value = "false"
     )]
     pub frequent_gc: bool,
+    /// Use an IP to check bit-constraints
+    #[arg(
+        long = "ir-fits-in-bits-ip",
+        env = "IR_FITS_IN_BITS_IP",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub fits_in_bits_ip: bool,
 }
 
 #[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]

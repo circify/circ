@@ -11,6 +11,7 @@ pub mod scalarize_vars;
 pub mod sha;
 pub mod tuple;
 mod visit;
+mod fits_in_bits_ip;
 
 use super::term::*;
 
@@ -50,6 +51,8 @@ pub enum Opt {
     VolatileRam,
     /// Replace challenge terms with random variables
     SkolemizeChallenges,
+    /// Check bit-constaints with challenges.
+    FitsInBitsIp,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -133,6 +136,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::SkolemizeChallenges => {
                     chall::skolemize_challenges(c);
+                }
+                Opt::FitsInBitsIp => {
+                    fits_in_bits_ip::fits_in_bits_ip(c);
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());
