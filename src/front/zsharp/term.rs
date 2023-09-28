@@ -868,6 +868,13 @@ pub fn field_to_bits(f: T, n: usize) -> Result<T, String> {
     }
 }
 
+pub fn field_fits_in_bits(f: T, n: usize) -> Result<T, String> {
+    match &f.ty {
+        Ty::Field => Ok(T::new(Ty::Bool, term![Op::PfFitsInBits(n); f.term])),
+        u => Err(format!("Cannot do fits_in_bits on {u}")),
+    }
+}
+
 fn bv_from_bits(barr: Term, size: usize) -> Term {
     term(
         Op::BvConcat,

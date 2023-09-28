@@ -1,0 +1,18 @@
+from "EMBED" import fits_in_bits
+
+const u32 ACCESSES = 1024
+const u32 BITS = 8
+
+const u32 ACCESSES2 = 10
+const u32 BITS2 = 4
+
+def main(private field[ACCESSES] y, private field[ACCESSES2] y2) -> field:
+    for u32 i in 0..ACCESSES do
+        assert(fits_in_bits::<BITS>(y[i]))
+    endfor
+    for u32 i in 0..ACCESSES2 do
+        assert(fits_in_bits::<BITS2>(y2[i]))
+    endfor
+    return 0
+
+

@@ -43,6 +43,9 @@ def u8_to_bits(u8 a) -> bool[8]:
 def unpack<N>(field i) -> bool[N]:
     return [false; N]
 
+def fits_in_bits<N>(field i) -> bool:
+    return true
+
 def bit_array_le<N>(bool[N] a, bool[N] b) -> bool:
     return false
 

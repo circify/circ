@@ -335,6 +335,27 @@ impl<'ast> ZGen<'ast> {
                     Ok(uint_lit(cfg().field().modulus().significant_bits(), 32))
                 }
             }
+            "fits_in_bits" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/fits_in_bits, expected 1",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/fits_in_bits, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let nbits =
+                        const_int(generics.pop().unwrap())?
+                            .to_usize()
+                            .ok_or_else(|| {
+                                "builtin_call failed to convert fits_in_bits's N to usize".to_string()
+                            })?;
+                    field_fits_in_bits(args.pop().unwrap(), nbits)
+                }
+            }
             _ => Err(format!("Unknown or unimplemented builtin '{f_name}'")),
         }
     }

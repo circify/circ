@@ -17,6 +17,7 @@ mod checker;
 mod hash;
 pub mod persistent;
 pub mod volatile;
+pub use checker::range_check_ip;
 
 #[derive(Debug)]
 /// An access to a RAM
