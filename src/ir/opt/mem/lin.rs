@@ -17,6 +17,12 @@ fn arr_val_to_tup(v: &Value) -> Value {
             }
             vec
         }),
+        Value::Tuple(vs) => Value::Tuple(
+            vs.iter()
+                .map(arr_val_to_tup)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        ),
         v => v.clone(),
     }
 }
@@ -29,7 +35,7 @@ impl RewritePass for Linearizer {
         rewritten_children: F,
     ) -> Option<Term> {
         match &orig.op() {
-            Op::Const(v @ Value::Array(..)) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
+            Op::Const(v) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
             Op::Var(name, Sort::Array(..)) => {
                 let precomp = extras::array_to_tuple(orig);
                 let new_name = format!("{name}.tup");

@@ -13,11 +13,14 @@
 //!
 //! So, essentially, what's going on is that T maps each term t to an (approximate) analysis of t
 //! that indicates which accesses can be perfectly resolved.
+//!
+//! We could make the analysis more precise (and/or efficient) with a better data structure for
+//! tracking information about value locations.
 
 use crate::ir::term::extras::as_uint_constant;
 use crate::ir::term::*;
 
-use log::{debug, trace};
+use log::trace;
 
 #[derive(Default)]
 struct OblivRewriter {
@@ -30,6 +33,7 @@ fn suitable_const(t: &Term) -> bool {
 }
 
 impl OblivRewriter {
+    /// Get, prefering tuple if possible.
     fn get_t(&self, t: &Term) -> &Term {
         self.tups.get(t).unwrap_or(self.terms.get(t).unwrap())
     }
@@ -57,7 +61,7 @@ impl OblivRewriter {
                 (
                     if let Some(aa) = self.tups.get(a) {
                         if suitable_const(i) {
-                            debug!("simplify store {}", i);
+                            trace!("simplify store {}", i);
                             Some(term![Op::Update(get_const(i)); aa.clone(), self.get_t(v).clone()])
                         } else {
                             None
@@ -73,7 +77,7 @@ impl OblivRewriter {
                 let i = &t.cs()[1];
                 if let Some(aa) = self.tups.get(a) {
                     if suitable_const(i) {
-                        debug!("simplify select {}", i);
+                        trace!("simplify select {}", i);
                         let tt = term![Op::Field(get_const(i)); aa.clone()];
                         (
                             Some(tt.clone()),
@@ -115,7 +119,37 @@ impl OblivRewriter {
                     },
                 )
             }
-            Op::Tuple => panic!("Tuple in obliv"),
+            Op::Tuple => (
+                if t.cs().iter().all(|c| self.tups.contains_key(c)) {
+                    Some(term(
+                        Op::Tuple,
+                        t.cs()
+                            .iter()
+                            .map(|c| self.tups.get(c).unwrap().clone())
+                            .collect(),
+                    ))
+                } else {
+                    None
+                },
+                None,
+            ),
+            Op::Field(i) => (
+                if t.cs().iter().all(|c| self.tups.contains_key(c)) {
+                    Some(term_c![Op::Field(*i); self.get_t(&t.cs()[0])])
+                } else {
+                    None
+                },
+                None,
+            ),
+            Op::Update(i) => (
+                if t.cs().iter().all(|c| self.tups.contains_key(c)) {
+                    Some(term_c![Op::Update(*i); self.get_t(&t.cs()[0]), self.get_t(&t.cs()[1])])
+                } else {
+                    None
+                },
+                None,
+            ),
+            //Op::Tuple => panic!("Tuple in obliv"),
             _ => (None, None),
         };
         if let Some(tup) = tup_opt {
