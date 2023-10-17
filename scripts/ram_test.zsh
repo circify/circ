@@ -25,7 +25,10 @@ function ram_test {
 ram_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 ram_test ./examples/ZoKrates/pf/mem/volatile.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 ram_test ./examples/ZoKrates/pf/mem/volatile_struct.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
+ram_test ./examples/ZoKrates/pf/mem/arr_of_str.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 ram_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/volatile.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/volatile_struct.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/arr_of_str.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/arr_of_str_of_arr.zok mirage ""
 

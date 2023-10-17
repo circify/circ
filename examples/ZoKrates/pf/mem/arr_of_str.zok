@@ -1,5 +1,5 @@
-const u32 LEN = 40
-const u32 ACCESSES = 40
+const u32 LEN = 6
+const u32 ACCESSES = 3
 
 struct Pt {
     field x

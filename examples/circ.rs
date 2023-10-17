@@ -271,6 +271,10 @@ fn main() {
             opts.push(Opt::Obliv);
             // The obliv elim pass produces more tuples, that must be eliminated
             if options.circ.ram.enabled {
+                // Waksman can only route scalars, so tuple first!
+                if options.circ.ram.permutation == circ_opt::PermutationStrategy::Waksman {
+                    opts.push(Opt::Tuple);
+                }
                 opts.push(Opt::PersistentRam);
                 opts.push(Opt::VolatileRam);
                 opts.push(Opt::SkolemizeChallenges);

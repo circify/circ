@@ -72,6 +72,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     }
 
     let mut deltas = Vec::new();
+    // To: check some condition on the start?
     for j in 0..(n - 1) {
         // previous entry
         let i = &accs[j].idx;
@@ -86,8 +87,6 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
 
         let v_p = if only_init {
             v.clone()
-        } else if j == 0 {
-            default.clone()
         } else {
             term![ITE; c_n.b.clone(), default.clone(), v.clone()]
         };

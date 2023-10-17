@@ -30,7 +30,6 @@ pub(super) fn waksman(
         circ_waksman::symbolic_apply(field_tuples, &mut switch_settings, &mut crossbar);
 
     assert!(switch_settings.is_empty());
-    dbg!(sorted_field_tuple_values.len());
 
     let sorted_accesses: Vec<Access> = sorted_field_tuple_values
         .into_iter()
@@ -76,7 +75,6 @@ pub(super) fn msh(
     let sorted_field_tuple_values: Vec<Term> = unmake_array(
         term![Op::ExtOp(ExtOp::Sort); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())],
     );
-    dbg!(sorted_field_tuple_values.len());
     let mut sorted_accesses: Vec<Access> = sorted_field_tuple_values
         .into_iter()
         .enumerate()

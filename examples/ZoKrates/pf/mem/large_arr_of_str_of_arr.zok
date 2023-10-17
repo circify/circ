@@ -1,6 +1,6 @@
-const u32 LEN = 4
-const u32 INNER_LEN = 2
-const u32 ACCESSES = 2
+const u32 LEN = 256
+const u32 INNER_LEN = 8
+const u32 ACCESSES = 10
 
 struct Pt {
     field[INNER_LEN] x
@@ -18,4 +18,5 @@ def main(private field[ACCESSES] idx) -> field:
         endfor
     endfor
     return prod
+
 
