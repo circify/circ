@@ -225,7 +225,7 @@ fn untuple_value(v: &Value) -> Value {
 }
 
 fn find_tuple_term(t: Term) -> Option<Term> {
-    PostOrderIter::new(t).find(|c| matches!(check(&c), Sort::Tuple(..)))
+    PostOrderIter::new(t).find(|c| matches!(check(c), Sort::Tuple(..)))
 }
 
 #[allow(dead_code)]

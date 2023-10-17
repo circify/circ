@@ -110,15 +110,15 @@ impl AccessCfg {
             true,
         )
     }
-    fn val_sort_len(&self, s: &Sort) -> usize {
+    fn val_sort_len(s: &Sort) -> usize {
         match s {
-            Sort::Tuple(t) => t.iter().map(|i| self.val_sort_len(i)).sum(),
-            Sort::Array(_, v, size) => *size * self.val_sort_len(v),
+            Sort::Tuple(t) => t.iter().map(Self::val_sort_len).sum(),
+            Sort::Array(_, v, size) => *size * Self::val_sort_len(v),
             _ => 1,
         }
     }
     fn len(&self, s: &Sort) -> usize {
-        (if self.create { 5 } else { 4 }) + self.val_sort_len(s)
+        (if self.create { 5 } else { 4 }) + Self::val_sort_len(s)
     }
     fn bool2pf(&self, t: Term) -> Term {
         term![Op::Ite; t, self.one.clone(), self.zero.clone()]
@@ -255,7 +255,7 @@ impl Access {
             }
             Sort::Array(_, v, size) => {
                 for i in 0..*size {
-                    Self::sort_subnames(&**v, &format!("{}_{}", prefix, i), out);
+                    Self::sort_subnames(v, &format!("{}_{}", prefix, i), out);
                 }
             }
             _ => unreachable!(),
@@ -279,7 +279,7 @@ impl Access {
         }
     }
 
-    fn val_from_field_elements_trusted<'a>(sort: &Sort, next: &mut impl FnMut() -> Term) -> Term {
+    fn val_from_field_elements_trusted(sort: &Sort, next: &mut impl FnMut() -> Term) -> Term {
         match sort {
             Sort::Field(_) => next().clone(),
             Sort::Bool => term![Op::PfToBoolTrusted; next().clone()],
