@@ -272,7 +272,11 @@ impl Access {
             }
             Sort::Array(_, _, size) => {
                 for i in 0..size {
-                    Self::val_to_field_elements(&term![Op::Select; val.clone(), c.pf_lit(i)], c, out);
+                    Self::val_to_field_elements(
+                        &term![Op::Select; val.clone(), c.pf_lit(i)],
+                        c,
+                        out,
+                    );
                 }
             }
             _ => unreachable!(),
