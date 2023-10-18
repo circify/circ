@@ -1,0 +1,18 @@
+const u32 LEN = 2
+const u32 LEN2 = 100
+const u32 ACCESSES = 37
+const u32 P_ = 8
+
+struct Pt {
+    field[P_] x
+    field[P_] x2
+}
+const Pt [LEN][LEN2] array = [[Pt {x: [0; P_], x2: [0; P_]}; LEN2], ...[[Pt {x: [100; P_], x2: [100; P_]}; LEN2] ; LEN-1]] // 638887 when LEN = 8190 // 63949 when LEN = 819
+
+def main(private field[ACCESSES][2] idx) -> field:
+    field sum = 0
+    for u32 i in 0..ACCESSES do
+        field[2] access = idx[i]
+        sum = sum + array[access[1]][access[0]].x[0]
+    endfor
+    return sum

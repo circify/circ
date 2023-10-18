@@ -34,12 +34,24 @@ struct ArrayGraph {
     ram_terms: TermSet,
 }
 
+/// Are terms of sort `s` hashable using a UHF keyed by field type `f`.
+fn hashable(s: &Sort, f: &FieldT) -> bool {
+    match s {
+        Sort::Field(ff) => f == ff,
+        Sort::Tuple(ss) => ss.iter().all(|s| hashable(s, f)),
+        Sort::BitVector(_) => true,
+        Sort::Bool => true,
+        Sort::Array(_k, v, size) => *size < 20 && hashable(v, f),
+        _ => false,
+    }
+}
+
 /// Does this array have a sort compatible with our RAM machinery?
 fn right_sort(t: &Term, f: &FieldT) -> bool {
     let s = check(t);
     if let Sort::Array(k, v, _) = &s {
-        if let (Sort::Field(k), Sort::Field(v)) = (&**k, &**v) {
-            v == f && k == f
+        if let Sort::Field(k) = &**k {
+            k == f && hashable(v, f)
         } else {
             false
         }
@@ -168,9 +180,9 @@ impl Extactor {
         // create a default RAM from `t`'s sort.
         let id = self.rams.len();
         let t_sort = check(t);
-        let (key_sort, _, size) = t_sort.as_array();
+        let (key_sort, val_sort, size) = t_sort.as_array();
         let def = BoundaryConditions::Default(key_sort.default_term());
-        let mut ram = Ram::new(id, size, self.cfg.clone(), def);
+        let mut ram = Ram::new(id, size, self.cfg.clone(), val_sort.clone(), def);
 
         // update with details specific to `t`.
         match &t.op() {

@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 pub(super) fn waksman(
     accesses: &VecDeque<Access>,
     cfg: &AccessCfg,
+    val_sort: &Sort,
     new_var: &mut impl FnMut(&str, Term) -> Term,
 ) -> Vec<Access> {
     let f = &cfg.field;
@@ -37,7 +38,14 @@ pub(super) fn waksman(
             let elems = (0..len)
                 .map(|idx| term![Op::Field(idx); v.clone()])
                 .collect();
-            Access::from_field_elems_trusted(elems, cfg, Order::Sort)
+            let mut access = Access::from_field_elems_trusted(elems, val_sort, cfg, Order::Sort);
+            assert!(
+                check(&access.val).is_scalar(),
+                "Waksman only supports scalar values; got {}",
+                check(&access.val)
+            );
+            access.val_hash = Some(super::scalar_to_field(&access.val, cfg));
+            access
         })
         .collect();
     sorted_accesses
@@ -57,6 +65,7 @@ pub(super) fn msh(
     ns: &Namespace,
     cfg: &AccessCfg,
     new_var: &mut impl FnMut(&str, Term) -> Term,
+    val_sort: &Sort,
     assertions: &mut Vec<Term>,
 ) -> Vec<Access> {
     let f = &cfg.field;
@@ -66,13 +75,14 @@ pub(super) fn msh(
     let sorted_field_tuple_values: Vec<Term> = unmake_array(
         term![Op::ExtOp(ExtOp::Sort); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())],
     );
-    let sorted_accesses: Vec<Access> = sorted_field_tuple_values
+    let mut sorted_accesses: Vec<Access> = sorted_field_tuple_values
         .into_iter()
         .enumerate()
         .map(|(i, v)| {
             Access::declare_trusted(
                 cfg,
                 |name: &str, term: Term| new_var(&format!("sort_a{i}_{name}"), term),
+                val_sort,
                 v,
             )
         })
@@ -81,20 +91,23 @@ pub(super) fn msh(
         .into_iter()
         .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(cfg)))
         .collect();
-    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), f, uhf_inputs.clone(), cfg.len());
+    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), f, uhf_inputs.clone(), cfg.len(val_sort));
     let msh = MsHasher::new(ns.fqn("ms_hash_key"), f, uhf_inputs);
 
     // (2) permutation argument
     let univ_hashes_unsorted: Vec<Term> = accesses
         .iter()
-        .map(|a| a.universal_hash(cfg, &uhf))
+        .map(|a| a.universal_hash(cfg, val_sort, &uhf).0)
         .collect();
-    let univ_hashes_sorted: Vec<Term> = sorted_accesses
+    let (univ_hashes_sorted, val_hashes_sorted): (Vec<Term>, Vec<Term>) = sorted_accesses
         .iter()
-        .map(|a| a.universal_hash(cfg, &uhf))
-        .collect();
+        .map(|a| a.universal_hash(cfg, val_sort, &uhf))
+        .unzip();
     let ms_hash_passes = term![EQ; msh.hash(univ_hashes_unsorted), msh.hash(univ_hashes_sorted)];
     assertions.push(ms_hash_passes);
+    for (access, hash) in sorted_accesses.iter_mut().zip(val_hashes_sorted) {
+        access.val_hash = Some(hash);
+    }
 
     sorted_accesses
 }

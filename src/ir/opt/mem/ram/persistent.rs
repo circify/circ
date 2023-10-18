@@ -55,7 +55,13 @@ pub fn persistent_to_ram(c: &mut Computation, cfg: &AccessCfg) -> Vec<Ram> {
         c.metadata.add_commitment(final_names);
 
         let boundary_conditions = BoundaryConditions::Persistent(terms, final_terms);
-        let ram = Ram::new(i, size, cfg.clone(), boundary_conditions);
+        let ram = Ram::new(
+            i,
+            size,
+            cfg.clone(),
+            Sort::Field(cfg.field.clone()),
+            boundary_conditions,
+        );
 
         term_rams.insert(init_term, i);
         rams.push(ram);

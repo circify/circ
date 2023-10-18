@@ -224,9 +224,13 @@ fn untuple_value(v: &Value) -> Value {
     }
 }
 
+fn find_tuple_term(t: Term) -> Option<Term> {
+    PostOrderIter::new(t).find(|c| matches!(check(c), Sort::Tuple(..)))
+}
+
 #[allow(dead_code)]
 fn tuple_free(t: Term) -> bool {
-    PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
+    find_tuple_term(t).is_none()
 }
 
 /// Run the tuple elimination pass.
@@ -301,6 +305,8 @@ pub fn eliminate_tuples(cs: &mut Computation) {
         .collect();
     #[cfg(debug_assertions)]
     for o in &cs.outputs {
-        assert!(tuple_free(o.clone()));
+        if let Some(t) = find_tuple_term(o.clone()) {
+            panic!("Tuple term {}", t)
+        }
     }
 }

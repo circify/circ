@@ -2102,7 +2102,7 @@ impl Computation {
         );
         self.metadata.new_input(name.to_owned(), party, s.clone());
         if let Some(p) = precompute {
-            assert_eq!(&s, &check(&p));
+            assert_eq!(&s, &check(&p), "precompute {} doesn't match sort {}", p, s);
             self.precomputes.add_output(name.to_owned(), p);
         }
         leaf_term(Op::Var(name.to_owned(), s))

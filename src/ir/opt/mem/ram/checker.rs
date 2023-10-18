@@ -25,6 +25,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     let id = ram.id;
     let ns = Namespace::new().subspace(&format!("ram{id}"));
     let f_s = Sort::Field(f.clone());
+    let v_s = ram.val_sort.clone();
     let mut new_var =
         |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
 
@@ -33,9 +34,16 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     let sorted_accesses = if ram.cfg.waksman {
         let mut new_bit_var =
             |name: &str, val: Term| c.new_var(&ns.fqn(name), Sort::Bool, PROVER_VIS, Some(val));
-        permutation::waksman(&ram.accesses, &ram.cfg, &mut new_bit_var)
+        permutation::waksman(&ram.accesses, &ram.cfg, &v_s, &mut new_bit_var)
     } else {
-        permutation::msh(&ram.accesses, &ns, &ram.cfg, &mut new_var, &mut assertions)
+        permutation::msh(
+            &ram.accesses,
+            &ns,
+            &ram.cfg,
+            &mut new_var,
+            &v_s,
+            &mut assertions,
+        )
     };
 
     // (2) check the sorted transcript
@@ -64,22 +72,21 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     }
 
     let mut deltas = Vec::new();
+    // To: check some condition on the start?
     for j in 0..(n - 1) {
         // previous entry
         let i = &accs[j].idx;
         let t = &accs[j].time;
-        let v = &accs[j].val;
+        let v = accs[j].val_hash.as_ref().expect("missing value hash");
         // this entry
         let i_n = &accs[j + 1].idx;
         let t_n = &accs[j + 1].time;
-        let v_n = &accs[j + 1].val;
+        let v_n = accs[j + 1].val_hash.as_ref().expect("missing value hash");
         let c_n = &accs[j + 1].create;
         let w_n = &accs[j + 1].write;
 
         let v_p = if only_init {
             v.clone()
-        } else if j == 0 {
-            default.clone()
         } else {
             term![ITE; c_n.b.clone(), default.clone(), v.clone()]
         };

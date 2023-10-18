@@ -26,6 +26,8 @@ pub mod volatile;
 struct Access {
     /// The value read or (conditionally) written.
     pub val: Term,
+    /// A (field) hash of the value read or (conditionally) written.
+    pub val_hash: Option<Term>,
     /// The index/address.
     pub idx: Term,
     /// The time of this access.
@@ -108,18 +110,39 @@ impl AccessCfg {
             true,
         )
     }
-    fn len(&self) -> usize {
-        if self.create {
-            6
-        } else {
-            5
+    fn val_sort_len(s: &Sort) -> usize {
+        match s {
+            Sort::Tuple(t) => t.iter().map(Self::val_sort_len).sum(),
+            Sort::Array(_, v, size) => *size * Self::val_sort_len(v),
+            _ => 1,
         }
+    }
+    fn len(&self, s: &Sort) -> usize {
+        (if self.create { 5 } else { 4 }) + Self::val_sort_len(s)
     }
     fn bool2pf(&self, t: Term) -> Term {
         term![Op::Ite; t, self.one.clone(), self.zero.clone()]
     }
     fn pf_neg(&self, t: Term) -> Term {
         term![PF_ADD; self.one.clone(), term![PF_NEG; t]]
+    }
+    fn pf_lit(&self, i: usize) -> Term {
+        pf_lit(self.field.new_v(i))
+    }
+}
+
+fn scalar_to_field(scalar: &Term, c: &AccessCfg) -> Term {
+    match check(scalar) {
+        Sort::Field(f) => {
+            if f == c.field {
+                scalar.clone()
+            } else {
+                panic!("Cannot convert scalar of field {} to field {}", f, c.field)
+            }
+        }
+        Sort::Bool => c.bool2pf(scalar.clone()),
+        Sort::BitVector(_) => term![Op::UbvToPf(c.field.clone()); scalar.clone()],
+        s => panic!("non-scalar sort {}", s),
     }
 }
 
@@ -163,6 +186,7 @@ impl Access {
     fn new_read(f: &AccessCfg, idx: Term, val: Term, time: Term) -> Self {
         Self {
             val,
+            val_hash: None,
             idx,
             time,
             write: FieldBit::from_bool_lit(f, false),
@@ -173,6 +197,7 @@ impl Access {
     fn new_write(f: &AccessCfg, idx: Term, val: Term, active: Term, time: Term) -> Self {
         Self {
             val,
+            val_hash: None,
             idx,
             time,
             write: FieldBit::from_bool_lit(f, true),
@@ -183,6 +208,7 @@ impl Access {
     fn new_init(f: &AccessCfg, idx: Term, val: Term) -> Self {
         Self {
             val,
+            val_hash: None,
             idx,
             time: f.zero.clone(),
             write: FieldBit::from_bool_lit(f, true),
@@ -191,56 +217,127 @@ impl Access {
         }
     }
 
-    fn field_names(c: &AccessCfg, order: Order) -> &'static [&'static str] {
+    fn field_names(c: &AccessCfg, sort: &Sort, order: Order) -> Vec<String> {
+        let mut out = Vec::new();
         match order {
             Order::Hash => {
+                Self::sort_subnames(sort, "v", &mut out);
+                out.push("i".into());
+                out.push("t".into());
+                out.push("w".into());
+                out.push("a".into());
                 if c.create {
-                    &["v", "i", "t", "w", "a", "c"]
-                } else {
-                    &["v", "i", "t", "w", "a"]
+                    out.push("c".into());
                 }
             }
             // dead code, but for clarity...
             Order::Sort => {
+                out.push("i".into());
+                out.push("t".into());
                 if c.create {
-                    &["i", "t", "c", "v", "w", "a"]
-                } else {
-                    &["i", "t", "v", "w", "a"]
+                    out.push("c".into());
+                }
+                Self::sort_subnames(sort, "v", &mut out);
+                out.push("w".into());
+                out.push("a".into());
+            }
+        }
+        out
+    }
+
+    fn sort_subnames(sort: &Sort, prefix: &str, out: &mut Vec<String>) {
+        match sort {
+            Sort::Field(_) | Sort::Bool | Sort::BitVector(_) => out.push(prefix.into()),
+            Sort::Tuple(ss) => {
+                for (i, s) in ss.iter().enumerate() {
+                    Self::sort_subnames(s, &format!("{}_{}", prefix, i), out);
                 }
             }
+            Sort::Array(_, v, size) => {
+                for i in 0..*size {
+                    Self::sort_subnames(v, &format!("{}_{}", prefix, i), out);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn val_to_field_elements(val: &Term, c: &AccessCfg, out: &mut Vec<Term>) {
+        match check(val) {
+            Sort::Field(_) | Sort::Bool | Sort::BitVector(_) => out.push(scalar_to_field(val, c)),
+            Sort::Tuple(ss) => {
+                for i in 0..ss.len() {
+                    Self::val_to_field_elements(&term![Op::Field(i); val.clone()], c, out);
+                }
+            }
+            Sort::Array(_, _, size) => {
+                for i in 0..size {
+                    Self::val_to_field_elements(
+                        &term![Op::Select; val.clone(), c.pf_lit(i)],
+                        c,
+                        out,
+                    );
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn val_from_field_elements_trusted(sort: &Sort, next: &mut impl FnMut() -> Term) -> Term {
+        match sort {
+            Sort::Field(_) => next().clone(),
+            Sort::Bool => term![Op::PfToBoolTrusted; next().clone()],
+            Sort::BitVector(w) => term![Op::PfToBv(*w); next().clone()],
+            Sort::Tuple(ss) => term(
+                Op::Tuple,
+                ss.iter()
+                    .map(|s| Self::val_from_field_elements_trusted(s, next))
+                    .collect(),
+            ),
+            Sort::Array(k, v, size) => term(
+                Op::Array(*k.clone(), *v.clone()),
+                (0..*size)
+                    .map(|_| Self::val_from_field_elements_trusted(v, next))
+                    .collect(),
+            ),
+            _ => unreachable!(),
         }
     }
 
     fn to_field_elems(&self, c: &AccessCfg, order: Order) -> Vec<Term> {
+        let mut out = Vec::new();
         match order {
             Order::Hash => {
-                let mut out = vec![
-                    self.val.clone(),
-                    self.idx.clone(),
-                    self.time.clone(),
-                    self.write.f.clone(),
-                    self.active.f.clone(),
-                ];
-                if c.create {
-                    out.push(self.create.f.clone())
-                }
-                out
-            }
-            Order::Sort => {
-                let mut out = vec![self.idx.clone(), self.time.clone()];
-                if c.create {
-                    out.push(self.create.f.clone())
-                }
-                out.push(self.val.clone());
+                Self::val_to_field_elements(&self.val, c, &mut out);
+                out.push(self.idx.clone());
+                out.push(self.time.clone());
                 out.push(self.write.f.clone());
                 out.push(self.active.f.clone());
-                out
+                if c.create {
+                    out.push(self.create.f.clone())
+                }
+            }
+            Order::Sort => {
+                out.push(self.idx.clone());
+                out.push(self.time.clone());
+                if c.create {
+                    out.push(self.create.f.clone())
+                }
+                Self::val_to_field_elements(&self.val, c, &mut out);
+                out.push(self.write.f.clone());
+                out.push(self.active.f.clone());
             }
         }
+        out
     }
 
-    fn from_field_elems_trusted(elems: Vec<Term>, c: &AccessCfg, order: Order) -> Self {
-        debug_assert_eq!(elems.len(), c.len());
+    fn from_field_elems_trusted(
+        elems: Vec<Term>,
+        val_sort: &Sort,
+        c: &AccessCfg,
+        order: Order,
+    ) -> Self {
+        debug_assert_eq!(elems.len(), c.len(val_sort));
         let mut elems = elems.into_iter();
         let mut next = || {
             let t = elems.next().unwrap();
@@ -249,7 +346,8 @@ impl Access {
         };
         match order {
             Order::Hash => Self {
-                val: next(),
+                val: Self::val_from_field_elements_trusted(val_sort, &mut next),
+                val_hash: None,
                 idx: next(),
                 time: next(),
                 write: FieldBit::from_trusted_field(c, next()),
@@ -261,6 +359,7 @@ impl Access {
                 },
             },
             Order::Sort => Self {
+                val_hash: None,
                 idx: next(),
                 time: next(),
                 create: if c.create {
@@ -268,16 +367,26 @@ impl Access {
                 } else {
                     FieldBit::from_bool_lit(c, false)
                 },
-                val: next(),
+                val: Self::val_from_field_elements_trusted(val_sort, &mut next),
                 write: FieldBit::from_trusted_field(c, next()),
                 active: FieldBit::from_trusted_field(c, next()),
             },
         }
     }
 
-    fn universal_hash(&self, c: &AccessCfg, hasher: &hash::UniversalHasher) -> Term {
-        assert_eq!(hasher.len(), c.len());
-        hasher.hash(self.to_field_elems(c, Order::Hash))
+    fn universal_hash(
+        &self,
+        c: &AccessCfg,
+        val_sort: &Sort,
+        hasher: &hash::UniversalHasher,
+    ) -> (Term, Term) {
+        assert_eq!(hasher.len(), c.len(val_sort));
+        let mut val_elems = Vec::new();
+        Self::val_to_field_elements(&self.val, c, &mut val_elems);
+        (
+            hasher.hash(self.to_field_elems(c, Order::Hash)),
+            hasher.hash(val_elems),
+        )
     }
 
     fn to_field_tuple(&self, c: &AccessCfg) -> Term {
@@ -287,16 +396,17 @@ impl Access {
     fn declare_trusted(
         c: &AccessCfg,
         mut declare_var: impl FnMut(&str, Term) -> Term,
+        val_sort: &Sort,
         value_tuple: Term,
     ) -> Self {
         let mut declare_field =
             |name: &str, idx: usize| declare_var(name, term![Op::Field(idx); value_tuple.clone()]);
-        let elems = Self::field_names(c, Order::Sort)
+        let elems = Self::field_names(c, val_sort, Order::Sort)
             .iter()
             .enumerate()
             .map(|(idx, name)| declare_field(name, idx))
             .collect();
-        Self::from_field_elems_trusted(elems, c, Order::Sort)
+        Self::from_field_elems_trusted(elems, val_sort, c, Order::Sort)
     }
 }
 
@@ -318,8 +428,10 @@ pub struct Ram {
     boundary_conditions: BoundaryConditions,
     /// The unique id of this RAM
     id: usize,
-    /// The sort for times, indices, and values.
+    /// The sort for times and indices.
     sort: Sort,
+    /// The sort for values.
+    val_sort: Sort,
     /// The size
     size: usize,
     /// The list of accesses (in access order)
@@ -332,11 +444,25 @@ pub struct Ram {
     cfg: AccessCfg,
 }
 
+#[allow(dead_code)]
+/// Are terms of sort `s` hashable using a UHF keyed by field type `f`.
+fn hashable(s: &Sort, f: &FieldT) -> bool {
+    match s {
+        Sort::Field(ff) => f == ff,
+        Sort::Tuple(ss) => ss.iter().all(|s| hashable(s, f)),
+        Sort::BitVector(_) => true,
+        Sort::Bool => true,
+        Sort::Array(_k, v, size) => *size < 20 && hashable(v, f),
+        _ => false,
+    }
+}
+
 impl Ram {
     fn new(
         id: usize,
         size: usize,
         cfg: AccessCfg,
+        val_sort: Sort,
         boundary_conditions: BoundaryConditions,
     ) -> Self {
         assert!(!matches!(
@@ -347,6 +473,7 @@ impl Ram {
             boundary_conditions,
             id,
             sort: Sort::Field(cfg.field.clone()),
+            val_sort,
             cfg,
             accesses: Default::default(),
             size,
@@ -369,6 +496,21 @@ impl Ram {
             }
         }
     }
+    #[track_caller]
+    #[allow(unused_variables)]
+    /// Assert that `other` is hashable using the field of `self`.
+    fn assert_hashable(&self, other: &Term) {
+        #[cfg(debug_assertions)]
+        {
+            let s = check(other);
+            if !hashable(&s, &self.cfg.field) {
+                panic!(
+                    "RAM field of sort {} is not hashable with field {}",
+                    s, self.cfg.field
+                );
+            }
+        }
+    }
     fn next_time_term(&mut self) -> Term {
         let t = self.sort.nth_elem(self.next_time);
         if !self.end_of_time {
@@ -379,12 +521,12 @@ impl Ram {
     fn new_read(&mut self, idx: Term, computation: &mut Computation, read_value: Term) -> Term {
         let val_name = format!("__ram{}_read_v{}", self.id, self.accesses.len());
         self.assert_field(&idx);
-        self.assert_field(&read_value);
+        self.assert_hashable(&read_value);
         debug_assert!(!self.end_of_time);
 
         let var = computation.new_var(
             &val_name,
-            self.sort.clone(),
+            self.val_sort.clone(),
             Some(crate::ir::proof::PROVER_ID),
             Some(read_value),
         );
@@ -396,7 +538,7 @@ impl Ram {
     }
     fn new_final_read(&mut self, idx: Term, val: Term) {
         self.assert_field(&idx);
-        self.assert_field(&val);
+        self.assert_hashable(&val);
         self.end_of_time = true;
         let time = self.next_time_term();
         trace!(
@@ -411,7 +553,7 @@ impl Ram {
     fn new_write(&mut self, idx: Term, val: Term, guard: Term) {
         debug_assert!(!self.end_of_time);
         self.assert_field(&idx);
-        self.assert_field(&val);
+        self.assert_hashable(&val);
         debug_assert_eq!(&check(&guard), &Sort::Bool);
         let time = self.next_time_term();
         trace!(
@@ -426,7 +568,7 @@ impl Ram {
     }
     fn new_init(&mut self, idx: Term, val: Term) {
         self.assert_field(&idx);
-        self.assert_field(&val);
+        self.assert_hashable(&val);
         self.end_of_time = true;
         trace!("init: ops: idx {}, val {}", idx.op(), val.op());
         self.accesses
