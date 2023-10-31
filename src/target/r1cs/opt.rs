@@ -74,7 +74,12 @@ impl LinReducer {
                             let m = e.get_mut();
                             *m += sc.clone() * v;
                             if e.get().is_zero() {
-                                uses.get_mut(i).unwrap().remove(&con_id);
+                                // You might think that removing con_id from `uses.get_mut(i)`
+                                // would be okay here.
+                                //
+                                // But no! Why? Because the constraint has three LCs. Just because
+                                // the variable cancelled in *this* LC doesn't mean that it has
+                                // cancelled in the others.
                                 e.remove_entry();
                             }
                         }
@@ -120,8 +125,9 @@ impl LinReducer {
             if let Some((var, lc)) = as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs) {
                 if lc.monomials.len() < self.lc_size_thresh {
                     debug!(
-                        "Elim: {} -> {}",
+                        "Elim: {} ({:?}) -> {}",
                         self.r1cs.idx_to_sig.get_fwd(&var).unwrap(),
+                        var,
                         self.r1cs.format_lc(&lc)
                     );
                     self.clear_constraint(con_id);
