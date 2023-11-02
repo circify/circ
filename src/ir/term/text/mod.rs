@@ -736,10 +736,9 @@ impl<'src> IrInterp<'src> {
                     persistent_arrays.push((id, term));
                 }
                 num_skipped += 1;
-            }
-            else if tts_inner[0] == Leaf(Token::Ident, b"ram_arrays") {
+            } else if tts_inner[0] == Leaf(Token::Ident, b"ram_arrays") {
                 for tti in tts_inner.iter().skip(1) {
-                    let term = self.term(&tti);
+                    let term = self.term(tti);
                     ram_arrays.push(term);
                 }
                 num_skipped += 1;
