@@ -402,6 +402,7 @@ mod test {
             (computation
                 (metadata (parties ) (inputs ) (commitments))
                 (precompute () () (#t ))
+                (ram_arrays (#a (mod 11) #f0m11 4 ()))
                 (set_default_modulus 11
                     (let
                         (
@@ -432,6 +433,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -474,6 +476,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs (a bool)) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -516,6 +519,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs (a bool)) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -557,6 +561,7 @@ mod test {
                (computation
                    (metadata (parties ) (inputs (a bool)) (commitments))
                    (precompute () () (#t ))
+                   (ram_arrays (#a (mod 11) #f000m11 4 ()))
                    (set_default_modulus 11
                    (let
                        (
@@ -603,6 +608,7 @@ mod test {
                (computation
                    (metadata (parties ) (inputs (a bool)) (commitments))
                    (precompute () () (#t ))
+                   (ram_arrays (#a (mod 11) #f0m11 16 ()))
                    (set_default_modulus 11
                    (let
                         (
@@ -632,6 +638,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -663,6 +670,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -718,6 +726,7 @@ mod test {
                     (commitments)
                 )
                 (precompute () () (#t ))
+                (ram_arrays ((fill (mod 101) 4) #f0m11))
                 (set_default_modulus 101
                 (let(
                   ('1 ((fill (mod 101) 4) #f0))
