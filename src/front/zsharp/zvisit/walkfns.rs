@@ -189,6 +189,17 @@ pub fn walk_parameter<'ast, Z: ZVisitorMut<'ast>>(
     visitor.visit_span(&mut param.span)
 }
 
+pub fn walk_array_param_metadata<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    vis: &mut ast::ArrayParamMetadata<'ast>,
+) -> ZVisitorResult {
+    use ast::ArrayParamMetadata::*;
+    match vis {
+        Committed(x) => visitor.visit_array_committed(x),
+        Transcript(x) => visitor.visit_array_transcript(x),
+    }
+}
+
 pub fn walk_visibility<'ast, Z: ZVisitorMut<'ast>>(
     visitor: &mut Z,
     vis: &mut ast::Visibility<'ast>,
@@ -196,7 +207,6 @@ pub fn walk_visibility<'ast, Z: ZVisitorMut<'ast>>(
     use ast::Visibility::*;
     match vis {
         Public(pu) => visitor.visit_public_visibility(pu),
-        Committed(c) => visitor.visit_commited_visibility(c),
         Private(pr) => visitor.visit_private_visibility(pr),
     }
 }

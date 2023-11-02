@@ -113,7 +113,18 @@ pub trait ZVisitorMut<'ast>: Sized {
         Ok(())
     }
 
-    fn visit_commited_visibility(&mut self, _c: &mut ast::CommittedVisibility) -> ZVisitorResult {
+    fn visit_array_param_metadata(
+        &mut self,
+        vis: &mut ast::ArrayParamMetadata<'ast>,
+    ) -> ZVisitorResult {
+        walk_array_param_metadata(self, vis)
+    }
+
+    fn visit_array_committed(&mut self, _c: &mut ast::ArrayCommitted<'ast>) -> ZVisitorResult {
+        Ok(())
+    }
+
+    fn visit_array_transcript(&mut self, _c: &mut ast::ArrayTranscript<'ast>) -> ZVisitorResult {
         Ok(())
     }
 

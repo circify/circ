@@ -2072,6 +2072,8 @@ pub struct Computation {
     /// * name: a variable name (array type) indicating the input state
     /// * name: a term indicating the output state
     pub persistent_arrays: Vec<(String, Term)>,
+    /// Check these arrays using RAM transcripts
+    pub ram_arrays: TermSet,
 }
 
 impl Computation {
@@ -2221,6 +2223,7 @@ impl Computation {
             metadata: ComputationMetadata::default(),
             precomputes: Default::default(),
             persistent_arrays: Default::default(),
+            ram_arrays: Default::default(),
         }
     }
 

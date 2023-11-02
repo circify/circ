@@ -77,6 +77,7 @@ impl Constraints for Computation {
             metadata,
             precomputes: Default::default(),
             persistent_arrays: Default::default(),
+            ram_arrays: Default::default(),
         }
     }
 }

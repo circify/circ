@@ -11,7 +11,7 @@ use crate::front::proof::PROVER_ID;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 use rug::Integer;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -141,7 +141,11 @@ fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
 enum ZVis {
     Public,
     Private(u8),
+}
+
+enum ArrayParamMetadata {
     Committed,
+    Transcript,
 }
 
 impl<'ast> ZGen<'ast> {
@@ -685,12 +689,25 @@ impl<'ast> ZGen<'ast> {
         for p in f.parameters.iter() {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
+            let md = self.interpret_array_md(&p.array_metadata);
             let vis = self.interpret_visibility(&p.visibility);
-            if let ZVis::Committed = &vis {
-                persistent_arrays.push(p.id.value.clone());
+            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false, &md);
+            let unwrapped = self.unwrap(r, &p.span);
+            if let Some(md_some) = md {
+                match md_some {
+                    ArrayParamMetadata::Committed => {
+                        info!(
+                            "Input committed array of type {} in {:?}",
+                            ty,
+                            self.file_stack.borrow().last().unwrap()
+                        );
+                        persistent_arrays.push(p.id.value.clone());
+                    }
+                    ArrayParamMetadata::Transcript => {
+                        self.mark_array_as_transcript(&p.id.value, unwrapped);
+                    }
+                }
             }
-            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false);
-            self.unwrap(r, &p.span);
         }
         for s in &f.statements {
             self.unwrap(self.stmt_impl_::<false>(s), s.span());
@@ -722,7 +739,14 @@ impl<'ast> ZGen<'ast> {
                     let name = "return".to_owned();
                     let ret_val = r.unwrap_term();
                     let ret_var_val = self
-                        .circ_declare_input(name, ty, ZVis::Public, Some(ret_val.clone()), false)
+                        .circ_declare_input(
+                            name,
+                            ty,
+                            ZVis::Public,
+                            Some(ret_val.clone()),
+                            false,
+                            &None,
+                        )
                         .expect("circ_declare return");
                     let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
                     let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
@@ -772,13 +796,20 @@ impl<'ast> ZGen<'ast> {
             }
         }
     }
+    fn interpret_array_md(
+        &self,
+        md: &Option<ast::ArrayParamMetadata<'ast>>,
+    ) -> Option<ArrayParamMetadata> {
+        match md {
+            Some(ast::ArrayParamMetadata::Committed(_)) => Some(ArrayParamMetadata::Committed),
+            Some(ast::ArrayParamMetadata::Transcript(_)) => Some(ArrayParamMetadata::Transcript),
+            None => None,
+        }
+    }
+
     fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> ZVis {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => ZVis::Public,
-            Some(ast::Visibility::Committed(_)) => match self.mode {
-                Mode::Proof => ZVis::Committed,
-                _ => unimplemented!(),
-            },
             Some(ast::Visibility::Private(private)) => match self.mode {
                 Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
@@ -1230,7 +1261,16 @@ impl<'ast> ZGen<'ast> {
                                 l.identifier.value.clone(),
                                 decl_ty,
                                 e,
-                            )
+                            )?;
+                            let md = self.interpret_array_md(&l.array_metadata);
+                            if let Some(ArrayParamMetadata::Transcript) = md {
+                                let value = self
+                                    .circ_get_value(Loc::local(l.identifier.value.clone()))
+                                    .map_err(|e| format!("{e}"))?
+                                    .unwrap_term();
+                                self.mark_array_as_transcript(&l.identifier.value, value);
+                            }
+                            Ok(())
                         }
                     }
                 } else {
@@ -1463,6 +1503,13 @@ impl<'ast> ZGen<'ast> {
                 ),
                 &c.span,
             );
+        }
+
+        if let Some(ast::ArrayParamMetadata::Transcript(_)) = &c.array_metadata {
+            if !value.type_().is_array() {
+                self.err(format!("Non-array transcript {}", &c.id.value), &c.span);
+            }
+            self.mark_array_as_transcript(&c.id.value, value.clone());
         }
 
         // insert into constant map
@@ -1849,6 +1896,22 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
+    fn mark_array_as_transcript(&self, name: &str, array: T) {
+        info!(
+            "Transcript array {} of type {} in {:?}",
+            name,
+            array.ty,
+            self.file_stack.borrow().last().unwrap()
+        );
+        self.circ
+            .borrow()
+            .cir_ctx()
+            .cs
+            .borrow_mut()
+            .ram_arrays
+            .insert(array.term);
+    }
+
     /*** circify wrapper functions (hides RefCell) ***/
 
     fn circ_enter_condition(&self, cond: Term) {
@@ -1894,32 +1957,30 @@ impl<'ast> ZGen<'ast> {
         vis: ZVis,
         precomputed_value: Option<T>,
         mangle_name: bool,
+        md: &Option<ArrayParamMetadata>,
     ) -> Result<T, CircError> {
-        match vis {
-            ZVis::Public => {
-                self.circ
-                    .borrow_mut()
-                    .declare_input(name, ty, None, precomputed_value, mangle_name)
-            }
-            ZVis::Private(i) => self.circ.borrow_mut().declare_input(
+        if let Some(ArrayParamMetadata::Committed) = md {
+            let size = match ty {
+                Ty::Array(size, _) => *size,
+                _ => panic!(),
+            };
+            Ok(self.circ.borrow_mut().start_persistent_array(
+                &name,
+                size,
+                default_field(),
+                crate::front::proof::PROVER_ID,
+            ))
+        } else {
+            self.circ.borrow_mut().declare_input(
                 name,
                 ty,
-                Some(i),
+                match vis {
+                    ZVis::Public => None,
+                    ZVis::Private(i) => Some(i),
+                },
                 precomputed_value,
                 mangle_name,
-            ),
-            ZVis::Committed => {
-                let size = match ty {
-                    Ty::Array(size, _) => *size,
-                    _ => panic!(),
-                };
-                Ok(self.circ.borrow_mut().start_persistent_array(
-                    &name,
-                    size,
-                    default_field(),
-                    crate::front::proof::PROVER_ID,
-                ))
-            }
+            )
         }
     }
 

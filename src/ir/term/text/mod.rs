@@ -747,6 +747,7 @@ impl<'src> IrInterp<'src> {
             metadata,
             precomputes,
             persistent_arrays,
+            ram_arrays: Default::default(),
         }
     }
 
