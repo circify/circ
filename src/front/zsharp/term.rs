@@ -102,6 +102,10 @@ impl Ty {
             _ => panic!("Not an array type: {:?}", self),
         }
     }
+    /// Is this an array?
+    pub fn is_array(&self) -> bool {
+        matches!(self, Self::Array(_, _) | Self::MutArray(_))
+    }
 }
 
 #[derive(Clone, Debug)]

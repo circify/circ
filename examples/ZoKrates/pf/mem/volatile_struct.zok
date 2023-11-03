@@ -8,7 +8,7 @@ struct Pt {
 }
 
 def main(private field x, private field y, private bool b) -> field:
-    Pt [LEN] array = [Pt {x: 0, y: 0} ; LEN]
+    transcript Pt [LEN] array = [Pt {x: 0, y: 0} ; LEN]
     for field i in 0..ACCESSES do
         array[x+i] = if b then Pt{x : 1, y: i} else array[x+i] fi
     endfor

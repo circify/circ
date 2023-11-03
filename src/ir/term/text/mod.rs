@@ -15,7 +15,7 @@
 //!   * `I`: integer (arbitrary-precision)
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
-//!   * Computation `C`: `(computation M P ARRAYS T)`
+//!   * Computation `C`: `(computation M P PERSISTENT_ARRAYS RAM_ARRAYS T)`
 //!     * Metadata `M`: `(metadata PARTIES INPUTS COMMITMENTS)`
 //!       * PARTIES is `(parties X1 .. Xn)`
 //!       * INPUTS is `(inputs INPUT1 .. INPUTn)`
@@ -28,11 +28,12 @@
 //!       * INPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * OUTPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * TUPLE_TERM is a tuple of the same arity as the output
-//!     * ARRAYS (optional): `(persistent_arrays ARRAY*)`:
+//!     * PERSISTENT_ARRAYS (optional): `(persistent_arrays ARRAY*)`:
 //!       * ARRAY is `(X S T)`
 //!         * X is the name of the inital state
 //!         * S is the size
 //!         * T is the state (final)
+//!     * RAM_ARRAYS (optional): `(ram_arrays T*)`:
 //!   * Sort `S`:
 //!     * `bool`
 //!     * `f32`
@@ -723,10 +724,10 @@ impl<'src> IrInterp<'src> {
         let (metadata, input_names) = self.metadata(&tts[0]);
         let precomputes = self.precompute(&tts[1]);
         let mut persistent_arrays = Vec::new();
-        let mut skip_one = false;
-        if let List(tts_inner) = &tts[2] {
+        let mut ram_arrays = Vec::new();
+        let mut num_skipped = 0;
+        while let List(tts_inner) = &tts[2 + num_skipped] {
             if tts_inner[0] == Leaf(Token::Ident, b"persistent_arrays") {
-                skip_one = true;
                 for tti in tts_inner.iter().skip(1) {
                     let ttis = self.unwrap_list(tti, "persistent_arrays");
                     let id = self.ident_string(&ttis[0]);
@@ -734,12 +735,18 @@ impl<'src> IrInterp<'src> {
                     let term = self.term(&ttis[2]);
                     persistent_arrays.push((id, term));
                 }
+                num_skipped += 1;
+            } else if tts_inner[0] == Leaf(Token::Ident, b"ram_arrays") {
+                for tti in tts_inner.iter().skip(1) {
+                    let term = self.term(tti);
+                    ram_arrays.push(term);
+                }
+                num_skipped += 1;
+            } else {
+                break;
             }
         }
-        let mut iter = tts.iter().skip(2);
-        if skip_one {
-            iter.next();
-        }
+        let iter = tts.iter().skip(2 + num_skipped);
         let outputs = iter.map(|tti| self.term(tti)).collect();
         self.unbind(input_names);
         Computation {
@@ -747,6 +754,7 @@ impl<'src> IrInterp<'src> {
             metadata,
             precomputes,
             persistent_arrays,
+            ram_arrays: ram_arrays.into_iter().collect(),
         }
     }
 
@@ -900,6 +908,13 @@ pub fn serialize_computation(c: &Computation) -> String {
         for (name, term) in &c.persistent_arrays {
             let size = check(term).as_array().2;
             writeln!(&mut out, "  ({name} {size} {})", serialize_term(term)).unwrap();
+        }
+        writeln!(&mut out, "\n)").unwrap();
+    }
+    if !c.ram_arrays.is_empty() {
+        writeln!(&mut out, "(ram_arrays").unwrap();
+        for term in &c.ram_arrays {
+            writeln!(&mut out, "  {}", serialize_term(term)).unwrap();
         }
         writeln!(&mut out, "\n)").unwrap();
     }
@@ -1221,6 +1236,7 @@ mod test {
                     (tuple (not (and c d)))
                 )
                 (persistent_arrays (AA 2 (#a (bv 4) false 4 ((#b0000 true)))))
+                (ram_arrays (#a (bv 4) false 4 ((#b0001 true))))
                 (let (
                         (B ((update 1) A b))
                 ) (xor ((field 1) B)

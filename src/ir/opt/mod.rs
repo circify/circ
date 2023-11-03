@@ -72,13 +72,15 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::ConstantFold(ignore) => {
                     let mut cache = TermCache::with_capacity(TERM_CACHE_LIMIT);
+                    cache.resize(std::usize::MAX);
                     for a in &mut c.outputs {
-                        // allow unbounded size during a single fold_cache call
-                        cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &ignore.clone());
-                        // then shrink back down to size between calls
-                        cache.resize(TERM_CACHE_LIMIT);
                     }
+                    c.ram_arrays = c
+                        .ram_arrays
+                        .iter()
+                        .map(|a| cfold::fold_cache(a, &mut cache, &ignore.clone()))
+                        .collect();
                 }
                 Opt::Sha => {
                     for a in &mut c.outputs {

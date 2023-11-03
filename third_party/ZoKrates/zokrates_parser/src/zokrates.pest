@@ -14,14 +14,14 @@ main_import_directive = { "import" ~ quoted_string ~ ("as" ~ identifier)? ~ NEWL
 import_symbol = { identifier ~ ("as" ~ identifier)? }
 import_symbol_list = _{ import_symbol ~ ("," ~ import_symbol)* }
 function_definition = {"def" ~ identifier ~ constant_generics_declaration? ~ "(" ~ parameter_list ~ ")" ~ return_types ~ ":" ~ NEWLINE* ~ statement* }
-const_definition = {"const" ~ ty ~ identifier ~ "=" ~ expression ~ NEWLINE*}
+const_definition = {"const" ~ array_param_metadata? ~ ty ~ identifier ~ "=" ~ expression ~ NEWLINE*}
 type_definition = {"type" ~ identifier ~ constant_generics_declaration? ~ "=" ~ ty ~ NEWLINE*}
 return_types = _{ ( "->" ~ ( "(" ~ ty_list ~ ")" | ty ))? }
 constant_generics_declaration = _{ "<" ~ constant_generics_list ~ ">" }
 constant_generics_list = _{ identifier ~ ("," ~ identifier)* }
 
 parameter_list = _{(parameter ~ ("," ~ parameter)*)?}
-parameter = {vis? ~ ty ~ identifier}
+parameter = {array_param_metadata? ~ vis? ~ ty ~ identifier}
 
 // basic types
 ty_field = {"field"}
@@ -45,8 +45,11 @@ struct_field = { ty ~ identifier }
 vis_private_num = @{ "<" ~ ASCII_DIGIT* ~ ">" }
 vis_private = {"private" ~ vis_private_num? }
 vis_public = {"public"}
-vis_committed = {"committed"}
-vis = { vis_private | vis_public | vis_committed }
+vis = { vis_private | vis_public }
+
+array_param_metadata = { apm_committed | apm_transcript }
+apm_committed = { "committed" }
+apm_transcript = { "transcript" }
 
 // Statements
 statement = { (return_statement // does not require subsequent newline
@@ -109,7 +112,7 @@ array_initializer_expression = { "[" ~ expression ~ ";" ~ expression ~ "]" }
 
 // End Expressions
 
-typed_identifier = { ty ~ identifier }
+typed_identifier = { array_param_metadata? ~ ty ~ identifier }
 assignee = { identifier ~ assignee_access* }
 assignee_access = { array_access | member_access }
 identifier = @{ ((!keyword ~ ASCII_ALPHA) | (keyword ~ (ASCII_ALPHANUMERIC | "_"))) ~ (ASCII_ALPHANUMERIC | "_")* }

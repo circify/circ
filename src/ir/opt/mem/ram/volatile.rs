@@ -5,7 +5,7 @@ use fxhash::FxHashMap as HashMap;
 use fxhash::FxHashSet as HashSet;
 use std::collections::BinaryHeap;
 
-use log::trace;
+use log::{debug, trace};
 
 /// Graph of the *arrays* in the computation.
 ///
@@ -72,6 +72,7 @@ impl ArrayGraph {
         let mut cs = TermMap::default();
         let mut arrs = TermSet::default();
 
+        // locate all array terms
         for t in c.terms_postorder() {
             if check(&t).is_array() {
                 arrs.insert(t.clone());
@@ -80,6 +81,7 @@ impl ArrayGraph {
             }
         }
 
+        // compute parents and children
         for t in c.terms_postorder() {
             if check(&t).is_array() {
                 for c in t.cs() {
@@ -90,12 +92,16 @@ impl ArrayGraph {
                 }
             }
         }
+
         let mut ram_terms: TermSet = TermSet::default();
         // first, we grow the set of RAM terms, from leaves towards dependents.
         {
-            let mut stack: Vec<Term> = arrs
+            // we start with the explicitly marked RAMs
+            trace!("Starting with {} RAMS", c.ram_arrays.len());
+            let mut stack: Vec<Term> = c
+                .ram_arrays
                 .iter()
-                .filter(|a| right_sort(a, field) && array_leaf(a))
+                .filter(|a| arrs.contains(a))
                 .cloned()
                 .collect();
             while let Some(top) = stack.pop() {
@@ -371,6 +377,10 @@ pub fn extract(c: &mut Computation, cfg: AccessCfg) -> Vec<Ram> {
 
 /// Extract any volatile RAMS from a computation, and emit checks.
 pub fn apply(c: &mut Computation, cfg: &AccessCfg) {
+    if c.ram_arrays.is_empty() {
+        debug!("Skipping VolatileRam; no RAM arrays");
+        return;
+    }
     let rams = extract(c, cfg.clone());
     if !rams.is_empty() {
         for ram in rams {
@@ -392,6 +402,7 @@ mod test {
             (computation
                 (metadata (parties ) (inputs ) (commitments))
                 (precompute () () (#t ))
+                (ram_arrays (#a (mod 11) #f0m11 4 ()))
                 (set_default_modulus 11
                     (let
                         (
@@ -422,6 +433,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -464,6 +476,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs (a bool)) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -506,6 +519,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs (a bool)) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -547,6 +561,7 @@ mod test {
                (computation
                    (metadata (parties ) (inputs (a bool)) (commitments))
                    (precompute () () (#t ))
+                   (ram_arrays (#a (mod 11) #f000m11 4 ()))
                    (set_default_modulus 11
                    (let
                        (
@@ -593,6 +608,7 @@ mod test {
                (computation
                    (metadata (parties ) (inputs (a bool)) (commitments))
                    (precompute () () (#t ))
+                   (ram_arrays (#a (mod 11) #f0m11 16 ()))
                    (set_default_modulus 11
                    (let
                         (
@@ -622,6 +638,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -653,6 +670,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -708,6 +726,7 @@ mod test {
                     (commitments)
                 )
                 (precompute () () (#t ))
+                (ram_arrays ((fill (mod 101) 4) #f0m11))
                 (set_default_modulus 101
                 (let(
                   ('1 ((fill (mod 101) 4) #f0))
