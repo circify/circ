@@ -70,6 +70,7 @@ pub struct AccessCfg {
     sort_indices: bool,
     split_times: bool,
     waksman: bool,
+    covering_rom: bool,
 }
 
 impl AccessCfg {
@@ -86,6 +87,7 @@ impl AccessCfg {
             sort_indices: opt.index == IndexStrategy::Sort,
             split_times: opt.range == RangeStrategy::BitSplit,
             waksman: opt.permutation == PermutationStrategy::Waksman,
+            covering_rom: false,
         }
     }
     /// Create a default configuration, with this field.
@@ -100,6 +102,7 @@ impl AccessCfg {
             sort_indices: false,
             split_times: false,
             waksman: false,
+            covering_rom: false,
         }
     }
     /// Create a new default configuration
@@ -118,7 +121,13 @@ impl AccessCfg {
         }
     }
     fn len(&self, s: &Sort) -> usize {
-        (if self.create { 5 } else { 4 }) + Self::val_sort_len(s)
+        (if self.covering_rom {
+            1
+        } else if self.create {
+            5
+        } else {
+            4
+        }) + Self::val_sort_len(s)
     }
     fn bool2pf(&self, t: Term) -> Term {
         term![Op::Ite; t, self.one.clone(), self.zero.clone()]
@@ -147,7 +156,7 @@ fn scalar_to_field(scalar: &Term, c: &AccessCfg) -> Term {
 }
 
 /// A bit encoded in the field.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FieldBit {
     /// The field value (0 or 1)
     f: Term,
@@ -219,27 +228,34 @@ impl Access {
 
     fn field_names(c: &AccessCfg, sort: &Sort, order: Order) -> Vec<String> {
         let mut out = Vec::new();
+        let metadata = !c.covering_rom;
         match order {
             Order::Hash => {
                 Self::sort_subnames(sort, "v", &mut out);
                 out.push("i".into());
-                out.push("t".into());
-                out.push("w".into());
-                out.push("a".into());
-                if c.create {
-                    out.push("c".into());
+                if metadata {
+                    out.push("t".into());
+                    out.push("w".into());
+                    out.push("a".into());
+                    if c.create {
+                        out.push("c".into());
+                    }
                 }
             }
             // dead code, but for clarity...
             Order::Sort => {
                 out.push("i".into());
-                out.push("t".into());
-                if c.create {
-                    out.push("c".into());
+                if metadata {
+                    out.push("t".into());
+                    if c.create {
+                        out.push("c".into());
+                    }
                 }
                 Self::sort_subnames(sort, "v", &mut out);
-                out.push("w".into());
-                out.push("a".into());
+                if metadata {
+                    out.push("w".into());
+                    out.push("a".into());
+                }
             }
         }
         out
@@ -304,33 +320,50 @@ impl Access {
         }
     }
 
+    /// Encode this access as a sequence of field terms.
+    ///
+    /// The sequence depends on `order` and on `c`.
+    ///
+    /// For example, if `c.covering_rom` is set, then the sequence will only contain an encoding of
+    /// the indices and values.
     fn to_field_elems(&self, c: &AccessCfg, order: Order) -> Vec<Term> {
         let mut out = Vec::new();
+        let metadata = !c.covering_rom;
         match order {
             Order::Hash => {
                 Self::val_to_field_elements(&self.val, c, &mut out);
                 out.push(self.idx.clone());
-                out.push(self.time.clone());
-                out.push(self.write.f.clone());
-                out.push(self.active.f.clone());
-                if c.create {
-                    out.push(self.create.f.clone())
+                if metadata {
+                    out.push(self.time.clone());
+                    out.push(self.write.f.clone());
+                    out.push(self.active.f.clone());
+                    if c.create {
+                        out.push(self.create.f.clone())
+                    }
                 }
             }
             Order::Sort => {
                 out.push(self.idx.clone());
-                out.push(self.time.clone());
-                if c.create {
-                    out.push(self.create.f.clone())
+                if metadata {
+                    out.push(self.time.clone());
+                    if c.create {
+                        out.push(self.create.f.clone())
+                    }
                 }
                 Self::val_to_field_elements(&self.val, c, &mut out);
-                out.push(self.write.f.clone());
-                out.push(self.active.f.clone());
+                if metadata {
+                    out.push(self.write.f.clone());
+                    out.push(self.active.f.clone());
+                }
             }
         }
         out
     }
 
+    /// Decode this access as a sequence of field terms, assuming that those field terms are the
+    /// encoding of an access.
+    ///
+    /// The expected order of field terms depends on `c` and `order`; see [Access::to_field_elems].
     fn from_field_elems_trusted(
         elems: Vec<Term>,
         val_sort: &Sort,
@@ -344,15 +377,25 @@ impl Access {
             debug_assert!(matches!(check(&t), Sort::Field(_)));
             t
         };
+        let metadata = !c.covering_rom;
+        let f = FieldBit::from_bool_lit(c, false);
         match order {
             Order::Hash => Self {
                 val: Self::val_from_field_elements_trusted(val_sort, &mut next),
                 val_hash: None,
                 idx: next(),
-                time: next(),
-                write: FieldBit::from_trusted_field(c, next()),
-                active: FieldBit::from_trusted_field(c, next()),
-                create: if c.create {
+                time: if metadata { next() } else { c.pf_lit(0) },
+                write: if metadata {
+                    FieldBit::from_trusted_field(c, next())
+                } else {
+                    f.clone()
+                },
+                active: if metadata {
+                    FieldBit::from_trusted_field(c, next())
+                } else {
+                    f.clone()
+                },
+                create: if c.create && metadata {
                     FieldBit::from_trusted_field(c, next())
                 } else {
                     FieldBit::from_bool_lit(c, false)
@@ -361,15 +404,23 @@ impl Access {
             Order::Sort => Self {
                 val_hash: None,
                 idx: next(),
-                time: next(),
-                create: if c.create {
+                time: if metadata { next() } else { c.pf_lit(0) },
+                create: if c.create && metadata {
                     FieldBit::from_trusted_field(c, next())
                 } else {
                     FieldBit::from_bool_lit(c, false)
                 },
                 val: Self::val_from_field_elements_trusted(val_sort, &mut next),
-                write: FieldBit::from_trusted_field(c, next()),
-                active: FieldBit::from_trusted_field(c, next()),
+                write: if metadata {
+                    FieldBit::from_trusted_field(c, next())
+                } else {
+                    f.clone()
+                },
+                active: if metadata {
+                    FieldBit::from_trusted_field(c, next())
+                } else {
+                    f.clone()
+                },
             },
         }
     }
@@ -573,5 +624,38 @@ impl Ram {
         trace!("init: ops: idx {}, val {}", idx.op(), val.op());
         self.accesses
             .push_front(Access::new_init(&self.cfg, idx, val));
+    }
+    /// A ROM is a RAM in which there is only one write to any location, and that write happens
+    /// *before* any read.
+    ///
+    /// A covering ROM is a ROM with a write to every location.
+    ///
+    /// This function computes whether the first accesses are writes to distinct locations, and
+    /// whether the rest are reads.
+    fn is_covering_rom(&self) -> bool {
+        let mut written_addresses = TermSet::default();
+        for access in self.accesses.iter().take(self.size) {
+            if !access.idx.is_const()
+                || access.write.b != bool_lit(true)
+                || access.active.b != bool_lit(true)
+            {
+                trace!(
+                    "non-ROM because of an early non-const or non-read to {}",
+                    access.idx
+                );
+                return false;
+            }
+            if !written_addresses.insert(access.idx.clone()) {
+                trace!("non-ROM because of a 2nd access to {}", access.idx);
+                return false;
+            }
+        }
+        for access in self.accesses.iter().skip(self.size) {
+            if access.write.b != bool_lit(false) && access.active.b != bool_lit(false) {
+                trace!("non-ROM because of a late write to {}", access.idx);
+                return false;
+            }
+        }
+        true
     }
 }

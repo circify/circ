@@ -97,7 +97,7 @@ impl ArrayGraph {
         // first, we grow the set of RAM terms, from leaves towards dependents.
         {
             // we start with the explicitly marked RAMs
-            trace!("Starting with {} RAMS", c.ram_arrays.len());
+            trace!("Starting with {} RAMs", c.ram_arrays.len());
             let mut stack: Vec<Term> = c
                 .ram_arrays
                 .iter()
@@ -355,6 +355,13 @@ impl RewritePass for Extactor {
             .iter()
             .map(|o| cache.get(o).unwrap().clone())
             .collect();
+        if !self.cfg.waksman {
+            for ram in &mut self.rams {
+                if ram.is_covering_rom() {
+                    ram.cfg.covering_rom = true;
+                }
+            }
+        }
     }
 }
 
@@ -378,10 +385,12 @@ pub fn extract(c: &mut Computation, cfg: AccessCfg) -> Vec<Ram> {
 /// Extract any volatile RAMS from a computation, and emit checks.
 pub fn apply(c: &mut Computation, cfg: &AccessCfg) {
     if c.ram_arrays.is_empty() {
-        debug!("Skipping VolatileRam; no RAM arrays");
+        debug!("Skipping VolatileRam; no RAM arrays marked.");
+        debug!("Found 0 RAMs");
         return;
     }
     let rams = extract(c, cfg.clone());
+    debug!("Found {} transcripts", rams.len());
     if !rams.is_empty() {
         for ram in rams {
             super::checker::check_ram(c, ram);

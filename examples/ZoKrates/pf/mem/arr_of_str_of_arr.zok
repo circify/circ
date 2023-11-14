@@ -6,7 +6,7 @@ struct Pt {
     field[INNER_LEN] x
     field[INNER_LEN] y
 }
-const Pt [LEN] array = [Pt {x: [0; INNER_LEN], y: [5; INNER_LEN]}, ...[Pt {x: [1; INNER_LEN], y: [2; INNER_LEN]}; LEN - 1]]
+const transcript Pt [LEN] array = [Pt {x: [0; INNER_LEN], y: [5; INNER_LEN]}, ...[Pt {x: [1; INNER_LEN], y: [2; INNER_LEN]}; LEN - 1]]
 
 def main(private field[ACCESSES] idx) -> field:
     field prod = 1
