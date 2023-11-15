@@ -75,3 +75,8 @@ def u16_to_u32(u16 i) -> u32:
 
 def u8_to_u16(u8 i) -> u16:
     return 0u16
+
+// the output is sampled uniformly and independently of the inputs
+def sample_challenge<N>(field[N] x) -> field:
+    return 0
+

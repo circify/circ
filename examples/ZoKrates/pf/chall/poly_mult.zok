@@ -1,0 +1,21 @@
+from "EMBED" import sample_challenge
+
+def main(private field[4] f, private field[4] g, private field[7] h) -> field:
+    field x = sample_challenge([...f, ...g, ...h])
+    field[7] xpows = [1; 7]
+    for field i in 0..6 do
+        xpows[i+1] = xpows[i] * x
+    endfor
+    field fx = 0
+    field gx = 0
+    field hx = 0
+    for field i in 0..4 do
+        fx = fx + xpows[i] * f[i]
+        gx = gx + xpows[i] * g[i]
+    endfor
+    for field i in 0..7 do
+        hx = hx + xpows[i] * h[i]
+    endfor
+    assert(fx * gx == hx)
+    return f[0]
+

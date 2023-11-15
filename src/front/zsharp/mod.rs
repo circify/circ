@@ -97,6 +97,7 @@ struct ZGen<'ast> {
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
     assertions: RefCell<Vec<Term>>,
+    challenge_count: Cell<usize>,
     isolate_asserts: bool,
 }
 
@@ -172,6 +173,7 @@ impl<'ast> ZGen<'ast> {
             ret_ty_stack: Default::default(),
             gc_depth_estimate: Cell::new(2 * GC_INC),
             assertions: Default::default(),
+            challenge_count: Cell::new(0),
             isolate_asserts,
         };
         this.circ
@@ -200,7 +202,12 @@ impl<'ast> ZGen<'ast> {
         r.unwrap_or_else(|e| self.err(e, s))
     }
 
-    fn builtin_call(f_name: &str, mut args: Vec<T>, mut generics: Vec<T>) -> Result<T, String> {
+    fn builtin_call(
+        &self,
+        f_name: &str,
+        mut args: Vec<T>,
+        mut generics: Vec<T>,
+    ) -> Result<T, String> {
         debug!("Builtin Call: {}", f_name);
         match f_name {
             "u8_to_bits" | "u16_to_bits" | "u32_to_bits" | "u64_to_bits" => {
@@ -337,6 +344,24 @@ impl<'ast> ZGen<'ast> {
                     ))
                 } else {
                     Ok(uint_lit(cfg().field().modulus().significant_bits(), 32))
+                }
+            }
+            "sample_challenge" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/sample_challenge, expected 1",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/sample_challenge, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let n = self.challenge_count.get();
+                    let t = sample_challenge(args.pop().unwrap(), n)?;
+                    self.challenge_count.set(n + 1);
+                    Ok(t)
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{f_name}'")),
@@ -544,7 +569,7 @@ impl<'ast> ZGen<'ast> {
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Self::builtin_call(&f_name, args, generics)
+            self.builtin_call(&f_name, args, generics)
         } else {
             // XXX(unimpl) multi-return unimplemented
             assert!(f.returns.len() <= 1);
