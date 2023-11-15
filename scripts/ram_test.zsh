@@ -7,7 +7,8 @@ disable -r time
 # cargo build --release --features r1cs,smt,zok --example circ
 # cargo build --features "zok smt bellman" --example circ --example zk
 
-MODE=release # debug or release
+MODE=release
+# MODE=debug
 BIN=./target/$MODE/examples/circ
 ZK_BIN=./target/$MODE/examples/zk
 
@@ -21,6 +22,42 @@ function ram_test {
     $ZK_BIN --inputs $ex_name.vin --action verify --proof-impl $proof_impl
     rm -rf P V pi
 }
+
+# Test for how many transcripts are extracted
+function transcript_count_test {
+    ex_name=$1
+    ex_num=$2
+    rm -rf P V pi
+    found_num=$(RUST_LOG=circ::ir::opt::mem=debug $BIN $ex_name r1cs --action count |& grep -Eo 'Found [0-9]* transcripts' | grep -Eo '\b[0-9]+\b')
+    if [[ ! $ex_num == $found_num ]]
+    then
+        echo "expected $ex_num transcripts;\n  found $found_num transcripts"
+        exit 2
+    fi
+}
+
+# Test for whether a particular type of transcript is found
+function transcript_type_test {
+    ex_name=$1
+    ex_type=$2
+    rm -rf P V pi
+    output=$(RUST_LOG=circ::ir::opt::mem=debug $BIN $ex_name r1cs --action count |& cat)
+    echo $output
+    if (echo $output |& grep "Checking $ex_type") then;
+    else
+        echo "Did not find a transcript of type $ex_type"
+        exit 2
+    fi
+}
+
+transcript_count_test ./examples/ZoKrates/pf/mem/volatile.zok 1
+transcript_count_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok 1
+transcript_count_test ./examples/ZoKrates/pf/mem/volatile_struct.zok 1
+transcript_count_test ./examples/ZoKrates/pf/mem/arr_of_str.zok 1
+transcript_count_test ./examples/ZoKrates/pf/mem/arr_of_str_of_arr.zok 1
+
+transcript_type_test ./examples/ZoKrates/pf/mem/volatile_struct.zok "RAM"
+transcript_type_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok "covering ROM"
 
 ram_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 ram_test ./examples/ZoKrates/pf/mem/volatile.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"

@@ -1,5 +1,5 @@
 //! Replacing array and tuple variables with scalars.
-use log::debug;
+use log::trace;
 
 use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::*;
@@ -52,7 +52,7 @@ fn create_vars(
         _ => {
             // don't request a new variable if we're not recursing...
             if !top_rec_level {
-                debug!("New scalar var: {}", prefix);
+                trace!("New scalar var: {}", prefix);
                 new_var_requests.push((prefix.into(), prefix_term));
             }
             leaf_term(Op::Var(prefix.into(), sort.clone()))
@@ -68,7 +68,7 @@ impl RewritePass for Pass {
         _rewritten_children: F,
     ) -> Option<Term> {
         if let Op::Var(name, sort) = &orig.op() {
-            debug!("Considering var: {}", name);
+            trace!("Considering var: {}", name);
             if !computation.metadata.lookup(name).committed {
                 let mut new_var_reqs = Vec::new();
                 let new = create_vars(name, orig.clone(), sort, &mut new_var_reqs, true);
@@ -77,7 +77,7 @@ impl RewritePass for Pass {
                 }
                 Some(new)
             } else {
-                debug!("Skipping b/c it is commited.");
+                trace!("Skipping b/c it is commited.");
                 None
             }
         } else {

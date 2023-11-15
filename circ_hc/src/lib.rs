@@ -69,6 +69,10 @@ pub trait Node<Op>: Sized + Clone + PartialEq + Eq + PartialOrd + Ord + Hash {
     fn op(&self) -> &Op;
     /// Get the children of this node.
     fn cs(&self) -> &[Self];
+    /// Get the operator and children of this node.
+    fn parts(&self) -> (&Op, &[Self]) {
+        (self.op(), self.cs())
+    }
     /// Get a token that does not retain this node during GC.
     fn downgrade(&self) -> Self::Weak;
 }

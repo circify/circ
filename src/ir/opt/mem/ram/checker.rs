@@ -4,17 +4,24 @@ use super::*;
 use crate::front::PROVER_VIS;
 use crate::util::ns::Namespace;
 use circ_fields::FieldT;
-use log::trace;
+use log::{debug, trace};
 
 mod permutation;
 
 /// Check a RAM
 pub fn check_ram(c: &mut Computation, ram: Ram) {
-    trace!(
-        "Checking RAM {}, size {}, {} accesses",
+    debug!(
+        "Checking {} {}, size {}, {} accesses, keys {}, values {}",
+        if ram.cfg.covering_rom {
+            "covering ROM"
+        } else {
+            "RAM"
+        },
         ram.id,
         ram.size,
-        ram.accesses.len()
+        ram.accesses.len(),
+        ram.sort,
+        ram.val_sort,
     );
     let f = &ram.cfg.field;
     let (only_init, default) = match &ram.boundary_conditions {
@@ -26,8 +33,6 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     let ns = Namespace::new().subspace(&format!("ram{id}"));
     let f_s = Sort::Field(f.clone());
     let v_s = ram.val_sort.clone();
-    let mut new_var =
-        |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
 
     let mut assertions = Vec::new();
     // (1) sort the transcript, checking only that we've applied a permutation.
@@ -36,6 +41,8 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
             |name: &str, val: Term| c.new_var(&ns.fqn(name), Sort::Bool, PROVER_VIS, Some(val));
         permutation::waksman(&ram.accesses, &ram.cfg, &v_s, &mut new_bit_var)
     } else {
+        let mut new_var =
+            |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
         permutation::msh(
             &ram.accesses,
             &ns,
@@ -50,98 +57,129 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
     let n = sorted_accesses.len();
     let mut accs = sorted_accesses;
 
-    // set c value if needed.
-    if !only_init {
-        accs[0].create = FieldBit::from_bool_lit(&ram.cfg, true);
-        for i in 0..(n - 1) {
-            let create = term![NOT; term![EQ; accs[i].idx.clone(), accs[i+1].idx.clone()]];
-            accs[i + 1].create = FieldBit::from_bool(&ram.cfg, create);
-        }
-    }
-
-    // (3a) v' = ite(a',v',v)
-    for i in 0..(n - 1) {
-        accs[i + 1].val = term_c![Op::Ite; accs[i+1].active.b.clone(), accs[i+1].val, accs[i].val];
-    }
-
-    assertions.push(accs[0].create.b.clone());
-
     let zero = pf_lit(f.new_v(0));
+    let one = pf_lit(f.new_v(1));
     fn sub(a: &Term, b: &Term) -> Term {
         term![PF_ADD; a.clone(), term![PF_NEG; b.clone()]]
     }
 
-    let mut deltas = Vec::new();
-    // To: check some condition on the start?
-    for j in 0..(n - 1) {
-        // previous entry
-        let i = &accs[j].idx;
-        let t = &accs[j].time;
-        let v = accs[j].val_hash.as_ref().expect("missing value hash");
-        // this entry
-        let i_n = &accs[j + 1].idx;
-        let t_n = &accs[j + 1].time;
-        let v_n = accs[j + 1].val_hash.as_ref().expect("missing value hash");
-        let c_n = &accs[j + 1].create;
-        let w_n = &accs[j + 1].write;
+    if ram.cfg.covering_rom {
+        // the covering ROM case
+        let mut new_var =
+            |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
+        assertions.push(term_c![EQ; zero, accs[0].idx]);
+        for j in 0..(n - 1) {
+            // previous entry
+            let i = &accs[j].idx;
+            let v = accs[j].val_hash.as_ref().expect("missing value hash");
+            // this entry
+            let i_n = &accs[j + 1].idx;
+            let v_n = accs[j + 1].val_hash.as_ref().expect("missing value hash");
 
-        let v_p = if only_init {
-            v.clone()
-        } else {
-            term![ITE; c_n.b.clone(), default.clone(), v.clone()]
-        };
+            let i_d = sub(i_n, i);
+            let v_d = sub(v_n, v);
 
-        // delta = (1 - c')(t' - t)
-        deltas.push(term![PF_MUL; c_n.nf.clone(), sub(t_n, t)]);
+            // (i' - i)(i' - i - 1) = 0
+            assertions.push(term![EQ; term![PF_MUL; i_d.clone(), sub(&i_d, &one)], zero.clone()]);
 
-        // check c value if not computed: (i' - i)(1 - c') = 0
-        if only_init {
-            assertions.push(term![EQ; term![PF_MUL; sub(i_n, i), c_n.nf.clone()], zero.clone()]);
+            // r = 1/(i' - i)
+            let r = new_var(&format!("r{}", j), term_c![PF_RECIP; i_d]);
+            // (i' - i)r(v' - v) = v' - v  [v' = v OR i' != i]
+            assertions.push(term![EQ; term![PF_MUL; i_d, r, v_d.clone()], v_d]);
         }
-        // writes allow a value change: (v' - v)(1 - w') = 0
-        assertions.push(term![EQ; term![PF_MUL; sub(v_n, &v_p), w_n.nf.clone()], zero.clone()]);
-    }
-
-    // check that index blocks are unique
-    if !only_init {
-        if ram.cfg.sort_indices {
-            let bits = ram.size.next_power_of_two().ilog2() as usize;
-            trace!("Index difference checks ({bits} bits)");
-            assertions.push(term![Op::PfFitsInBits(bits); accs[0].idx.clone()]);
-            for j in 0..(n - 1) {
-                let d = pf_sub(accs[j + 1].idx.clone(), accs[j].idx.clone());
-                assertions.push(term![Op::PfFitsInBits(bits); d]);
-            }
-        } else {
-            derivative_gcd(
-                c,
-                accs.iter().map(|a| a.idx.clone()).collect(),
-                accs.iter().map(|a| a.create.b.clone()).collect(),
-                &ns,
-                &mut assertions,
-                f,
-            );
-        }
-    }
-
-    // check ranges
-    assertions.push(c.outputs[0].clone());
-    #[allow(clippy::type_complexity)]
-    let range_checker: Box<
-        dyn Fn(&mut Computation, Vec<Term>, &Namespace, &mut Vec<Term>, usize, &FieldT),
-    > = if ram.cfg.split_times {
-        Box::new(&bit_split_range_check)
+        assertions.push(term_c![EQ; ram.cfg.pf_lit(ram.size-1), accs[n - 1].idx]);
     } else {
-        Box::new(&range_check)
-    };
-    range_checker(
-        c,
-        deltas,
-        &ns.subspace("time"),
-        &mut assertions,
-        ram.next_time + 1,
-        f,
-    );
+        // the general RAM case
+        // set c value if needed.
+        if !only_init {
+            accs[0].create = FieldBit::from_bool_lit(&ram.cfg, true);
+            for i in 0..(n - 1) {
+                let create = term![NOT; term![EQ; accs[i].idx.clone(), accs[i+1].idx.clone()]];
+                accs[i + 1].create = FieldBit::from_bool(&ram.cfg, create);
+            }
+        }
+
+        // (3a) v' = ite(a',v',v)
+        for i in 0..(n - 1) {
+            accs[i + 1].val =
+                term_c![Op::Ite; accs[i+1].active.b.clone(), accs[i+1].val, accs[i].val];
+        }
+
+        assertions.push(accs[0].create.b.clone());
+
+        let mut deltas = Vec::new();
+        // To: check some condition on the start?
+        for j in 0..(n - 1) {
+            // previous entry
+            let i = &accs[j].idx;
+            let t = &accs[j].time;
+            let v = accs[j].val_hash.as_ref().expect("missing value hash");
+            // this entry
+            let i_n = &accs[j + 1].idx;
+            let t_n = &accs[j + 1].time;
+            let v_n = accs[j + 1].val_hash.as_ref().expect("missing value hash");
+            let c_n = &accs[j + 1].create;
+            let w_n = &accs[j + 1].write;
+
+            let v_p = if only_init {
+                v.clone()
+            } else {
+                term![ITE; c_n.b.clone(), default.clone(), v.clone()]
+            };
+
+            // delta = (1 - c')(t' - t)
+            deltas.push(term![PF_MUL; c_n.nf.clone(), sub(t_n, t)]);
+
+            // check c value if not computed: (i' - i)(1 - c') = 0
+            if only_init {
+                assertions
+                    .push(term![EQ; term![PF_MUL; sub(i_n, i), c_n.nf.clone()], zero.clone()]);
+            }
+            // writes allow a value change: (v' - v)(1 - w') = 0
+            assertions.push(term![EQ; term![PF_MUL; sub(v_n, &v_p), w_n.nf.clone()], zero.clone()]);
+        }
+
+        // check that index blocks are unique
+        if !only_init {
+            if ram.cfg.sort_indices {
+                let bits = ram.size.next_power_of_two().ilog2() as usize;
+                trace!("Index difference checks ({bits} bits)");
+                assertions.push(term![Op::PfFitsInBits(bits); accs[0].idx.clone()]);
+                for j in 0..(n - 1) {
+                    let d = pf_sub(accs[j + 1].idx.clone(), accs[j].idx.clone());
+                    assertions.push(term![Op::PfFitsInBits(bits); d]);
+                }
+            } else {
+                derivative_gcd(
+                    c,
+                    accs.iter().map(|a| a.idx.clone()).collect(),
+                    accs.iter().map(|a| a.create.b.clone()).collect(),
+                    &ns,
+                    &mut assertions,
+                    f,
+                );
+            }
+        }
+
+        // check ranges
+        assertions.push(c.outputs[0].clone());
+        #[allow(clippy::type_complexity)]
+        let range_checker: Box<
+            dyn Fn(&mut Computation, Vec<Term>, &Namespace, &mut Vec<Term>, usize, &FieldT),
+        > = if ram.cfg.split_times {
+            Box::new(&bit_split_range_check)
+        } else {
+            Box::new(&range_check)
+        };
+        range_checker(
+            c,
+            deltas,
+            &ns.subspace("time"),
+            &mut assertions,
+            ram.next_time + 1,
+            f,
+        );
+    }
     c.outputs[0] = term(AND, assertions);
 }
 
