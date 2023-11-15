@@ -1,5 +1,6 @@
 //! The ZoKrates/Z# front-end
 
+mod interp;
 mod parser;
 mod term;
 pub mod zvisit;
@@ -11,6 +12,7 @@ use crate::front::proof::PROVER_ID;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 
+use fxhash::FxHashMap;
 use log::{debug, info, trace, warn};
 use rug::Integer;
 use std::cell::{Cell, RefCell};
@@ -65,14 +67,14 @@ impl FrontEnd for ZSharpFE {
 
 impl ZSharpFE {
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
-    pub fn interpret(i: Inputs) -> T {
+    pub fn interpret(i: Inputs, input_scalar_values: FxHashMap<String, Value>) -> T {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
-        g.const_entry_fn("main")
+        g.const_entry_fn("main", input_scalar_values)
     }
 }
 
@@ -670,24 +672,41 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn const_entry_fn(&self, n: &str) -> T {
+    fn const_entry_fn(&self, n: &str, mut input_scalar_values: FxHashMap<String, Value>) -> T {
         debug!("Const entry: {}", n);
         let (f_file, f_name) = self.deref_import(n);
         if let Some(f) = self.functions.get(&f_file).and_then(|m| m.get(&f_name)) {
             if !f.generics.is_empty() {
                 panic!("const_entry_fn cannot be called on a generic function")
-            } else if !f.parameters.is_empty() {
-                panic!("const_entry_fn must be called on a function with zero arguments")
             }
+
+            let mut args = Vec::new();
+            for p in &f.parameters {
+                let name = &p.id.value;
+                let ty = self.type_(&p.ty);
+                let value = interp::extract(name, &ty, &mut input_scalar_values)
+                    .unwrap_or_else(|e| self.err(format!("Error: {e}"), &p.span));
+                args.push(value);
+            }
+
+            if !input_scalar_values.is_empty() {
+                let unused_input_list = input_scalar_values
+                    .keys()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .as_slice()
+                    .join(", ");
+                self.err(format!("Ununused inputs {unused_input_list}"), &f.span);
+            }
+
+            self.function_call_impl_::<true>(args, &[][..], None, f_file, f_name)
+                .unwrap_or_else(|e| panic!("const_entry_fn failed: {}", e))
         } else {
             panic!(
                 "No function '{:?}//{}' attempting const_entry_fn",
                 &f_file, &f_name
-            );
+            )
         }
-
-        self.function_call_impl_::<true>(Vec::new(), &[][..], None, f_file, f_name)
-            .unwrap_or_else(|e| panic!("const_entry_fn failed: {}", e))
     }
 
     fn entry_fn(&self, n: &str) {
