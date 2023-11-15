@@ -28,7 +28,7 @@ function transcript_count_test {
     ex_name=$1
     ex_num=$2
     rm -rf P V pi
-    found_num=$(RUST_LOG=circ::ir::opt::mem=debug $BIN $ex_name r1cs --action count |& rg 'Found (\d*) transcripts' -r '$1' -o)
+    found_num=$(RUST_LOG=circ::ir::opt::mem=debug $BIN $ex_name r1cs --action count |& grep -Eo 'Found [0-9]* transcripts' | grep -Eo '\b[0-9]+\b')
     if [[ ! $ex_num == $found_num ]]
     then
         echo "expected $ex_num transcripts;\n  found $found_num transcripts"
@@ -43,7 +43,7 @@ function transcript_type_test {
     rm -rf P V pi
     output=$(RUST_LOG=circ::ir::opt::mem=debug $BIN $ex_name r1cs --action count |& cat)
     echo $output
-    if (echo $output |& rg "Checking $ex_type") then;
+    if (echo $output |& grep "Checking $ex_type") then;
     else
         echo "Did not find a transcript of type $ex_type"
         exit 2
