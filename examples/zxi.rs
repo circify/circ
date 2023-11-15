@@ -1,4 +1,5 @@
 use circ::front::zsharp::{Inputs, ZSharpFE};
+use circ::ir::term::text::parse_value_map;
 
 use circ::cfg::{
     clap::{self, Parser},
@@ -13,6 +14,10 @@ struct Options {
     /// Input file
     #[arg()]
     zsharp_path: PathBuf,
+
+    /// Scalar input values
+    #[arg()]
+    inputs_path: Option<PathBuf>,
 
     #[command(flatten)]
     /// CirC options
@@ -31,7 +36,11 @@ fn main() {
         file: options.zsharp_path,
         mode: Mode::Proof,
     };
-    let cs = ZSharpFE::interpret(inputs);
+    let scalar_input_values = match options.inputs_path.as_ref() {
+        Some(p) => parse_value_map(&std::fs::read(p).unwrap()),
+        None => Default::default(),
+    };
+    let cs = ZSharpFE::interpret(inputs, scalar_input_values);
     cs.pretty(&mut std::io::stdout().lock())
         .expect("error pretty-printing value");
     println!();
