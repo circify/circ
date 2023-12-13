@@ -1,0 +1,120 @@
+\section{Persistent}
+\begin{outline}
+\1 initial definitions
+  \2 \FF: target field
+  \2 $N$: persistent array size
+  \2 $\vec a, \vec b \in \FF^N$: initial and final arrays
+  \2 $c_a, c_b$: commitments to arrays with randomness $r_a, r_b$
+  \2 $R$: a witness relation $R(c_a, c_b, x, \vec a, \vec b, w, r_a, r_b)$ for a CP-SNARK
+    \3 $x$ extra instance material
+    \3 $w$ extra witness material
+    \3 $\vec a$ represents the initial state of a RAM that $R$ makes $A$
+    accesses to; $\vec b$ is the final state.
+    \2 $A$: number of accesses 
+  \2 $[A]$: $\{0, \dots, A-1\}$
+  \2 hashes
+    \3 root hash: $H_r(k, \vec x) = \prod_i (x_i - k)$
+      \4 used for ``permutation arguments''
+      \4 used to hash multisets to scalars
+    \3 coefficient hash: $H_c(k, \vec x) = \sum_{i=0} k^ix_i$
+      \4 used to hash vectors to scalars
+\1 coalesce the memory footprint
+  \2 goal: from the $N$ entries, isolate up to $A$ that $R$ will be able to
+  touch
+    \3 route the remaining entries from $\vec a$ to $\vec b$ as cheaply as
+       possible
+  \2 witness: $\vec c$: $A$ index-value pairs of $\vec a$ including all touched entries.
+  \2 witness: $\vec d$: similar, with $\vec b$ (same indices and order).
+  \2 challenge $\alpha$
+  \2 compute $\vec a'$, defined by $a'_i = H_c(\alpha, (a_i, i))$ and $\vec b'$ similarly
+    \3 free (linear)
+  \2 compute $\vec c'$, a length $N$ vector
+    \3 First $A$ entries: root-hashes, similarly from $\vec c$.
+      \4 $v + \alpha i$
+      \4 \csPerA{1} (could share with main?)
+    \3 For the rest, hashes of other $\vec a$ entries, in original order (witness)
+  \2 compute $\vec d'$ similarly, from $\vec d$ and $\vec b$.
+    \3 \csPerA{1}
+  \2 challenge $\beta$
+  \2 equate last $N-A$ entries of $\vec c'$ and $\vec d'$.
+    \3 free (linear)
+  \2 permutation arguments for $\vec a', \vec c'$ and $\vec b', \vec d'$ (key $\beta$)
+    \3 \csPerN{3} + \csPerA{2}
+    \3 because some is shared.
+  \2 outputs
+    \3 $\vec c$ initial index-value pairs
+    \3 $\vec d$ final index-value pairs
+\1 build the main transcript
+  \2 goal: define access-order and index-order transcripts, and ensure they're
+  permutations of one another
+  \2 $T$: number of entries ($3A$)
+  \2 entries: (value, idx, time, write?, create?, active?)
+    \3 create is a bit that is set if this is an access writing from the initial persistent RAM
+    \3 active is a bit that is set if this \textbf{write} is active (it's always set for reads)
+      \4 if inactive, this write has no effect.
+    \3 times are in $[A+1]$, not $[3A]$
+      \4 accesses from $R$ gets times in $[A]$, as standard
+      \4 all initial writes to have time 0
+      \4 all final reads have time $A$
+  \2 denote the transcript $\vec e$
+  \2 witness: $\vec f$: the transcript ordered on index and then time
+  \2 challenge $\alpha$
+  \2 compute $\vec e'$ with element-wise coefficient hash over $\vec e$ keyed on $\alpha$.
+    \3 The computations is something like $v + \alpha i + k_2 \alpha^2 + w \alpha^3 + k_4 \alpha^4 + k_5 \alpha^5$
+      \4 $w$ is write
+    \3 The $k$'s are all fixed
+    \3 \csPerT{2} - \csPerA{2}
+      \4 the minus is b/c the $w$s are fixed
+         for the initialization and finalization accesses
+    \3 Furthermore, the single non-linear product $\alpha i$ is shared with the
+    hashes needed for coalescing.
+  \2 compute $\vec f'$ similarly from $\vec f$
+    \3 \csPerT{5} for hashing
+    \3 the hash ensures well-formedness for booleans
+  \2 challenge $\beta$
+  \2 permutation argument for $\vec e', \vec f'$ (key $\beta$)
+    \3 \csPerT{2}
+  \2 three properties remain to be checked
+    \3 transcript is grouped by index
+    \3 within that, sorted by time
+    \3 read-over-write semantics
+      \4 with no writing to fresh indices
+\1 checking the index-order transcript
+  \2 goal: check array semantics (modulo residual range checks)
+  \2 Refer to one entry as $(v, i, t, w, c, a)$ and the next as $(v', i', t', w', c', a')$
+  \2 First, redef $w'$ to be $w'$ if $a=1$, else $w$
+    \3 \csPerT{1}
+  \2 Recall that the ranges of each value are ensured by hashing
+    \3 $i \in [N]$
+    \3 $t \in [A+1]$
+    \3 $w, c, a \in \zo$
+  \2 rules:
+    \3 start with a create
+    \3 $t$ grows or next $c=1$
+    \3 $v$ is constant or next $w=1$
+    \3 $i$ is constant or next $c=1$
+  \2 constraints:
+    \3 $c_0 = 1$
+    \3 $(v'-v)(w'-1)=0$
+    \3 $(i'-i)(c'-1)=0$
+    \3 compute $\Delta_t = (1-c')(t'-t)$
+    \3 cost: \csPerT{3}
+      \4 and range check
+      \4 and one for $c_0 = 1$
+    \3 we must show (next section) that each $\Delta_t \in [A+1]$
+\1 range check
+  \2 goal: check that each $\Delta_t$ is in $[A+1]$
+  \2 let $\vec g$ denote all $\Delta_t$s concatenated to $[A+1]$ (length $4A+1$)
+  \2 witness $\vec h$: sort $\vec g$
+    \3 check that each delta is 0 or 1. \csPerA{4}
+  \2 challenge $\alpha$
+  \2 permutation argument for $\vec g, \vec h$ (key $\alpha$)
+    \3 \csPerA{8}
+\1 Accounting
+  \2 two verifier challenges ($\alpha,\beta$)
+  \2 \csPerN{3}
+    \3 plus an extra MSM of size $2\cdot N$.
+  \2 \csPerA{53}
+    \3 The cost of a linear scan (per element scanned) is $3$ by my reckoning
+    \3 So if $A < 53/3 < 18$, you should do linear scans instead.
+\end{outline}

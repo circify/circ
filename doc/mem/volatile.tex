@@ -1,0 +1,86 @@
+\section{Volatile}
+\begin{outline}
+\1 initial definitions
+  \2 \FF: target field
+  \2 $N$: RAM size
+  \2 reads from uninit memory are undefined
+  \2 $R$: a witness relation $R(x, w)$ for a CC-SNARK
+    \3 $A$: number of RAM accesses
+      \4 each access is a conditional write
+\1 build the main transcript
+  \2 goal: define access-order and index-order transcripts, and ensure they're
+  permutations of one another
+  \2 entries: (value, idx, time, write?, active?) $(v, i, t, w, a)$
+    \3 write indicates read/write.
+    \3 active is a bit that is set for a write if it takes effect; otherwise, it has no effect. It is always set for reads.
+    \3 times are in $[A]$
+    \3 ROM case: entries are (value, idx)
+  \2 $\vec a$: time-order access sequence
+  \2 witness: $\vec b$: index-order access sequence
+  \2 challenge $\alpha$
+  \2 compute $\vec a'$: coefficient-hashes of time-order accesses with key
+  $\alpha$.
+    \3 Since time and write are fixed, \csPerA{2}.
+  \2 compute $\vec b'$: same for $\vec b$
+    \3 \csPerA{4}
+  \2 challenge $\beta$, use root-hash to do permutation argument
+    \3 \csPerA{2}
+\1 check the index-order transcript
+  \2 adjacent entries: $(v, i, t, w, a)$ and then $(v', i', t', w', a')$
+  \2 rules:
+    \3 (A) values can change only if indices do, or if $w'=1$
+    \3 (B) times increase, or indices change
+    \3 (C) first indices in index-constant blocks are unique
+  \2 witness sequence $\vec d$ that indicates index change
+    \3 defined by $d_0=1$ and $d'=1$ if $i \ne i'$, else $d'=0$
+    \3 cost: \csPerA{2}
+  \2 compute $\delta_t = (t'-t)(1-d')$. \csPerA{1}
+  \2 compute $v_p = d'(s-v) + v$. \csPerA{1}
+  \2 redef $v'$ to $v'$ if $a$, else $v$. \csPerA{1}
+  \2 $(v'-v_p)(1-w')=0$ \csPerA{1}
+  \2 range-check $\delta_t$s (next section)
+\1 uniqueness check
+  \2 define polynomial $p(X)$ by $\prod_j (w_j(X - i_j - 1) + 1)$
+  \2 it's derivative is $p'(X)$
+  \2 for an index-order transcript, $\gcd(p,p')=1$
+    \3 so there exist polynomials $f,g$ of degree at most $A-1$ such that $1 = pf + p'g$
+  \2 witness $\vec f$ of length $A$ is the coefficients of $f$
+  \2 witness $\vec g$ of length $A$ is the coefficients of $g$
+  \2 challenge $\gamma$ (same round as $\beta$)
+  \2 check $p(\gamma)f(\gamma) + p'(\gamma)g(\gamma)=1$
+  \2 eval $f(\gamma), g(\gamma)$: \csPerA{2} total
+  \2 eval $p(\gamma)$: \csPerA{2}
+    \3 one constraint for conditional
+    \3 one for product accumulation
+  \2 eval $p'(\gamma)$: \csPerA{2}
+    \3 as $p(\gamma)\sum_j\frac{p(\gamma)}{\gamma-i_j}$
+    \3 one constraint for inversion
+    \3 one constraint for conditional
+    \3 sum is free
+\1 range check
+  \2 concat $\delta_t$s and $[A]$
+  \2 sort (length $2A$)
+  \2 check const-or-plus-1 \csPerA{2}
+  \2 permutation check $(\beta)$ \csPerA{4}
+\1 accounting
+  \2 \csPerA{26}
+\1 ROM case
+  \2 assume $A$ reads, including at least one read to every index
+  \2 entries are (value, idx)
+  \2 permutation argument: \romCsPerA{4}
+  \2 checking the sorted transcript:
+    \3 adjacent entries $(i, v), (i', v')$
+    \3 logically:
+      \4 $i = i' \lor i + 1 = i'$
+      \4 $i = i' \implies v = v'$ ($i \ne i' \lor v = v'$)
+    \3 R1CS:
+      \4 $(i'-i)(i'-i-1)=0$
+      \4 $(i'-i)r(v'-v)=(v'-v)$
+      \4 \romCsPerA{3}
+    \3 some boundary conditions
+  \2 accounting: {\color{purple}{$7\cdot A$}}
+    \3 values of size $\ell$: {\color{purple}{$(5 + 2\ell)\cdot A$}}
+      \4 NB: to get this, process value equalities over value \textit{hashes}
+
+\end{outline}
+

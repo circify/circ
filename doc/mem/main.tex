@@ -1,0 +1,134 @@
+\documentclass[conference,compsoc]{article}
+%\documentclass[conference,compsoc]{IEEEtran}
+%% \BibTeX command to typeset BibTeX logo in the docs
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[normalem]{ulem}
+\usepackage[]{outlines}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{amsmath,amssymb,comment}
+\usepackage[bookmarksnumbered,unicode]{hyperref}
+\hypersetup{                    % ...like so
+  pdftex,
+  colorlinks,
+  pdfborder={0 0 0},
+  pdfmenubar=false,
+  pdfpagemode=UseNone,
+  pdfnonfullscreenpagemode=UseNone,
+  bookmarksopen=false,
+  bookmarks=false,
+  breaklinks=true,
+  linkcolor={green!50!black},
+  citecolor={red!50!black},
+  urlcolor={blue!50!black}
+}
+
+% add `hide` to hide comments
+\usepackage[]{comments}
+\Commenter{EL}
+\Commenter{AO}
+\Commenter{DB}
+
+\usepackage[square,comma,numbers,sort&compress]{natbib}
+
+\usepackage{xspace}
+\usepackage[htt]{hyphenat}
+\usepackage{listings}
+\usepackage{nicefrac}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\tikzset{>=Latex[]}
+\usepackage{booktabs}
+\usepackage{menukeys}
+\bibliographystyle{ieeetr}
+\usepackage{caption}
+\usepackage{subcaption}
+% \usepackage[nohead,
+%             left=0.625in,right=0.625in,top=0.75in,bottom=0.75in,
+%             %left=0.633in,right=0.633in,top=0.75in,bottom=0.75in,
+%             columnsep=0.25in
+%             ]{geometry}
+
+\usepackage{bussproofs}
+\usepackage{backnaur}
+
+% AO: Oakland minimum is 11pt, but that's crazy.
+\usepackage{leading}
+
+\newcommand\sysname{ZkPi\xspace}
+\newcommand\sys{\sysname}
+\newcommand\CIC{CIC\xspace}
+
+\input{macros}
+
+%\usepackage[text=DRAFT\ do\ not\ distribute,fontsize=0.08\paperwidth,angle=0,vpos=0.95\paperheight]{draftwatermark}
+
+% careful
+\hyphenation{an-aly-sis}
+
+% Eddie Kohler protect us
+\frenchspacing
+
+\begin{document}
+
+%%
+%% The "title" command has an optional parameter,
+\title{
+%\vspace*{-1cm}
+Persistent Memory
+%\vspace*{-0.25cm}
+}
+%\subtitle{Shared Compiler Infrastructure for Constraint Solvers and Cryptosystems}
+
+\author{}
+% \author{%
+%   \IEEEauthorblockN{%
+%     Evan Laufer\quad
+%     Alex Ozdemir\quad
+%     Dan Boneh
+%   }%\\
+%   \IEEEauthorblockA{%
+%     Stanford University
+%   }
+% }
+
+
+%%
+%% By default, the full list of authors will be used in the page %% headers. Often, this list is too long, and will overlap %% other information printed in the page headers. This command allows
+%% the author to define a more concise list
+%% of authors' names for this purpose.
+%\renewcommand{\shortauthors}{Trovato and Tobin, et al.}
+
+\maketitle
+
+\begin{abstract}
+  TODO
+% \input{abstract}
+\end{abstract}
+
+\commentprimer
+
+\input{persistent}
+\input{sparse}
+\input{volatile}
+
+\pagebreak
+
+\begin{flushleft}
+\footnotesize
+\setlength{\parskip}{0pt}
+\setlength{\itemsep}{0pt}
+%\bibliographystyle{abbrv}
+%\bibliography{myabbrev,cryptobib/crypto,refs}
+\bibliography{refs}
+\end{flushleft}
+
+%% If your work has an appendix, this is the place to put it.
+% \appendices
+
+\end{document}
+\endinput
