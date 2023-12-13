@@ -664,6 +664,14 @@ impl NaryFlat<Integer> for IntNaryOp {
     }
 }
 
+fn safe_nary(op: Op, mut children: Vec<Term>) -> Term {
+    match children.len() {
+        0 => panic!("Empty {}", op),
+        1 => children.pop().unwrap(),
+        _ => term(op, children),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -765,13 +773,5 @@ mod test {
         let before = text::parse_term(b"(declare ((a int)) (intmul a 1 1 0))");
         let ex_after = text::parse_term(b"(declare ((a int)) 0)");
         assert_eq!(fold(&before, &[]), ex_after);
-    }
-}
-
-fn safe_nary(op: Op, mut children: Vec<Term>) -> Term {
-    match children.len() {
-        0 => panic!("Empty {}", op),
-        1 => children.pop().unwrap(),
-        _ => term(op, children),
     }
 }

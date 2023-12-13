@@ -30,7 +30,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
         BoundaryConditions::Persistent(..) => panic!(),
     };
     let id = ram.id;
-    let ns = Namespace::new().subspace(&format!("ram{id}"));
+    let ns = Namespace::new().subspace(format!("ram{id}"));
     let f_s = Sort::Field(f.clone());
     let v_s = ram.val_sort.clone();
 
