@@ -4,6 +4,7 @@ use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::{debug, trace};
 use paste::paste;
+use rayon::prelude::*;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -456,9 +457,9 @@ impl R1csFinal {
 
     /// Check all assertions
     fn check_all(&self, values: &HashMap<Var, FieldV>) {
-        for (a, b, c) in &self.constraints {
-            self.check(a, b, c, values)
-        }
+        self.constraints
+            .par_iter()
+            .for_each(|(a, b, c)| self.check(a, b, c, values));
     }
 }
 
