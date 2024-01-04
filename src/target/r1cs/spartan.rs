@@ -10,6 +10,7 @@ use merlin::Transcript;
 use rug::Integer;
 use std::fs::File;
 use std::io;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 /// Hold Spartan variables
@@ -244,25 +245,25 @@ pub fn write_data<P1: AsRef<Path>, P2: AsRef<Path>>(
 }
 
 fn write_prover_data<P: AsRef<Path>>(path: P, data: &ProverData) -> io::Result<()> {
-    let mut file = File::create(path)?;
+    let mut file = BufWriter::new(File::create(path)?);
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
 fn read_prover_data<P: AsRef<Path>>(path: P) -> io::Result<ProverData> {
-    let mut file = File::open(path)?;
+    let mut file = BufReader::new(File::open(path)?);
     let data: ProverData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }
 
 fn write_verifier_data<P: AsRef<Path>>(path: P, data: &VerifierData) -> io::Result<()> {
-    let mut file = File::create(path)?;
+    let mut file = BufWriter::new(File::create(path)?);
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
 fn read_verifier_data<P: AsRef<Path>>(path: P) -> io::Result<VerifierData> {
-    let mut file = File::open(path)?;
+    let mut file = BufReader::new(File::open(path)?);
     let data: VerifierData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }
