@@ -71,7 +71,7 @@ impl CTermData {
     pub fn term(&self, ctx: &CirCtx) -> Term {
         let ts = self.terms(ctx);
         assert!(ts.len() == 1);
-        ts.get(0).unwrap().clone()
+        ts.first().unwrap().clone()
     }
 
     pub fn simple_term(&self) -> Term {
