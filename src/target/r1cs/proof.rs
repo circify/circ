@@ -1,8 +1,8 @@
 //! A trait for CirC-compatible proofs
 
 use std::fs::File;
-use std::path::Path;
 use std::io::{BufReader, BufWriter};
+use std::path::Path;
 
 use bincode::{deserialize_from, serialize_into};
 use fxhash::FxHashMap as HashMap;
