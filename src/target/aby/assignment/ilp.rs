@@ -166,9 +166,9 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
     ilp.maximize(
         -conv_vars
             .values()
-            .map(|(a, b)| (a, b))
-            .chain(term_vars.values().map(|(a, b, _)| (a, b)))
-            .fold(0.0.into(), |acc: Expression, (v, cost)| acc + *v * *cost),
+            .cloned()
+            .chain(term_vars.values().map(|(a, b, _)| (*a, *b)))
+            .fold(0.0.into(), |acc: Expression, (v, cost)| acc + v * cost),
     );
 
     let (_opt, solution) = ilp.default_solve().unwrap();
