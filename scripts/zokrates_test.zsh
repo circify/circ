@@ -56,7 +56,7 @@ function pf_test_only_pf {
     done
 }
 
-# Test prove workflow with --z-isolate-asserts, given an example name
+# Test prove workflow with --zsharp-isolate-asserts, given an example name
 function pf_test_isolate {
     for proof_impl in groth16 mirage
     do
