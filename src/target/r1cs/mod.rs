@@ -464,8 +464,8 @@ impl R1csFinal {
 }
 
 impl ProverData {
-    /// Check all assertions. Puts in 1 for challenges.
-    pub fn check_all(&self, values: &HashMap<String, Value>) {
+    /// Compute an R1CS witness (setting any challenges to 1s)
+    pub fn extend_r1cs_witness(&self, values: &HashMap<String, Value>) -> HashMap<Var, FieldV> {
         // we need to evaluate all R1CS variables
         let mut var_values: HashMap<Var, FieldV> = Default::default();
         let mut eval = wit_comp::StagedWitCompEvaluator::new(&self.precompute);
@@ -504,7 +504,11 @@ impl ProverData {
                 }
             }
         }
-        self.r1cs.check_all(&var_values);
+        var_values
+    }
+    /// Check all assertions. Puts in 1 for challenges.
+    pub fn check_all(&self, values: &HashMap<String, Value>) {
+        self.r1cs.check_all(&self.extend_r1cs_witness(values));
     }
 
     /// How many commitments?

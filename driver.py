@@ -44,8 +44,6 @@ def check(features):
     cmd = ["cargo", "check", "--tests", "--examples", "--benches", "--bins"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
 
 
@@ -82,8 +80,6 @@ def build(features):
 
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
 
     log_run_check(cmd)
 
@@ -114,9 +110,6 @@ def test(features, extra_args):
     if features:
         test_cmd += ["--features"] + [",".join(features)]
         test_cmd_release += ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            test_cmd += ["--no-default-features"]
-            test_cmd_release += ["--no-default-features"]
     if len(extra_args) > 0:
         test_cmd += [a for a in extra_args if a != "--"]
         test_cmd_release += [a for a in extra_args if a != "--"]
@@ -135,7 +128,7 @@ def test(features, extra_args):
         if "lp" in features:
             log_run_check(["./scripts/test_zok_to_ilp.zsh"])
         if "r1cs" in features:
-            if "ristretto255" in features:  # spartan field
+            if "spartan" in features:  # spartan field
                 log_run_check(["./scripts/spartan_zok_test.zsh"])
             else:  # bellman field
                 log_run_check(["./scripts/zokrates_test.zsh"])
@@ -168,8 +161,6 @@ def benchmark(features):
 
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
 
 
@@ -192,8 +183,6 @@ def lint():
     cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
 
 
@@ -201,8 +190,6 @@ def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     cmd += extra
     print("running:", " ".join(cmd))
     log_run_check(cmd)
@@ -243,7 +230,7 @@ def set_features(features):
         features = set()
 
     def verify_feature(f):
-        if f in cargo_features | {"ristretto255"}:
+        if f in cargo_features:
             return True
         return False
 

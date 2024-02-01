@@ -17,15 +17,17 @@ case "$OSTYPE" in
     ;;
 esac
 
+modulus=7237005577332262213973186563042994240857116359379907606001950938285454250989
+
 function r1cs_test {
     zpath=$1
-    measure_time $BIN $zpath r1cs --action count
+    measure_time $BIN --field-custom-modulus $modulus $zpath r1cs --action count
 }
 
 function r1cs_test_count {
     zpath=$1
     threshold=$2
-    o=$($BIN $zpath r1cs --action count)
+    o=$($BIN --field-custom-modulus $modulus $zpath r1cs --action count)
     n_constraints=$(echo $o | grep 'Final R1cs size:' | grep -Eo '\b[0-9]+\b')
     [[ $n_constraints -lt $threshold ]] || (echo "Got $n_constraints, expected < $threshold" && exit 1)
 }
@@ -34,15 +36,15 @@ function r1cs_test_count {
 # examples that don't need modulus change
 function pf_test {
     ex_name=$1
-    $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action spartansetup
+    $BIN --field-custom-modulus $modulus examples/ZoKrates/pf/$ex_name.zok r1cs --action spartan-setup
     $ZK_BIN --pin examples/ZoKrates/pf/$ex_name.zok.pin --vin examples/ZoKrates/pf/$ex_name.zok.vin --action spartan
     rm -rf P V pi
 }
 
-# Test prove workflow with --z-isolate-asserts, given an example name
+# Test prove workflow with --zsharp-isolate-asserts, given an example name
 function spartan_test_isolate {
     ex_name=$1
-    $BIN --z-isolate-asserts examples/ZoKrates/spartan/$ex_name.zok r1cs --action spartansetup
+    $BIN --field-custom-modulus $modulus --zsharp-isolate-asserts true examples/ZoKrates/spartan/$ex_name.zok r1cs --action spartan-setup
     $ZK_BIN --pin examples/ZoKrates/spartan/$ex_name.zok.pin --vin examples/ZoKrates/spartan/$ex_name.zok.vin --action spartan
     rm -rf P V pi
 }
@@ -50,10 +52,12 @@ function spartan_test_isolate {
 # Test prove workflow, given an example name
 function spartan_test {
     ex_name=$1
-    $BIN examples/ZoKrates/spartan/$ex_name.zok r1cs --action spartansetup
-    $ZK_BIN --pin examples/ZoKrates/spartan/$ex_name.zok.pin --vin examples/ZoKrates/spartan/$ex_name.zok.vin --action spartan
+    $BIN --field-custom-modulus $modulus examples/ZoKrates/spartan/$ex_name.zok r1cs --action spartan-setup
+    $ZK_BIN --field-custom-modulus $modulus --pin examples/ZoKrates/spartan/$ex_name.zok.pin --vin examples/ZoKrates/spartan/$ex_name.zok.vin --action spartan
     rm -rf P V pi
 }
+
+spartan_test assert
 
 r1cs_test_count ./examples/ZoKrates/pf/mm4_cond.zok 120
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
@@ -70,7 +74,6 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zo
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
 
-spartan_test assert
 spartan_test_isolate isolate_assert
 pf_test 3_plus
 pf_test xor
