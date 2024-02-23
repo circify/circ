@@ -122,7 +122,7 @@ impl<'a> Loader for &'a ZLoad {
 
     fn parse<P: AsRef<Path>>(&self, p: &P) -> Result<Self::AST, Self::ParseError> {
         let mut s = String::new();
-        File::open(p).unwrap().read_to_string(&mut s).unwrap();
+        File::open(p)?.read_to_string(&mut s).unwrap();
         debug!("Parsing: {}", p.as_ref().display());
         let s = self.sources.alloc(s);
         let ast = ast::generate_ast(s);
