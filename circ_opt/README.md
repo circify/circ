@@ -129,6 +129,16 @@ Options:
           - waksman: Use the AS-Waksman network
           - msh:     Use the (keyed) multi-set hash
 
+      --ram-rom <ROM>
+          ROM approach
+          
+          [env: RAM_ROM=]
+          [default: haboeck]
+
+          Possible values:
+          - haboeck: Use Haboeck's argument
+          - permute: Use permute-and-check
+
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use
           
@@ -210,6 +220,8 @@ Options:
           How to argue that indices are only repeated in blocks [env: RAM_INDEX=] [default: uniqueness] [possible values: sort, uniqueness]
       --ram-permutation <PERMUTATION>
           How to argue that indices are only repeated in blocks [env: RAM_PERMUTATION=] [default: msh] [possible values: waksman, msh]
+      --ram-rom <ROM>
+          ROM approach [env: RAM_ROM=] [default: haboeck] [possible values: haboeck, permute]
       --fmt-use-default-field <USE_DEFAULT_FIELD>
           Which field to use [env: FMT_USE_DEFAULT_FIELD=] [default: true] [possible values: true, false]
       --fmt-hide-field <HIDE_FIELD>
@@ -253,6 +265,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -298,6 +311,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -341,6 +355,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -384,6 +399,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -427,6 +443,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -470,6 +487,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -513,6 +531,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -556,6 +575,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -602,6 +622,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -646,6 +667,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -692,6 +714,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -736,6 +759,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -782,6 +806,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,
@@ -826,6 +851,7 @@ BinaryOpt {
             range: Sort,
             index: Uniqueness,
             permutation: Msh,
+            rom: Haboeck,
         },
         fmt: FmtOpt {
             use_default_field: true,

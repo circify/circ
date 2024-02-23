@@ -1094,6 +1094,17 @@ impl<'cfg> ToR1cs<'cfg> {
                         i
                     }
                 },
+                Op::PfDiv => match self.cfg.r1cs.div_by_zero {
+                    FieldDivByZero::Incomplete => {
+                        // ix = y
+                        let y = self.get_pf(&c.cs()[0]).clone();
+                        let x = self.get_pf(&c.cs()[1]).clone();
+                        let div = self.fresh_wit("div", term![PF_DIV; y.0.clone(), x.0.clone()]);
+                        self.constraint(x.1, div.1.clone(), y.1);
+                        div
+                    }
+                    _ => unimplemented!(),
+                },
                 _ => panic!("Non-field in embed_pf: {}", c),
             };
             self.cache.insert(c.clone(), EmbeddedTerm::Field(lc));

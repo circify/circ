@@ -50,6 +50,15 @@ function transcript_type_test {
     fi
 }
 
+function cs_count_test {
+    ex_name=$1
+    cs_upper_bound=$2
+    rm -rf P V pi
+    output=$($BIN $ex_name r1cs --action count |& cat)
+    n_constraints=$(echo "$output" | grep 'Final R1cs size:' | grep -Eo '\b[0-9]+\b')
+    [[ $n_constraints -lt $cs_upper_bound ]] || (echo "Got $n_constraints, expected < $cs_upper_bound" && exit 1)
+}
+
 transcript_count_test ./examples/ZoKrates/pf/mem/volatile.zok 1
 transcript_count_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok 1
 transcript_count_test ./examples/ZoKrates/pf/mem/volatile_struct.zok 1
@@ -58,6 +67,9 @@ transcript_count_test ./examples/ZoKrates/pf/mem/arr_of_str_of_arr.zok 1
 
 transcript_type_test ./examples/ZoKrates/pf/mem/volatile_struct.zok "RAM"
 transcript_type_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok "covering ROM"
+
+# A=400; N=20; L=2; expected cost ~= N + A(L+1) = 1220
+cs_count_test ./examples/ZoKrates/pf/mem/rom.zok 1230
 
 ram_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 ram_test ./examples/ZoKrates/pf/mem/volatile.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"

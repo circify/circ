@@ -183,6 +183,7 @@ impl DisplayIr for Op {
             Op::FpToFp(a) => write!(f, "(fp2fp {a})"),
             Op::PfUnOp(a) => write!(f, "{a}"),
             Op::PfNaryOp(a) => write!(f, "{a}"),
+            Op::PfDiv => write!(f, "/"),
             Op::IntNaryOp(a) => write!(f, "{a}"),
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
@@ -225,6 +226,7 @@ impl DisplayIr for Op {
 impl DisplayIr for ext::ExtOp {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         match self {
+            ext::ExtOp::Haboeck => write!(f, "haboeck"),
             ext::ExtOp::PersistentRamSplit => write!(f, "persistent_ram_split"),
             ext::ExtOp::UniqDeriGcd => write!(f, "uniq_deri_gcd"),
             ext::ExtOp::Sort => write!(f, "sort"),

@@ -71,12 +71,13 @@ pub struct AccessCfg {
     split_times: bool,
     waksman: bool,
     covering_rom: bool,
+    haboeck: bool,
 }
 
 impl AccessCfg {
     /// Create a new configuration
     pub fn new(field: FieldT, opt: RamOpt, create: bool) -> Self {
-        use circ_opt::{IndexStrategy, PermutationStrategy, RangeStrategy};
+        use circ_opt::{IndexStrategy, PermutationStrategy, RangeStrategy, RomStrategy};
         Self {
             false_: bool_lit(false),
             true_: bool_lit(true),
@@ -88,6 +89,7 @@ impl AccessCfg {
             split_times: opt.range == RangeStrategy::BitSplit,
             waksman: opt.permutation == PermutationStrategy::Waksman,
             covering_rom: false,
+            haboeck: opt.rom == RomStrategy::Haboeck,
         }
     }
     /// Create a default configuration, with this field.
@@ -103,6 +105,7 @@ impl AccessCfg {
             split_times: false,
             waksman: false,
             covering_rom: false,
+            haboeck: true,
         }
     }
     /// Create a new default configuration
@@ -278,6 +281,7 @@ impl Access {
         }
     }
 
+    /// Serialize a value as field elements.
     fn val_to_field_elements(val: &Term, c: &AccessCfg, out: &mut Vec<Term>) {
         match check(val) {
             Sort::Field(_) | Sort::Bool | Sort::BitVector(_) => out.push(scalar_to_field(val, c)),
