@@ -135,6 +135,8 @@ pub enum Op {
     PfChallenge(String, FieldT),
     /// Requires the input pf element to fit in this many (unsigned) bits.
     PfFitsInBits(usize),
+    /// Prime-field division
+    PfDiv,
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -247,6 +249,8 @@ pub const BV_CONCAT: Op = Op::BvConcat;
 pub const PF_NEG: Op = Op::PfUnOp(PfUnOp::Neg);
 /// prime-field reciprocal
 pub const PF_RECIP: Op = Op::PfUnOp(PfUnOp::Recip);
+/// prime-field division
+pub const PF_DIV: Op = Op::PfDiv;
 /// prime-field addition
 pub const PF_ADD: Op = Op::PfNaryOp(PfNaryOp::Add);
 /// prime-field multiplication
@@ -296,6 +300,7 @@ impl Op {
             Op::SbvToFp(_) => Some(1),
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
+            Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
             Op::PfChallenge(_, _) => None,
             Op::PfFitsInBits(..) => Some(1),
@@ -1425,6 +1430,11 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 }
                 PfUnOp::Neg => -a,
             }
+        }),
+        Op::PfDiv => Value::Field({
+            let a = args[0].as_pf().clone();
+            let b = args[1].as_pf().clone();
+            a * b.recip()
         }),
         Op::PfNaryOp(o) => Value::Field({
             let mut xs = args.iter().map(|a| a.as_pf().clone());

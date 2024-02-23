@@ -281,6 +281,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"+") => Ok(Op::PfNaryOp(PfNaryOp::Add)),
             Leaf(Ident, b"*") => Ok(Op::PfNaryOp(PfNaryOp::Mul)),
             Leaf(Ident, b"pfrecip") => Ok(Op::PfUnOp(PfUnOp::Recip)),
+            Leaf(Ident, b"/") => Ok(Op::PfDiv),
             Leaf(Ident, b"-") => Ok(Op::PfUnOp(PfUnOp::Neg)),
             Leaf(Ident, b"<") => Ok(INT_LT),
             Leaf(Ident, b"<=") => Ok(INT_LE),
@@ -1318,6 +1319,22 @@ mod test {
          (pairs (array (mod 17) (tuple (mod 17) bool) 5))
         )
          (uniq_deri_gcd pairs))",
+        );
+        let s = serialize_term(&t);
+        println!("{s}");
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn haboeck_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (haystack (array (mod 17) (mod 17) 5))
+         (needles (array (mod 17) (mod 17) 8))
+        )
+         (haboeck haystack needles))",
         );
         let s = serialize_term(&t);
         println!("{s}");

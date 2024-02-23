@@ -64,7 +64,7 @@ approx = "0.5.0"
 default = []
 # frontends
 c = ["lang-c"]
-zok = ["zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
+zok = ["smt", "zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
 datalog = ["pest", "pest-ast", "pest_derive", "from-pest", "lazy_static"]
 # backends
 smt = ["rsmt2", "ieee754"]
