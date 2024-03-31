@@ -38,9 +38,13 @@ function pf_test {
     for proof_impl in groth16 mirage
     do
         ex_name=$1
+        # compile the circuit to R1CS and then perform zkSNARK Setup, storing pk and vk in files P and V respectively
         $BIN examples/ZoKrates/pf/$ex_name.zok r1cs --action setup --proof-impl $proof_impl
+        # create a proof using the prover input (x,w) stored in the .pin file
         $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.pin --action prove --proof-impl $proof_impl
+        # verify a proof using the verifier input (x) stored in the .vin file
         $ZK_BIN --inputs examples/ZoKrates/pf/$ex_name.zok.vin --action verify --proof-impl $proof_impl
+        # clean up
         rm -rf P V pi
     done
 }
