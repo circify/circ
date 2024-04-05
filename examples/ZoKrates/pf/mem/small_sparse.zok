@@ -1,0 +1,32 @@
+// dense to sparse
+// Inputs:    00    01    10    11
+// Outputs: 0000  0001  0100  0101
+const transcript field[4] DENSE_TO_SPARSE = [0f, 1f, 4f, 5f]
+
+from "EMBED" import unpack, value_in_array, reverse_lookup
+
+def split_sparse_bits<N>(field x) -> field[2]:
+  bool[2*N] bits = unpack(x)
+  field even = 0
+  field odd = 0
+  for u32 i in 0..N do
+    even = even + 4 ** i * (if bits[2*N-1-(2*i)] then 1 else 0 fi)
+    odd = odd + 4 ** i * (if bits[2*N-1-(2*i+1)] then 1 else 0 fi)
+  endfor
+  return [even, odd]
+
+
+//do a bitwise AND.
+def main(private field x, private field y) -> field:
+  field sy = DENSE_TO_SPARSE[y]
+  field sx = DENSE_TO_SPARSE[x]
+  unsafe witness field[2] split = split_sparse_bits::<2>(sx + sy)
+  field even = split[0]
+  field odd = split[1]
+  assert(value_in_array(even, DENSE_TO_SPARSE))
+  field odd_dense = reverse_lookup(DENSE_TO_SPARSE, odd)
+  assert(sx + sy == 2 * odd + even)
+  return odd_dense
+
+
+

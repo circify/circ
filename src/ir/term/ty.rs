@@ -3,6 +3,7 @@
 use super::*;
 
 use std::cell::RefCell;
+use std::convert::TryFrom;
 
 use circ_hc::collections::cache::NodeCache;
 
@@ -61,6 +62,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
         Op::PfChallenge(_, _) => Vec::new(),
+        Op::Witness(_) => vec![t.cs()[0].clone()],
         Op::PfFitsInBits(_) => Vec::new(),
         Op::Select => vec![t.cs()[0].clone()],
         Op::Store => vec![t.cs()[0].clone()],
@@ -138,6 +140,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::IntBinPred(_) => Ok(Sort::Bool),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
         Op::PfChallenge(_, m) => Ok(Sort::Field(m.clone())),
+        Op::Witness(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfFitsInBits(_) => Ok(Sort::Bool),
         Op::Select => array_or(get_ty(&t.cs()[0]), "select").map(|(_, v, _)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs()[0]).clone()),
@@ -278,9 +281,9 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             let ctx = "bv nary op";
             all_eq_or(a.iter().cloned(), ctx)
                 .and_then(|t| bv_or(t, ctx))
-                .map(|a| a.clone())
+                .cloned()
         }
-        (Op::BvUnOp(_), &[a]) => bv_or(a, "bv unary op").map(|a| a.clone()),
+        (Op::BvUnOp(_), &[a]) => bv_or(a, "bv unary op").cloned(),
         (Op::BoolToBv, &[Sort::Bool]) => Ok(Sort::BitVector(1)),
         (Op::BvExtract(high, low), &[Sort::BitVector(w)]) => {
             if low <= high && high < w {
@@ -311,9 +314,9 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             let ctx = "bool nary op";
             all_eq_or(a.iter().cloned(), ctx)
                 .and_then(|t| bool_or(t, ctx))
-                .map(|a| a.clone())
+                .cloned()
         }
-        (Op::Not, &[a]) => bool_or(a, "bool unary op").map(|a| a.clone()),
+        (Op::Not, &[a]) => bool_or(a, "bool unary op").cloned(),
         (Op::BvBit(i), &[Sort::BitVector(w)]) => {
             if i < w {
                 Ok(Sort::Bool)
@@ -327,7 +330,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             let ctx = "bool majority";
             bool_or(a, ctx)
                 .and_then(|_| bool_or(b, ctx).and_then(|_| bool_or(c, ctx)))
-                .map(|c| c.clone())
+                .cloned()
         }
         (Op::FpBinOp(_), &[a, b]) => {
             let ctx = "fp binary op";
@@ -341,7 +344,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 .and_then(|_| eq_or(a, b, ctx))
                 .map(|_| Sort::Bool)
         }
-        (Op::FpUnOp(_), &[a]) => fp_or(a, "fp unary op").map(|a| a.clone()),
+        (Op::FpUnOp(_), &[a]) => fp_or(a, "fp unary op").cloned(),
         (Op::FpUnPred(_), &[a]) => fp_or(a, "fp unary predicate").map(|_| Sort::Bool),
         (Op::BvToFp, &[Sort::BitVector(64)]) => Ok(Sort::F64),
         (Op::BvToFp, &[Sort::BitVector(32)]) => Ok(Sort::F64),
@@ -355,20 +358,19 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             let ctx = "pf nary op";
             all_eq_or(a.iter().cloned(), ctx)
                 .and_then(|t| pf_or(t, ctx))
-                .map(|a| a.clone())
+                .cloned()
         }
         (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
         (Op::PfChallenge(_, m), _) => Ok(Sort::Field(m.clone())),
+        (Op::Witness(_), &[a]) => Ok(a.clone()),
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),
-        (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
-        (Op::PfDiv, &[a, b]) => {
-            eq_or(&pf_or(a, "pf / op").map(|a| a.clone())?, b, "pf / op").cloned()
-        }
+        (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").cloned(),
+        (Op::PfDiv, &[a, b]) => eq_or(&pf_or(a, "pf / op").cloned()?, b, "pf / op").cloned(),
         (Op::IntNaryOp(_), a) => {
             let ctx = "int nary op";
             all_eq_or(a.iter().cloned(), ctx)
                 .and_then(|t| int_or(t, ctx))
-                .map(|a| a.clone())
+                .cloned()
         }
         (Op::IntBinPred(_), &[a, b]) => int_or(a, "int bin pred")
             .and_then(|_| int_or(b, "int bin pred"))
@@ -542,6 +544,8 @@ pub enum TypeErrorReason {
     ExpectedPf(Sort, &'static str),
     /// A sort should be an array
     ExpectedArray(Sort, &'static str),
+    /// A sort should be a map
+    ExpectedMap(Sort, &'static str),
     /// A sort should be a tuple
     ExpectedTuple(&'static str),
     /// An empty n-ary operator.
@@ -578,6 +582,17 @@ pub(super) fn array_or<'a>(
         Ok((k, v, *size))
     } else {
         Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
+    }
+}
+
+pub(super) fn map_or<'a>(
+    a: &'a Sort,
+    ctx: &'static str,
+) -> Result<(&'a Sort, &'a Sort), TypeErrorReason> {
+    if let Sort::Map(k, v) = a {
+        Ok((k, v))
+    } else {
+        Err(TypeErrorReason::ExpectedMap(a.clone(), ctx))
     }
 }
 
@@ -650,4 +665,10 @@ fn all_eq_or<'a, I: Iterator<Item = &'a Sort>>(
         }
     }
     Ok(first)
+}
+
+pub(super) fn count_or<'a, const N: usize>(
+    sorts: &'a [&'a Sort],
+) -> Result<&'a [&'a Sort; N], TypeErrorReason> {
+    <&'a [&'a Sort; N]>::try_from(sorts).map_err(|_| TypeErrorReason::ExpectedArgs(N, sorts.len()))
 }

@@ -8,7 +8,7 @@ disable -r time
 # cargo build --features "zok smt bellman" --example circ --example zk
 
 MODE=release
-MODE=debug
+# MODE=debug
 BIN=./target/$MODE/examples/circ
 ZK_BIN=./target/$MODE/examples/zk
 
@@ -82,6 +82,11 @@ ram_test ./examples/ZoKrates/pf/mem/volatile.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/volatile_struct.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/arr_of_str.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/arr_of_str_of_arr.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/in_array.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/small_sparse.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/reverse_lookup.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/sparse.zok mirage ""
+
 
 # challenges
 ram_test ./examples/ZoKrates/pf/chall/simple.zok mirage ""

@@ -23,7 +23,7 @@ pub use ast::{
     SymbolDeclaration, TernaryExpression, ToExpression, Type, TypeDefinition, TypedIdentifier,
     TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type, U32NumberExpression,
     U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
-    U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, EOI,
+    U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, WitnessStatement, EOI,
 };
 
 mod ast {
@@ -406,6 +406,7 @@ mod ast {
     pub enum Statement<'ast> {
         Return(ReturnStatement<'ast>),
         Definition(DefinitionStatement<'ast>),
+        Witness(WitnessStatement<'ast>),
         Assertion(AssertionStatement<'ast>),
         CondStore(CondStoreStatement<'ast>),
         Iteration(IterationStatement<'ast>),
@@ -416,6 +417,7 @@ mod ast {
             match self {
                 Statement::Return(x) => &x.span,
                 Statement::Definition(x) => &x.span,
+                Statement::Witness(x) => &x.span,
                 Statement::Assertion(x) => &x.span,
                 Statement::CondStore(x) => &x.span,
                 Statement::Iteration(x) => &x.span,
@@ -427,6 +429,16 @@ mod ast {
     #[pest_ast(rule(Rule::definition_statement))]
     pub struct DefinitionStatement<'ast> {
         pub lhs: Vec<TypedIdentifierOrAssignee<'ast>>,
+        pub expression: Expression<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::witness_statement))]
+    pub struct WitnessStatement<'ast> {
+        pub ty: Type<'ast>,
+        pub id: IdentifierExpression<'ast>,
         pub expression: Expression<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,

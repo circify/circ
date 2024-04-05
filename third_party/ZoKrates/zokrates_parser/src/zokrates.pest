@@ -57,6 +57,7 @@ statement = { (return_statement // does not require subsequent newline
                 | definition_statement
                 | expression_statement
                 | cond_store_statement
+                | witness_statement
                 ) ~ NEWLINE
             ) ~ NEWLINE* }
 
@@ -64,6 +65,7 @@ iteration_statement = { "for" ~ ty ~ identifier ~ "in" ~ expression ~ ".." ~ exp
 return_statement = { "return" ~ expression_list}
 definition_statement = { typed_identifier_or_assignee_list ~ "=" ~ expression } // declare and assign, so only identifiers are allowed, unlike `assignment_statement`
 expression_statement = {"assert" ~ "(" ~ expression ~ ("," ~ quoted_string)? ~ ")"}
+witness_statement = {"unsafe" ~ "witness" ~ ty ~ identifier ~ "=" ~ expression }
 cond_store_statement = {"cond_store" ~ "(" ~ identifier ~ "," ~ expression ~ "," ~ expression ~ "," ~ expression ~ ")"}
 
 typed_identifier_or_assignee_list = _{ typed_identifier_or_assignee ~ ("," ~ typed_identifier_or_assignee)* }

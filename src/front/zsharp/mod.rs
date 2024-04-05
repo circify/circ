@@ -101,6 +101,7 @@ struct ZGen<'ast> {
     assertions: RefCell<Vec<Term>>,
     challenge_count: Cell<usize>,
     isolate_asserts: bool,
+    in_witness_gen: Cell<bool>,
 }
 
 impl<'ast> Drop for ZGen<'ast> {
@@ -177,6 +178,7 @@ impl<'ast> ZGen<'ast> {
             assertions: Default::default(),
             challenge_count: Cell::new(0),
             isolate_asserts,
+            in_witness_gen: Cell::new(false),
         };
         this.circ
             .borrow()
@@ -364,6 +366,51 @@ impl<'ast> ZGen<'ast> {
                     let t = sample_challenge(args.pop().unwrap(), n)?;
                     self.challenge_count.set(n + 1);
                     Ok(t)
+                }
+            }
+            "value_in_array" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/value_in_array, expected 2",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/value_in_array, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let array = args.pop().unwrap();
+                    let value = args.pop().unwrap();
+                    let map = term![Op::ExtOp(ExtOp::ArrayToMap); array.term];
+                    let flip = term![Op::ExtOp(ExtOp::MapFlip); map];
+                    let contains = term![Op::ExtOp(ExtOp::MapContainsKey); flip, value.term];
+                    Ok(T::new(Ty::Bool, contains))
+                }
+            }
+            "reverse_lookup" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/reverse_lookup, expected 2",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/reverse_lookup, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let value = args.pop().unwrap();
+                    let array = args.pop().unwrap();
+                    let map = term![Op::ExtOp(ExtOp::ArrayToMap); array.term.clone()];
+                    let flip = term![Op::ExtOp(ExtOp::MapFlip); map];
+                    let key = term![Op::ExtOp(ExtOp::MapSelect); flip.clone(), value.term.clone()];
+                    let key_witness = term![Op::Witness("rlook".into()); key];
+                    if !self.in_witness_gen.get() {
+                        let eq_lookup = term![EQ; value.term, term![Op::Select; array.term, key_witness.clone()]];
+                        self.assert(eq_lookup)?;
+                    }
+                    Ok(T::new(Ty::Field, key_witness))
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{f_name}'")),
@@ -1224,7 +1271,7 @@ impl<'ast> ZGen<'ast> {
                     )),
                     _ => {
                         let b = bool(self.expr_impl_::<false>(&e.expression)?)?;
-                        self.assert(b);
+                        self.assert(b)?;
                         Ok(())
                     }
                 }
@@ -1321,6 +1368,25 @@ impl<'ast> ZGen<'ast> {
                     warn!("Statement with no LHS!");
                     Ok(())
                 }
+            }
+            ast::Statement::Witness(d) => {
+                if self.in_witness_gen.get() {
+                    return Err("already in witness generation".into());
+                }
+                self.in_witness_gen.set(true);
+                let wit_e = self.expr_impl_::<IS_CNST>(&d.expression)?;
+                self.in_witness_gen.set(false);
+                let decl_ty = self.type_impl_::<IS_CNST>(&d.ty)?;
+                let ty = wit_e.type_();
+                if &decl_ty != ty {
+                    return Err(format!(
+                        "Assignment type mismatch: {decl_ty} annotated vs {ty} actual",
+                    ));
+                }
+                let mut e = wit_e;
+                e.term = term![Op::Witness("wit".into()); e.term];
+                self.declare_init_impl_::<IS_CNST>(d.id.value.clone(), decl_ty, e)?;
+                Ok(())
             }
         }
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(s.span())))
@@ -1928,8 +1994,11 @@ impl<'ast> ZGen<'ast> {
             .map(|m| (m.as_ref(), s_path))
     }
 
-    fn assert(&self, asrt: Term) {
+    fn assert(&self, asrt: Term) -> Result<(), String> {
         debug_assert!(matches!(check(&asrt), Sort::Bool));
+        if self.in_witness_gen.get() {
+            return Err("cannot assert in witness generation".into());
+        }
         if self.isolate_asserts {
             let path = self.circ_condition();
             self.assertions
@@ -1938,6 +2007,7 @@ impl<'ast> ZGen<'ast> {
         } else {
             self.assertions.borrow_mut().push(asrt);
         }
+        Ok(())
     }
 
     fn mark_array_as_transcript(&self, name: &str, array: T) {

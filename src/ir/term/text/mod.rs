@@ -42,6 +42,7 @@
 //!     * `(mod I)`
 //!     * `(tuple S1 ... Sn)`
 //!     * `(array Sk Sv N)`
+//!     * `(map Sk Sv)`
 //!   * Value `V`:
 //!     * boolean: `true`, `false`
 //!     * integer: `I`
@@ -52,6 +53,7 @@
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!     * list: `(#l Sk (V1 ... Vn))`
 //!       * gives an array with default value sort, length n, and increasing keys for the values
+//!     * map: `(#m Sk Sv ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!   * Term `T`:
 //!     * value: `V`
 //!     * let: `(let ((X1 T1) ... (Xn Tn)) T)`
@@ -171,6 +173,7 @@ enum CtrlOp {
     Declare,
     TupleValue,
     ArrayValue,
+    MapValue,
     ListValue,
     SetDefaultModulus,
 }
@@ -222,6 +225,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"#t") => Err(CtrlOp::TupleValue),
             Leaf(Ident, b"#a") => Err(CtrlOp::ArrayValue),
             Leaf(Ident, b"#l") => Err(CtrlOp::ListValue),
+            Leaf(Ident, b"#m") => Err(CtrlOp::MapValue),
             Leaf(Ident, b"set_default_modulus") => Err(CtrlOp::SetDefaultModulus),
             Leaf(Ident, b"ite") => Ok(Op::Ite),
             Leaf(Ident, b"=") => Ok(Op::Eq),
@@ -357,6 +361,9 @@ impl<'src> IrInterp<'src> {
                         Box::new(self.sort(v)),
                         self.usize(s),
                     ),
+                    [Leaf(Ident, b"map"), k, v] => {
+                        Sort::Map(Box::new(self.sort(k)), Box::new(self.sort(v)))
+                    }
                     [Leaf(Ident, b"tuple"), ..] => {
                         Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
                     }
@@ -530,6 +537,15 @@ impl<'src> IrInterp<'src> {
                             Box::new(default),
                             vals.into_iter().collect(),
                             size,
+                        ))))
+                    }
+                    Err(CtrlOp::MapValue) => {
+                        assert_eq!(tts.len(), 4);
+                        let key_sort = self.sort(&tts[1]);
+                        let value_sort = self.sort(&tts[2]);
+                        let vals = self.value_alist(&tts[3]);
+                        leaf_term(Op::Const(Value::Map(map::Map::new(
+                            key_sort, value_sort, vals,
                         ))))
                     }
                     Err(CtrlOp::ListValue) => {
@@ -1022,6 +1038,22 @@ mod test {
                  (B (store A a b))
          ) (xor (select B a)
                 (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))",
+        );
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn map_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (a bool)
+         (b bool)
+         (A (map bool bool))
+         )
+         (#m bool bool ((true false))))",
         );
         let s = serialize_term(&t);
         let t2 = parse_term(s.as_bytes());

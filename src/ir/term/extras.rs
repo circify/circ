@@ -231,3 +231,18 @@ impl<'a, F: Fn(&Term) -> bool + 'a> std::iter::Iterator for PostOrderSkipIter<'a
         })
     }
 }
+
+/// Add every AND-descendent of `fact` that satisfies `op_predicate` to `assertions`.
+pub fn collect_asserted_ops(
+    fact: &Term,
+    op_predicate: &impl Fn(&Op) -> bool,
+    assertions: &mut TermSet,
+) {
+    if op_predicate(fact.op()) {
+        assertions.insert(fact.clone());
+    } else if fact.op() == &AND {
+        for c in fact.cs() {
+            collect_asserted_ops(c, op_predicate, assertions);
+        }
+    }
+}

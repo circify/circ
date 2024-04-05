@@ -16,6 +16,7 @@ use circ_opt::RamOpt;
 mod checker;
 mod hash;
 pub mod persistent;
+pub mod set;
 pub mod volatile;
 
 #[derive(Debug)]

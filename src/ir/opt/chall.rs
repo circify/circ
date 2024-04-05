@@ -28,10 +28,52 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use crate::ir::opt::visit::RewritePass;
+use crate::ir::proof::PROVER_ID;
 use crate::ir::term::*;
+use crate::util::ns::Uniquer;
+
+/// Replace witness terms with new variables.
+pub fn deskolemize_witnesses(comp: &mut Computation) {
+    // skip pass if no witnesses
+    if !comp
+        .terms_postorder()
+        .any(|t| matches!(t.op(), Op::Witness(..)))
+    {
+        return;
+    }
+
+    struct WitPass(Uniquer);
+
+    impl RewritePass for WitPass {
+        fn visit<F: Fn() -> Vec<Term>>(
+            &mut self,
+            computation: &mut Computation,
+            orig: &Term,
+            _rewritten_children: F,
+        ) -> Option<Term> {
+            if let Op::Witness(prefix) = orig.op() {
+                let name = self.0.mk_uniq(prefix);
+                let sort = check(orig);
+                let var = computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.clone()));
+                Some(var)
+            } else {
+                None
+            }
+        }
+    }
+
+    let names_iterator = comp
+        .terms_postorder()
+        .filter(|t| t.is_var())
+        .map(|t| t.as_var_name().to_string())
+        .chain(comp.precomputes.outputs().iter().map(|o| o.0.clone()))
+        .chain(comp.precomputes.inputs().iter().map(|o| o.0.clone()));
+    let uniqer = Uniquer::new(names_iterator);
+    WitPass(uniqer).traverse_full(comp, false, false);
+}
 
 /// Replace the challenge terms in this computation with random inputs.
-pub fn skolemize_challenges(comp: &mut Computation) {
+pub fn deskolemize_challenges(comp: &mut Computation) {
     for var in comp.metadata.ordered_input_names() {
         let md = comp.metadata.lookup(&var);
         assert_eq!(md.round, 0, "There are already rounds");
@@ -256,7 +298,7 @@ mod test {
         super::super::mem::ram::persistent::apply(&mut cs, &cfg);
         println!("{}", text::serialize_computation(&cs));
         assert_eq!(vec![Value::Bool(true)], cs.eval_all(&values));
-        skolemize_challenges(&mut cs);
+        deskolemize_challenges(&mut cs);
         println!("{}", text::serialize_computation(&cs));
         assert_eq!(vec![Value::Bool(true)], cs.eval_all(&values));
     }
