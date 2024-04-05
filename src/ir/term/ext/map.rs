@@ -61,5 +61,5 @@ pub fn check_map_contains_key(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReas
 /// Evaluate [super::ExtOp::MapContainsKey].
 pub fn eval_map_contains_key(args: &[&Value]) -> Value {
     let map = &args[0].as_map();
-    Value::Bool(map.contains_key(&args[1]))
+    Value::Bool(map.contains_key(args[1]))
 }

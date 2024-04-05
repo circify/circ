@@ -22,7 +22,7 @@ pub fn apply(c: &mut Computation) {
         let [map, key]: &[Term; 2] = containment.cs().try_into().unwrap();
         maps_to_keys
             .entry(map.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(key.clone());
     }
     let ns = Namespace::new();

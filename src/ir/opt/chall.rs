@@ -53,7 +53,7 @@ pub fn deskolemize_witnesses(comp: &mut Computation) {
         ) -> Option<Term> {
             if let Op::Witness(prefix) = orig.op() {
                 let name = self.0.mk_uniq(prefix);
-                let sort = check(&orig);
+                let sort = check(orig);
                 let var = computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.clone()));
                 Some(var)
             } else {
@@ -66,8 +66,8 @@ pub fn deskolemize_witnesses(comp: &mut Computation) {
         .terms_postorder()
         .filter(|t| t.is_var())
         .map(|t| t.as_var_name().to_string())
-        .chain(comp.precomputes.outputs().into_iter().map(|o| o.0.clone()))
-        .chain(comp.precomputes.inputs().into_iter().map(|o| o.0.clone()));
+        .chain(comp.precomputes.outputs().iter().map(|o| o.0.clone()))
+        .chain(comp.precomputes.inputs().iter().map(|o| o.0.clone()));
     let uniqer = Uniquer::new(names_iterator);
     WitPass(uniqer).traverse_full(comp, false, false);
 }

@@ -1371,7 +1371,7 @@ impl<'ast> ZGen<'ast> {
             }
             ast::Statement::Witness(d) => {
                 if self.in_witness_gen.get() {
-                    return Err(format!("already in witness generation"));
+                    return Err("already in witness generation".into());
                 }
                 self.in_witness_gen.set(true);
                 let wit_e = self.expr_impl_::<IS_CNST>(&d.expression)?;
@@ -1997,7 +1997,7 @@ impl<'ast> ZGen<'ast> {
     fn assert(&self, asrt: Term) -> Result<(), String> {
         debug_assert!(matches!(check(&asrt), Sort::Bool));
         if self.in_witness_gen.get() {
-            return Err(format!("cannot assert in witness generation"));
+            return Err("cannot assert in witness generation".into());
         }
         if self.isolate_asserts {
             let path = self.circ_condition();
