@@ -442,6 +442,10 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_definition_statement(self, def)
     }
 
+    fn visit_witness_statement(&mut self, def: &mut ast::WitnessStatement<'ast>) -> ZVisitorResult {
+        walk_witness_statement(self, def)
+    }
+
     fn visit_typed_identifier_or_assignee(
         &mut self,
         tioa: &mut ast::TypedIdentifierOrAssignee<'ast>,

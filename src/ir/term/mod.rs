@@ -40,6 +40,7 @@ pub mod ext;
 pub mod extras;
 pub mod fmt;
 pub mod lin;
+pub mod map;
 pub mod precomp;
 pub mod serde_mods;
 pub mod text;
@@ -137,6 +138,10 @@ pub enum Op {
     PfFitsInBits(usize),
     /// Prime-field division
     PfDiv,
+
+    /// Receive a value from the prover (in a proof)
+    /// The string is a name for it; does not need to be unique.
+    Witness(String),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -303,6 +308,7 @@ impl Op {
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
             Op::PfChallenge(_, _) => None,
+            Op::Witness(_) => Some(1),
             Op::PfFitsInBits(..) => Some(1),
             Op::IntNaryOp(_) => None,
             Op::IntBinPred(_) => Some(2),
@@ -689,6 +695,8 @@ pub enum Value {
     Bool(bool),
     /// Array
     Array(Array),
+    /// Map
+    Map(map::Map),
     /// Tuple
     Tuple(Box<[Value]>),
 }
@@ -823,6 +831,7 @@ impl std::hash::Hash for Value {
             Value::Field(bv) => bv.hash(state),
             Value::Bool(bv) => bv.hash(state),
             Value::Array(a) => a.hash(state),
+            Value::Map(a) => a.hash(state),
             Value::Tuple(s) => {
                 s.hash(state);
             }
@@ -849,6 +858,8 @@ pub enum Sort {
     ///
     /// size presumes an order, and a zero, for the key sort.
     Array(Box<Sort>, Box<Sort>, usize),
+    /// Map from one sort to another.
+    Map(Box<Sort>, Box<Sort>),
     /// A tuple
     Tuple(Box<[Sort]>),
 }
@@ -903,6 +914,21 @@ impl Sort {
     /// Is this an array?
     pub fn is_array(&self) -> bool {
         matches!(self, Sort::Array(..))
+    }
+
+    #[track_caller]
+    /// Unwrap the constituent sorts of this array, panicking otherwise.
+    pub fn as_map(&self) -> (&Sort, &Sort) {
+        if let Sort::Map(k, v) = self {
+            (k, v)
+        } else {
+            panic!("{} is not a map", self)
+        }
+    }
+
+    /// Is this a map?
+    pub fn is_map(&self) -> bool {
+        matches!(self, Sort::Map(..))
     }
 
     /// The nth element of this sort.
@@ -1001,12 +1027,17 @@ impl Sort {
             Sort::F64 => Value::F64(0.0),
             Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
             Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
+            Sort::Map(k, v) => Value::Map(map::Map::new(
+                (**k).clone(),
+                (**v).clone(),
+                std::iter::empty(),
+            )),
         }
     }
 
     /// Is this a scalar?
     pub fn is_scalar(&self) -> bool {
-        !matches!(self, Sort::Tuple(..) | Sort::Array(..))
+        !matches!(self, Sort::Tuple(..) | Sort::Array(..) | Sort::Map(..))
     }
 }
 
@@ -1130,6 +1161,15 @@ impl Term {
         }
     }
 
+    /// Get the underlying map constant, if possible.
+    pub fn as_map_opt(&self) -> Option<&map::Map> {
+        if let Op::Const(Value::Map(a)) = &self.op() {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
     /// Get the underlying constant value, if possible.
     pub fn as_value_opt(&self) -> Option<&Value> {
         if let Op::Const(v) = &self.op() {
@@ -1176,6 +1216,11 @@ impl Value {
                 size,
                 ..
             }) => Sort::Array(Box::new(key_sort.clone()), Box::new(default.sort()), *size),
+            Value::Map(map::Map {
+                key_sort,
+                value_sort,
+                ..
+            }) => Sort::Map(Box::new(key_sort.clone()), Box::new(value_sort.clone())),
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -1232,6 +1277,16 @@ impl Value {
             w
         } else {
             panic!("{} is not an aray", self)
+        }
+    }
+
+    #[track_caller]
+    /// Unwrap the constituent value of this map, panicking otherwise.
+    pub fn as_map(&self) -> &map::Map {
+        if let Value::Map(w) = self {
+            w
+        } else {
+            panic!("{} is not a map", self)
         }
     }
 
@@ -1470,6 +1525,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
         Op::PfChallenge(name, field) => Value::Field(pf_challenge(name, field)),
+        Op::Witness(_) => args[0].clone(),
         Op::PfFitsInBits(n_bits) => {
             Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
         }

@@ -84,294 +84,312 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
             continue;
         }
 
-        let mut get = |i: usize| c_get(&t.cs()[i]);
-        let new_t_opt = match &t.op() {
-            Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
-            Op::Implies => match get(0).as_bool_opt() {
-                Some(true) => Some(get(1)),
-                Some(false) => cbool(true),
-                None => match get(1).as_bool_opt() {
-                    Some(true) => cbool(true),
-                    Some(false) => Some(term![NOT; get(0)]),
-                    None => None,
+        let args: Vec<Term> = t.cs().iter().map(&mut c_get).collect();
+        let const_args: Vec<&Value> = args.iter().filter_map(|a| a.as_value_opt()).collect();
+        let new_t_opt = if const_args.len() == args.len() && !t.is_var() {
+            Some(leaf_term(Op::Const(eval_op(
+                t.op(),
+                &const_args,
+                &Default::default(),
+            ))))
+        } else {
+            let mut get = |i: usize| c_get(&t.cs()[i]);
+            match &t.op() {
+                Op::Not => get(0).as_bool_opt().and_then(|c| cbool(!c)),
+                Op::Implies => match get(0).as_bool_opt() {
+                    Some(true) => Some(get(1)),
+                    Some(false) => cbool(true),
+                    None => match get(1).as_bool_opt() {
+                        Some(true) => cbool(true),
+                        Some(false) => Some(term![NOT; get(0)]),
+                        None => None,
+                    },
                 },
-            },
-            Op::BvBit(i) => match get(0).as_bv_opt() {
-                Some(bv) => cbool(bv.bit(*i)),
-                _ => None,
-            },
-            Op::BoolNaryOp(o) => match o {
-                BoolNaryOp::Xor => Some((*o).flatten(t.cs().iter().map(c_get))),
-                BoolNaryOp::Or => {
-                    // (a || a) = a
-                    // (a || !a) = true
-                    let flattened = (*o).flatten(t.cs().iter().map(c_get));
-                    Some(if *flattened.op() == OR {
+                Op::BvBit(i) => match get(0).as_bv_opt() {
+                    Some(bv) => cbool(bv.bit(*i)),
+                    _ => None,
+                },
+                Op::BoolNaryOp(o) => match o {
+                    BoolNaryOp::Xor => Some((*o).flatten(t.cs().iter().map(c_get))),
+                    BoolNaryOp::Or => {
+                        // (a || a) = a
+                        // (a || !a) = true
+                        let flattened = (*o).flatten(t.cs().iter().map(c_get));
+                        Some(if *flattened.op() == OR {
+                            let mut dedup_children = TermSet::default();
+                            for t in flattened.cs().iter() {
+                                if dedup_children.contains(&term![Op::Not; t.clone()]) {
+                                    dedup_children.remove(&term![Op::Not; t.clone()]);
+                                } else {
+                                    dedup_children.insert(t.clone());
+                                }
+                            }
+
+                            match dedup_children.len().cmp(&1) {
+                                Ordering::Less => flattened,
+                                Ordering::Equal => {
+                                    dedup_children.into_iter().collect_vec()[0].clone()
+                                }
+                                Ordering::Greater => {
+                                    term(OR, dedup_children.into_iter().collect_vec())
+                                }
+                            }
+                        } else {
+                            flattened
+                        })
+                    }
+                    BoolNaryOp::And => {
+                        // (a && a) = a
+                        // (a && !a) = false
+                        let flattened = (*o).flatten(t.cs().iter().map(c_get));
                         let mut dedup_children = TermSet::default();
-                        for t in flattened.cs().iter() {
-                            if dedup_children.contains(&term![Op::Not; t.clone()]) {
-                                dedup_children.remove(&term![Op::Not; t.clone()]);
-                            } else {
+                        Some(if *flattened.op() == AND {
+                            for t in flattened.cs().iter() {
+                                if dedup_children.contains(&term![Op::Not; t.clone()]) {
+                                    return bool_lit(false);
+                                }
                                 dedup_children.insert(t.clone());
                             }
-                        }
-
-                        match dedup_children.len().cmp(&1) {
-                            Ordering::Less => flattened,
-                            Ordering::Equal => dedup_children.into_iter().collect_vec()[0].clone(),
-                            Ordering::Greater => term(OR, dedup_children.into_iter().collect_vec()),
-                        }
-                    } else {
-                        flattened
-                    })
-                }
-                BoolNaryOp::And => {
-                    // (a && a) = a
-                    // (a && !a) = false
-                    let flattened = (*o).flatten(t.cs().iter().map(c_get));
-                    let mut dedup_children = TermSet::default();
-                    Some(if *flattened.op() == AND {
-                        for t in flattened.cs().iter() {
-                            if dedup_children.contains(&term![Op::Not; t.clone()]) {
-                                return bool_lit(false);
-                            }
-                            dedup_children.insert(t.clone());
-                        }
-                        match dedup_children.len().cmp(&1) {
-                            Ordering::Less => flattened,
-                            Ordering::Equal => dedup_children.iter().collect_vec()[0].clone(),
-                            Ordering::Greater => {
-                                term(AND, dedup_children.into_iter().collect_vec())
-                            }
-                        }
-                    } else {
-                        flattened
-                    })
-                }
-            },
-            Op::Eq => {
-                let c0 = get(0);
-                let c1 = get(1);
-                match (c0.as_value_opt(), c1.as_value_opt()) {
-                    (Some(Value::BitVector(b0)), Some(Value::BitVector(b1))) => cbool(*b0 == *b1),
-                    (Some(Value::F32(b0)), Some(Value::F32(b1))) => cbool(*b0 == *b1),
-                    (Some(Value::F64(b0)), Some(Value::F64(b1))) => cbool(*b0 == *b1),
-                    (Some(Value::Int(b0)), Some(Value::Int(b1))) => cbool(*b0 == *b1),
-                    (Some(Value::Field(b0)), Some(Value::Field(b1))) => cbool(*b0 == *b1),
-                    (Some(Value::Bool(b0)), Some(Value::Bool(b1))) => cbool(*b0 == *b1),
-                    (Some(Value::Tuple(t0)), Some(Value::Tuple(t1))) => cbool(*t0 == *t1),
-                    (Some(Value::Array(a0)), Some(Value::Array(a1))) => {
-                        cbool(a0.size == a1.size && a0.map == a1.map)
-                    }
-                    _ => None,
-                }
-            }
-            Op::PfToBv(w) => {
-                let child = get(0);
-                child.as_pf_opt().map(|c| {
-                    let i = c.i();
-                    if let FieldToBv::Panic = cfg().ir.field_to_bv {
-                        assert!(
-                            (i.significant_bits() as usize) <= *w,
-                            "{}",
-                            "oversized input to Op::PfToBv({w})",
-                        );
-                    }
-                    bv_lit(i % (Integer::from(1) << *w), *w)
-                })
-            }
-            Op::BvBinOp(o) => {
-                let c0 = get(0);
-                let c1 = get(1);
-                use BvBinOp::*;
-                match (o, c0.as_bv_opt(), c1.as_bv_opt()) {
-                    (Sub, Some(a), Some(b)) => cbv(a.clone() - b.clone()),
-                    (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0),
-                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(0) => Some(bv_lit(
-                        (Integer::from(1) << b.width() as u32) - 1,
-                        b.width(),
-                    )),
-                    (Udiv, Some(a), Some(b)) => cbv(a.clone() / b),
-                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0),
-                    (Udiv, _, Some(b)) if b.uint() == &Integer::from(-1) => {
-                        Some(term![Op::BvUnOp(BvUnOp::Neg); c0])
-                    }
-                    // TODO: Udiv by power of two?
-                    (Urem, Some(a), Some(b)) => cbv(a.clone() % b),
-                    // TODO: Urem by power of two?
-                    (Shl, Some(a), Some(b)) => cbv(a.clone() << b),
-                    (Shl, _, Some(b)) => {
-                        assert!(b.uint() < &Integer::from(b.width()));
-                        let n = b.uint().to_usize().unwrap();
-                        Some(term![BV_CONCAT;
-                          term![Op::BvExtract(b.width()-n-1, 0); c0],
-                          leaf_term(Op::Const(Value::BitVector(BitVector::zeros(n))))
-                        ])
-                    }
-                    (Ashr, Some(a), Some(b)) => cbv(a.clone().ashr(b)),
-                    (Ashr, _, Some(b)) => {
-                        assert!(b.uint() < &Integer::from(b.width()));
-                        let n = b.uint().to_usize().unwrap();
-                        Some(term![Op::BvSext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0]])
-                    }
-                    (Lshr, Some(a), Some(b)) => cbv(a.clone().lshr(b)),
-                    (Lshr, _, Some(b)) => {
-                        assert!(b.uint() < &Integer::from(b.width()));
-                        let n = b.uint().to_usize().unwrap();
-                        Some(term![Op::BvUext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0]])
-                    }
-                    _ => None,
-                }
-            }
-            Op::BvNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
-            Op::BvBinPred(p) => {
-                if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
-                    Some(leaf_term(Op::Const(Value::Bool(match p {
-                        BvBinPred::Uge => a.uint() >= b.uint(),
-                        BvBinPred::Ugt => a.uint() > b.uint(),
-                        BvBinPred::Ule => a.uint() <= b.uint(),
-                        BvBinPred::Ult => a.uint() < b.uint(),
-                        BvBinPred::Sge => a.as_sint() >= b.as_sint(),
-                        BvBinPred::Sgt => a.as_sint() > b.as_sint(),
-                        BvBinPred::Sle => a.as_sint() <= b.as_sint(),
-                        BvBinPred::Slt => a.as_sint() < b.as_sint(),
-                    }))))
-                } else {
-                    None
-                }
-            }
-            Op::BvUnOp(o) => get(0).as_bv_opt().map(|bv| {
-                leaf_term(Op::Const(Value::BitVector(match o {
-                    BvUnOp::Not => !bv.clone(),
-                    BvUnOp::Neg => -bv.clone(),
-                })))
-            }),
-            Op::Ite => {
-                let c = get(0);
-                let t = get(1);
-                let f = get(2);
-                if t == f {
-                    Some(t)
-                } else {
-                    match c.as_bool_opt() {
-                        Some(true) => Some(t),
-                        Some(false) => Some(f),
-                        None => match t.as_bool_opt() {
-                            Some(true) => Some(fold_cache(&term![OR; c, f], cache, ignore)),
-                            Some(false) => {
-                                Some(fold_cache(&term![AND; neg_bool(c), f], cache, ignore))
-                            }
-                            _ => match f.as_bool_opt() {
-                                Some(true) => {
-                                    Some(fold_cache(&term![OR; neg_bool(c), t], cache, ignore))
+                            match dedup_children.len().cmp(&1) {
+                                Ordering::Less => flattened,
+                                Ordering::Equal => dedup_children.iter().collect_vec()[0].clone(),
+                                Ordering::Greater => {
+                                    term(AND, dedup_children.into_iter().collect_vec())
                                 }
-                                Some(false) => Some(fold_cache(&term![AND; c, t], cache, ignore)),
-                                _ => None,
+                            }
+                        } else {
+                            flattened
+                        })
+                    }
+                },
+                Op::Eq => {
+                    let c0 = get(0);
+                    let c1 = get(1);
+                    match (c0.as_value_opt(), c1.as_value_opt()) {
+                        (Some(Value::BitVector(b0)), Some(Value::BitVector(b1))) => {
+                            cbool(*b0 == *b1)
+                        }
+                        (Some(Value::F32(b0)), Some(Value::F32(b1))) => cbool(*b0 == *b1),
+                        (Some(Value::F64(b0)), Some(Value::F64(b1))) => cbool(*b0 == *b1),
+                        (Some(Value::Int(b0)), Some(Value::Int(b1))) => cbool(*b0 == *b1),
+                        (Some(Value::Field(b0)), Some(Value::Field(b1))) => cbool(*b0 == *b1),
+                        (Some(Value::Bool(b0)), Some(Value::Bool(b1))) => cbool(*b0 == *b1),
+                        (Some(Value::Tuple(t0)), Some(Value::Tuple(t1))) => cbool(*t0 == *t1),
+                        (Some(Value::Array(a0)), Some(Value::Array(a1))) => {
+                            cbool(a0.size == a1.size && a0.map == a1.map)
+                        }
+                        _ => None,
+                    }
+                }
+                Op::PfToBv(w) => {
+                    let child = get(0);
+                    child.as_pf_opt().map(|c| {
+                        let i = c.i();
+                        if let FieldToBv::Panic = cfg().ir.field_to_bv {
+                            assert!(
+                                (i.significant_bits() as usize) <= *w,
+                                "{}",
+                                "oversized input to Op::PfToBv({w})",
+                            );
+                        }
+                        bv_lit(i % (Integer::from(1) << *w), *w)
+                    })
+                }
+                Op::BvBinOp(o) => {
+                    let c0 = get(0);
+                    let c1 = get(1);
+                    use BvBinOp::*;
+                    match (o, c0.as_bv_opt(), c1.as_bv_opt()) {
+                        (Sub, Some(a), Some(b)) => cbv(a.clone() - b.clone()),
+                        (Sub, _, Some(b)) if b.uint() == &Integer::from(0) => Some(c0),
+                        (Udiv, _, Some(b)) if b.uint() == &Integer::from(0) => Some(bv_lit(
+                            (Integer::from(1) << b.width() as u32) - 1,
+                            b.width(),
+                        )),
+                        (Udiv, Some(a), Some(b)) => cbv(a.clone() / b),
+                        (Udiv, _, Some(b)) if b.uint() == &Integer::from(1) => Some(c0),
+                        (Udiv, _, Some(b)) if b.uint() == &Integer::from(-1) => {
+                            Some(term![Op::BvUnOp(BvUnOp::Neg); c0])
+                        }
+                        // TODO: Udiv by power of two?
+                        (Urem, Some(a), Some(b)) => cbv(a.clone() % b),
+                        // TODO: Urem by power of two?
+                        (Shl, Some(a), Some(b)) => cbv(a.clone() << b),
+                        (Shl, _, Some(b)) => {
+                            assert!(b.uint() < &Integer::from(b.width()));
+                            let n = b.uint().to_usize().unwrap();
+                            Some(term![BV_CONCAT;
+                              term![Op::BvExtract(b.width()-n-1, 0); c0],
+                              leaf_term(Op::Const(Value::BitVector(BitVector::zeros(n))))
+                            ])
+                        }
+                        (Ashr, Some(a), Some(b)) => cbv(a.clone().ashr(b)),
+                        (Ashr, _, Some(b)) => {
+                            assert!(b.uint() < &Integer::from(b.width()));
+                            let n = b.uint().to_usize().unwrap();
+                            Some(term![Op::BvSext(n);
+                                   term![Op::BvExtract(b.width()-1, n); c0]])
+                        }
+                        (Lshr, Some(a), Some(b)) => cbv(a.clone().lshr(b)),
+                        (Lshr, _, Some(b)) => {
+                            assert!(b.uint() < &Integer::from(b.width()));
+                            let n = b.uint().to_usize().unwrap();
+                            Some(term![Op::BvUext(n);
+                                   term![Op::BvExtract(b.width()-1, n); c0]])
+                        }
+                        _ => None,
+                    }
+                }
+                Op::BvNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
+                Op::BvBinPred(p) => {
+                    if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
+                        Some(leaf_term(Op::Const(Value::Bool(match p {
+                            BvBinPred::Uge => a.uint() >= b.uint(),
+                            BvBinPred::Ugt => a.uint() > b.uint(),
+                            BvBinPred::Ule => a.uint() <= b.uint(),
+                            BvBinPred::Ult => a.uint() < b.uint(),
+                            BvBinPred::Sge => a.as_sint() >= b.as_sint(),
+                            BvBinPred::Sgt => a.as_sint() > b.as_sint(),
+                            BvBinPred::Sle => a.as_sint() <= b.as_sint(),
+                            BvBinPred::Slt => a.as_sint() < b.as_sint(),
+                        }))))
+                    } else {
+                        None
+                    }
+                }
+                Op::BvUnOp(o) => get(0).as_bv_opt().map(|bv| {
+                    leaf_term(Op::Const(Value::BitVector(match o {
+                        BvUnOp::Not => !bv.clone(),
+                        BvUnOp::Neg => -bv.clone(),
+                    })))
+                }),
+                Op::Ite => {
+                    let c = get(0);
+                    let t = get(1);
+                    let f = get(2);
+                    if t == f {
+                        Some(t)
+                    } else {
+                        match c.as_bool_opt() {
+                            Some(true) => Some(t),
+                            Some(false) => Some(f),
+                            None => match t.as_bool_opt() {
+                                Some(true) => Some(fold_cache(&term![OR; c, f], cache, ignore)),
+                                Some(false) => {
+                                    Some(fold_cache(&term![AND; neg_bool(c), f], cache, ignore))
+                                }
+                                _ => match f.as_bool_opt() {
+                                    Some(true) => {
+                                        Some(fold_cache(&term![OR; neg_bool(c), t], cache, ignore))
+                                    }
+                                    Some(false) => {
+                                        Some(fold_cache(&term![AND; c, t], cache, ignore))
+                                    }
+                                    _ => None,
+                                },
                             },
-                        },
+                        }
                     }
                 }
-            }
-            Op::PfNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
-            Op::PfUnOp(o) => get(0).as_pf_opt().map(|pf| {
-                leaf_term(Op::Const(Value::Field(match o {
-                    PfUnOp::Recip => pf.clone().recip(),
-                    PfUnOp::Neg => -pf.clone(),
-                })))
-            }),
-            Op::IntNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
-            Op::IntBinPred(p) => {
-                if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
-                    Some(leaf_term(Op::Const(Value::Bool(match p {
-                        IntBinPred::Ge => a >= b,
-                        IntBinPred::Gt => a > b,
-                        IntBinPred::Le => a <= b,
-                        IntBinPred::Lt => a < b,
-                    }))))
-                } else {
-                    None
-                }
-            }
-            Op::UbvToPf(fty) => get(0)
-                .as_bv_opt()
-                .map(|bv| leaf_term(Op::Const(Value::Field(fty.new_v(bv.uint()))))),
-            Op::Store => {
-                match (
-                    get(0).as_array_opt(),
-                    get(1).as_value_opt(),
-                    get(2).as_value_opt(),
-                ) {
-                    (Some(arr), Some(idx), Some(val)) => {
-                        let new_arr = arr.clone().store(idx.clone(), val.clone());
-                        Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                Op::PfNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
+                Op::PfUnOp(o) => get(0).as_pf_opt().map(|pf| {
+                    leaf_term(Op::Const(Value::Field(match o {
+                        PfUnOp::Recip => pf.clone().recip(),
+                        PfUnOp::Neg => -pf.clone(),
+                    })))
+                }),
+                Op::IntNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
+                Op::IntBinPred(p) => {
+                    if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
+                        Some(leaf_term(Op::Const(Value::Bool(match p {
+                            IntBinPred::Ge => a >= b,
+                            IntBinPred::Gt => a > b,
+                            IntBinPred::Le => a <= b,
+                            IntBinPred::Lt => a < b,
+                        }))))
+                    } else {
+                        None
                     }
-                    _ => None,
                 }
-            }
-            Op::Array(k, v) => t
-                .cs()
-                .iter()
-                .map(|c| c_get(c).as_value_opt().cloned())
-                .collect::<Option<_>>()
-                .map(|cs| {
-                    leaf_term(Op::Const(Value::Array(Array::from_vec(
+                Op::UbvToPf(fty) => get(0)
+                    .as_bv_opt()
+                    .map(|bv| leaf_term(Op::Const(Value::Field(fty.new_v(bv.uint()))))),
+                Op::Store => {
+                    match (
+                        get(0).as_array_opt(),
+                        get(1).as_value_opt(),
+                        get(2).as_value_opt(),
+                    ) {
+                        (Some(arr), Some(idx), Some(val)) => {
+                            let new_arr = arr.clone().store(idx.clone(), val.clone());
+                            Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                        }
+                        _ => None,
+                    }
+                }
+                Op::Array(k, v) => t
+                    .cs()
+                    .iter()
+                    .map(|c| c_get(c).as_value_opt().cloned())
+                    .collect::<Option<_>>()
+                    .map(|cs| {
+                        leaf_term(Op::Const(Value::Array(Array::from_vec(
+                            k.clone(),
+                            v.clone(),
+                            cs,
+                        ))))
+                    }),
+                Op::Fill(k, s) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
+                    leaf_term(Op::Const(Value::Array(Array::new(
                         k.clone(),
-                        v.clone(),
-                        cs,
+                        Box::new(v.clone()),
+                        Default::default(),
+                        *s,
                     ))))
                 }),
-            Op::Fill(k, s) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
-                leaf_term(Op::Const(Value::Array(Array::new(
-                    k.clone(),
-                    Box::new(v.clone()),
-                    Default::default(),
-                    *s,
-                ))))
-            }),
-            Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
-                (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
+                Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
+                    (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
+                    _ => None,
+                },
+                Op::Tuple => t
+                    .cs()
+                    .iter()
+                    .map(|c| c_get(c).as_value_opt().cloned())
+                    .collect::<Option<_>>()
+                    .map(|v| leaf_term(Op::Const(Value::Tuple(v)))),
+                Op::Field(n) => get(0)
+                    .as_tuple_opt()
+                    .map(|t| leaf_term(Op::Const(t[*n].clone()))),
+                Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
+                    (Some(t), Some(v)) => {
+                        let mut new_vec = Vec::from(t).into_boxed_slice();
+                        assert_eq!(new_vec[*n].sort(), v.sort());
+                        new_vec[*n] = v.clone();
+                        Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
+                    }
+                    _ => None,
+                },
+                Op::BvConcat => t
+                    .cs()
+                    .iter()
+                    .map(|c| c_get(c).as_bv_opt().cloned())
+                    .collect::<Option<Vec<_>>>()
+                    .and_then(|v| v.into_iter().reduce(BitVector::concat))
+                    .map(|bv| leaf_term(Op::Const(Value::BitVector(bv)))),
+                Op::BoolToBv => get(0).as_bool_opt().map(|b| {
+                    leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                        Integer::from(b),
+                        1,
+                    ))))
+                }),
+                Op::BvUext(w) => get(0).as_bv_opt().map(|b| {
+                    leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                        b.uint().clone(),
+                        b.width() + w,
+                    ))))
+                }),
                 _ => None,
-            },
-            Op::Tuple => t
-                .cs()
-                .iter()
-                .map(|c| c_get(c).as_value_opt().cloned())
-                .collect::<Option<_>>()
-                .map(|v| leaf_term(Op::Const(Value::Tuple(v)))),
-            Op::Field(n) => get(0)
-                .as_tuple_opt()
-                .map(|t| leaf_term(Op::Const(t[*n].clone()))),
-            Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
-                (Some(t), Some(v)) => {
-                    let mut new_vec = Vec::from(t).into_boxed_slice();
-                    assert_eq!(new_vec[*n].sort(), v.sort());
-                    new_vec[*n] = v.clone();
-                    Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
-                }
-                _ => None,
-            },
-            Op::BvConcat => t
-                .cs()
-                .iter()
-                .map(|c| c_get(c).as_bv_opt().cloned())
-                .collect::<Option<Vec<_>>>()
-                .and_then(|v| v.into_iter().reduce(BitVector::concat))
-                .map(|bv| leaf_term(Op::Const(Value::BitVector(bv)))),
-            Op::BoolToBv => get(0).as_bool_opt().map(|b| {
-                leaf_term(Op::Const(Value::BitVector(BitVector::new(
-                    Integer::from(b),
-                    1,
-                ))))
-            }),
-            Op::BvUext(w) => get(0).as_bv_opt().map(|b| {
-                leaf_term(Op::Const(Value::BitVector(BitVector::new(
-                    b.uint().clone(),
-                    b.width() + w,
-                ))))
-            }),
-            _ => None,
+            }
         };
         let new_t = {
             let cc_get = |x: &Term| -> Term {

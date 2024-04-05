@@ -3,7 +3,7 @@
 //! https://eprint.iacr.org/2022/1530.pdf
 //!
 //! Given a haystack array of values h1, ..., hN and an array of needles v1, ..., vA, outputs
-//! an array of counts c1, ..., cN such that hi occurs ci times in v1, ..., vA.
+//! an array of counts c1, ..., cN such that hI occurs cI times in v1, ..., vA.
 //!
 //! All input and output arrays must be be field -> field
 
@@ -42,7 +42,14 @@ pub fn eval(args: &[&Value]) -> Value {
         .collect();
     let mut counts = vec![0; haystack.len()];
     for needle in needles {
-        counts[*haystack_item_index.get(&needle).expect("missing needle")] += 1;
+        if let Some(idx) = haystack_item_index.get(&needle) {
+            counts[*idx] += 1;
+        } else {
+            panic!(
+                "missing needle\nhaystack: {:?}, needle: {}",
+                haystack, needle
+            )
+        }
     }
     let field_counts: Vec<Value> = counts
         .into_iter()

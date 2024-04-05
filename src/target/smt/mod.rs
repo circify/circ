@@ -100,6 +100,7 @@ impl Expr2Smt<()> for Value {
                 }
                 write!(w, ")")?;
             }
+            Value::Map(_) => unimplemented!("Value::Map in smt backend"),
         }
         Ok(())
     }
@@ -211,6 +212,7 @@ impl Sort2Smt for Sort {
                 write!(w, ")")?;
             }
             Sort::Field(f) => write!(w, "(_ FiniteField {})", f.modulus())?,
+            Sort::Map(..) => unimplemented!("Sort::Map in smt backend"),
         }
         Ok(())
     }

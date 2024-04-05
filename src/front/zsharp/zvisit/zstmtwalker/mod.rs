@@ -833,6 +833,14 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
         self.visit_span(&mut def.span)
     }
 
+    fn visit_witness_statement(&mut self, def: &mut ast::WitnessStatement<'ast>) -> ZVisitorResult {
+        ZConstLiteralRewriter::new(None).visit_type(&mut def.ty)?;
+        self.insert_var(&def.id.value, def.ty.clone())?;
+        self.unify(Some(def.ty.clone()), &mut def.expression)?;
+        self.visit_expression(&mut def.expression)?;
+        self.visit_span(&mut def.span)
+    }
+
     fn visit_assignee(&mut self, asgn: &mut ast::Assignee<'ast>) -> ZVisitorResult {
         if !self.var_defined(&asgn.id.value) {
             Err(ZVisitorError(format!(

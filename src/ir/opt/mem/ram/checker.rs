@@ -7,7 +7,7 @@ use circ_fields::FieldT;
 use log::{debug, trace};
 
 mod permutation;
-mod rom;
+pub mod rom;
 
 /// Check a RAM
 pub fn check_ram(c: &mut Computation, ram: Ram) {
@@ -191,6 +191,7 @@ pub fn check_ram(c: &mut Computation, ram: Ram) {
             );
         }
     }
+    assertions.push(c.outputs[0].clone());
     c.outputs[0] = term(AND, assertions);
 }
 

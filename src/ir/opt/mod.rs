@@ -48,8 +48,12 @@ pub enum Opt {
     PersistentRam,
     /// Eliminate volatile RAM
     VolatileRam,
+    /// Eliminate set membership args
+    SetMembership,
     /// Replace challenge terms with random variables
     SkolemizeChallenges,
+    /// Replace witness terms with variables
+    DeskolemizeWitnesses,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -129,12 +133,18 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     let cfg = mem::ram::AccessCfg::from_cfg();
                     mem::ram::persistent::apply(c, &cfg);
                 }
+                Opt::SetMembership => {
+                    mem::ram::set::apply(c);
+                }
                 Opt::VolatileRam => {
                     let cfg = mem::ram::AccessCfg::from_cfg();
                     mem::ram::volatile::apply(c, &cfg);
                 }
+                Opt::DeskolemizeWitnesses => {
+                    chall::deskolemize_witnesses(c);
+                }
                 Opt::SkolemizeChallenges => {
-                    chall::skolemize_challenges(c);
+                    chall::deskolemize_challenges(c);
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());

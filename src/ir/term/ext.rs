@@ -6,6 +6,7 @@ use circ_hc::Node;
 use serde::{Deserialize, Serialize};
 
 mod haboeck;
+mod map;
 mod poly;
 mod ram;
 mod sort;
@@ -26,6 +27,14 @@ pub enum ExtOp {
     UniqDeriGcd,
     /// See [waksman].
     Waksman,
+    /// Array to map
+    ArrayToMap,
+    /// Select from map
+    MapSelect,
+    /// Does a map contain a key
+    MapContainsKey,
+    /// Flip keys and values; values maps to *first* key
+    MapFlip,
 }
 
 impl ExtOp {
@@ -37,6 +46,10 @@ impl ExtOp {
             ExtOp::Sort => Some(1),
             ExtOp::Waksman => Some(1),
             ExtOp::UniqDeriGcd => Some(1),
+            ExtOp::ArrayToMap => Some(1),
+            ExtOp::MapContainsKey => Some(2),
+            ExtOp::MapSelect => Some(2),
+            ExtOp::MapFlip => Some(2),
         }
     }
     /// Type-check, given argument sorts
@@ -47,6 +60,10 @@ impl ExtOp {
             ExtOp::Sort => sort::check(arg_sorts),
             ExtOp::Waksman => waksman::check(arg_sorts),
             ExtOp::UniqDeriGcd => poly::check(arg_sorts),
+            ExtOp::ArrayToMap => map::check_array_to_map(arg_sorts),
+            ExtOp::MapContainsKey => map::check_map_contains_key(arg_sorts),
+            ExtOp::MapSelect => map::check_map_select(arg_sorts),
+            ExtOp::MapFlip => map::check_map_flip(arg_sorts),
         }
     }
     /// Evaluate, given argument values
@@ -57,6 +74,10 @@ impl ExtOp {
             ExtOp::Sort => sort::eval(args),
             ExtOp::Waksman => waksman::eval(args),
             ExtOp::UniqDeriGcd => poly::eval(args),
+            ExtOp::ArrayToMap => map::eval_array_to_map(args),
+            ExtOp::MapContainsKey => map::eval_map_contains_key(args),
+            ExtOp::MapSelect => map::eval_map_select(args),
+            ExtOp::MapFlip => map::eval_map_flip(args),
         }
     }
     /// Indicate which children of `t` must be typed to type `t`.
@@ -71,6 +92,10 @@ impl ExtOp {
             b"uniq_deri_gcd" => Some(ExtOp::UniqDeriGcd),
             b"sort" => Some(ExtOp::Sort),
             b"waksman" => Some(ExtOp::Waksman),
+            b"array_to_map" => Some(ExtOp::ArrayToMap),
+            b"map_contains_key" => Some(ExtOp::MapContainsKey),
+            b"map_select" => Some(ExtOp::MapSelect),
+            b"map_flip" => Some(ExtOp::MapFlip),
             _ => None,
         }
     }
@@ -81,7 +106,11 @@ impl ExtOp {
             ExtOp::PersistentRamSplit => "persistent_ram_split",
             ExtOp::UniqDeriGcd => "uniq_deri_gcd",
             ExtOp::Sort => "sort",
-            ExtOp::Waksman => "Waksman",
+            ExtOp::Waksman => "waksman",
+            ExtOp::ArrayToMap => "array_to_map",
+            ExtOp::MapContainsKey => "map_contains_key",
+            ExtOp::MapSelect => "map_select",
+            ExtOp::MapFlip => "map_flip",
         }
     }
 }

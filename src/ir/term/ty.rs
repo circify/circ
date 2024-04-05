@@ -3,6 +3,7 @@
 use super::*;
 
 use std::cell::RefCell;
+use std::convert::TryFrom;
 
 use circ_hc::collections::cache::NodeCache;
 
@@ -61,6 +62,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
         Op::PfChallenge(_, _) => Vec::new(),
+        Op::Witness(_) => vec![t.cs()[0].clone()],
         Op::PfFitsInBits(_) => Vec::new(),
         Op::Select => vec![t.cs()[0].clone()],
         Op::Store => vec![t.cs()[0].clone()],
@@ -138,6 +140,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::IntBinPred(_) => Ok(Sort::Bool),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
         Op::PfChallenge(_, m) => Ok(Sort::Field(m.clone())),
+        Op::Witness(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfFitsInBits(_) => Ok(Sort::Bool),
         Op::Select => array_or(get_ty(&t.cs()[0]), "select").map(|(_, v, _)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs()[0]).clone()),
@@ -359,6 +362,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         }
         (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
         (Op::PfChallenge(_, m), _) => Ok(Sort::Field(m.clone())),
+        (Op::Witness(_), &[a]) => Ok(a.clone()),
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").map(|a| a.clone()),
         (Op::PfDiv, &[a, b]) => {
@@ -542,6 +546,8 @@ pub enum TypeErrorReason {
     ExpectedPf(Sort, &'static str),
     /// A sort should be an array
     ExpectedArray(Sort, &'static str),
+    /// A sort should be a map
+    ExpectedMap(Sort, &'static str),
     /// A sort should be a tuple
     ExpectedTuple(&'static str),
     /// An empty n-ary operator.
@@ -578,6 +584,17 @@ pub(super) fn array_or<'a>(
         Ok((k, v, *size))
     } else {
         Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
+    }
+}
+
+pub(super) fn map_or<'a>(
+    a: &'a Sort,
+    ctx: &'static str,
+) -> Result<(&'a Sort, &'a Sort), TypeErrorReason> {
+    if let Sort::Map(k, v) = a {
+        Ok((k, v))
+    } else {
+        Err(TypeErrorReason::ExpectedMap(a.clone(), ctx))
     }
 }
 
@@ -650,4 +667,10 @@ fn all_eq_or<'a, I: Iterator<Item = &'a Sort>>(
         }
     }
     Ok(first)
+}
+
+pub(super) fn count_or<'a, const N: usize>(
+    sorts: &'a [&'a Sort],
+) -> Result<&'a [&'a Sort; N], TypeErrorReason> {
+    <&'a [&'a Sort; N]>::try_from(sorts).map_err(|_| TypeErrorReason::ExpectedArgs(N, sorts.len()))
 }

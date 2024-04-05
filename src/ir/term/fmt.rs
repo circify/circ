@@ -1,7 +1,7 @@
 //! Machinery for formatting IR types
 use super::{
-    ext, Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
-    VariableMetadata,
+    check, ext, map::Map, Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term,
+    TermMap, Value, VariableMetadata,
 };
 use crate::cfg::{cfg, is_cfg_set};
 
@@ -139,6 +139,14 @@ impl DisplayIr for Sort {
                 v.ir_fmt(f)?;
                 write!(f, " {n})")
             }
+            Sort::Map(k, v) => {
+                // we could make our own write macro.
+                write!(f, "(map ")?;
+                k.ir_fmt(f)?;
+                write!(f, " ")?;
+                v.ir_fmt(f)?;
+                write!(f, ")")
+            }
             Sort::Tuple(fields) => {
                 write!(f, "(tuple")?;
                 for field in fields.iter() {
@@ -188,6 +196,7 @@ impl DisplayIr for Op {
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
+            Op::Witness(n) => write!(f, "(witness {})", n),
             Op::PfFitsInBits(n) => write!(f, "(pf_fits_in_bits {})", n),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
@@ -225,13 +234,7 @@ impl DisplayIr for Op {
 
 impl DisplayIr for ext::ExtOp {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
-        match self {
-            ext::ExtOp::Haboeck => write!(f, "haboeck"),
-            ext::ExtOp::PersistentRamSplit => write!(f, "persistent_ram_split"),
-            ext::ExtOp::UniqDeriGcd => write!(f, "uniq_deri_gcd"),
-            ext::ExtOp::Sort => write!(f, "sort"),
-            ext::ExtOp::Waksman => write!(f, "Waksman"),
-        }
+        write!(f, "{}", self.to_str())
     }
 }
 
@@ -253,6 +256,7 @@ impl DisplayIr for Value {
                 write!(f, ")")
             }
             Value::Array(a) => a.ir_fmt(f),
+            Value::Map(a) => a.ir_fmt(f),
         }
     }
 }
@@ -293,6 +297,29 @@ impl DisplayIr for Array {
             }
             write!(f, "))")
         }
+    }
+}
+
+impl DisplayIr for Map {
+    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
+        write!(f, "(#m ")?;
+        self.key_sort.ir_fmt(f)?;
+        write!(f, " ")?;
+        self.value_sort.ir_fmt(f)?;
+        write!(f, " (")?;
+        let mut first = true;
+        for (k, v) in &self.map {
+            if !first {
+                write!(f, " ")?;
+            }
+            write!(f, "(")?;
+            k.ir_fmt(f)?;
+            write!(f, " ")?;
+            v.ir_fmt(f)?;
+            write!(f, ")")?;
+            first = false;
+        }
+        write!(f, "))")
     }
 }
 
@@ -423,9 +450,10 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     for t in PostOrderIter::new(t.clone()) {
         for c in t.cs().iter().cloned() {
             let has_children = !c.cs().is_empty();
+            let non_scalar_const = c.is_const() && !check(&c).is_scalar();
             let count = parent_counts.entry(c).or_insert(0);
             *count += 1;
-            if *count == 2 && has_children {
+            if *count == 2 && (has_children || non_scalar_const) {
                 n_bindings += 1;
             }
         }
@@ -440,7 +468,9 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
         writeln!(f, " (let")?;
         writeln!(f, "  (")?; // let binding list
         for t in PostOrderIter::new(t.clone()) {
-            if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs().is_empty() {
+            let non_scalar_const = t.is_const() && !check(&t).is_scalar();
+            if parent_counts.get(&t).unwrap_or(&0) > &1 && (!t.cs().is_empty() || non_scalar_const)
+            {
                 write!(f, "   ('{} ", f.defs.next_id.clone(),)?;
                 t.ir_fmt(f)?;
                 writeln!(f, ")")?;
