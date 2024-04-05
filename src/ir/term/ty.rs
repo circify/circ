@@ -365,9 +365,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::Witness(_), &[a]) => Ok(a.clone()),
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").cloned(),
-        (Op::PfDiv, &[a, b]) => {
-            eq_or(&pf_or(a, "pf / op").cloned()?, b, "pf / op").cloned()
-        }
+        (Op::PfDiv, &[a, b]) => eq_or(&pf_or(a, "pf / op").cloned()?, b, "pf / op").cloned(),
         (Op::IntNaryOp(_), a) => {
             let ctx = "int nary op";
             all_eq_or(a.iter().cloned(), ctx)
