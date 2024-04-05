@@ -83,8 +83,9 @@ ram_test ./examples/ZoKrates/pf/mem/volatile_struct.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/arr_of_str.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/arr_of_str_of_arr.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/in_array.zok mirage ""
-ram_test ./examples/ZoKrates/pf/mem/sparse.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/small_sparse.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/reverse_lookup.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/sparse.zok mirage ""
 
 
 # challenges
