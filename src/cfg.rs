@@ -21,7 +21,7 @@ pub use circ_opt::clap;
 /// Re-export our clap [clap::Args]
 pub use circ_opt::CircOpt;
 
-/// A Circ configuration. Contructible [From::from] [CircOpt].
+/// A CirC configuration. Constructible [From::from] [CircOpt].
 #[derive(Clone, Debug)]
 pub struct CircCfg {
     opt: CircOpt,
@@ -33,7 +33,7 @@ pub struct CircCfg {
 /// If you want to build the CirC configuration [CircCfg] object yourself,
 /// you can set it with [set_cfg].
 ///
-/// [CircOpt] implements [clap::Args], so it can be build from your command line or envvars. See
+/// [CircOpt] implements [clap::Args], so it can be built from your command line or envvars. See
 /// its documentation.
 pub fn set(o: &CircOpt) {
     set_cfg(From::from(o.clone()))
@@ -47,7 +47,7 @@ pub fn set_default() {
 
 /// Set the CirC configuration from a [CircCfg].
 ///
-/// We recommends using [set], which takes a [CircOpt] instead.
+/// We recommend using [set], which takes a [CircOpt] instead.
 pub fn set_cfg(c: CircCfg) {
     CFG.set(c).unwrap_or_else(|c| {
         panic!(
@@ -120,3 +120,4 @@ impl CircCfg {
         &self.field
     }
 }
+
