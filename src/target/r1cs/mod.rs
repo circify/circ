@@ -370,6 +370,37 @@ impl R1cs {
         matches!(var.ty(), VarType::FinalWit)
     }
 
+    /// Can this variable be eliminated within this constraint?
+    ///
+    /// A witness variable can be eliminated iff it is in the *last* round of its constraint.
+    /// We only approximate this.
+    /// We elim if:
+    /// 1) this is a final wit or
+    /// 2) this is a wit with only other wits and insts and it is the last wit
+    ///
+    /// This is an approximation because we comparse witness numbers in (2) instead of witness
+    /// rounds. So, we under-approximate the set of eliminatable variables.
+    pub fn can_eliminate_in(&self, var: Var, constraint: &Lc) -> bool {
+        match var.ty() {
+            VarType::FinalWit => true,
+            VarType::Inst | VarType::Chall | VarType::CWit => false,
+            VarType::RoundWit => {
+                for v in constraint.monomials.keys() {
+                    match v.ty() {
+                        VarType::Inst | VarType::CWit => {}
+                        VarType::Chall | VarType::FinalWit => return false,
+                        VarType::RoundWit => {
+                            if v.number() > var.number() {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                true
+            }
+        }
+    }
+
     /// Get a nice string represenation of the tuple.
     pub fn format_qeq(&self, (a, b, c): &(Lc, Lc, Lc)) -> String {
         format!(

@@ -177,7 +177,7 @@ impl LinReducer {
 fn as_linear_sub((a, b, c): &(Lc, Lc, Lc), r1cs: &R1cs) -> Option<(Var, Lc)> {
     if a.is_zero() || b.is_zero() {
         for i in c.monomials.keys() {
-            if r1cs.can_eliminate(*i) {
+            if r1cs.can_eliminate_in(*i, c) {
                 let mut lc = c.clone();
                 let v = lc.monomials.remove(i).unwrap();
                 lc *= v.recip();
