@@ -275,7 +275,7 @@ impl RewritePass for Extactor {
                 "Bad ram term: {}",
                 t
             );
-            debug_assert!(self.graph.children.get(t).is_some());
+            debug_assert!(self.graph.children.contains_key(t));
             debug_assert_eq!(1, self.graph.children.get(t).unwrap().len());
             // Get dependency's RAM
             let child = self.graph.children.get(t).unwrap()[0].clone();

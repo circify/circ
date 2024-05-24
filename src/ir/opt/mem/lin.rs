@@ -52,11 +52,15 @@ impl RewritePass for Linearizer {
                 let cs = rewritten_children();
                 let idx = &cs[1];
                 let tup = &cs[0];
-                if let Sort::Array(key_sort, _, size) = check(&orig.cs()[0]) {
+                if let Sort::Array(key_sort, val_sort, size) = check(&orig.cs()[0]) {
                     assert!(size > 0);
                     if idx.is_const() {
                         let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
-                        Some(term![Op::Field(idx_usize); tup.clone()])
+                        if idx_usize < size {
+                            Some(term![Op::Field(idx_usize); tup.clone()])
+                        } else {
+                            Some(val_sort.default_term())
+                        }
                     } else {
                         let mut fields = (0..size).map(|idx| term![Op::Field(idx); tup.clone()]);
                         let first = fields.next().unwrap();
@@ -77,13 +81,46 @@ impl RewritePass for Linearizer {
                     assert!(size > 0);
                     if idx.is_const() {
                         let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
-                        Some(term![Op::Update(idx_usize); tup.clone(), val.clone()])
+                        if idx_usize < size {
+                            Some(term![Op::Update(idx_usize); tup.clone(), val.clone()])
+                        } else {
+                            Some(tup.clone())
+                        }
                     } else {
                         let mut updates =
                             (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
                         let first = updates.next().unwrap();
                         Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
                         term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], update, acc]
+                    }))
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+            Op::CStore => {
+                let cs = rewritten_children();
+                let tup = &cs[0];
+                let idx = &cs[1];
+                let val = &cs[2];
+                let cond = &cs[3];
+                if let Sort::Array(key_sort, _, size) = check(&orig.cs()[0]) {
+                    assert!(size > 0);
+                    if idx.is_const() {
+                        let idx_usize = extras::as_uint_constant(idx).unwrap().to_usize().unwrap();
+                        if idx_usize < size {
+                            Some(
+                                term![Op::Ite; cond.clone(), term![Op::Update(idx_usize); tup.clone(), val.clone()], tup.clone()],
+                            )
+                        } else {
+                            Some(tup.clone())
+                        }
+                    } else {
+                        let mut updates =
+                            (0..size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
+                        let first = updates.next().unwrap();
+                        Some(key_sort.elems_iter().take(size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
+                        term![Op::Ite; term![AND; term![Op::Eq; idx.clone(), idx_c], cond.clone()], update, acc]
                     }))
                     }
                 } else {

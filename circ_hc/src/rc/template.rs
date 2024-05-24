@@ -14,6 +14,7 @@ struct NodeData {
     cs: Box<[Node]>,
 }
 
+#[allow(dead_code)]
 struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a TemplateOp, &'a Q);
 
 #[derive(Clone)]

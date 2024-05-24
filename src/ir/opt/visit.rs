@@ -102,6 +102,7 @@ pub trait RewritePass {
 
 /// An analysis pass that repeated sweeps all terms, visiting them, untill a pass makes no more
 /// progress.
+#[allow(dead_code)]
 pub trait ProgressAnalysisPass {
     /// The visit function. Returns whether progress was made.
     fn visit(&mut self, term: &Term) -> bool;
