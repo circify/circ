@@ -1,5 +1,5 @@
 //! Distributions over terms (useful for fuzz testing)
-
+#![allow(dead_code)]
 use super::*;
 
 use circ_fields::{FieldT, FieldV};

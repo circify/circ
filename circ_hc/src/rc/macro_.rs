@@ -17,6 +17,7 @@ macro_rules! generate_hashcons_rc {
             cs: Box<[Node]>,
         }
 
+        #[allow(dead_code)]
         struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a $Op, &'a Q);
 
         #[derive(Clone)]
