@@ -71,6 +71,8 @@ transcript_type_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok "covering ROM"
 # A=400; N=20; L=2; expected cost ~= N + A(L+1) = 1220
 cs_count_test ./examples/ZoKrates/pf/mem/rom.zok 1230
 
+ram_test ./examples/ZoKrates/pf/mem/2024_05_31_benny_bug_tr.zok mirage ""
+ram_test ./examples/ZoKrates/pf/mem/2024_05_24_benny_bug_tr.zok mirage ""
 ram_test ./examples/ZoKrates/pf/mem/two_level_ptr.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 ram_test ./examples/ZoKrates/pf/mem/volatile.zok groth16 "--ram-permutation waksman --ram-index sort --ram-range bit-split"
 # waksman is broken for non-scalar array values
