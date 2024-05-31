@@ -1,0 +1,127 @@
+// Examples of different SHA-esque operations being performed using sparse form
+// and lookup arguments
+
+
+// python -c "b=4;dtos=lambda d: sum(4**i*int(b) for i, b in enumerate(bin(d)[2:][::-1]));print(f'const transcript field[{2**b}] D_TO_S_{b} = [', ', '.join(str(dtos(i)) for i in range(2**b)), ']', sep='')"
+const transcript field[16] D_TO_S_4 = [0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85]
+
+const transcript field[8] D_TO_S_3 = [0, 1, 4, 5, 16, 17, 20, 21]
+
+const transcript field[8] D_3 = [0, 1, 2, 3, 4, 5, 6, 7]
+
+// python -c "b=4;dtos=lambda d: sum(4**i*int(b) for i, b in enumerate(bin(d)[2:][::-1]));print(f'const field S_ONES_{b} = {dtos(2**b-1)}');print(f'const field D_ONES_{b} = {2**b-1}')"
+const field S_ONES_4 = 85
+const field D_ONES_4 = 15
+
+from "EMBED" import unpack, value_in_array, reverse_lookup, fits_in_bits
+
+// split a number into (unchecked) high and low bits
+def unsafe_split<LOW_BITS,HIGH_BITS>(field x) -> field[2]:
+  bool[LOW_BITS+HIGH_BITS] bits = unpack(x)
+  field low = 0
+  field high = 0
+  for u32 i in 0..LOW_BITS do
+    low = low + 2 ** i * (if bits[LOW_BITS+HIGH_BITS-1-i] then 1 else 0 fi)
+  endfor
+  for u32 i in LOW_BITS..HIGH_BITS do
+    high = high + 2 ** i * (if bits[LOW_BITS+HIGH_BITS-1-i] then 1 else 0 fi)
+  endfor
+  return [low, high]
+
+// split a 2N bit number into (unchecked) even and odd bits (in sparse form)
+def unsafe_separate_sparse<N>(field x) -> field[2]:
+  bool[2*N] bits = unpack(x)
+  field even = 0
+  field odd = 0
+  for u32 i in 0..N do
+    even = even + 4 ** i * (if bits[2*N-1-(2*i)] then 1 else 0 fi)
+    odd = odd + 4 ** i * (if bits[2*N-1-(2*i+1)] then 1 else 0 fi)
+  endfor
+  return [even, odd]
+
+struct Dual {
+    field s
+    field d
+}
+
+// convert a dense 8-bit value to dual form; ensures the value fits in 8 bits.
+def dense_to_dual_4(field x) -> Dual:
+  field s = D_TO_S_4[x]
+  return Dual {s: s, d: x}
+
+// get the even bits of a 16-bit value in dual form; ensures the value fits in 16 bits.
+def split_even_dual_4(field x) -> Dual:
+  unsafe witness field[2] split = unsafe_separate_sparse::<8>(x)
+  field even = split[0]
+  field odd = split[1]
+  assert(x == 2 * odd + even)
+  field even_d = reverse_lookup(D_TO_S_4, even)
+  assert(value_in_array(odd, D_TO_S_4))
+  return Dual { s: even, d: even_d }
+
+// get the odd bits of a 16-bit value in dual form; ensures the value fits in 16 bits.
+def split_odd_dual_4(field x) -> Dual:
+  unsafe witness field[2] split = unsafe_separate_sparse::<8>(x)
+  // field even = split[0]
+  field odd = split[1]
+  field even = x - 2 * odd
+  // assert(x == 2 * odd + even)
+  field odd_d = reverse_lookup(D_TO_S_4, odd)
+  assert(value_in_array(even, D_TO_S_4))
+  return Dual { s: odd, d: odd_d }
+
+// get the even and odd bits of a 16-bit value in dual form; ensures the value fits in 16 bits.
+def split_both_dual_4(field x) -> Dual[2]:
+  unsafe witness field[2] split = unsafe_separate_sparse::<8>(x)
+  field even = split[0]
+  field odd = split[1]
+  field odd_d = reverse_lookup(D_TO_S_4, odd)
+  field even_d = reverse_lookup(D_TO_S_4, even)
+  return [Dual { s: even, d: even_d }, Dual { s: odd, d: odd_d }]
+
+// expected cost: 3    observed: 5
+def and_4(Dual x, Dual y) -> Dual:
+  return split_odd_dual_4(x.s + y.s)
+
+def maj_4(Dual x, Dual y, Dual z) -> Dual:
+  return split_odd_dual_4(x.s + y.s + z.s)
+
+def xor_4(Dual x, Dual y, Dual z) -> Dual:
+  return split_even_dual_4(x.s + y.s + z.s)
+
+def not_4(Dual x) -> Dual:
+  return Dual { s: S_ONES_4 - x.s, d: D_ONES_4 - x.d }
+
+def or_4(Dual x, Dual y) -> Dual:
+  return not_4(and_4(not_4(x), not_4(y)))
+
+// split s into 8 low bits and 3 high bits, and return the low bits
+// in dual form.
+def normalize_sum_4(field s) -> Dual:
+  unsafe witness field[2] split = unsafe_split::<8, 3>(s)
+  field low = split[0]
+  field high = split[1]
+  assert(value_in_array(high, D_3))
+  return dense_to_dual_4(low)
+
+// table costs:
+// 16 + 16 + 8 = 40
+//do a bitwise AND.
+def main(private field dense_x, private field dense_y) -> field:
+  Dual z = dense_to_dual_4(0)
+  Dual x = dense_to_dual_4(dense_x)    // 1010 (10)
+  Dual y = dense_to_dual_4(dense_y)    // 1001 (9)
+  Dual a = and_4(x, y)                 // 1000 (8)
+  for field i in 0..10 do
+      a = and_4(a, y)                  // idempotent
+  endfor
+  Dual b = or_4(x, y)                  // 1011 (11)
+  Dual s = normalize_sum_4(b.d + a.d)  // 0011 (3)
+  return s.d
+  // return reverse_lookup(D_TO_S_4, dense_x) * dense_y
+  // return reverse_lookup(D_TO_S_4, dense_x) * reverse_lookup(D_TO_S_4, dense_y)
+  // return dense_x * dense_y
+
+
+
+
