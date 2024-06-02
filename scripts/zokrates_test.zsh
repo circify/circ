@@ -88,6 +88,7 @@ r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/utils/casts/bool_128_to_
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
+r1cs_test ./examples/ZoKrates/pf/2024_06_02_chad_bug.zok
 
 pf_test_only_pf sha_temp1
 pf_test_only_pf sha_rot

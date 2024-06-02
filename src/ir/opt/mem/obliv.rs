@@ -42,6 +42,7 @@ impl OblivRewriter {
     }
     fn visit(&mut self, t: &Term) {
         let (tup_opt, term_opt) = match t.op() {
+            Op::Var(_, sort) if sort.is_scalar() => (Some(t.clone()), None),
             Op::Const(v @ Value::Array(_)) => (Some(leaf_term(Op::Const(arr_val_to_tup(v)))), None),
             Op::Array(_k, _v) => (
                 Some(term(
