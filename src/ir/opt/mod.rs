@@ -3,6 +3,7 @@ pub mod binarize;
 pub mod cfold;
 pub mod chall;
 pub mod cstore;
+pub mod fits_in_bits_ip;
 pub mod flat;
 pub mod inline;
 pub mod link;
@@ -54,6 +55,8 @@ pub enum Opt {
     SkolemizeChallenges,
     /// Replace witness terms with variables
     DeskolemizeWitnesses,
+    /// Check bit-constaints with challenges.
+    FitsInBitsIp,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -85,6 +88,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                         .iter()
                         .map(|a| cfold::fold_cache(a, &mut cache, &ignore.clone()))
                         .collect();
+                    for p in &mut c.persistent_arrays {
+                        p.1 = cfold::fold_cache(&p.1, &mut cache, &ignore.clone());
+                    }
                 }
                 Opt::Sha => {
                     for a in &mut c.outputs {
@@ -145,6 +151,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::SkolemizeChallenges => {
                     chall::deskolemize_challenges(c);
+                }
+                Opt::FitsInBitsIp => {
+                    fits_in_bits_ip::fits_in_bits_ip(c);
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());

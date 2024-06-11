@@ -22,8 +22,10 @@ jobs:
               with:
                   toolchain: stable
             - uses: Swatinem/rust-cache@v2
+            - name: No default features pushed
+              run: zsh ./scripts/assert_no_default_features.zsh
             - name: Set all features on
-              run: python3 driver.py --all_features
+              run: python3 driver.py --all-features
             - name: Install python reqs
               run: python3 driver.py --install
             - name: Check

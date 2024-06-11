@@ -168,7 +168,7 @@ impl Default for BuiltinField {
 }
 
 /// Options for the prime field used
-#[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct IrOpt {
     /// Which field to use
     #[arg(
@@ -186,6 +186,24 @@ pub struct IrOpt {
         default_value = "false"
     )]
     pub frequent_gc: bool,
+    /// Use an IP to check bit-constraints
+    #[arg(
+        long = "ir-fits-in-bits-ip",
+        env = "IR_FITS_IN_BITS_IP",
+        action = ArgAction::Set,
+        default_value = "true"
+    )]
+    pub fits_in_bits_ip: bool,
+}
+
+impl Default for IrOpt {
+    fn default() -> Self {
+        Self {
+            field_to_bv: Default::default(),
+            frequent_gc: Default::default(),
+            fits_in_bits_ip: true,
+        }
+    }
 }
 
 #[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
@@ -231,7 +249,7 @@ pub struct RamOpt {
         default_value = "uniqueness"
     )]
     pub index: IndexStrategy,
-    /// How to argue that indices are only repeated in blocks.
+    /// How to permute accesses
     #[arg(
         long = "ram-permutation",
         env = "RAM_PERMUTATION",

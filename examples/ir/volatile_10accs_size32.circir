@@ -1,0 +1,109 @@
+
+; TEST_FILE
+; FEATURES: r1cs poly
+; CMD: $circ $file r1cs --proof-impl mirage --action count
+(computations
+ (main
+  (computation
+   (metadata
+    (parties prover verifier)
+    (inputs
+        (x (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+        (y (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+        (b bool)
+    )
+    (commitments))
+   (precompute
+    ()
+    ((return (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513)))
+    (tuple 
+    (set_default_modulus 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    (declare
+        (
+            (x (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (y (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (b bool)
+        )
+    (let (
+        (a0 (#a (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513) #f0 32 ()))
+        (pow0 #f1)
+
+        (a1 (ite b (store a0 (+ x #f0) pow0) a0))
+        (pow1 (* pow0 y))
+
+        (a2 (ite b (store a1 (+ x #f1) pow1) a1))
+        (pow2 (* pow1 y))
+
+        (a3 (ite b (store a2 (+ x #f2) pow2) a2))
+        (pow3 (* pow2 y))
+
+        (a4 (ite b (store a3 (+ x #f3) pow3) a3))
+        (pow4 (* pow3 y))
+
+        (a5 (ite b (store a4 (+ x #f4) pow4) a4))
+        (pow5 (* pow4 y))
+
+        (a6 (ite b (store a5 (+ x #f5) pow5) a5))
+        (pow6 (* pow5 y))
+
+        (a7 (ite b (store a6 (+ x #f6) pow6) a6))
+        (pow7 (* pow6 y))
+
+        (a8 (ite b (store a7 (+ x #f7) pow7) a7))
+        (pow8 (* pow7 y))
+
+        (a9 (ite b (store a8 (+ x #f8) pow8) a8))
+        (pow9 (* pow8 y))
+
+        (output (select a9 y))
+        )
+
+        output
+    ))))
+    )
+   (ram_arrays (#a (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513) #f0m52435875175126190479447740508185965837690552500527637822603658699938581184513 32 ()))
+
+    (set_default_modulus 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    (declare
+        (
+            (x (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (y (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (b bool)
+        )
+    (let (
+        (a0 (#a (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513) #f0 32 ()))
+        (pow0 #f1)
+
+        (a1 (ite b (store a0 (+ x #f0) pow0) a0))
+        (pow1 (* pow0 y))
+
+        (a2 (ite b (store a1 (+ x #f1) pow1) a1))
+        (pow2 (* pow1 y))
+
+        (a3 (ite b (store a2 (+ x #f2) pow2) a2))
+        (pow3 (* pow2 y))
+
+        (a4 (ite b (store a3 (+ x #f3) pow3) a3))
+        (pow4 (* pow3 y))
+
+        (a5 (ite b (store a4 (+ x #f4) pow4) a4))
+        (pow5 (* pow4 y))
+
+        (a6 (ite b (store a5 (+ x #f5) pow5) a5))
+        (pow6 (* pow5 y))
+
+        (a7 (ite b (store a6 (+ x #f6) pow6) a6))
+        (pow7 (* pow6 y))
+
+        (a8 (ite b (store a7 (+ x #f7) pow7) a7))
+        (pow8 (* pow7 y))
+
+        (a9 (ite b (store a8 (+ x #f8) pow8) a8))
+        (pow9 (* pow8 y))
+
+        (output (select a9 y))
+        )
+
+   (= output y)
+   )))
+   )))

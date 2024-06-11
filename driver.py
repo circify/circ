@@ -3,14 +3,62 @@
 import argparse
 import subprocess
 import sys
+import os
 
-from util import *
+# Gloable variables
+feature_path = ".features.txt"
+mode_path = ".mode.txt"
+
+cargo_features = {
+    "aby",
+    "c",
+    "lp",
+    "r1cs",
+    "smt",
+    "zok",
+    "datalog",
+    "bellman",
+    "spartan",
+    "poly",
+}
+
+
+def save_mode(mode):
+    """Save mode to file"""
+    with open(mode_path, "w") as f:
+        f.write(mode)
+
+
+def load_mode():
+    """Load mode from file"""
+    if os.path.exists(mode_path):
+        with open(mode_path, "r") as f:
+            return f.read().strip()
+    else:
+        return ""
+
+
+def save_features(features):
+    """Save features to file"""
+    with open(feature_path, "w") as f:
+        feature_str = "\n".join(features)
+        f.write(feature_str)
+
+
+def load_features():
+    """Load features from file"""
+    if os.path.exists(feature_path):
+        with open(feature_path, "r") as f:
+            features = f.read().splitlines()
+            return features
+    else:
+        return []
 
 
 def log_run_check(cmd):
     s = (
         " ".join(f"'{tok}'" if " " in tok else tok for tok in cmd)
-        if type(cmd) == list
+        if isinstance(cmd, list)
         else cmd
     )
     print(f"Running: {s}")
@@ -28,7 +76,8 @@ def install(features):
     """
 
     # install python requirements
-    subprocess.run(["pip3", "install", "-r", "requirements.txt"])
+    if "aby" in features:
+        subprocess.run(["pip3", "install", "-r", "requirements.txt"])
 
 
 def check(features):
@@ -52,8 +101,18 @@ def check_all():
     Run cargo check with every individual feature
     """
     for feature in cargo_features:
-        log_run_check(["cargo", "check", "--tests", "--examples",
-                      "--benches", "--bins", "--features", feature])
+        log_run_check(
+            [
+                "cargo",
+                "check",
+                "--tests",
+                "--examples",
+                "--benches",
+                "--bins",
+                "--features",
+                feature,
+            ]
+        )
 
 
 def build(features):
@@ -123,8 +182,7 @@ def test(features, extra_args):
 
     if "zok" in features and "smt" in features:
         if "aby" in features:
-            log_run_check(
-                ["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
+            log_run_check(["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
         if "lp" in features:
             log_run_check(["./scripts/test_zok_to_ilp.zsh"])
         if "r1cs" in features:
@@ -143,6 +201,7 @@ def test(features, extra_args):
             log_run_check(["python3", "./scripts/aby_tests/c_test_aby.py"])
         if "smt" in features:
             log_run_check(["./scripts/test_c_smt.zsh"])
+    log_run_check(["./scripts/file_tests.zsh", ",".join(features)])
 
 
 def benchmark(features):
@@ -186,6 +245,16 @@ def lint():
     log_run_check(cmd)
 
 
+def set_default_features(features):
+    cargo_toml = (
+        os.path.dirname(os.path.abspath(os.path.realpath(__file__))) + "/Cargo.toml"
+    )
+    features_array = "[" + ", ".join('"' + f + '"' for f in features) + "]"
+    new_default_line = f"default = {features_array}"
+    print(f"sed -i 's/^default =.*/{new_default_line}/' {cargo_toml}")
+    log_run_check(["sed", "-i", f"s/^default =.*/{new_default_line}/", cargo_toml])
+
+
 def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
     if features:
@@ -209,8 +278,7 @@ def clean(features):
 def set_mode(mode):
     def verify_mode(mode):
         if mode not in ("debug", "release"):
-            raise RuntimeError(
-                f"Unknown mode: {mode}, --mode <debug, release>")
+            raise RuntimeError(f"Unknown mode: {mode}, --mode <debug, release>")
 
     verify_mode(mode)
     save_mode(mode)
@@ -236,7 +304,7 @@ def set_features(features):
 
     features = set(sorted([f for f in features if verify_feature(f)]))
     save_features(features)
-    print("Feature set:", sorted(list(features)))
+    print(",".join(sorted(features)))
     return features
 
 
@@ -287,10 +355,16 @@ if __name__ == "__main__":
             "-m", "--mode", type=str, help="set `debug` or `release` mode"
         )
         parser.add_argument(
-            "-A", "--all_features", action="store_true", help="set all features on"
+            "-A", "--all-features", action="store_true", help="set all features on"
         )
         parser.add_argument(
-            "-L", "--list_features", action="store_true", help="print active features"
+            "-L", "--list-features", action="store_true", help="print active features"
+        )
+        parser.add_argument(
+            "-s",
+            "--set-default-features",
+            action="store_true",
+            help="write active features to Cargo.toml's default features; useful for rust tooling",
         )
         parser.add_argument(
             "-F",
@@ -298,8 +372,7 @@ if __name__ == "__main__":
             nargs="+",
             help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none",
         )
-        parser.add_argument(
-            "--benchmark", action="store_true", help="build benchmarks")
+        parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
         parser.add_argument(
             "extra",
             metavar="PASS_THROUGH_ARGS",
@@ -371,10 +444,13 @@ if __name__ == "__main__":
             features = set_features(cargo_features)
 
         if args.list_features:
-            print("Feature set:", sorted(list(features)))
+            print(",".join(sorted(features)))
 
         if args.features:
             features = set_features(args.features)
+
+        if args.set_default_features:
+            set_default_features(features)
     except subprocess.CalledProcessError as e:
         print("The command")
         cmd_str = " ".join("'" + a + "'" if " " in a else a for a in e.cmd)
