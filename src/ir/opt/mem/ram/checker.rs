@@ -248,7 +248,7 @@ fn range_check(
 }
 
 /// Haboeck range check
-fn haboeck_range_check(
+pub fn haboeck_range_check(
     c: &mut Computation,
     values: Vec<Term>,
     ns: &Namespace,

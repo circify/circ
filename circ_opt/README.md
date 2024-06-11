@@ -92,6 +92,13 @@ Options:
           [default: false]
           [possible values: true, false]
 
+      --ir-fits-in-bits-ip <FITS_IN_BITS_IP>
+          Use an IP to check bit-constraints
+          
+          [env: IR_FITS_IN_BITS_IP=]
+          [default: true]
+          [possible values: true, false]
+
       --ram <ENABLED>
           Whether to use advanced RAM techniques
           
@@ -120,7 +127,7 @@ Options:
           - uniqueness: Use the GCD-derivative uniqueness argument
 
       --ram-permutation <PERMUTATION>
-          How to argue that indices are only repeated in blocks
+          How to permute accesses
           
           [env: RAM_PERMUTATION=]
           [default: msh]
@@ -212,6 +219,8 @@ Options:
           Which field to use [env: IR_FIELD_TO_BV=] [default: wrap] [possible values: wrap, panic]
       --ir-frequent-gc <FREQUENT_GC>
           Garbage collection after each optimization pass [env: IR_FREQUENT_GC=] [default: false] [possible values: true, false]
+      --ir-fits-in-bits-ip <FITS_IN_BITS_IP>
+          Use an IP to check bit-constraints [env: IR_FITS_IN_BITS_IP=] [default: true] [possible values: true, false]
       --ram <ENABLED>
           Whether to use advanced RAM techniques [env: RAM=] [default: false] [possible values: true, false]
       --ram-range <RANGE>
@@ -219,7 +228,7 @@ Options:
       --ram-index <INDEX>
           How to argue that indices are only repeated in blocks [env: RAM_INDEX=] [default: uniqueness] [possible values: sort, uniqueness]
       --ram-permutation <PERMUTATION>
-          How to argue that indices are only repeated in blocks [env: RAM_PERMUTATION=] [default: msh] [possible values: waksman, msh]
+          How to permute accesses [env: RAM_PERMUTATION=] [default: msh] [possible values: waksman, msh]
       --ram-rom <ROM>
           ROM approach [env: RAM_ROM=] [default: haboeck] [possible values: haboeck, permute]
       --fmt-use-default-field <USE_DEFAULT_FIELD>
@@ -259,6 +268,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -305,6 +315,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -349,6 +360,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -393,6 +405,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -437,6 +450,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -481,6 +495,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -525,6 +540,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -569,6 +585,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -616,6 +633,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -661,6 +679,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -708,6 +727,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -753,6 +773,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -800,6 +821,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,
@@ -845,6 +867,7 @@ BinaryOpt {
         ir: IrOpt {
             field_to_bv: Wrap,
             frequent_gc: false,
+            fits_in_bits_ip: true,
         },
         ram: RamOpt {
             enabled: false,

@@ -1,0 +1,349 @@
+
+; TEST_FILE
+; FEATURES: r1cs poly
+; CMD: $circ $file r1cs --proof-impl mirage --action count
+(computations
+ (main
+  (computation
+   (metadata
+    (parties prover verifier)
+    (inputs
+        (x (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+        (y (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+        (b bool)
+    )
+    (commitments))
+   (precompute
+    ()
+    ((return (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513)))
+    (tuple 
+    (set_default_modulus 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    (declare
+        (
+            (x (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (y (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (b bool)
+        )
+    (let (
+        (a0 (#a (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513) #f0 1152921504606846976 ()))
+        (pow0 #f1)
+
+        (a1 (ite b (store a0 (+ x #f0) pow0) a0))
+        (pow1 (* pow0 y))
+
+        (a2 (ite b (store a1 (+ x #f1) pow1) a1))
+        (pow2 (* pow1 y))
+
+        (a3 (ite b (store a2 (+ x #f2) pow2) a2))
+        (pow3 (* pow2 y))
+
+        (a4 (ite b (store a3 (+ x #f3) pow3) a3))
+        (pow4 (* pow3 y))
+
+        (a5 (ite b (store a4 (+ x #f4) pow4) a4))
+        (pow5 (* pow4 y))
+
+        (a6 (ite b (store a5 (+ x #f5) pow5) a5))
+        (pow6 (* pow5 y))
+
+        (a7 (ite b (store a6 (+ x #f6) pow6) a6))
+        (pow7 (* pow6 y))
+
+        (a8 (ite b (store a7 (+ x #f7) pow7) a7))
+        (pow8 (* pow7 y))
+
+        (a9 (ite b (store a8 (+ x #f8) pow8) a8))
+        (pow9 (* pow8 y))
+
+        (a10 (ite b (store a9 (+ x #f9) pow9) a9))
+        (pow10 (* pow9 y))
+
+        (a11 (ite b (store a10 (+ x #f10) pow10) a10))
+        (pow11 (* pow10 y))
+
+        (a12 (ite b (store a11 (+ x #f11) pow11) a11))
+        (pow12 (* pow11 y))
+
+        (a13 (ite b (store a12 (+ x #f12) pow12) a12))
+        (pow13 (* pow12 y))
+
+        (a14 (ite b (store a13 (+ x #f13) pow13) a13))
+        (pow14 (* pow13 y))
+
+        (a15 (ite b (store a14 (+ x #f14) pow14) a14))
+        (pow15 (* pow14 y))
+
+        (a16 (ite b (store a15 (+ x #f15) pow15) a15))
+        (pow16 (* pow15 y))
+
+        (a17 (ite b (store a16 (+ x #f16) pow16) a16))
+        (pow17 (* pow16 y))
+
+        (a18 (ite b (store a17 (+ x #f17) pow17) a17))
+        (pow18 (* pow17 y))
+
+        (a19 (ite b (store a18 (+ x #f18) pow18) a18))
+        (pow19 (* pow18 y))
+
+        (a20 (ite b (store a19 (+ x #f19) pow19) a19))
+        (pow20 (* pow19 y))
+
+        (a21 (ite b (store a20 (+ x #f20) pow20) a20))
+        (pow21 (* pow20 y))
+
+        (a22 (ite b (store a21 (+ x #f21) pow21) a21))
+        (pow22 (* pow21 y))
+
+        (a23 (ite b (store a22 (+ x #f22) pow22) a22))
+        (pow23 (* pow22 y))
+
+        (a24 (ite b (store a23 (+ x #f23) pow23) a23))
+        (pow24 (* pow23 y))
+
+        (a25 (ite b (store a24 (+ x #f24) pow24) a24))
+        (pow25 (* pow24 y))
+
+        (a26 (ite b (store a25 (+ x #f25) pow25) a25))
+        (pow26 (* pow25 y))
+
+        (a27 (ite b (store a26 (+ x #f26) pow26) a26))
+        (pow27 (* pow26 y))
+
+        (a28 (ite b (store a27 (+ x #f27) pow27) a27))
+        (pow28 (* pow27 y))
+
+        (a29 (ite b (store a28 (+ x #f28) pow28) a28))
+        (pow29 (* pow28 y))
+
+        (a30 (ite b (store a29 (+ x #f29) pow29) a29))
+        (pow30 (* pow29 y))
+
+        (a31 (ite b (store a30 (+ x #f30) pow30) a30))
+        (pow31 (* pow30 y))
+
+        (a32 (ite b (store a31 (+ x #f31) pow31) a31))
+        (pow32 (* pow31 y))
+
+        (a33 (ite b (store a32 (+ x #f32) pow32) a32))
+        (pow33 (* pow32 y))
+
+        (a34 (ite b (store a33 (+ x #f33) pow33) a33))
+        (pow34 (* pow33 y))
+
+        (a35 (ite b (store a34 (+ x #f34) pow34) a34))
+        (pow35 (* pow34 y))
+
+        (a36 (ite b (store a35 (+ x #f35) pow35) a35))
+        (pow36 (* pow35 y))
+
+        (a37 (ite b (store a36 (+ x #f36) pow36) a36))
+        (pow37 (* pow36 y))
+
+        (a38 (ite b (store a37 (+ x #f37) pow37) a37))
+        (pow38 (* pow37 y))
+
+        (a39 (ite b (store a38 (+ x #f38) pow38) a38))
+        (pow39 (* pow38 y))
+
+        (a40 (ite b (store a39 (+ x #f39) pow39) a39))
+        (pow40 (* pow39 y))
+
+        (a41 (ite b (store a40 (+ x #f40) pow40) a40))
+        (pow41 (* pow40 y))
+
+        (a42 (ite b (store a41 (+ x #f41) pow41) a41))
+        (pow42 (* pow41 y))
+
+        (a43 (ite b (store a42 (+ x #f42) pow42) a42))
+        (pow43 (* pow42 y))
+
+        (a44 (ite b (store a43 (+ x #f43) pow43) a43))
+        (pow44 (* pow43 y))
+
+        (a45 (ite b (store a44 (+ x #f44) pow44) a44))
+        (pow45 (* pow44 y))
+
+        (a46 (ite b (store a45 (+ x #f45) pow45) a45))
+        (pow46 (* pow45 y))
+
+        (a47 (ite b (store a46 (+ x #f46) pow46) a46))
+        (pow47 (* pow46 y))
+
+        (a48 (ite b (store a47 (+ x #f47) pow47) a47))
+        (pow48 (* pow47 y))
+
+        (a49 (ite b (store a48 (+ x #f48) pow48) a48))
+        (pow49 (* pow48 y))
+
+        (output (select a49 y))
+        )
+
+        output
+    ))))
+    )
+   (ram_arrays (#a (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513) #f0m52435875175126190479447740508185965837690552500527637822603658699938581184513 1152921504606846976 ()))
+
+    (set_default_modulus 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    (declare
+        (
+            (x (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (y (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513))
+            (b bool)
+        )
+    (let (
+        (a0 (#a (mod 52435875175126190479447740508185965837690552500527637822603658699938581184513) #f0 1152921504606846976 ()))
+        (pow0 #f1)
+
+        (a1 (ite b (store a0 (+ x #f0) pow0) a0))
+        (pow1 (* pow0 y))
+
+        (a2 (ite b (store a1 (+ x #f1) pow1) a1))
+        (pow2 (* pow1 y))
+
+        (a3 (ite b (store a2 (+ x #f2) pow2) a2))
+        (pow3 (* pow2 y))
+
+        (a4 (ite b (store a3 (+ x #f3) pow3) a3))
+        (pow4 (* pow3 y))
+
+        (a5 (ite b (store a4 (+ x #f4) pow4) a4))
+        (pow5 (* pow4 y))
+
+        (a6 (ite b (store a5 (+ x #f5) pow5) a5))
+        (pow6 (* pow5 y))
+
+        (a7 (ite b (store a6 (+ x #f6) pow6) a6))
+        (pow7 (* pow6 y))
+
+        (a8 (ite b (store a7 (+ x #f7) pow7) a7))
+        (pow8 (* pow7 y))
+
+        (a9 (ite b (store a8 (+ x #f8) pow8) a8))
+        (pow9 (* pow8 y))
+
+        (a10 (ite b (store a9 (+ x #f9) pow9) a9))
+        (pow10 (* pow9 y))
+
+        (a11 (ite b (store a10 (+ x #f10) pow10) a10))
+        (pow11 (* pow10 y))
+
+        (a12 (ite b (store a11 (+ x #f11) pow11) a11))
+        (pow12 (* pow11 y))
+
+        (a13 (ite b (store a12 (+ x #f12) pow12) a12))
+        (pow13 (* pow12 y))
+
+        (a14 (ite b (store a13 (+ x #f13) pow13) a13))
+        (pow14 (* pow13 y))
+
+        (a15 (ite b (store a14 (+ x #f14) pow14) a14))
+        (pow15 (* pow14 y))
+
+        (a16 (ite b (store a15 (+ x #f15) pow15) a15))
+        (pow16 (* pow15 y))
+
+        (a17 (ite b (store a16 (+ x #f16) pow16) a16))
+        (pow17 (* pow16 y))
+
+        (a18 (ite b (store a17 (+ x #f17) pow17) a17))
+        (pow18 (* pow17 y))
+
+        (a19 (ite b (store a18 (+ x #f18) pow18) a18))
+        (pow19 (* pow18 y))
+
+        (a20 (ite b (store a19 (+ x #f19) pow19) a19))
+        (pow20 (* pow19 y))
+
+        (a21 (ite b (store a20 (+ x #f20) pow20) a20))
+        (pow21 (* pow20 y))
+
+        (a22 (ite b (store a21 (+ x #f21) pow21) a21))
+        (pow22 (* pow21 y))
+
+        (a23 (ite b (store a22 (+ x #f22) pow22) a22))
+        (pow23 (* pow22 y))
+
+        (a24 (ite b (store a23 (+ x #f23) pow23) a23))
+        (pow24 (* pow23 y))
+
+        (a25 (ite b (store a24 (+ x #f24) pow24) a24))
+        (pow25 (* pow24 y))
+
+        (a26 (ite b (store a25 (+ x #f25) pow25) a25))
+        (pow26 (* pow25 y))
+
+        (a27 (ite b (store a26 (+ x #f26) pow26) a26))
+        (pow27 (* pow26 y))
+
+        (a28 (ite b (store a27 (+ x #f27) pow27) a27))
+        (pow28 (* pow27 y))
+
+        (a29 (ite b (store a28 (+ x #f28) pow28) a28))
+        (pow29 (* pow28 y))
+
+        (a30 (ite b (store a29 (+ x #f29) pow29) a29))
+        (pow30 (* pow29 y))
+
+        (a31 (ite b (store a30 (+ x #f30) pow30) a30))
+        (pow31 (* pow30 y))
+
+        (a32 (ite b (store a31 (+ x #f31) pow31) a31))
+        (pow32 (* pow31 y))
+
+        (a33 (ite b (store a32 (+ x #f32) pow32) a32))
+        (pow33 (* pow32 y))
+
+        (a34 (ite b (store a33 (+ x #f33) pow33) a33))
+        (pow34 (* pow33 y))
+
+        (a35 (ite b (store a34 (+ x #f34) pow34) a34))
+        (pow35 (* pow34 y))
+
+        (a36 (ite b (store a35 (+ x #f35) pow35) a35))
+        (pow36 (* pow35 y))
+
+        (a37 (ite b (store a36 (+ x #f36) pow36) a36))
+        (pow37 (* pow36 y))
+
+        (a38 (ite b (store a37 (+ x #f37) pow37) a37))
+        (pow38 (* pow37 y))
+
+        (a39 (ite b (store a38 (+ x #f38) pow38) a38))
+        (pow39 (* pow38 y))
+
+        (a40 (ite b (store a39 (+ x #f39) pow39) a39))
+        (pow40 (* pow39 y))
+
+        (a41 (ite b (store a40 (+ x #f40) pow40) a40))
+        (pow41 (* pow40 y))
+
+        (a42 (ite b (store a41 (+ x #f41) pow41) a41))
+        (pow42 (* pow41 y))
+
+        (a43 (ite b (store a42 (+ x #f42) pow42) a42))
+        (pow43 (* pow42 y))
+
+        (a44 (ite b (store a43 (+ x #f43) pow43) a43))
+        (pow44 (* pow43 y))
+
+        (a45 (ite b (store a44 (+ x #f44) pow44) a44))
+        (pow45 (* pow44 y))
+
+        (a46 (ite b (store a45 (+ x #f45) pow45) a45))
+        (pow46 (* pow45 y))
+
+        (a47 (ite b (store a46 (+ x #f46) pow46) a46))
+        (pow47 (* pow46 y))
+
+        (a48 (ite b (store a47 (+ x #f47) pow47) a47))
+        (pow48 (* pow47 y))
+
+        (a49 (ite b (store a48 (+ x #f48) pow48) a48))
+        (pow49 (* pow48 y))
+
+        (output (select a49 y))
+        )
+
+   (= output y)
+   )))
+   )))

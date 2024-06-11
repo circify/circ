@@ -18,6 +18,7 @@ mod hash;
 pub mod persistent;
 pub mod set;
 pub mod volatile;
+pub use checker::haboeck_range_check;
 
 #[derive(Debug)]
 /// An access to a RAM
