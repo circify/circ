@@ -355,10 +355,10 @@ if __name__ == "__main__":
             "-m", "--mode", type=str, help="set `debug` or `release` mode"
         )
         parser.add_argument(
-            "-A", "--all_features", action="store_true", help="set all features on"
+            "-A", "--all-features", action="store_true", help="set all features on"
         )
         parser.add_argument(
-            "-L", "--list_features", action="store_true", help="print active features"
+            "-L", "--list-features", action="store_true", help="print active features"
         )
         parser.add_argument(
             "-s",
