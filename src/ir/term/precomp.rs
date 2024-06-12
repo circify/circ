@@ -16,7 +16,7 @@ use log::trace;
 pub struct PreComp {
     #[serde(with = "crate::ir::term::serde_mods::map")]
     /// A map from output names to the terms that compute them.
-    outputs: FxHashMap<String, Term>,
+    pub outputs: FxHashMap<String, Term>,
     sequence: Vec<(String, Sort)>,
     inputs: FxHashSet<(String, Sort)>,
 }

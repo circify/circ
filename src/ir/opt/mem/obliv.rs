@@ -122,6 +122,17 @@ impl OblivRewriter {
                     None,
                 )
             }
+            Op::Witness(s) => {
+                let arg = &t.cs()[0];
+                (
+                    if let Some(targ) = self.tups.get(arg) {
+                        Some(term![Op::Witness(s.clone()); targ.clone()])
+                    } else {
+                        None
+                    },
+                    None,
+                )
+            }
             Op::Eq => {
                 let a = &t.cs()[0];
                 let b = &t.cs()[1];
@@ -188,9 +199,18 @@ pub fn elim_obliv(c: &mut Computation) {
     for t in c.terms_postorder() {
         pass.visit(&t);
     }
+    for t in PostOrderIter::from_roots_and_skips(
+        c.precomputes.outputs.values().cloned(),
+        Default::default(),
+    ) {
+        pass.visit(&t);
+    }
     for o in &mut c.outputs {
         debug_assert!(check(o).is_scalar());
         *o = pass.get(o).clone();
+    }
+    for v in c.precomputes.outputs.values_mut() {
+        *v = pass.get(v).clone();
     }
 }
 

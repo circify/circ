@@ -609,6 +609,7 @@ impl ProverData {
                 }
             }
         }
+        eval.print_times();
         var_values
     }
     /// Check all assertions. Puts in 1 for challenges.

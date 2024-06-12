@@ -83,6 +83,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     for a in &mut c.outputs {
                         *a = cfold::fold_cache(a, &mut cache, &ignore.clone());
                     }
+                    for v in &mut c.precomputes.outputs.values_mut() {
+                        *v = cfold::fold_cache(v, &mut cache, &ignore.clone());
+                    }
                     c.ram_arrays = c
                         .ram_arrays
                         .iter()
