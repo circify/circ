@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use fxhash::FxHashSet;
+use fxhash::{FxHashMap, FxHashSet};
 
 /// A namespace. Used to create unique names.
 ///
@@ -28,6 +28,7 @@ impl Namespace {
 /// A tool for ensuring name uniqueness.
 pub struct Uniquer {
     used: FxHashSet<String>,
+    counts: FxHashMap<String, usize>,
 }
 
 impl Uniquer {
@@ -35,6 +36,7 @@ impl Uniquer {
     pub fn new(used: impl IntoIterator<Item = String>) -> Self {
         Uniquer {
             used: used.into_iter().collect(),
+            counts: Default::default(),
         }
     }
     /// Make a unique name prefixed by `prefix`, store it, and return it.
@@ -43,10 +45,12 @@ impl Uniquer {
             self.used.insert(prefix.into());
             return prefix.into();
         }
-        for i in 0.. {
+        let counts = self.counts.entry(prefix.into()).or_default();
+        for i in *counts.. {
             let name = format!("{prefix}_{i}");
             if !self.used.contains(&name) {
                 self.used.insert(name.clone());
+                *counts = i + 1;
                 return name;
             }
         }

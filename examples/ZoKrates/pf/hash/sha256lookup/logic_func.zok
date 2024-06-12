@@ -1,0 +1,74 @@
+from "basic_op" import xor_11, xor_10, xor_for_all_limbs, rotr, shr, and_s2s, and_s2d, not
+from "utils" import combine_limbs, combine_sparse_limbs, split_odd_dual_11, split_odd_dual_10, Dual, dual_limbs_to_dense_limbs
+
+// SSIG0 (sparse to dense-single) function for SHA-256
+def ssig0<N>(field[N] input, u32[N] LIMBWIDTH) -> field:
+    // u32[N] LIMBWIDTH = [11, 11, 10]
+    field[3] int = [0; 3]
+    int[0] = rotr::<N, 7>(input, LIMBWIDTH, LIMBWIDTH)
+    int[1] = rotr::<N, 18>(input, LIMBWIDTH, LIMBWIDTH)
+    int[2] = shr::<N, 3>(input, LIMBWIDTH, LIMBWIDTH)
+    field[N] output_limbs = xor_for_all_limbs::<3>(int, LIMBWIDTH)
+    return combine_limbs::<N>(output_limbs, LIMBWIDTH)
+
+// SSIG1 (sparse to dense-single) function for SHA-256
+def ssig1<N>(field[N] input, u32[N] LIMBWIDTH) -> field:
+    // u32[N] LIMBWIDTH = [11, 11, 10]
+    field[3] int = [0; 3]
+    int[0] = rotr::<N, 17>(input, LIMBWIDTH, LIMBWIDTH)
+    int[1] = rotr::<N, 19>(input, LIMBWIDTH, LIMBWIDTH)
+    int[2] = shr::<N, 10>(input, LIMBWIDTH, LIMBWIDTH)
+    field[N] output_limbs = xor_for_all_limbs::<3>(int, LIMBWIDTH)
+    return combine_limbs::<N>(output_limbs, LIMBWIDTH)
+
+// bsig0 (sparse to dense-single) function for SHA-256
+def bsig0<N>(field[N] input) -> field:
+    u32[N] LIMBWIDTH_ORI = [11, 11, 10]
+    u32[N] LIMBWIDTH_NEW = [10, 11, 11]
+    field[3] int = [0; 3]
+    int[0] = rotr::<N, 2>(input, LIMBWIDTH_ORI, LIMBWIDTH_NEW)
+    int[1] = rotr::<N, 13>(input, LIMBWIDTH_ORI, LIMBWIDTH_NEW)
+    int[2] = combine_sparse_limbs::<N>([input[2], input[0], input[1]], LIMBWIDTH_NEW) // ROTR^22
+    field[N] output_limbs = xor_for_all_limbs::<3>(int, LIMBWIDTH_ORI)
+    return combine_limbs::<N>(output_limbs, LIMBWIDTH_ORI)
+
+// bsig1 (sparse to dense-single) function for SHA-256
+def bsig1<N>(field[N] input) -> field:
+    u32[N] LIMBWIDTH_ORI = [11, 11, 10]
+    u32[N] LIMBWIDTH_NEW = [11, 10, 11]
+    field[3] int = [0; 3]
+    int[0] = rotr::<N, 6>(input, LIMBWIDTH_ORI, LIMBWIDTH_NEW)
+    int[1] = combine_sparse_limbs::<N>([input[1], input[2], input[0]], LIMBWIDTH_NEW)// ROTR^11
+    int[2] = rotr::<N, 25>(input, LIMBWIDTH_ORI, LIMBWIDTH_NEW)
+    field[N] output_limbs = xor_for_all_limbs::<3>(int, LIMBWIDTH_ORI)
+    return combine_limbs::<N>(output_limbs, LIMBWIDTH_ORI)
+
+// MAJ (sparse to dense-single) function for SHA-256
+// LIMBWIDTH = [11, 11, 10];
+def maj<N>(field[3][N] input) -> field:
+    field[N] intermediate = [0; N]
+    for u32 i in 0..N do
+        intermediate[i] = input[0][i] + input[1][i] + input[2][i]
+    endfor
+    Dual[N] output_dual = [Dual{d: 0, s: 0}; N]
+    output_dual[0] = split_odd_dual_11(intermediate[0])
+    output_dual[1] = split_odd_dual_11(intermediate[1])
+    output_dual[2] = split_odd_dual_10(intermediate[2])
+    u32[N] LIMBWIDTH = [11, 11, 10]
+    field[N] output_limbs = dual_limbs_to_dense_limbs::<N>(output_dual)
+    return combine_limbs::<N>(output_limbs, LIMBWIDTH)
+
+// CH (sparse to dense-single) function for SHA-256
+// LIMBWIDTH = [11, 11, 10];
+def ch<N>(field[3][N] input) -> field:
+    field[2][N] int = [[0; N]; 2]
+    int[0] = and_s2d(input[0], input[1]) // of type field[N]
+    int[1] = and_s2d(not(input[0]), input[2]) // of type field[N]
+    field[N] output_limbs = [0; N]
+    for u32 i in 0..N do
+        output_limbs[i] = int[0][i] + int[1][i] // replace xor with pure addition
+    endfor
+    u32[N] LIMBWIDTH = [11, 11, 10]
+    return combine_limbs::<N>(output_limbs, LIMBWIDTH)
+
+

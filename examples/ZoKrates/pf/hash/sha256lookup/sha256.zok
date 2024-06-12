@@ -1,0 +1,25 @@
+import "./shaRound" as shaRound
+from "utils" import Dual, dual_limbs_to_dense_limbs, dense_limbs_to_dual_limbs, combine_limbs
+from "const" import IV_S
+
+
+// N: Number of invocations of sha256 blocks
+// NL: Number of limbs
+// output dense form of sha256(message)
+// def main<N, NL>(field[N][16][NL] message) -> field[8][NL]:
+def main<N, NL>(field[N][16][NL] message) -> field[8]: // for debug purpose
+    u32[NL] LIMBWIDTH = [11, 11, 10]
+    Dual[8][NL] current = IV_S
+    for u32 i in 0..N do
+        Dual[16][NL] cur_msg = dense_limbs_to_dual_limbs::<16, NL>(message[i], LIMBWIDTH) // implicitly do range checks for message
+        current = shaRound::<NL>(cur_msg, current, LIMBWIDTH)
+    endfor
+    // field[8][NL] output = [[0; NL]; 8]
+    // for u32 i in 0..8 do
+    //     output[i] = dual_limbs_to_dense_limbs(current[i])
+    // endfor
+    field[8] output = [0; 8]
+    for u32 i in 0..8 do
+        output[i] = combine_limbs(dual_limbs_to_dense_limbs(current[i]), LIMBWIDTH)
+    endfor
+    return output

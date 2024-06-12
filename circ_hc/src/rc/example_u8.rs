@@ -218,10 +218,10 @@ impl Manager {
             let duration = start.elapsed();
             self.in_gc.set(false);
             trace!(
-                "GC: {} terms -> {} terms in {} us",
+                "GC: {} terms -> {} terms in {} ns",
                 collected,
                 new_size,
-                duration.as_micros()
+                duration.as_nanos()
             );
             collected
         } else {

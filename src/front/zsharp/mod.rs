@@ -1007,7 +1007,7 @@ impl<'ast> ZGen<'ast> {
                 format!(
                     "Undefined const identifier {} in {}",
                     &i.value,
-                    self.cur_path().canonicalize().unwrap().to_string_lossy()
+                    self.cur_path().to_string_lossy()
                 )
             }),
             _ => match self
