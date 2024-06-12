@@ -197,6 +197,7 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a, F> {
             vars.len(),
             self.0.r1cs.constraints.len()
         );
+        std::process::exit(0);
         Ok(())
     }
 
@@ -460,8 +461,8 @@ where
     ) -> Self::Proof {
         assert_eq!(rand.len(), pk.data.num_commitments());
         let rng = &mut rand::thread_rng();
-        #[cfg(debug_assertions)]
         pk.data.check_all(witness);
+        std::process::exit(0);
         let rands: Vec<E::Fr> = rand.iter().map(|r| r.0).collect();
         let mut rng = &mut rand::thread_rng();
         let pf_rands: Vec<E::Fr> = (0..rand.len()).map(|_| E::Fr::random(&mut *rng)).collect();
