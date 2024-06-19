@@ -266,6 +266,7 @@ fn main() {
         Mode::Proof | Mode::ProofOfHighValue(_) => {
             let mut opts = Vec::new();
 
+            opts.push(Opt::ConstantFold(Box::new([])));
             opts.push(Opt::DeskolemizeWitnesses);
             opts.push(Opt::ScalarizeVars);
             opts.push(Opt::Flatten);

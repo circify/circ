@@ -28,10 +28,9 @@ pub fn lookup(c: &mut Computation, ns: Namespace, haystack: Vec<Term>, needles: 
     }
     let sort = check(&haystack[0]);
     let f = sort.as_pf().clone();
-    let array_op = Op::Array(sort.clone(), sort.clone());
-    let haystack_array = term(array_op.clone(), haystack.clone());
-    let needles_array = term(array_op.clone(), needles.clone());
-    let counts_pre = unmake_array(term![Op::ExtOp(ExtOp::Haboeck); haystack_array, needles_array]);
+    let haystack_tup = term(Op::Tuple, haystack.clone());
+    let needles_tup = term(Op::Tuple, needles.clone());
+    let counts_pre = tuple_terms(term![Op::ExtOp(ExtOp::Haboeck); haystack_tup, needles_tup]);
     let counts: Vec<Term> = counts_pre
         .into_iter()
         .enumerate()
@@ -53,22 +52,69 @@ pub fn lookup(c: &mut Computation, ns: Namespace, haystack: Vec<Term>, needles: 
             .cloned()
             .collect(),
     );
-    let haysum = term(
-        PF_ADD,
-        counts
-            .into_iter()
-            .zip(haystack)
-            .map(|(ct, hay)| term![PF_DIV; ct, term![PF_ADD; hay, key.clone()]])
-            .collect(),
+    // x_i + k
+    let needle_shifts: Vec<Term> = needles
+        .into_iter()
+        .map(|needle| term![PF_ADD; needle, key.clone()])
+        .collect();
+    // tup(1 / (x_i + k))
+    let needle_invs_tup: Term =
+        term![Op::ExtOp(ExtOp::PfBatchInv); term(Op::Tuple, needle_shifts.clone())];
+    // 1 / (x_i + k)
+    let needle_invs: Vec<Term> = (0..needle_shifts.len())
+        .map(|i| {
+            c.new_var(
+                &ns.fqn(format!("needi{i}")),
+                sort.clone(),
+                PROVER_VIS,
+                Some(term_c![Op::Field(i); needle_invs_tup]),
+            )
+        })
+        .collect();
+    let one = pf_lit(f.new_v(1));
+    let mut assertions: Vec<Term> = Vec::new();
+    // check 1 / (x_i + k)
+    assertions.extend(
+        needle_invs
+            .iter()
+            .zip(&needle_shifts)
+            .map(|(ix, x)| term![EQ; term_c![PF_MUL; ix, x], one.clone()]),
     );
-    let needlesum = term(
-        PF_ADD,
-        needles
-            .into_iter()
-            .map(|needle| term![PF_RECIP; term![PF_ADD; needle, key.clone()]])
-            .collect(),
+
+    // 1 / (x_i + k)
+    let hay_shifts: Vec<Term> = haystack
+        .clone()
+        .into_iter()
+        .map(|hay| term![PF_ADD; hay, key.clone()])
+        .collect();
+    // tup(1 / (x_i + k))
+    let hay_invs_tup: Term =
+        term![Op::ExtOp(ExtOp::PfBatchInv); term(Op::Tuple, hay_shifts.clone())];
+    // ct_i / (x_i + k)
+    let hay_divs: Vec<Term> = (0..hay_shifts.len())
+        .zip(&counts)
+        .map(|(i, ct)| {
+            c.new_var(
+                &ns.fqn(format!("hayi{i}")),
+                sort.clone(),
+                PROVER_VIS,
+                Some(term![PF_MUL; ct.clone(), term_c![Op::Field(i); hay_invs_tup]]),
+            )
+        })
+        .collect();
+
+    assertions.extend(
+        hay_divs
+            .iter()
+            .zip(hay_shifts)
+            .zip(counts)
+            .map(|((div, hay_shift), ct)| term![EQ; term_c![PF_MUL; div, hay_shift.clone()], ct]),
     );
-    term![Op::Eq; haysum, needlesum]
+
+    let needlesum = term(PF_ADD, needle_invs);
+    let haysum = term(PF_ADD, hay_divs);
+    assertions.push(term![Op::Eq; haysum, needlesum]);
+    term(AND, assertions)
 }
 
 /// Returns a term to assert.

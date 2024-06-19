@@ -84,8 +84,8 @@ fn persistent_ram_split_eval() {
     let t = text::parse_term(
         b"
         (declare (
-         (entries (array (mod 17) (tuple (mod 17) (mod 17)) 5))
-         (indices (array (mod 17) (mod 17) 3))
+         (entries (tuple 5 (tuple (mod 17) (mod 17))))
+         (indices (tuple 3 (mod 17)))
         )
          (persistent_ram_split entries indices))",
     );
@@ -95,8 +95,8 @@ fn persistent_ram_split_eval() {
         (set_default_modulus 17
         (let
         (
-            (entries (#l (mod 17) ( (#t #f0 #f1) (#t #f1 #f1) (#t #f2 #f3) (#t #f3 #f4) (#t #f4 #f4) )))
-            (indices (#l (mod 17) (#f0 #f2 #f3)))
+            (entries (#t (#t #f0 #f1) (#t #f1 #f1) (#t #f2 #f3) (#t #f3 #f4) (#t #f4 #f4) ))
+            (indices (#t #f0 #f2 #f3))
         ) false))
         ",
     );
@@ -107,18 +107,12 @@ fn persistent_ram_split_eval() {
         (let
         (
           (output (#t
-            (#l (mod 17) ( (#t #f1 #f1) (#t #f4 #f4) )) ; untouched
-            (#l (mod 17) ( (#t #f0 #f0) (#t #f2 #f2) (#t #f3 #f3) )) ; init_reads
-            (#l (mod 17) ( (#t #f0 #f1) (#t #f2 #f3) (#t #f3 #f4) )) ; fin_writes
+            (#t (#t #f1 #f1) (#t #f4 #f4) ) ; untouched
+            (#t (#t #f0 #f0) (#t #f2 #f2) (#t #f3 #f3) ) ; init_reads
+            (#t (#t #f0 #f1) (#t #f2 #f3) (#t #f3 #f4) ) ; fin_writes
           ))
         ) false))
         ",
-    );
-    dbg!(&actual_output.as_tuple()[0].as_array().default);
-    dbg!(
-        &expected_output.get("output").unwrap().as_tuple()[0]
-            .as_array()
-            .default
     );
     assert_eq!(&actual_output, expected_output.get("output").unwrap());
 
@@ -128,8 +122,8 @@ fn persistent_ram_split_eval() {
         (set_default_modulus 17
         (let
         (
-            (entries (#l (mod 17) ( (#t #f0 #f0) (#t #f1 #f2) (#t #f2 #f2) (#t #f3 #f3) (#t #f4 #f4) )))
-            (indices (#l (mod 17) (#f1 #f1 #f1)))
+            (entries (#t (#t #f0 #f0) (#t #f1 #f2) (#t #f2 #f2) (#t #f3 #f3) (#t #f4 #f4) ))
+            (indices (#t #f1 #f1 #f1))
         ) false))
         ",
     );
@@ -140,9 +134,9 @@ fn persistent_ram_split_eval() {
         (let
         (
           (output (#t
-            (#l (mod 17) ( (#t #f3 #f3) (#t #f4 #f4) )) ; untouched
-            (#l (mod 17) ( (#t #f0 #f0) (#t #f1 #f1) (#t #f2 #f2) )) ; init_reads
-            (#l (mod 17) ( (#t #f0 #f0) (#t #f1 #f2) (#t #f2 #f2) )) ; fin_writes
+            (#t (#t #f3 #f3) (#t #f4 #f4) ) ; untouched
+            (#t (#t #f0 #f0) (#t #f1 #f1) (#t #f2 #f2) ) ; init_reads
+            (#t (#t #f0 #f0) (#t #f1 #f2) (#t #f2 #f2) ) ; fin_writes
           ))
         ) false))
         ",
@@ -155,8 +149,8 @@ fn haboeck_eval(haystack: &[usize], needles: &[usize], counts: &[usize]) {
         format!(
             "
         (declare (
-         (haystack (array (mod 17) (mod 17) {}))
-         (needles (array (mod 17) (mod 17) {}))
+         (haystack (tuple {} (mod 17)))
+         (needles (tuple {} (mod 17)))
         )
          (haboeck haystack needles))",
             haystack.len(),
@@ -174,8 +168,8 @@ fn haboeck_eval(haystack: &[usize], needles: &[usize], counts: &[usize]) {
             "(set_default_modulus 17
         (let
         (
-            (haystack (#l (mod 17) ({})))
-            (needles (#l (mod 17) ({})))
+            (haystack (#t {}))
+            (needles (#t {}))
         ) false))",
             haystack.join(" "),
             needles.join(" ")
@@ -187,7 +181,7 @@ fn haboeck_eval(haystack: &[usize], needles: &[usize], counts: &[usize]) {
             "(set_default_modulus 17
         (let
         (
-            (counts (#l (mod 17) ({})))
+            (counts (#t {}))
         ) false))",
             counts.join(" ")
         )

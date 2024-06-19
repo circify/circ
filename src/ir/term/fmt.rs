@@ -148,12 +148,18 @@ impl DisplayIr for Sort {
                 write!(f, ")")
             }
             Sort::Tuple(fields) => {
-                write!(f, "(tuple")?;
-                for field in fields.iter() {
-                    write!(f, " ")?;
-                    field.ir_fmt(f)?;
+                if fields.len() > 1 && fields[1..].iter().all(|s| s == &fields[0]) {
+                    write!(f, "(tuple {} ", fields.len())?;
+                    fields[0].ir_fmt(f)?;
+                    write!(f, ")")
+                } else {
+                    write!(f, "(tuple")?;
+                    for field in fields.iter() {
+                        write!(f, " ")?;
+                        field.ir_fmt(f)?;
+                    }
+                    write!(f, ")")
                 }
-                write!(f, ")")
             }
         }
     }

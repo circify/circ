@@ -997,7 +997,8 @@ impl R1cs {
         // we still need to remove the non-r1cs variables
         //use crate::ir::proof::PROVER_ID;
         //let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
-        let mut precompute_map = precompute.flatten();
+        precompute.flatten();
+        let mut precompute_map = precompute.outputs;
         let mut vars: HashMap<String, Sort> = {
             PostOrderIter::from_roots_and_skips(
                 precompute_map.values().cloned(),
@@ -1074,7 +1075,8 @@ impl R1cs {
         for c in &self.challenge_names {
             assert!(!vars.contains_key(c));
         }
-        let mut precompute_map = precompute.flatten();
+        precompute.flatten();
+        let mut precompute_map = precompute.outputs;
         let terms = self
             .insts_iter()
             .map(|v| {

@@ -41,6 +41,7 @@
 //!     * `(bv N)`
 //!     * `(mod I)`
 //!     * `(tuple S1 ... Sn)`
+//!     * `(tuple N S)` : N copies of S
 //!     * `(array Sk Sv N)`
 //!     * `(map Sk Sv)`
 //!   * Value `V`:
@@ -365,7 +366,16 @@ impl<'src> IrInterp<'src> {
                         Sort::Map(Box::new(self.sort(k)), Box::new(self.sort(v)))
                     }
                     [Leaf(Ident, b"tuple"), ..] => {
-                        Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
+                        if ls.len() > 1 {
+                            if let Some(size) = self.maybe_usize(&ls[1]) {
+                                assert_eq!(ls.len(), 3);
+                                Sort::Tuple(vec![self.sort(&ls[2]); size].into())
+                            } else {
+                                Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
+                            }
+                        } else {
+                            Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
+                        }
                     }
                     _ => panic!("Expected sort, found {}", tt),
                 }
@@ -401,9 +411,12 @@ impl<'src> IrInterp<'src> {
         }
     }
     fn usize(&self, tt: &TokTree) -> usize {
+        self.maybe_usize(tt).unwrap()
+    }
+    fn maybe_usize(&self, tt: &TokTree) -> Option<usize> {
         match tt {
-            Leaf(Token::Int, s) => usize::from_str(from_utf8(s).unwrap()).unwrap(),
-            _ => panic!("Expected integer, got {}", tt),
+            Leaf(Token::Int, s) => usize::from_str(from_utf8(s).ok()?).ok(),
+            _ => None,
         }
     }
     /// Parse lets, returning bindings, in-order.
@@ -1294,8 +1307,8 @@ mod test {
         let t = parse_term(
             b"
         (declare (
-         (entries (array (mod 17) (tuple (mod 17) (mod 17)) 5))
-         (indices (array (mod 17) (mod 17) 3))
+         (entries (tuple 5 (tuple (mod 17) (mod 17))))
+         (indices (tuple 3 (mod 17)))
         )
          (persistent_ram_split entries indices))",
         );
@@ -1337,6 +1350,20 @@ mod test {
     }
 
     #[test]
+    fn tuple_dup_roundtrip() {
+        let t = parse_term(b"(declare ((a (tuple 4 bool))) a)");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn tuple_nodup_roundtrip() {
+        let t = parse_term(b"(declare ((a (tuple (bv 4) bool))) a)");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
     fn pf_fits_in_bits_rountrip() {
         let t = parse_term(b"(declare ((a bool)) ((pf_fits_in_bits 4) (ite a #f1m11 #f0m11)))");
         let t2 = parse_term(serialize_term(&t).as_bytes());
@@ -1363,10 +1390,25 @@ mod test {
         let t = parse_term(
             b"
         (declare (
-         (haystack (array (mod 17) (mod 17) 5))
-         (needles (array (mod 17) (mod 17) 8))
+         (haystack (tuple 5 (mod 17)))
+         (needles (tuple 8 (mod 17)))
         )
          (haboeck haystack needles))",
+        );
+        let s = serialize_term(&t);
+        println!("{s}");
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn pf_batch_inv_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (values (tuple (mod 17) (mod 17)))
+        )
+         (pf_batch_inv values))",
         );
         let s = serialize_term(&t);
         println!("{s}");

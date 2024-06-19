@@ -1,6 +1,6 @@
 //! A multi-stage R1CS witness evaluator.
 
-use crate::cfg::cfg;
+use crate::cfg::cfg_or_default;
 use crate::ir::term::*;
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
@@ -118,7 +118,7 @@ impl<'a> StagedWitCompEvaluator<'a> {
             stages_evaluated: Default::default(),
             outputs_evaluted: 0,
             op_times: Default::default(),
-            time_ops: cfg().ir.time_eval_ops,
+            time_ops: cfg_or_default().ir.time_eval_ops,
         }
     }
     /// Have all stages been evaluated?

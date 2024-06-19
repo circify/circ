@@ -5,7 +5,7 @@ use crate::ir::term::*;
 
 /// Type-check [super::ExtOp::ArrayToMap].
 pub fn check_array_to_map(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    let [array] = ty::count_or(arg_sorts)?;
+    let [array] = ty::count_or_ref(arg_sorts)?;
     let (k, v, _size) = ty::array_or(array, "ArrayToMap expects array")?;
     Ok(Sort::Map(Box::new(k.clone()), Box::new(v.clone())))
 }
@@ -20,7 +20,7 @@ pub fn eval_array_to_map(args: &[&Value]) -> Value {
 
 /// Type-check [super::ExtOp::MapFlip].
 pub fn check_map_flip(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    let [map] = ty::count_or(arg_sorts)?;
+    let [map] = ty::count_or_ref(arg_sorts)?;
     let (k, v) = ty::map_or(map, "MapFlip expects map")?;
     Ok(Sort::Map(Box::new(k.clone()), Box::new(v.clone())))
 }
@@ -37,7 +37,7 @@ pub fn eval_map_flip(args: &[&Value]) -> Value {
 
 /// Type-check [super::ExtOp::MapSelect].
 pub fn check_map_select(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    let [map, k] = ty::count_or(arg_sorts)?;
+    let [map, k] = ty::count_or_ref(arg_sorts)?;
     let (km, v) = ty::map_or(map, "MapSelect expects map")?;
     ty::eq_or(km, k, "MapSelect key")?;
     Ok(v.clone())
@@ -52,7 +52,7 @@ pub fn eval_map_select(args: &[&Value]) -> Value {
 
 /// Type-check [super::ExtOp::MapContainsKey].
 pub fn check_map_contains_key(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    let [map, k] = ty::count_or(arg_sorts)?;
+    let [map, k] = ty::count_or_ref(arg_sorts)?;
     let (km, _) = ty::map_or(map, "MapContainsKey expects map")?;
     ty::eq_or(km, k, "MapContainsKey key")?;
     Ok(Sort::Bool)

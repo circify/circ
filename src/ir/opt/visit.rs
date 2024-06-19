@@ -78,22 +78,24 @@ pub trait RewritePass {
                 }
             }
         }
+        let cache_get = |t: &Term| {
+            cache
+                .get(t)
+                .unwrap_or_else(|| panic!("Cache is missing: {}", t))
+                .clone()
+        };
         if persistent_arrays {
             for (_name, final_term) in &mut computation.persistent_arrays {
-                let new_final_term = cache.get(final_term).unwrap().clone();
+                let new_final_term = cache_get(final_term);
                 trace!("Array {} -> {}", final_term, new_final_term);
                 *final_term = new_final_term;
             }
         }
-        computation.outputs = computation
-            .outputs
-            .iter()
-            .map(|o| cache.get(o).unwrap().clone())
-            .collect();
+        computation.outputs = computation.outputs.iter().map(cache_get).collect();
         if precompute {
             let os = computation.precomputes.outputs().clone();
             for (name, old_term) in os {
-                let new_term = cache.get(&old_term).unwrap().clone();
+                let new_term = cache_get(&old_term);
                 computation.precomputes.change_output(&name, new_term);
             }
         }

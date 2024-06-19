@@ -1690,6 +1690,19 @@ pub fn unmake_array(a: Term) -> Vec<Term> {
         .collect()
 }
 
+/// Make a sequence of terms from a tuple
+///
+/// Requires
+///
+/// * a tuple term
+pub fn tuple_terms(a: Term) -> Vec<Term> {
+    let sort = check(&a);
+    let size = sort.as_tuple().len();
+    (0..size)
+        .map(|idx| term(Op::Field(idx), vec![a.clone()]))
+        .collect()
+}
+
 /// Make a term with no arguments, just an operator.
 pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
