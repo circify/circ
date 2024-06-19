@@ -46,7 +46,7 @@ pub fn fold(node: &Term, ignore: &[Op]) -> Term {
 
         // make the cache unbounded during the fold_cache call
         let old_capacity = cache.cap();
-        cache.resize(std::usize::MAX);
+        cache.resize(usize::MAX);
 
         let ret = fold_cache(node, &mut cache, ignore);
         // shrink cache to its max size
