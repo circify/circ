@@ -6,8 +6,8 @@ use circ_hc::Node;
 use serde::{Deserialize, Serialize};
 
 mod haboeck;
-mod pf_batch_inv;
 mod map;
+mod pf_batch_inv;
 mod poly;
 mod ram;
 mod sort;

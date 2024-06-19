@@ -687,7 +687,7 @@ pub(super) fn homogenous_tuple_or<'a>(
     ctx: &'static str,
 ) -> Result<(usize, &'a Sort), TypeErrorReason> {
     let sorts = tuple_or(a, ctx)?;
-    if sorts.len() > 0 {
+    if !sorts.is_empty() {
         for i in 1..sorts.len() {
             if sorts[0] != sorts[i] {
                 return Err(TypeErrorReason::ExpectedHomogenousTuple(ctx));

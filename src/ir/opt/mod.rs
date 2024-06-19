@@ -62,7 +62,7 @@ pub enum Opt {
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for c in cs.comps.values() {
-        trace!("Before all opts: {}", text::serialize_computation(&c));
+        trace!("Before all opts: {}", text::serialize_computation(c));
     }
     for i in optimizations {
         debug!("Applying: {:?}", i);
@@ -163,7 +163,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());
-            trace!("After {:?}: {}", i, text::serialize_computation(&c));
+            trace!("After {:?}: {}", i, text::serialize_computation(c));
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, c.terms());
             #[cfg(debug_assertions)]

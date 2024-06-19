@@ -277,7 +277,7 @@ pub fn node_cs_iter(node: Term) -> impl Iterator<Item = Term> {
 //     /// Any extra dependencies that should be traversed before this term.
 //     fn extra_dependencies(&mut self, t: &Term) -> Option<Vec<Term>> { None }
 // }
-// 
+//
 // pub struct TermTraversal {
-//     
+//
 // }

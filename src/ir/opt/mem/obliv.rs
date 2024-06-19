@@ -125,11 +125,9 @@ impl OblivRewriter {
             Op::Witness(s) => {
                 let arg = &t.cs()[0];
                 (
-                    if let Some(targ) = self.tups.get(arg) {
-                        Some(term![Op::Witness(s.clone()); targ.clone()])
-                    } else {
-                        None
-                    },
+                    self.tups
+                        .get(arg)
+                        .map(|targ| term![Op::Witness(s.clone()); targ.clone()]),
                     None,
                 )
             }

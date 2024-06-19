@@ -149,6 +149,7 @@ impl TupleTree {
             _ => panic!("{:?} is tuple!", self),
         }
     }
+    #[allow(clippy::wrong_self_convention)]
     fn as_term(self) -> Term {
         match self {
             TupleTree::NonTuple(t) => t,

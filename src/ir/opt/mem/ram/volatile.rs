@@ -367,6 +367,8 @@ impl RewritePass for Extactor {
                     .collect::<Vec<_>>(),
                 cache.keys().cloned().collect(),
             ) {
+                // false positive: the value constructor uses `cache`.
+                #[allow(clippy::map_entry)]
                 if !cache.contains_key(&t) {
                     let new_t = term(
                         t.op().clone(),
@@ -378,7 +380,11 @@ impl RewritePass for Extactor {
                     cache.insert(t, new_t);
                 }
             }
-            for (name, _sort) in computation.precomputes.sequence()[..initial_precompute_len].to_owned() {
+            // false positive; need to clone to drop reference.
+            #[allow(clippy::unnecessary_to_owned)]
+            for (name, _sort) in
+                computation.precomputes.sequence()[..initial_precompute_len].to_owned()
+            {
                 let term = computation.precomputes.outputs.get_mut(&name).unwrap();
                 *term = cache.get(term).unwrap().clone();
             }

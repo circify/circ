@@ -9,7 +9,7 @@ pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
     let &[entries, indices] = ty::count_or_ref(arg_sorts)?;
     let (size, value) = ty::homogenous_tuple_or(entries, "PersistentRamSplit entries")?;
     let [old, new] = ty::count_or(ty::tuple_or(value, "PersistentRamSplit entries")?)?;
-    eq_or(&old, &new, "PersistentRamSplit entries")?;
+    eq_or(old, new, "PersistentRamSplit entries")?;
     let (i_size, i_value) = ty::homogenous_tuple_or(indices, "PersistentRamSplit indices")?;
     let f = pf_or(i_value, "PersistentRamSplit indices")?;
     let n_touched = i_size.min(size);

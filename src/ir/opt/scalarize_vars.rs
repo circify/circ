@@ -120,7 +120,7 @@ impl RewritePass for Pass {
             if !sort.is_scalar() {
                 trace!("Considering witness: {}", name);
             }
-            Some(create_wits(&name, cs.pop().unwrap(), &sort))
+            Some(create_wits(name, cs.pop().unwrap(), &sort))
         } else {
             None
         }

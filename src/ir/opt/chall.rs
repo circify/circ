@@ -54,7 +54,8 @@ pub fn deskolemize_witnesses(comp: &mut Computation) {
             if let Op::Witness(prefix) = orig.op() {
                 let name = self.0.mk_uniq(prefix);
                 let sort = check(orig);
-                let var = computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.cs()[0].clone()));
+                let var =
+                    computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.cs()[0].clone()));
                 Some(var)
             } else {
                 None
