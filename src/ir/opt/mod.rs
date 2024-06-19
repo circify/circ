@@ -61,6 +61,9 @@ pub enum Opt {
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
+    for c in cs.comps.values() {
+        trace!("Before all opts: {}", text::serialize_computation(c));
+    }
     for i in optimizations {
         debug!("Applying: {:?}", i);
 
@@ -79,9 +82,12 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::ConstantFold(ignore) => {
                     let mut cache = TermCache::with_capacity(TERM_CACHE_LIMIT);
-                    cache.resize(std::usize::MAX);
+                    cache.resize(usize::MAX);
                     for a in &mut c.outputs {
                         *a = cfold::fold_cache(a, &mut cache, &ignore.clone());
+                    }
+                    for v in &mut c.precomputes.outputs.values_mut() {
+                        *v = cfold::fold_cache(v, &mut cache, &ignore.clone());
                     }
                     c.ram_arrays = c
                         .ram_arrays
@@ -157,9 +163,11 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
             }
             debug!("After {:?}: {} outputs", i, c.outputs.len());
-            trace!("After {:?}: {}", i, c.outputs[0]);
+            trace!("After {:?}: {}", i, text::serialize_computation(c));
             //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
             debug!("After {:?}: {} terms", i, c.terms());
+            #[cfg(debug_assertions)]
+            c.precomputes.check_topo_orderable();
         }
         if crate::cfg::cfg().ir.frequent_gc {
             garbage_collect();

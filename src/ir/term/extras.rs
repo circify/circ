@@ -246,3 +246,38 @@ pub fn collect_asserted_ops(
         }
     }
 }
+
+/// Iterator over a node's children.
+pub fn node_cs_iter(node: Term) -> impl Iterator<Item = Term> {
+    (0..node.cs().len()).map(move |i| node.cs()[i].clone())
+}
+
+// impl ChildrenIter {
+//     fn new(node: Term) -> Self {
+//         Self {node, next_child: 0}
+//     }
+//     fn next(&mut self) {
+//         if self.next_child < self.node.cs().len() {
+//             self.next_child += 1;
+//         }
+//     }
+//     fn is_done(&self)
+//     fn this_child(&self)
+// }
+//
+
+// #[allow(unused_variables)]
+// /// Term traversal control
+// pub trait TermTraversalControl {
+//     /// Whether to skip this term and all descendents.
+//     ///
+//     /// This term is guaranteed to be skipped, but its descendents are not guaranteed to be
+//     /// skipped.
+//     fn skip(&mut self, t: &Term) -> bool { false }
+//     /// Any extra dependencies that should be traversed before this term.
+//     fn extra_dependencies(&mut self, t: &Term) -> Option<Vec<Term>> { None }
+// }
+//
+// pub struct TermTraversal {
+//
+// }

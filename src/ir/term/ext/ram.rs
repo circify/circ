@@ -6,50 +6,22 @@ use fxhash::FxHashSet as HashSet;
 
 /// Type-check [super::ExtOp::PersistentRamSplit].
 pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    if let &[entries, indices] = arg_sorts {
-        let (key, value, size) = ty::array_or(entries, "PersistentRamSplit entries")?;
-        let f = pf_or(key, "PersistentRamSplit entries: indices must be field")?;
-        let value_tup = ty::tuple_or(value, "PersistentRamSplit entries: value must be a tuple")?;
-        if let &[old, new] = &value_tup {
-            eq_or(
-                f,
-                old,
-                "PersistentRamSplit entries: value must be a field pair",
-            )?;
-            eq_or(
-                f,
-                new,
-                "PersistentRamSplit entries: value must be a field pair",
-            )?;
-            let (i_key, i_value, i_size) = ty::array_or(indices, "PersistentRamSplit indices")?;
-            eq_or(f, i_key, "PersistentRamSplit indices: key must be a field")?;
-            eq_or(
-                f,
-                i_value,
-                "PersistentRamSplit indices: value must be a field",
-            )?;
-            let n_touched = i_size.min(size);
-            let n_ignored = size - n_touched;
-            let box_f = Box::new(f.clone());
-            let f_pair = Sort::Tuple(Box::new([f.clone(), f.clone()]));
-            let ignored_entries_sort =
-                Sort::Array(box_f.clone(), Box::new(f_pair.clone()), n_ignored);
-            let selected_entries_sort = Sort::Array(box_f, Box::new(f_pair), n_touched);
-            Ok(Sort::Tuple(Box::new([
-                ignored_entries_sort,
-                selected_entries_sort.clone(),
-                selected_entries_sort,
-            ])))
-        } else {
-            // non-pair entries value
-            Err(TypeErrorReason::Custom(
-                "PersistentRamSplit: entries value must be a pair".into(),
-            ))
-        }
-    } else {
-        // wrong arg count
-        Err(TypeErrorReason::ExpectedArgs(2, arg_sorts.len()))
-    }
+    let &[entries, indices] = ty::count_or_ref(arg_sorts)?;
+    let (size, value) = ty::homogenous_tuple_or(entries, "PersistentRamSplit entries")?;
+    let [old, new] = ty::count_or(ty::tuple_or(value, "PersistentRamSplit entries")?)?;
+    eq_or(old, new, "PersistentRamSplit entries")?;
+    let (i_size, i_value) = ty::homogenous_tuple_or(indices, "PersistentRamSplit indices")?;
+    let f = pf_or(i_value, "PersistentRamSplit indices")?;
+    let n_touched = i_size.min(size);
+    let n_ignored = size - n_touched;
+    let f_pair = Sort::Tuple(Box::new([f.clone(), f.clone()]));
+    let ignored_entries_sort = Sort::Tuple(vec![f_pair.clone(); n_ignored].into());
+    let selected_entries_sort = Sort::Tuple(vec![f_pair.clone(); n_touched].into());
+    Ok(Sort::Tuple(Box::new([
+        ignored_entries_sort,
+        selected_entries_sort.clone(),
+        selected_entries_sort,
+    ])))
 }
 
 /// Evaluate [super::ExtOp::PersistentRamSplit].
@@ -72,14 +44,14 @@ pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
 ///   * init_reads (array field (tuple (field field)) (length I))
 ///   * fin_writes (array field (tuple (field field)) (length I))
 pub fn eval(args: &[&Value]) -> Value {
-    let entries = &args[0].as_array().values();
+    let entries = &args[0].as_tuple();
     let (init_vals, fin_vals): (Vec<Value>, Vec<Value>) = entries
         .iter()
         .map(|t| (t.as_tuple()[0].clone(), t.as_tuple()[1].clone()))
         .unzip();
-    let indices = &args[1].as_array().values();
+    let indices = &args[1].as_tuple();
     let num_accesses = indices.len();
-    let field = args[0].as_array().key_sort.as_pf();
+    let field = args[1].sort().as_tuple()[0].as_pf().clone();
     let uniq_indices = {
         let mut uniq_indices = Vec::<usize>::new();
         let mut used_indices = HashSet::<usize>::default();
@@ -108,19 +80,14 @@ pub fn eval(args: &[&Value]) -> Value {
             untouched_entries.push((i, init_val));
         }
     }
-    let key_sort = Sort::Field(field.clone());
     let entry_to_vals =
         |e: (usize, Value)| Value::Tuple(Box::new([Value::Field(field.new_v(e.0)), e.1]));
-    let vec_to_arr = |v: Vec<(usize, Value)>| {
+    let vec_to_tuple = |v: Vec<(usize, Value)>| {
         let vals: Vec<Value> = v.into_iter().map(entry_to_vals).collect();
-        Value::Array(Array::from_vec(
-            key_sort.clone(),
-            vals.first().unwrap().sort(),
-            vals,
-        ))
+        Value::Tuple(vals.into())
     };
-    let init_reads = vec_to_arr(init_reads);
-    let untouched_entries = vec_to_arr(untouched_entries);
-    let fin_writes = vec_to_arr(fin_writes);
+    let init_reads = vec_to_tuple(init_reads);
+    let untouched_entries = vec_to_tuple(untouched_entries);
+    let fin_writes = vec_to_tuple(fin_writes);
     Value::Tuple(vec![untouched_entries, init_reads, fin_writes].into_boxed_slice())
 }

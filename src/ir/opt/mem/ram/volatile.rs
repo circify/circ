@@ -332,6 +332,7 @@ impl RewritePass for Extactor {
     }
 
     fn traverse(&mut self, computation: &mut Computation) {
+        let initial_precompute_len = computation.precomputes.outputs.len();
         let terms: Vec<Term> = computation.terms_postorder().collect();
         let term_refs: HashSet<&Term> = terms.iter().collect();
         let mut cache = TermMap::<Term>::default();
@@ -355,10 +356,44 @@ impl RewritePass for Extactor {
             .iter()
             .map(|o| cache.get(o).unwrap().clone())
             .collect();
-        if !self.cfg.waksman {
-            for ram in &mut self.rams {
-                if ram.is_covering_rom() {
-                    ram.cfg.covering_rom = true;
+        let final_precompute_len = computation.precomputes.outputs.len();
+        debug!("from {initial_precompute_len} to {final_precompute_len} pre-variables");
+        if !self.rams.is_empty() {
+            for t in PostOrderIter::from_roots_and_skips(
+                computation.precomputes.sequence()[..initial_precompute_len]
+                    .iter()
+                    .map(|(name, _)| computation.precomputes.outputs.get(name).unwrap())
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cache.keys().cloned().collect(),
+            ) {
+                // false positive: the value constructor uses `cache`.
+                #[allow(clippy::map_entry)]
+                if !cache.contains_key(&t) {
+                    let new_t = term(
+                        t.op().clone(),
+                        t.cs()
+                            .iter()
+                            .map(|c| cache.get(c).unwrap().clone())
+                            .collect(),
+                    );
+                    cache.insert(t, new_t);
+                }
+            }
+            // false positive; need to clone to drop reference.
+            #[allow(clippy::unnecessary_to_owned)]
+            for (name, _sort) in
+                computation.precomputes.sequence()[..initial_precompute_len].to_owned()
+            {
+                let term = computation.precomputes.outputs.get_mut(&name).unwrap();
+                *term = cache.get(term).unwrap().clone();
+            }
+            computation.precomputes.reorder();
+            if !self.cfg.waksman {
+                for ram in &mut self.rams {
+                    if ram.is_covering_rom() {
+                        ram.cfg.covering_rom = true;
+                    }
                 }
             }
         }

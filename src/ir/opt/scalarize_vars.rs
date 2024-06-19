@@ -1,4 +1,6 @@
 //! Replacing array and tuple variables with scalars.
+//!
+//! Also replaces array and tuple *witnesses* with scalars.
 use log::trace;
 
 use crate::ir::opt::visit::RewritePass;
@@ -60,12 +62,43 @@ fn create_vars(
     }
 }
 
+fn create_wits(prefix: &str, prefix_term: Term, sort: &Sort) -> Term {
+    match sort {
+        Sort::Tuple(sorts) => term(
+            Op::Tuple,
+            sorts
+                .iter()
+                .enumerate()
+                .map(|(i, sort)| {
+                    create_wits(
+                        &format!("{prefix}.{i}"),
+                        term![Op::Field(i); prefix_term.clone()],
+                        sort,
+                    )
+                })
+                .collect(),
+        ),
+        Sort::Array(key_s, val_s, size) => {
+            let array_elements = extras::array_elements(&prefix_term);
+            make_array(
+                (**key_s).clone(),
+                (**val_s).clone(),
+                (0..*size)
+                    .zip(array_elements)
+                    .map(|(i, element)| create_wits(&format!("{prefix}.{i}"), element, val_s))
+                    .collect(),
+            )
+        }
+        _ => term![Op::Witness(prefix.to_owned()); prefix_term],
+    }
+}
+
 impl RewritePass for Pass {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
         computation: &mut Computation,
         orig: &Term,
-        _rewritten_children: F,
+        rewritten_children: F,
     ) -> Option<Term> {
         if let Op::Var(name, sort) = &orig.op() {
             trace!("Considering var: {}", name);
@@ -80,6 +113,14 @@ impl RewritePass for Pass {
                 trace!("Skipping b/c it is commited.");
                 None
             }
+        } else if let Op::Witness(name) = &orig.op() {
+            let sort = check(orig);
+            let mut cs = rewritten_children();
+            debug_assert_eq!(cs.len(), 1);
+            if !sort.is_scalar() {
+                trace!("Considering witness: {}", name);
+            }
+            Some(create_wits(name, cs.pop().unwrap(), &sort))
         } else {
             None
         }
@@ -89,7 +130,7 @@ impl RewritePass for Pass {
 /// Run the tuple elimination pass.
 pub fn scalarize_inputs(cs: &mut Computation) {
     let mut pass = Pass;
-    pass.traverse(cs);
+    pass.traverse_full(cs, false, true);
     #[cfg(debug_assertions)]
     assert_all_vars_are_scalars(cs);
     remove_non_scalar_vars_from_main_computation(cs);

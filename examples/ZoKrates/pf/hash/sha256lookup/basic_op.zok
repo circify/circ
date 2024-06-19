@@ -1,0 +1,166 @@
+from "assert_well_formed" import fits_in_bits, fits_in_bits_sparse
+from "utils" import Dual, unsafe_split, split_limbs_in_sparse, unsafe_split_dyn, unsafe_split_dyn_sparse, split_even_dual_10, split_even_dual_11, split_odd_dual_10, split_odd_dual_11, dense_limb_to_dual_limb, dual_limbs_to_sparse_limbs, dual_limbs_to_dense_limbs, combine_limbs, split_even_dual_for_all_limbs
+from "const_range_check" import S_ONES_10, S_ONES_11
+// Compute right and left parts of input s.t. 
+// i. input[N-1]||0||..||input[1]||0||input[0] = left||0||right
+// ii. left is sparse form of bitwidth RED_L = LIMBWIDTH[SPLIT_IDX]-RED_R bits
+// iii. right = input[SPLIT_IDX] - left * (2 ** (2 * RED_R))
+def split_for_shift<N, R>(field[N] input, u32[N] LIMBWIDTH) -> field[2]:
+    u32 CUR_WIDTH = 0
+    u32 SPLIT_IDX = 0 // input[split_idx] needs to be split
+    u32 RED_R = R // limbwidth of the right part of the splited limb
+    for u32 i in 0..N do
+        SPLIT_IDX = if CUR_WIDTH < R then i else SPLIT_IDX fi // When i=0, CUR_WIDTH=0; When i=1, CUR_WIDTH=LIMBWIDTH[0]; When i=2, CUR_WIDTH=LIMBWIDTH[0]+LIMBWIDTH[1]; ...
+        RED_R = if CUR_WIDTH < R then R-CUR_WIDTH else RED_R fi
+        CUR_WIDTH = CUR_WIDTH + LIMBWIDTH[i] 
+    endfor
+    u32 TOTAL_WIDTH = CUR_WIDTH
+    u32 LOW_BITS = RED_R * 2
+    u32 HIGH_BITS = 2*LIMBWIDTH[SPLIT_IDX] - 1 - LOW_BITS
+    unsafe witness field[2] split = unsafe_split::<LOW_BITS, HIGH_BITS>(input[SPLIT_IDX]) // would input[SPLIT_IDX] incur lookup cost?
+    field[2] safe_split = [0, split[1]]
+    safe_split[0] =  input[SPLIT_IDX] - split[1] * (2 ** LOW_BITS)
+    // Check that the split limbs are well-formed
+    u32 RED_L = LIMBWIDTH[SPLIT_IDX] - RED_R
+    assert(fits_in_bits_sparse::<RED_L>(safe_split[1]))
+    // split[0] = input[SPLIT_IDX] - split[1] * (2 ** LOW_BITS)
+    // assert(input[SPLIT_IDX] == split[1] * (2 ** LOW_BITS) + split[0])
+    assert(fits_in_bits_sparse::<RED_R>(safe_split[0]))
+
+    CUR_WIDTH = 0
+    field right = 0
+    for u32 i in 0..SPLIT_IDX do
+        right = right + input[i] * (2 ** (2 * CUR_WIDTH))
+        CUR_WIDTH = CUR_WIDTH + LIMBWIDTH[i]
+    endfor
+    right = right + safe_split[0] * (2 ** (2 * CUR_WIDTH))
+    
+    // CUR_WIDTH = RED_R
+    CUR_WIDTH = RED_L
+    field left = safe_split[1]
+    for u32 i in (SPLIT_IDX+1)..N do
+        left = left + input[i] * (2 ** (2 * CUR_WIDTH))
+        CUR_WIDTH = CUR_WIDTH + LIMBWIDTH[i]
+    endfor
+    return [right, left] // right = low_bits, left = high_bits
+
+// constant-offset rotation (sparse->sparse) (when LIMBWIDTH[0] != R and LIMBWIDTH[0] + LIMBWIDTH[1] != R)
+def rotr<N, R>(field[N] input, u32[N] LIMBWIDTH_ORI, u32[N] LIMBWIDTH_NEW) -> field:
+    field[2] overall_split = split_for_shift::<N, R>(input, LIMBWIDTH_ORI)
+    u32 TOTAL_WIDTH = 0
+    for u32 i in 0..N do
+        TOTAL_WIDTH = TOTAL_WIDTH + LIMBWIDTH_ORI[i]
+    endfor
+    assert(TOTAL_WIDTH == 32)
+    field output_val = overall_split[0] * (2 ** (2 * (TOTAL_WIDTH - R))) + overall_split[1]
+    // return split_limbs_in_sparse::<N>(output_val, LIMBWIDTH_NEW)
+    return output_val
+    
+// constant-offset shift (sparse->sparse) (when LIMBWIDTH[0] != R and LIMBWIDTH[0] + LIMBWIDTH[1] != R)
+def shr<N, R>(field[N] input,u32[N] LIMBWIDTH_ORI, u32[N] LIMBWIDTH_NEW) -> field:
+    field[2] overall_split = split_for_shift::<N, R>(input, LIMBWIDTH_ORI)
+    field output_val = overall_split[1]
+    // return split_limbs_in_sparse::<N>(output_val, LIMBWIDTH_NEW)
+    return output_val
+
+// N-ary XOR for 10-bit values (sparse to dense) where N = 2 or 3
+def xor_10<N>(field[N] input) -> field:
+    assert(N == 2 || N == 3)
+    field sum = 0
+    for u32 i in 0..N do
+        sum = sum + input[i]
+    endfor
+    Dual dual = split_even_dual_10(sum)
+    return dual.d
+
+// N-ary XOR for 11-bit values (sparse to dense) where N = 2 or 3
+def xor_11<N>(field[N] input) -> field:
+    assert(N == 2 || N == 3)
+    field sum = 0
+    for u32 i in 0..N do
+        sum = sum + input[i]
+    endfor
+    Dual dual = split_even_dual_11(sum)
+    return dual.d
+
+// N-ary XOR for value in limb representation (sparse to dense) where N = 2 or 3
+def xor_for_all_limbs<N>(field[3] input, u32[3] LIMBWIDTH) -> field[3]:
+    field int = 0
+    for u32 i in 0..3 do
+        int = int + input[i]
+    endfor
+    return split_even_dual_for_all_limbs(int, LIMBWIDTH)
+
+
+// 2-ary AND for 10-bit values (sparse to Dual)
+def and_10(field[2] input) -> Dual:
+    // Dual dual = split_odd_dual_10(input[0] + input[1])
+    // return dual.s
+    return split_odd_dual_10(input[0] + input[1])
+
+// 2-ary AND for 11-bit values (sparse to Dual)
+def and_11(field[2] input) -> Dual:
+    // Dual dual = split_odd_dual_11(input[0] + input[1])
+    // return dual.s
+    return split_odd_dual_11(input[0] + input[1])
+
+// 2-ary AND for value in limb representation (sparse to dual)
+def and(field[3] x, field[3] y) -> Dual[3]:
+    Dual[3] output = [Dual {d: 0, s: 0} ; 3]
+    output[0] = and_11([x[0], y[0]])
+    output[1] = and_11([x[1], y[1]])
+    output[2] = and_10([x[2], y[2]])
+    return output
+
+// // 2-ary AND for value in limb representation (sparse to sparse)
+// // LIMBWIDTH = [11, 11, 10]
+// def and_s2s(field[3] x, field[3] y) -> field[3]:
+//     // field[3] output = [0; 3]
+//     // output[0] = and_11([x[0], y[0]])
+//     // output[1] = and_11([x[1], y[1]])
+//     // output[2] = and_10([x[2], y[2]])
+//     // return output
+//     Dual[3] output = and(x, y)
+//     return dual_limbs_to_sparse_limbs(output)
+
+// 2-ary AND for value in limb representation (sparse to dense)
+// LIMBWIDTH = [11, 11, 10]
+def and_s2d(field[3] x, field[3] y) -> field[3]:
+    Dual[3] output = and(x, y)
+    return dual_limbs_to_dense_limbs(output)
+
+// NOT for 10-bit values (sparse to sparse)
+def not_10(field input) -> field:
+    return S_ONES_10 - input
+
+// NOT for 11-bit values (sparse to sparse)
+def not_11(field input) -> field:
+    return S_ONES_11 - input
+
+// 2-ary NOT for value in limb representation (sparse to sparse)
+// LIMBWIDTH = [11, 11, 10]
+def not(field[3] input) -> field[3]:
+    field[3] output = [0; 3]
+    output[0] = not_11(input[0])
+    output[1] = not_11(input[1])
+    output[2] = not_10(input[2])
+    return output
+
+// N-ary ADD modulo 2^32 (Convert N dense-single values to M limbs in dual form)
+// C = \ceil{log2 N}
+// Note: Should also work for modulo 2^K
+def sum<N, M, C, CM>(field[N] input, u32[M] LIMBWIDTH) -> Dual[M]:
+    assert((1 << C) >= N)
+    field sum = 0
+    for u32 i in 0..N do
+        sum = sum + input[i]
+    endfor
+    u32 MP1 = M + 1
+    u32[MP1] SPLITWIDTH = [...LIMBWIDTH, C]
+    unsafe witness field[MP1] split = unsafe_split_dyn::<MP1>(sum, SPLITWIDTH)
+    field[MP1] safe_split = [0, ...split[1..MP1]]
+    safe_split[0] = sum - combine_limbs::<M>(safe_split[1..MP1], SPLITWIDTH[1..MP1]) * (2 ** (LIMBWIDTH[0]))
+    assert(fits_in_bits::<CM>(safe_split[M]))
+    field res_sum = combine_limbs::<M>(safe_split[0..MP1], LIMBWIDTH)
+    // assert(sum == split[M] * (2 ** TOTAL_WIDTH) + res_sum)
+    return dense_limb_to_dual_limb::<M>(safe_split[0..M], LIMBWIDTH)

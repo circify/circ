@@ -12,30 +12,29 @@ use crate::ir::term::*;
 
 /// Type-check [super::ExtOp::UniqDeriGcd].
 pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    if let &[haystack, needles] = arg_sorts {
-        let (key0, value0, _n) = ty::array_or(haystack, "haystack must be an array")?;
-        let (key1, value1, _a) = ty::array_or(needles, "needles must be an array")?;
-        let key0 = pf_or(key0, "haystack indices must be field")?;
-        let key1 = pf_or(key1, "needles indices must be field")?;
-        let value0 = pf_or(value0, "haystack values must be field")?;
-        let value1 = pf_or(value1, "needles values must be field")?;
-        eq_or(key0, key1, "field must be the same")?;
-        eq_or(key1, value0, "field must be the same")?;
-        eq_or(value0, value1, "field must be the same")?;
-        Ok(haystack.clone())
-    } else {
-        // wrong arg count
-        Err(TypeErrorReason::ExpectedArgs(2, arg_sorts.len()))
-    }
+    let &[haystack, needles] = ty::count_or_ref(arg_sorts)?;
+    let (_n, value0) = ty::homogenous_tuple_or(haystack, "haystack must be a tuple")?;
+    let (_a, value1) = ty::homogenous_tuple_or(needles, "needles must be a tuple")?;
+    let value0 = pf_or(value0, "haystack values must be field")?;
+    let value1 = pf_or(value1, "needles values must be field")?;
+    eq_or(value0, value1, "field must be the same")?;
+    Ok(haystack.clone())
 }
 
 /// Evaluate [super::ExtOp::UniqDeriGcd].
 pub fn eval(args: &[&Value]) -> Value {
-    let haystack = args[0].as_array().values();
-    let sort = args[0].sort().as_array().0.clone();
-    let field = sort.as_pf().clone();
-    let needles = args[1].as_array().values();
-    let haystack_item_index: FxHashMap<Value, usize> = haystack
+    let haystack: Vec<FieldV> = args[0]
+        .as_tuple()
+        .iter()
+        .map(|v| v.as_pf().clone())
+        .collect();
+    let needles: Vec<FieldV> = args[1]
+        .as_tuple()
+        .iter()
+        .map(|v| v.as_pf().clone())
+        .collect();
+    let field = haystack[0].ty();
+    let haystack_item_index: FxHashMap<FieldV, usize> = haystack
         .iter()
         .enumerate()
         .map(|(i, v)| (v.clone(), i))
@@ -55,5 +54,5 @@ pub fn eval(args: &[&Value]) -> Value {
         .into_iter()
         .map(|c| Value::Field(field.new_v(c)))
         .collect();
-    Value::Array(Array::from_vec(sort.clone(), sort, field_counts))
+    Value::Tuple(field_counts.into())
 }

@@ -253,14 +253,52 @@ impl BitVector {
 
 impl Display for BitVector {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "#b")?;
-        for i in 0..self.width {
+        if self.width % 4 == 0 {
             write!(
                 f,
-                "{}",
-                self.uint.get_bit((self.width - i - 1) as u32) as u8
+                "#x{:0>width$}",
+                &format!("{:x}", self.uint).as_str(),
+                width = self.width / 4
+            )?;
+        } else {
+            write!(
+                f,
+                "#b{:0>width$}",
+                &format!("{:b}", self.uint).as_str(),
+                width = self.width
             )?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn formatting() {
+        for bits in 0..8 {
+            for i in 0..(1 << bits) {
+                let int = Integer::from(i);
+                let bv = BitVector::new(int.clone(), bits);
+                let fmt = format!("{}", bv);
+                let hex = bits % 4 == 0;
+                assert_eq!(
+                    &fmt[..2],
+                    if hex { "#x" } else { "#b" },
+                    "formatted {} ({} bits) as {}",
+                    i,
+                    bits,
+                    fmt
+                );
+                let integer = Integer::from_str_radix(&fmt[2..], if hex { 16 } else { 2 }).unwrap();
+                assert_eq!(
+                    int, integer,
+                    "formatted {} ({} bits) as {}, which parsed as {}",
+                    i, bits, fmt, integer
+                );
+            }
+        }
     }
 }

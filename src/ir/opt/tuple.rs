@@ -149,6 +149,15 @@ impl TupleTree {
             _ => panic!("{:?} is tuple!", self),
         }
     }
+    #[allow(clippy::wrong_self_convention)]
+    fn as_term(self) -> Term {
+        match self {
+            TupleTree::NonTuple(t) => t,
+            TupleTree::Tuple(items) => {
+                term(Op::Tuple, items.into_iter().map(|i| i.as_term()).collect())
+            }
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -236,7 +245,10 @@ fn tuple_free(t: Term) -> bool {
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
     let mut lifted: TermMap<TupleTree> = TermMap::default();
-    for t in cs.terms_postorder() {
+    let terms =
+        PostOrderIter::from_roots_and_skips(cs.outputs().iter().cloned(), Default::default());
+    // .chain(cs.precomputes.outputs().values().cloned()),
+    for t in terms {
         let mut cs: Vec<TupleTree> = t
             .cs()
             .iter()
@@ -294,7 +306,7 @@ pub fn eliminate_tuples(cs: &mut Computation) {
             Op::Tuple => TupleTree::Tuple(cs.into()),
             _ => TupleTree::NonTuple(term(
                 t.op().clone(),
-                cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
+                cs.into_iter().map(|c| c.as_term()).collect(),
             )),
         };
         lifted.insert(t, new_t);
@@ -303,6 +315,11 @@ pub fn eliminate_tuples(cs: &mut Computation) {
         .into_iter()
         .flat_map(|o| lifted.get(&o).unwrap().clone().flatten())
         .collect();
+    //    let os = cs.precomputes.outputs().clone();
+    //    for (name, old_term) in os {
+    //        let new_term = lifted.get(&old_term).unwrap().clone().as_term();
+    //        cs.precomputes.change_output(&name, new_term);
+    //    }
     #[cfg(debug_assertions)]
     for o in &cs.outputs {
         if let Some(t) = find_tuple_term(o.clone()) {

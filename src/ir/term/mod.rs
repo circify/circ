@@ -1076,6 +1076,11 @@ thread_local! {
     static LAST_LEN: Cell<usize> = Default::default();
 }
 
+/// Size of the term table.
+pub fn table_size() -> usize {
+    hc::Table::table_size()
+}
+
 fn should_collect() -> bool {
     let last_len = LAST_LEN.with(|l| l.get());
     let ret = LEN_THRESH_DEN * hc::Table::table_size() > LEN_THRESH_NUM * last_len;
@@ -1100,21 +1105,33 @@ pub fn maybe_garbage_collect() -> bool {
     }
 
     if should_collect() {
-        collect_terms();
-        collect_types();
-        super::opt::cfold::collect();
+        let orig_terms = table_size();
+        let n_collected = collect_terms();
+        if 50 * n_collected > orig_terms {
+            collect_types();
+            super::opt::cfold::collect();
+        }
         true
     } else {
         false
     }
 }
 
-fn collect_terms() {
+fn collect_terms() -> usize {
+    let size_before = hc::Table::table_size();
     hc::Table::gc();
+    let size_after = hc::Table::table_size();
+    let pct_removed = (size_before - size_after) as f64 / size_before as f64 * 100.0;
+    debug!("Term collection: {size_before} -> {size_after} (-{pct_removed}%)");
+    size_before - size_after
 }
 
 fn collect_types() {
+    let size_before = ty::TERM_TYPES.with(|tys| tys.borrow().len());
     ty::TERM_TYPES.with(|tys| tys.borrow_mut().collect());
+    let size_after = ty::TERM_TYPES.with(|tys| tys.borrow().len());
+    let pct_removed = (size_before - size_after) as f64 / size_before as f64 * 100.0;
+    debug!("Type collection: {size_before} -> {size_after} (-{pct_removed}%)");
 }
 
 impl Term {
@@ -1670,6 +1687,19 @@ pub fn unmake_array(a: Term) -> Vec<Term> {
         .elems_iter()
         .take(size)
         .map(|idx| term(Op::Select, vec![a.clone(), idx]))
+        .collect()
+}
+
+/// Make a sequence of terms from a tuple
+///
+/// Requires
+///
+/// * a tuple term
+pub fn tuple_terms(a: Term) -> Vec<Term> {
+    let sort = check(&a);
+    let size = sort.as_tuple().len();
+    (0..size)
+        .map(|idx| term(Op::Field(idx), vec![a.clone()]))
         .collect()
 }
 

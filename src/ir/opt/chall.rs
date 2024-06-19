@@ -54,7 +54,8 @@ pub fn deskolemize_witnesses(comp: &mut Computation) {
             if let Op::Witness(prefix) = orig.op() {
                 let name = self.0.mk_uniq(prefix);
                 let sort = check(orig);
-                let var = computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.clone()));
+                let var =
+                    computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.cs()[0].clone()));
                 Some(var)
             } else {
                 None
@@ -69,7 +70,7 @@ pub fn deskolemize_witnesses(comp: &mut Computation) {
         .chain(comp.precomputes.outputs().iter().map(|o| o.0.clone()))
         .chain(comp.precomputes.inputs().iter().map(|o| o.0.clone()));
     let uniqer = Uniquer::new(names_iterator);
-    WitPass(uniqer).traverse_full(comp, false, false);
+    WitPass(uniqer).traverse_full(comp, true, true);
 }
 
 /// Replace the challenge terms in this computation with random inputs.
@@ -101,7 +102,10 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
         let round = match t.op() {
             Op::Var(n, _) => {
                 if let Some(v) = comp.precomputes.outputs().get(n) {
-                    *min_round.borrow().get(v).unwrap()
+                    *min_round
+                        .borrow()
+                        .get(v)
+                        .unwrap_or_else(|| panic!("missing key: {}", v))
                 } else {
                     0
                 }
@@ -177,12 +181,15 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
     let mut challs = TermMap::default();
     for t in comp.terms_postorder() {
         if let Op::PfChallenge(name, field) = t.op() {
+            let round = *actual_round.get(&t).unwrap();
+            debug!("challenge {name}: round = {round}");
+            trace!("challenge term {t}");
             let md = VariableMetadata {
                 name: name.clone(),
                 random: true,
                 vis: None,
                 sort: Sort::Field(field.clone()),
-                round: *actual_round.get(&t).unwrap(),
+                round,
                 ..Default::default()
             };
             let var = comp.new_var_metadata(md, None);
@@ -247,7 +254,12 @@ impl RewritePass for Pass {
         _rewritten_children: F,
     ) -> Option<Term> {
         if let Op::PfChallenge(..) = orig.op() {
-            Some(self.0.get(orig).unwrap().clone())
+            Some(
+                self.0
+                    .get(orig)
+                    .unwrap_or_else(|| panic!("missing key: {}", orig))
+                    .clone(),
+            )
         } else {
             None
         }

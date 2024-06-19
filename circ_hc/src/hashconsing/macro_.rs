@@ -52,7 +52,7 @@ macro_rules! generate_hashcons_hashconsing {
                 "hashconsing"
             }
 
-            fn for_each(f: impl FnMut(&$Op, &[Self::Node])) {
+            fn for_each(_f: impl FnMut(&$Op, &[Self::Node])) {
                 panic!()
             }
 

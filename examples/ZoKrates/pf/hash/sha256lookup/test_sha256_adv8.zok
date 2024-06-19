@@ -1,0 +1,7 @@
+from "test_sha256_adv" import test_sha256
+
+const u32 N = 8
+const u32 NL = 3 // Number of limbs
+
+def main(field[8] expected_hash, private field[N][16][NL] padded_message) -> bool:
+    return test_sha256::<N, NL>(expected_hash, padded_message)

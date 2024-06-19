@@ -5,20 +5,18 @@ macro_rules! generate_hashcons_rc {
         use fxhash::FxHashMap as HashMap;
 
         use log::trace;
-        use std::borrow::Borrow;
         use std::cell::{Cell, RefCell};
         use std::rc::Rc;
+        use std::sync::atomic::AtomicU64;
         use std::thread_local;
         use $crate::Id;
 
         #[allow(dead_code)]
         struct NodeData {
             op: $Op,
+            hash: AtomicU64,
             cs: Box<[Node]>,
         }
-
-        #[allow(dead_code)]
-        struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a $Op, &'a Q);
 
         #[derive(Clone)]
         pub struct Node {
@@ -161,6 +159,7 @@ macro_rules! generate_hashcons_rc {
                 let mut table = self.table.borrow_mut();
                 let data = Rc::new(NodeData {
                     op: op.clone(),
+                    hash: Default::default(),
                     cs: children.into(),
                 });
 
@@ -221,10 +220,10 @@ macro_rules! generate_hashcons_rc {
                     let duration = start.elapsed();
                     self.in_gc.set(false);
                     trace!(
-                        "GC: {} terms -> {} terms in {} us",
+                        "GC: {} terms -> {} terms in {} ns",
                         collected,
                         new_size,
-                        duration.as_micros()
+                        duration.as_nanos()
                     );
                     collected
                 } else {
@@ -299,37 +298,45 @@ macro_rules! generate_hashcons_rc {
         }
 
         mod hash {
-            use super::{Node, NodeData, NodeDataRef, Weak};
-            use std::borrow::Borrow;
+            use super::{Node, NodeData, Weak};
+            use fxhash::FxHasher;
             use std::hash::{Hash, Hasher};
+            use std::sync::atomic::Ordering::SeqCst;
 
             impl Hash for Node {
+                #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
                     self.id.hash(state)
                 }
             }
 
             impl Hash for Weak {
+                #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
                     self.id.hash(state)
                 }
             }
 
-            impl Hash for NodeData {
-                fn hash<H: Hasher>(&self, state: &mut H) {
-                    self.op.hash(state);
+            impl NodeData {
+                fn rehash(&self) -> u64 {
+                    let mut hasher = FxHasher::default();
+                    self.op.hash(&mut hasher);
                     for c in self.cs.iter() {
-                        c.hash(state);
+                        c.hash(&mut hasher);
                     }
+                    let current_hash = hasher.finish();
+                    self.hash.store(current_hash, SeqCst);
+                    current_hash
                 }
             }
-
-            impl<'a, Q: Borrow<[Node]>> Hash for NodeDataRef<'a, Q> {
+            impl Hash for NodeData {
+                #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    self.0.hash(state);
-                    for c in self.1.borrow().iter() {
-                        c.hash(state);
+                    let mut current_hash: u64 = self.hash.load(SeqCst);
+                    if current_hash == 0 {
+                        current_hash = self.rehash();
                     }
+                    state.write_u64(current_hash);
                 }
             }
         }

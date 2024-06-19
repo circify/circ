@@ -1,10 +1,13 @@
 //! A multi-stage R1CS witness evaluator.
 
+use crate::cfg::cfg_or_default;
 use crate::ir::term::*;
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 
 use log::trace;
+
+use std::time::Duration;
 
 /// A witness computation that proceeds in stages.
 ///
@@ -101,6 +104,8 @@ pub struct StagedWitCompEvaluator<'a> {
     step_values: Vec<Value>,
     stages_evaluated: usize,
     outputs_evaluted: usize,
+    op_times: HashMap<(Op, Vec<Sort>), (Duration, usize)>,
+    time_ops: bool,
 }
 
 impl<'a> StagedWitCompEvaluator<'a> {
@@ -112,6 +117,8 @@ impl<'a> StagedWitCompEvaluator<'a> {
             step_values: Default::default(),
             stages_evaluated: Default::default(),
             outputs_evaluted: 0,
+            op_times: Default::default(),
+            time_ops: cfg_or_default().ir.time_eval_ops,
         }
     }
     /// Have all stages been evaluated?
@@ -122,12 +129,27 @@ impl<'a> StagedWitCompEvaluator<'a> {
         let next_step_idx = self.step_values.len();
         assert!(next_step_idx < self.comp.steps.len());
         let op = &self.comp.steps[next_step_idx].0;
+        let step_values = &self.step_values;
+        let op_times = &mut self.op_times;
         let args: Vec<&Value> = self
             .comp
             .step_args(next_step_idx)
-            .map(|i| &self.step_values[i])
+            .map(|i| &step_values[i])
             .collect();
-        let value = eval_op(op, &args, &self.variable_values);
+        let value = if self.time_ops {
+            let start = std::time::Instant::now();
+            let r = eval_op(op, &args, &self.variable_values);
+            let duration = start.elapsed();
+            let (ref mut dur, ref mut ct) = op_times
+                .entry((op.clone(), args.iter().map(|v| v.sort()).collect()))
+                .or_default();
+            *dur += duration;
+            *ct += 1;
+            r
+        } else {
+            eval_op(op, &args, &self.variable_values)
+        };
+
         trace!(
             "Eval step {}: {} on {:?} -> {}",
             next_step_idx,
@@ -172,6 +194,30 @@ impl<'a> StagedWitCompEvaluator<'a> {
             out.push(&self.step_values[*output_step]);
         }
         out
+    }
+
+    /// Prints out operator evaluation times (if self.time_ops is set)
+    pub fn print_times(&self) {
+        if self.time_ops {
+            // (operator, nanos total, counts, nanos/count, arg sorts (or *))
+            let mut rows: Vec<(String, usize, usize, f64, String)> = Default::default();
+            for ((op, arg_sorts), (time, count)) in &self.op_times {
+                let nanos = time.as_nanos() as usize;
+                let per = nanos as f64 / *count as f64;
+                rows.push((
+                    format!("{}", op),
+                    nanos,
+                    *count,
+                    per,
+                    format!("{:?}", arg_sorts),
+                ));
+            }
+            rows.sort_by_key(|t| t.1);
+            println!("time,op,nanos,counts,nanos_per,arg_sorts");
+            for (op, nanos, counts, nanos_per, arg_sorts) in &rows {
+                println!("time,{op},{nanos},{counts},{nanos_per},{arg_sorts}");
+            }
+        }
     }
 }
 

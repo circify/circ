@@ -194,6 +194,14 @@ pub struct IrOpt {
         default_value = "true"
     )]
     pub fits_in_bits_ip: bool,
+    /// Time operator evaluations
+    #[arg(
+        long = "ir-time-eval-ops",
+        env = "IR_TIME_EVAL_OPS",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub time_eval_ops: bool,
 }
 
 impl Default for IrOpt {
@@ -202,6 +210,7 @@ impl Default for IrOpt {
             field_to_bv: Default::default(),
             frequent_gc: Default::default(),
             fits_in_bits_ip: true,
+            time_eval_ops: false,
         }
     }
 }

@@ -9,6 +9,8 @@ use crate::ir::term::*;
 
 use log::trace;
 
+use std::cell::RefCell;
+
 /// A "precomputation".
 ///
 /// Expresses a computation to be run in advance by a single party.
@@ -16,7 +18,7 @@ use log::trace;
 pub struct PreComp {
     #[serde(with = "crate::ir::term::serde_mods::map")]
     /// A map from output names to the terms that compute them.
-    outputs: FxHashMap<String, Term>,
+    pub outputs: FxHashMap<String, Term>,
     sequence: Vec<(String, Sort)>,
     inputs: FxHashSet<(String, Sort)>,
 }
@@ -133,7 +135,7 @@ impl PreComp {
     }
 
     /// Reduce the precomputation to a single, step-less map.
-    pub fn flatten(self) -> FxHashMap<String, Term> {
+    pub fn flatten(&mut self) {
         let mut out: FxHashMap<String, Term> = Default::default();
         let mut cache: TermMap<Term> = Default::default();
         for (name, sort) in &self.sequence {
@@ -142,7 +144,124 @@ impl PreComp {
             out.insert(name.into(), term.clone());
             cache.insert(var_term, term);
         }
-        out
+        self.outputs = out;
+    }
+
+    /// Compute a topo order
+    pub fn topo_order(&self) -> FxHashMap<String, usize> {
+        let mut order: FxHashMap<String, usize> = FxHashMap::default();
+        let mut stack: Vec<Term> = self
+            .outputs
+            .iter()
+            .map(|(name, t)| leaf_term(Op::Var(name.clone(), check(t))))
+            .collect();
+        let mut post_visited: TermSet = Default::default();
+        let mut pre_visited: TermSet = Default::default();
+        while let Some(t) = stack.pop() {
+            if post_visited.contains(&t) {
+                continue;
+            }
+            if pre_visited.insert(t.clone()) {
+                // children not yet pushed
+                stack.push(t.clone());
+                if let Op::Var(name, _) = t.op() {
+                    if let Some(c) = self.outputs.get(name) {
+                        if !post_visited.contains(c) {
+                            assert!(!pre_visited.contains(c), "loop on {} {}", c.id(), c);
+                            stack.push(c.clone());
+                        }
+                    }
+                } else {
+                    for c in t.cs() {
+                        if !post_visited.contains(c) {
+                            assert!(!pre_visited.contains(c), "loop on {} {}", c.id(), c);
+                            stack.push(c.clone());
+                        }
+                    }
+                }
+            } else {
+                post_visited.insert(t.clone());
+                if let Op::Var(name, _) = t.op() {
+                    order.insert(name.clone(), order.len());
+                }
+            }
+        }
+        order
+    }
+
+    /// Put the outputs back into a topo order
+    pub fn reorder(&mut self) {
+        let order = self.topo_order();
+        self.sequence
+            .sort_by_cached_key(|(name, _sort)| order.get(name).unwrap());
+        trace!("{}", text::serialize_precompute(self));
+        #[cfg(debug_assertions)]
+        self.check_topo_order();
+    }
+
+    #[allow(dead_code)]
+    /// Check that no variables is used before defintion.
+    pub fn check_topo_order(&self) {
+        let defined: TermSet = self
+            .sequence
+            .iter()
+            .map(|(n, s)| leaf_term(Op::Var(n.clone(), s.clone())))
+            .collect();
+        let seen = RefCell::new(TermSet::default());
+        for (name, sort) in &self.inputs {
+            seen.borrow_mut()
+                .insert(leaf_term(Op::Var(name.clone(), sort.clone())));
+        }
+        for (name, sort) in &self.sequence {
+            let t = self.outputs.get(name).unwrap();
+            for desc in extras::PostOrderSkipIter::new(t.clone(), &|n| seen.borrow().contains(n)) {
+                if desc.is_var() && defined.contains(&desc) {
+                    // we haven't seen this, or it would have been skipped.
+                    panic!("variable {} used before definition", desc);
+                }
+                seen.borrow_mut().insert(desc);
+            }
+            seen.borrow_mut()
+                .insert(leaf_term(Op::Var(name.clone(), sort.clone())));
+        }
+    }
+
+    /// Check that a topo-order exists
+    #[allow(dead_code)]
+    pub fn check_topo_orderable(&self) {
+        let mut stack: Vec<Term> = self
+            .outputs
+            .iter()
+            .map(|(name, t)| leaf_term(Op::Var(name.clone(), check(t))))
+            .collect();
+        let mut post_visited: TermSet = Default::default();
+        let mut pre_visited: TermSet = Default::default();
+        while let Some(t) = stack.pop() {
+            if post_visited.contains(&t) {
+                continue;
+            }
+            if pre_visited.insert(t.clone()) {
+                // children not yet pushed
+                stack.push(t.clone());
+                if let Op::Var(name, _) = t.op() {
+                    if let Some(c) = self.outputs.get(name) {
+                        if !post_visited.contains(c) {
+                            assert!(!pre_visited.contains(c), "loop on {} {}", c.id(), c);
+                            stack.push(c.clone());
+                        }
+                    }
+                } else {
+                    for c in t.cs() {
+                        if !post_visited.contains(c) {
+                            assert!(!pre_visited.contains(c), "loop on {} {}", c.id(), c);
+                            stack.push(c.clone());
+                        }
+                    }
+                }
+            } else {
+                post_visited.insert(t.clone());
+            }
+        }
     }
 }
 

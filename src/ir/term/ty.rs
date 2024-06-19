@@ -548,6 +548,8 @@ pub enum TypeErrorReason {
     ExpectedMap(Sort, &'static str),
     /// A sort should be a tuple
     ExpectedTuple(&'static str),
+    /// A sort should be a (non-empty) homogenous tuple
+    ExpectedHomogenousTuple(&'static str),
     /// An empty n-ary operator.
     EmptyNary(String),
     /// Expected _ args, but got _
@@ -667,8 +669,32 @@ fn all_eq_or<'a, I: Iterator<Item = &'a Sort>>(
     Ok(first)
 }
 
-pub(super) fn count_or<'a, const N: usize>(
+pub(super) fn count_or_ref<'a, const N: usize>(
     sorts: &'a [&'a Sort],
 ) -> Result<&'a [&'a Sort; N], TypeErrorReason> {
     <&'a [&'a Sort; N]>::try_from(sorts).map_err(|_| TypeErrorReason::ExpectedArgs(N, sorts.len()))
+}
+
+pub(super) fn count_or<'a, const N: usize>(
+    sorts: &'a [Sort],
+) -> Result<&'a [Sort; N], TypeErrorReason> {
+    <&'a [Sort; N]>::try_from(sorts).map_err(|_| TypeErrorReason::ExpectedArgs(N, sorts.len()))
+}
+
+/// Check if this is a non-empty homogenous tuple.
+pub(super) fn homogenous_tuple_or<'a>(
+    a: &'a Sort,
+    ctx: &'static str,
+) -> Result<(usize, &'a Sort), TypeErrorReason> {
+    let sorts = tuple_or(a, ctx)?;
+    if !sorts.is_empty() {
+        for i in 1..sorts.len() {
+            if sorts[0] != sorts[i] {
+                return Err(TypeErrorReason::ExpectedHomogenousTuple(ctx));
+            }
+        }
+        Ok((sorts.len(), &sorts[0]))
+    } else {
+        Err(TypeErrorReason::ExpectedHomogenousTuple(ctx))
+    }
 }

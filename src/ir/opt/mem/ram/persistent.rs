@@ -105,7 +105,6 @@ pub fn check_ram(c: &mut Computation, mut ram: Ram, cfg: &AccessCfg) {
     let field_s = Sort::Field(field.clone());
     let mut new_f_var =
         |name: &str, val: Term| c.new_var(name, field_s.clone(), PROVER_VIS, Some(val));
-    let field_tuple_s = Sort::Tuple(Box::new([field_s.clone(), field_s.clone()]));
     let mut uhf_inputs = inital_terms.clone();
     uhf_inputs.extend(final_terms.iter().cloned());
     let uhf_key = term(
@@ -113,22 +112,20 @@ pub fn check_ram(c: &mut Computation, mut ram: Ram, cfg: &AccessCfg) {
         uhf_inputs,
     );
     let uhf = |idx: Term, val: Term| term![PF_ADD; val, term![PF_MUL; uhf_key.clone(), idx]];
-    let init_and_fin_values = make_array(
-        field_s.clone(),
-        field_tuple_s,
+    let init_and_fin_values = term(
+        Op::Tuple,
         inital_terms
             .iter()
             .zip(&final_terms)
             .map(|(i, f)| term![Op::Tuple; i.clone(), f.clone()])
             .collect(),
     );
-    let used_indices = make_array(
-        field_s.clone(),
-        field_s.clone(),
+    let used_indices = term(
+        Op::Tuple,
         ram.accesses.iter().map(|a| a.idx.clone()).collect(),
     );
     let split = term![Op::ExtOp(ExtOp::PersistentRamSplit); init_and_fin_values, used_indices];
-    let unused_hashes: Vec<Term> = unmake_array(term![Op::Field(0); split.clone()])
+    let unused_hashes: Vec<Term> = tuple_terms(term![Op::Field(0); split.clone()])
         .into_iter()
         .enumerate()
         .map(|(i, entry)| {
@@ -137,8 +134,8 @@ pub fn check_ram(c: &mut Computation, mut ram: Ram, cfg: &AccessCfg) {
             new_f_var(&format!("__unused_hash.{j}.{i}"), uhf(idx_term, val_term))
         })
         .collect();
-    let mut declare_access_vars = |array: Term, name: &str| -> Vec<(Term, Term)> {
-        unmake_array(array)
+    let mut declare_access_vars = |tuple: Term, name: &str| -> Vec<(Term, Term)> {
+        tuple_terms(tuple)
             .into_iter()
             .enumerate()
             .map(|(i, access)| {

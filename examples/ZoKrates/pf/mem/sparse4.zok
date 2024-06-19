@@ -109,18 +109,14 @@ def normalize_sum_4(field s) -> Dual:
 //do a bitwise AND.
 def main(private field dense_x, private field dense_y) -> field:
   Dual z = dense_to_dual_4(0)
-  Dual x = dense_to_dual_4(dense_x)    // 1010 (10)
-  Dual y = dense_to_dual_4(dense_y)    // 1001 (9)
-  Dual a = and_4(x, y)                 // 1000 (8)
-  for field i in 0..10 do
-      a = and_4(a, y)                  // idempotent
-  endfor
-  Dual b = or_4(x, y)                  // 1011 (11)
-  Dual s = normalize_sum_4(b.d + a.d)  // 0011 (3)
+  Dual x = dense_to_dual_4(dense_x) // 10001000 (136)
+  Dual y = dense_to_dual_4(dense_y) // 10000001 (129)
+  Dual a = and_4(x, y)              // 10000000
+  Dual b = or_4(x, y)               // 10001001
+  Dual c = xor_4(x, y, z)           // 00001001
+  Dual d = maj_4(x, y, c)           // 10001001
+  Dual s = normalize_sum_4(d.d + c.d + b.d + a.d) // 10011011 (128+27=155)
   return s.d
-  // return reverse_lookup(D_TO_S_4, dense_x) * dense_y
-  // return reverse_lookup(D_TO_S_4, dense_x) * reverse_lookup(D_TO_S_4, dense_y)
-  // return dense_x * dense_y
 
 
 

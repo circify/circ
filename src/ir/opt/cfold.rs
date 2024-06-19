@@ -46,7 +46,7 @@ pub fn fold(node: &Term, ignore: &[Op]) -> Term {
 
         // make the cache unbounded during the fold_cache call
         let old_capacity = cache.cap();
-        cache.resize(std::usize::MAX);
+        cache.resize(usize::MAX);
 
         let ret = fold_cache(node, &mut cache, ignore);
         // shrink cache to its max size
@@ -59,10 +59,15 @@ pub fn fold(node: &Term, ignore: &[Op]) -> Term {
 pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> Term {
     // (node, children pushed)
     let mut stack = vec![(node.clone(), false)];
+    let mut retainer: Vec<Term> = Vec::new();
 
     // Maps terms to their rewritten versions.
     while let Some((t, children_pushed)) = stack.pop() {
-        if cache.contains(&t.downgrade()) {
+        if cache
+            .get(&t.downgrade())
+            .and_then(|x| x.upgrade())
+            .is_some()
+        {
             continue;
         }
         if !children_pushed {
@@ -72,10 +77,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         }
 
         let mut c_get = |x: &Term| -> Term {
-            cache
+            let weak = cache
                 .get(&x.downgrade())
-                .and_then(|x| x.upgrade())
-                .expect("postorder cache")
+                .unwrap_or_else(|| panic!("postorder cache missing key: {} {}", x.id(), x));
+            weak.upgrade().unwrap_or_else(|| {
+                panic!("postorder cache missing value: {} -> {}", x.id(), weak.id())
+            })
         };
 
         if ignore.contains(t.op()) {
@@ -401,11 +408,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
             new_t_opt.unwrap_or_else(|| term(t.op().clone(), t.cs().iter().map(cc_get).collect()))
         };
         cache.put(t.downgrade(), new_t.downgrade());
+        retainer.push(new_t);
     }
-    cache
+    let result = cache
         .get(&node.downgrade())
         .and_then(|x| x.upgrade())
-        .expect("postorder cache")
+        .expect("postorder cache");
+    std::mem::drop(retainer);
+    result
 }
 
 fn neg_bool(t: Term) -> Term {

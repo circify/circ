@@ -14,6 +14,8 @@ use log::{debug, trace};
 use rug::ops::Pow;
 use rug::Integer;
 
+use fxhash::FxHashMap;
+
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::iter::ExactSizeIterator;
@@ -36,19 +38,6 @@ enum EmbeddedTerm {
     Tuple(Vec<EmbeddedTerm>),
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct Metric {
-    n_constraints: u32,
-    n_vars: u32,
-}
-
-impl std::ops::AddAssign<&Metric> for Metric {
-    fn add_assign(&mut self, rhs: &Metric) {
-        self.n_vars += rhs.n_vars;
-        self.n_constraints += rhs.n_constraints;
-    }
-}
-
 struct ToR1cs<'cfg> {
     r1cs: R1cs,
     cache: TermMap<EmbeddedTerm>,
@@ -59,9 +48,10 @@ struct ToR1cs<'cfg> {
     cfg: &'cfg CircCfg,
     field: FieldT,
     used_vars: HashSet<String>,
-    profiling_data: TermMap<Metric>,
-    metric: Metric,
-    term_in_progress: Option<Term>,
+    /// Map from (operator, arity) to metric.
+    profiling_data: FxHashMap<(Op, usize), (usize, R1csStats)>,
+    old_stats: R1csStats,
+    op_in_progress: Option<(Op, usize)>,
 }
 
 impl<'cfg> ToR1cs<'cfg> {
@@ -82,68 +72,62 @@ impl<'cfg> ToR1cs<'cfg> {
             field,
             cfg,
             profiling_data: Default::default(),
-            term_in_progress: None,
-            metric: Default::default(),
+            op_in_progress: None,
+            old_stats: Default::default(),
         }
     }
 
     fn profile_start_term(&mut self, t: Term) {
         if self.cfg.r1cs.profile {
-            assert!(self.term_in_progress.is_none());
-            self.term_in_progress = Some(t);
-            self.metric = Default::default();
+            assert!(self.op_in_progress.is_none());
+            let key = (t.op().clone(), t.cs().len());
+            // trace!("profile start {:?}", key);
+            self.op_in_progress = Some(key);
+            self.old_stats = self.r1cs.stats().clone();
         }
     }
 
     fn profile_end_term(&mut self) {
         if self.cfg.r1cs.profile {
-            assert!(self.term_in_progress.is_some());
-            let t = self.term_in_progress.take().unwrap();
-            *self.profiling_data.entry(t).or_default() += &self.metric;
-            self.metric = Default::default();
+            assert!(self.op_in_progress.is_some());
+            let t = self.op_in_progress.take().unwrap();
+            // trace!("profile end {:?}", t);
+            let mut current_stats = self.r1cs.stats().clone();
+            current_stats -= &self.old_stats;
+            let data = self.profiling_data.entry(t).or_default();
+            data.1 += &current_stats;
+            data.0 += 1;
+            self.old_stats = Default::default();
         }
     }
 
     fn profile_print(&self) {
         if self.cfg.r1cs.profile {
-            let terms: TermSet = self.profiling_data.keys().cloned().collect();
-            let mut cum_metrics: TermMap<Metric> = Default::default();
-            for t in PostOrderIter::from_roots_and_skips(terms, Default::default()) {
-                let mut cum = Metric::default();
-                if let Some(d) = self.profiling_data.get(&t) {
-                    cum += d;
-                }
-                for c in t.cs() {
-                    cum += cum_metrics.get(c).unwrap();
-                }
-                cum_metrics.insert(t, cum);
-            }
-            let mut data: Vec<(Term, Metric, Metric)> = cum_metrics
-                .into_iter()
-                .map(|(term, cum)| {
-                    let indiv = self
-                        .profiling_data
-                        .get(&term)
-                        .cloned()
-                        .unwrap_or(Default::default());
-                    (term, cum, indiv)
-                })
+            let mut data: Vec<(&Op, usize, usize, &R1csStats)> = self
+                .profiling_data
+                .iter()
+                .map(|((op, arity), (count, stats))| (op, *arity, *count, stats))
                 .collect();
-            data.sort_by(|(t0, c0, i0), (t1, c1, i1)| i0.cmp(i1).then(c0.cmp(c1)).then(t0.cmp(t1)));
+            data.sort_by_key(|(_, _, count, stats)| {
+                (stats.n_entries(), stats.n_constraints, stats.n_vars, *count)
+            });
             data.reverse();
-            for (t, c, i) in data {
-                if c.n_constraints != 0 {
-                    println!(
-                        "{:>8}: {:>8}cs cum, {:>8}vs cum, {:>8}cs, {:>8}vs;   {} {:?}",
-                        format!("{}", t.id()),
-                        c.n_constraints,
-                        c.n_vars,
-                        i.n_constraints,
-                        i.n_vars,
-                        t.op(),
-                        t.cs().iter().map(|c| c.id()).collect::<Vec<_>>(),
-                    )
-                }
+            println!(
+                "r1csstats,entries,constraints,count,vars,a_entries,b_entries,c_entries,op_arity,op"
+            );
+            for (op, arity, count, stats) in data {
+                println!(
+                    "r1csstats,{},{},{},{},{},{},{},{},{}",
+                    stats.n_entries(),
+                    stats.n_constraints,
+                    count,
+                    stats.n_vars,
+                    stats.n_a_entries,
+                    stats.n_b_entries,
+                    stats.n_c_entries,
+                    arity,
+                    op,
+                )
             }
         }
     }
@@ -173,7 +157,6 @@ impl<'cfg> ToR1cs<'cfg> {
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
         self.r1cs.add_var(n.clone(), comp.clone(), ty);
-        self.metric.n_vars += 1;
         debug!("fresh: {n:?}");
         TermLc(comp, self.r1cs.signal_lc(&n))
     }
@@ -185,7 +168,6 @@ impl<'cfg> ToR1cs<'cfg> {
 
     /// Create a constraint
     fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
-        self.metric.n_constraints += 1;
         self.r1cs.constraint(a, b, c);
     }
 
@@ -1045,7 +1027,17 @@ impl<'cfg> ToR1cs<'cfg> {
                 Op::PfNaryOp(o) => {
                     let args = c.cs().iter().map(|c| self.get_pf(c));
                     match o {
-                        PfNaryOp::Add => args.fold(self.zero.clone(), std::ops::Add::add),
+                        PfNaryOp::Add => {
+                            let mut lc = args.fold(self.zero.clone(), std::ops::Add::add);
+                            if lc.1.monomials.len() > self.cfg.r1cs.lc_elim_thresh {
+                                let w = self.fresh_wit("add", lc.0.clone());
+                                lc -= &w;
+                                self.constraint(self.zero.1.clone(), self.zero.1.clone(), lc.1);
+                                w
+                            } else {
+                                lc
+                            }
+                        }
                         PfNaryOp::Mul => {
                             // Needed to end the above closures borrow of self, before the mul call
                             #[allow(clippy::needless_collect)]

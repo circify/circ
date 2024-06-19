@@ -271,6 +271,7 @@ where
 
     fn prove(pk: &Self::ProvingKey, witness: &FxHashMap<String, Value>) -> Self::Proof {
         let rng = &mut rand::thread_rng();
+        #[cfg(debug_assertions)]
         pk.0.check_all(witness);
         Proof(groth16::create_random_proof(SynthInput(&pk.0, Some(witness)), &pk.1, rng).unwrap())
     }

@@ -132,6 +132,8 @@ pub struct R1cs {
     /// The contraints themselves
     constraints: Vec<(Lc, Lc, Lc)>,
 
+    stats: R1csStats,
+
     /// Terms for computing them.
     #[serde(with = "crate::ir::term::serde_mods::map")]
     terms: HashMap<Var, Term>,
@@ -222,6 +224,7 @@ impl R1cs {
             num_final_wits: Default::default(),
             challenge_names: Default::default(),
             constraints: Vec::new(),
+            stats: Default::default(),
             terms: Default::default(),
             precompute,
         }
@@ -257,6 +260,7 @@ impl R1cs {
         // could check `t` dependents
         self.idx_to_sig.insert(var, s);
         self.terms.insert(var, t);
+        self.stats.n_vars += 1;
         var
     }
 
@@ -324,6 +328,13 @@ impl R1cs {
         assert_eq!(&self.modulus, &a.modulus);
         assert_eq!(&self.modulus, &b.modulus);
         assert_eq!(&self.modulus, &c.modulus);
+        self.stats.n_constraints += 1;
+        let n_a = a.monomials.len() + !a.constant.is_zero() as usize;
+        let n_b = b.monomials.len() + !b.constant.is_zero() as usize;
+        let n_c = c.monomials.len() + !c.constant.is_zero() as usize;
+        self.stats.n_a_entries += n_a as u32;
+        self.stats.n_b_entries += n_b as u32;
+        self.stats.n_c_entries += n_c as u32;
         debug!(
             "Constraint:\n    {}\n  * {}\n  = {}",
             self.format_lc(&a),
@@ -418,6 +429,69 @@ impl R1cs {
     /// Access the raw constraints.
     pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
         &self.constraints
+    }
+
+    /// Statistics for this R1CS instance
+    pub fn stats(&self) -> &R1csStats {
+        &self.stats
+    }
+
+    /// Recalculate statistics for this R1CS instance
+    pub fn update_stats(&mut self) {
+        self.stats = R1csStats::default();
+        self.stats.n_vars = self.num_vars() as u32;
+        let s = &mut self.stats;
+        s.n_constraints = self.constraints.len() as u32;
+        for (a, b, c) in &self.constraints {
+            let n_a = a.monomials.len() + !a.constant.is_zero() as usize;
+            let n_b = b.monomials.len() + !b.constant.is_zero() as usize;
+            let n_c = c.monomials.len() + !c.constant.is_zero() as usize;
+            s.n_a_entries += n_a as u32;
+            s.n_b_entries += n_b as u32;
+            s.n_c_entries += n_c as u32;
+        }
+    }
+}
+
+/// R1CS statistics
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct R1csStats {
+    /// number of constraints
+    pub n_constraints: u32,
+    /// number of variables
+    pub n_vars: u32,
+    /// number of non-zero A matrix entries
+    pub n_a_entries: u32,
+    /// number of non-zero B matrix entries
+    pub n_b_entries: u32,
+    /// number of non-zero C matrix entries
+    pub n_c_entries: u32,
+}
+
+impl R1csStats {
+    /// number of non-zero A, B, and C entries
+    pub fn n_entries(&self) -> u64 {
+        self.n_a_entries as u64 + self.n_b_entries as u64 + self.n_c_entries as u64
+    }
+}
+
+impl std::ops::AddAssign<&R1csStats> for R1csStats {
+    fn add_assign(&mut self, other: &R1csStats) {
+        self.n_constraints += other.n_constraints;
+        self.n_vars += other.n_vars;
+        self.n_a_entries += other.n_a_entries;
+        self.n_b_entries += other.n_b_entries;
+        self.n_c_entries += other.n_c_entries;
+    }
+}
+
+impl std::ops::SubAssign<&R1csStats> for R1csStats {
+    fn sub_assign(&mut self, other: &R1csStats) {
+        self.n_constraints -= other.n_constraints;
+        self.n_vars -= other.n_vars;
+        self.n_a_entries -= other.n_a_entries;
+        self.n_b_entries -= other.n_b_entries;
+        self.n_c_entries -= other.n_c_entries;
     }
 }
 
@@ -535,6 +609,7 @@ impl ProverData {
                 }
             }
         }
+        eval.print_times();
         var_values
     }
     /// Check all assertions. Puts in 1 for challenges.
@@ -922,7 +997,8 @@ impl R1cs {
         // we still need to remove the non-r1cs variables
         //use crate::ir::proof::PROVER_ID;
         //let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
-        let mut precompute_map = precompute.flatten();
+        precompute.flatten();
+        let mut precompute_map = precompute.outputs;
         let mut vars: HashMap<String, Sort> = {
             PostOrderIter::from_roots_and_skips(
                 precompute_map.values().cloned(),
@@ -999,7 +1075,8 @@ impl R1cs {
         for c in &self.challenge_names {
             assert!(!vars.contains_key(c));
         }
-        let mut precompute_map = precompute.flatten();
+        precompute.flatten();
+        let mut precompute_map = precompute.outputs;
         let terms = self
             .insts_iter()
             .map(|v| {
