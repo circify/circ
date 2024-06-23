@@ -1,7 +1,8 @@
 //! Machinery for formatting IR types
 use super::{
-    check, ext, map::Map, Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term,
-    TermMap, Value, VariableMetadata,
+    check, ext, map::Map, Array, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp, BvUnOp,
+    ComputationMetadata, FpBinOp, FpBinPred, FpUnOp, FpUnPred, IntBinPred, IntNaryOp, Node, Op,
+    PartyId, PfNaryOp, PfUnOp, PostOrderIter, Sort, Term, TermMap, Value, VariableMetadata,
 };
 use crate::cfg::{cfg, is_cfg_set};
 
@@ -11,6 +12,154 @@ use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use itertools::Itertools;
 
 use std::fmt::{Debug, Display, Error as FmtError, Formatter, Result as FmtResult, Write};
+
+impl Display for BoolNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BoolNaryOp::And => write!(f, "and"),
+            BoolNaryOp::Or => write!(f, "or"),
+            BoolNaryOp::Xor => write!(f, "xor"),
+        }
+    }
+}
+
+impl Display for BvBinOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvBinOp::Sub => write!(f, "bvsub"),
+            BvBinOp::Udiv => write!(f, "bvudiv"),
+            BvBinOp::Urem => write!(f, "bvurem"),
+            BvBinOp::Shl => write!(f, "bvshl"),
+            BvBinOp::Ashr => write!(f, "bvashr"),
+            BvBinOp::Lshr => write!(f, "bvlshr"),
+        }
+    }
+}
+
+impl Display for BvBinPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvBinPred::Ult => write!(f, "bvult"),
+            BvBinPred::Ugt => write!(f, "bvugt"),
+            BvBinPred::Ule => write!(f, "bvule"),
+            BvBinPred::Uge => write!(f, "bvuge"),
+            BvBinPred::Slt => write!(f, "bvslt"),
+            BvBinPred::Sgt => write!(f, "bvsgt"),
+            BvBinPred::Sle => write!(f, "bvsle"),
+            BvBinPred::Sge => write!(f, "bvsge"),
+        }
+    }
+}
+
+impl Display for BvNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvNaryOp::Add => write!(f, "bvadd"),
+            BvNaryOp::Mul => write!(f, "bvmul"),
+            BvNaryOp::Or => write!(f, "bvor"),
+            BvNaryOp::And => write!(f, "bvand"),
+            BvNaryOp::Xor => write!(f, "bvxor"),
+        }
+    }
+}
+
+impl Display for BvUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvUnOp::Not => write!(f, "bvnot"),
+            BvUnOp::Neg => write!(f, "bvneg"),
+        }
+    }
+}
+
+impl Display for FpBinOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpBinOp::Add => write!(f, "fpadd"),
+            FpBinOp::Mul => write!(f, "fpmul"),
+            FpBinOp::Sub => write!(f, "fpsub"),
+            FpBinOp::Div => write!(f, "fpdiv"),
+            FpBinOp::Rem => write!(f, "fprem"),
+            FpBinOp::Max => write!(f, "fpmax"),
+            FpBinOp::Min => write!(f, "fpmin"),
+        }
+    }
+}
+
+impl Display for FpUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpUnOp::Neg => write!(f, "fpneg"),
+            FpUnOp::Abs => write!(f, "fpabs"),
+            FpUnOp::Sqrt => write!(f, "fpsqrt"),
+            FpUnOp::Round => write!(f, "fpround"),
+        }
+    }
+}
+
+impl Display for FpBinPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpBinPred::Le => write!(f, "fple"),
+            FpBinPred::Lt => write!(f, "fplt"),
+            FpBinPred::Eq => write!(f, "fpeq"),
+            FpBinPred::Ge => write!(f, "fpge"),
+            FpBinPred::Gt => write!(f, "fpgt"),
+        }
+    }
+}
+
+impl Display for FpUnPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpUnPred::Normal => write!(f, "fpnormal"),
+            FpUnPred::Subnormal => write!(f, "fpsubnormal"),
+            FpUnPred::Zero => write!(f, "fpzero"),
+            FpUnPred::Infinite => write!(f, "fpinfinite"),
+            FpUnPred::Nan => write!(f, "fpnan"),
+            FpUnPred::Negative => write!(f, "fpnegative"),
+            FpUnPred::Positive => write!(f, "fppositive"),
+        }
+    }
+}
+
+impl Display for PfNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            PfNaryOp::Add => write!(f, "+"),
+            PfNaryOp::Mul => write!(f, "*"),
+        }
+    }
+}
+
+impl Display for PfUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            PfUnOp::Neg => write!(f, "-"),
+            PfUnOp::Recip => write!(f, "pfrecip"),
+        }
+    }
+}
+
+impl Display for IntNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            IntNaryOp::Add => write!(f, "intadd"),
+            IntNaryOp::Mul => write!(f, "intmul"),
+        }
+    }
+}
+
+impl Display for IntBinPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            IntBinPred::Lt => write!(f, "<"),
+            IntBinPred::Gt => write!(f, ">"),
+            IntBinPred::Le => write!(f, "<="),
+            IntBinPred::Ge => write!(f, ">="),
+        }
+    }
+}
 
 /// State that influences how IR is formatted.
 struct IrFormatter<'a, 'b> {
