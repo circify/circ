@@ -317,7 +317,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
                 [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(
-                    self.ident_string(name),
+                    self.ident_string(name).into_boxed_str(),
                     FieldT::from(self.int(field)),
                 )),
                 [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(self.sort(k), self.sort(v))),

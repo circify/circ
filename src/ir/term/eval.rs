@@ -216,7 +216,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             )
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
-        Op::PfChallenge(name, field) => Value::Field(pf_challenge(name, field)),
+        Op::PfChallenge(name, field) => Value::Field(eval_pf_challenge(name, field)),
         Op::Witness(_) => args[0].clone(),
         Op::PfFitsInBits(n_bits) => {
             Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
@@ -341,7 +341,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
 }
 
 /// Compute a (deterministic) prime-field challenge.
-pub fn pf_challenge(name: &str, field: &FieldT) -> FieldV {
+pub fn eval_pf_challenge(name: &str, field: &FieldT) -> FieldV {
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use std::hash::{Hash, Hasher};

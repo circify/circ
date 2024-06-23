@@ -108,7 +108,7 @@ pub fn check_ram(c: &mut Computation, mut ram: Ram, cfg: &AccessCfg) {
     let mut uhf_inputs = inital_terms.clone();
     uhf_inputs.extend(final_terms.iter().cloned());
     let uhf_key = term(
-        Op::PfChallenge(format!("__uhf_key.{j}"), field.clone()),
+        Op::PfChallenge(format!("__uhf_key.{j}").into_boxed_str(), field.clone()),
         uhf_inputs,
     );
     let uhf = |idx: Term, val: Term| term![PF_ADD; val, term![PF_MUL; uhf_key.clone(), idx]];

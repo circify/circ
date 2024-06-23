@@ -603,7 +603,7 @@ impl ProverData {
                     }
                     let var = self.r1cs.vars[next_var_i];
                     let name = self.r1cs.names.get(&var).unwrap().clone();
-                    let val = pf_challenge(&name, &self.r1cs.field);
+                    let val = eval_pf_challenge(&name, &self.r1cs.field);
                     var_values.insert(var, val.clone());
                     inputs.insert(name, Value::Field(val));
                 }

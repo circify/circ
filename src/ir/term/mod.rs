@@ -46,7 +46,7 @@ pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
-pub use eval::{eval, eval_cached, eval_op, pf_challenge};
+pub use eval::{eval, eval_cached, eval_op, eval_pf_challenge};
 pub use ext::ExtOp;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
@@ -133,7 +133,7 @@ pub enum Op {
     /// differentely) and a field to sample from.
     ///
     /// In IR evaluation, we sample deterministically based on a hash of the name.
-    PfChallenge(String, FieldT),
+    PfChallenge(Box<str>, FieldT),
     /// Requires the input pf element to fit in this many (unsigned) bits.
     PfFitsInBits(usize),
     /// Prime-field division
@@ -1880,7 +1880,7 @@ impl Computation {
         for v in self.metadata.vars.values() {
             if v.random {
                 let field = v.sort.as_pf();
-                let value = Value::Field(eval::pf_challenge(&v.name, field));
+                let value = Value::Field(eval::eval_pf_challenge(&v.name, field));
                 values.insert(v.name.clone(), value);
             }
         }

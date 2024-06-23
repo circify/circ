@@ -185,7 +185,7 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
             debug!("challenge {name}: round = {round}");
             trace!("challenge term {t}");
             let md = VariableMetadata {
-                name: name.clone(),
+                name: name.to_string(),
                 random: true,
                 vis: None,
                 sort: Sort::Field(field.clone()),

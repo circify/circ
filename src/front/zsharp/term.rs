@@ -915,7 +915,10 @@ pub fn sample_challenge(a: T, number: usize) -> Result<T, String> {
             Ok(T::new(
                 Ty::Field,
                 term(
-                    Op::PfChallenge(format!("zx_chall_{number}"), default_field()),
+                    Op::PfChallenge(
+                        format!("zx_chall_{number}").into_boxed_str(),
+                        default_field(),
+                    ),
                     a.unwrap_array_ir()?,
                 ),
             ))

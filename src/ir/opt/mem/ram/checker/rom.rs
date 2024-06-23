@@ -44,7 +44,7 @@ pub fn lookup(c: &mut Computation, ns: Namespace, haystack: Vec<Term>, needles: 
         })
         .collect();
     let key = term(
-        Op::PfChallenge(ns.fqn("key"), f.clone()),
+        Op::PfChallenge(ns.fqn("key").into_boxed_str(), f.clone()),
         haystack
             .iter()
             .chain(&needles)
