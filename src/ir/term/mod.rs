@@ -31,7 +31,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 pub mod bv;
 pub mod dist;
@@ -342,16 +341,6 @@ pub enum BoolNaryOp {
     Or,
 }
 
-impl Display for BoolNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BoolNaryOp::And => write!(f, "and"),
-            BoolNaryOp::Or => write!(f, "or"),
-            BoolNaryOp::Xor => write!(f, "xor"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector binary operator
 pub enum BvBinOp {
@@ -367,19 +356,6 @@ pub enum BvBinOp {
     Ashr,
     /// Bit-vector logical (zero fill) (>>)
     Lshr,
-}
-
-impl Display for BvBinOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvBinOp::Sub => write!(f, "bvsub"),
-            BvBinOp::Udiv => write!(f, "bvudiv"),
-            BvBinOp::Urem => write!(f, "bvurem"),
-            BvBinOp::Shl => write!(f, "bvshl"),
-            BvBinOp::Ashr => write!(f, "bvashr"),
-            BvBinOp::Lshr => write!(f, "bvlshr"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -404,21 +380,6 @@ pub enum BvBinPred {
     Sge,
 }
 
-impl Display for BvBinPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvBinPred::Ult => write!(f, "bvult"),
-            BvBinPred::Ugt => write!(f, "bvugt"),
-            BvBinPred::Ule => write!(f, "bvule"),
-            BvBinPred::Uge => write!(f, "bvuge"),
-            BvBinPred::Slt => write!(f, "bvslt"),
-            BvBinPred::Sgt => write!(f, "bvsgt"),
-            BvBinPred::Sle => write!(f, "bvsle"),
-            BvBinPred::Sge => write!(f, "bvsge"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector n-ary operator
 pub enum BvNaryOp {
@@ -434,18 +395,6 @@ pub enum BvNaryOp {
     Xor,
 }
 
-impl Display for BvNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvNaryOp::Add => write!(f, "bvadd"),
-            BvNaryOp::Mul => write!(f, "bvmul"),
-            BvNaryOp::Or => write!(f, "bvor"),
-            BvNaryOp::And => write!(f, "bvand"),
-            BvNaryOp::Xor => write!(f, "bvxor"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector unary operator
 pub enum BvUnOp {
@@ -453,15 +402,6 @@ pub enum BvUnOp {
     Not,
     /// Bit-vector two's complement negation
     Neg,
-}
-
-impl Display for BvUnOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvUnOp::Not => write!(f, "bvnot"),
-            BvUnOp::Neg => write!(f, "bvneg"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -483,20 +423,6 @@ pub enum FpBinOp {
     Min,
 }
 
-impl Display for FpBinOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpBinOp::Add => write!(f, "fpadd"),
-            FpBinOp::Mul => write!(f, "fpmul"),
-            FpBinOp::Sub => write!(f, "fpsub"),
-            FpBinOp::Div => write!(f, "fpdiv"),
-            FpBinOp::Rem => write!(f, "fprem"),
-            FpBinOp::Max => write!(f, "fpmax"),
-            FpBinOp::Min => write!(f, "fpmin"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Floating-point unary operator
 pub enum FpUnOp {
@@ -508,17 +434,6 @@ pub enum FpUnOp {
     Sqrt,
     /// Floating-point round
     Round,
-}
-
-impl Display for FpUnOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpUnOp::Neg => write!(f, "fpneg"),
-            FpUnOp::Abs => write!(f, "fpabs"),
-            FpUnOp::Sqrt => write!(f, "fpsqrt"),
-            FpUnOp::Round => write!(f, "fpround"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -534,18 +449,6 @@ pub enum FpBinPred {
     Ge,
     /// Floating-point (>)
     Gt,
-}
-
-impl Display for FpBinPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpBinPred::Le => write!(f, "fple"),
-            FpBinPred::Lt => write!(f, "fplt"),
-            FpBinPred::Eq => write!(f, "fpeq"),
-            FpBinPred::Ge => write!(f, "fpge"),
-            FpBinPred::Gt => write!(f, "fpgt"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -567,20 +470,6 @@ pub enum FpUnPred {
     Positive,
 }
 
-impl Display for FpUnPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpUnPred::Normal => write!(f, "fpnormal"),
-            FpUnPred::Subnormal => write!(f, "fpsubnormal"),
-            FpUnPred::Zero => write!(f, "fpzero"),
-            FpUnPred::Infinite => write!(f, "fpinfinite"),
-            FpUnPred::Nan => write!(f, "fpnan"),
-            FpUnPred::Negative => write!(f, "fpnegative"),
-            FpUnPred::Positive => write!(f, "fppositive"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Finite field n-ary operator
 pub enum PfNaryOp {
@@ -588,15 +477,6 @@ pub enum PfNaryOp {
     Add,
     /// Finite field (*)
     Mul,
-}
-
-impl Display for PfNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            PfNaryOp::Add => write!(f, "+"),
-            PfNaryOp::Mul => write!(f, "*"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -608,15 +488,6 @@ pub enum PfUnOp {
     Recip,
 }
 
-impl Display for PfUnOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            PfUnOp::Neg => write!(f, "-"),
-            PfUnOp::Recip => write!(f, "pfrecip"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Integer n-ary operator
 pub enum IntNaryOp {
@@ -624,15 +495,6 @@ pub enum IntNaryOp {
     Add,
     /// Finite field (*)
     Mul,
-}
-
-impl Display for IntNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            IntNaryOp::Add => write!(f, "intadd"),
-            IntNaryOp::Mul => write!(f, "intmul"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -646,17 +508,6 @@ pub enum IntBinPred {
     Le,
     /// Integer (>=)
     Ge,
-}
-
-impl Display for IntBinPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            IntBinPred::Lt => write!(f, "<"),
-            IntBinPred::Gt => write!(f, ">"),
-            IntBinPred::Le => write!(f, "<="),
-            IntBinPred::Ge => write!(f, ">="),
-        }
-    }
 }
 
 impl Serialize for Term {
