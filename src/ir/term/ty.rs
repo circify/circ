@@ -144,9 +144,9 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::PfFitsInBits(_) => Ok(Sort::Bool),
         Op::Select => array_or(get_ty(&t.cs()[0]), "select").map(|(_, v, _)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs()[0]).clone()),
-        Op::Array(k, v) => Ok(Sort::Array(
-            Box::new(k.clone()),
-            Box::new(v.clone()),
+        Op::Array(a) => Ok(Sort::Array(
+            Box::new(a.key.clone()),
+            Box::new(a.val.clone()),
             t.cs().len(),
         )),
         Op::CStore => Ok(get_ty(&t.cs()[0]).clone()),
@@ -388,11 +388,17 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             Box::new(v.clone()),
             *size,
         )),
-        (Op::Array(k, v), a) => {
+        (Op::Array(arr), a) => {
             let ctx = "array op";
             a.iter()
-                .try_fold((), |(), ai| eq_or(v, ai, ctx).map(|_| ()))
-                .map(|_| Sort::Array(Box::new(k.clone()), Box::new(v.clone()), a.len()))
+                .try_fold((), |(), ai| eq_or(&arr.val, ai, ctx).map(|_| ()))
+                .map(|_| {
+                    Sort::Array(
+                        Box::new(arr.key.clone()),
+                        Box::new(arr.val.clone()),
+                        a.len(),
+                    )
+                })
         }
         (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
         (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {

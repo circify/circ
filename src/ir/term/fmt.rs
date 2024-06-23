@@ -361,11 +361,11 @@ impl DisplayIr for Op {
                 key_sort.ir_fmt(f)?;
                 write!(f, " {})", *size)
             }
-            Op::Array(k, v) => {
+            Op::Array(a) => {
                 write!(f, "(array ")?;
-                k.ir_fmt(f)?;
+                a.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
+                a.val.ir_fmt(f)?;
                 write!(f, ")")
             }
             Op::Tuple => write!(f, "tuple"),

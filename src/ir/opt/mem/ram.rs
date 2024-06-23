@@ -317,7 +317,10 @@ impl Access {
                     .collect(),
             ),
             Sort::Array(k, v, size) => term(
-                Op::Array(*k.clone(), *v.clone()),
+                Op::Array(Box::new(ArrayOp {
+                    key: *k.clone(),
+                    val: *v.clone(),
+                })),
                 (0..*size)
                     .map(|_| Self::val_from_field_elements_trusted(v, next))
                     .collect(),

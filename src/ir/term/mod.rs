@@ -164,7 +164,7 @@ pub enum Op {
     /// Makes an array of the indicated key sort with the indicated size, filled with the argument.
     Fill(Sort, usize),
     /// Create an array from (contiguous) values.
-    Array(Sort, Sort),
+    Array(Box<ArrayOp>),
 
     /// Assemble n things into a tuple
     Tuple,
@@ -199,6 +199,15 @@ pub struct CallOp {
     pub arg_sorts: Vec<Sort>,
     /// Return sorts
     pub ret_sort: Sort,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ArrayOp {
+    /// The key sort
+    pub key: Sort,
+    /// The value sort
+    pub val: Sort,
 }
 
 /// Boolean AND
@@ -1206,7 +1215,13 @@ impl Value {
 /// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
 /// * a value sort, for the array's default
 pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
-    term(Op::Array(key_sort, value_sort), i)
+    term(
+        Op::Array(Box::new(ArrayOp {
+            key: key_sort,
+            val: value_sort,
+        })),
+        i,
+    )
 }
 
 /// Make a sequence of terms from an array.

@@ -263,9 +263,9 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 *size,
             ))
         }
-        Op::Array(key, value) => Value::Array(Array::from_vec(
-            key.clone(),
-            value.clone(),
+        Op::Array(a) => Value::Array(Array::from_vec(
+            a.key.clone(),
+            a.val.clone(),
             args.iter().cloned().cloned().collect(),
         )),
         Op::Select => {

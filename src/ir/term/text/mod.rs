@@ -320,7 +320,10 @@ impl<'src> IrInterp<'src> {
                     self.ident_string(name).into_boxed_str(),
                     FieldT::from(self.int(field)),
                 )),
-                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(self.sort(k), self.sort(v))),
+                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(Box::new(ArrayOp {
+                    key: self.sort(k),
+                    val: self.sort(v),
+                }))),
                 [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),

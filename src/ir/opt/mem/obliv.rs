@@ -52,7 +52,7 @@ impl OblivRewriter {
                     (None, None)
                 }
             }
-            Op::Array(_k, _v) => (
+            Op::Array(_) => (
                 Some(term(
                     Op::Tuple,
                     t.cs().iter().map(|c| self.get_t(c)).cloned().collect(),

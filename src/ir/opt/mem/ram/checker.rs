@@ -302,7 +302,10 @@ fn derivative_gcd(
     let ns = ns.subspace("uniq");
     let fs = Sort::Field(f.clone());
     let pairs = term(
-        Op::Array(fs.clone(), Sort::Tuple(Box::new([fs.clone(), Sort::Bool]))),
+        Op::Array(Box::new(ArrayOp {
+            key: fs.clone(),
+            val: Sort::Tuple(Box::new([fs.clone(), Sort::Bool])),
+        })),
         values
             .clone()
             .into_iter()

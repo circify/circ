@@ -787,7 +787,13 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
 
 fn ir_array<I: IntoIterator<Item = Term>>(value_sort: Sort, elems: I) -> Term {
     let key_sort = Sort::Field(cfg().field().clone());
-    term(Op::Array(key_sort, value_sort), elems.into_iter().collect())
+    term(
+        Op::Array(Box::new(ArrayOp {
+            key: key_sort,
+            val: value_sort,
+        })),
+        elems.into_iter().collect(),
+    )
 }
 
 pub fn fill_array(value: T, size: usize) -> Result<T, String> {

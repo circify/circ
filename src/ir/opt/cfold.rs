@@ -334,15 +334,15 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                         _ => None,
                     }
                 }
-                Op::Array(k, v) => t
+                Op::Array(a) => t
                     .cs()
                     .iter()
                     .map(|c| c_get(c).as_value_opt().cloned())
                     .collect::<Option<_>>()
                     .map(|cs| {
                         leaf_term(Op::Const(Value::Array(Array::from_vec(
-                            k.clone(),
-                            v.clone(),
+                            a.key.clone(),
+                            a.val.clone(),
                             cs,
                         ))))
                     }),
