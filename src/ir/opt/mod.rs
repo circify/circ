@@ -15,7 +15,7 @@ mod visit;
 
 use super::term::*;
 
-use log::{debug, trace};
+use log::{debug, info, trace};
 
 #[derive(Clone, Debug)]
 /// An optimization pass
@@ -63,6 +63,9 @@ pub enum Opt {
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for c in cs.comps.values() {
         trace!("Before all opts: {}", text::serialize_computation(c));
+        info!("Before all opts: {} terms", c.stats().main.n_terms);
+        debug!("Before all opts: {:#?}", c.stats());
+        debug!("Before all opts: {:#?}", c.detailed_stats());
     }
     for i in optimizations {
         debug!("Applying: {:?}", i);
@@ -162,10 +165,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     fits_in_bits_ip::fits_in_bits_ip(c);
                 }
             }
-            debug!("After {:?}: {} outputs", i, c.outputs.len());
+            info!("After {:?}: {} terms", i, c.stats().main.n_terms);
+            debug!("After {:?}: {:#?}", i, c.stats());
             trace!("After {:?}: {}", i, text::serialize_computation(c));
-            //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
-            debug!("After {:?}: {} terms", i, c.terms());
             #[cfg(debug_assertions)]
             c.precomputes.check_topo_orderable();
         }
