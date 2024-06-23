@@ -111,6 +111,11 @@ impl PreComp {
         )
     }
 
+    /// Visit all terms
+    pub fn terms_postorder(&self) -> impl Iterator<Item = Term> {
+        PostOrderIter::from_roots_and_skips(self.outputs.values().cloned(), Default::default())
+    }
+
     /// Recompute the inputs.
     fn recompute_inputs(&mut self) {
         let mut inputs = FxHashSet::default();
