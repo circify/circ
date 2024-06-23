@@ -41,7 +41,7 @@ fn hashable(s: &Sort, f: &FieldT) -> bool {
         Sort::Tuple(ss) => ss.iter().all(|s| hashable(s, f)),
         Sort::BitVector(_) => true,
         Sort::Bool => true,
-        Sort::Array(_k, v, size) => *size < 20 && hashable(v, f),
+        Sort::Array(a) => a.size < 20 && hashable(&a.val, f),
         _ => false,
     }
 }
@@ -49,9 +49,9 @@ fn hashable(s: &Sort, f: &FieldT) -> bool {
 /// Does this array have a sort compatible with our RAM machinery?
 fn right_sort(t: &Term, f: &FieldT) -> bool {
     let s = check(t);
-    if let Sort::Array(k, v, _) = &s {
-        if let Sort::Field(k) = &**k {
-            k == f && hashable(v, f)
+    if let Sort::Array(a) = &s {
+        if let Sort::Field(k) = &a.key {
+            k == f && hashable(&a.val, f)
         } else {
             false
         }

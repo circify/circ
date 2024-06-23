@@ -122,7 +122,7 @@ impl TupleTree {
             TupleTree::NonTuple(cs) => {
                 if let Sort::Tuple(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Field(i); cs.clone()])
-                } else if let Sort::Array(_, _, _) = check(cs) {
+                } else if let Sort::Array(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Select; cs.clone(), bv_lit(i, 32)])
                 } else {
                     panic!("Get ({}) on non-tuple {:?}", i, self)

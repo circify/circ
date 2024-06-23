@@ -32,18 +32,18 @@ fn create_vars(
                 })
                 .collect(),
         ),
-        Sort::Array(key_s, val_s, size) => {
+        Sort::Array(a) => {
             let array_elements = extras::array_elements(&prefix_term);
             make_array(
-                (**key_s).clone(),
-                (**val_s).clone(),
-                (0..*size)
+                a.key.clone(),
+                a.val.clone(),
+                (0..a.size)
                     .zip(array_elements)
                     .map(|(i, element)| {
                         create_vars(
                             &format!("{prefix}.{i}"),
                             element,
-                            val_s,
+                            &a.val,
                             new_var_requests,
                             false,
                         )
@@ -78,14 +78,14 @@ fn create_wits(prefix: &str, prefix_term: Term, sort: &Sort) -> Term {
                 })
                 .collect(),
         ),
-        Sort::Array(key_s, val_s, size) => {
+        Sort::Array(a) => {
             let array_elements = extras::array_elements(&prefix_term);
             make_array(
-                (**key_s).clone(),
-                (**val_s).clone(),
-                (0..*size)
+                a.key.clone(),
+                a.val.clone(),
+                (0..a.size)
                     .zip(array_elements)
-                    .map(|(i, element)| create_wits(&format!("{prefix}.{i}"), element, val_s))
+                    .map(|(i, element)| create_wits(&format!("{prefix}.{i}"), element, &a.val))
                     .collect(),
             )
         }

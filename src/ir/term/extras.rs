@@ -143,10 +143,10 @@ pub fn parents_map(c: &Computation) -> TermMap<Vec<Term>> {
 
 /// The elements in this array (select terms) as a vector.
 pub fn array_elements(t: &Term) -> Vec<Term> {
-    if let Sort::Array(key_sort, _, size) = check(t) {
-        key_sort
+    if let Sort::Array(a) = check(t) {
+        a.key
             .elems_iter()
-            .take(size)
+            .take(a.size)
             .map(|key| term(Op::Select, vec![t.clone(), key]))
             .collect()
     } else {

@@ -280,20 +280,20 @@ impl DisplayIr for Sort {
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
             Sort::Field(fty) => write!(f, "(mod {})", fty.modulus()),
-            Sort::Array(k, v, n) => {
+            Sort::Array(a) => {
                 // we could make our own write macro.
                 write!(f, "(array ")?;
-                k.ir_fmt(f)?;
+                a.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
-                write!(f, " {n})")
+                a.val.ir_fmt(f)?;
+                write!(f, " {})", a.size)
             }
-            Sort::Map(k, v) => {
+            Sort::Map(m) => {
                 // we could make our own write macro.
                 write!(f, "(map ")?;
-                k.ir_fmt(f)?;
+                m.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
+                m.val.ir_fmt(f)?;
                 write!(f, ")")
             }
             Sort::Tuple(fields) => {

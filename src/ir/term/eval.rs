@@ -280,7 +280,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             for arg in args {
                 let arr = arg.as_array().clone();
                 let iter = match arg.sort() {
-                    Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                    Sort::Array(a) => a.key.clone().elems_iter_values().take(a.size).enumerate(),
                     _ => panic!("Input type should be Array"),
                 };
                 for (j, jval) in iter {
@@ -294,9 +294,9 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                     .collect(),
             );
             let (mut res, iter) = match check(&term) {
-                Sort::Array(k, v, n) => (
-                    Array::default((*k).clone(), &v, n),
-                    (*k).clone().elems_iter_values().take(n).enumerate(),
+                Sort::Array(a) => (
+                    Array::default(a.key.clone(), &a.val, a.size),
+                    a.key.clone().elems_iter_values().take(a.size).enumerate(),
                 ),
                 _ => panic!("Output type of map should be array"),
             };
@@ -311,10 +311,10 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         Op::Rot(i) => {
             let a = args[0].as_array().clone();
             let (mut res, iter, len) = match args[0].sort() {
-                Sort::Array(k, v, n) => (
-                    Array::default((*k).clone(), &v, n),
-                    (*k).clone().elems_iter_values().take(n).enumerate(),
-                    n,
+                Sort::Array(a) => (
+                    Array::default(a.key.clone(), &a.val, a.size),
+                    a.key.clone().elems_iter_values().take(a.size).enumerate(),
+                    a.size,
                 ),
                 _ => panic!("Input type should be Array"),
             };

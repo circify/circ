@@ -55,11 +55,11 @@ impl MemManager {
     /// Allocate a new stack array, equal to `array`.
     pub fn allocate(&mut self, array: Term) -> AllocId {
         let s = check(&array);
-        if let Sort::Array(box_addr_width, box_val_width, size) = s {
-            if let Sort::BitVector(addr_width) = *box_addr_width {
-                if let Sort::BitVector(val_width) = *box_val_width {
+        if let Sort::Array(a) = s {
+            if let Sort::BitVector(addr_width) = &a.key {
+                if let Sort::BitVector(val_width) = &a.val {
                     let id = self.take_next_id();
-                    let alloc = Alloc::new(addr_width, val_width, size, array);
+                    let alloc = Alloc::new(*addr_width, *val_width, a.size, array);
                     self.allocs.insert(id, alloc);
                     id
                 } else {
@@ -130,7 +130,7 @@ impl MemManager {
     }
 }
 
-#[cfg(all(feature = "smt", feature = "test", feature = "zok"))]
+#[cfg(all(feature = "smt", test, feature = "zok"))]
 mod test {
     use super::*;
     use crate::target::smt::check_sat;
@@ -141,8 +141,9 @@ mod test {
         leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
     }
 
+    #[test]
     fn sat_test() {
-        let cs = Rc::new(RefCell::new(Computation::new(false)));
+        let cs = Rc::new(RefCell::new(Computation::new()));
         let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
@@ -163,8 +164,9 @@ mod test {
         assert!(check_sat(&sys))
     }
 
+    #[test]
     fn unsat_test() {
-        let cs = Rc::new(RefCell::new(Computation::new(false)));
+        let cs = Rc::new(RefCell::new(Computation::new()));
         let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);

@@ -82,7 +82,7 @@ impl Expr2Smt<()> for Value {
                     write!(w, "(store ")?;
                 }
                 let val_s = check(&leaf_term(Op::Const((**default).clone())));
-                let s = Sort::Array(Box::new(key_sort.clone()), Box::new(val_s), *size);
+                let s = Sort::new_array(key_sort.clone(), val_s, *size);
                 write!(
                     w,
                     "((as const {}) {})",
@@ -197,8 +197,8 @@ impl Sort2Smt for Sort {
     fn sort_to_smt2<W: Write>(&self, w: &mut W) -> SmtRes<()> {
         match self {
             Sort::BitVector(b) => write!(w, "(_ BitVec {b})")?,
-            Sort::Array(k, v, _size) => {
-                write!(w, "(Array {} {})", SmtSortDisp(&**k), SmtSortDisp(&**v))?;
+            Sort::Array(a) => {
+                write!(w, "(Array {} {})", SmtSortDisp(&a.key), SmtSortDisp(&a.val))?;
             }
             Sort::F64 => write!(w, "Float64")?,
             Sort::F32 => write!(w, "Float32")?,

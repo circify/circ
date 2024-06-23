@@ -121,7 +121,7 @@ impl AccessCfg {
     fn val_sort_len(s: &Sort) -> usize {
         match s {
             Sort::Tuple(t) => t.iter().map(Self::val_sort_len).sum(),
-            Sort::Array(_, v, size) => *size * Self::val_sort_len(v),
+            Sort::Array(a) => a.size * Self::val_sort_len(&a.val),
             _ => 1,
         }
     }
@@ -274,9 +274,9 @@ impl Access {
                     Self::sort_subnames(s, &format!("{}_{}", prefix, i), out);
                 }
             }
-            Sort::Array(_, v, size) => {
-                for i in 0..*size {
-                    Self::sort_subnames(v, &format!("{}_{}", prefix, i), out);
+            Sort::Array(a) => {
+                for i in 0..a.size {
+                    Self::sort_subnames(&a.val, &format!("{}_{}", prefix, i), out);
                 }
             }
             _ => unreachable!(),
@@ -292,8 +292,8 @@ impl Access {
                     Self::val_to_field_elements(&term![Op::Field(i); val.clone()], c, out);
                 }
             }
-            Sort::Array(_, _, size) => {
-                for i in 0..size {
+            Sort::Array(a) => {
+                for i in 0..a.size {
                     Self::val_to_field_elements(
                         &term![Op::Select; val.clone(), c.pf_lit(i)],
                         c,
@@ -316,13 +316,13 @@ impl Access {
                     .map(|s| Self::val_from_field_elements_trusted(s, next))
                     .collect(),
             ),
-            Sort::Array(k, v, size) => term(
+            Sort::Array(a) => term(
                 Op::Array(Box::new(ArrayOp {
-                    key: *k.clone(),
-                    val: *v.clone(),
+                    key: a.key.clone(),
+                    val: a.val.clone(),
                 })),
-                (0..*size)
-                    .map(|_| Self::val_from_field_elements_trusted(v, next))
+                (0..a.size)
+                    .map(|_| Self::val_from_field_elements_trusted(&a.val, next))
                     .collect(),
             ),
             _ => unreachable!(),
@@ -512,7 +512,7 @@ fn hashable(s: &Sort, f: &FieldT) -> bool {
         Sort::Tuple(ss) => ss.iter().all(|s| hashable(s, f)),
         Sort::BitVector(_) => true,
         Sort::Bool => true,
-        Sort::Array(_k, v, size) => *size < 20 && hashable(v, f),
+        Sort::Array(a) => a.size < 20 && hashable(&a.val, f),
         _ => false,
     }
 }

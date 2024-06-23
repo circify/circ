@@ -364,14 +364,10 @@ impl<'src> IrInterp<'src> {
                 match &ls[..] {
                     [Leaf(Ident, b"mod"), m] => Sort::Field(FieldT::from(self.int(m))),
                     [Leaf(Ident, b"bv"), w] => Sort::BitVector(self.usize(w)),
-                    [Leaf(Ident, b"array"), k, v, s] => Sort::Array(
-                        Box::new(self.sort(k)),
-                        Box::new(self.sort(v)),
-                        self.usize(s),
-                    ),
-                    [Leaf(Ident, b"map"), k, v] => {
-                        Sort::Map(Box::new(self.sort(k)), Box::new(self.sort(v)))
+                    [Leaf(Ident, b"array"), k, v, s] => {
+                        Sort::new_array(self.sort(k), self.sort(v), self.usize(s))
                     }
+                    [Leaf(Ident, b"map"), k, v] => Sort::new_map(self.sort(k), self.sort(v)),
                     [Leaf(Ident, b"tuple"), ..] => {
                         if ls.len() > 1 {
                             if let Some(size) = self.maybe_usize(&ls[1]) {

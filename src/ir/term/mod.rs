@@ -729,11 +729,31 @@ pub enum Sort {
     /// Array from one sort to another, of fixed size.
     ///
     /// size presumes an order, and a zero, for the key sort.
-    Array(Box<Sort>, Box<Sort>, usize),
+    Array(Box<ArraySort>),
     /// Map from one sort to another.
-    Map(Box<Sort>, Box<Sort>),
+    Map(Box<MapSort>),
     /// A tuple
     Tuple(Box<[Sort]>),
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Array sort
+pub struct ArraySort {
+    /// key sort
+    pub key: Sort,
+    /// value sort
+    pub val: Sort,
+    /// size
+    pub size: usize,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Map sort
+pub struct MapSort {
+    /// key sort
+    pub key: Sort,
+    /// value sort
+    pub val: Sort,
 }
 
 impl Default for Sort {
@@ -776,11 +796,16 @@ impl Sort {
     #[track_caller]
     /// Unwrap the constituent sorts of this array, panicking otherwise.
     pub fn as_array(&self) -> (&Sort, &Sort, usize) {
-        if let Sort::Array(k, v, s) = self {
-            (k, v, *s)
+        if let Sort::Array(a) = self {
+            (&a.key, &a.val, a.size)
         } else {
             panic!("{} is not an array", self)
         }
+    }
+
+    /// Create a new array sort
+    pub fn new_array(key: Sort, val: Sort, size: usize) -> Self {
+        Self::Array(Box::new(ArraySort { key, val, size }))
     }
 
     /// Is this an array?
@@ -791,8 +816,8 @@ impl Sort {
     #[track_caller]
     /// Unwrap the constituent sorts of this array, panicking otherwise.
     pub fn as_map(&self) -> (&Sort, &Sort) {
-        if let Sort::Map(k, v) = self {
-            (k, v)
+        if let Sort::Map(m) = self {
+            (&m.key, &m.val)
         } else {
             panic!("{} is not a map", self)
         }
@@ -801,6 +826,11 @@ impl Sort {
     /// Is this a map?
     pub fn is_map(&self) -> bool {
         matches!(self, Sort::Map(..))
+    }
+
+    /// Create a new map sort
+    pub fn new_map(key: Sort, val: Sort) -> Self {
+        Self::Map(Box::new(MapSort { key, val }))
     }
 
     /// The nth element of this sort.
@@ -898,10 +928,10 @@ impl Sort {
             Sort::F32 => Value::F32(0.0f32),
             Sort::F64 => Value::F64(0.0),
             Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
-            Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
-            Sort::Map(k, v) => Value::Map(map::Map::new(
-                (**k).clone(),
-                (**v).clone(),
+            Sort::Array(a) => Value::Array(Array::default(a.key.clone(), &a.val, a.size)),
+            Sort::Map(m) => Value::Map(map::Map::new(
+                m.key.clone(),
+                m.val.clone(),
                 std::iter::empty(),
             )),
         }
@@ -1104,12 +1134,12 @@ impl Value {
                 default,
                 size,
                 ..
-            }) => Sort::Array(Box::new(key_sort.clone()), Box::new(default.sort()), *size),
+            }) => Sort::new_array(key_sort.clone(), default.sort(), *size),
             Value::Map(map::Map {
                 key_sort,
                 value_sort,
                 ..
-            }) => Sort::Map(Box::new(key_sort.clone()), Box::new(value_sort.clone())),
+            }) => Sort::new_map(key_sort.clone(), value_sort.clone()),
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -1822,7 +1852,7 @@ impl Computation {
         party: PartyId,
     ) -> Term {
         let f = Sort::Field(field);
-        let s = Sort::Array(Box::new(f.clone()), Box::new(f), size);
+        let s = Sort::new_array(f.clone(), f, size);
         let md = VariableMetadata {
             name: var.to_owned(),
             vis: Some(party),

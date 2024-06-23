@@ -9,6 +9,7 @@ use itertools::Itertools;
 use rug::Integer;
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::num::NonZero;
 
 thread_local! {
     static FOLDS: RefCell<TermCache<TTerm>> = RefCell::new(TermCache::with_capacity(TERM_CACHE_LIMIT));
@@ -46,7 +47,7 @@ pub fn fold(node: &Term, ignore: &[Op]) -> Term {
 
         // make the cache unbounded during the fold_cache call
         let old_capacity = cache.cap();
-        cache.resize(usize::MAX);
+        cache.resize(NonZero::new(usize::MAX).unwrap());
 
         let ret = fold_cache(node, &mut cache, ignore);
         // shrink cache to its max size

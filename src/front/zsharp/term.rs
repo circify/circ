@@ -68,14 +68,8 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w),
             Self::Field => default_field_sort(),
-            Self::Array(n, b) => {
-                Sort::Array(Box::new(default_field_sort()), Box::new(b.sort()), *n)
-            }
-            Self::MutArray(n) => Sort::Array(
-                Box::new(default_field_sort()),
-                Box::new(default_field_sort()),
-                *n,
-            ),
+            Self::Array(n, b) => Sort::new_array(default_field_sort(), b.sort(), *n),
+            Self::MutArray(n) => Sort::new_array(default_field_sort(), default_field_sort(), *n),
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
@@ -127,8 +121,8 @@ impl T {
         fn terms_tail(term: &Term, output: &mut Vec<Term>) {
             match check(term) {
                 Sort::Bool | Sort::BitVector(_) | Sort::Field(_) => output.push(term.clone()),
-                Sort::Array(_k, _v, size) => {
-                    for i in 0..size {
+                Sort::Array(a) => {
+                    for i in 0..a.size {
                         terms_tail(&term![Op::Select; term.clone(), pf_lit_ir(i)], output)
                     }
                 }
