@@ -141,7 +141,7 @@ pub enum Op {
 
     /// Receive a value from the prover (in a proof)
     /// The string is a name for it; does not need to be unique.
-    Witness(String),
+    Witness(Box<str>),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),

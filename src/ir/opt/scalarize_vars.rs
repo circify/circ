@@ -89,7 +89,7 @@ fn create_wits(prefix: &str, prefix_term: Term, sort: &Sort) -> Term {
                     .collect(),
             )
         }
-        _ => term![Op::Witness(prefix.to_owned()); prefix_term],
+        _ => term![Op::Witness(prefix.into()); prefix_term],
     }
 }
 
