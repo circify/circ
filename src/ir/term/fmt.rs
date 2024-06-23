@@ -376,9 +376,9 @@ impl DisplayIr for Op {
                 op.ir_fmt(f)?;
                 write!(f, "))")
             }
-            Op::Call(name, a, r) => {
-                let arg_sorts = a.iter().map(|x| x.to_string()).join(" ");
-                write!(f, "(call {name} ({arg_sorts}) {r})")
+            Op::Call(c) => {
+                let arg_sorts = c.arg_sorts.iter().map(|x| x.to_string()).join(" ");
+                write!(f, "(call {} ({}) {})", c.name, arg_sorts, c.ret_sort)
             }
             Op::Rot(i) => write!(f, "(rot {i})"),
             Op::PfToBoolTrusted => write!(f, "pf2bool_trusted"),

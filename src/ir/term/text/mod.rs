@@ -328,7 +328,11 @@ impl<'src> IrInterp<'src> {
                     let name = from_utf8(name).unwrap().to_owned();
                     let arg_sorts = self.sorts(arg_sorts);
                     let ret_sort = self.sort(ret_sort);
-                    Ok(Op::Call(name, arg_sorts, ret_sort))
+                    Ok(Op::Call(Box::new(CallOp {
+                        name,
+                        arg_sorts,
+                        ret_sort,
+                    })))
                 }
                 [Leaf(Ident, b"fill"), key_sort, size] => {
                     Ok(Op::Fill(self.sort(key_sort), self.usize(size)))

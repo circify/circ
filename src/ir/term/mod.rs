@@ -177,7 +177,7 @@ pub enum Op {
     Map(Box<Op>),
 
     /// Call a function (name, argument sorts, return sort)
-    Call(String, Vec<Sort>, Sort),
+    Call(Box<CallOp>),
 
     /// Cyclic right rotation of an array
     /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
@@ -188,6 +188,17 @@ pub enum Op {
 
     /// Extension operators. Used in compilation, but not externally supported
     ExtOp(ext::ExtOp),
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CallOp {
+    /// The function name
+    pub name: String,
+    /// Argument sorts
+    pub arg_sorts: Vec<Sort>,
+    /// Return sorts
+    pub ret_sort: Sort,
 }
 
 /// Boolean AND
@@ -322,7 +333,7 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
-            Op::Call(_, args, _) => Some(args.len()),
+            Op::Call(c) => Some(c.arg_sorts.len()),
             Op::Rot(_) => Some(1),
             Op::ExtOp(o) => o.arity(),
             Op::PfToBoolTrusted => Some(1),
@@ -1645,9 +1656,16 @@ impl ComputationMetadata {
             .iter()
             .map(|name| args.get(name).expect("Argument not found: {}").clone())
             .collect::<Vec<Term>>();
-        let ordered_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
+        let arg_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
 
-        term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
+        term(
+            Op::Call(Box::new(CallOp {
+                name,
+                arg_sorts,
+                ret_sort,
+            })),
+            ordered_args,
+        )
     }
 }
 
