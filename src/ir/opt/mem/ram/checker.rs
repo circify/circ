@@ -302,7 +302,10 @@ fn derivative_gcd(
     let ns = ns.subspace("uniq");
     let fs = Sort::Field(f.clone());
     let pairs = term(
-        Op::Array(fs.clone(), Sort::Tuple(Box::new([fs.clone(), Sort::Bool]))),
+        Op::Array(Box::new(ArrayOp {
+            key: fs.clone(),
+            val: Sort::Tuple(Box::new([fs.clone(), Sort::Bool])),
+        })),
         values
             .clone()
             .into_iter()
@@ -337,7 +340,7 @@ fn derivative_gcd(
     terms_that_define_all_polys.extend(t_coeffs_skolem.iter().cloned());
     let n = values.len();
     let x = term(
-        Op::PfChallenge(ns.fqn("x"), f.clone()),
+        Op::new_chall(ns.fqn("x"), f.clone()),
         terms_that_define_all_polys,
     );
     let r = values;

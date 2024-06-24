@@ -249,7 +249,7 @@ mod test {
             for v in &vars {
                 let var = r1cs.add_var(
                     v.clone(),
-                    leaf_term(Op::Var(v.clone(), Sort::Field(field.clone()))),
+                    var(v.clone(), Sort::Field(field.clone())),
                     VarType::FinalWit,
                 );
                 let val = field.random_v(&mut rng);

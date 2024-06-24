@@ -301,7 +301,7 @@ impl<Ty: Display> FnFrame<Ty> {
                 StateEntry::Break(name_, ref mut break_conds) => {
                     if name_ == name {
                         break_conds.push(if break_if.is_empty() {
-                            leaf_term(Op::Const(Value::Bool(true)))
+                            bool_lit(true)
                         } else {
                             term(Op::BoolNaryOp(BoolNaryOp::And), break_if)
                         });
@@ -437,7 +437,7 @@ impl<E: Embeddable> Circify<E> {
                 mem: Rc::new(RefCell::new(mem::MemManager::default())),
                 cs,
             },
-            condition: leaf_term(Op::Const(Value::Bool(true))),
+            condition: bool_lit(true),
             typedefs: HashMap::default(),
         }
     }
@@ -677,7 +677,7 @@ impl<E: Embeddable> Circify<E> {
         // TODO:  more precise conditions, depending on lex scopes.
         let cs: Vec<_> = self.fn_stack.iter().flat_map(|f| f.conditions()).collect();
         if cs.is_empty() {
-            leaf_term(Op::Const(Value::Bool(true)))
+            bool_lit(true)
         } else {
             term(Op::BoolNaryOp(BoolNaryOp::And), cs)
         }
@@ -935,7 +935,7 @@ mod test {
         impl Ty {
             fn default(&self) -> T {
                 match self {
-                    Ty::Bool => T::Base(leaf_term(Op::Const(Value::Bool(false)))),
+                    Ty::Bool => T::Base(bool_lit(false)),
                     Ty::Pair(a, b) => T::Pair(Box::new(a.default()), Box::new(b.default())),
                 }
             }

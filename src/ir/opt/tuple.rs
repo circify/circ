@@ -60,7 +60,7 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    bv_lit, check, leaf_term, term, Array, Computation, Node, Op, PostOrderIter, Sort, Term,
+    bv_lit, check, const_, term, Array, ArrayOp, Computation, Node, Op, PostOrderIter, Sort, Term,
     TermMap, Value, AND,
 };
 use std::collections::BTreeMap;
@@ -122,7 +122,7 @@ impl TupleTree {
             TupleTree::NonTuple(cs) => {
                 if let Sort::Tuple(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Field(i); cs.clone()])
-                } else if let Sort::Array(_, _, _) = check(cs) {
+                } else if let Sort::Array(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Select; cs.clone(), bv_lit(i, 32)])
                 } else {
                     panic!("Get ({}) on non-tuple {:?}", i, self)
@@ -196,7 +196,7 @@ fn termify_val_tuples(v: Value) -> TupleTree {
     if let Value::Tuple(vs) = v {
         TupleTree::Tuple(Vec::from(vs).into_iter().map(termify_val_tuples).collect())
     } else {
-        TupleTree::NonTuple(leaf_term(Op::Const(v)))
+        TupleTree::NonTuple(const_(v))
     }
 }
 
@@ -277,14 +277,20 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 debug_assert!(cs.is_empty());
                 a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v)
             }
-            Op::Array(k, _v) => TupleTree::transpose_map(cs, |children| {
+            Op::Array(a) => TupleTree::transpose_map(cs, |children| {
                 assert!(!children.is_empty());
                 let v_s = check(&children[0]);
-                term(Op::Array(k.clone(), v_s), children)
+                term(
+                    Op::Array(Box::new(ArrayOp {
+                        key: a.key.clone(),
+                        val: v_s,
+                    })),
+                    children,
+                )
             }),
-            Op::Fill(key_sort, size) => {
+            Op::Fill(_) => {
                 let values = cs.pop().unwrap();
-                values.map(|v| term![Op::Fill(key_sort.clone(), *size); v])
+                values.map(|v| term![t.op().clone(); v])
             }
             Op::Select => {
                 let i = cs.pop().unwrap().unwrap_non_tuple();

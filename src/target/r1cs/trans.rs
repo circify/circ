@@ -137,7 +137,7 @@ impl<'cfg> ToR1cs<'cfg> {
         self.r1cs.add_committed_witness(elements.clone());
         for (name, value) in elements {
             let lc = self.r1cs.signal_lc(&name);
-            let var = leaf_term(Op::Var(name, check(&value)));
+            let var = var(name, check(&value));
             self.embed.borrow_mut().insert(var.clone());
             self.cache
                 .insert(var, EmbeddedTerm::Field(TermLc(value, lc)));
@@ -357,30 +357,30 @@ impl<'cfg> ToR1cs<'cfg> {
         self.profile_start_term(var.clone());
         let public = matches!(ty, VarType::Inst);
         match var.op() {
-            Op::Var(name, Sort::Bool) => {
+            Op::Var(v) if matches!(&v.sort, Sort::Bool) => {
                 let comp = term![Op::Ite; var.clone(), self.one.0.clone(), self.zero.0.clone()];
-                let lc = self.fresh_var(name, comp, ty);
+                let lc = self.fresh_var(&v.name, comp, ty);
                 if !public {
                     self.enforce_bit(lc.clone());
                 }
                 self.cache.insert(var.clone(), EmbeddedTerm::Bool(lc));
                 self.embed.borrow_mut().insert(var.clone());
             }
-            Op::Var(name, Sort::BitVector(n_bits)) => {
+            Op::Var(v) if v.sort.is_bv() => {
                 let public = matches!(ty, VarType::Inst);
                 let lc = self.fresh_var(
-                    name,
-                    term![Op::UbvToPf(self.field.clone()); var.clone()],
+                    &v.name,
+                    term![Op::new_ubv_to_pf(self.field.clone()); var.clone()],
                     ty,
                 );
-                self.set_bv_uint(var.clone(), lc, *n_bits);
+                self.set_bv_uint(var.clone(), lc, v.sort.as_bv());
                 if !public {
                     self.get_bv_bits(var);
                 }
             }
-            Op::Var(name, Sort::Field(f)) => {
-                assert_eq!(f, &self.field);
-                let lc = self.fresh_var(name, var.clone(), ty);
+            Op::Var(v) if v.sort.is_pf() => {
+                assert_eq!(v.sort.as_pf(), &self.field);
+                let lc = self.fresh_var(&v.name, var.clone(), ty);
                 self.cache.insert(var.clone(), EmbeddedTerm::Field(lc));
                 self.embed.borrow_mut().insert(var.clone());
             }
@@ -494,7 +494,7 @@ impl<'cfg> ToR1cs<'cfg> {
         if !self.cache.contains_key(&c) {
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
-                Op::Const(Value::Bool(b)) => self.zero.clone() + *b as isize,
+                Op::Const(v) => self.zero.clone() + v.as_bool() as isize,
                 Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
                     let a = self.get_bool(&c.cs()[0]).clone();
@@ -708,7 +708,8 @@ impl<'cfg> ToR1cs<'cfg> {
             if !self.cache.contains_key(&bv) {
                 match &bv.op() {
                     Op::Var(..) => panic!("call embed_var instead"),
-                    Op::Const(Value::BitVector(b)) => {
+                    Op::Const(v) => {
+                        let b = v.as_bv();
                         let bit_lcs = (0..b.width())
                             .map(|i| self.zero.clone() + b.uint().get_bit(i as u32) as isize)
                             .collect();
@@ -839,8 +840,8 @@ impl<'cfg> ToR1cs<'cfg> {
                             BvBinOp::Udiv | BvBinOp::Urem => {
                                 let a_bv_term = term![Op::PfToBv(n); a.0.clone()];
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
-                                let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
-                                let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
+                                let q_term = term![Op::new_ubv_to_pf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
+                                let r_term = term![Op::new_ubv_to_pf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
                                 let q = self.fresh_wit("div_q", q_term);
                                 let r = self.fresh_wit("div_r", r_term);
                                 let qb = self.bitify("div_q", &q, n, false);
@@ -899,8 +900,8 @@ impl<'cfg> ToR1cs<'cfg> {
                         let bits = self
                             .get_bv_bits(&bv.cs()[0])
                             .into_iter()
-                            .skip(*low)
-                            .take(*high - *low + 1)
+                            .skip(*low as usize)
+                            .take((*high - *low + 1) as usize)
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }
@@ -1014,9 +1015,9 @@ impl<'cfg> ToR1cs<'cfg> {
             debug!("embed_pf {}", c);
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
-                Op::Const(Value::Field(r)) => TermLc(
+                Op::Const(v) => TermLc(
                     c.clone(),
-                    self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
+                    self.r1cs.constant(v.as_pf().as_ty_ref(&self.r1cs.modulus)),
                 ),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs()[0]).clone();
@@ -1201,12 +1202,12 @@ pub mod test {
         .collect();
         let cs = Computation::from_constraint_system_parts(
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                var("a".to_owned(), Sort::Bool),
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool),
             ],
         );
         let r1cs = to_r1cs_mod17(cs);
@@ -1228,7 +1229,7 @@ pub mod test {
     #[quickcheck]
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1240,7 +1241,7 @@ pub mod test {
     #[quickcheck]
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         let cfg = CircCfg::default();
         let r1cs = to_r1cs(&cs, &cfg);
@@ -1252,7 +1253,7 @@ pub mod test {
     #[quickcheck]
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1274,8 +1275,8 @@ pub mod test {
 
         let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv_lit(0b10110, 8),
-                              term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
-            vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
+                              term![Op::BvUnOp(BvUnOp::Neg); var("b".to_owned(), Sort::BitVector(8))]]]],
+            vec![var("b".to_owned(), Sort::BitVector(8))],
         );
         let r1cs = to_r1cs_dflt(cs);
         r1cs.check_all(&values);
@@ -1284,12 +1285,12 @@ pub mod test {
     #[test]
     fn not_opt_test() {
         init();
-        let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
+        let t = term![Op::Not; var("b".to_owned(), Sort::Bool)];
         let values: FxHashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
             .into_iter()
             .collect();
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
         let cfg = CircCfg::default();
         let r1cs = to_r1cs(&cs, &cfg);
@@ -1299,7 +1300,7 @@ pub mod test {
     }
 
     fn pf_dflt(i: isize) -> Term {
-        leaf_term(Op::Const(Value::Field(CircCfg::default().field().new_v(i))))
+        pf_lit(CircCfg::default().field().new_v(i))
     }
 
     fn const_test(term: Term) {
@@ -1419,12 +1420,12 @@ pub mod test {
         .collect();
         let mut cs = Computation::from_constraint_system_parts(
             vec![
-                term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                term![Op::Field(0); term![Op::Tuple; var("a".to_owned(), Sort::Bool), bool_lit(false)]],
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool),
             ],
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);

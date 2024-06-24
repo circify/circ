@@ -63,8 +63,8 @@ impl PreComp {
         let o_tuple = term(Op::Tuple, os.values().cloned().collect());
         let to_remove = &mut TermSet::default();
         for t in PostOrderIter::new(o_tuple) {
-            if let Op::Var(ref name, _) = &t.op() {
-                if !known.contains(name) {
+            if let Op::Var(var) = &t.op() {
+                if !known.contains(&*var.name) {
                     to_remove.insert(t);
                 }
             } else if t.cs().iter().any(|c| to_remove.contains(c)) {
@@ -120,8 +120,8 @@ impl PreComp {
     fn recompute_inputs(&mut self) {
         let mut inputs = FxHashSet::default();
         for t in PostOrderIter::new(self.tuple()) {
-            if let Op::Var(name, sort) = &t.op() {
-                inputs.insert((name.clone(), sort.clone()));
+            if let Op::Var(var) = &t.op() {
+                inputs.insert((var.name.to_string(), var.sort.clone()));
             }
         }
         self.inputs = inputs;
@@ -145,7 +145,7 @@ impl PreComp {
         let mut cache: TermMap<Term> = Default::default();
         for (name, sort) in &self.sequence {
             let term = extras::substitute_cache(self.outputs.get(name).unwrap(), &mut cache);
-            let var_term = leaf_term(Op::Var(name.clone(), sort.clone()));
+            let var_term = var(name.clone(), sort.clone());
             out.insert(name.into(), term.clone());
             cache.insert(var_term, term);
         }
@@ -158,7 +158,7 @@ impl PreComp {
         let mut stack: Vec<Term> = self
             .outputs
             .iter()
-            .map(|(name, t)| leaf_term(Op::Var(name.clone(), check(t))))
+            .map(|(name, t)| var(name.clone(), check(t)))
             .collect();
         let mut post_visited: TermSet = Default::default();
         let mut pre_visited: TermSet = Default::default();
@@ -169,8 +169,8 @@ impl PreComp {
             if pre_visited.insert(t.clone()) {
                 // children not yet pushed
                 stack.push(t.clone());
-                if let Op::Var(name, _) = t.op() {
-                    if let Some(c) = self.outputs.get(name) {
+                if let Op::Var(var) = t.op() {
+                    if let Some(c) = self.outputs.get(&*var.name) {
                         if !post_visited.contains(c) {
                             assert!(!pre_visited.contains(c), "loop on {} {}", c.id(), c);
                             stack.push(c.clone());
@@ -186,8 +186,8 @@ impl PreComp {
                 }
             } else {
                 post_visited.insert(t.clone());
-                if let Op::Var(name, _) = t.op() {
-                    order.insert(name.clone(), order.len());
+                if let Op::Var(var) = t.op() {
+                    order.insert(var.name.to_string(), order.len());
                 }
             }
         }
@@ -210,12 +210,11 @@ impl PreComp {
         let defined: TermSet = self
             .sequence
             .iter()
-            .map(|(n, s)| leaf_term(Op::Var(n.clone(), s.clone())))
+            .map(|(n, s)| var(n.clone(), s.clone()))
             .collect();
         let seen = RefCell::new(TermSet::default());
         for (name, sort) in &self.inputs {
-            seen.borrow_mut()
-                .insert(leaf_term(Op::Var(name.clone(), sort.clone())));
+            seen.borrow_mut().insert(var(name.clone(), sort.clone()));
         }
         for (name, sort) in &self.sequence {
             let t = self.outputs.get(name).unwrap();
@@ -226,8 +225,7 @@ impl PreComp {
                 }
                 seen.borrow_mut().insert(desc);
             }
-            seen.borrow_mut()
-                .insert(leaf_term(Op::Var(name.clone(), sort.clone())));
+            seen.borrow_mut().insert(var(name.clone(), sort.clone()));
         }
     }
 
@@ -237,7 +235,7 @@ impl PreComp {
         let mut stack: Vec<Term> = self
             .outputs
             .iter()
-            .map(|(name, t)| leaf_term(Op::Var(name.clone(), check(t))))
+            .map(|(name, t)| var(name.clone(), check(t)))
             .collect();
         let mut post_visited: TermSet = Default::default();
         let mut pre_visited: TermSet = Default::default();
@@ -248,8 +246,8 @@ impl PreComp {
             if pre_visited.insert(t.clone()) {
                 // children not yet pushed
                 stack.push(t.clone());
-                if let Op::Var(name, _) = t.op() {
-                    if let Some(c) = self.outputs.get(name) {
+                if let Op::Var(var) = t.op() {
+                    if let Some(c) = self.outputs.get(&*var.name) {
                         if !post_visited.contains(c) {
                             assert!(!pre_visited.contains(c), "loop on {} {}", c.id(), c);
                             stack.push(c.clone());

@@ -30,7 +30,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
     match &t.op() {
         Op::Ite => vec![t.cs()[1].clone()],
         Op::Eq => Vec::new(),
-        Op::Var(_, _) => Vec::new(),
+        Op::Var(_) => Vec::new(),
         Op::Const(_) => Vec::new(),
         Op::BvBinOp(_) => vec![t.cs()[0].clone()],
         Op::BvBinPred(_) => Vec::new(),
@@ -61,7 +61,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::IntNaryOp(_) => Vec::new(),
         Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
-        Op::PfChallenge(_, _) => Vec::new(),
+        Op::PfChallenge(_) => Vec::new(),
         Op::Witness(_) => vec![t.cs()[0].clone()],
         Op::PfFitsInBits(_) => Vec::new(),
         Op::Select => vec![t.cs()[0].clone()],
@@ -73,7 +73,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::Field(_) => vec![t.cs()[0].clone()],
         Op::Update(_i) => vec![t.cs()[0].clone()],
         Op::Map(_) => t.cs().to_vec(),
-        Op::Call(_, _, _) => Vec::new(),
+        Op::Call(_) => Vec::new(),
         Op::Rot(_) => vec![t.cs()[0].clone()],
         Op::PfToBoolTrusted => Vec::new(),
         Op::ExtOp(o) => o.check_dependencies(t),
@@ -87,14 +87,14 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
     match &t.op() {
         Op::Ite => Ok(get_ty(&t.cs()[1]).clone()),
         Op::Eq => Ok(Sort::Bool),
-        Op::Var(_, s) => Ok(s.clone()),
+        Op::Var(v) => Ok(v.sort.clone()),
         Op::Const(c) => Ok(c.sort()),
         Op::BvBinOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::BvBinPred(_) => Ok(Sort::Bool),
         Op::BvNaryOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::BvUnOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::BoolToBv => Ok(Sort::BitVector(1)),
-        Op::BvExtract(a, b) => Ok(Sort::BitVector(a - b + 1)),
+        Op::BvExtract(a, b) => Ok(Sort::BitVector(*a as usize - *b as usize + 1)),
         Op::BvConcat => t
             .cs()
             .iter()
@@ -138,22 +138,18 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::PfNaryOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::IntNaryOp(_) => Ok(Sort::Int),
         Op::IntBinPred(_) => Ok(Sort::Bool),
-        Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
-        Op::PfChallenge(_, m) => Ok(Sort::Field(m.clone())),
+        Op::UbvToPf(m) => Ok(Sort::Field((**m).clone())),
+        Op::PfChallenge(c) => Ok(Sort::Field(c.field.clone())),
         Op::Witness(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfFitsInBits(_) => Ok(Sort::Bool),
         Op::Select => array_or(get_ty(&t.cs()[0]), "select").map(|(_, v, _)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs()[0]).clone()),
-        Op::Array(k, v) => Ok(Sort::Array(
-            Box::new(k.clone()),
-            Box::new(v.clone()),
-            t.cs().len(),
-        )),
+        Op::Array(a) => Ok(Sort::new_array(a.key.clone(), a.val.clone(), t.cs().len())),
         Op::CStore => Ok(get_ty(&t.cs()[0]).clone()),
-        Op::Fill(key_sort, size) => Ok(Sort::Array(
-            Box::new(key_sort.clone()),
-            Box::new(get_ty(&t.cs()[0]).clone()),
-            *size,
+        Op::Fill(fill) => Ok(Sort::new_array(
+            fill.key_sort.clone(),
+            get_ty(&t.cs()[0]).clone(),
+            fill.size,
         )),
         Op::Tuple => Ok(Sort::Tuple(t.cs().iter().map(get_ty).cloned().collect())),
         Op::Field(i) => {
@@ -200,11 +196,11 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
                 Some(e) => Err(e),
                 None => {
                     let value_sort = rec_check_raw_helper(op, &arg_sorts_to_inner_op)?;
-                    Ok(Sort::Array(Box::new(key_sort), Box::new(value_sort), size))
+                    Ok(Sort::new_array(key_sort, value_sort, size))
                 }
             }
         }
-        Op::Call(_, _, ret) => Ok(ret.clone()),
+        Op::Call(c) => Ok(c.ret_sort.clone()),
         Op::Rot(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfToBoolTrusted => Ok(Sort::Bool),
         Op::ExtOp(o) => {
@@ -263,7 +259,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
     match (oper, a) {
         (Op::Eq, &[a, b]) => eq_or(a, b, "=").map(|_| Sort::Bool),
         (Op::Ite, &[&Sort::Bool, b, c]) => eq_or(b, c, "ITE").map(|_| b.clone()),
-        (Op::Var(_, s), &[]) => Ok(s.clone()),
+        (Op::Var(v), &[]) => Ok(v.sort.clone()),
         (Op::Const(c), &[]) => Ok(c.sort()),
         (Op::BvBinOp(_), &[a, b]) => {
             let ctx = "bv binary op";
@@ -286,8 +282,8 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::BvUnOp(_), &[a]) => bv_or(a, "bv unary op").cloned(),
         (Op::BoolToBv, &[Sort::Bool]) => Ok(Sort::BitVector(1)),
         (Op::BvExtract(high, low), &[Sort::BitVector(w)]) => {
-            if low <= high && high < w {
-                Ok(Sort::BitVector(high - low + 1))
+            if low <= high && *high < *w as u32 {
+                Ok(Sort::BitVector((high - low + 1) as usize))
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
                     "Cannot slice from {high} to {low} in a bit-vector of width {w}"
@@ -360,8 +356,8 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 .and_then(|t| pf_or(t, ctx))
                 .cloned()
         }
-        (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
-        (Op::PfChallenge(_, m), _) => Ok(Sort::Field(m.clone())),
+        (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field((**m).clone())),
+        (Op::PfChallenge(f), _) => Ok(Sort::Field(f.field.clone())),
         (Op::Witness(_), &[a]) => Ok(a.clone()),
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").cloned(),
@@ -375,24 +371,22 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::IntBinPred(_), &[a, b]) => int_or(a, "int bin pred")
             .and_then(|_| int_or(b, "int bin pred"))
             .map(|_| Sort::Bool),
-        (Op::Select, &[Sort::Array(k, v, _), a]) => eq_or(k, a, "select").map(|_| (**v).clone()),
-        (Op::Store, &[Sort::Array(k, v, n), a, b]) => eq_or(k, a, "store")
-            .and_then(|_| eq_or(v, b, "store"))
-            .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
-        (Op::CStore, &[Sort::Array(k, v, n), a, b, c]) => eq_or(k, a, "cstore")
-            .and_then(|_| eq_or(v, b, "cstore"))
+        (Op::Select, &[Sort::Array(arr), a]) => {
+            eq_or(&arr.key, a, "select").map(|_| arr.val.clone())
+        }
+        (Op::Store, &[s @ Sort::Array(arr), a, b]) => eq_or(&arr.key, a, "store")
+            .and_then(|_| eq_or(&arr.val, b, "store"))
+            .map(|_| s.clone()),
+        (Op::CStore, &[s @ Sort::Array(arr), a, b, c]) => eq_or(&arr.key, a, "cstore")
+            .and_then(|_| eq_or(&arr.val, b, "cstore"))
             .and_then(|_| bool_or(c, "cstore"))
-            .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
-        (Op::Fill(key_sort, size), &[v]) => Ok(Sort::Array(
-            Box::new(key_sort.clone()),
-            Box::new(v.clone()),
-            *size,
-        )),
-        (Op::Array(k, v), a) => {
+            .map(|_| s.clone()),
+        (Op::Fill(f), &[v]) => Ok(Sort::new_array(f.key_sort.clone(), v.clone(), f.size)),
+        (Op::Array(arr), a) => {
             let ctx = "array op";
             a.iter()
-                .try_fold((), |(), ai| eq_or(v, ai, ctx).map(|_| ()))
-                .map(|_| Sort::Array(Box::new(k.clone()), Box::new(v.clone()), a.len()))
+                .try_fold((), |(), ai| eq_or(&arr.val, ai, ctx).map(|_| ()))
+                .map(|_| Sort::new_array(arr.key.clone(), arr.val.clone(), a.len()))
         }
         (Op::Tuple, a) => Ok(Sort::Tuple(a.iter().map(|a| (*a).clone()).collect())),
         (Op::Field(i), &[a]) => tuple_or(a, "tuple field access").and_then(|t| {
@@ -420,25 +414,29 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             // recursively call helper to get value type of mapped array
             // then return Ok(...)
 
-            let (key_sort, size) = match a[0].clone() {
-                Sort::Array(k, _, s) => (*k, s),
-                s => return Err(TypeErrorReason::ExpectedArray(s, "map")),
+            let (key_sort, size) = match a[0] {
+                Sort::Array(arr) => (&arr.key, arr.size),
+                s => return Err(TypeErrorReason::ExpectedArray(s.clone(), "map")),
             };
 
             let mut val_sorts = Vec::new();
 
             for a_i in a {
                 match (*a_i).clone() {
-                    Sort::Array(k, v, s) => {
-                        if *k != key_sort {
-                            return Err(TypeErrorReason::NotEqual(*k, key_sort, "map: key sorts"));
+                    Sort::Array(arr) => {
+                        if &arr.key != key_sort {
+                            return Err(TypeErrorReason::NotEqual(
+                                arr.key.clone(),
+                                key_sort.clone(),
+                                "map: key sorts",
+                            ));
                         }
-                        if s != size {
+                        if arr.size != size {
                             return Err(TypeErrorReason::Custom(
                                 "map: array lengths unequal".to_string(),
                             ));
                         }
-                        val_sorts.push((*v).clone());
+                        val_sorts.push(arr.val.clone());
                     }
                     s => return Err(TypeErrorReason::ExpectedArray(s, "map")),
                 };
@@ -449,21 +447,24 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 new_a.push(ptr);
             }
             rec_check_raw_helper(&op.clone(), &new_a[..])
-                .map(|val_sort| Sort::Array(Box::new(key_sort), Box::new(val_sort), size))
+                .map(|val_sort| Sort::new_array(key_sort.clone(), val_sort.clone(), size))
         }
-        (Op::Call(_, ex_args, ret), act_args) => {
-            if ex_args.len() != act_args.len() {
-                Err(TypeErrorReason::ExpectedArgs(ex_args.len(), act_args.len()))
+        (Op::Call(c), act_args) => {
+            if c.arg_sorts.len() != act_args.len() {
+                Err(TypeErrorReason::ExpectedArgs(
+                    c.arg_sorts.len(),
+                    act_args.len(),
+                ))
             } else {
-                for (e, a) in ex_args.iter().zip(act_args) {
+                for (e, a) in c.arg_sorts.iter().zip(act_args) {
                     eq_or(e, a, "in function call")?;
                 }
-                Ok(ret.clone())
+                Ok(c.ret_sort.clone())
             }
         }
-        (Op::Rot(_), &[Sort::Array(k, v, n)]) => bv_or(k, "rot key")
-            .and_then(|_| bv_or(v, "rot val"))
-            .map(|_| Sort::Array(k.clone(), v.clone(), *n)),
+        (Op::Rot(_), &[s @ Sort::Array(a)]) => bv_or(&a.key, "rot key")
+            .and_then(|_| bv_or(&a.val, "rot val"))
+            .map(|_| s.clone()),
         (Op::PfToBoolTrusted, &[k]) => pf_or(k, "pf to bool argument").map(|_| Sort::Bool),
         (Op::ExtOp(o), _) => o.check(a),
         (_, _) => Err(TypeErrorReason::Custom("other".to_string())),
@@ -580,8 +581,8 @@ pub(super) fn array_or<'a>(
     a: &'a Sort,
     ctx: &'static str,
 ) -> Result<(&'a Sort, &'a Sort, usize), TypeErrorReason> {
-    if let Sort::Array(k, v, size) = a {
-        Ok((k, v, *size))
+    if let Sort::Array(arr) = a {
+        Ok((&arr.key, &arr.val, arr.size))
     } else {
         Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
     }
@@ -591,8 +592,8 @@ pub(super) fn map_or<'a>(
     a: &'a Sort,
     ctx: &'static str,
 ) -> Result<(&'a Sort, &'a Sort), TypeErrorReason> {
-    if let Sort::Map(k, v) = a {
-        Ok((k, v))
+    if let Sort::Map(m) = a {
+        Ok((&m.key, &m.val))
     } else {
         Err(TypeErrorReason::ExpectedMap(a.clone(), ctx))
     }
@@ -602,8 +603,8 @@ fn arrmap_or<'a>(
     a: &'a Sort,
     ctx: &'static str,
 ) -> Result<(&'a Sort, &'a Sort, &'a usize), TypeErrorReason> {
-    if let Sort::Array(k, v, s) = a {
-        Ok((k, v, s))
+    if let Sort::Array(arr) = a {
+        Ok((&arr.key, &arr.val, &arr.size))
     } else {
         Err(TypeErrorReason::ExpectedArray(a.clone(), ctx))
     }

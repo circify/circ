@@ -43,8 +43,7 @@ pub fn apply(c: &mut Computation) {
             .map
             .keys()
             .cloned()
-            .map(Op::Const)
-            .map(leaf_term)
+            .map(const_)
             .collect();
         to_assert.push(super::checker::rom::lookup(
             c,

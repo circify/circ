@@ -280,20 +280,20 @@ impl DisplayIr for Sort {
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
             Sort::Field(fty) => write!(f, "(mod {})", fty.modulus()),
-            Sort::Array(k, v, n) => {
+            Sort::Array(a) => {
                 // we could make our own write macro.
                 write!(f, "(array ")?;
-                k.ir_fmt(f)?;
+                a.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
-                write!(f, " {n})")
+                a.val.ir_fmt(f)?;
+                write!(f, " {})", a.size)
             }
-            Sort::Map(k, v) => {
+            Sort::Map(m) => {
                 // we could make our own write macro.
                 write!(f, "(map ")?;
-                k.ir_fmt(f)?;
+                m.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
+                m.val.ir_fmt(f)?;
                 write!(f, ")")
             }
             Sort::Tuple(fields) => {
@@ -319,7 +319,7 @@ impl DisplayIr for Op {
         match self {
             Op::Ite => write!(f, "ite"),
             Op::Eq => write!(f, "="),
-            Op::Var(n, _) => write!(f, "{n}"),
+            Op::Var(v) => write!(f, "{}", v.name),
             Op::Const(c) => c.ir_fmt(f),
             Op::BvBinOp(a) => write!(f, "{a}"),
             Op::BvBinPred(a) => write!(f, "{a}"),
@@ -350,22 +350,22 @@ impl DisplayIr for Op {
             Op::IntNaryOp(a) => write!(f, "{a}"),
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
-            Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
+            Op::PfChallenge(c) => write!(f, "(challenge {} {})", c.name, c.field.modulus()),
             Op::Witness(n) => write!(f, "(witness {})", n),
             Op::PfFitsInBits(n) => write!(f, "(pf_fits_in_bits {})", n),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::CStore => write!(f, "cstore"),
-            Op::Fill(key_sort, size) => {
+            Op::Fill(fill) => {
                 write!(f, "(fill ")?;
-                key_sort.ir_fmt(f)?;
-                write!(f, " {})", *size)
+                fill.key_sort.ir_fmt(f)?;
+                write!(f, " {})", fill.size)
             }
-            Op::Array(k, v) => {
+            Op::Array(a) => {
                 write!(f, "(array ")?;
-                k.ir_fmt(f)?;
+                a.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
+                a.val.ir_fmt(f)?;
                 write!(f, ")")
             }
             Op::Tuple => write!(f, "tuple"),
@@ -376,9 +376,9 @@ impl DisplayIr for Op {
                 op.ir_fmt(f)?;
                 write!(f, "))")
             }
-            Op::Call(name, a, r) => {
-                let arg_sorts = a.iter().map(|x| x.to_string()).join(" ");
-                write!(f, "(call {name} ({arg_sorts}) {r})")
+            Op::Call(c) => {
+                let arg_sorts = c.arg_sorts.iter().map(|x| x.to_string()).join(" ");
+                write!(f, "(call {} ({}) {})", c.name, arg_sorts, c.ret_sort)
             }
             Op::Rot(i) => write!(f, "(rot {i})"),
             Op::PfToBoolTrusted => write!(f, "pf2bool_trusted"),
@@ -578,13 +578,7 @@ impl DisplayIr for ComputationMetadata {
 fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     let close_dft_f = if f.cfg.use_default_field && f.default_field.is_none() {
         let fields: HashSet<FieldT> = PostOrderIter::new(t.clone())
-            .filter_map(|c| {
-                if let Op::Const(Value::Field(f)) = &c.op() {
-                    Some(f.ty())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|c| c.as_pf_opt().map(|f| f.ty()))
             .collect();
         if fields.len() == 1 && !f.cfg.hide_field {
             f.default_field = fields.into_iter().next();
@@ -612,9 +606,9 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
                 n_bindings += 1;
             }
         }
-        if let Op::Var(name, sort) = &t.op() {
-            write!(f, "  ({name} ")?;
-            sort.ir_fmt(f)?;
+        if let Op::Var(v) = &t.op() {
+            write!(f, "  ({} ", v.name)?;
+            v.sort.ir_fmt(f)?;
             writeln!(f, ")")?;
         }
     }

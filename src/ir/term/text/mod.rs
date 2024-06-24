@@ -307,7 +307,7 @@ impl<'src> IrInterp<'src> {
                 }
             }
             List(tts) => match &tts[..] {
-                [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.usize(a), self.usize(b))),
+                [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.u32(a), self.u32(b))),
                 [Leaf(Ident, b"uext"), a] => Ok(Op::BvUext(self.usize(a))),
                 [Leaf(Ident, b"sext"), a] => Ok(Op::BvSext(self.usize(a))),
                 [Leaf(Ident, b"pf2bv"), a] => Ok(Op::PfToBv(self.usize(a))),
@@ -316,22 +316,29 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
-                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(
+                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::new_chall(
                     self.ident_string(name),
                     FieldT::from(self.int(field)),
                 )),
-                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(self.sort(k), self.sort(v))),
-                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
+                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(Box::new(ArrayOp {
+                    key: self.sort(k),
+                    val: self.sort(v),
+                }))),
+                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::new_ubv_to_pf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
                 [Leaf(Ident, b"call"), Leaf(Ident, name), arg_sorts, ret_sort] => {
                     let name = from_utf8(name).unwrap().to_owned();
                     let arg_sorts = self.sorts(arg_sorts);
                     let ret_sort = self.sort(ret_sort);
-                    Ok(Op::Call(name, arg_sorts, ret_sort))
+                    Ok(Op::Call(Box::new(CallOp {
+                        name,
+                        arg_sorts,
+                        ret_sort,
+                    })))
                 }
                 [Leaf(Ident, b"fill"), key_sort, size] => {
-                    Ok(Op::Fill(self.sort(key_sort), self.usize(size)))
+                    Ok(Op::new_fill(self.sort(key_sort), self.usize(size)))
                 }
                 _ => todo!("Unparsed op: {}", tt),
             },
@@ -341,7 +348,7 @@ impl<'src> IrInterp<'src> {
     fn value(&mut self, tt: &TokTree<'src>) -> Value {
         let t = self.term(tt);
         match &t.op() {
-            Op::Const(v) => v.clone(),
+            Op::Const(v) => (**v).clone(),
             _ => panic!("Expected value, found term {}", t),
         }
     }
@@ -357,14 +364,10 @@ impl<'src> IrInterp<'src> {
                 match &ls[..] {
                     [Leaf(Ident, b"mod"), m] => Sort::Field(FieldT::from(self.int(m))),
                     [Leaf(Ident, b"bv"), w] => Sort::BitVector(self.usize(w)),
-                    [Leaf(Ident, b"array"), k, v, s] => Sort::Array(
-                        Box::new(self.sort(k)),
-                        Box::new(self.sort(v)),
-                        self.usize(s),
-                    ),
-                    [Leaf(Ident, b"map"), k, v] => {
-                        Sort::Map(Box::new(self.sort(k)), Box::new(self.sort(v)))
+                    [Leaf(Ident, b"array"), k, v, s] => {
+                        Sort::new_array(self.sort(k), self.sort(v), self.usize(s))
                     }
+                    [Leaf(Ident, b"map"), k, v] => Sort::new_map(self.sort(k), self.sort(v)),
                     [Leaf(Ident, b"tuple"), ..] => {
                         if ls.len() > 1 {
                             if let Some(size) = self.maybe_usize(&ls[1]) {
@@ -419,6 +422,15 @@ impl<'src> IrInterp<'src> {
             _ => None,
         }
     }
+    fn u32(&self, tt: &TokTree) -> u32 {
+        self.maybe_u32(tt).unwrap()
+    }
+    fn maybe_u32(&self, tt: &TokTree) -> Option<u32> {
+        match tt {
+            Leaf(Token::Int, s) => u32::from_str(from_utf8(s).ok()?).ok(),
+            _ => None,
+        }
+    }
     /// Parse lets, returning bindings, in-order.
     fn let_list(&mut self, tt: &TokTree<'src>) -> Vec<Vec<u8>> {
         if let List(tts) = tt {
@@ -470,7 +482,7 @@ impl<'src> IrInterp<'src> {
                     List(ls) => match &ls[..] {
                         [Leaf(Token::Ident, name), s] => {
                             let sort = self.sort(s);
-                            let t = leaf_term(Op::Var(from_utf8(name).unwrap().to_owned(), sort));
+                            let t = var(from_utf8(name).unwrap().to_owned(), sort);
                             self.bind(name, t);
                             name.to_vec()
                         }
@@ -486,13 +498,9 @@ impl<'src> IrInterp<'src> {
     fn term(&mut self, tt: &TokTree<'src>) -> Term {
         use Token::*;
         match tt {
-            Leaf(Bin, s) => leaf_term(Op::Const(Value::BitVector(
-                BitVector::from_bin_lit(s).unwrap(),
-            ))),
-            Leaf(Hex, s) => leaf_term(Op::Const(Value::BitVector(
-                BitVector::from_hex_lit(s).unwrap(),
-            ))),
-            Leaf(Int, s) => leaf_term(Op::Const(Value::Int(Integer::parse(s).unwrap().into()))),
+            Leaf(Bin, s) => const_(Value::BitVector(BitVector::from_bin_lit(s).unwrap())),
+            Leaf(Hex, s) => const_(Value::BitVector(BitVector::from_hex_lit(s).unwrap())),
+            Leaf(Int, s) => const_(Value::Int(Integer::parse(s).unwrap().into())),
             Leaf(Field, s) => {
                 let (v, m) = if let Some(i) = s.iter().position(|b| *b == b'm') {
                     (
@@ -509,7 +517,7 @@ impl<'src> IrInterp<'src> {
                         .clone();
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
-                leaf_term(Op::Const(Value::Field(FieldV::new::<Integer>(v, m))))
+                pf_lit(FieldV::new::<Integer>(v, m))
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),
@@ -545,39 +553,37 @@ impl<'src> IrInterp<'src> {
                         let default = self.value(&tts[2]);
                         let size = self.usize(&tts[3]);
                         let vals = self.value_alist(&tts[4]);
-                        leaf_term(Op::Const(Value::Array(Array::new(
+                        const_(Value::Array(Array::new(
                             key_sort,
                             Box::new(default),
                             vals.into_iter().collect(),
                             size,
-                        ))))
+                        )))
                     }
                     Err(CtrlOp::MapValue) => {
                         assert_eq!(tts.len(), 4);
                         let key_sort = self.sort(&tts[1]);
                         let value_sort = self.sort(&tts[2]);
                         let vals = self.value_alist(&tts[3]);
-                        leaf_term(Op::Const(Value::Map(map::Map::new(
-                            key_sort, value_sort, vals,
-                        ))))
+                        const_(Value::Map(map::Map::new(key_sort, value_sort, vals)))
                     }
                     Err(CtrlOp::ListValue) => {
                         assert_eq!(tts.len(), 3);
                         let key_sort = self.sort(&tts[1]);
                         let vals = self.value_list(&tts[2]);
-                        leaf_term(Op::Const(Value::Array(Array::from_vec(
+                        const_(Value::Array(Array::from_vec(
                             key_sort,
                             vals.first().unwrap().sort(),
                             vals,
-                        ))))
+                        )))
                     }
-                    Err(CtrlOp::TupleValue) => leaf_term(Op::Const(Value::Tuple(
+                    Err(CtrlOp::TupleValue) => const_(Value::Tuple(
                         tts[1..]
                             .iter()
                             .map(|tti| self.value(tti))
                             .collect::<Vec<_>>()
                             .into(),
-                    ))),
+                    )),
                     Err(CtrlOp::SetDefaultModulus) => {
                         assert_eq!(
                             tts.len(),
@@ -900,7 +906,7 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
         .map(|(name, term)| {
             let name = std::str::from_utf8(name).unwrap().to_string();
             let val = match term[0].op() {
-                Op::Const(v) => v.clone(),
+                Op::Const(v) => (**v).clone(),
                 _ => panic!("Non-value binding {} associated with {}", term[0], name),
             };
             (name, val)

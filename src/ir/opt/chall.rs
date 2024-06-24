@@ -100,8 +100,8 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
             .max()
             .unwrap_or(0);
         let round = match t.op() {
-            Op::Var(n, _) => {
-                if let Some(v) = comp.precomputes.outputs().get(n) {
+            Op::Var(v) => {
+                if let Some(v) = comp.precomputes.outputs().get(&*v.name) {
                     *min_round
                         .borrow()
                         .get(v)
@@ -149,8 +149,8 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
     for t in terms.into_iter().rev() {
         let round = match t.op() {
             Op::PfChallenge(..) => min_round.get(&t).unwrap().checked_sub(1).unwrap(),
-            Op::Var(name, _) if comp.metadata.is_input_public(name) => 0,
-            Op::Var(name, _) if comp.metadata.lookup(name).committed => 0,
+            Op::Var(v) if comp.metadata.is_input_public(&v.name) => 0,
+            Op::Var(v) if comp.metadata.lookup(&*v.name).committed => 0,
             _ => parents
                 .get(&t)
                 .unwrap()
@@ -180,15 +180,15 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
 
     let mut challs = TermMap::default();
     for t in comp.terms_postorder() {
-        if let Op::PfChallenge(name, field) = t.op() {
+        if let Op::PfChallenge(c) = t.op() {
             let round = *actual_round.get(&t).unwrap();
-            debug!("challenge {name}: round = {round}");
+            debug!("challenge {}: round = {round}", c.name);
             trace!("challenge term {t}");
             let md = VariableMetadata {
-                name: name.clone(),
+                name: c.name.to_string(),
                 random: true,
                 vis: None,
-                sort: Sort::Field(field.clone()),
+                sort: Sort::Field(c.field.clone()),
                 round,
                 ..Default::default()
             };

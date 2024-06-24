@@ -63,13 +63,12 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                     let bv = term_c![Op::PfToBv(field_bits); t];
                     let mut pf_summands = Vec::new();
                     for ii in 0..num_subranges {
-                        let sub_bv =
-                            term_c![Op::BvExtract(k as usize * (ii + 1) - 1, k as usize * ii); &bv];
+                        let sub_bv = term_c![Op::new_bv_extract(k as usize * (ii + 1) - 1, k as usize * ii); &bv];
                         let sub_f = c.new_var(
                             &ns.fqn(format!("sub{}", ii)),
                             Sort::Field(field.clone()),
                             Some(super::super::proof::PROVER_ID),
-                            Some(term![Op::UbvToPf(field.clone()); sub_bv]),
+                            Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
                         pf_summands.push(
                         term![PF_MUL.clone(); pf_lit(field.new_v(1).pow(k as u64 * ii as u64)), sub_f.clone()],
@@ -78,12 +77,12 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                     }
                     if end_length > 0 {
                         let end_start = num_subranges * k as usize;
-                        let sub_bv = term_c![Op::BvExtract(num_bits - 1, end_start); &bv];
+                        let sub_bv = term_c![Op::new_bv_extract(num_bits - 1, end_start); &bv];
                         let sub_f = c.new_var(
                             &ns.fqn("end"),
                             Sort::Field(field.clone()),
                             Some(super::super::proof::PROVER_ID),
-                            Some(term![Op::UbvToPf(field.clone()); sub_bv]),
+                            Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
                         pf_summands.push(term![PF_MUL.clone(); pf_lit(field.new_v(1 << end_start)), sub_f.clone()]);
                         new_assertions.push(term![Op::PfFitsInBits(end_length); sub_f]);

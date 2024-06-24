@@ -48,8 +48,8 @@ impl Constraints for Computation {
         let public_inputs_set: FxHashSet<String> = public_inputs
             .iter()
             .filter_map(|t| {
-                if let Op::Var(n, _) = &t.op() {
-                    Some(n.clone())
+                if let Op::Var(v) = &t.op() {
+                    Some(v.name.to_string())
                 } else {
                     None
                 }
@@ -57,16 +57,16 @@ impl Constraints for Computation {
             .collect();
 
         for v in public_inputs {
-            if let Op::Var(n, s) = &v.op() {
-                metadata.new_input(n.to_owned(), None, s.clone());
+            if let Op::Var(var) = &v.op() {
+                metadata.new_input(var.name.to_string(), None, var.sort.clone());
             } else {
                 panic!()
             }
         }
         for v in all_vars {
-            if let Op::Var(n, s) = &v.op() {
-                if !public_inputs_set.contains(n) {
-                    metadata.new_input(n.to_owned(), Some(PROVER_ID), s.clone());
+            if let Op::Var(var) = &v.op() {
+                if !public_inputs_set.contains(&*var.name) {
+                    metadata.new_input(var.name.to_string(), Some(PROVER_ID), var.sort.clone());
                 }
             } else {
                 panic!()

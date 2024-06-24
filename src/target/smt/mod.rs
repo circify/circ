@@ -81,8 +81,8 @@ impl Expr2Smt<()> for Value {
                 for _ in 0..map.len() {
                     write!(w, "(store ")?;
                 }
-                let val_s = check(&leaf_term(Op::Const((**default).clone())));
-                let s = Sort::Array(Box::new(key_sort.clone()), Box::new(val_s), *size);
+                let val_s = check(&const_((**default).clone()));
+                let s = Sort::new_array(key_sort.clone(), val_s, *size);
                 write!(
                     w,
                     "((as const {}) {})",
@@ -109,8 +109,8 @@ impl Expr2Smt<()> for Value {
 impl Expr2Smt<()> for Term {
     fn expr_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
         let s_expr_children = match &self.op() {
-            Op::Var(n, _) => {
-                write!(w, "{n}")?;
+            Op::Var(v) => {
+                write!(w, "{}", v.name)?;
                 false
             }
             Op::Eq => {
@@ -138,7 +138,7 @@ impl Expr2Smt<()> for Term {
                 true
             }
             Op::Const(c) => {
-                write!(w, "{}", SmtDisp(c))?;
+                write!(w, "{}", SmtDisp(&**c))?;
                 false
             }
             Op::Store => {
@@ -197,8 +197,8 @@ impl Sort2Smt for Sort {
     fn sort_to_smt2<W: Write>(&self, w: &mut W) -> SmtRes<()> {
         match self {
             Sort::BitVector(b) => write!(w, "(_ BitVec {b})")?,
-            Sort::Array(k, v, _size) => {
-                write!(w, "(Array {} {})", SmtSortDisp(&**k), SmtSortDisp(&**v))?;
+            Sort::Array(a) => {
+                write!(w, "(Array {} {})", SmtSortDisp(&a.key), SmtSortDisp(&a.val))?;
             }
             Sort::F64 => write!(w, "Float64")?,
             Sort::F32 => write!(w, "Float32")?,
@@ -228,9 +228,9 @@ impl Expr2Smt<()> for BitVector {
     }
 }
 
-struct SmtSymDisp<'a, T>(pub &'a T);
+struct SmtSymDisp<'a, T: ?Sized>(pub &'a T);
 
-impl<'a, T: Display + 'a> Sym2Smt<()> for SmtSymDisp<'a, T> {
+impl<'a, T: Display + 'a + ?Sized> Sym2Smt<()> for SmtSymDisp<'a, T> {
     fn sym_to_smt2<W: Write>(&self, w: &mut W, (): ()) -> SmtRes<()> {
         write!(w, "{}", self.0)?;
         Ok(())
@@ -345,11 +345,11 @@ fn make_solver<P>(parser: P, models: bool, inc: bool) -> rsmt2::Solver<P> {
 /// Write SMT2 the encodes this terms satisfiability to a file
 pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
     for c in PostOrderIter::new(t.clone()) {
-        if let Op::Var(n, s) = &c.op() {
+        if let Op::Var(v) = &c.op() {
             write!(w, "(declare-const ").unwrap();
-            SmtSymDisp(n).sym_to_smt2(&mut w, ()).unwrap();
+            SmtSymDisp(&*v.name).sym_to_smt2(&mut w, ()).unwrap();
             write!(w, " ").unwrap();
-            s.sort_to_smt2(&mut w).unwrap();
+            v.sort.sort_to_smt2(&mut w).unwrap();
             writeln!(w, ")").unwrap();
         }
     }
@@ -364,8 +364,10 @@ pub fn write_smt2<W: Write>(mut w: W, t: &Term) {
 pub fn check_sat(t: &Term) -> bool {
     let mut solver = make_solver((), false, false);
     for c in PostOrderIter::new(t.clone()) {
-        if let Op::Var(n, s) = &c.op() {
-            solver.declare_const(&SmtSymDisp(n), s).unwrap();
+        if let Op::Var(v) = &c.op() {
+            solver
+                .declare_const(&SmtSymDisp(&*v.name), &v.sort)
+                .unwrap();
         }
     }
     assert!(check(t) == Sort::Bool);
@@ -377,8 +379,10 @@ fn get_model_solver(t: &Term, inc: bool) -> rsmt2::Solver<Parser> {
     let mut solver = make_solver(Parser, true, inc);
     //solver.path_tee("solver_com").unwrap();
     for c in PostOrderIter::new(t.clone()) {
-        if let Op::Var(n, s) = &c.op() {
-            solver.declare_const(&SmtSymDisp(n), s).unwrap();
+        if let Op::Var(v) = &c.op() {
+            solver
+                .declare_const(&SmtSymDisp(&*v.name), &v.sort)
+                .unwrap();
         }
     }
     assert!(check(t) == Sort::Bool);
@@ -424,7 +428,7 @@ pub fn find_unique_model(t: &Term, uniqs: Vec<String>) -> Option<HashMap<String,
         .flat_map(|n| {
             model
                 .get(&n)
-                .map(|v| term![EQ; term![Op::Var(n, v.sort())], term![Op::Const(v.clone())]])
+                .map(|v| term![EQ; term![Op::new_var(n, v.sort())], const_(v.clone())])
         })
         .reduce(|l, r| term![AND; l, r])
         .map(|t| term![NOT; t])
@@ -451,13 +455,13 @@ mod test {
 
     #[test]
     fn var_is_sat() {
-        let t = leaf_term(Op::Var("a".into(), Sort::Bool));
+        let t = var("a".into(), Sort::Bool);
         assert!(check_sat(&t));
     }
 
     #[test]
     fn var_is_sat_model() {
-        let t = leaf_term(Op::Var("a".into(), Sort::Bool));
+        let t = var("a".into(), Sort::Bool);
         assert!(
             find_model(&t)
                 == Some(
@@ -470,14 +474,14 @@ mod test {
 
     #[test]
     fn var_and_not_is_unsat() {
-        let v = leaf_term(Op::Var("a".into(), Sort::Bool));
+        let v = var("a".into(), Sort::Bool);
         let t = term![Op::BoolNaryOp(BoolNaryOp::And); v.clone(), term![Op::Not; v]];
         assert!(!check_sat(&t));
     }
 
     #[test]
     fn bv_is_sat() {
-        let t = term![Op::Eq; bv_lit(0,4), leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
+        let t = term![Op::Eq; bv_lit(0,4), var("a".into(), Sort::BitVector(4))];
         assert!(check_sat(&t));
     }
 
@@ -532,15 +536,15 @@ mod test {
 
     #[test]
     fn tuple_is_sat() {
-        let t = term![Op::Eq; term![Op::Field(0); term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)]], leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
+        let t = term![Op::Eq; term![Op::Field(0); term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)]], var("a".into(), Sort::BitVector(4))];
         assert!(check_sat(&t));
-        let t = term![Op::Eq; term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)], leaf_term(Op::Var("a".into(), Sort::Tuple(vec![Sort::BitVector(4), Sort::BitVector(6)].into_boxed_slice())))];
+        let t = term![Op::Eq; term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)], var("a".into(), Sort::Tuple(vec![Sort::BitVector(4), Sort::BitVector(6)].into_boxed_slice()))];
         assert!(check_sat(&t));
     }
 
     #[test]
     fn bv_is_sat_model() {
-        let t = term![Op::Eq; bv_lit(0,4), leaf_term(Op::Var("a".into(), Sort::BitVector(4)))];
+        let t = term![Op::Eq; bv_lit(0,4), var("a".into(), Sort::BitVector(4))];
         assert!(
             find_model(&t)
                 == Some(
@@ -557,9 +561,9 @@ mod test {
     #[test]
     fn vars_are_sat_model() {
         let t = term![Op::BoolNaryOp(BoolNaryOp::And);
-           leaf_term(Op::Var("a".into(), Sort::Bool)),
-           leaf_term(Op::Var("b".into(), Sort::Bool)),
-           leaf_term(Op::Var("c".into(), Sort::Bool))
+           var("a".into(), Sort::Bool),
+           var("b".into(), Sort::Bool),
+           var("c".into(), Sort::Bool)
         ];
         assert!(
             find_model(&t)
@@ -584,29 +588,31 @@ mod test {
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.
     pub fn smt_eval_test(t: Term, vs: &HashMap<String, Value>) -> bool {
         let mut solver = make_solver((), false, false);
-        for (var, val) in vs {
+        for (v, val) in vs {
             let s = val.sort();
-            solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
-            solver.assert(&term![Op::Eq; leaf_term(Op::Var(var.to_owned(), s)), leaf_term(Op::Const(val.clone()))]).unwrap();
+            solver.declare_const(&SmtSymDisp(&v), &s).unwrap();
+            solver
+                .assert(&term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
+                .unwrap();
         }
         let val = eval(&t, vs);
-        solver
-            .assert(&term![Op::Eq; t, leaf_term(Op::Const(val))])
-            .unwrap();
+        solver.assert(&term![Op::Eq; t, const_(val)]).unwrap();
         solver.check_sat().unwrap()
     }
 
     /// Check that `t` evaluates consistently within the SMT solver under `vs`.
     pub fn smt_eval_alternate_solution(t: Term, vs: &HashMap<String, Value>) -> bool {
         let mut solver = make_solver((), false, false);
-        for (var, val) in vs {
+        for (v, val) in vs {
             let s = val.sort();
-            solver.declare_const(&SmtSymDisp(&var), &s).unwrap();
-            solver.assert(&term![Op::Eq; leaf_term(Op::Var(var.to_owned(), s)), leaf_term(Op::Const(val.clone()))]).unwrap();
+            solver.declare_const(&SmtSymDisp(&v), &s).unwrap();
+            solver
+                .assert(&term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
+                .unwrap();
         }
         let val = eval(&t, vs);
         solver
-            .assert(&term![Op::Not; term![Op::Eq; t, leaf_term(Op::Const(val))]])
+            .assert(&term![Op::Not; term![Op::Eq; t, const_(val)]])
             .unwrap();
         solver.check_sat().unwrap()
     }

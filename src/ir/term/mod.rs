@@ -46,7 +46,7 @@ pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
-pub use eval::{eval, eval_cached, eval_op, pf_challenge};
+pub use eval::{eval, eval_cached, eval_op, eval_pf_challenge};
 pub use ext::ExtOp;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
@@ -54,9 +54,9 @@ pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 /// An operator
 pub enum Op {
     /// a variable
-    Var(String, Sort),
+    Var(Box<Var>),
     /// a constant
-    Const(Value),
+    Const(Box<Value>),
 
     /// if-then-else: ternary
     Ite,
@@ -76,7 +76,7 @@ pub enum Op {
     /// Get bits (high) through (low) from the underlying bit-vector.
     ///
     /// Zero-indexed and inclusive.
-    BvExtract(usize, usize),
+    BvExtract(u32, u32),
     /// bit-vector concatenation. n-ary. Low-index arguements map to high-order bits
     BvConcat,
     /// add this many zero bits
@@ -126,14 +126,14 @@ pub enum Op {
     /// Unsigned bit-vector to prime-field
     ///
     /// Takes the modulus.
-    UbvToPf(FieldT),
+    UbvToPf(Box<FieldT>),
     /// A random value, sampled uniformly and independently of its arguments.
     ///
     /// Takes a name (if deterministically sampled, challenges of different names are sampled
     /// differentely) and a field to sample from.
     ///
     /// In IR evaluation, we sample deterministically based on a hash of the name.
-    PfChallenge(String, FieldT),
+    PfChallenge(Box<ChallengeOp>),
     /// Requires the input pf element to fit in this many (unsigned) bits.
     PfFitsInBits(usize),
     /// Prime-field division
@@ -141,7 +141,8 @@ pub enum Op {
 
     /// Receive a value from the prover (in a proof)
     /// The string is a name for it; does not need to be unique.
-    Witness(String),
+    /// The double box is to get a thin pointer.
+    Witness(Box<Box<str>>),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -162,9 +163,9 @@ pub enum Op {
     /// Otherwise, oupputs `array`.
     CStore,
     /// Makes an array of the indicated key sort with the indicated size, filled with the argument.
-    Fill(Sort, usize),
+    Fill(Box<FillOp>),
     /// Create an array from (contiguous) values.
-    Array(Sort, Sort),
+    Array(Box<ArrayOp>),
 
     /// Assemble n things into a tuple
     Tuple,
@@ -177,7 +178,7 @@ pub enum Op {
     Map(Box<Op>),
 
     /// Call a function (name, argument sorts, return sort)
-    Call(String, Vec<Sort>, Sort),
+    Call(Box<CallOp>),
 
     /// Cyclic right rotation of an array
     /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
@@ -188,6 +189,53 @@ pub enum Op {
 
     /// Extension operators. Used in compilation, but not externally supported
     ExtOp(ext::ExtOp),
+}
+
+/// Variable
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Var {
+    /// Variable name
+    pub name: Box<str>,
+    /// Variable sort
+    pub sort: Sort,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChallengeOp {
+    /// The key sort
+    pub name: Box<str>,
+    /// The size
+    pub field: FieldT,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FillOp {
+    /// The key sort
+    pub key_sort: Sort,
+    /// The size
+    pub size: usize,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CallOp {
+    /// The function name
+    pub name: String,
+    /// Argument sorts
+    pub arg_sorts: Vec<Sort>,
+    /// Return sorts
+    pub ret_sort: Sort,
+}
+
+/// An array creation operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ArrayOp {
+    /// The key sort
+    pub key: Sort,
+    /// The value sort
+    pub val: Sort,
 }
 
 /// Boolean AND
@@ -279,7 +327,7 @@ impl Op {
         match self {
             Op::Ite => Some(3),
             Op::Eq => Some(2),
-            Op::Var(_, _) => Some(0),
+            Op::Var(_) => Some(0),
             Op::Const(_) => Some(0),
             Op::BvBinOp(_) => Some(2),
             Op::BvBinPred(_) => Some(2),
@@ -307,7 +355,7 @@ impl Op {
             Op::PfUnOp(_) => Some(1),
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
-            Op::PfChallenge(_, _) => None,
+            Op::PfChallenge(_) => None,
             Op::Witness(_) => Some(1),
             Op::PfFitsInBits(..) => Some(1),
             Op::IntNaryOp(_) => None,
@@ -322,11 +370,52 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
-            Op::Call(_, args, _) => Some(args.len()),
+            Op::Call(c) => Some(c.arg_sorts.len()),
             Op::Rot(_) => Some(1),
             Op::ExtOp(o) => o.arity(),
             Op::PfToBoolTrusted => Some(1),
         }
+    }
+
+    /// Create a new [Op::Fill].
+    pub fn new_fill(key_sort: Sort, size: usize) -> Self {
+        Op::Fill(Box::new(FillOp { key_sort, size }))
+    }
+
+    /// Create a new [Op::PfChallenge].
+    pub fn new_chall(name: String, field: FieldT) -> Self {
+        Op::PfChallenge(Box::new(ChallengeOp {
+            name: name.into_boxed_str(),
+            field,
+        }))
+    }
+
+    /// Create a new [Op::Var].
+    pub fn new_var(name: String, sort: Sort) -> Self {
+        Op::Var(Box::new(Var {
+            name: name.into_boxed_str(),
+            sort,
+        }))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_const(value: Value) -> Self {
+        Op::Const(Box::new(value))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_witness(name: String) -> Self {
+        Op::Witness(Box::new(name.into_boxed_str()))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_ubv_to_pf(field: FieldT) -> Self {
+        Op::UbvToPf(Box::new(field))
+    }
+
+    /// Create a new [Op::BvExtract].
+    pub fn new_bv_extract(hi: usize, lo: usize) -> Self {
+        Op::BvExtract(hi as u32, lo as u32)
     }
 }
 
@@ -709,11 +798,31 @@ pub enum Sort {
     /// Array from one sort to another, of fixed size.
     ///
     /// size presumes an order, and a zero, for the key sort.
-    Array(Box<Sort>, Box<Sort>, usize),
+    Array(Box<ArraySort>),
     /// Map from one sort to another.
-    Map(Box<Sort>, Box<Sort>),
+    Map(Box<MapSort>),
     /// A tuple
     Tuple(Box<[Sort]>),
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Array sort
+pub struct ArraySort {
+    /// key sort
+    pub key: Sort,
+    /// value sort
+    pub val: Sort,
+    /// size
+    pub size: usize,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Map sort
+pub struct MapSort {
+    /// key sort
+    pub key: Sort,
+    /// value sort
+    pub val: Sort,
 }
 
 impl Default for Sort {
@@ -733,6 +842,11 @@ impl Sort {
         }
     }
 
+    /// Is this a bit-vector?
+    pub fn is_bv(&self) -> bool {
+        matches!(self, Sort::BitVector(..))
+    }
+
     #[track_caller]
     /// Unwrap the modulus of this prime field, panicking otherwise.
     pub fn as_pf(&self) -> &FieldT {
@@ -741,6 +855,11 @@ impl Sort {
         } else {
             panic!("{} is not a field", self)
         }
+    }
+
+    /// Is this a prime field?
+    pub fn is_pf(&self) -> bool {
+        matches!(self, Sort::Field(..))
     }
 
     #[track_caller]
@@ -756,11 +875,16 @@ impl Sort {
     #[track_caller]
     /// Unwrap the constituent sorts of this array, panicking otherwise.
     pub fn as_array(&self) -> (&Sort, &Sort, usize) {
-        if let Sort::Array(k, v, s) = self {
-            (k, v, *s)
+        if let Sort::Array(a) = self {
+            (&a.key, &a.val, a.size)
         } else {
             panic!("{} is not an array", self)
         }
+    }
+
+    /// Create a new array sort
+    pub fn new_array(key: Sort, val: Sort, size: usize) -> Self {
+        Self::Array(Box::new(ArraySort { key, val, size }))
     }
 
     /// Is this an array?
@@ -771,8 +895,8 @@ impl Sort {
     #[track_caller]
     /// Unwrap the constituent sorts of this array, panicking otherwise.
     pub fn as_map(&self) -> (&Sort, &Sort) {
-        if let Sort::Map(k, v) = self {
-            (k, v)
+        if let Sort::Map(m) = self {
+            (&m.key, &m.val)
         } else {
             panic!("{} is not a map", self)
         }
@@ -781,6 +905,11 @@ impl Sort {
     /// Is this a map?
     pub fn is_map(&self) -> bool {
         matches!(self, Sort::Map(..))
+    }
+
+    /// Create a new map sort
+    pub fn new_map(key: Sort, val: Sort) -> Self {
+        Self::Map(Box::new(MapSort { key, val }))
     }
 
     /// The nth element of this sort.
@@ -808,7 +937,7 @@ impl Sort {
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]
     pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
-        Box::new(self.elems_iter_values().map(|v| leaf_term(Op::Const(v))))
+        Box::new(self.elems_iter_values().map(const_))
     }
 
     /// An iterator over the elements of this sort (as IR values).
@@ -859,7 +988,7 @@ impl Sort {
     /// * floats: zero
     /// * tuples/arrays: recursively default
     pub fn default_term(&self) -> Term {
-        leaf_term(Op::Const(self.default_value()))
+        const_(self.default_value())
     }
 
     /// Compute the default value for this sort.
@@ -878,10 +1007,10 @@ impl Sort {
             Sort::F32 => Value::F32(0.0f32),
             Sort::F64 => Value::F64(0.0),
             Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
-            Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
-            Sort::Map(k, v) => Value::Map(map::Map::new(
-                (**k).clone(),
-                (**v).clone(),
+            Sort::Array(a) => Value::Array(Array::default(a.key.clone(), &a.val, a.size)),
+            Sort::Map(m) => Value::Map(map::Map::new(
+                m.key.clone(),
+                m.val.clone(),
                 std::iter::empty(),
             )),
         }
@@ -989,7 +1118,7 @@ fn collect_types() {
 impl Term {
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
-        if let Op::Const(Value::Bool(b)) = &self.op() {
+        if let Some(Value::Bool(b)) = self.as_value_opt() {
             Some(*b)
         } else {
             None
@@ -997,7 +1126,7 @@ impl Term {
     }
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
-        if let Op::Const(Value::BitVector(b)) = &self.op() {
+        if let Some(Value::BitVector(b)) = self.as_value_opt() {
             Some(b)
         } else {
             None
@@ -1005,7 +1134,7 @@ impl Term {
     }
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldV> {
-        if let Op::Const(Value::Field(b)) = &self.op() {
+        if let Some(Value::Field(b)) = self.as_value_opt() {
             Some(b)
         } else {
             None
@@ -1014,7 +1143,7 @@ impl Term {
 
     /// Get the underlying tuple constant, if possible.
     pub fn as_tuple_opt(&self) -> Option<&[Value]> {
-        if let Op::Const(Value::Tuple(t)) = &self.op() {
+        if let Some(Value::Tuple(t)) = self.as_value_opt() {
             Some(t)
         } else {
             None
@@ -1023,7 +1152,7 @@ impl Term {
 
     /// Get the underlying array constant, if possible.
     pub fn as_array_opt(&self) -> Option<&Array> {
-        if let Op::Const(Value::Array(a)) = &self.op() {
+        if let Some(Value::Array(a)) = self.as_value_opt() {
             Some(a)
         } else {
             None
@@ -1032,7 +1161,7 @@ impl Term {
 
     /// Get the underlying map constant, if possible.
     pub fn as_map_opt(&self) -> Option<&map::Map> {
-        if let Op::Const(Value::Map(a)) = &self.op() {
+        if let Some(Value::Map(a)) = self.as_value_opt() {
             Some(a)
         } else {
             None
@@ -1061,8 +1190,8 @@ impl Term {
     /// Get the variable name; panic if not a variable.
     #[track_caller]
     pub fn as_var_name(&self) -> &str {
-        if let Op::Var(n, _) = &self.op() {
-            n
+        if let Op::Var(v) = &self.op() {
+            &v.name
         } else {
             panic!("not a variable")
         }
@@ -1084,12 +1213,12 @@ impl Value {
                 default,
                 size,
                 ..
-            }) => Sort::Array(Box::new(key_sort.clone()), Box::new(default.sort()), *size),
+            }) => Sort::new_array(key_sort.clone(), default.sort(), *size),
             Value::Map(map::Map {
                 key_sort,
                 value_sort,
                 ..
-            }) => Sort::Map(Box::new(key_sort.clone()), Box::new(value_sort.clone())),
+            }) => Sort::new_map(key_sort.clone(), value_sort.clone()),
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -1150,6 +1279,12 @@ impl Value {
     }
 
     #[track_caller]
+    /// Unwrap the constituent value of this array, panicking otherwise.
+    pub fn is_array(&self) -> bool {
+        matches!(self, Value::Array(_))
+    }
+
+    #[track_caller]
     /// Unwrap the constituent value of this map, panicking otherwise.
     pub fn as_map(&self) -> &map::Map {
         if let Value::Map(w) = self {
@@ -1167,6 +1302,7 @@ impl Value {
             None
         }
     }
+
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
         if let Value::BitVector(b) = self {
@@ -1195,7 +1331,13 @@ impl Value {
 /// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
 /// * a value sort, for the array's default
 pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
-    term(Op::Array(key_sort, value_sort), i)
+    term(
+        Op::Array(Box::new(ArrayOp {
+            key: key_sort,
+            val: value_sort,
+        })),
+        i,
+    )
 }
 
 /// Make a sequence of terms from an array.
@@ -1231,6 +1373,16 @@ pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
+/// Make a variable term.
+pub fn var(name: String, sort: Sort) -> Term {
+    leaf_term(Op::new_var(name, sort))
+}
+
+/// Make a constant term.
+pub fn const_(value: Value) -> Term {
+    leaf_term(Op::new_const(value))
+}
+
 /// Make a term with arguments.
 #[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
@@ -1243,7 +1395,7 @@ pub fn term(op: Op, cs: Vec<Term>) -> Term {
 
 /// Make a prime-field constant term.
 pub fn pf_lit(elem: FieldV) -> Term {
-    leaf_term(Op::Const(Value::Field(elem)))
+    const_(Value::Field(elem))
 }
 
 /// Make a bit-vector constant term.
@@ -1251,15 +1403,12 @@ pub fn bv_lit<T>(uint: T, width: usize) -> Term
 where
     Integer: From<T>,
 {
-    leaf_term(Op::Const(Value::BitVector(BitVector::new(
-        uint.into(),
-        width,
-    ))))
+    const_(Value::BitVector(BitVector::new(uint.into(), width)))
 }
 
 /// Make a bit-vector constant term.
 pub fn bool_lit(b: bool) -> Term {
-    leaf_term(Op::Const(Value::Bool(b)))
+    const_(Value::Bool(b))
 }
 
 #[macro_export]
@@ -1394,7 +1543,7 @@ pub struct VariableMetadata {
 impl VariableMetadata {
     /// term (cached)
     pub fn term(&self) -> Term {
-        leaf_term(Op::Var(self.name.clone(), self.sort.clone()))
+        var(self.name.clone(), self.sort.clone())
     }
 }
 
@@ -1645,9 +1794,16 @@ impl ComputationMetadata {
             .iter()
             .map(|name| args.get(name).expect("Argument not found: {}").clone())
             .collect::<Vec<Term>>();
-        let ordered_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
+        let arg_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
 
-        term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
+        term(
+            Op::Call(Box::new(CallOp {
+                name,
+                arg_sorts,
+                ret_sort,
+            })),
+            ordered_args,
+        )
     }
 }
 
@@ -1726,7 +1882,7 @@ impl Computation {
             assert_eq!(&s, &check(&p), "precompute {} doesn't match sort {}", p, s);
             self.precomputes.add_output(name.to_owned(), p);
         }
-        leaf_term(Op::Var(name.to_owned(), s))
+        var(name.to_owned(), s)
     }
 
     /// Create a new variable with the given metadata.
@@ -1751,7 +1907,7 @@ impl Computation {
             assert_eq!(&sort, &check(&p));
             self.precomputes.add_output(name.clone(), p);
         }
-        leaf_term(Op::Var(name, sort))
+        var(name, sort)
     }
 
     /// Add a new input `new_input_var` to this computation,
@@ -1789,7 +1945,7 @@ impl Computation {
         party: PartyId,
     ) -> Term {
         let f = Sort::Field(field);
-        let s = Sort::Array(Box::new(f.clone()), Box::new(f), size);
+        let s = Sort::new_array(f.clone(), f, size);
         let md = VariableMetadata {
             name: var.to_owned(),
             vis: Some(party),
@@ -1880,7 +2036,7 @@ impl Computation {
         for v in self.metadata.vars.values() {
             if v.random {
                 let field = v.sort.as_pf();
-                let value = Value::Field(eval::pf_challenge(&v.name, field));
+                let value = Value::Field(eval::eval_pf_challenge(&v.name, field));
                 values.insert(v.name.clone(), value);
             }
         }

@@ -9,6 +9,7 @@ use itertools::Itertools;
 use rug::Integer;
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::num::NonZero;
 
 thread_local! {
     static FOLDS: RefCell<TermCache<TTerm>> = RefCell::new(TermCache::with_capacity(TERM_CACHE_LIMIT));
@@ -31,12 +32,12 @@ pub(in super::super) fn collect() {
 
 /// Create a constant boolean
 fn cbool(b: bool) -> Option<Term> {
-    Some(leaf_term(Op::Const(Value::Bool(b))))
+    Some(bool_lit(b))
 }
 
 /// Create a constant bit-vector
 fn cbv(b: BitVector) -> Option<Term> {
-    Some(leaf_term(Op::Const(Value::BitVector(b))))
+    Some(const_(Value::BitVector(b)))
 }
 
 /// Fold away operators over constants.
@@ -46,7 +47,7 @@ pub fn fold(node: &Term, ignore: &[Op]) -> Term {
 
         // make the cache unbounded during the fold_cache call
         let old_capacity = cache.cap();
-        cache.resize(usize::MAX);
+        cache.resize(NonZero::new(usize::MAX).unwrap());
 
         let ret = fold_cache(node, &mut cache, ignore);
         // shrink cache to its max size
@@ -94,11 +95,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
         let args: Vec<Term> = t.cs().iter().map(&mut c_get).collect();
         let const_args: Vec<&Value> = args.iter().filter_map(|a| a.as_value_opt()).collect();
         let new_t_opt = if const_args.len() == args.len() && !t.is_var() {
-            Some(leaf_term(Op::Const(eval_op(
-                t.op(),
-                &const_args,
-                &Default::default(),
-            ))))
+            Some(const_(eval_op(t.op(), &const_args, &Default::default())))
         } else {
             let mut get = |i: usize| c_get(&t.cs()[i]);
             match &t.op() {
@@ -226,8 +223,8 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             assert!(b.uint() < &Integer::from(b.width()));
                             let n = b.uint().to_usize().unwrap();
                             Some(term![BV_CONCAT;
-                              term![Op::BvExtract(b.width()-n-1, 0); c0],
-                              leaf_term(Op::Const(Value::BitVector(BitVector::zeros(n))))
+                              term![Op::new_bv_extract(b.width()-n-1, 0); c0],
+                              const_(Value::BitVector(BitVector::zeros(n)))
                             ])
                         }
                         (Ashr, Some(a), Some(b)) => cbv(a.clone().ashr(b)),
@@ -235,14 +232,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             assert!(b.uint() < &Integer::from(b.width()));
                             let n = b.uint().to_usize().unwrap();
                             Some(term![Op::BvSext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0]])
+                                   term![Op::new_bv_extract(b.width()-1, n); c0]])
                         }
                         (Lshr, Some(a), Some(b)) => cbv(a.clone().lshr(b)),
                         (Lshr, _, Some(b)) => {
                             assert!(b.uint() < &Integer::from(b.width()));
                             let n = b.uint().to_usize().unwrap();
                             Some(term![Op::BvUext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0]])
+                                   term![Op::new_bv_extract(b.width()-1, n); c0]])
                         }
                         _ => None,
                     }
@@ -250,7 +247,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 Op::BvNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
                 Op::BvBinPred(p) => {
                     if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
-                        Some(leaf_term(Op::Const(Value::Bool(match p {
+                        Some(bool_lit(match p {
                             BvBinPred::Uge => a.uint() >= b.uint(),
                             BvBinPred::Ugt => a.uint() > b.uint(),
                             BvBinPred::Ule => a.uint() <= b.uint(),
@@ -259,16 +256,16 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             BvBinPred::Sgt => a.as_sint() > b.as_sint(),
                             BvBinPred::Sle => a.as_sint() <= b.as_sint(),
                             BvBinPred::Slt => a.as_sint() < b.as_sint(),
-                        }))))
+                        }))
                     } else {
                         None
                     }
                 }
                 Op::BvUnOp(o) => get(0).as_bv_opt().map(|bv| {
-                    leaf_term(Op::Const(Value::BitVector(match o {
+                    const_(Value::BitVector(match o {
                         BvUnOp::Not => !bv.clone(),
                         BvUnOp::Neg => -bv.clone(),
-                    })))
+                    }))
                 }),
                 Op::Ite => {
                     let c = get(0);
@@ -300,27 +297,25 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                 }
                 Op::PfNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
                 Op::PfUnOp(o) => get(0).as_pf_opt().map(|pf| {
-                    leaf_term(Op::Const(Value::Field(match o {
+                    pf_lit(match o {
                         PfUnOp::Recip => pf.clone().recip(),
                         PfUnOp::Neg => -pf.clone(),
-                    })))
+                    })
                 }),
                 Op::IntNaryOp(o) => Some(o.flatten(t.cs().iter().map(c_get))),
                 Op::IntBinPred(p) => {
                     if let (Some(a), Some(b)) = (get(0).as_bv_opt(), get(1).as_bv_opt()) {
-                        Some(leaf_term(Op::Const(Value::Bool(match p {
+                        Some(bool_lit(match p {
                             IntBinPred::Ge => a >= b,
                             IntBinPred::Gt => a > b,
                             IntBinPred::Le => a <= b,
                             IntBinPred::Lt => a < b,
-                        }))))
+                        }))
                     } else {
                         None
                     }
                 }
-                Op::UbvToPf(fty) => get(0)
-                    .as_bv_opt()
-                    .map(|bv| leaf_term(Op::Const(Value::Field(fty.new_v(bv.uint()))))),
+                Op::UbvToPf(fty) => get(0).as_bv_opt().map(|bv| pf_lit(fty.new_v(bv.uint()))),
                 Op::Store => {
                     match (
                         get(0).as_array_opt(),
@@ -329,33 +324,33 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     ) {
                         (Some(arr), Some(idx), Some(val)) => {
                             let new_arr = arr.clone().store(idx.clone(), val.clone());
-                            Some(leaf_term(Op::Const(Value::Array(new_arr))))
+                            Some(const_(Value::Array(new_arr)))
                         }
                         _ => None,
                     }
                 }
-                Op::Array(k, v) => t
+                Op::Array(a) => t
                     .cs()
                     .iter()
                     .map(|c| c_get(c).as_value_opt().cloned())
                     .collect::<Option<_>>()
                     .map(|cs| {
-                        leaf_term(Op::Const(Value::Array(Array::from_vec(
-                            k.clone(),
-                            v.clone(),
+                        const_(Value::Array(Array::from_vec(
+                            a.key.clone(),
+                            a.val.clone(),
                             cs,
-                        ))))
+                        )))
                     }),
-                Op::Fill(k, s) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
-                    leaf_term(Op::Const(Value::Array(Array::new(
-                        k.clone(),
+                Op::Fill(f) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
+                    const_(Value::Array(Array::new(
+                        f.key_sort.clone(),
                         Box::new(v.clone()),
                         Default::default(),
-                        *s,
-                    ))))
+                        f.size,
+                    )))
                 }),
                 Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
-                    (Some(arr), Some(idx)) => Some(leaf_term(Op::Const(arr.select(idx)))),
+                    (Some(arr), Some(idx)) => Some(const_(arr.select(idx))),
                     _ => None,
                 },
                 Op::Tuple => t
@@ -363,16 +358,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     .iter()
                     .map(|c| c_get(c).as_value_opt().cloned())
                     .collect::<Option<_>>()
-                    .map(|v| leaf_term(Op::Const(Value::Tuple(v)))),
-                Op::Field(n) => get(0)
-                    .as_tuple_opt()
-                    .map(|t| leaf_term(Op::Const(t[*n].clone()))),
+                    .map(|v| const_(Value::Tuple(v))),
+                Op::Field(n) => get(0).as_tuple_opt().map(|t| const_(t[*n].clone())),
                 Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
                     (Some(t), Some(v)) => {
                         let mut new_vec = Vec::from(t).into_boxed_slice();
                         assert_eq!(new_vec[*n].sort(), v.sort());
                         new_vec[*n] = v.clone();
-                        Some(leaf_term(Op::Const(Value::Tuple(new_vec))))
+                        Some(const_(Value::Tuple(new_vec)))
                     }
                     _ => None,
                 },
@@ -382,18 +375,15 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     .map(|c| c_get(c).as_bv_opt().cloned())
                     .collect::<Option<Vec<_>>>()
                     .and_then(|v| v.into_iter().reduce(BitVector::concat))
-                    .map(|bv| leaf_term(Op::Const(Value::BitVector(bv)))),
-                Op::BoolToBv => get(0).as_bool_opt().map(|b| {
-                    leaf_term(Op::Const(Value::BitVector(BitVector::new(
-                        Integer::from(b),
-                        1,
-                    ))))
-                }),
+                    .map(|bv| const_(Value::BitVector(bv))),
+                Op::BoolToBv => get(0)
+                    .as_bool_opt()
+                    .map(|b| const_(Value::BitVector(BitVector::new(Integer::from(b), 1)))),
                 Op::BvUext(w) => get(0).as_bv_opt().map(|b| {
-                    leaf_term(Op::Const(Value::BitVector(BitVector::new(
+                    const_(Value::BitVector(BitVector::new(
                         b.uint().clone(),
                         b.width() + w,
-                    ))))
+                    )))
                 }),
                 _ => None,
             }
@@ -443,8 +433,8 @@ trait NaryFlat<T: Clone>: Sized {
 
 impl NaryFlat<bool> for BoolNaryOp {
     fn as_const(t: Term) -> Result<bool, Term> {
-        match t.op() {
-            Op::Const(Value::Bool(b)) => Ok(*b),
+        match t.as_value_opt() {
+            Some(Value::Bool(b)) => Ok(*b),
             _ => Err(t),
         }
     }
@@ -452,18 +442,18 @@ impl NaryFlat<bool> for BoolNaryOp {
         match self {
             BoolNaryOp::Or => {
                 if consts.iter().any(|b| *b) {
-                    leaf_term(Op::Const(Value::Bool(true)))
+                    bool_lit(true)
                 } else if children.is_empty() {
-                    leaf_term(Op::Const(Value::Bool(false)))
+                    bool_lit(false)
                 } else {
                     safe_nary(OR, children)
                 }
             }
             BoolNaryOp::And => {
                 if consts.iter().any(|b| !*b) {
-                    leaf_term(Op::Const(Value::Bool(false)))
+                    bool_lit(false)
                 } else if children.is_empty() {
-                    leaf_term(Op::Const(Value::Bool(true)))
+                    bool_lit(true)
                 } else {
                     safe_nary(AND, children)
                 }
@@ -471,7 +461,7 @@ impl NaryFlat<bool> for BoolNaryOp {
             BoolNaryOp::Xor => {
                 let odd_trues = consts.into_iter().filter(|b| *b).count() % 2 == 1;
                 if children.is_empty() {
-                    leaf_term(Op::Const(Value::Bool(odd_trues)))
+                    bool_lit(odd_trues)
                 } else {
                     let t = safe_nary(XOR, children);
                     if odd_trues {
@@ -487,8 +477,8 @@ impl NaryFlat<bool> for BoolNaryOp {
 
 impl NaryFlat<BitVector> for BvNaryOp {
     fn as_const(t: Term) -> Result<BitVector, Term> {
-        match &t.op() {
-            Op::Const(Value::BitVector(b)) => Ok(b.clone()),
+        match t.as_value_opt() {
+            Some(Value::BitVector(b)) => Ok(b.clone()),
             _ => Err(t),
         }
     }
@@ -498,7 +488,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::BitOr::bitor);
                     if children.is_empty() {
-                        leaf_term(Op::Const(Value::BitVector(c)))
+                        const_(Value::BitVector(c))
                     } else if c.uint() == &Integer::from(0) {
                         safe_nary(BV_OR, children)
                     } else {
@@ -507,7 +497,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                             (0..c.width())
                                 .map(|i| {
                                     term![Op::BoolToBv; if c.bit(i) {
-                                        leaf_term(Op::Const(Value::Bool(true)))
+                                        bool_lit(true)
                                     } else {
                                         safe_nary(
                                             OR,
@@ -531,7 +521,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::BitAnd::bitand);
                     if children.is_empty() {
-                        leaf_term(Op::Const(Value::BitVector(c)))
+                        const_(Value::BitVector(c))
                     } else {
                         safe_nary(
                             BV_CONCAT,
@@ -547,7 +537,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                                                 .collect(),
                                         )
                                     } else {
-                                        leaf_term(Op::Const(Value::Bool(false)))
+                                        bool_lit(false)
                                     }]
                                 })
                                 .rev()
@@ -562,7 +552,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::BitXor::bitxor);
                     if children.is_empty() {
-                        leaf_term(Op::Const(Value::BitVector(c)))
+                        const_(Value::BitVector(c))
                     } else {
                         safe_nary(
                             BV_CONCAT,
@@ -594,7 +584,7 @@ impl NaryFlat<BitVector> for BvNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Add::add);
                     if c.uint() != &Integer::from(0) || children.is_empty() {
-                        children.push(leaf_term(Op::Const(Value::BitVector(c))));
+                        children.push(const_(Value::BitVector(c)));
                     }
                 }
                 safe_nary(BV_ADD, children)
@@ -603,10 +593,10 @@ impl NaryFlat<BitVector> for BvNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Mul::mul);
                     if c.uint() == &Integer::from(0) {
-                        leaf_term(Op::Const(Value::BitVector(c)))
+                        const_(Value::BitVector(c))
                     } else {
                         if c.uint() != &Integer::from(1) || children.is_empty() {
-                            children.push(leaf_term(Op::Const(Value::BitVector(c))));
+                            children.push(const_(Value::BitVector(c)));
                         }
                         safe_nary(BV_MUL, children)
                     }
@@ -620,8 +610,8 @@ impl NaryFlat<BitVector> for BvNaryOp {
 
 impl NaryFlat<FieldV> for PfNaryOp {
     fn as_const(t: Term) -> Result<FieldV, Term> {
-        match &t.op() {
-            Op::Const(Value::Field(b)) => Ok(b.clone()),
+        match t.as_value_opt() {
+            Some(Value::Field(b)) => Ok(b.clone()),
             _ => Err(t),
         }
     }
@@ -631,7 +621,7 @@ impl NaryFlat<FieldV> for PfNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Add::add);
                     if !c.is_zero() || children.is_empty() {
-                        children.push(leaf_term(Op::Const(Value::Field(c))));
+                        children.push(pf_lit(c));
                     }
                 }
                 safe_nary(PF_ADD, children)
@@ -640,10 +630,10 @@ impl NaryFlat<FieldV> for PfNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Mul::mul);
                     if c.is_zero() || children.is_empty() {
-                        leaf_term(Op::Const(Value::Field(c)))
+                        pf_lit(c)
                     } else {
                         if !c.is_one() {
-                            children.push(leaf_term(Op::Const(Value::Field(c))));
+                            children.push(pf_lit(c))
                         }
                         safe_nary(PF_MUL, children)
                     }
@@ -657,8 +647,8 @@ impl NaryFlat<FieldV> for PfNaryOp {
 
 impl NaryFlat<Integer> for IntNaryOp {
     fn as_const(t: Term) -> Result<Integer, Term> {
-        match &t.op() {
-            Op::Const(Value::Int(b)) => Ok(b.clone()),
+        match t.as_value_opt() {
+            Some(Value::Int(b)) => Ok(b.clone()),
             _ => Err(t),
         }
     }
@@ -668,7 +658,7 @@ impl NaryFlat<Integer> for IntNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Add::add);
                     if c != 0u8 || children.is_empty() {
-                        children.push(leaf_term(Op::Const(Value::Int(c))));
+                        children.push(const_(Value::Int(c)));
                     }
                 }
                 safe_nary(INT_ADD, children)
@@ -677,10 +667,10 @@ impl NaryFlat<Integer> for IntNaryOp {
                 if let Some(c) = consts.pop() {
                     let c = consts.into_iter().fold(c, std::ops::Mul::mul);
                     if c == 0u8 || children.is_empty() {
-                        leaf_term(Op::Const(Value::Int(c)))
+                        const_(Value::Int(c))
                     } else {
                         if c != 1u8 {
-                            children.push(leaf_term(Op::Const(Value::Int(c))));
+                            children.push(const_(Value::Int(c)));
                         }
                         safe_nary(INT_MUL, children)
                     }
@@ -707,11 +697,11 @@ mod test {
     use quickcheck_macros::quickcheck;
 
     fn v_bv(n: &str, w: usize) -> Term {
-        leaf_term(Op::Var(n.to_owned(), Sort::BitVector(w)))
+        var(n.to_owned(), Sort::BitVector(w))
     }
 
     fn bool(b: bool) -> Term {
-        leaf_term(Op::Const(Value::Bool(b)))
+        bool_lit(b)
     }
 
     #[quickcheck]

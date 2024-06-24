@@ -17,7 +17,7 @@ impl MsHasher {
     pub fn new(key_name: String, f: &FieldT, inputs: Vec<Term>) -> Self {
         Self {
             f: f.clone(),
-            key: term(Op::PfChallenge(key_name, f.clone()), inputs),
+            key: term(Op::new_chall(key_name, f.clone()), inputs),
         }
     }
     /// Hash some `data`, as a multi-set.
@@ -43,7 +43,7 @@ impl UniversalHasher {
     /// * `f` is the field used.
     /// * `len` is the data length.
     pub fn new(key_name: String, f: &FieldT, inputs: Vec<Term>, len: usize) -> Self {
-        let key = term(Op::PfChallenge(key_name, f.clone()), inputs);
+        let key = term(Op::new_chall(key_name, f.clone()), inputs);
         let key_powers: Vec<Term> = std::iter::successors(Some(key.clone()), |p| {
             Some(term![PF_MUL; p.clone(), key.clone()])
         })

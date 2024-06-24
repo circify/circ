@@ -603,7 +603,7 @@ impl ProverData {
                     }
                     let var = self.r1cs.vars[next_var_i];
                     let name = self.r1cs.names.get(&var).unwrap().clone();
-                    let val = pf_challenge(&name, &self.r1cs.field);
+                    let val = eval_pf_challenge(&name, &self.r1cs.field);
                     var_values.insert(var, val.clone());
                     inputs.insert(name, Value::Field(val));
                 }
@@ -1005,8 +1005,8 @@ impl R1cs {
                 Default::default(),
             )
             .filter_map(|t| {
-                if let Op::Var(n, s) = t.op() {
-                    Some((n.clone(), s.clone()))
+                if let Op::Var(v) = t.op() {
+                    Some((v.name.to_string(), v.sort.clone()))
                 } else {
                     None
                 }
@@ -1064,8 +1064,8 @@ impl R1cs {
         let vars: HashMap<String, Sort> = {
             PostOrderIter::new(precompute.tuple())
                 .filter_map(|t| {
-                    if let Op::Var(n, s) = t.op() {
-                        Some((n.clone(), s.clone()))
+                    if let Op::Var(v) = t.op() {
+                        Some((v.name.to_string(), v.sort.clone()))
                     } else {
                         None
                     }
@@ -1116,7 +1116,7 @@ impl R1cs {
     /// Get an IR term that represents this system.
     pub fn lc_ir_term(&self, lc: &Lc) -> Term {
         term(PF_ADD,
-            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), leaf_term(Op::Var(self.idx_to_sig.get_fwd(i).unwrap().into(), Sort::Field(self.modulus.clone())))])).collect())
+            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), var(self.idx_to_sig.get_fwd(i).unwrap().into(), Sort::Field(self.modulus.clone()))])).collect())
     }
 
     /// Get an IR term that represents this system.

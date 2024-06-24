@@ -178,14 +178,14 @@ impl<'a> ToABY<'a> {
                 .unwrap();
             let op = "CONS";
 
-            match &t.op() {
-                Op::Const(Value::BitVector(b)) => {
+            match t.as_value_opt() {
+                Some(Value::BitVector(b)) => {
                     let value = b.as_sint();
                     let bitlen = 32;
                     let line = format!("2 1 {value} {bitlen} {output_share} {op}\n");
                     self.const_output.push(line);
                 }
-                Op::Const(Value::Bool(b)) => {
+                Some(Value::Bool(b)) => {
                     let value = *b as i32;
                     let bitlen = 1;
                     let line = format!("2 1 {value} {bitlen} {output_share} {op}\n");
@@ -239,7 +239,7 @@ impl<'a> ToABY<'a> {
         len += match s {
             Sort::Bool => 1,
             Sort::BitVector(_) => 1,
-            Sort::Array(_, _, n) => *n,
+            Sort::Array(a) => a.size,
             Sort::Tuple(sorts) => {
                 let mut inner_len = 0;
                 for inner_s in sorts.iter() {
@@ -280,19 +280,19 @@ impl<'a> ToABY<'a> {
     fn embed_bool(&mut self, t: Term) {
         let to_share_type = self.get_term_share_type(&t);
         match &t.op() {
-            Op::Var(name, Sort::Bool) => {
+            Op::Var(v) if matches!(&v.sort, Sort::Bool) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.is_input(name) {
-                    let vis = self.unwrap_vis(name);
+                if !self.inputs.contains(&t) && md.is_input(&v.name) {
+                    let vis = self.unwrap_vis(&v.name);
                     let s = self.get_share(&t, to_share_type);
                     let op = "IN";
 
                     if vis == PUBLIC {
                         let bitlen = 1;
-                        let line = format!("3 1 {name} {vis} {bitlen} {s} {op}\n");
+                        let line = format!("3 1 {} {vis} {bitlen} {s} {op}\n", v.name);
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {name} {vis} {s} {op}\n");
+                        let line = format!("2 1 {} {vis} {s} {op}\n", v.name);
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
@@ -407,25 +407,26 @@ impl<'a> ToABY<'a> {
     fn embed_bv(&mut self, t: Term) {
         let to_share_type = self.get_term_share_type(&t);
         match &t.op() {
-            Op::Var(name, Sort::BitVector(_)) => {
+            Op::Var(v) if matches!(&v.sort, Sort::BitVector(_)) => {
                 let md = self.get_md();
-                if !self.inputs.contains(&t) && md.is_input(name) {
-                    let vis = self.unwrap_vis(name);
+                if !self.inputs.contains(&t) && md.is_input(&v.name) {
+                    let vis = self.unwrap_vis(&v.name);
                     let s = self.get_share(&t, to_share_type);
                     let op = "IN";
 
                     if vis == PUBLIC {
                         let bitlen = 32;
-                        let line = format!("3 1 {name} {vis} {bitlen} {s} {op}\n");
+                        let line = format!("3 1 {} {vis} {bitlen} {s} {op}\n", v.name);
                         self.bytecode_input.push(line);
                     } else {
-                        let line = format!("2 1 {name} {vis} {s} {op}\n");
+                        let line = format!("2 1 {} {vis} {s} {op}\n", v.name);
                         self.bytecode_input.push(line);
                     }
                     self.inputs.push(t.clone());
                 }
             }
-            Op::Const(Value::BitVector(_)) => {
+            Op::Const(_) => {
+                assert!(t.as_bv_opt().is_some());
                 // create all three shares
                 self.insert_const(&t);
             }
@@ -537,7 +538,7 @@ impl<'a> ToABY<'a> {
                 let select_share = self.get_share(&t, to_share_type);
                 let array_share = self.get_share(&t.cs()[0], to_share_type);
 
-                let line = if let Op::Const(Value::BitVector(bv)) = &t.cs()[1].op() {
+                let line = if let Some(Value::BitVector(bv)) = t.cs()[1].as_value_opt() {
                     let op = "SELECT_CONS";
                     let idx = bv.uint().to_usize().unwrap();
                     let len = self.get_sort_len(&check(&t.cs()[0]));
@@ -557,51 +558,22 @@ impl<'a> ToABY<'a> {
 
     fn embed_vector(&mut self, t: Term) {
         let to_share_type = self.get_term_share_type(&t);
-        match &t.op() {
-            Op::Const(Value::Array(arr)) => {
-                let array_share = self.get_share(&t, to_share_type);
-                let mut shares: Vec<i32> = Vec::new();
-                for i in 0..arr.size {
-                    // TODO: sort of index might not be a 32-bit bitvector
-                    let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
-                    let v = match arr.map.get(&idx) {
-                        Some(c) => c,
-                        None => &*arr.default,
-                    };
+        match t.op() {
+            Op::Const(v) => {
+                match &**v {
+                    Value::Array(arr) => {
+                        let array_share = self.get_share(&t, to_share_type);
+                        let mut shares: Vec<i32> = Vec::new();
+                        for i in 0..arr.size {
+                            // TODO: sort of index might not be a 32-bit bitvector
+                            let idx = Value::BitVector(BitVector::new(Integer::from(i), 32));
+                            let v = match arr.map.get(&idx) {
+                                Some(c) => c,
+                                None => &*arr.default,
+                            };
 
-                    // TODO: sort of value might not be a 32-bit bitvector
-                    let v_term = leaf_term(Op::Const(v.clone()));
-                    if self.const_cache.contains_key(&v_term) {
-                        // existing const
-                        let s = self.get_share(&v_term, to_share_type);
-                        shares.push(s);
-                    } else {
-                        // new const
-                        self.insert_const(&v_term);
-                        let s = self.get_share(&v_term, to_share_type);
-                        shares.push(s);
-                    }
-                }
-                assert!(shares.len() == arr.size);
-
-                let op = "CONS_ARRAY";
-                let line = format!(
-                    "{} 1 {} {} {}\n",
-                    arr.size,
-                    self.shares_to_string(shares),
-                    array_share,
-                    op
-                );
-                self.const_output.push(line);
-                self.term_to_shares.insert(t.clone(), array_share);
-            }
-            Op::Const(Value::Tuple(tup)) => {
-                let tuple_share = self.get_share(&t, to_share_type);
-                let mut shares: Vec<i32> = Vec::new();
-                for val in tup.iter() {
-                    match val {
-                        Value::BitVector(b) => {
-                            let v_term: Term = bv_lit(b.as_sint(), 32);
+                            // TODO: sort of value might not be a 32-bit bitvector
+                            let v_term = const_(v.clone());
                             if self.const_cache.contains_key(&v_term) {
                                 // existing const
                                 let s = self.get_share(&v_term, to_share_type);
@@ -613,21 +585,55 @@ impl<'a> ToABY<'a> {
                                 shares.push(s);
                             }
                         }
-                        _ => todo!(),
-                    }
-                }
-                assert!(shares.len() == tup.len());
+                        assert!(shares.len() == arr.size);
 
-                let op = "CONS_TUPLE";
-                let line = format!(
-                    "{} 1 {} {} {}\n",
-                    tup.len(),
-                    self.shares_to_string(shares.clone()),
-                    tuple_share,
-                    op
-                );
-                self.const_output.push(line);
-                self.term_to_shares.insert(t.clone(), tuple_share);
+                        let op = "CONS_ARRAY";
+                        let line = format!(
+                            "{} 1 {} {} {}\n",
+                            arr.size,
+                            self.shares_to_string(shares),
+                            array_share,
+                            op
+                        );
+                        self.const_output.push(line);
+                        self.term_to_shares.insert(t.clone(), array_share);
+                    }
+                    Value::Tuple(tup) => {
+                        let tuple_share = self.get_share(&t, to_share_type);
+                        let mut shares: Vec<i32> = Vec::new();
+                        for val in tup.iter() {
+                            match val {
+                                Value::BitVector(b) => {
+                                    let v_term: Term = bv_lit(b.as_sint(), 32);
+                                    if self.const_cache.contains_key(&v_term) {
+                                        // existing const
+                                        let s = self.get_share(&v_term, to_share_type);
+                                        shares.push(s);
+                                    } else {
+                                        // new const
+                                        self.insert_const(&v_term);
+                                        let s = self.get_share(&v_term, to_share_type);
+                                        shares.push(s);
+                                    }
+                                }
+                                _ => todo!(),
+                            }
+                        }
+                        assert!(shares.len() == tup.len());
+
+                        let op = "CONS_TUPLE";
+                        let line = format!(
+                            "{} 1 {} {} {}\n",
+                            tup.len(),
+                            self.shares_to_string(shares.clone()),
+                            tuple_share,
+                            op
+                        );
+                        self.const_output.push(line);
+                        self.term_to_shares.insert(t.clone(), tuple_share);
+                    }
+                    _ => unimplemented!("{}", t.op()),
+                }
             }
             Op::Ite => {
                 let op = "MUX";
@@ -648,7 +654,7 @@ impl<'a> ToABY<'a> {
                 let value_share = self.get_share(&t.cs()[2], to_share_type);
                 let store_share = self.get_share(&t, to_share_type);
 
-                let line = if let Op::Const(Value::BitVector(bv)) = &t.cs()[1].op() {
+                let line = if let Some(Value::BitVector(bv)) = t.cs()[1].as_value_opt() {
                     let op = "STORE_CONS";
                     let idx = bv.uint().to_usize().unwrap();
                     let len = self.get_sort_len(&check(&t.cs()[0]));
@@ -725,9 +731,9 @@ impl<'a> ToABY<'a> {
                 self.bytecode_output.push(line);
                 self.term_to_shares.insert(t.clone(), tuple_share);
             }
-            Op::Call(name, ..) => {
+            Op::Call(call) => {
                 let call_share = self.get_share(&t, to_share_type);
-                let op = format!("CALL({name})");
+                let op = format!("CALL({})", call.name);
 
                 let mut arg_shares: Vec<i32> = Vec::new();
                 for c in t.cs().iter() {

@@ -26,7 +26,7 @@ pub fn persistent_to_ram(c: &mut Computation, cfg: &AccessCfg) -> Vec<Ram> {
         let key_sort = sort.as_array().0.clone();
         let value_sort = sort.as_array().1.clone();
         let size = sort.as_array().2;
-        let init_term = leaf_term(Op::Var(name.clone(), sort));
+        let init_term = var(name.clone(), sort);
 
         // create a new var for each initial value
         let names: Vec<String> = (0..size).map(|i| format!("{name}.init.{i}")).collect();
@@ -108,7 +108,7 @@ pub fn check_ram(c: &mut Computation, mut ram: Ram, cfg: &AccessCfg) {
     let mut uhf_inputs = inital_terms.clone();
     uhf_inputs.extend(final_terms.iter().cloned());
     let uhf_key = term(
-        Op::PfChallenge(format!("__uhf_key.{j}"), field.clone()),
+        Op::new_chall(format!("__uhf_key.{j}"), field.clone()),
         uhf_inputs,
     );
     let uhf = |idx: Term, val: Term| term![PF_ADD; val, term![PF_MUL; uhf_key.clone(), idx]];

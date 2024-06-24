@@ -7,7 +7,7 @@ use crate::ir::term::*;
 pub fn check_array_to_map(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
     let [array] = ty::count_or_ref(arg_sorts)?;
     let (k, v, _size) = ty::array_or(array, "ArrayToMap expects array")?;
-    Ok(Sort::Map(Box::new(k.clone()), Box::new(v.clone())))
+    Ok(Sort::new_map(k.clone(), v.clone()))
 }
 
 /// Evaluate [super::ExtOp::ArrayToMap].
@@ -22,7 +22,7 @@ pub fn eval_array_to_map(args: &[&Value]) -> Value {
 pub fn check_map_flip(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
     let [map] = ty::count_or_ref(arg_sorts)?;
     let (k, v) = ty::map_or(map, "MapFlip expects map")?;
-    Ok(Sort::Map(Box::new(k.clone()), Box::new(v.clone())))
+    Ok(Sort::new_map(v.clone(), k.clone()))
 }
 
 /// Evaluate [super::ExtOp::MapFlip].

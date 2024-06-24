@@ -193,8 +193,8 @@ impl ToMilp {
         debug_assert!(check(&c) == Sort::Bool);
         if !self.cache.contains_key(&c) {
             let lc = match &c.op() {
-                Op::Var(name, Sort::Bool) => self.bit(name.to_string()),
-                Op::Const(Value::Bool(b)) => Expression::from(*b as i32),
+                Op::Var(v) => self.bit(v.name.to_string()),
+                Op::Const(b) => Expression::from(b.as_bool() as i32),
                 Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
                     let a = self.get_bool(&c.cs()[0]).clone();
@@ -256,12 +256,13 @@ impl ToMilp {
     fn embed_bv(&mut self, bv: Term) {
         if let Sort::BitVector(n) = check(&bv) {
             if !self.cache.contains_key(&bv) {
-                match &bv.op() {
-                    Op::Var(name, Sort::BitVector(n_bits)) => {
-                        let var = self.bv_lit(name.clone(), *n_bits);
+                match bv.op() {
+                    Op::Var(v) => {
+                        let var = self.bv_lit(v.name.to_string(), v.sort.as_bv());
                         self.set_bv_uint(bv.clone(), var, n);
                     }
-                    Op::Const(Value::BitVector(b)) => {
+                    Op::Const(c) => {
+                        let b = c.as_bv();
                         let bit_lcs = (0..b.width())
                             .map(|i| Expression::from(b.uint().get_bit(i as u32) as i32))
                             .collect();
@@ -436,8 +437,8 @@ impl ToMilp {
                         let bits = self
                             .get_bv_bits(&bv.cs()[0])
                             .into_iter()
-                            .skip(*low)
-                            .take(*high - *low + 1)
+                            .skip(*low as usize)
+                            .take((*high - *low + 1) as usize)
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }
@@ -701,12 +702,12 @@ mod test {
     fn bool_test() {
         let cs = Computation {
             outputs: vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                var("a".to_owned(), Sort::Bool),
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
                 // max this
                 term![AND;
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool)],
             ],
             ..Default::default()
         };
@@ -725,7 +726,7 @@ mod test {
             term![Op::Not; t]
         };
         let cs = Computation::from_constraint_system_parts(
-            vec![t, leaf_term(Op::Const(Value::Bool(true)))],
+            vec![t, const_(Value::Bool(true))],
             Vec::new(),
         );
         let mut ilp = to_ilp(cs);
@@ -769,7 +770,7 @@ mod test {
         init();
         let mut cs = Computation::new();
         cs.assert(term.clone());
-        cs.assert(leaf_term(Op::Const(Value::Bool(true))));
+        cs.assert(const_(Value::Bool(true)));
         let ilp = to_ilp(cs);
         let r = ilp.solve(default_solver);
         if r.is_err() {
@@ -848,7 +849,7 @@ mod test {
     #[test]
     fn trivial_bv_opt() {
         let cs = Computation {
-            outputs: vec![leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))],
+            outputs: vec![var("a".to_owned(), Sort::BitVector(4))],
             ..Default::default()
         };
         let ilp = to_ilp(cs);
@@ -861,7 +862,7 @@ mod test {
     fn mul1_bv_opt() {
         let cs = Computation {
             outputs: vec![term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
+                var("a".to_owned(), Sort::BitVector(4)),
                 bv_lit(1,4)
             ]],
             ..Default::default()
@@ -875,7 +876,7 @@ mod test {
     fn mul2_bv_opt() {
         let cs = Computation {
             outputs: vec![term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
+                var("a".to_owned(), Sort::BitVector(4)),
                 bv_lit(2,4)
             ]],
             ..Default::default()
@@ -889,11 +890,11 @@ mod test {
         let cs = Computation {
             outputs: vec![term![BV_ADD;
                 term![BV_MUL;
-                    leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4))),
+                    var("a".to_owned(), Sort::BitVector(4)),
                     bv_lit(2,4)
                 ],
 
-                    leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)))
+                    var("a".to_owned(), Sort::BitVector(4))
             ]],
             ..Default::default()
         };
@@ -904,8 +905,8 @@ mod test {
     }
     #[test]
     fn ite_bv_opt() {
-        let a = leaf_term(Op::Var("a".to_owned(), Sort::BitVector(4)));
-        let c = leaf_term(Op::Var("c".to_owned(), Sort::Bool));
+        let a = var("a".to_owned(), Sort::BitVector(4));
+        let c = var("c".to_owned(), Sort::Bool);
         let cs = Computation {
             outputs: vec![term![BV_ADD;
             term![ITE; c, bv_lit(2,4), bv_lit(1,4)],

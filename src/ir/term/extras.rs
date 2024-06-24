@@ -9,7 +9,7 @@ pub fn to_width(t: &Term, w: usize) -> Term {
     match old_w.cmp(&w) {
         Ordering::Less => term(Op::BvUext(w - old_w), vec![t.clone()]),
         Ordering::Equal => t.clone(),
-        Ordering::Greater => term(Op::BvExtract(w - 1, 0), vec![t.clone()]),
+        Ordering::Greater => term(Op::BvExtract(w as u32 - 1, 0), vec![t.clone()]),
     }
 }
 
@@ -76,7 +76,7 @@ pub fn contains(haystack: Term, needle: &Term) -> bool {
 pub fn free_in(v: &str, t: Term) -> bool {
     for n in PostOrderIter::new(t) {
         match &n.op() {
-            Op::Var(name, _) if v == name => {
+            Op::Var(var) if v == &*var.name => {
                 return true;
             }
             _ => {}
@@ -89,7 +89,7 @@ pub fn free_in(v: &str, t: Term) -> bool {
 pub fn free_variables(t: Term) -> FxHashSet<String> {
     PostOrderIter::new(t)
         .filter_map(|n| match &n.op() {
-            Op::Var(name, _) => Some(name.into()),
+            Op::Var(var) => Some(var.name.to_string()),
             _ => None,
         })
         .collect()
@@ -99,7 +99,7 @@ pub fn free_variables(t: Term) -> FxHashSet<String> {
 pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
     PostOrderIter::new(t)
         .filter_map(|n| match &n.op() {
-            Op::Var(name, sort) => Some((name.into(), sort.clone())),
+            Op::Var(var) => Some((var.name.to_string(), var.sort.clone())),
             _ => None,
         })
         .collect()
@@ -107,12 +107,12 @@ pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
 
 /// If this term is a constant field or bit-vector, get the unsigned int value.
 pub fn as_uint_constant(t: &Term) -> Option<Integer> {
-    match &t.op() {
-        Op::Const(Value::BitVector(bv)) => Some(bv.uint().clone()),
-        Op::Const(Value::Field(f)) => Some(f.i()),
-        Op::Const(Value::Bool(b)) => Some((*b).into()),
+    t.as_value_opt().and_then(|v| match v {
+        Value::BitVector(bv) => Some(bv.uint().clone()),
+        Value::Field(f) => Some(f.i()),
+        Value::Bool(b) => Some((*b).into()),
         _ => None,
-    }
+    })
 }
 
 /// Assert that all variables in the term graph are declared in the metadata.
@@ -143,10 +143,10 @@ pub fn parents_map(c: &Computation) -> TermMap<Vec<Term>> {
 
 /// The elements in this array (select terms) as a vector.
 pub fn array_elements(t: &Term) -> Vec<Term> {
-    if let Sort::Array(key_sort, _, size) = check(t) {
-        key_sort
+    if let Sort::Array(a) = check(t) {
+        a.key
             .elems_iter()
-            .take(size)
+            .take(a.size)
             .map(|key| term(Op::Select, vec![t.clone(), key]))
             .collect()
     } else {

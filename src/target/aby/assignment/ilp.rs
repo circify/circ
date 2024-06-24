@@ -223,13 +223,23 @@ mod tests {
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
-        let cs = Computation {
-            outputs: vec![term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                leaf_term(Op::Var("b".to_owned(), Sort::BitVector(32)))
-            ]],
-            ..Default::default()
-        };
+        let cs = text::parse_computation(
+            b"
+            (computation
+                (metadata (parties)
+                    (inputs
+                        (a (bv 32))
+                        (b (bv 32))
+                    )
+                    (commitments)
+                )
+                (precompute () () (#t ))
+                (declare ((a (bv 32)) (b (bv 32)))
+                    (bvmul a b)
+                )
+            )
+        ",
+        );
         let _assignment = build_ilp(&cs, &costs);
     }
 
@@ -240,34 +250,31 @@ mod tests {
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
-        let cs = Computation {
-            outputs: vec![term![Op::Eq;
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
-            ]
-            ]
-            ]
-            ]
-            ]
-            ]
-            ],
-            leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
-            ]],
-            ..Default::default()
-        };
+        let cs = text::parse_computation(
+            b"
+            (computation
+                (metadata (parties)
+                    (inputs
+                        (a (bv 32))
+                    )
+                    (commitments)
+                )
+                (precompute () () (#t ))
+                (declare ((a (bv 32)))
+                (=
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a a)))))))
+                    a
+                )
+                )
+            )
+        ",
+        );
         let assignment = build_ilp(&cs, &costs);
         // Big enough to do the math with arith
         assert_eq!(
@@ -285,25 +292,28 @@ mod tests {
             var("CARGO_MANIFEST_DIR").expect("Could not find env var CARGO_MANIFEST_DIR")
         );
         let costs = CostModel::from_opa_cost_file(&p);
-        let cs = Computation {
-            outputs: vec![term![Op::Eq;
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                term![BV_MUL;
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32))),
-                leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
-            ]
-            ]
-            ]
-            ],
-            leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)))
-            ]],
-            ..Default::default()
-        };
+        let cs = text::parse_computation(
+            b"
+            (computation
+                (metadata (parties)
+                    (inputs
+                        (a (bv 32))
+                    )
+                    (commitments)
+                )
+                (precompute () () (#t ))
+                (declare ((a (bv 32)))
+                (=
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a
+                    (bvmul a a))))
+                    a
+                )
+                )
+            )
+        ",
+        );
         let assignment = build_ilp(&cs, &costs);
         // All yao
         assert_eq!(

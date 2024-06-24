@@ -180,10 +180,10 @@ impl BitVector {
     /// Gets the bits from `high` to `low`, inclusive. Zero-indexed.
     ///
     /// The number of bits yielded is `high-low+1`.
-    pub fn extract(self, high: usize, low: usize) -> Self {
+    pub fn extract(self, high: u32, low: u32) -> Self {
         let r = BitVector {
-            uint: (self.uint >> low as u32).keep_bits((high - low + 1) as u32),
-            width: high - low + 1,
+            uint: (self.uint >> low).keep_bits(high - low + 1),
+            width: (high - low + 1) as usize,
         };
         r.check("extract");
         r

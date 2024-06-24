@@ -82,9 +82,7 @@ impl Ty {
             Self::Void => Sort::Bool,
             Self::Bool => Sort::Bool,
             Self::Int(_s, w) => Sort::BitVector(*w),
-            Self::Array(n, _, b) => {
-                Sort::Array(Box::new(Sort::BitVector(32)), Box::new(b.sort()), *n)
-            }
+            Self::Array(n, _, b) => Sort::new_array(Sort::BitVector(32), b.sort(), *n),
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }

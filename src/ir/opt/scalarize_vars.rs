@@ -32,18 +32,18 @@ fn create_vars(
                 })
                 .collect(),
         ),
-        Sort::Array(key_s, val_s, size) => {
+        Sort::Array(a) => {
             let array_elements = extras::array_elements(&prefix_term);
             make_array(
-                (**key_s).clone(),
-                (**val_s).clone(),
-                (0..*size)
+                a.key.clone(),
+                a.val.clone(),
+                (0..a.size)
                     .zip(array_elements)
                     .map(|(i, element)| {
                         create_vars(
                             &format!("{prefix}.{i}"),
                             element,
-                            val_s,
+                            &a.val,
                             new_var_requests,
                             false,
                         )
@@ -57,7 +57,7 @@ fn create_vars(
                 trace!("New scalar var: {}", prefix);
                 new_var_requests.push((prefix.into(), prefix_term));
             }
-            leaf_term(Op::Var(prefix.into(), sort.clone()))
+            var(prefix.into(), sort.clone())
         }
     }
 }
@@ -78,18 +78,18 @@ fn create_wits(prefix: &str, prefix_term: Term, sort: &Sort) -> Term {
                 })
                 .collect(),
         ),
-        Sort::Array(key_s, val_s, size) => {
+        Sort::Array(a) => {
             let array_elements = extras::array_elements(&prefix_term);
             make_array(
-                (**key_s).clone(),
-                (**val_s).clone(),
-                (0..*size)
+                a.key.clone(),
+                a.val.clone(),
+                (0..a.size)
                     .zip(array_elements)
-                    .map(|(i, element)| create_wits(&format!("{prefix}.{i}"), element, val_s))
+                    .map(|(i, element)| create_wits(&format!("{prefix}.{i}"), element, &a.val))
                     .collect(),
             )
         }
-        _ => term![Op::Witness(prefix.to_owned()); prefix_term],
+        _ => term![Op::new_witness(prefix.into()); prefix_term],
     }
 }
 
@@ -100,11 +100,11 @@ impl RewritePass for Pass {
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
-        if let Op::Var(name, sort) = &orig.op() {
-            trace!("Considering var: {}", name);
-            if !computation.metadata.lookup(name).committed {
+        if let Op::Var(v) = &orig.op() {
+            trace!("Considering var: {}", v.name);
+            if !computation.metadata.lookup(&*v.name).committed {
                 let mut new_var_reqs = Vec::new();
-                let new = create_vars(name, orig.clone(), sort, &mut new_var_reqs, true);
+                let new = create_vars(&v.name, orig.clone(), &v.sort, &mut new_var_reqs, true);
                 for (name, term) in new_var_reqs {
                     computation.extend_precomputation(name, term);
                 }
@@ -139,9 +139,9 @@ pub fn scalarize_inputs(cs: &mut Computation) {
 /// Check that every variables is a scalar (or committed)
 pub fn assert_all_vars_are_scalars(cs: &Computation) {
     for t in cs.terms_postorder() {
-        if let Op::Var(name, sort) = &t.op() {
-            if !cs.metadata.lookup(name).committed {
-                match sort {
+        if let Op::Var(v) = &t.op() {
+            if !cs.metadata.lookup(&*v.name).committed {
+                match &v.sort {
                     Sort::Array(..) | Sort::Tuple(..) => {
                         panic!("Variable {} is non-scalar", t);
                     }

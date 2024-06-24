@@ -1,7 +1,7 @@
 //! IR Evaluation
 
 use super::{
-    check, extras, leaf_term, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
+    check, const_, extras, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
     BvUnOp, FieldToBv, FxHashMap, IntBinPred, IntNaryOp, Integer, Node, Op, PfNaryOp, PfUnOp, Sort,
     Term, TermMap, Value,
 };
@@ -67,9 +67,9 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, t: Term) ->
 #[allow(clippy::uninlined_format_args)]
 pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) -> Value {
     match op {
-        Op::Var(n, _) => var_vals
-            .get(n)
-            .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, var_vals))
+        Op::Var(var) => var_vals
+            .get(&*var.name)
+            .unwrap_or_else(|| panic!("Missing var: {} in {:?}", var.name, var_vals))
             .clone(),
         Op::Eq => Value::Bool(args[0] == args[1]),
         Op::Not => Value::Bool(!args[0].as_bool()),
@@ -94,7 +94,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             it.fold(f, BitVector::concat)
         }),
         Op::BvExtract(h, l) => Value::BitVector(args[0].as_bv().clone().extract(*h, *l)),
-        Op::Const(v) => v.clone(),
+        Op::Const(v) => (**v).clone(),
         Op::BvBinOp(o) => Value::BitVector({
             let a = args[0].as_bv().clone();
             let b = args[1].as_bv().clone();
@@ -216,7 +216,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             )
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
-        Op::PfChallenge(name, field) => Value::Field(pf_challenge(name, field)),
+        Op::PfChallenge(c) => Value::Field(eval_pf_challenge(&c.name, &c.field)),
         Op::Witness(_) => args[0].clone(),
         Op::PfFitsInBits(n_bits) => {
             Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
@@ -254,18 +254,18 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 Value::Array(a)
             }
         }
-        Op::Fill(key_sort, size) => {
+        Op::Fill(f) => {
             let v = args[0].clone();
             Value::Array(Array::new(
-                key_sort.clone(),
+                f.key_sort.clone(),
                 Box::new(v),
                 Default::default(),
-                *size,
+                f.size,
             ))
         }
-        Op::Array(key, value) => Value::Array(Array::from_vec(
-            key.clone(),
-            value.clone(),
+        Op::Array(a) => Value::Array(Array::from_vec(
+            a.key.clone(),
+            a.val.clone(),
             args.iter().cloned().cloned().collect(),
         )),
         Op::Select => {
@@ -280,7 +280,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             for arg in args {
                 let arr = arg.as_array().clone();
                 let iter = match arg.sort() {
-                    Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
+                    Sort::Array(a) => a.key.clone().elems_iter_values().take(a.size).enumerate(),
                     _ => panic!("Input type should be Array"),
                 };
                 for (j, jval) in iter {
@@ -289,14 +289,12 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             }
             let term = term(
                 op.clone(),
-                args.iter()
-                    .map(|a| leaf_term(Op::Const((*a).clone())))
-                    .collect(),
+                args.iter().map(|a| const_((*a).clone())).collect(),
             );
             let (mut res, iter) = match check(&term) {
-                Sort::Array(k, v, n) => (
-                    Array::default((*k).clone(), &v, n),
-                    (*k).clone().elems_iter_values().take(n).enumerate(),
+                Sort::Array(a) => (
+                    Array::default(a.key.clone(), &a.val, a.size),
+                    a.key.clone().elems_iter_values().take(a.size).enumerate(),
                 ),
                 _ => panic!("Output type of map should be array"),
             };
@@ -311,10 +309,10 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         Op::Rot(i) => {
             let a = args[0].as_array().clone();
             let (mut res, iter, len) = match args[0].sort() {
-                Sort::Array(k, v, n) => (
-                    Array::default((*k).clone(), &v, n),
-                    (*k).clone().elems_iter_values().take(n).enumerate(),
-                    n,
+                Sort::Array(a) => (
+                    Array::default(a.key.clone(), &a.val, a.size),
+                    a.key.clone().elems_iter_values().take(a.size).enumerate(),
+                    a.size,
                 ),
                 _ => panic!("Input type should be Array"),
             };
@@ -341,7 +339,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
 }
 
 /// Compute a (deterministic) prime-field challenge.
-pub fn pf_challenge(name: &str, field: &FieldT) -> FieldV {
+pub fn eval_pf_challenge(name: &str, field: &FieldT) -> FieldV {
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
     use std::hash::{Hash, Hasher};

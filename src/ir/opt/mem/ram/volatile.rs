@@ -41,7 +41,7 @@ fn hashable(s: &Sort, f: &FieldT) -> bool {
         Sort::Tuple(ss) => ss.iter().all(|s| hashable(s, f)),
         Sort::BitVector(_) => true,
         Sort::Bool => true,
-        Sort::Array(_k, v, size) => *size < 20 && hashable(v, f),
+        Sort::Array(a) => a.size < 20 && hashable(&a.val, f),
         _ => false,
     }
 }
@@ -49,9 +49,9 @@ fn hashable(s: &Sort, f: &FieldT) -> bool {
 /// Does this array have a sort compatible with our RAM machinery?
 fn right_sort(t: &Term, f: &FieldT) -> bool {
     let s = check(t);
-    if let Sort::Array(k, v, _) = &s {
-        if let Sort::Field(k) = &**k {
-            k == f && hashable(v, f)
+    if let Sort::Array(a) = &s {
+        if let Sort::Field(k) = &a.key {
+            k == f && hashable(&a.val, f)
         } else {
             false
         }
@@ -197,14 +197,10 @@ impl Extactor {
                 let value = &t.cs()[0];
                 ram.boundary_conditions = BoundaryConditions::Default(value.clone());
             }
-            Op::Const(Value::Array(a)) => {
+            Op::Const(v) if v.is_array() => {
                 // for a constant: add (constant) writes
-                for (k, v) in &a.map {
-                    ram.new_write(
-                        leaf_term(Op::Const(k.clone())),
-                        leaf_term(Op::Const(v.clone())),
-                        self.cfg.true_.clone(),
-                    );
+                for (k, v) in &v.as_array().map {
+                    ram.new_write(const_(k.clone()), const_(v.clone()), self.cfg.true_.clone());
                 }
             }
             Op::Array(..) => {
@@ -538,7 +534,7 @@ mod test {
         let field = FieldT::from(rug::Integer::from(11));
         let rams = extract(&mut cs2, AccessCfg::default_from_field(field.clone()));
         extras::assert_all_vars_declared(&cs2);
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let a = var("a".to_string(), Sort::Bool);
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
         assert_eq!(3, rams[0].accesses.len());
@@ -557,7 +553,7 @@ mod test {
 
     #[test]
     fn mix_store_chain() {
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let a = var("a".to_string(), Sort::Bool);
         let cs = text::parse_computation(
             b"
                 (computation

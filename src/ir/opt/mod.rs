@@ -13,6 +13,8 @@ pub mod sha;
 pub mod tuple;
 mod visit;
 
+use std::num::NonZero;
+
 use super::term::*;
 
 use log::{debug, info, trace};
@@ -85,7 +87,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::ConstantFold(ignore) => {
                     let mut cache = TermCache::with_capacity(TERM_CACHE_LIMIT);
-                    cache.resize(usize::MAX);
+                    cache.resize(NonZero::new(usize::MAX).unwrap());
                     for a in &mut c.outputs {
                         *a = cfold::fold_cache(a, &mut cache, &ignore.clone());
                     }

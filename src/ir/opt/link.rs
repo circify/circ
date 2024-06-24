@@ -33,7 +33,7 @@ pub fn link_one(callee: &Computation, values: Vec<Term>) -> Term {
     assert_eq!(names.len(), values.len());
     for (name, value) in names.into_iter().zip(values) {
         let sort = callee.metadata.input_sort(&name).clone();
-        substitution_map.insert(leaf_term(Op::Var(name, sort)), value);
+        substitution_map.insert(var(name, sort), value);
     }
     term(
         Op::Tuple,
@@ -51,8 +51,8 @@ impl<'f> Linker<'f> {
         if !self.cache.contains_key(name) {
             let mut c = self.cs.get(name).clone();
             for t in c.terms_postorder() {
-                if let Op::Call(callee_name, ..) = &t.op() {
-                    self.link_all(callee_name);
+                if let Op::Call(c) = &t.op() {
+                    self.link_all(&c.name);
                 }
             }
 
@@ -73,8 +73,8 @@ impl<'f> RewritePass for Linker<'f> {
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
-        if let Op::Call(fn_name, _, _) = &orig.op() {
-            let callee = self.cache.get(fn_name).expect("missing inlined callee");
+        if let Op::Call(c) = &orig.op() {
+            let callee = self.cache.get(&c.name).expect("missing inlined callee");
             let term = link_one(callee, rewritten_children());
             Some(term)
         } else {

@@ -68,14 +68,8 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w),
             Self::Field => default_field_sort(),
-            Self::Array(n, b) => {
-                Sort::Array(Box::new(default_field_sort()), Box::new(b.sort()), *n)
-            }
-            Self::MutArray(n) => Sort::Array(
-                Box::new(default_field_sort()),
-                Box::new(default_field_sort()),
-                *n,
-            ),
+            Self::Array(n, b) => Sort::new_array(default_field_sort(), b.sort(), *n),
+            Self::MutArray(n) => Sort::new_array(default_field_sort(), default_field_sort(), *n),
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
@@ -127,8 +121,8 @@ impl T {
         fn terms_tail(term: &Term, output: &mut Vec<Term>) {
             match check(term) {
                 Sort::Bool | Sort::BitVector(_) | Sort::Field(_) => output.push(term.clone()),
-                Sort::Array(_k, _v, size) => {
-                    for i in 0..size {
+                Sort::Array(a) => {
+                    for i in 0..a.size {
                         terms_tail(&term![Op::Select; term.clone(), pf_lit_ir(i)], output)
                     }
                 }
@@ -234,7 +228,7 @@ impl T {
             Op::Const(v) => Ok(v),
             _ => Err(Error::new(ErrorKind::Other, "not a const val")),
         }?;
-        match val {
+        match &**val {
             Value::Bool(b) => write!(f, "{b}"),
             Value::Field(fe) => write!(f, "{}f", fe.i()),
             Value::BitVector(bv) => match bv.width() {
@@ -256,7 +250,7 @@ impl T {
                 write!(f, "{n} {{ ")?;
                 fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
                     write!(f, "{n}: ")?;
-                    T::new(ty.clone(), leaf_term(Op::Const(v.clone()))).pretty(f)?;
+                    T::new(ty.clone(), const_(v.clone())).pretty(f)?;
                     write!(f, ", ")
                 })?;
                 write!(f, "}}")
@@ -277,7 +271,7 @@ impl T {
                     .try_for_each(|idx| {
                         T::new(
                             *inner_ty.clone(),
-                            leaf_term(Op::Const(arr.select(idx.as_value_opt().unwrap()))),
+                            const_(arr.select(idx.as_value_opt().unwrap())),
                         )
                         .pretty(f)?;
                         write!(f, ", ")
@@ -387,11 +381,15 @@ pub fn div(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("/", Some(div_uint), Some(div_field), None, a, b)
 }
 
+fn to_dflt_f(t: Term) -> Term {
+    term![Op::new_ubv_to_pf(default_field()); t]
+}
+
 fn rem_field(a: Term, b: Term) -> Term {
     let len = cfg().field().modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
-    term![Op::UbvToPf(default_field()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
+    to_dflt_f(term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv])
 }
 
 fn rem_uint(a: Term, b: Term) -> Term {
@@ -600,7 +598,7 @@ pub fn const_bool(a: T) -> Option<bool> {
 
 pub fn const_val(a: T) -> Result<T, String> {
     match const_value(&a.term) {
-        Some(v) => Ok(T::new(a.ty, leaf_term(Op::Const(v)))),
+        Some(v) => Ok(T::new(a.ty, const_(v))),
         _ => Err(format!("{} is not a constant value", &a)),
     }
 }
@@ -608,7 +606,7 @@ pub fn const_val(a: T) -> Result<T, String> {
 fn const_value(t: &Term) -> Option<Value> {
     let folded = constant_fold(t, &[]);
     match &folded.op() {
-        Op::Const(v) => Some(v.clone()),
+        Op::Const(v) => Some((**v).clone()),
         _ => None,
     }
 }
@@ -652,7 +650,7 @@ pub fn pf_lit_ir<I>(i: I) -> Term
 where
     Integer: From<I>,
 {
-    leaf_term(Op::Const(pf_val(i)))
+    const_(pf_val(i))
 }
 
 fn pf_val<I>(i: I) -> Value
@@ -670,7 +668,7 @@ where
 }
 
 pub fn z_bool_lit(v: bool) -> T {
-    T::new(Ty::Bool, leaf_term(Op::Const(Value::Bool(v))))
+    T::new(Ty::Bool, bool_lit(v))
 }
 
 pub fn uint_lit<I>(v: I, bits: usize) -> T
@@ -737,7 +735,7 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
 
 fn coerce_to_field(i: T) -> Result<Term, String> {
     match &i.ty {
-        Ty::Uint(_) => Ok(term![Op::UbvToPf(default_field()); i.term]),
+        Ty::Uint(_) => Ok(to_dflt_f(i.term)),
         Ty::Field => Ok(i.term),
         _ => Err(format!("Cannot coerce {} to a field element", &i)),
     }
@@ -772,7 +770,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-            term![Op::UbvToPf(default_field()); idx.term]
+            to_dflt_f(idx.term)
         } else {
             idx.term
         };
@@ -787,13 +785,19 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
 
 fn ir_array<I: IntoIterator<Item = Term>>(value_sort: Sort, elems: I) -> Term {
     let key_sort = Sort::Field(cfg().field().clone());
-    term(Op::Array(key_sort, value_sort), elems.into_iter().collect())
+    term(
+        Op::Array(Box::new(ArrayOp {
+            key: key_sort,
+            val: value_sort,
+        })),
+        elems.into_iter().collect(),
+    )
 }
 
 pub fn fill_array(value: T, size: usize) -> Result<T, String> {
     Ok(T::new(
         Ty::Array(size, Box::new(value.ty)),
-        term![Op::Fill(default_field_sort(), size); value.term],
+        term![Op::new_fill(default_field_sort(), size); value.term],
     ))
 }
 pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
@@ -816,10 +820,7 @@ pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
 
 pub fn uint_to_field(u: T) -> Result<T, String> {
     match &u.ty {
-        Ty::Uint(_) => Ok(T::new(
-            Ty::Field,
-            term![Op::UbvToPf(default_field()); u.term],
-        )),
+        Ty::Uint(_) => Ok(T::new(Ty::Field, to_dflt_f(u.term))),
         u => Err(format!("Cannot do uint-to-field on {u}")),
     }
 }
@@ -915,7 +916,7 @@ pub fn sample_challenge(a: T, number: usize) -> Result<T, String> {
             Ok(T::new(
                 Ty::Field,
                 term(
-                    Op::PfChallenge(format!("zx_chall_{number}"), default_field()),
+                    Op::new_chall(format!("zx_chall_{number}"), default_field()),
                     a.unwrap_array_ir()?,
                 ),
             ))

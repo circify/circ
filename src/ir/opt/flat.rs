@@ -130,7 +130,7 @@ mod test {
     use quickcheck_macros::quickcheck;
 
     fn bool(b: bool) -> Term {
-        leaf_term(Op::Const(Value::Bool(b)))
+        bool_lit(b)
     }
 
     fn is_flat(t: Term) -> bool {
@@ -155,7 +155,7 @@ mod test {
 
     #[test]
     fn simple_bool() {
-        for o in vec![AND, OR, XOR] {
+        for o in [AND, OR, XOR] {
             let t = term![o.clone(); term![o.clone(); bool(true), bool(false)], bool(true)];
             let tt = term![o.clone(); bool(true), bool(false), bool(true)];
             assert_eq!(flatten_nary_ops(t), tt);
@@ -164,7 +164,7 @@ mod test {
 
     #[test]
     fn simple_bv() {
-        for o in vec![BV_AND, BV_OR, BV_XOR, BV_ADD, BV_MUL] {
+        for o in [BV_AND, BV_OR, BV_XOR, BV_ADD, BV_MUL] {
             let t = term![o.clone(); term![o.clone(); bv_lit(3,5), bv_lit(3,5)], bv_lit(3,5)];
             let tt = term![o.clone(); bv_lit(3, 5), bv_lit(3, 5), bv_lit(3, 5)];
             assert_eq!(flatten_nary_ops(t), tt);
