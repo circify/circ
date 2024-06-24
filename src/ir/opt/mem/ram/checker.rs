@@ -304,7 +304,7 @@ fn derivative_gcd(
     let pairs = term(
         Op::Array(Box::new(ArrayOp {
             key: fs.clone(),
-            val: Sort::Tuple(Box::new([fs.clone(), Sort::Bool])),
+            val: Sort::new_tuple(vec![fs.clone(), Sort::Bool]),
         })),
         values
             .clone()

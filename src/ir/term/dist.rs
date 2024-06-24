@@ -176,11 +176,12 @@ impl FixedSizeDist {
         match op {
             Op::Ite => vec![Sort::Bool, sort.clone(), sort.clone()],
             o if o.arity() == Some(0) => vec![],
-            Op::Field(i) => vec![if let Sort::Tuple(mut ss) =
+            Op::Field(i) => vec![if let Sort::Tuple(ss) =
                 self.sample_tuple_sort(*i + 1, self.size - 1, rng)
             {
+                let mut ss = (*ss).to_vec();
                 ss[*i] = sort.clone();
-                Sort::Tuple(ss)
+                Sort::new_tuple(ss)
             } else {
                 unreachable!()
             }],

@@ -31,6 +31,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 pub mod bv;
 pub mod dist;
@@ -798,11 +799,11 @@ pub enum Sort {
     /// Array from one sort to another, of fixed size.
     ///
     /// size presumes an order, and a zero, for the key sort.
-    Array(Box<ArraySort>),
+    Array(Arc<ArraySort>),
     /// Map from one sort to another.
-    Map(Box<MapSort>),
+    Map(Arc<MapSort>),
     /// A tuple
-    Tuple(Box<[Sort]>),
+    Tuple(Arc<[Sort]>),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -872,6 +873,11 @@ impl Sort {
         }
     }
 
+    /// Create a new tuple sort
+    pub fn new_tuple(sorts: Vec<Sort>) -> Self {
+        Self::Tuple(Arc::from(sorts.into_boxed_slice()))
+    }
+
     #[track_caller]
     /// Unwrap the constituent sorts of this array, panicking otherwise.
     pub fn as_array(&self) -> (&Sort, &Sort, usize) {
@@ -884,7 +890,7 @@ impl Sort {
 
     /// Create a new array sort
     pub fn new_array(key: Sort, val: Sort, size: usize) -> Self {
-        Self::Array(Box::new(ArraySort { key, val, size }))
+        Self::Array(Arc::new(ArraySort { key, val, size }))
     }
 
     /// Is this an array?
@@ -909,7 +915,7 @@ impl Sort {
 
     /// Create a new map sort
     pub fn new_map(key: Sort, val: Sort) -> Self {
-        Self::Map(Box::new(MapSort { key, val }))
+        Self::Map(Arc::new(MapSort { key, val }))
     }
 
     /// The nth element of this sort.
