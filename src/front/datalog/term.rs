@@ -33,7 +33,7 @@ impl T {
         match (ty, ir) {
             (Ty::Bool, Sort::Bool) | (Ty::Field, Sort::Field(_)) => {}
             (Ty::Uint(w), Sort::BitVector(w2)) if *w as usize == *w2 => {}
-            (Ty::Array(l, t), Sort::Array(_, t2, l2)) if l == l2 => Self::check_ty(t2, t),
+            (Ty::Array(l, t), Sort::Array(a)) if *l == a.size => Self::check_ty(&a.val, t),
             _ => panic!("IR sort {} doesn't match datalog type {}", ir, ty),
         }
     }
@@ -63,12 +63,12 @@ pub fn pf_ir_lit<I>(i: I) -> Term
 where
     Integer: From<I>,
 {
-    leaf_term(Op::Const(Value::Field(cfg().field().new_v(i))))
+    const_(Value::Field(cfg().field().new_v(i)))
 }
 
 /// Initialize a boolean literal
 pub fn bool_lit(b: bool) -> T {
-    T::new(leaf_term(Op::Const(Value::Bool(b))), Ty::Bool)
+    T::new(const_(Value::Bool(b)), Ty::Bool)
 }
 
 /// Initialize an unsigned integer literal
@@ -82,11 +82,7 @@ impl Ty {
             Self::Bool => Sort::Bool,
             Self::Uint(w) => Sort::BitVector(*w as usize),
             Self::Field => Sort::Field(cfg().field().clone()),
-            Self::Array(n, b) => Sort::Array(
-                Box::new(Sort::Field(cfg().field().clone())),
-                Box::new(b.sort()),
-                *n,
-            ),
+            Self::Array(n, b) => Sort::new_array(Sort::Field(cfg().field().clone()), b.sort(), *n),
         }
     }
     fn default_ir_term(&self) -> Term {
@@ -318,7 +314,7 @@ pub fn or(s: &T, t: &T) -> Result<T> {
 pub fn uint_to_field(s: &T) -> Result<T> {
     match &s.ty {
         Ty::Uint(_) => Ok(T::new(
-            term![Op::UbvToPf(cfg().field().clone()); s.ir.clone()],
+            term![Op::new_ubv_to_pf(cfg().field().clone()); s.ir.clone()],
             Ty::Field,
         )),
         _ => Err(ErrorKind::InvalidUnOp("to_field".into(), s.clone())),

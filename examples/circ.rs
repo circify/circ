@@ -404,7 +404,7 @@ fn main() {
                 .ordered_inputs()
                 .iter()
                 .map(|term| match term.op() {
-                    Op::Var(n, s) => (n.clone(), s.clone()),
+                    Op::Var(v) => (v.name.to_string(), v.sort.clone()),
                     _ => unreachable!(),
                 })
                 .collect();
