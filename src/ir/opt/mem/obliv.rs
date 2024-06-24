@@ -44,7 +44,7 @@ impl OblivRewriter {
     }
     fn visit(&mut self, t: &Term) {
         let (tup_opt, term_opt) = match t.op() {
-            Op::Var(_, sort) if sort.is_scalar() => (Some(t.clone()), None),
+            Op::Var(v) if v.sort.is_scalar() => (Some(t.clone()), None),
             Op::Const(v @ Value::Array(a)) => {
                 if a.size <= OBLIV_SIZE_THRESH {
                     (Some(leaf_term(Op::Const(arr_val_to_tup(v)))), None)
@@ -243,7 +243,7 @@ mod test {
     use super::*;
 
     fn v_bv(n: &str, w: usize) -> Term {
-        leaf_term(Op::Var(n.to_owned(), Sort::BitVector(w)))
+        var(n.to_owned(), Sort::BitVector(w))
     }
 
     fn array_free(t: &Term) -> bool {

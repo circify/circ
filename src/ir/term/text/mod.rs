@@ -473,7 +473,7 @@ impl<'src> IrInterp<'src> {
                     List(ls) => match &ls[..] {
                         [Leaf(Token::Ident, name), s] => {
                             let sort = self.sort(s);
-                            let t = leaf_term(Op::Var(from_utf8(name).unwrap().to_owned(), sort));
+                            let t = var(from_utf8(name).unwrap().to_owned(), sort);
                             self.bind(name, t);
                             name.to_vec()
                         }

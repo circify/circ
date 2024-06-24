@@ -319,7 +319,7 @@ impl DisplayIr for Op {
         match self {
             Op::Ite => write!(f, "ite"),
             Op::Eq => write!(f, "="),
-            Op::Var(n, _) => write!(f, "{n}"),
+            Op::Var(v) => write!(f, "{}", v.name),
             Op::Const(c) => c.ir_fmt(f),
             Op::BvBinOp(a) => write!(f, "{a}"),
             Op::BvBinPred(a) => write!(f, "{a}"),
@@ -612,9 +612,9 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
                 n_bindings += 1;
             }
         }
-        if let Op::Var(name, sort) = &t.op() {
-            write!(f, "  ({name} ")?;
-            sort.ir_fmt(f)?;
+        if let Op::Var(v) = &t.op() {
+            write!(f, "  ({} ", v.name)?;
+            v.sort.ir_fmt(f)?;
             writeln!(f, ")")?;
         }
     }

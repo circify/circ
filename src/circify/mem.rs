@@ -138,7 +138,7 @@ mod test {
     use std::rc::Rc;
 
     fn bv_var(s: &str, w: usize) -> Term {
-        leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
+        var(s.to_owned(), Sort::BitVector(w))
     }
 
     #[test]

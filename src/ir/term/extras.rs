@@ -76,7 +76,7 @@ pub fn contains(haystack: Term, needle: &Term) -> bool {
 pub fn free_in(v: &str, t: Term) -> bool {
     for n in PostOrderIter::new(t) {
         match &n.op() {
-            Op::Var(name, _) if v == name => {
+            Op::Var(var) if v == &*var.name => {
                 return true;
             }
             _ => {}
@@ -89,7 +89,7 @@ pub fn free_in(v: &str, t: Term) -> bool {
 pub fn free_variables(t: Term) -> FxHashSet<String> {
     PostOrderIter::new(t)
         .filter_map(|n| match &n.op() {
-            Op::Var(name, _) => Some(name.into()),
+            Op::Var(var) => Some(var.name.to_string()),
             _ => None,
         })
         .collect()
@@ -99,7 +99,7 @@ pub fn free_variables(t: Term) -> FxHashSet<String> {
 pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
     PostOrderIter::new(t)
         .filter_map(|n| match &n.op() {
-            Op::Var(name, sort) => Some((name.into(), sort.clone())),
+            Op::Var(var) => Some((var.name.to_string(), var.sort.clone())),
             _ => None,
         })
         .collect()

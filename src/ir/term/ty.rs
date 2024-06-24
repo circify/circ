@@ -30,7 +30,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
     match &t.op() {
         Op::Ite => vec![t.cs()[1].clone()],
         Op::Eq => Vec::new(),
-        Op::Var(_, _) => Vec::new(),
+        Op::Var(_) => Vec::new(),
         Op::Const(_) => Vec::new(),
         Op::BvBinOp(_) => vec![t.cs()[0].clone()],
         Op::BvBinPred(_) => Vec::new(),
@@ -87,7 +87,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
     match &t.op() {
         Op::Ite => Ok(get_ty(&t.cs()[1]).clone()),
         Op::Eq => Ok(Sort::Bool),
-        Op::Var(_, s) => Ok(s.clone()),
+        Op::Var(v) => Ok(v.sort.clone()),
         Op::Const(c) => Ok(c.sort()),
         Op::BvBinOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::BvBinPred(_) => Ok(Sort::Bool),
@@ -259,7 +259,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
     match (oper, a) {
         (Op::Eq, &[a, b]) => eq_or(a, b, "=").map(|_| Sort::Bool),
         (Op::Ite, &[&Sort::Bool, b, c]) => eq_or(b, c, "ITE").map(|_| b.clone()),
-        (Op::Var(_, s), &[]) => Ok(s.clone()),
+        (Op::Var(v), &[]) => Ok(v.sort.clone()),
         (Op::Const(c), &[]) => Ok(c.sort()),
         (Op::BvBinOp(_), &[a, b]) => {
             let ctx = "bv binary op";

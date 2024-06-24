@@ -67,9 +67,9 @@ fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, t: Term) ->
 #[allow(clippy::uninlined_format_args)]
 pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) -> Value {
     match op {
-        Op::Var(n, _) => var_vals
-            .get(n)
-            .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, var_vals))
+        Op::Var(var) => var_vals
+            .get(&*var.name)
+            .unwrap_or_else(|| panic!("Missing var: {} in {:?}", var.name, var_vals))
             .clone(),
         Op::Eq => Value::Bool(args[0] == args[1]),
         Op::Not => Value::Bool(!args[0].as_bool()),

@@ -60,8 +60,8 @@ impl StagedWitComp {
     fn add_step(&mut self, term: Term) {
         debug_assert!(!self.term_to_step.contains_key(&term));
         let step_idx = self.steps.len();
-        if let Op::Var(name, _) = term.op() {
-            debug_assert!(self.vars.contains(name));
+        if let Op::Var(var) = term.op() {
+            debug_assert!(self.vars.contains(&*var.name));
         }
         for child in term.cs() {
             let child_step = self.term_to_step.get(child).unwrap();
@@ -302,8 +302,8 @@ mod test {
         let field = FieldT::from(Integer::from(7));
         comp.add_stage(mk_inputs(vec![("a".into(), Sort::Bool), ("b".into(), Sort::Field(field.clone()))]),
         vec![
-            leaf_term(Op::Var("b".into(), Sort::Field(field.clone()))),
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
+            var("b".into(), Sort::Field(field.clone())),
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
         ]);
 
         let mut evaluator = StagedWitCompEvaluator::new(&comp);
@@ -331,16 +331,16 @@ mod test {
         let field = FieldT::from(Integer::from(7));
         comp.add_stage(mk_inputs(vec![("a".into(), Sort::Bool), ("b".into(), Sort::Field(field.clone()))]),
         vec![
-            leaf_term(Op::Var("b".into(), Sort::Field(field.clone()))),
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
+            var("b".into(), Sort::Field(field.clone())),
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
         ]);
         comp.add_stage(mk_inputs(vec![("c".into(), Sort::Field(field.clone()))]),
         vec![
             term![PF_ADD;
-               leaf_term(Op::Var("b".into(), Sort::Field(field.clone()))),
-               leaf_term(Op::Var("c".into(), Sort::Field(field.clone())))],
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(0)), pf_lit(field.new_v(1))],
+               var("b".into(), Sort::Field(field.clone())),
+               var("c".into(), Sort::Field(field.clone()))],
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(0)), pf_lit(field.new_v(1))],
         ]);
 
         let mut evaluator = StagedWitCompEvaluator::new(&comp);

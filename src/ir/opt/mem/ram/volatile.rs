@@ -538,7 +538,7 @@ mod test {
         let field = FieldT::from(rug::Integer::from(11));
         let rams = extract(&mut cs2, AccessCfg::default_from_field(field.clone()));
         extras::assert_all_vars_declared(&cs2);
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let a = var("a".to_string(), Sort::Bool);
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
         assert_eq!(3, rams[0].accesses.len());
@@ -557,7 +557,7 @@ mod test {
 
     #[test]
     fn mix_store_chain() {
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let a = var("a".to_string(), Sort::Bool);
         let cs = text::parse_computation(
             b"
                 (computation

@@ -33,7 +33,7 @@ pub fn link_one(callee: &Computation, values: Vec<Term>) -> Term {
     assert_eq!(names.len(), values.len());
     for (name, value) in names.into_iter().zip(values) {
         let sort = callee.metadata.input_sort(&name).clone();
-        substitution_map.insert(leaf_term(Op::Var(name, sort)), value);
+        substitution_map.insert(var(name, sort), value);
     }
     term(
         Op::Tuple,

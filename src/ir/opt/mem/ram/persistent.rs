@@ -26,7 +26,7 @@ pub fn persistent_to_ram(c: &mut Computation, cfg: &AccessCfg) -> Vec<Ram> {
         let key_sort = sort.as_array().0.clone();
         let value_sort = sort.as_array().1.clone();
         let size = sort.as_array().2;
-        let init_term = leaf_term(Op::Var(name.clone(), sort));
+        let init_term = var(name.clone(), sort);
 
         // create a new var for each initial value
         let names: Vec<String> = (0..size).map(|i| format!("{name}.init.{i}")).collect();

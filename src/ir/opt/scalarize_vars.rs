@@ -57,7 +57,7 @@ fn create_vars(
                 trace!("New scalar var: {}", prefix);
                 new_var_requests.push((prefix.into(), prefix_term));
             }
-            leaf_term(Op::Var(prefix.into(), sort.clone()))
+            var(prefix.into(), sort.clone())
         }
     }
 }
@@ -100,11 +100,11 @@ impl RewritePass for Pass {
         orig: &Term,
         rewritten_children: F,
     ) -> Option<Term> {
-        if let Op::Var(name, sort) = &orig.op() {
-            trace!("Considering var: {}", name);
-            if !computation.metadata.lookup(name).committed {
+        if let Op::Var(v) = &orig.op() {
+            trace!("Considering var: {}", v.name);
+            if !computation.metadata.lookup(&*v.name).committed {
                 let mut new_var_reqs = Vec::new();
-                let new = create_vars(name, orig.clone(), sort, &mut new_var_reqs, true);
+                let new = create_vars(&v.name, orig.clone(), &v.sort, &mut new_var_reqs, true);
                 for (name, term) in new_var_reqs {
                     computation.extend_precomputation(name, term);
                 }
@@ -139,9 +139,9 @@ pub fn scalarize_inputs(cs: &mut Computation) {
 /// Check that every variables is a scalar (or committed)
 pub fn assert_all_vars_are_scalars(cs: &Computation) {
     for t in cs.terms_postorder() {
-        if let Op::Var(name, sort) = &t.op() {
-            if !cs.metadata.lookup(name).committed {
-                match sort {
+        if let Op::Var(v) = &t.op() {
+            if !cs.metadata.lookup(&*v.name).committed {
+                match &v.sort {
                     Sort::Array(..) | Sort::Tuple(..) => {
                         panic!("Variable {} is non-scalar", t);
                     }

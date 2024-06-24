@@ -54,7 +54,7 @@ pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 /// An operator
 pub enum Op {
     /// a variable
-    Var(String, Sort),
+    Var(Box<Var>),
     /// a constant
     Const(Value),
 
@@ -190,6 +190,15 @@ pub enum Op {
     ExtOp(ext::ExtOp),
 }
 
+/// Variable
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Var {
+    /// Variable name
+    pub name: Box<str>,
+    /// Variable sort
+    pub sort: Sort,
+}
+
 /// A function call operator
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ChallengeOp {
@@ -317,7 +326,7 @@ impl Op {
         match self {
             Op::Ite => Some(3),
             Op::Eq => Some(2),
-            Op::Var(_, _) => Some(0),
+            Op::Var(_) => Some(0),
             Op::Const(_) => Some(0),
             Op::BvBinOp(_) => Some(2),
             Op::BvBinPred(_) => Some(2),
@@ -377,6 +386,14 @@ impl Op {
         Op::PfChallenge(Box::new(ChallengeOp {
             name: name.into_boxed_str(),
             field,
+        }))
+    }
+
+    /// Create a new [Op::Var].
+    pub fn new_var(name: String, sort: Sort) -> Self {
+        Op::Var(Box::new(Var {
+            name: name.into_boxed_str(),
+            sort,
         }))
     }
 }
@@ -804,6 +821,11 @@ impl Sort {
         }
     }
 
+    /// Is this a bit-vector?
+    pub fn is_bv(&self) -> bool {
+        matches!(self, Sort::BitVector(..))
+    }
+
     #[track_caller]
     /// Unwrap the modulus of this prime field, panicking otherwise.
     pub fn as_pf(&self) -> &FieldT {
@@ -812,6 +834,11 @@ impl Sort {
         } else {
             panic!("{} is not a field", self)
         }
+    }
+
+    /// Is this a prime field?
+    pub fn is_pf(&self) -> bool {
+        matches!(self, Sort::Field(..))
     }
 
     #[track_caller]
@@ -1142,8 +1169,8 @@ impl Term {
     /// Get the variable name; panic if not a variable.
     #[track_caller]
     pub fn as_var_name(&self) -> &str {
-        if let Op::Var(n, _) = &self.op() {
-            n
+        if let Op::Var(v) = &self.op() {
+            &v.name
         } else {
             panic!("not a variable")
         }
@@ -1318,6 +1345,11 @@ pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
+/// Make a term with no arguments, just an operator.
+pub fn var(name: String, sort: Sort) -> Term {
+    leaf_term(Op::new_var(name, sort))
+}
+
 /// Make a term with arguments.
 #[track_caller]
 pub fn term(op: Op, cs: Vec<Term>) -> Term {
@@ -1481,7 +1513,7 @@ pub struct VariableMetadata {
 impl VariableMetadata {
     /// term (cached)
     pub fn term(&self) -> Term {
-        leaf_term(Op::Var(self.name.clone(), self.sort.clone()))
+        var(self.name.clone(), self.sort.clone())
     }
 }
 
@@ -1820,7 +1852,7 @@ impl Computation {
             assert_eq!(&s, &check(&p), "precompute {} doesn't match sort {}", p, s);
             self.precomputes.add_output(name.to_owned(), p);
         }
-        leaf_term(Op::Var(name.to_owned(), s))
+        var(name.to_owned(), s)
     }
 
     /// Create a new variable with the given metadata.
@@ -1845,7 +1877,7 @@ impl Computation {
             assert_eq!(&sort, &check(&p));
             self.precomputes.add_output(name.clone(), p);
         }
-        leaf_term(Op::Var(name, sort))
+        var(name, sort)
     }
 
     /// Add a new input `new_input_var` to this computation,

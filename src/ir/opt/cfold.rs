@@ -708,7 +708,7 @@ mod test {
     use quickcheck_macros::quickcheck;
 
     fn v_bv(n: &str, w: usize) -> Term {
-        leaf_term(Op::Var(n.to_owned(), Sort::BitVector(w)))
+        var(n.to_owned(), Sort::BitVector(w))
     }
 
     fn bool(b: bool) -> Term {

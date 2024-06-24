@@ -137,7 +137,7 @@ impl<'cfg> ToR1cs<'cfg> {
         self.r1cs.add_committed_witness(elements.clone());
         for (name, value) in elements {
             let lc = self.r1cs.signal_lc(&name);
-            let var = leaf_term(Op::Var(name, check(&value)));
+            let var = var(name, check(&value));
             self.embed.borrow_mut().insert(var.clone());
             self.cache
                 .insert(var, EmbeddedTerm::Field(TermLc(value, lc)));
@@ -357,30 +357,30 @@ impl<'cfg> ToR1cs<'cfg> {
         self.profile_start_term(var.clone());
         let public = matches!(ty, VarType::Inst);
         match var.op() {
-            Op::Var(name, Sort::Bool) => {
+            Op::Var(v) if matches!(&v.sort, Sort::Bool) => {
                 let comp = term![Op::Ite; var.clone(), self.one.0.clone(), self.zero.0.clone()];
-                let lc = self.fresh_var(name, comp, ty);
+                let lc = self.fresh_var(&v.name, comp, ty);
                 if !public {
                     self.enforce_bit(lc.clone());
                 }
                 self.cache.insert(var.clone(), EmbeddedTerm::Bool(lc));
                 self.embed.borrow_mut().insert(var.clone());
             }
-            Op::Var(name, Sort::BitVector(n_bits)) => {
+            Op::Var(v) if v.sort.is_bv() => {
                 let public = matches!(ty, VarType::Inst);
                 let lc = self.fresh_var(
-                    name,
+                    &v.name,
                     term![Op::UbvToPf(self.field.clone()); var.clone()],
                     ty,
                 );
-                self.set_bv_uint(var.clone(), lc, *n_bits);
+                self.set_bv_uint(var.clone(), lc, v.sort.as_bv());
                 if !public {
                     self.get_bv_bits(var);
                 }
             }
-            Op::Var(name, Sort::Field(f)) => {
-                assert_eq!(f, &self.field);
-                let lc = self.fresh_var(name, var.clone(), ty);
+            Op::Var(v) if v.sort.is_pf() => {
+                assert_eq!(v.sort.as_pf(), &self.field);
+                let lc = self.fresh_var(&v.name, var.clone(), ty);
                 self.cache.insert(var.clone(), EmbeddedTerm::Field(lc));
                 self.embed.borrow_mut().insert(var.clone());
             }
@@ -1201,12 +1201,12 @@ pub mod test {
         .collect();
         let cs = Computation::from_constraint_system_parts(
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                var("a".to_owned(), Sort::Bool),
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool),
             ],
         );
         let r1cs = to_r1cs_mod17(cs);
@@ -1274,8 +1274,8 @@ pub mod test {
 
         let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv_lit(0b10110, 8),
-                              term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
-            vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
+                              term![Op::BvUnOp(BvUnOp::Neg); var("b".to_owned(), Sort::BitVector(8))]]]],
+            vec![var("b".to_owned(), Sort::BitVector(8))],
         );
         let r1cs = to_r1cs_dflt(cs);
         r1cs.check_all(&values);
@@ -1284,7 +1284,7 @@ pub mod test {
     #[test]
     fn not_opt_test() {
         init();
-        let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
+        let t = term![Op::Not; var("b".to_owned(), Sort::Bool)];
         let values: FxHashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
             .into_iter()
             .collect();
@@ -1419,12 +1419,12 @@ pub mod test {
         .collect();
         let mut cs = Computation::from_constraint_system_parts(
             vec![
-                term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                term![Op::Field(0); term![Op::Tuple; var("a".to_owned(), Sort::Bool), leaf_term(Op::Const(Value::Bool(false)))]],
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool),
             ],
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);

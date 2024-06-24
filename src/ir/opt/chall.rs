@@ -100,8 +100,8 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
             .max()
             .unwrap_or(0);
         let round = match t.op() {
-            Op::Var(n, _) => {
-                if let Some(v) = comp.precomputes.outputs().get(n) {
+            Op::Var(v) => {
+                if let Some(v) = comp.precomputes.outputs().get(&*v.name) {
                     *min_round
                         .borrow()
                         .get(v)
@@ -149,8 +149,8 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
     for t in terms.into_iter().rev() {
         let round = match t.op() {
             Op::PfChallenge(..) => min_round.get(&t).unwrap().checked_sub(1).unwrap(),
-            Op::Var(name, _) if comp.metadata.is_input_public(name) => 0,
-            Op::Var(name, _) if comp.metadata.lookup(name).committed => 0,
+            Op::Var(v) if comp.metadata.is_input_public(&v.name) => 0,
+            Op::Var(v) if comp.metadata.lookup(&*v.name).committed => 0,
             _ => parents
                 .get(&t)
                 .unwrap()

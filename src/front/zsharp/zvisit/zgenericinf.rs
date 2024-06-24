@@ -2,7 +2,7 @@
 
 use super::super::term::{cond, const_val, Ty, T};
 use super::super::{span_to_string, ZGen};
-use crate::ir::term::{bv_lit, leaf_term, term, BoolNaryOp, Op, Sort, Term, Value};
+use crate::ir::term::{bv_lit, leaf_term, term, var, BoolNaryOp, Op, Sort, Term, Value};
 #[cfg(feature = "smt")]
 use crate::target::smt::find_unique_model;
 
@@ -469,5 +469,5 @@ fn make_varname_str(id: &str, sfx: &str) -> String {
 
 fn make_varname(id: &str, sfx: &str) -> Term {
     let tmp = make_varname_str(id, sfx);
-    term![Op::Var(tmp, Sort::BitVector(32))]
+    var(tmp, Sort::BitVector(32))
 }

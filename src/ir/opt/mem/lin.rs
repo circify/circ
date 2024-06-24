@@ -36,12 +36,12 @@ impl RewritePass for Linearizer {
     ) -> Option<Term> {
         match &orig.op() {
             Op::Const(v) => Some(leaf_term(Op::Const(arr_val_to_tup(v)))),
-            Op::Var(name, Sort::Array(..)) => {
+            Op::Var(v) if v.sort.is_array() => {
                 let precomp = extras::array_to_tuple(orig);
-                let new_name = format!("{name}.tup");
+                let new_name = format!("{}.tup", v.name);
                 let new_sort = check(&precomp);
                 computation.extend_precomputation(new_name.clone(), precomp);
-                Some(leaf_term(Op::Var(new_name, new_sort)))
+                Some(var(new_name, new_sort))
             }
             Op::Array(..) => Some(term(Op::Tuple, rewritten_children())),
             Op::Fill(f) => Some(term(
