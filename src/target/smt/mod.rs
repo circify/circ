@@ -538,7 +538,7 @@ mod test {
     fn tuple_is_sat() {
         let t = term![Op::Eq; term![Op::Field(0); term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)]], var("a".into(), Sort::BitVector(4))];
         assert!(check_sat(&t));
-        let t = term![Op::Eq; term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)], var("a".into(), Sort::Tuple(vec![Sort::BitVector(4), Sort::BitVector(6)].into_boxed_slice()))];
+        let t = term![Op::Eq; term![Op::Tuple; bv_lit(0,4), bv_lit(5,6)], var("a".into(), Sort::new_tuple(vec![Sort::BitVector(4), Sort::BitVector(6)]))];
         assert!(check_sat(&t));
     }
 

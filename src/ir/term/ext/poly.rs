@@ -23,7 +23,7 @@ pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
                 "UniqDeriGcd pairs: second element must be a bool",
             )?;
             let arr = Sort::new_array(f.clone(), f.clone(), size);
-            Ok(Sort::Tuple(Box::new([arr.clone(), arr])))
+            Ok(Sort::new_tuple(vec![arr.clone(), arr]))
         } else {
             // non-pair entries value
             Err(TypeErrorReason::Custom(

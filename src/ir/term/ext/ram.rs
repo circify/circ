@@ -14,14 +14,14 @@ pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
     let f = pf_or(i_value, "PersistentRamSplit indices")?;
     let n_touched = i_size.min(size);
     let n_ignored = size - n_touched;
-    let f_pair = Sort::Tuple(Box::new([f.clone(), f.clone()]));
+    let f_pair = Sort::new_tuple(vec![f.clone(), f.clone()]);
     let ignored_entries_sort = Sort::Tuple(vec![f_pair.clone(); n_ignored].into());
     let selected_entries_sort = Sort::Tuple(vec![f_pair.clone(); n_touched].into());
-    Ok(Sort::Tuple(Box::new([
+    Ok(Sort::new_tuple(vec![
         ignored_entries_sort,
         selected_entries_sort.clone(),
         selected_entries_sort,
-    ])))
+    ]))
 }
 
 /// Evaluate [super::ExtOp::PersistentRamSplit].
