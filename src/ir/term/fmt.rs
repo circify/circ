@@ -350,16 +350,16 @@ impl DisplayIr for Op {
             Op::IntNaryOp(a) => write!(f, "{a}"),
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
-            Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
+            Op::PfChallenge(c) => write!(f, "(challenge {} {})", c.name, c.field.modulus()),
             Op::Witness(n) => write!(f, "(witness {})", n),
             Op::PfFitsInBits(n) => write!(f, "(pf_fits_in_bits {})", n),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::CStore => write!(f, "cstore"),
-            Op::Fill(key_sort, size) => {
+            Op::Fill(fill) => {
                 write!(f, "(fill ")?;
-                key_sort.ir_fmt(f)?;
-                write!(f, " {})", *size)
+                fill.key_sort.ir_fmt(f)?;
+                write!(f, " {})", fill.size)
             }
             Op::Array(a) => {
                 write!(f, "(array ")?;

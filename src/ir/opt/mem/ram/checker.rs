@@ -340,7 +340,7 @@ fn derivative_gcd(
     terms_that_define_all_polys.extend(t_coeffs_skolem.iter().cloned());
     let n = values.len();
     let x = term(
-        Op::PfChallenge(ns.fqn("x").into_boxed_str(), f.clone()),
+        Op::new_chall(ns.fqn("x"), f.clone()),
         terms_that_define_all_polys,
     );
     let r = values;

@@ -180,15 +180,15 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
 
     let mut challs = TermMap::default();
     for t in comp.terms_postorder() {
-        if let Op::PfChallenge(name, field) = t.op() {
+        if let Op::PfChallenge(c) = t.op() {
             let round = *actual_round.get(&t).unwrap();
-            debug!("challenge {name}: round = {round}");
+            debug!("challenge {}: round = {round}", c.name);
             trace!("challenge term {t}");
             let md = VariableMetadata {
-                name: name.to_string(),
+                name: c.name.to_string(),
                 random: true,
                 vis: None,
-                sort: Sort::Field(field.clone()),
+                sort: Sort::Field(c.field.clone()),
                 round,
                 ..Default::default()
             };

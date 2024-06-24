@@ -316,8 +316,8 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
-                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(
-                    self.ident_string(name).into_boxed_str(),
+                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::new_chall(
+                    self.ident_string(name),
                     FieldT::from(self.int(field)),
                 )),
                 [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(Box::new(ArrayOp {
@@ -338,7 +338,7 @@ impl<'src> IrInterp<'src> {
                     })))
                 }
                 [Leaf(Ident, b"fill"), key_sort, size] => {
-                    Ok(Op::Fill(self.sort(key_sort), self.usize(size)))
+                    Ok(Op::new_fill(self.sort(key_sort), self.usize(size)))
                 }
                 _ => todo!("Unparsed op: {}", tt),
             },

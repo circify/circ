@@ -59,10 +59,13 @@ impl OblivRewriter {
                 )),
                 None,
             ),
-            Op::Fill(_k, size) => {
-                if *size < OBLIV_SIZE_THRESH {
+            Op::Fill(f) => {
+                if f.size < OBLIV_SIZE_THRESH {
                     (
-                        Some(term(Op::Tuple, vec![self.get_t(&t.cs()[0]).clone(); *size])),
+                        Some(term(
+                            Op::Tuple,
+                            vec![self.get_t(&t.cs()[0]).clone(); f.size],
+                        )),
                         None,
                     )
                 } else {

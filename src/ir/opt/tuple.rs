@@ -288,9 +288,9 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                     children,
                 )
             }),
-            Op::Fill(key_sort, size) => {
+            Op::Fill(_) => {
                 let values = cs.pop().unwrap();
-                values.map(|v| term![Op::Fill(key_sort.clone(), *size); v])
+                values.map(|v| term![t.op().clone(); v])
             }
             Op::Select => {
                 let i = cs.pop().unwrap().unwrap_non_tuple();

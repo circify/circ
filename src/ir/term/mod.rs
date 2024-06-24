@@ -133,7 +133,7 @@ pub enum Op {
     /// differentely) and a field to sample from.
     ///
     /// In IR evaluation, we sample deterministically based on a hash of the name.
-    PfChallenge(Box<str>, FieldT),
+    PfChallenge(Box<ChallengeOp>),
     /// Requires the input pf element to fit in this many (unsigned) bits.
     PfFitsInBits(usize),
     /// Prime-field division
@@ -162,7 +162,7 @@ pub enum Op {
     /// Otherwise, oupputs `array`.
     CStore,
     /// Makes an array of the indicated key sort with the indicated size, filled with the argument.
-    Fill(Sort, usize),
+    Fill(Box<FillOp>),
     /// Create an array from (contiguous) values.
     Array(Box<ArrayOp>),
 
@@ -192,6 +192,24 @@ pub enum Op {
 
 /// A function call operator
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChallengeOp {
+    /// The key sort
+    pub name: Box<str>,
+    /// The size
+    pub field: FieldT,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FillOp {
+    /// The key sort
+    pub key_sort: Sort,
+    /// The size
+    pub size: usize,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CallOp {
     /// The function name
     pub name: String,
@@ -201,7 +219,7 @@ pub struct CallOp {
     pub ret_sort: Sort,
 }
 
-/// A function call operator
+/// An array creation operator
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ArrayOp {
     /// The key sort
@@ -327,7 +345,7 @@ impl Op {
             Op::PfUnOp(_) => Some(1),
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
-            Op::PfChallenge(_, _) => None,
+            Op::PfChallenge(_) => None,
             Op::Witness(_) => Some(1),
             Op::PfFitsInBits(..) => Some(1),
             Op::IntNaryOp(_) => None,
@@ -347,6 +365,19 @@ impl Op {
             Op::ExtOp(o) => o.arity(),
             Op::PfToBoolTrusted => Some(1),
         }
+    }
+
+    /// Create a new [Op::Fill].
+    pub fn new_fill(key_sort: Sort, size: usize) -> Self {
+        Op::Fill(Box::new(FillOp { key_sort, size }))
+    }
+
+    /// Create a new [Op::PfChallenge].
+    pub fn new_chall(name: String, field: FieldT) -> Self {
+        Op::PfChallenge(Box::new(ChallengeOp {
+            name: name.into_boxed_str(),
+            field,
+        }))
     }
 }
 

@@ -61,7 +61,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::IntNaryOp(_) => Vec::new(),
         Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
-        Op::PfChallenge(_, _) => Vec::new(),
+        Op::PfChallenge(_) => Vec::new(),
         Op::Witness(_) => vec![t.cs()[0].clone()],
         Op::PfFitsInBits(_) => Vec::new(),
         Op::Select => vec![t.cs()[0].clone()],
@@ -139,17 +139,17 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::IntNaryOp(_) => Ok(Sort::Int),
         Op::IntBinPred(_) => Ok(Sort::Bool),
         Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
-        Op::PfChallenge(_, m) => Ok(Sort::Field(m.clone())),
+        Op::PfChallenge(c) => Ok(Sort::Field(c.field.clone())),
         Op::Witness(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfFitsInBits(_) => Ok(Sort::Bool),
         Op::Select => array_or(get_ty(&t.cs()[0]), "select").map(|(_, v, _)| v.clone()),
         Op::Store => Ok(get_ty(&t.cs()[0]).clone()),
         Op::Array(a) => Ok(Sort::new_array(a.key.clone(), a.val.clone(), t.cs().len())),
         Op::CStore => Ok(get_ty(&t.cs()[0]).clone()),
-        Op::Fill(key_sort, size) => Ok(Sort::new_array(
-            key_sort.clone(),
+        Op::Fill(fill) => Ok(Sort::new_array(
+            fill.key_sort.clone(),
             get_ty(&t.cs()[0]).clone(),
-            *size,
+            fill.size,
         )),
         Op::Tuple => Ok(Sort::Tuple(t.cs().iter().map(get_ty).cloned().collect())),
         Op::Field(i) => {
@@ -357,7 +357,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 .cloned()
         }
         (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
-        (Op::PfChallenge(_, m), _) => Ok(Sort::Field(m.clone())),
+        (Op::PfChallenge(f), _) => Ok(Sort::Field(f.field.clone())),
         (Op::Witness(_), &[a]) => Ok(a.clone()),
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").cloned(),
@@ -381,7 +381,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
             .and_then(|_| eq_or(&arr.val, b, "cstore"))
             .and_then(|_| bool_or(c, "cstore"))
             .map(|_| s.clone()),
-        (Op::Fill(key_sort, size), &[v]) => Ok(Sort::new_array(key_sort.clone(), v.clone(), *size)),
+        (Op::Fill(f), &[v]) => Ok(Sort::new_array(f.key_sort.clone(), v.clone(), f.size)),
         (Op::Array(arr), a) => {
             let ctx = "array op";
             a.iter()

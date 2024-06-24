@@ -216,7 +216,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             )
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
-        Op::PfChallenge(name, field) => Value::Field(eval_pf_challenge(name, field)),
+        Op::PfChallenge(c) => Value::Field(eval_pf_challenge(&c.name, &c.field)),
         Op::Witness(_) => args[0].clone(),
         Op::PfFitsInBits(n_bits) => {
             Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
@@ -254,13 +254,13 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 Value::Array(a)
             }
         }
-        Op::Fill(key_sort, size) => {
+        Op::Fill(f) => {
             let v = args[0].clone();
             Value::Array(Array::new(
-                key_sort.clone(),
+                f.key_sort.clone(),
                 Box::new(v),
                 Default::default(),
-                *size,
+                f.size,
             ))
         }
         Op::Array(a) => Value::Array(Array::from_vec(

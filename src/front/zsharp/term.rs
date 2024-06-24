@@ -793,7 +793,7 @@ fn ir_array<I: IntoIterator<Item = Term>>(value_sort: Sort, elems: I) -> Term {
 pub fn fill_array(value: T, size: usize) -> Result<T, String> {
     Ok(T::new(
         Ty::Array(size, Box::new(value.ty)),
-        term![Op::Fill(default_field_sort(), size); value.term],
+        term![Op::new_fill(default_field_sort(), size); value.term],
     ))
 }
 pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
@@ -915,10 +915,7 @@ pub fn sample_challenge(a: T, number: usize) -> Result<T, String> {
             Ok(T::new(
                 Ty::Field,
                 term(
-                    Op::PfChallenge(
-                        format!("zx_chall_{number}").into_boxed_str(),
-                        default_field(),
-                    ),
+                    Op::new_chall(format!("zx_chall_{number}"), default_field()),
                     a.unwrap_array_ir()?,
                 ),
             ))

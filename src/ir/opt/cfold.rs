@@ -347,12 +347,12 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             cs,
                         ))))
                     }),
-                Op::Fill(k, s) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
+                Op::Fill(f) => c_get(&t.cs()[0]).as_value_opt().map(|v| {
                     leaf_term(Op::Const(Value::Array(Array::new(
-                        k.clone(),
+                        f.key_sort.clone(),
                         Box::new(v.clone()),
                         Default::default(),
-                        *s,
+                        f.size,
                     ))))
                 }),
                 Op::Select => match (get(0).as_array_opt(), get(1).as_value_opt()) {
