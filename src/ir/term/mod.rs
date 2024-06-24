@@ -76,7 +76,7 @@ pub enum Op {
     /// Get bits (high) through (low) from the underlying bit-vector.
     ///
     /// Zero-indexed and inclusive.
-    BvExtract(usize, usize),
+    BvExtract(u32, u32),
     /// bit-vector concatenation. n-ary. Low-index arguements map to high-order bits
     BvConcat,
     /// add this many zero bits
@@ -411,6 +411,11 @@ impl Op {
     /// Create a new [Op::Const].
     pub fn new_ubv_to_pf(field: FieldT) -> Self {
         Op::UbvToPf(Box::new(field))
+    }
+
+    /// Create a new [Op::BvExtract].
+    pub fn new_bv_extract(hi: usize, lo: usize) -> Self {
+        Op::BvExtract(hi as u32, lo as u32)
     }
 }
 

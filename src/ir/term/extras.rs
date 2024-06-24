@@ -9,7 +9,7 @@ pub fn to_width(t: &Term, w: usize) -> Term {
     match old_w.cmp(&w) {
         Ordering::Less => term(Op::BvUext(w - old_w), vec![t.clone()]),
         Ordering::Equal => t.clone(),
-        Ordering::Greater => term(Op::BvExtract(w - 1, 0), vec![t.clone()]),
+        Ordering::Greater => term(Op::BvExtract(w as u32 - 1, 0), vec![t.clone()]),
     }
 }
 

@@ -63,8 +63,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                     let bv = term_c![Op::PfToBv(field_bits); t];
                     let mut pf_summands = Vec::new();
                     for ii in 0..num_subranges {
-                        let sub_bv =
-                            term_c![Op::BvExtract(k as usize * (ii + 1) - 1, k as usize * ii); &bv];
+                        let sub_bv = term_c![Op::new_bv_extract(k as usize * (ii + 1) - 1, k as usize * ii); &bv];
                         let sub_f = c.new_var(
                             &ns.fqn(format!("sub{}", ii)),
                             Sort::Field(field.clone()),
@@ -78,7 +77,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                     }
                     if end_length > 0 {
                         let end_start = num_subranges * k as usize;
-                        let sub_bv = term_c![Op::BvExtract(num_bits - 1, end_start); &bv];
+                        let sub_bv = term_c![Op::new_bv_extract(num_bits - 1, end_start); &bv];
                         let sub_f = c.new_var(
                             &ns.fqn("end"),
                             Sort::Field(field.clone()),

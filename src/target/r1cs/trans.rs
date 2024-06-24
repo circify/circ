@@ -900,8 +900,8 @@ impl<'cfg> ToR1cs<'cfg> {
                         let bits = self
                             .get_bv_bits(&bv.cs()[0])
                             .into_iter()
-                            .skip(*low)
-                            .take(*high - *low + 1)
+                            .skip(*low as usize)
+                            .take((*high - *low + 1) as usize)
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }

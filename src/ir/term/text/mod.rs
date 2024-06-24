@@ -307,7 +307,7 @@ impl<'src> IrInterp<'src> {
                 }
             }
             List(tts) => match &tts[..] {
-                [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.usize(a), self.usize(b))),
+                [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.u32(a), self.u32(b))),
                 [Leaf(Ident, b"uext"), a] => Ok(Op::BvUext(self.usize(a))),
                 [Leaf(Ident, b"sext"), a] => Ok(Op::BvSext(self.usize(a))),
                 [Leaf(Ident, b"pf2bv"), a] => Ok(Op::PfToBv(self.usize(a))),
@@ -419,6 +419,15 @@ impl<'src> IrInterp<'src> {
     fn maybe_usize(&self, tt: &TokTree) -> Option<usize> {
         match tt {
             Leaf(Token::Int, s) => usize::from_str(from_utf8(s).ok()?).ok(),
+            _ => None,
+        }
+    }
+    fn u32(&self, tt: &TokTree) -> u32 {
+        self.maybe_u32(tt).unwrap()
+    }
+    fn maybe_u32(&self, tt: &TokTree) -> Option<u32> {
+        match tt {
+            Leaf(Token::Int, s) => u32::from_str(from_utf8(s).ok()?).ok(),
             _ => None,
         }
     }

@@ -94,7 +94,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::BvNaryOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::BvUnOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::BoolToBv => Ok(Sort::BitVector(1)),
-        Op::BvExtract(a, b) => Ok(Sort::BitVector(a - b + 1)),
+        Op::BvExtract(a, b) => Ok(Sort::BitVector(*a as usize - *b as usize + 1)),
         Op::BvConcat => t
             .cs()
             .iter()
@@ -282,8 +282,8 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::BvUnOp(_), &[a]) => bv_or(a, "bv unary op").cloned(),
         (Op::BoolToBv, &[Sort::Bool]) => Ok(Sort::BitVector(1)),
         (Op::BvExtract(high, low), &[Sort::BitVector(w)]) => {
-            if low <= high && high < w {
-                Ok(Sort::BitVector(high - low + 1))
+            if low <= high && *high < *w as u32 {
+                Ok(Sort::BitVector((high - low + 1) as usize))
             } else {
                 Err(TypeErrorReason::OutOfBounds(format!(
                     "Cannot slice from {high} to {low} in a bit-vector of width {w}"

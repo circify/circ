@@ -223,7 +223,7 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             assert!(b.uint() < &Integer::from(b.width()));
                             let n = b.uint().to_usize().unwrap();
                             Some(term![BV_CONCAT;
-                              term![Op::BvExtract(b.width()-n-1, 0); c0],
+                              term![Op::new_bv_extract(b.width()-n-1, 0); c0],
                               const_(Value::BitVector(BitVector::zeros(n)))
                             ])
                         }
@@ -232,14 +232,14 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                             assert!(b.uint() < &Integer::from(b.width()));
                             let n = b.uint().to_usize().unwrap();
                             Some(term![Op::BvSext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0]])
+                                   term![Op::new_bv_extract(b.width()-1, n); c0]])
                         }
                         (Lshr, Some(a), Some(b)) => cbv(a.clone().lshr(b)),
                         (Lshr, _, Some(b)) => {
                             assert!(b.uint() < &Integer::from(b.width()));
                             let n = b.uint().to_usize().unwrap();
                             Some(term![Op::BvUext(n);
-                                   term![Op::BvExtract(b.width()-1, n); c0]])
+                                   term![Op::new_bv_extract(b.width()-1, n); c0]])
                         }
                         _ => None,
                     }
