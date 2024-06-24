@@ -405,7 +405,7 @@ impl<'ast> ZGen<'ast> {
                     let map = term![Op::ExtOp(ExtOp::ArrayToMap); array.term.clone()];
                     let flip = term![Op::ExtOp(ExtOp::MapFlip); map];
                     let key = term![Op::ExtOp(ExtOp::MapSelect); flip.clone(), value.term.clone()];
-                    let key_witness = term![Op::Witness("rlook".into()); key];
+                    let key_witness = term![Op::new_witness("rlook".into()); key];
                     if !self.in_witness_gen.get() {
                         let eq_lookup = term![EQ; value.term, term![Op::Select; array.term, key_witness.clone()]];
                         self.assert(eq_lookup)?;
@@ -1384,7 +1384,7 @@ impl<'ast> ZGen<'ast> {
                     ));
                 }
                 let mut e = wit_e;
-                e.term = term![Op::Witness("wit".into()); e.term];
+                e.term = term![Op::new_witness("wit".into()); e.term];
                 self.declare_init_impl_::<IS_CNST>(d.id.value.clone(), decl_ty, e)?;
                 Ok(())
             }

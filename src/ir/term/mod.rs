@@ -141,7 +141,8 @@ pub enum Op {
 
     /// Receive a value from the prover (in a proof)
     /// The string is a name for it; does not need to be unique.
-    Witness(Box<str>),
+    /// The double box is to get a thin pointer.
+    Witness(Box<Box<str>>),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -400,6 +401,11 @@ impl Op {
     /// Create a new [Op::Const].
     pub fn new_const(value: Value) -> Self {
         Op::Const(Box::new(value))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_witness(name: String) -> Self {
+        Op::Witness(Box::new(name.into_boxed_str()))
     }
 }
 
