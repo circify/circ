@@ -69,7 +69,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                             &ns.fqn(format!("sub{}", ii)),
                             Sort::Field(field.clone()),
                             Some(super::super::proof::PROVER_ID),
-                            Some(term![Op::UbvToPf(field.clone()); sub_bv]),
+                            Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
                         pf_summands.push(
                         term![PF_MUL.clone(); pf_lit(field.new_v(1).pow(k as u64 * ii as u64)), sub_f.clone()],
@@ -83,7 +83,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                             &ns.fqn("end"),
                             Sort::Field(field.clone()),
                             Some(super::super::proof::PROVER_ID),
-                            Some(term![Op::UbvToPf(field.clone()); sub_bv]),
+                            Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
                         pf_summands.push(term![PF_MUL.clone(); pf_lit(field.new_v(1 << end_start)), sub_f.clone()]);
                         new_assertions.push(term![Op::PfFitsInBits(end_length); sub_f]);

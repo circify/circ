@@ -138,7 +138,7 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::PfNaryOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::IntNaryOp(_) => Ok(Sort::Int),
         Op::IntBinPred(_) => Ok(Sort::Bool),
-        Op::UbvToPf(m) => Ok(Sort::Field(m.clone())),
+        Op::UbvToPf(m) => Ok(Sort::Field((**m).clone())),
         Op::PfChallenge(c) => Ok(Sort::Field(c.field.clone())),
         Op::Witness(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfFitsInBits(_) => Ok(Sort::Bool),
@@ -356,7 +356,7 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
                 .and_then(|t| pf_or(t, ctx))
                 .cloned()
         }
-        (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field(m.clone())),
+        (Op::UbvToPf(m), &[a]) => bv_or(a, "ubv-to-pf").map(|_| Sort::Field((**m).clone())),
         (Op::PfChallenge(f), _) => Ok(Sort::Field(f.field.clone())),
         (Op::Witness(_), &[a]) => Ok(a.clone()),
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),

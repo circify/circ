@@ -381,11 +381,15 @@ pub fn div(a: T, b: T) -> Result<T, String> {
     wrap_bin_op("/", Some(div_uint), Some(div_field), None, a, b)
 }
 
+fn to_dflt_f(t: Term) -> Term {
+    term![Op::new_ubv_to_pf(default_field()); t]
+}
+
 fn rem_field(a: Term, b: Term) -> Term {
     let len = cfg().field().modulus().significant_bits() as usize;
     let a_bv = term![Op::PfToBv(len); a];
     let b_bv = term![Op::PfToBv(len); b];
-    term![Op::UbvToPf(default_field()); term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv]]
+    to_dflt_f(term![Op::BvBinOp(BvBinOp::Urem); a_bv, b_bv])
 }
 
 fn rem_uint(a: Term, b: Term) -> Term {
@@ -731,7 +735,7 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
 
 fn coerce_to_field(i: T) -> Result<Term, String> {
     match &i.ty {
-        Ty::Uint(_) => Ok(term![Op::UbvToPf(default_field()); i.term]),
+        Ty::Uint(_) => Ok(to_dflt_f(i.term)),
         Ty::Field => Ok(i.term),
         _ => Err(format!("Cannot coerce {} to a field element", &i)),
     }
@@ -766,7 +770,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
     if matches!(&array.ty, Ty::Array(_, _)) && matches!(&idx.ty, Ty::Uint(_) | Ty::Field) {
         // XXX(q) typecheck here?
         let iterm = if matches!(idx.ty, Ty::Uint(_)) {
-            term![Op::UbvToPf(default_field()); idx.term]
+            to_dflt_f(idx.term)
         } else {
             idx.term
         };
@@ -816,10 +820,7 @@ pub fn array<I: IntoIterator<Item = T>>(elems: I) -> Result<T, String> {
 
 pub fn uint_to_field(u: T) -> Result<T, String> {
     match &u.ty {
-        Ty::Uint(_) => Ok(T::new(
-            Ty::Field,
-            term![Op::UbvToPf(default_field()); u.term],
-        )),
+        Ty::Uint(_) => Ok(T::new(Ty::Field, to_dflt_f(u.term))),
         u => Err(format!("Cannot do uint-to-field on {u}")),
     }
 }

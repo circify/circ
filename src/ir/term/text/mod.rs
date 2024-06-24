@@ -324,7 +324,7 @@ impl<'src> IrInterp<'src> {
                     key: self.sort(k),
                     val: self.sort(v),
                 }))),
-                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
+                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::new_ubv_to_pf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
                 [Leaf(Ident, b"call"), Leaf(Ident, name), arg_sorts, ret_sort] => {

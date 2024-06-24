@@ -155,7 +155,7 @@ fn scalar_to_field(scalar: &Term, c: &AccessCfg) -> Term {
             }
         }
         Sort::Bool => c.bool2pf(scalar.clone()),
-        Sort::BitVector(_) => term![Op::UbvToPf(c.field.clone()); scalar.clone()],
+        Sort::BitVector(_) => term![Op::new_ubv_to_pf(c.field.clone()); scalar.clone()],
         s => panic!("non-scalar sort {}", s),
     }
 }

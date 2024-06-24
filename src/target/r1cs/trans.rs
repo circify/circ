@@ -370,7 +370,7 @@ impl<'cfg> ToR1cs<'cfg> {
                 let public = matches!(ty, VarType::Inst);
                 let lc = self.fresh_var(
                     &v.name,
-                    term![Op::UbvToPf(self.field.clone()); var.clone()],
+                    term![Op::new_ubv_to_pf(self.field.clone()); var.clone()],
                     ty,
                 );
                 self.set_bv_uint(var.clone(), lc, v.sort.as_bv());
@@ -840,8 +840,8 @@ impl<'cfg> ToR1cs<'cfg> {
                             BvBinOp::Udiv | BvBinOp::Urem => {
                                 let a_bv_term = term![Op::PfToBv(n); a.0.clone()];
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
-                                let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
-                                let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
+                                let q_term = term![Op::new_ubv_to_pf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
+                                let r_term = term![Op::new_ubv_to_pf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
                                 let q = self.fresh_wit("div_q", q_term);
                                 let r = self.fresh_wit("div_r", r_term);
                                 let qb = self.bitify("div_q", &q, n, false);

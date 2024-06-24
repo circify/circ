@@ -126,7 +126,7 @@ pub enum Op {
     /// Unsigned bit-vector to prime-field
     ///
     /// Takes the modulus.
-    UbvToPf(FieldT),
+    UbvToPf(Box<FieldT>),
     /// A random value, sampled uniformly and independently of its arguments.
     ///
     /// Takes a name (if deterministically sampled, challenges of different names are sampled
@@ -406,6 +406,11 @@ impl Op {
     /// Create a new [Op::Const].
     pub fn new_witness(name: String) -> Self {
         Op::Witness(Box::new(name.into_boxed_str()))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_ubv_to_pf(field: FieldT) -> Self {
+        Op::UbvToPf(Box::new(field))
     }
 }
 
