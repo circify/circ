@@ -60,8 +60,8 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    bv_lit, check, leaf_term, term, Array, ArrayOp, Computation, Node, Op, PostOrderIter, Sort,
-    Term, TermMap, Value, AND,
+    bv_lit, check, const_, term, Array, ArrayOp, Computation, Node, Op, PostOrderIter, Sort, Term,
+    TermMap, Value, AND,
 };
 use std::collections::BTreeMap;
 
@@ -196,7 +196,7 @@ fn termify_val_tuples(v: Value) -> TupleTree {
     if let Value::Tuple(vs) = v {
         TupleTree::Tuple(Vec::from(vs).into_iter().map(termify_val_tuples).collect())
     } else {
-        TupleTree::NonTuple(leaf_term(Op::Const(v)))
+        TupleTree::NonTuple(const_(v))
     }
 }
 

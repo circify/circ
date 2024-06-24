@@ -17,17 +17,17 @@ fn eq() {
 #[test]
 fn bv2pf() {
     assert_eq!(
-        leaf_term(Op::Const(eval(
+        const_(eval(
             &text::parse_term(b"(bvshl #b0001 #b0010)"),
             &FxHashMap::default()
-        ))),
+        )),
         text::parse_term(b" #b0100 ")
     );
     assert_eq!(
-        leaf_term(Op::Const(eval(
+        const_(eval(
             &text::parse_term(b" (set_default_modulus 17 ((pf2bv 4) #f1)) "),
             &FxHashMap::default()
-        ))),
+        )),
         text::parse_term(b" #b0001 ")
     );
 }
@@ -220,7 +220,7 @@ mod type_ {
 }
 
 fn bool(b: bool) -> Term {
-    leaf_term(Op::Const(Value::Bool(b)))
+    bool_lit(b)
 }
 
 pub fn bool_and_tests() -> Vec<Term> {

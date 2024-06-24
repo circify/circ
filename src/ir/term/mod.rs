@@ -56,7 +56,7 @@ pub enum Op {
     /// a variable
     Var(Box<Var>),
     /// a constant
-    Const(Value),
+    Const(Box<Value>),
 
     /// if-then-else: ternary
     Ite,
@@ -395,6 +395,11 @@ impl Op {
             name: name.into_boxed_str(),
             sort,
         }))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_const(value: Value) -> Self {
+        Op::Const(Box::new(value))
     }
 }
 
@@ -916,7 +921,7 @@ impl Sort {
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]
     pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
-        Box::new(self.elems_iter_values().map(|v| leaf_term(Op::Const(v))))
+        Box::new(self.elems_iter_values().map(const_))
     }
 
     /// An iterator over the elements of this sort (as IR values).
@@ -967,7 +972,7 @@ impl Sort {
     /// * floats: zero
     /// * tuples/arrays: recursively default
     pub fn default_term(&self) -> Term {
-        leaf_term(Op::Const(self.default_value()))
+        const_(self.default_value())
     }
 
     /// Compute the default value for this sort.
@@ -1097,7 +1102,7 @@ fn collect_types() {
 impl Term {
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
-        if let Op::Const(Value::Bool(b)) = &self.op() {
+        if let Some(Value::Bool(b)) = self.as_value_opt() {
             Some(*b)
         } else {
             None
@@ -1105,7 +1110,7 @@ impl Term {
     }
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
-        if let Op::Const(Value::BitVector(b)) = &self.op() {
+        if let Some(Value::BitVector(b)) = self.as_value_opt() {
             Some(b)
         } else {
             None
@@ -1113,7 +1118,7 @@ impl Term {
     }
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldV> {
-        if let Op::Const(Value::Field(b)) = &self.op() {
+        if let Some(Value::Field(b)) = self.as_value_opt() {
             Some(b)
         } else {
             None
@@ -1122,7 +1127,7 @@ impl Term {
 
     /// Get the underlying tuple constant, if possible.
     pub fn as_tuple_opt(&self) -> Option<&[Value]> {
-        if let Op::Const(Value::Tuple(t)) = &self.op() {
+        if let Some(Value::Tuple(t)) = self.as_value_opt() {
             Some(t)
         } else {
             None
@@ -1131,7 +1136,7 @@ impl Term {
 
     /// Get the underlying array constant, if possible.
     pub fn as_array_opt(&self) -> Option<&Array> {
-        if let Op::Const(Value::Array(a)) = &self.op() {
+        if let Some(Value::Array(a)) = self.as_value_opt() {
             Some(a)
         } else {
             None
@@ -1140,7 +1145,7 @@ impl Term {
 
     /// Get the underlying map constant, if possible.
     pub fn as_map_opt(&self) -> Option<&map::Map> {
-        if let Op::Const(Value::Map(a)) = &self.op() {
+        if let Some(Value::Map(a)) = self.as_value_opt() {
             Some(a)
         } else {
             None
@@ -1258,6 +1263,12 @@ impl Value {
     }
 
     #[track_caller]
+    /// Unwrap the constituent value of this array, panicking otherwise.
+    pub fn is_array(&self) -> bool {
+        matches!(self, Value::Array(_))
+    }
+
+    #[track_caller]
     /// Unwrap the constituent value of this map, panicking otherwise.
     pub fn as_map(&self) -> &map::Map {
         if let Value::Map(w) = self {
@@ -1275,6 +1286,7 @@ impl Value {
             None
         }
     }
+
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
         if let Value::BitVector(b) = self {
@@ -1345,9 +1357,14 @@ pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
 }
 
-/// Make a term with no arguments, just an operator.
+/// Make a variable term.
 pub fn var(name: String, sort: Sort) -> Term {
     leaf_term(Op::new_var(name, sort))
+}
+
+/// Make a constant term.
+pub fn const_(value: Value) -> Term {
+    leaf_term(Op::new_const(value))
 }
 
 /// Make a term with arguments.
@@ -1362,7 +1379,7 @@ pub fn term(op: Op, cs: Vec<Term>) -> Term {
 
 /// Make a prime-field constant term.
 pub fn pf_lit(elem: FieldV) -> Term {
-    leaf_term(Op::Const(Value::Field(elem)))
+    const_(Value::Field(elem))
 }
 
 /// Make a bit-vector constant term.
@@ -1370,15 +1387,12 @@ pub fn bv_lit<T>(uint: T, width: usize) -> Term
 where
     Integer: From<T>,
 {
-    leaf_term(Op::Const(Value::BitVector(BitVector::new(
-        uint.into(),
-        width,
-    ))))
+    const_(Value::BitVector(BitVector::new(uint.into(), width)))
 }
 
 /// Make a bit-vector constant term.
 pub fn bool_lit(b: bool) -> Term {
-    leaf_term(Op::Const(Value::Bool(b)))
+    const_(Value::Bool(b))
 }
 
 #[macro_export]

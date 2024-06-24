@@ -85,11 +85,11 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        self.allocate(term![Op::Const(Value::Array(Array::default(
+        self.allocate(const_(Value::Array(Array::default(
             Sort::BitVector(addr_width),
             &Sort::BitVector(val_width),
-            size
-        )))])
+            size,
+        ))))
     }
 
     /// Load the value of index `offset` from the allocation `id`.
@@ -147,12 +147,7 @@ mod test {
         let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(
-            id0,
-            bv_lit(3, 4),
-            bv_lit(2, 8),
-            leaf_term(Op::Const(Value::Bool(true))),
-        );
+        mem.store(id0, bv_lit(3, 4), bv_lit(2, 8), const_(Value::Bool(true)));
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
@@ -170,12 +165,7 @@ mod test {
         let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(
-            id0,
-            bv_lit(3, 4),
-            bv_var("a", 8),
-            leaf_term(Op::Const(Value::Bool(true))),
-        );
+        mem.store(id0, bv_lit(3, 4), bv_var("a", 8), const_(Value::Bool(true)));
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(3, 4));
         let t = term![Op::Not; term![Op::Eq; a, b]];

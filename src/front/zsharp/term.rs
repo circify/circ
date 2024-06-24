@@ -228,7 +228,7 @@ impl T {
             Op::Const(v) => Ok(v),
             _ => Err(Error::new(ErrorKind::Other, "not a const val")),
         }?;
-        match val {
+        match &**val {
             Value::Bool(b) => write!(f, "{b}"),
             Value::Field(fe) => write!(f, "{}f", fe.i()),
             Value::BitVector(bv) => match bv.width() {
@@ -250,7 +250,7 @@ impl T {
                 write!(f, "{n} {{ ")?;
                 fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
                     write!(f, "{n}: ")?;
-                    T::new(ty.clone(), leaf_term(Op::Const(v.clone()))).pretty(f)?;
+                    T::new(ty.clone(), const_(v.clone())).pretty(f)?;
                     write!(f, ", ")
                 })?;
                 write!(f, "}}")
@@ -271,7 +271,7 @@ impl T {
                     .try_for_each(|idx| {
                         T::new(
                             *inner_ty.clone(),
-                            leaf_term(Op::Const(arr.select(idx.as_value_opt().unwrap()))),
+                            const_(arr.select(idx.as_value_opt().unwrap())),
                         )
                         .pretty(f)?;
                         write!(f, ", ")
@@ -594,7 +594,7 @@ pub fn const_bool(a: T) -> Option<bool> {
 
 pub fn const_val(a: T) -> Result<T, String> {
     match const_value(&a.term) {
-        Some(v) => Ok(T::new(a.ty, leaf_term(Op::Const(v)))),
+        Some(v) => Ok(T::new(a.ty, const_(v))),
         _ => Err(format!("{} is not a constant value", &a)),
     }
 }
@@ -602,7 +602,7 @@ pub fn const_val(a: T) -> Result<T, String> {
 fn const_value(t: &Term) -> Option<Value> {
     let folded = constant_fold(t, &[]);
     match &folded.op() {
-        Op::Const(v) => Some(v.clone()),
+        Op::Const(v) => Some((**v).clone()),
         _ => None,
     }
 }
@@ -646,7 +646,7 @@ pub fn pf_lit_ir<I>(i: I) -> Term
 where
     Integer: From<I>,
 {
-    leaf_term(Op::Const(pf_val(i)))
+    const_(pf_val(i))
 }
 
 fn pf_val<I>(i: I) -> Value
@@ -664,7 +664,7 @@ where
 }
 
 pub fn z_bool_lit(v: bool) -> T {
-    T::new(Ty::Bool, leaf_term(Op::Const(Value::Bool(v))))
+    T::new(Ty::Bool, bool_lit(v))
 }
 
 pub fn uint_lit<I>(v: I, bits: usize) -> T

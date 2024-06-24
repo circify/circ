@@ -45,9 +45,13 @@ impl OblivRewriter {
     fn visit(&mut self, t: &Term) {
         let (tup_opt, term_opt) = match t.op() {
             Op::Var(v) if v.sort.is_scalar() => (Some(t.clone()), None),
-            Op::Const(v @ Value::Array(a)) => {
-                if a.size <= OBLIV_SIZE_THRESH {
-                    (Some(leaf_term(Op::Const(arr_val_to_tup(v)))), None)
+            Op::Const(v) => {
+                if let Value::Array(a) = &**v {
+                    if a.size <= OBLIV_SIZE_THRESH {
+                        (Some(const_(arr_val_to_tup(v))), None)
+                    } else {
+                        (None, None)
+                    }
                 } else {
                     (None, None)
                 }
@@ -263,15 +267,15 @@ mod test {
 
     #[test]
     fn obliv() {
-        let z = term![Op::Const(Value::Array(Array::new(
+        let z = const_(Value::Array(Array::new(
             Sort::BitVector(4),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
-            6
-        )))];
+            6,
+        )));
         let t = term![Op::Select;
             term![Op::Ite;
-              leaf_term(Op::Const(Value::Bool(true))),
+              bool_lit(true),
               term![Op::Store; z.clone(), bv_lit(3, 4), bv_lit(1, 4)],
               term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
@@ -285,15 +289,15 @@ mod test {
 
     #[test]
     fn not_obliv() {
-        let z = term![Op::Const(Value::Array(Array::new(
+        let z = const_(Value::Array(Array::new(
             Sort::BitVector(4),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
-            6
-        )))];
+            6,
+        )));
         let t = term![Op::Select;
             term![Op::Ite;
-              leaf_term(Op::Const(Value::Bool(true))),
+              bool_lit(true),
               term![Op::Store; z.clone(), v_bv("a", 4), bv_lit(1, 4)],
               term![Op::Store; z, bv_lit(2, 4), bv_lit(1, 4)]
             ],
@@ -307,18 +311,18 @@ mod test {
 
     #[test]
     fn mix_diff_constant() {
-        let z0 = term![Op::Const(Value::Array(Array::new(
+        let z0 = const_(Value::Array(Array::new(
             Sort::BitVector(4),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
-            6
-        )))];
-        let z1 = term![Op::Const(Value::Array(Array::new(
+            6,
+        )));
+        let z1 = const_(Value::Array(Array::new(
             Sort::BitVector(4),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
-            5
-        )))];
+            5,
+        )));
         let t0 = term![Op::Select;
             term![Op::Store; z0, v_bv("a", 4), bv_lit(1, 4)],
             bv_lit(3, 4)
@@ -337,12 +341,12 @@ mod test {
 
     #[test]
     fn mix_same_constant() {
-        let z = term![Op::Const(Value::Array(Array::new(
+        let z = const_(Value::Array(Array::new(
             Sort::BitVector(4),
             Box::new(Sort::BitVector(4).default_value()),
             Default::default(),
-            6
-        )))];
+            6,
+        )));
         let t0 = term![Op::Select;
             term![Op::Store; z.clone(), v_bv("a", 4), bv_lit(1, 4)],
             bv_lit(3, 4)

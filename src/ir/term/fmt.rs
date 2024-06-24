@@ -578,13 +578,7 @@ impl DisplayIr for ComputationMetadata {
 fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     let close_dft_f = if f.cfg.use_default_field && f.default_field.is_none() {
         let fields: HashSet<FieldT> = PostOrderIter::new(t.clone())
-            .filter_map(|c| {
-                if let Op::Const(Value::Field(f)) = &c.op() {
-                    Some(f.ty())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|c| c.as_pf_opt().map(|f| f.ty()))
             .collect();
         if fields.len() == 1 && !f.cfg.hide_field {
             f.default_field = fields.into_iter().next();

@@ -37,7 +37,7 @@ impl rand::distributions::Distribution<Vec<usize>> for Sum {
 impl rand::distributions::Distribution<Term> for PureBoolDist {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Term {
         let ops = &[
-            Op::Const(Value::Bool(rng.gen())),
+            Op::new_const(Value::Bool(rng.gen())),
             Op::new_var(
                 std::str::from_utf8(&[b'a' + rng.gen_range(0..26)])
                     .unwrap()
@@ -91,7 +91,7 @@ impl FixedSizeDist {
         format!("{}_{}", prefix, (b'a' + rng.gen_range(0..26)) as char)
     }
     fn sample_value<R: Rng + ?Sized>(&self, sort: &Sort, rng: &mut R) -> Op {
-        Op::Const(UniformValue(sort).sample(rng))
+        Op::new_const(UniformValue(sort).sample(rng))
     }
     fn sample_op<R: Rng + ?Sized>(&self, sort: &Sort, rng: &mut R) -> Op {
         let mut ops = match sort {

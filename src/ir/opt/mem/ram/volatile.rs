@@ -197,14 +197,10 @@ impl Extactor {
                 let value = &t.cs()[0];
                 ram.boundary_conditions = BoundaryConditions::Default(value.clone());
             }
-            Op::Const(Value::Array(a)) => {
+            Op::Const(v) if v.is_array() => {
                 // for a constant: add (constant) writes
-                for (k, v) in &a.map {
-                    ram.new_write(
-                        leaf_term(Op::Const(k.clone())),
-                        leaf_term(Op::Const(v.clone())),
-                        self.cfg.true_.clone(),
-                    );
+                for (k, v) in &v.as_array().map {
+                    ram.new_write(const_(k.clone()), const_(v.clone()), self.cfg.true_.clone());
                 }
             }
             Op::Array(..) => {

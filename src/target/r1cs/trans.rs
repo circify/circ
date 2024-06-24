@@ -494,7 +494,7 @@ impl<'cfg> ToR1cs<'cfg> {
         if !self.cache.contains_key(&c) {
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
-                Op::Const(Value::Bool(b)) => self.zero.clone() + *b as isize,
+                Op::Const(v) => self.zero.clone() + v.as_bool() as isize,
                 Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
                     let a = self.get_bool(&c.cs()[0]).clone();
@@ -708,7 +708,8 @@ impl<'cfg> ToR1cs<'cfg> {
             if !self.cache.contains_key(&bv) {
                 match &bv.op() {
                     Op::Var(..) => panic!("call embed_var instead"),
-                    Op::Const(Value::BitVector(b)) => {
+                    Op::Const(v) => {
+                        let b = v.as_bv();
                         let bit_lcs = (0..b.width())
                             .map(|i| self.zero.clone() + b.uint().get_bit(i as u32) as isize)
                             .collect();
@@ -1014,9 +1015,9 @@ impl<'cfg> ToR1cs<'cfg> {
             debug!("embed_pf {}", c);
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
-                Op::Const(Value::Field(r)) => TermLc(
+                Op::Const(v) => TermLc(
                     c.clone(),
-                    self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
+                    self.r1cs.constant(v.as_pf().as_ty_ref(&self.r1cs.modulus)),
                 ),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs()[0]).clone();
@@ -1228,7 +1229,7 @@ pub mod test {
     #[quickcheck]
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1240,7 +1241,7 @@ pub mod test {
     #[quickcheck]
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         let cfg = CircCfg::default();
         let r1cs = to_r1cs(&cs, &cfg);
@@ -1252,7 +1253,7 @@ pub mod test {
     #[quickcheck]
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1289,7 +1290,7 @@ pub mod test {
             .into_iter()
             .collect();
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
         let cfg = CircCfg::default();
         let r1cs = to_r1cs(&cs, &cfg);
@@ -1299,7 +1300,7 @@ pub mod test {
     }
 
     fn pf_dflt(i: isize) -> Term {
-        leaf_term(Op::Const(Value::Field(CircCfg::default().field().new_v(i))))
+        pf_lit(CircCfg::default().field().new_v(i))
     }
 
     fn const_test(term: Term) {
@@ -1419,7 +1420,7 @@ pub mod test {
         .collect();
         let mut cs = Computation::from_constraint_system_parts(
             vec![
-                term![Op::Field(0); term![Op::Tuple; var("a".to_owned(), Sort::Bool), leaf_term(Op::Const(Value::Bool(false)))]],
+                term![Op::Field(0); term![Op::Tuple; var("a".to_owned(), Sort::Bool), bool_lit(false)]],
                 term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![

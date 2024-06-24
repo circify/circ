@@ -348,7 +348,7 @@ impl<'src> IrInterp<'src> {
     fn value(&mut self, tt: &TokTree<'src>) -> Value {
         let t = self.term(tt);
         match &t.op() {
-            Op::Const(v) => v.clone(),
+            Op::Const(v) => (**v).clone(),
             _ => panic!("Expected value, found term {}", t),
         }
     }
@@ -489,13 +489,9 @@ impl<'src> IrInterp<'src> {
     fn term(&mut self, tt: &TokTree<'src>) -> Term {
         use Token::*;
         match tt {
-            Leaf(Bin, s) => leaf_term(Op::Const(Value::BitVector(
-                BitVector::from_bin_lit(s).unwrap(),
-            ))),
-            Leaf(Hex, s) => leaf_term(Op::Const(Value::BitVector(
-                BitVector::from_hex_lit(s).unwrap(),
-            ))),
-            Leaf(Int, s) => leaf_term(Op::Const(Value::Int(Integer::parse(s).unwrap().into()))),
+            Leaf(Bin, s) => const_(Value::BitVector(BitVector::from_bin_lit(s).unwrap())),
+            Leaf(Hex, s) => const_(Value::BitVector(BitVector::from_hex_lit(s).unwrap())),
+            Leaf(Int, s) => const_(Value::Int(Integer::parse(s).unwrap().into())),
             Leaf(Field, s) => {
                 let (v, m) = if let Some(i) = s.iter().position(|b| *b == b'm') {
                     (
@@ -512,7 +508,7 @@ impl<'src> IrInterp<'src> {
                         .clone();
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
-                leaf_term(Op::Const(Value::Field(FieldV::new::<Integer>(v, m))))
+                pf_lit(FieldV::new::<Integer>(v, m))
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),
@@ -548,39 +544,37 @@ impl<'src> IrInterp<'src> {
                         let default = self.value(&tts[2]);
                         let size = self.usize(&tts[3]);
                         let vals = self.value_alist(&tts[4]);
-                        leaf_term(Op::Const(Value::Array(Array::new(
+                        const_(Value::Array(Array::new(
                             key_sort,
                             Box::new(default),
                             vals.into_iter().collect(),
                             size,
-                        ))))
+                        )))
                     }
                     Err(CtrlOp::MapValue) => {
                         assert_eq!(tts.len(), 4);
                         let key_sort = self.sort(&tts[1]);
                         let value_sort = self.sort(&tts[2]);
                         let vals = self.value_alist(&tts[3]);
-                        leaf_term(Op::Const(Value::Map(map::Map::new(
-                            key_sort, value_sort, vals,
-                        ))))
+                        const_(Value::Map(map::Map::new(key_sort, value_sort, vals)))
                     }
                     Err(CtrlOp::ListValue) => {
                         assert_eq!(tts.len(), 3);
                         let key_sort = self.sort(&tts[1]);
                         let vals = self.value_list(&tts[2]);
-                        leaf_term(Op::Const(Value::Array(Array::from_vec(
+                        const_(Value::Array(Array::from_vec(
                             key_sort,
                             vals.first().unwrap().sort(),
                             vals,
-                        ))))
+                        )))
                     }
-                    Err(CtrlOp::TupleValue) => leaf_term(Op::Const(Value::Tuple(
+                    Err(CtrlOp::TupleValue) => const_(Value::Tuple(
                         tts[1..]
                             .iter()
                             .map(|tti| self.value(tti))
                             .collect::<Vec<_>>()
                             .into(),
-                    ))),
+                    )),
                     Err(CtrlOp::SetDefaultModulus) => {
                         assert_eq!(
                             tts.len(),
@@ -903,7 +897,7 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
         .map(|(name, term)| {
             let name = std::str::from_utf8(name).unwrap().to_string();
             let val = match term[0].op() {
-                Op::Const(v) => v.clone(),
+                Op::Const(v) => (**v).clone(),
                 _ => panic!("Non-value binding {} associated with {}", term[0], name),
             };
             (name, val)

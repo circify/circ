@@ -1,7 +1,7 @@
 //! IR Evaluation
 
 use super::{
-    check, extras, leaf_term, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
+    check, const_, extras, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
     BvUnOp, FieldToBv, FxHashMap, IntBinPred, IntNaryOp, Integer, Node, Op, PfNaryOp, PfUnOp, Sort,
     Term, TermMap, Value,
 };
@@ -94,7 +94,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             it.fold(f, BitVector::concat)
         }),
         Op::BvExtract(h, l) => Value::BitVector(args[0].as_bv().clone().extract(*h, *l)),
-        Op::Const(v) => v.clone(),
+        Op::Const(v) => (**v).clone(),
         Op::BvBinOp(o) => Value::BitVector({
             let a = args[0].as_bv().clone();
             let b = args[1].as_bv().clone();
@@ -289,9 +289,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             }
             let term = term(
                 op.clone(),
-                args.iter()
-                    .map(|a| leaf_term(Op::Const((*a).clone())))
-                    .collect(),
+                args.iter().map(|a| const_((*a).clone())).collect(),
             );
             let (mut res, iter) = match check(&term) {
                 Sort::Array(a) => (

@@ -107,12 +107,12 @@ pub fn free_variables_with_sorts(t: Term) -> FxHashSet<(String, Sort)> {
 
 /// If this term is a constant field or bit-vector, get the unsigned int value.
 pub fn as_uint_constant(t: &Term) -> Option<Integer> {
-    match &t.op() {
-        Op::Const(Value::BitVector(bv)) => Some(bv.uint().clone()),
-        Op::Const(Value::Field(f)) => Some(f.i()),
-        Op::Const(Value::Bool(b)) => Some((*b).into()),
+    t.as_value_opt().and_then(|v| match v {
+        Value::BitVector(bv) => Some(bv.uint().clone()),
+        Value::Field(f) => Some(f.i()),
+        Value::Bool(b) => Some((*b).into()),
         _ => None,
-    }
+    })
 }
 
 /// Assert that all variables in the term graph are declared in the metadata.

@@ -81,7 +81,7 @@ impl Expr2Smt<()> for Value {
                 for _ in 0..map.len() {
                     write!(w, "(store ")?;
                 }
-                let val_s = check(&leaf_term(Op::Const((**default).clone())));
+                let val_s = check(&const_((**default).clone()));
                 let s = Sort::new_array(key_sort.clone(), val_s, *size);
                 write!(
                     w,
@@ -138,7 +138,7 @@ impl Expr2Smt<()> for Term {
                 true
             }
             Op::Const(c) => {
-                write!(w, "{}", SmtDisp(c))?;
+                write!(w, "{}", SmtDisp(&**c))?;
                 false
             }
             Op::Store => {
@@ -428,7 +428,7 @@ pub fn find_unique_model(t: &Term, uniqs: Vec<String>) -> Option<HashMap<String,
         .flat_map(|n| {
             model
                 .get(&n)
-                .map(|v| term![EQ; term![Op::new_var(n, v.sort())], term![Op::Const(v.clone())]])
+                .map(|v| term![EQ; term![Op::new_var(n, v.sort())], const_(v.clone())])
         })
         .reduce(|l, r| term![AND; l, r])
         .map(|t| term![NOT; t])
@@ -592,13 +592,11 @@ mod test {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&v), &s).unwrap();
             solver
-                .assert(&term![Op::Eq; var(v.to_string(), s), leaf_term(Op::Const(val.clone()))])
+                .assert(&term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
                 .unwrap();
         }
         let val = eval(&t, vs);
-        solver
-            .assert(&term![Op::Eq; t, leaf_term(Op::Const(val))])
-            .unwrap();
+        solver.assert(&term![Op::Eq; t, const_(val)]).unwrap();
         solver.check_sat().unwrap()
     }
 
@@ -609,12 +607,12 @@ mod test {
             let s = val.sort();
             solver.declare_const(&SmtSymDisp(&v), &s).unwrap();
             solver
-                .assert(&term![Op::Eq; var(v.to_string(), s), leaf_term(Op::Const(val.clone()))])
+                .assert(&term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
                 .unwrap();
         }
         let val = eval(&t, vs);
         solver
-            .assert(&term![Op::Not; term![Op::Eq; t, leaf_term(Op::Const(val))]])
+            .assert(&term![Op::Not; term![Op::Eq; t, const_(val)]])
             .unwrap();
         solver.check_sat().unwrap()
     }

@@ -21,7 +21,7 @@ pub fn extract(
             let ir_val = scalar_input_values
                 .remove(name)
                 .ok_or_else(|| format!("Could not find scalar variable {name} in the input map"))?;
-            Ok(T::new(ty.clone(), leaf_term(Op::Const(ir_val))))
+            Ok(T::new(ty.clone(), const_(ir_val)))
         }
         Ty::Array(elem_count, elem_ty) => T::new_array(
             (0..*elem_count)
