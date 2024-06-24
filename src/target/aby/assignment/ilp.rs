@@ -307,8 +307,7 @@ mod tests {
                     (bvmul a
                     (bvmul a
                     (bvmul a
-                    (bvmul a
-                    (bvmul a a)))))
+                    (bvmul a a))))
                     a
                 )
                 )
