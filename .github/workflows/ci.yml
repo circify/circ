@@ -28,11 +28,13 @@ jobs:
               run: python3 driver.py --all-features
             - name: Install python reqs
               run: python3 driver.py --install
-            - name: Check
-              run: python3 driver.py --check
             - name: Format
               run: cargo fmt -- --check
+            - name: Check
+              run: python3 driver.py --check
             - name: Lint
               run: python3 driver.py --lint
+            - name: Document
+              run: python3 driver.py --doc
             - name: Build, then Test
               run: python3 driver.py --test
