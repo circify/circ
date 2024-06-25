@@ -2,18 +2,18 @@
 use fxhash::FxHashMap as HashMap;
 
 use crate::Id;
-use std::borrow::Borrow;
+use log::trace;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::atomic::AtomicU64;
 use std::thread_local;
 
 #[allow(dead_code)]
 struct NodeData {
     op: u8,
+    hash: AtomicU64,
     cs: Box<[Node]>,
 }
-
-struct NodeDataRef<'a, Q: Borrow<[Node]>>(&'a u8, &'a Q);
 
 #[derive(Clone)]
 pub struct Node {
@@ -111,6 +111,9 @@ impl crate::Table<u8> for Table {
 
 struct Manager {
     table: RefCell<HashMap<Rc<NodeData>, Node>>,
+    /// Elements that are still in `table`, but should be collected.
+    to_collect: RefCell<Vec<Weak>>,
+    in_gc: Cell<bool>,
     next_id: Cell<Id>,
     /// a Vec map from [String] to function
     gc_hooks: RefCell<(Vec<String>, Vec<Box<dyn Fn(Id) -> Vec<Node>>>)>,
@@ -141,15 +144,11 @@ impl std::fmt::Debug for Manager {
 thread_local! {
     static MANAGER: Manager = Manager {
         table: Default::default(),
+        to_collect: Default::default(),
+        in_gc: Cell::new(false),
         next_id: Cell::new(Id(0)),
         gc_hooks: Default::default(),
     };
-}
-
-impl Node {
-    fn try_unwrap(self) -> Result<NodeData, Self> {
-        Rc::try_unwrap(self.data).map_err(|data| Node { data, id: self.id })
-    }
 }
 
 impl Manager {
@@ -157,6 +156,7 @@ impl Manager {
         let mut table = self.table.borrow_mut();
         let data = Rc::new(NodeData {
             op: op.clone(),
+            hash: Default::default(),
             cs: children.into(),
         });
 
@@ -175,44 +175,57 @@ impl Manager {
     }
 
     fn force_gc(&self) -> usize {
-        let mut table = self.table.borrow_mut();
-        let old_size = table.len();
-        let mut to_collect: Vec<Node> = Vec::new();
-        table.retain(|_, value| {
-            if Rc::strong_count(&value.data) > 2 {
-                true
-            } else {
-                to_collect.push(value.clone());
-                false
-            }
-        });
-        while let Some(t) = to_collect.pop() {
-            let id = t.id;
-            let data = Node::try_unwrap(t).unwrap_or_else(|node| {
-                panic!(
-                    "Attempting to collect node {:?}. but it has >1 ref",
-                    NodeShallowDebug(&node)
-                )
-            });
-            for c in data.cs.into_vec() {
-                if Rc::strong_count(&c.data) <= 3 {
-                    debug_assert_eq!(Rc::strong_count(&c.data), 3);
-                    table.remove(&c.data);
-                    to_collect.push(c.clone());
+        if !std::thread::panicking() {
+            let start = std::time::Instant::now();
+            assert!(!self.in_gc.get(), "Double GC");
+            self.in_gc.set(true);
+            let mut table = self.table.borrow_mut();
+            let mut to_collect = self.to_collect.borrow_mut();
+            let mut gc_hooks = self.gc_hooks.borrow_mut();
+            let mut collected = 0;
+            while let Some(t) = to_collect.pop() {
+                collected += 1;
+                let id = t.id;
+                if t.data.strong_count() != 2 {
+                    continue;
                 }
-            }
-            for h in self.gc_hooks.borrow_mut().1.iter_mut() {
-                for c in h(id) {
+                let strong_data = t.data.upgrade().expect("missing from table");
+                table.remove(&strong_data).expect("missing from table");
+                let data = Rc::try_unwrap(strong_data).unwrap_or_else(|d| {
+                    panic!("to many refs to {:?}", NodeListShallowDebug(&d.cs))
+                });
+                for c in data.cs.into_vec() {
+                    // 3 pointers: 2 from table, and this vector.
                     if Rc::strong_count(&c.data) <= 3 {
                         debug_assert_eq!(Rc::strong_count(&c.data), 3);
-                        table.remove(&c.data);
-                        to_collect.push(c.clone());
+                        use crate::Node;
+                        to_collect.push(c.downgrade());
+                    }
+                }
+                for h in gc_hooks.1.iter_mut() {
+                    for c in h(id) {
+                        // 3 pointers: 2 from table, and this vector.
+                        if Rc::strong_count(&c.data) <= 3 {
+                            debug_assert_eq!(Rc::strong_count(&c.data), 3);
+                            use crate::Node;
+                            to_collect.push(c.downgrade());
+                        }
                     }
                 }
             }
+            let new_size = table.len();
+            let duration = start.elapsed();
+            self.in_gc.set(false);
+            trace!(
+                "GC: {} terms -> {} terms in {} ns",
+                collected,
+                new_size,
+                duration.as_nanos()
+            );
+            collected
+        } else {
+            0
         }
-        let new_size = table.len();
-        old_size - new_size
     }
 }
 
@@ -243,6 +256,22 @@ impl crate::Node<u8> for Node {
     }
 }
 
+impl Drop for Node {
+    fn drop(&mut self) {
+        use crate::Node;
+        // 3 pointers: 2 from table, and this one.
+        if self.ref_cnt() <= 3 && !std::thread::panicking() {
+            MANAGER
+                .try_with(|m| {
+                    if !m.in_gc.get() {
+                        m.to_collect.borrow_mut().push(self.downgrade());
+                    }
+                })
+                .ok();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Weak {
     data: std::rc::Weak<NodeData>,
@@ -266,37 +295,45 @@ impl crate::Weak<u8> for Weak {
 }
 
 mod hash {
-    use super::{Node, NodeData, NodeDataRef, Weak};
-    use std::borrow::Borrow;
+    use super::{Node, NodeData, Weak};
+    use fxhash::FxHasher;
     use std::hash::{Hash, Hasher};
+    use std::sync::atomic::Ordering::SeqCst;
 
     impl Hash for Node {
+        #[inline]
         fn hash<H: Hasher>(&self, state: &mut H) {
             self.id.hash(state)
         }
     }
 
     impl Hash for Weak {
+        #[inline]
         fn hash<H: Hasher>(&self, state: &mut H) {
             self.id.hash(state)
         }
     }
 
-    impl Hash for NodeData {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            self.op.hash(state);
+    impl NodeData {
+        fn rehash(&self) -> u64 {
+            let mut hasher = FxHasher::default();
+            self.op.hash(&mut hasher);
             for c in self.cs.iter() {
-                c.hash(state);
+                c.hash(&mut hasher);
             }
+            let current_hash = hasher.finish();
+            self.hash.store(current_hash, SeqCst);
+            current_hash
         }
     }
-
-    impl<'a, Q: Borrow<[Node]>> Hash for NodeDataRef<'a, Q> {
+    impl Hash for NodeData {
+        #[inline]
         fn hash<H: Hasher>(&self, state: &mut H) {
-            self.0.hash(state);
-            for c in self.1.borrow().iter() {
-                c.hash(state);
+            let mut current_hash: u64 = self.hash.load(SeqCst);
+            if current_hash == 0 {
+                current_hash = self.rehash();
             }
+            state.write_u64(current_hash);
         }
     }
 }
@@ -353,9 +390,13 @@ mod cmp {
 
 impl std::ops::Drop for Manager {
     fn drop(&mut self) {
-        // If we just drop everything in the table, then that can lead to deep Rc::drop recursions.
+        // If we just drop everything in the table, there can be deep Rc::drop recursions.
         //
         // If we run GC, then hopefully we avoid that.
-        self.force_gc();
+        //
+        // However, running GC takes a long time. This could probably be improved.
+        if !std::thread::panicking() {
+            self.force_gc();
+        }
     }
 }

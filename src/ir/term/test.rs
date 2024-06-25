@@ -6,9 +6,9 @@ use fxhash::FxHashMap;
 
 #[test]
 fn eq() {
-    let v = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
-    let u = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
-    let w = leaf_term(Op::Var("b".to_owned(), Sort::Bool));
+    let v = var("a".to_owned(), Sort::Bool);
+    let u = var("a".to_owned(), Sort::Bool);
+    let w = var("b".to_owned(), Sort::Bool);
     assert_eq!(v, u);
     assert!(v != w);
     assert!(u != w);
@@ -17,17 +17,17 @@ fn eq() {
 #[test]
 fn bv2pf() {
     assert_eq!(
-        leaf_term(Op::Const(eval(
+        const_(eval(
             &text::parse_term(b"(bvshl #b0001 #b0010)"),
             &FxHashMap::default()
-        ))),
+        )),
         text::parse_term(b" #b0100 ")
     );
     assert_eq!(
-        leaf_term(Op::Const(eval(
+        const_(eval(
             &text::parse_term(b" (set_default_modulus 17 ((pf2bv 4) #f1)) "),
             &FxHashMap::default()
-        ))),
+        )),
         text::parse_term(b" #b0001 ")
     );
 }
@@ -180,22 +180,22 @@ mod type_ {
     use super::*;
 
     fn t() -> Term {
-        let v = leaf_term(Op::Var("b".to_owned(), Sort::BitVector(4)));
+        let v = var("b".to_owned(), Sort::BitVector(4));
         term![
             Op::BvBit(4);
             term![
                 Op::BvConcat;
                 v,
-                term![Op::BoolToBv; leaf_term(Op::Var("c".to_owned(), Sort::Bool))]
+                term![Op::BoolToBv; var("c".to_owned(), Sort::Bool)]
             ]
         ]
     }
 
     #[test]
     fn vars() {
-        let v = leaf_term(Op::Var("a".to_owned(), Sort::Bool));
+        let v = var("a".to_owned(), Sort::Bool);
         assert_eq!(check(&v), Sort::Bool);
-        let v = leaf_term(Op::Var("b".to_owned(), Sort::BitVector(4)));
+        let v = var("b".to_owned(), Sort::BitVector(4));
         assert_eq!(check(&v), Sort::BitVector(4));
         let v = t();
         assert_eq!(check(&v), Sort::Bool);
@@ -206,9 +206,9 @@ mod type_ {
         let tt = t();
         assert_eq!(
             vec![
-                Op::Var("c".to_owned(), Sort::Bool),
+                Op::new_var("c".to_owned(), Sort::Bool),
                 Op::BoolToBv,
-                Op::Var("b".to_owned(), Sort::BitVector(4)),
+                Op::new_var("b".to_owned(), Sort::BitVector(4)),
                 Op::BvConcat,
                 Op::BvBit(4),
             ],
@@ -220,7 +220,7 @@ mod type_ {
 }
 
 fn bool(b: bool) -> Term {
-    leaf_term(Op::Const(Value::Bool(b)))
+    bool_lit(b)
 }
 
 pub fn bool_and_tests() -> Vec<Term> {

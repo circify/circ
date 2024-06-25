@@ -1,5 +1,6 @@
 //! The ZoKrates/Z# front-end
 
+mod interp;
 mod parser;
 mod term;
 pub mod zvisit;
@@ -11,7 +12,8 @@ use crate::front::proof::PROVER_ID;
 use crate::ir::proof::ConstraintMetadata;
 use crate::ir::term::*;
 
-use log::{debug, trace, warn};
+use fxhash::FxHashMap;
+use log::{debug, info, trace, warn};
 use rug::Integer;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -65,14 +67,14 @@ impl FrontEnd for ZSharpFE {
 
 impl ZSharpFE {
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
-    pub fn interpret(i: Inputs) -> T {
+    pub fn interpret(i: Inputs, input_scalar_values: FxHashMap<String, Value>) -> T {
         let loader = parser::ZLoad::new();
         let asts = loader.load(&i.file);
         let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
         g.visit_files();
         g.file_stack_push(i.file);
         g.generics_stack_push(HashMap::new());
-        g.const_entry_fn("main")
+        g.const_entry_fn("main", input_scalar_values)
     }
 }
 
@@ -97,7 +99,9 @@ struct ZGen<'ast> {
     ret_ty_stack: RefCell<Vec<Ty>>,
     gc_depth_estimate: Cell<usize>,
     assertions: RefCell<Vec<Term>>,
+    challenge_count: Cell<usize>,
     isolate_asserts: bool,
+    in_witness_gen: Cell<bool>,
 }
 
 impl<'ast> Drop for ZGen<'ast> {
@@ -141,7 +145,11 @@ fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
 enum ZVis {
     Public,
     Private(u8),
+}
+
+enum ArrayParamMetadata {
     Committed,
+    Transcript,
 }
 
 impl<'ast> ZGen<'ast> {
@@ -168,7 +176,9 @@ impl<'ast> ZGen<'ast> {
             ret_ty_stack: Default::default(),
             gc_depth_estimate: Cell::new(2 * GC_INC),
             assertions: Default::default(),
+            challenge_count: Cell::new(0),
             isolate_asserts,
+            in_witness_gen: Cell::new(false),
         };
         this.circ
             .borrow()
@@ -196,7 +206,12 @@ impl<'ast> ZGen<'ast> {
         r.unwrap_or_else(|e| self.err(e, s))
     }
 
-    fn builtin_call(f_name: &str, mut args: Vec<T>, mut generics: Vec<T>) -> Result<T, String> {
+    fn builtin_call(
+        &self,
+        f_name: &str,
+        mut args: Vec<T>,
+        mut generics: Vec<T>,
+    ) -> Result<T, String> {
         debug!("Builtin Call: {}", f_name);
         match f_name {
             "u8_to_bits" | "u16_to_bits" | "u32_to_bits" | "u64_to_bits" => {
@@ -333,6 +348,69 @@ impl<'ast> ZGen<'ast> {
                     ))
                 } else {
                     Ok(uint_lit(cfg().field().modulus().significant_bits(), 32))
+                }
+            }
+            "sample_challenge" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/sample_challenge, expected 1",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/sample_challenge, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let n = self.challenge_count.get();
+                    let t = sample_challenge(args.pop().unwrap(), n)?;
+                    self.challenge_count.set(n + 1);
+                    Ok(t)
+                }
+            }
+            "value_in_array" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/value_in_array, expected 2",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/value_in_array, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let array = args.pop().unwrap();
+                    let value = args.pop().unwrap();
+                    let map = term![Op::ExtOp(ExtOp::ArrayToMap); array.term];
+                    let flip = term![Op::ExtOp(ExtOp::MapFlip); map];
+                    let contains = term![Op::ExtOp(ExtOp::MapContainsKey); flip, value.term];
+                    Ok(T::new(Ty::Bool, contains))
+                }
+            }
+            "reverse_lookup" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/reverse_lookup, expected 2",
+                        args.len()
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/reverse_lookup, expected 1",
+                        generics.len()
+                    ))
+                } else {
+                    let value = args.pop().unwrap();
+                    let array = args.pop().unwrap();
+                    let map = term![Op::ExtOp(ExtOp::ArrayToMap); array.term.clone()];
+                    let flip = term![Op::ExtOp(ExtOp::MapFlip); map];
+                    let key = term![Op::ExtOp(ExtOp::MapSelect); flip.clone(), value.term.clone()];
+                    let key_witness = term![Op::new_witness("rlook".into()); key];
+                    if !self.in_witness_gen.get() {
+                        let eq_lookup = term![EQ; value.term, term![Op::Select; array.term, key_witness.clone()]];
+                        self.assert(eq_lookup)?;
+                    }
+                    Ok(T::new(Ty::Field, key_witness))
                 }
             }
             _ => Err(format!("Unknown or unimplemented builtin '{f_name}'")),
@@ -498,7 +576,7 @@ impl<'ast> ZGen<'ast> {
                     "explicit_generic_values got non-monomorphized generic argument".to_string(),
                 ),
             })
-            .zip(gens.into_iter())
+            .zip(gens)
             .map(|(g, n)| Ok((n.value, g?)))
             .collect()
     }
@@ -540,7 +618,7 @@ impl<'ast> ZGen<'ast> {
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Self::builtin_call(&f_name, args, generics)
+            self.builtin_call(&f_name, args, generics)
         } else {
             // XXX(unimpl) multi-return unimplemented
             assert!(f.returns.len() <= 1);
@@ -641,24 +719,41 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn const_entry_fn(&self, n: &str) -> T {
+    fn const_entry_fn(&self, n: &str, mut input_scalar_values: FxHashMap<String, Value>) -> T {
         debug!("Const entry: {}", n);
         let (f_file, f_name) = self.deref_import(n);
         if let Some(f) = self.functions.get(&f_file).and_then(|m| m.get(&f_name)) {
             if !f.generics.is_empty() {
                 panic!("const_entry_fn cannot be called on a generic function")
-            } else if !f.parameters.is_empty() {
-                panic!("const_entry_fn must be called on a function with zero arguments")
             }
+
+            let mut args = Vec::new();
+            for p in &f.parameters {
+                let name = &p.id.value;
+                let ty = self.type_(&p.ty);
+                let value = interp::extract(name, &ty, &mut input_scalar_values)
+                    .unwrap_or_else(|e| self.err(format!("Error: {e}"), &p.span));
+                args.push(value);
+            }
+
+            if !input_scalar_values.is_empty() {
+                let unused_input_list = input_scalar_values
+                    .keys()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .as_slice()
+                    .join(", ");
+                self.err(format!("Ununused inputs {unused_input_list}"), &f.span);
+            }
+
+            self.function_call_impl_::<true>(args, &[][..], None, f_file, f_name)
+                .unwrap_or_else(|e| panic!("const_entry_fn failed: {}", e))
         } else {
             panic!(
                 "No function '{:?}//{}' attempting const_entry_fn",
                 &f_file, &f_name
-            );
+            )
         }
-
-        self.function_call_impl_::<true>(Vec::new(), &[][..], None, f_file, f_name)
-            .unwrap_or_else(|e| panic!("const_entry_fn failed: {}", e))
     }
 
     fn entry_fn(&self, n: &str) {
@@ -685,12 +780,25 @@ impl<'ast> ZGen<'ast> {
         for p in f.parameters.iter() {
             let ty = self.type_(&p.ty);
             debug!("Entry param: {}: {}", p.id.value, ty);
+            let md = self.interpret_array_md(&p.array_metadata);
             let vis = self.interpret_visibility(&p.visibility);
-            if let ZVis::Committed = &vis {
-                persistent_arrays.push(p.id.value.clone());
+            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false, &md);
+            let unwrapped = self.unwrap(r, &p.span);
+            if let Some(md_some) = md {
+                match md_some {
+                    ArrayParamMetadata::Committed => {
+                        info!(
+                            "Input committed array of type {} in {:?}",
+                            ty,
+                            self.file_stack.borrow().last().unwrap()
+                        );
+                        persistent_arrays.push(p.id.value.clone());
+                    }
+                    ArrayParamMetadata::Transcript => {
+                        self.mark_array_as_transcript(&p.id.value, unwrapped);
+                    }
+                }
             }
-            let r = self.circ_declare_input(p.id.value.clone(), &ty, vis, None, false);
-            self.unwrap(r, &p.span);
         }
         for s in &f.statements {
             self.unwrap(self.stmt_impl_::<false>(s), s.span());
@@ -722,7 +830,14 @@ impl<'ast> ZGen<'ast> {
                     let name = "return".to_owned();
                     let ret_val = r.unwrap_term();
                     let ret_var_val = self
-                        .circ_declare_input(name, ty, ZVis::Public, Some(ret_val.clone()), false)
+                        .circ_declare_input(
+                            name,
+                            ty,
+                            ZVis::Public,
+                            Some(ret_val.clone()),
+                            false,
+                            &None,
+                        )
                         .expect("circ_declare return");
                     let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
                     let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
@@ -732,6 +847,7 @@ impl<'ast> ZGen<'ast> {
                         assertions.push(ret_eq);
                         term(AND, assertions)
                     };
+                    debug!("Assertion: {}", to_assert);
                     self.circ.borrow_mut().assert(to_assert);
                 }
                 Mode::Opt => {
@@ -771,13 +887,20 @@ impl<'ast> ZGen<'ast> {
             }
         }
     }
+    fn interpret_array_md(
+        &self,
+        md: &Option<ast::ArrayParamMetadata<'ast>>,
+    ) -> Option<ArrayParamMetadata> {
+        match md {
+            Some(ast::ArrayParamMetadata::Committed(_)) => Some(ArrayParamMetadata::Committed),
+            Some(ast::ArrayParamMetadata::Transcript(_)) => Some(ArrayParamMetadata::Transcript),
+            None => None,
+        }
+    }
+
     fn interpret_visibility(&self, visibility: &Option<ast::Visibility<'ast>>) -> ZVis {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => ZVis::Public,
-            Some(ast::Visibility::Committed(_)) => match self.mode {
-                Mode::Proof => ZVis::Committed,
-                _ => unimplemented!(),
-            },
             Some(ast::Visibility::Private(private)) => match self.mode {
                 Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
                     if private.number.is_some() {
@@ -884,7 +1007,7 @@ impl<'ast> ZGen<'ast> {
                 format!(
                     "Undefined const identifier {} in {}",
                     &i.value,
-                    self.cur_path().canonicalize().unwrap().to_string_lossy()
+                    self.cur_path().to_string_lossy()
                 )
             }),
             _ => match self
@@ -1036,12 +1159,12 @@ impl<'ast> ZGen<'ast> {
                 } else {
                     (self.identifier_impl_::<IS_CNST>(&p.id)?, &p.accesses[..])
                 };
-                accs.iter().fold(Ok(val), |v, acc| match acc {
+                accs.iter().try_fold(val, |v, acc| match acc {
                     ast::Access::Call(_) => {
                         Err("Function call in non-first-access position in expr".to_string())
                     }
-                    ast::Access::Member(a) => field_select(&v?, &a.id.value),
-                    ast::Access::Select(s) => self.array_access_impl_::<IS_CNST>(s, v?),
+                    ast::Access::Member(a) => field_select(&v, &a.id.value),
+                    ast::Access::Select(s) => self.array_access_impl_::<IS_CNST>(s, v),
                 })
             }
             ast::Expression::InlineStruct(u) => u
@@ -1148,7 +1271,7 @@ impl<'ast> ZGen<'ast> {
                     )),
                     _ => {
                         let b = bool(self.expr_impl_::<false>(&e.expression)?)?;
-                        self.assert(b);
+                        self.assert(b)?;
                         Ok(())
                     }
                 }
@@ -1157,10 +1280,10 @@ impl<'ast> ZGen<'ast> {
                 if IS_CNST {
                     return Err("cannot evaluate a const CondStore".into());
                 }
-                let a = self.identifier_impl_::<false>(&e.array)?;
-                let i = self.expr_impl_::<false>(&e.index)?;
-                let v = self.expr_impl_::<false>(&e.value)?;
-                let c = self.expr_impl_::<false>(&e.condition)?;
+                let a = self.identifier_impl_::<IS_CNST>(&e.array)?;
+                let i = self.expr_impl_::<IS_CNST>(&e.index)?;
+                let v = self.expr_impl_::<IS_CNST>(&e.value)?;
+                let c = self.expr_impl_::<IS_CNST>(&e.condition)?;
                 let cbool = bool(c)?;
                 let new = mut_array_store(a, i, v, cbool)?;
                 trace!("Cond store: {} to {}", e.array.value, new);
@@ -1229,13 +1352,41 @@ impl<'ast> ZGen<'ast> {
                                 l.identifier.value.clone(),
                                 decl_ty,
                                 e,
-                            )
+                            )?;
+                            let md = self.interpret_array_md(&l.array_metadata);
+                            if let Some(ArrayParamMetadata::Transcript) = md {
+                                let value = self
+                                    .circ_get_value(Loc::local(l.identifier.value.clone()))
+                                    .map_err(|e| format!("{e}"))?
+                                    .unwrap_term();
+                                self.mark_array_as_transcript(&l.identifier.value, value);
+                            }
+                            Ok(())
                         }
                     }
                 } else {
                     warn!("Statement with no LHS!");
                     Ok(())
                 }
+            }
+            ast::Statement::Witness(d) => {
+                if self.in_witness_gen.get() {
+                    return Err("already in witness generation".into());
+                }
+                self.in_witness_gen.set(true);
+                let wit_e = self.expr_impl_::<IS_CNST>(&d.expression)?;
+                self.in_witness_gen.set(false);
+                let decl_ty = self.type_impl_::<IS_CNST>(&d.ty)?;
+                let ty = wit_e.type_();
+                if &decl_ty != ty {
+                    return Err(format!(
+                        "Assignment type mismatch: {decl_ty} annotated vs {ty} actual",
+                    ));
+                }
+                let mut e = wit_e;
+                e.term = term![Op::new_witness("wit".into()); e.term];
+                self.declare_init_impl_::<IS_CNST>(d.id.value.clone(), decl_ty, e)?;
+                Ok(())
             }
         }
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(s.span())))
@@ -1277,25 +1428,23 @@ impl<'ast> ZGen<'ast> {
         match tya {
             Assignee(a) => {
                 let t = self.identifier_impl_::<IS_CNST>(&a.id)?;
-                a.accesses.iter().fold(Ok(t.ty), |ty, acc| {
-                    ty.and_then(|ty| match acc {
-                        ast::AssigneeAccess::Select(aa) => match ty {
-                            Ty::Array(sz, ity) => match &aa.expression {
-                                ast::RangeOrExpression::Expression(_) => Ok(*ity),
-                                ast::RangeOrExpression::Range(_) => Ok(Ty::Array(sz, ity)),
-                            },
-                            ty => Err(format!("Attempted array access on non-Array type {ty}")),
+                a.accesses.iter().try_fold(t.ty, |ty, acc| match acc {
+                    ast::AssigneeAccess::Select(aa) => match ty {
+                        Ty::Array(sz, ity) => match &aa.expression {
+                            ast::RangeOrExpression::Expression(_) => Ok(*ity),
+                            ast::RangeOrExpression::Range(_) => Ok(Ty::Array(sz, ity)),
                         },
-                        ast::AssigneeAccess::Member(sa) => match ty {
-                            Ty::Struct(nm, map) => map
-                                .search(&sa.id.value)
-                                .map(|r| r.1.clone())
-                                .ok_or_else(|| {
-                                    format!("No such member {} of struct {nm}", &sa.id.value)
-                                }),
-                            ty => Err(format!("Attempted member access on non-Struct type {ty}")),
-                        },
-                    })
+                        ty => Err(format!("Attempted array access on non-Array type {ty}")),
+                    },
+                    ast::AssigneeAccess::Member(sa) => match ty {
+                        Ty::Struct(nm, map) => map
+                            .search(&sa.id.value)
+                            .map(|r| r.1.clone())
+                            .ok_or_else(|| {
+                                format!("No such member {} of struct {nm}", &sa.id.value)
+                            }),
+                        ty => Err(format!("Attempted member access on non-Struct type {ty}")),
+                    },
                 })
             }
             TypedIdentifier(t) => self.type_impl_::<IS_CNST>(&t.ty),
@@ -1463,6 +1612,13 @@ impl<'ast> ZGen<'ast> {
             );
         }
 
+        if let Some(ast::ArrayParamMetadata::Transcript(_)) = &c.array_metadata {
+            if !value.type_().is_array() {
+                self.err(format!("Non-array transcript {}", &c.id.value), &c.span);
+            }
+            self.mark_array_as_transcript(&c.id.value, value.clone());
+        }
+
         // insert into constant map
         if self
             .constants
@@ -1619,15 +1775,12 @@ impl<'ast> ZGen<'ast> {
                         abs_src_path.display(),
                         dst_names
                     );
-                    src_names
-                        .into_iter()
-                        .zip(dst_names.into_iter())
-                        .for_each(|(sn, dn)| {
-                            if imap.contains_key(&dn) {
-                                self.err(format!("Import {dn} redeclared"), i_span);
-                            }
-                            assert!(imap.insert(dn, (abs_src_path.clone(), sn)).is_none());
-                        });
+                    src_names.into_iter().zip(dst_names).for_each(|(sn, dn)| {
+                        if imap.contains_key(&dn) {
+                            self.err(format!("Import {dn} redeclared"), i_span);
+                        }
+                        assert!(imap.insert(dn, (abs_src_path.clone(), sn)).is_none());
+                    });
 
                     // add included -> includer edge for later toposort
                     if !gn.contains_key(&abs_src_path) {
@@ -1838,8 +1991,11 @@ impl<'ast> ZGen<'ast> {
             .map(|m| (m.as_ref(), s_path))
     }
 
-    fn assert(&self, asrt: Term) {
+    fn assert(&self, asrt: Term) -> Result<(), String> {
         debug_assert!(matches!(check(&asrt), Sort::Bool));
+        if self.in_witness_gen.get() {
+            return Err("cannot assert in witness generation".into());
+        }
         if self.isolate_asserts {
             let path = self.circ_condition();
             self.assertions
@@ -1848,6 +2004,23 @@ impl<'ast> ZGen<'ast> {
         } else {
             self.assertions.borrow_mut().push(asrt);
         }
+        Ok(())
+    }
+
+    fn mark_array_as_transcript(&self, name: &str, array: T) {
+        info!(
+            "Transcript array {} of type {} in {:?}",
+            name,
+            array.ty,
+            self.file_stack.borrow().last().unwrap()
+        );
+        self.circ
+            .borrow()
+            .cir_ctx()
+            .cs
+            .borrow_mut()
+            .ram_arrays
+            .insert(array.term);
     }
 
     /*** circify wrapper functions (hides RefCell) ***/
@@ -1895,32 +2068,30 @@ impl<'ast> ZGen<'ast> {
         vis: ZVis,
         precomputed_value: Option<T>,
         mangle_name: bool,
+        md: &Option<ArrayParamMetadata>,
     ) -> Result<T, CircError> {
-        match vis {
-            ZVis::Public => {
-                self.circ
-                    .borrow_mut()
-                    .declare_input(name, ty, None, precomputed_value, mangle_name)
-            }
-            ZVis::Private(i) => self.circ.borrow_mut().declare_input(
+        if let Some(ArrayParamMetadata::Committed) = md {
+            let size = match ty {
+                Ty::Array(size, _) => *size,
+                _ => panic!(),
+            };
+            Ok(self.circ.borrow_mut().start_persistent_array(
+                &name,
+                size,
+                default_field(),
+                crate::front::proof::PROVER_ID,
+            ))
+        } else {
+            self.circ.borrow_mut().declare_input(
                 name,
                 ty,
-                Some(i),
+                match vis {
+                    ZVis::Public => None,
+                    ZVis::Private(i) => Some(i),
+                },
                 precomputed_value,
                 mangle_name,
-            ),
-            ZVis::Committed => {
-                let size = match ty {
-                    Ty::Array(size, _) => *size,
-                    _ => panic!(),
-                };
-                Ok(self.circ.borrow_mut().start_persistent_array(
-                    &name,
-                    size,
-                    default_field(),
-                    crate::front::proof::PROVER_ID,
-                ))
-            }
+            )
         }
     }
 

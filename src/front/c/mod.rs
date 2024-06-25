@@ -53,12 +53,12 @@ impl FrontEnd for C {
         let mut cs = Computations::new();
         let main_comp = g.circify().consume().borrow().clone();
         cs.comps.insert("main".to_string(), main_comp);
-        while !g.function_queue.is_empty() {
-            let call_term = g.function_queue.pop().unwrap();
-            if let Op::Call(name, arg_sorts, rets) = call_term.op() {
-                g.fn_call(name, arg_sorts, rets);
+        while let Some(call_term) = g.function_queue.pop() {
+            if let Op::Call(call) = call_term.op() {
+                let name = call.name.to_string();
+                g.fn_call(&name, &call.arg_sorts, &call.ret_sort);
                 let comp = g.circify().consume().borrow().clone();
-                cs.comps.insert(name.to_string(), comp);
+                cs.comps.insert(name, comp);
             } else {
                 panic!("Non-call term added to function queue.");
             }
@@ -1226,7 +1226,7 @@ impl CGen {
     }
 
     /// Returns whether this was a builtin, and thus has been handled.
-    fn maybe_handle_builtins(&mut self, name: &String, args: &Vec<CTerm>) -> Option<CTerm> {
+    fn maybe_handle_builtins(&mut self, name: &String, args: &[CTerm]) -> Option<CTerm> {
         if self.sv_functions && (name == "__VERIFIER_assert" || name == "__VERIFIER_assume") {
             assert!(args.len() == 1);
             let bool_arg = cast_to_bool(args[0].clone());
@@ -1242,7 +1242,7 @@ impl CGen {
         }
     }
 
-    fn fn_call(&mut self, name: &String, arg_sorts: &Vec<Sort>, rets: &Sort) {
+    fn fn_call(&mut self, name: &String, arg_sorts: &[Sort], rets: &Sort) {
         debug!("Call: {}", name);
 
         // Get function types
@@ -1266,11 +1266,11 @@ impl CGen {
             assert!(p_sort == arg_sorts[i]);
             let p_ty = match &param.ty {
                 Ty::Ptr(_, t) => {
-                    if let Sort::Array(_, _, len) = p_sort {
-                        let dims = vec![len];
+                    if let Sort::Array(a) = p_sort {
+                        let dims = vec![a.size];
                         // Add reference
                         ret_names.push(p_name.clone());
-                        Ty::Array(len, dims, t.clone())
+                        Ty::Array(a.size, dims, t.clone())
                     } else {
                         panic!("Ptr type does not match with Array sort: {}", p_sort)
                     }

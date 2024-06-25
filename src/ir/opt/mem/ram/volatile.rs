@@ -1,7 +1,11 @@
 //! A general-purpose RAM extractor
 use super::*;
 
-use log::trace;
+use fxhash::FxHashMap as HashMap;
+use fxhash::FxHashSet as HashSet;
+use std::collections::BinaryHeap;
+
+use log::{debug, trace};
 
 /// Graph of the *arrays* in the computation.
 ///
@@ -30,12 +34,24 @@ struct ArrayGraph {
     ram_terms: TermSet,
 }
 
+/// Are terms of sort `s` hashable using a UHF keyed by field type `f`.
+fn hashable(s: &Sort, f: &FieldT) -> bool {
+    match s {
+        Sort::Field(ff) => f == ff,
+        Sort::Tuple(ss) => ss.iter().all(|s| hashable(s, f)),
+        Sort::BitVector(_) => true,
+        Sort::Bool => true,
+        Sort::Array(a) => a.size < 20 && hashable(&a.val, f),
+        _ => false,
+    }
+}
+
 /// Does this array have a sort compatible with our RAM machinery?
 fn right_sort(t: &Term, f: &FieldT) -> bool {
     let s = check(t);
-    if let Sort::Array(k, v, _) = &s {
-        if let (Sort::Field(k), Sort::Field(v)) = (&**k, &**v) {
-            v == f && k == f
+    if let Sort::Array(a) = &s {
+        if let Sort::Field(k) = &a.key {
+            k == f && hashable(&a.val, f)
         } else {
             false
         }
@@ -56,6 +72,7 @@ impl ArrayGraph {
         let mut cs = TermMap::default();
         let mut arrs = TermSet::default();
 
+        // locate all array terms
         for t in c.terms_postorder() {
             if check(&t).is_array() {
                 arrs.insert(t.clone());
@@ -64,6 +81,7 @@ impl ArrayGraph {
             }
         }
 
+        // compute parents and children
         for t in c.terms_postorder() {
             if check(&t).is_array() {
                 for c in t.cs() {
@@ -74,12 +92,16 @@ impl ArrayGraph {
                 }
             }
         }
+
         let mut ram_terms: TermSet = TermSet::default();
         // first, we grow the set of RAM terms, from leaves towards dependents.
         {
-            let mut stack: Vec<Term> = arrs
+            // we start with the explicitly marked RAMs
+            trace!("Starting with {} RAMs", c.ram_arrays.len());
+            let mut stack: Vec<Term> = c
+                .ram_arrays
                 .iter()
-                .filter(|a| right_sort(a, field) && array_leaf(a))
+                .filter(|a| arrs.contains(a))
                 .cloned()
                 .collect();
             while let Some(top) = stack.pop() {
@@ -164,9 +186,9 @@ impl Extactor {
         // create a default RAM from `t`'s sort.
         let id = self.rams.len();
         let t_sort = check(t);
-        let (key_sort, _, size) = t_sort.as_array();
+        let (key_sort, val_sort, size) = t_sort.as_array();
         let def = BoundaryConditions::Default(key_sort.default_term());
-        let mut ram = Ram::new(id, size, self.cfg.clone(), def);
+        let mut ram = Ram::new(id, size, self.cfg.clone(), val_sort.clone(), def);
 
         // update with details specific to `t`.
         match &t.op() {
@@ -175,14 +197,10 @@ impl Extactor {
                 let value = &t.cs()[0];
                 ram.boundary_conditions = BoundaryConditions::Default(value.clone());
             }
-            Op::Const(Value::Array(a)) => {
+            Op::Const(v) if v.is_array() => {
                 // for a constant: add (constant) writes
-                for (k, v) in &a.map {
-                    ram.new_write(
-                        leaf_term(Op::Const(k.clone())),
-                        leaf_term(Op::Const(v.clone())),
-                        self.cfg.true_.clone(),
-                    );
+                for (k, v) in &v.as_array().map {
+                    ram.new_write(const_(k.clone()), const_(v.clone()), self.cfg.true_.clone());
                 }
             }
             Op::Array(..) => {
@@ -196,6 +214,46 @@ impl Extactor {
         self.rams.push(ram);
         id
     }
+}
+
+/// Given a set of terms, return an ordering of them in post-order, but also with array selects on
+/// A before stores to A.
+fn array_order<'a>(terms: HashSet<&'a Term>) -> Vec<&'a Term> {
+    let mut parents: HashMap<&'a Term, HashSet<&'a Term>> = Default::default();
+    let mut children: HashMap<&'a Term, HashSet<&'a Term>> = Default::default();
+    for t in &terms {
+        parents.entry(t).or_default();
+        children.entry(t).or_default();
+        for c in t.cs() {
+            debug_assert!(terms.contains(c));
+            parents.entry(c).or_default().insert(t);
+            children.entry(t).or_default().insert(c);
+        }
+    }
+    let mut output: Vec<&'a Term> = Default::default();
+    // max-heap contains (is_select, term) pairs; so, selects go first.
+    let mut to_output: BinaryHeap<(bool, &'a Term)> = terms
+        .iter()
+        .filter(|t| t.cs().is_empty())
+        .map(|t| (false, *t))
+        .collect();
+    let mut children_not_outputted: HashMap<&'a Term, usize> = children
+        .iter()
+        .map(|(term, children)| (*term, children.len()))
+        .collect();
+    while let Some((_, output_me)) = to_output.pop() {
+        output.push(output_me);
+        for p in parents.get(&output_me).unwrap() {
+            let count = children_not_outputted.get_mut(p).unwrap();
+            assert!(*count > 0);
+            *count -= 1;
+            if *count == 0 {
+                to_output.push((matches!(p.op(), Op::Select), *p));
+            }
+        }
+    }
+    assert_eq!(output.len(), terms.len());
+    output
 }
 
 impl RewritePass for Extactor {
@@ -213,7 +271,7 @@ impl RewritePass for Extactor {
                 "Bad ram term: {}",
                 t
             );
-            debug_assert!(self.graph.children.get(t).is_some());
+            debug_assert!(self.graph.children.contains_key(t));
             debug_assert_eq!(1, self.graph.children.get(t).unwrap().len());
             // Get dependency's RAM
             let child = self.graph.children.get(t).unwrap()[0].clone();
@@ -242,13 +300,97 @@ impl RewritePass for Extactor {
             match &t.op() {
                 // Rewrite select's whose array is a RAM term
                 Op::Select if self.graph.ram_terms.contains(&t.cs()[0]) => {
-                    let ram_id = self.get_or_start(&t.cs()[0]);
+                    let array = &t.cs()[0];
+                    let idx = &t.cs()[1];
+                    // If we're based on a leaf
+                    let ram_id = if array_leaf(array) {
+                        // check if that leaf has a RAM already
+                        if let Some(id) = self.term_ram.get(array) {
+                            *id
+                        } else {
+                            let id = self.start_ram_for_leaf(array);
+
+                            self.term_ram.insert(array.clone(), id);
+                            id
+                        }
+                    } else {
+                        // otherwise, assume that our parent has a RAM already
+                        *self.term_ram.get(array).unwrap()
+                    };
                     let ram = &mut self.rams[ram_id];
-                    let read_value = ram.new_read(t.cs()[1].clone(), computation, t.clone());
+                    let read_value = ram.new_read(idx.clone(), computation, t.clone());
                     self.read_terms.insert(t.clone(), read_value.clone());
                     Some(read_value)
                 }
                 _ => None,
+            }
+        }
+    }
+
+    fn traverse(&mut self, computation: &mut Computation) {
+        let initial_precompute_len = computation.precomputes.outputs.len();
+        let terms: Vec<Term> = computation.terms_postorder().collect();
+        let term_refs: HashSet<&Term> = terms.iter().collect();
+        let mut cache = TermMap::<Term>::default();
+        for top in array_order(term_refs) {
+            debug_assert!(!cache.contains_key(top));
+            let new_t_opt = self.visit_cache(computation, top, &cache);
+            let new_t = new_t_opt.unwrap_or_else(|| {
+                term(
+                    top.op().clone(),
+                    top.cs()
+                        .iter()
+                        .map(|c| cache.get(c).unwrap())
+                        .cloned()
+                        .collect(),
+                )
+            });
+            cache.insert(top.clone(), new_t);
+        }
+        computation.outputs = computation
+            .outputs
+            .iter()
+            .map(|o| cache.get(o).unwrap().clone())
+            .collect();
+        let final_precompute_len = computation.precomputes.outputs.len();
+        debug!("from {initial_precompute_len} to {final_precompute_len} pre-variables");
+        if !self.rams.is_empty() {
+            for t in PostOrderIter::from_roots_and_skips(
+                computation.precomputes.sequence()[..initial_precompute_len]
+                    .iter()
+                    .map(|(name, _)| computation.precomputes.outputs.get(name).unwrap())
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                cache.keys().cloned().collect(),
+            ) {
+                // false positive: the value constructor uses `cache`.
+                #[allow(clippy::map_entry)]
+                if !cache.contains_key(&t) {
+                    let new_t = term(
+                        t.op().clone(),
+                        t.cs()
+                            .iter()
+                            .map(|c| cache.get(c).unwrap().clone())
+                            .collect(),
+                    );
+                    cache.insert(t, new_t);
+                }
+            }
+            // false positive; need to clone to drop reference.
+            #[allow(clippy::unnecessary_to_owned)]
+            for (name, _sort) in
+                computation.precomputes.sequence()[..initial_precompute_len].to_owned()
+            {
+                let term = computation.precomputes.outputs.get_mut(&name).unwrap();
+                *term = cache.get(term).unwrap().clone();
+            }
+            computation.precomputes.reorder();
+            if !self.cfg.waksman {
+                for ram in &mut self.rams {
+                    if ram.is_covering_rom() {
+                        ram.cfg.covering_rom = true;
+                    }
+                }
             }
         }
     }
@@ -273,7 +415,13 @@ pub fn extract(c: &mut Computation, cfg: AccessCfg) -> Vec<Ram> {
 
 /// Extract any volatile RAMS from a computation, and emit checks.
 pub fn apply(c: &mut Computation, cfg: &AccessCfg) {
+    if c.ram_arrays.is_empty() {
+        debug!("Skipping VolatileRam; no RAM arrays marked.");
+        debug!("Found 0 RAMs");
+        return;
+    }
     let rams = extract(c, cfg.clone());
+    debug!("Found {} transcripts", rams.len());
     if !rams.is_empty() {
         for ram in rams {
             super::checker::check_ram(c, ram);
@@ -294,6 +442,7 @@ mod test {
             (computation
                 (metadata (parties ) (inputs ) (commitments))
                 (precompute () () (#t ))
+                (ram_arrays (#a (mod 11) #f0m11 4 ()))
                 (set_default_modulus 11
                     (let
                         (
@@ -324,6 +473,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs ) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -366,6 +516,7 @@ mod test {
                 (computation
                     (metadata (parties ) (inputs (a bool)) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -383,7 +534,7 @@ mod test {
         let field = FieldT::from(rug::Integer::from(11));
         let rams = extract(&mut cs2, AccessCfg::default_from_field(field.clone()));
         extras::assert_all_vars_declared(&cs2);
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let a = var("a".to_string(), Sort::Bool);
         assert_ne!(cs, cs2);
         assert_eq!(1, rams.len());
         assert_eq!(3, rams[0].accesses.len());
@@ -402,12 +553,13 @@ mod test {
 
     #[test]
     fn mix_store_chain() {
-        let a = leaf_term(Op::Var("a".to_string(), Sort::Bool));
+        let a = var("a".to_string(), Sort::Bool);
         let cs = text::parse_computation(
             b"
                 (computation
                     (metadata (parties ) (inputs (a bool)) (commitments))
                     (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
                     (set_default_modulus 11
                     (let
                         (
@@ -449,6 +601,7 @@ mod test {
                (computation
                    (metadata (parties ) (inputs (a bool)) (commitments))
                    (precompute () () (#t ))
+                   (ram_arrays (#a (mod 11) #f000m11 4 ()))
                    (set_default_modulus 11
                    (let
                        (
@@ -495,6 +648,7 @@ mod test {
                (computation
                    (metadata (parties ) (inputs (a bool)) (commitments))
                    (precompute () () (#t ))
+                   (ram_arrays (#a (mod 11) #f0m11 16 ()))
                    (set_default_modulus 11
                    (let
                         (
@@ -517,6 +671,85 @@ mod test {
         assert_eq!(cs, cs2);
     }
 
+    #[test]
+    fn rom() {
+        let cs = text::parse_computation(
+            b"
+                (computation
+                    (metadata (parties ) (inputs ) (commitments))
+                    (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
+                    (set_default_modulus 11
+                    (let
+                        (
+                            (c_array (#a (mod 11) #f0 4 ()))
+                            (x0 (select c_array #f0))
+                            (x1 (select c_array #f1))
+                            (x2 (select c_array #f2))
+                            (x3 (select c_array #f3))
+                        )
+                        (+ x0 x1 x2 x3)
+                    ))
+                )
+            ",
+        );
+        let mut cs2 = cs.clone();
+        cstore::parse(&mut cs2);
+        let field = FieldT::from(rug::Integer::from(11));
+        let rams = extract(&mut cs2, AccessCfg::default_from_field(field.clone()));
+        extras::assert_all_vars_declared(&cs2);
+        assert_ne!(cs, cs2);
+        assert_eq!(1, rams.len());
+        assert_eq!(4, rams[0].accesses.len());
+    }
+
+    #[test]
+    fn multi_arm_tree() {
+        let cs = text::parse_computation(
+            b"
+                (computation
+                    (metadata (parties ) (inputs ) (commitments))
+                    (precompute () () (#t ))
+                    (ram_arrays (#a (mod 11) #f0m11 4 ()))
+                    (set_default_modulus 11
+                    (let
+                        (
+                            (a0 (#a (mod 11) #f0 4 ()))
+                            (a1 (store a0 #f0 #f1))
+                            (x0 (select a1 #f0))
+                            (x1 (select a1 #f1))
+                            (a2 (store a1 #f0 #f1))
+                            (x2 (select a2 #f2))
+                            (x3 (select a2 #f3))
+                            (a3 (store a2 #f1 #f1))
+                            (x4 (select a3 #f0))
+                            (x5 (select a3 #f1))
+                        )
+                        (+ x0 x1 x2 x3 x4 x5)
+                    ))
+                )
+            ",
+        );
+        let mut cs2 = cs.clone();
+        cstore::parse(&mut cs2);
+        let field = FieldT::from(rug::Integer::from(11));
+        let rams = extract(&mut cs2, AccessCfg::default_from_field(field.clone()));
+        extras::assert_all_vars_declared(&cs2);
+        assert_ne!(cs, cs2);
+        assert_eq!(1, rams.len());
+        assert_eq!(9, rams[0].accesses.len());
+        println!("{:?}", rams[0].accesses);
+        assert_eq!(bool_lit(true), rams[0].accesses[0].write.b);
+        assert_eq!(bool_lit(false), rams[0].accesses[1].write.b);
+        assert_eq!(bool_lit(false), rams[0].accesses[2].write.b);
+        assert_eq!(bool_lit(true), rams[0].accesses[3].write.b);
+        assert_eq!(bool_lit(false), rams[0].accesses[4].write.b);
+        assert_eq!(bool_lit(false), rams[0].accesses[5].write.b);
+        assert_eq!(bool_lit(true), rams[0].accesses[6].write.b);
+        assert_eq!(bool_lit(false), rams[0].accesses[7].write.b);
+        assert_eq!(bool_lit(false), rams[0].accesses[8].write.b);
+    }
+
     #[cfg(feature = "poly")]
     #[test]
     fn length_4() {
@@ -533,6 +766,7 @@ mod test {
                     (commitments)
                 )
                 (precompute () () (#t ))
+                (ram_arrays ((fill (mod 101) 4) #f0m11))
                 (set_default_modulus 101
                 (let(
                   ('1 ((fill (mod 101) 4) #f0))

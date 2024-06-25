@@ -60,7 +60,7 @@
 //! fast vector type, instead of standard terms. This allows for log-time updates.
 
 use crate::ir::term::{
-    bv_lit, check, leaf_term, term, Array, Computation, Node, Op, PostOrderIter, Sort, Term,
+    bv_lit, check, const_, term, Array, ArrayOp, Computation, Node, Op, PostOrderIter, Sort, Term,
     TermMap, Value, AND,
 };
 use std::collections::BTreeMap;
@@ -122,7 +122,7 @@ impl TupleTree {
             TupleTree::NonTuple(cs) => {
                 if let Sort::Tuple(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Field(i); cs.clone()])
-                } else if let Sort::Array(_, _, _) = check(cs) {
+                } else if let Sort::Array(_) = check(cs) {
                     TupleTree::NonTuple(term![Op::Select; cs.clone(), bv_lit(i, 32)])
                 } else {
                     panic!("Get ({}) on non-tuple {:?}", i, self)
@@ -147,6 +147,15 @@ impl TupleTree {
         match self {
             TupleTree::NonTuple(t) => t,
             _ => panic!("{:?} is tuple!", self),
+        }
+    }
+    #[allow(clippy::wrong_self_convention)]
+    fn as_term(self) -> Term {
+        match self {
+            TupleTree::NonTuple(t) => t,
+            TupleTree::Tuple(items) => {
+                term(Op::Tuple, items.into_iter().map(|i| i.as_term()).collect())
+            }
         }
     }
 }
@@ -187,7 +196,7 @@ fn termify_val_tuples(v: Value) -> TupleTree {
     if let Value::Tuple(vs) = v {
         TupleTree::Tuple(Vec::from(vs).into_iter().map(termify_val_tuples).collect())
     } else {
-        TupleTree::NonTuple(leaf_term(Op::Const(v)))
+        TupleTree::NonTuple(const_(v))
     }
 }
 
@@ -224,15 +233,22 @@ fn untuple_value(v: &Value) -> Value {
     }
 }
 
+fn find_tuple_term(t: Term) -> Option<Term> {
+    PostOrderIter::new(t).find(|c| matches!(check(c), Sort::Tuple(..)))
+}
+
 #[allow(dead_code)]
 fn tuple_free(t: Term) -> bool {
-    PostOrderIter::new(t).all(|c| !matches!(check(&c), Sort::Tuple(..)))
+    find_tuple_term(t).is_none()
 }
 
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
     let mut lifted: TermMap<TupleTree> = TermMap::default();
-    for t in cs.terms_postorder() {
+    let terms =
+        PostOrderIter::from_roots_and_skips(cs.outputs().iter().cloned(), Default::default());
+    // .chain(cs.precomputes.outputs().values().cloned()),
+    for t in terms {
         let mut cs: Vec<TupleTree> = t
             .cs()
             .iter()
@@ -261,14 +277,20 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 debug_assert!(cs.is_empty());
                 a.bimap(|a, v| term![Op::Store; a, i.clone(), v], &v)
             }
-            Op::Array(k, _v) => TupleTree::transpose_map(cs, |children| {
+            Op::Array(a) => TupleTree::transpose_map(cs, |children| {
                 assert!(!children.is_empty());
                 let v_s = check(&children[0]);
-                term(Op::Array(k.clone(), v_s), children)
+                term(
+                    Op::Array(Box::new(ArrayOp {
+                        key: a.key.clone(),
+                        val: v_s,
+                    })),
+                    children,
+                )
             }),
-            Op::Fill(key_sort, size) => {
+            Op::Fill(_) => {
                 let values = cs.pop().unwrap();
-                values.map(|v| term![Op::Fill(key_sort.clone(), *size); v])
+                values.map(|v| term![t.op().clone(); v])
             }
             Op::Select => {
                 let i = cs.pop().unwrap().unwrap_non_tuple();
@@ -290,7 +312,7 @@ pub fn eliminate_tuples(cs: &mut Computation) {
             Op::Tuple => TupleTree::Tuple(cs.into()),
             _ => TupleTree::NonTuple(term(
                 t.op().clone(),
-                cs.into_iter().map(|c| c.unwrap_non_tuple()).collect(),
+                cs.into_iter().map(|c| c.as_term()).collect(),
             )),
         };
         lifted.insert(t, new_t);
@@ -299,8 +321,15 @@ pub fn eliminate_tuples(cs: &mut Computation) {
         .into_iter()
         .flat_map(|o| lifted.get(&o).unwrap().clone().flatten())
         .collect();
+    //    let os = cs.precomputes.outputs().clone();
+    //    for (name, old_term) in os {
+    //        let new_term = lifted.get(&old_term).unwrap().clone().as_term();
+    //        cs.precomputes.change_output(&name, new_term);
+    //    }
     #[cfg(debug_assertions)]
     for o in &cs.outputs {
-        assert!(tuple_free(o.clone()));
+        if let Some(t) = find_tuple_term(o.clone()) {
+            panic!("Tuple term {}", t)
+        }
     }
 }

@@ -1,6 +1,7 @@
 //! A trait for CirC-compatible proofs
 
 use std::fs::File;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 use bincode::{deserialize_from, serialize_into};
@@ -12,7 +13,7 @@ use crate::ir::term::text::parse_value_map;
 use crate::ir::term::Value;
 
 fn serialize_into_file<S: Serialize, P: AsRef<Path>>(data: &S, path: P) -> std::io::Result<()> {
-    let mut file = File::create(path.as_ref())?;
+    let mut file = BufWriter::new(File::create(path.as_ref())?);
     serialize_into(&mut file, data).unwrap();
     Ok(())
 }
@@ -20,7 +21,7 @@ fn serialize_into_file<S: Serialize, P: AsRef<Path>>(data: &S, path: P) -> std::
 fn deserialize_from_file<D: for<'a> Deserialize<'a>, P: AsRef<Path>>(
     path: P,
 ) -> std::io::Result<D> {
-    Ok(deserialize_from(File::open(path.as_ref())?).unwrap())
+    Ok(deserialize_from(BufReader::new(File::open(path.as_ref())?)).unwrap())
 }
 
 fn value_map_from_path<P: AsRef<Path>>(path: P) -> std::io::Result<HashMap<String, Value>> {

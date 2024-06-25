@@ -1,0 +1,53 @@
+\newcommand{\xspacemm}{\ifmmode\else\xspace\fi}
+
+\newcommand{\prover}{\ensuremath{\mathcal{P}}\xspacemm}
+\newcommand{\verifier}{\ensuremath{\mathcal{V}}\xspacemm}
+\newcommand{\constraints}{\ensuremath{\mathcal{C}}\xspacemm}
+\newcommand{\FF}{\ensuremath{\mathbb{F}}\xspace}
+\newcommand{\NN}{\ensuremath{\mathbb{N}}\xspace}
+\newcommand{\zo}{\ensuremath{\{0,1\}}\xspace}
+\newcommand{\ext}{\mathsf{Ext}\xspacemm}
+\newcommand{\enc}{\mathsf{Enc}\xspacemm}
+\newcommand{\Prove}{\mathsf{Prove}\xspacemm}
+\newcommand{\Verify}{\mathsf{Verify}\xspacemm}
+\newcommand{\negl}{\mathsf{negl}\xspacemm}
+\newcommand{\rfrom}{\xleftarrow{\text{\$}}}
+
+\newcommand{\MA}{\ensuremath{\mathcal{MA}}\xspacemm}
+\newcommand{\NP}{\ensuremath{\mathcal{NP}}\xspacemm}
+\newcommand{\ZoK}{ZoKrates\xspacemm}
+\newcommand{\zkSNARK}{zkSNARK\xspacemm}
+\newcommand{\zkSNARKs}{zkSNARKs\xspacemm}
+\newcommand{\zsharp}{Z\#\xspacemm}
+
+\newcommand{\pp}{\ensuremath{\mathsf{pp}}\xspacemm}
+\newcommand{\bnds}{\ensuremath{\mathsf{bnds}}\xspacemm}
+
+% Memory
+\newcommand{\MemAcc}{\ensuremath{\mathsf{acc}}\xspacemm}
+\newcommand{\MemWr}{\ensuremath{\mathsf{wr}}\xspacemm}
+\newcommand{\MemAdr}{\ensuremath{\mathsf{adr}}\xspacemm}
+\newcommand{\MemVal}{\ensuremath{\mathsf{val}}\xspacemm}
+\newcommand{\MemTime}{\ensuremath{\mathsf{t}}\xspacemm}
+
+\newcommand{\CtxElem}{\ensuremath{\mathsf{CtxElem}}\xspacemm}
+\newcommand{\MsHash}{\ensuremath{{H_\text{r}}}\xspacemm}
+\newcommand{\Uhf}{\ensuremath{{H_\text{c}}}\xspacemm}
+
+% CIC/lean terms
+\newcommand{\dbrk}[1]{\ensuremath{{[\![{#1}]\!]}}\xspacemm}
+\newcommand{\nat}{\ensuremath{\texttt{nat}}\xspacemm}
+\newcommand{\add}{\ensuremath{\texttt{add}}\xspacemm}
+
+% Eval
+\newcommand{\stdlib}{\ensuremath{\mathsf{stdlib}}\xspacemm}
+\newcommand{\mathlib}{\ensuremath{\mathsf{mathlib}}\xspacemm}
+\newcommand{\program}{\ensuremath{\mathsf{program}}\xspacemm}
+
+% \let\oldvec\vec
+\renewcommand{\vec}[1]{\ensuremath{\mathbf{#1}}\xspacemm}
+
+\newcommand{\csPerA}[1]{{\color{blue}\ensuremath{#1\cdot A} constraints}}
+\newcommand{\romCsPerA}[1]{{\color{purple}(ROM: \ensuremath{#1\cdot A} constraints)}}
+\newcommand{\csPerN}[1]{{\color{red}\ensuremath{#1 \cdot N} constraints}}
+\newcommand{\csPerT}[1]{{\color{blue}\ensuremath{#1\cdot 3A} constraints}}

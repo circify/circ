@@ -1,0 +1,10 @@
+const u32 N = 100
+const u32 A = 100
+const field[N] TABLE = [4, ...[5; N-1]]
+
+def main(field[A] is) -> field:
+    field sum = 0
+    for u32 i in 0..A do
+        sum = sum + TABLE[is[i]]
+    endfor
+    return sum

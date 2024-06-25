@@ -6,7 +6,7 @@ pub fn one<T: Table<u8>>() {
     let n = T::create_ref(&1, []);
     assert_eq!(T::table_size(), 1);
     std::mem::drop(n);
-    T::gc();
+    assert_eq!(1, T::gc());
     assert_eq!(T::table_size(), 0);
 }
 

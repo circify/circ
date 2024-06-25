@@ -1,0 +1,219 @@
+from "assert_well_formed" import fits_in_bits, fits_in_bits_sparse
+from "EMBED" import unpack, reverse_lookup //, value_in_array
+from "const_range_check" import D_TO_S_10, D_TO_S_11
+
+struct Dual {
+    field s
+    field d
+}
+
+def ceildiv(u32 x, u32 y) -> u32:
+    return (x + y - 1) / y
+// Reverse the limbs
+def reverse_limbs<N>(field[N] input) -> field[N]:
+    field[N] output = [0; N]
+    for u32 i in 0..N do
+        output[i] = input[N-1-i]
+    endfor
+    return output
+    
+// convert the limb representation (in dense form) into a value
+def combine_limbs<N>(field[N] input, u32[N] LIMBWIDTH) -> field:
+    field output = 0
+    u32 CUR_WIDTH = 0
+    for u32 i in 0..N do
+        u32 W = LIMBWIDTH[i]
+        output = output + input[i] * (2 ** CUR_WIDTH)
+        CUR_WIDTH = CUR_WIDTH + LIMBWIDTH[i]
+    endfor
+    return output
+
+// convert the limb representation (in sparse form) into a value
+def combine_sparse_limbs<N>(field[N] input, u32[N] LIMBWIDTH) -> field:
+    u32[N] SPARSE_LIMBWIDTH = [0; N]
+    for u32 i in 0..N do
+        SPARSE_LIMBWIDTH[i] = 2 * LIMBWIDTH[i]
+    endfor
+    return combine_limbs::<N>(input, SPARSE_LIMBWIDTH)
+
+// split a number into (unchecked) high and low bits
+def unsafe_split<LOW_BITS,HIGH_BITS>(field x) -> field[2]:
+    u32 TOTAL_BITS = LOW_BITS + HIGH_BITS
+    bool[TOTAL_BITS] bits = unpack(x)
+    field low = 0
+    field high = 0
+    for u32 i in 0..LOW_BITS do
+        low = low + (2 ** i) * (if bits[TOTAL_BITS-1-i] then 1 else 0 fi)
+    endfor
+    // for u32 i in LOW_BITS..HIGH_BITS do
+    for u32 i in LOW_BITS..TOTAL_BITS do
+        // high = high + 2 ** i * (if bits[LOW_BITS+HIGH_BITS-1-i] then 1 else 0 fi)
+        high = high + (2 ** (i-LOW_BITS)) * (if bits[TOTAL_BITS-1-i] then 1 else 0 fi)
+    endfor
+    return [low, high]
+
+// split a number into (unchecked) N limbs
+def unsafe_split_dyn<N>(field x, u32[N] LIMBWIDTH) -> field[N]:
+    u32 TOTAL_WIDTH = 0
+    for u32 i in 0..N do
+        TOTAL_WIDTH = TOTAL_WIDTH + LIMBWIDTH[i]
+    endfor
+    bool[TOTAL_WIDTH] bits = unpack(x)
+    field[N] output = [0; N]
+    u32 idx = TOTAL_WIDTH-1
+    for u32 i in 0..N do
+        for u32 j in 0..LIMBWIDTH[i] do
+            output[i] = output[i] + 2 ** j * (if bits[idx] then 1 else 0 fi)
+            idx = idx - 1
+        endfor
+    endfor
+    return output
+
+// split a number in sparse form into (unchecked) N limbs
+// Note: LIMBWIDTH is unsparsed
+def unsafe_split_dyn_sparse<N>(field x, u32[N] LIMBWIDTH) -> field[N]:
+    u32[N] LIMBWIDTH_SPARSE = [0; N]
+    for u32 i in 0..N do
+        LIMBWIDTH_SPARSE[i] = 2 * LIMBWIDTH[i]
+    endfor
+    return unsafe_split_dyn::<N>(x, LIMBWIDTH_SPARSE)
+
+// split a 2W bit number into (unchecked) even and odd bits (in sparse form)
+def unsafe_separate_sparse<N>(field x) -> field[2]:
+    bool[2*N] bits = unpack(x)
+    field even = 0
+    field odd = 0
+    for u32 i in 0..N do
+        even = even + 4 ** i * (if bits[2*N-1-(2*i)] then 1 else 0 fi)
+        odd = odd + 4 ** i * (if bits[2*N-1-(2*i+1)] then 1 else 0 fi)
+    endfor
+    return [even, odd]
+
+// - Split input into limbs according to LIMBWIDTH
+// - Check that the split limbs are sparse forms of desired bitwidths
+def split_limbs_in_sparse<N>(field input, u32[N] LIMBWIDTH) -> field[N]:
+    unsafe witness field[N] output_limbs = unsafe_split_dyn_sparse::<N>(input, LIMBWIDTH) // should not cost any constraint
+    field[N] safe_output_limbs = [0, ...output_limbs[1..N]]
+    u32 Nm1 = N - 1
+    safe_output_limbs[0] = input - combine_sparse_limbs::<Nm1>(safe_output_limbs[1..N], LIMBWIDTH[1..N]) * (2 ** (2 * LIMBWIDTH[0])) // output_limbs[N-1]||..||output_limbs[0] = overall_split[0]||overall_split[1]
+
+    field check_left = 0
+    // u32 CUR_WIDTH = 0
+    for u32 i in 0..N do
+        u32 W = LIMBWIDTH[i]
+        // Check that the output limbs are well-formed
+        assert(fits_in_bits_sparse::<W>(output_limbs[i]))
+    endfor
+    return output_limbs
+
+// ** to test
+def split_limbs_in_sparse_to_dense<N>(field input, u32[N] LIMBWIDTH) -> field[N]:
+    unsafe witness field[N] output_limbs = unsafe_split_dyn_sparse::<N>(input, LIMBWIDTH) // should not cost any constraint
+    field[N] safe_output_limbs = [0, ...output_limbs[1..N]]
+    u32 Nm1 = N - 1
+    safe_output_limbs[0] = input - combine_sparse_limbs::<Nm1>(safe_output_limbs[1..N], LIMBWIDTH[1..N]) * (2 ** (2 * LIMBWIDTH[0])) // output_limbs[N-1]||..||output_limbs[0] = overall_split[0]||overall_split[1]
+
+    field check_left = 0
+    field[N] output_limbs_sparse = [0; N]
+    output_limbs_sparse[0] = reverse_lookup(D_TO_S_11, output_limbs[0])
+    output_limbs_sparse[1] = reverse_lookup(D_TO_S_11, output_limbs[1])
+    output_limbs_sparse[2] = reverse_lookup(D_TO_S_10, output_limbs[2])
+
+    return output_limbs_sparse
+
+// get the old and even bits of a 2N-bit value in sparse form (without checking if they are well-formed)
+def split_both_sparse_inner<W>(field x) -> field[2]:
+    unsafe witness field[2] split = unsafe_separate_sparse::<W>(x)
+    field[2] safe_split = [0, split[1]]
+    safe_split[0] = x - 2 * safe_split[1]
+    return safe_split
+
+// get the even bits of a 2*10-bit value in dual form; ensures the value fits in 2*10 bits.
+def split_even_dual_10(field x) -> Dual:
+    field[2] split = split_both_sparse_inner::<10>(x) // do I need to add unsafe witness here?
+    field even = split[0]
+    field odd = split[1]
+    field even_d = reverse_lookup(D_TO_S_10, even)
+    assert(fits_in_bits_sparse::<10>(odd))
+    return Dual { s: even, d: even_d }
+
+// get the odd bits of a 2*10-bit value in dual form; ensures the value fits in 2*10 bits.
+def split_odd_dual_10(field x) -> Dual:
+    field[2] split = split_both_sparse_inner::<10>(x) // do I need to add unsafe witness here?
+    field even = split[0]
+    field odd = split[1]
+    field odd_d = reverse_lookup(D_TO_S_10, odd) // implicitly does fits_in_bits_sparse::<10>(odd)
+    assert(fits_in_bits_sparse::<10>(even))
+    return Dual { s: odd, d: odd_d }
+
+// get the even bits of a 2*11-bit value in dual form; ensures the value fits in 2*11 bits.
+def split_even_dual_11(field x) -> Dual: // it can probably merged with split_even_dual_10
+    field[2] split = split_both_sparse_inner::<11>(x) // do I need to add unsafe witness here?
+    field even = split[0]
+    field odd = split[1]
+    field even_d = reverse_lookup(D_TO_S_11, even)
+    assert(fits_in_bits_sparse::<11>(odd))
+    return Dual { s: even, d: even_d }
+
+// ** to test
+// return dense form of even bits
+def split_even_dual_for_all_limbs(field x, u32[3] LIMBWIDTH) -> field[3]:
+    u32 TOTAL_WIDTH = 32
+    field[2] split = split_both_sparse_inner::<TOTAL_WIDTH>(x)
+    field even = split[0]
+    field odd = split[1]
+    field[3] even_dense = split_limbs_in_sparse_to_dense::<3>(even, LIMBWIDTH)
+    field[3] odd_sparse = split_limbs_in_sparse::<3>(odd, LIMBWIDTH) // for range check only
+    return even_dense
+
+// get the odd bits of a 2*11-bit value in dual form; ensures the value fits in 2*11 bits.
+def split_odd_dual_11(field x) -> Dual:
+    field[2] split = split_both_sparse_inner::<11>(x) // do I need to add unsafe witness here?
+    field even = split[0]
+    field odd = split[1]
+    field odd_d = reverse_lookup(D_TO_S_11, odd)
+    
+    assert(fits_in_bits_sparse::<11>(even))
+    return Dual { s: odd, d: odd_d }
+
+def dual_limbs_to_sparse_limbs<N>(Dual[N] input) -> field[N]:
+    field[N] output = [0; N]
+    for u32 i in 0..N do
+        output[i] = input[i].s
+    endfor
+    return output
+
+def dual_limbs_to_dense_limbs<N>(Dual[N] input) -> field[N]:
+    field[N] output = [0; N]
+    for u32 i in 0..N do
+        output[i] = input[i].d
+    endfor
+    return output
+    
+// convert a dense W-bit value to dual form; ensures the value fits in W bits.
+// Note: Lookup implicitly checks that the value fits in W bits
+// Assume W = 10 or 11
+def dense_to_dual<W>(field x) -> Dual:
+    assert(W == 10 || W == 11)
+    field s = if W == 10 then D_TO_S_10[x] else D_TO_S_11[x] fi
+    return Dual {s: s, d: x}
+
+// def dense_to_dual_11_11_10(field[3] input) -> Dual[3]:
+//     return [dense_to_dual::<11>(input[0]), dense_to_dual::<11>(input[1]), dense_to_dual::<10>(input[2])]
+
+// Convert input in dense form to dual form
+def dense_limb_to_dual_limb<N>(field[N] input, u32[N] LIMBWIDTH) -> Dual[N]:
+    Dual[N] output = [Dual {s: 0, d: 0}; N]
+    for u32 i in 0..N do
+        u32 W = LIMBWIDTH[i]
+        output[i] = dense_to_dual::<W>(input[i])
+    endfor
+    return output
+
+// Convert input in dense form to dual form
+def dense_limbs_to_dual_limbs<N, NL>(field[N][NL] input, u32[N] LIMBWIDTH) -> Dual[N][NL]:
+    Dual[N][NL] output = [[Dual {s: 0, d: 0}; NL]; N]
+    for u32 i in 0..N do
+        output[i] = dense_limb_to_dual_limb::<NL>(input[i], LIMBWIDTH)
+    endfor
+    return output

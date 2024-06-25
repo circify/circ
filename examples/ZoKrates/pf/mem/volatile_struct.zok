@@ -1,0 +1,17 @@
+// volatile RAM
+const u32 LEN = 8196
+const field ACCESSES = 30
+
+struct Pt {
+    field x
+    field y
+}
+
+def main(private field x, private field y, private bool b) -> field:
+    transcript Pt [LEN] array = [Pt {x: 0, y: 0} ; LEN]
+    for field i in 0..ACCESSES do
+        array[x+i] = if b then Pt{x : 1, y: i} else array[x+i] fi
+    endfor
+    return array[y].x
+
+

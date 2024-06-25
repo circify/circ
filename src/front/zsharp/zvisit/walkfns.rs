@@ -189,6 +189,17 @@ pub fn walk_parameter<'ast, Z: ZVisitorMut<'ast>>(
     visitor.visit_span(&mut param.span)
 }
 
+pub fn walk_array_param_metadata<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    vis: &mut ast::ArrayParamMetadata<'ast>,
+) -> ZVisitorResult {
+    use ast::ArrayParamMetadata::*;
+    match vis {
+        Committed(x) => visitor.visit_array_committed(x),
+        Transcript(x) => visitor.visit_array_transcript(x),
+    }
+}
+
 pub fn walk_visibility<'ast, Z: ZVisitorMut<'ast>>(
     visitor: &mut Z,
     vis: &mut ast::Visibility<'ast>,
@@ -196,7 +207,6 @@ pub fn walk_visibility<'ast, Z: ZVisitorMut<'ast>>(
     use ast::Visibility::*;
     match vis {
         Public(pu) => visitor.visit_public_visibility(pu),
-        Committed(c) => visitor.visit_commited_visibility(c),
         Private(pr) => visitor.visit_private_visibility(pr),
     }
 }
@@ -708,6 +718,7 @@ pub fn walk_statement<'ast, Z: ZVisitorMut<'ast>>(
     match stmt {
         Return(r) => visitor.visit_return_statement(r),
         Definition(d) => visitor.visit_definition_statement(d),
+        Witness(d) => visitor.visit_witness_statement(d),
         Assertion(a) => visitor.visit_assertion_statement(a),
         CondStore(a) => visitor.visit_cond_store_statement(a),
         Iteration(i) => visitor.visit_iteration_statement(i),
@@ -731,6 +742,16 @@ pub fn walk_definition_statement<'ast, Z: ZVisitorMut<'ast>>(
     def.lhs
         .iter_mut()
         .try_for_each(|l| visitor.visit_typed_identifier_or_assignee(l))?;
+    visitor.visit_expression(&mut def.expression)?;
+    visitor.visit_span(&mut def.span)
+}
+
+pub fn walk_witness_statement<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    def: &mut ast::WitnessStatement<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_type(&mut def.ty)?;
+    visitor.visit_identifier_expression(&mut def.id)?;
     visitor.visit_expression(&mut def.expression)?;
     visitor.visit_span(&mut def.span)
 }
@@ -794,7 +815,7 @@ pub fn walk_cond_store_statement<'ast, Z: ZVisitorMut<'ast>>(
 ) -> ZVisitorResult {
     visitor.visit_identifier_expression(&mut s.array)?;
     visitor.visit_array_index_expression(&mut s.index)?;
-    visitor.visit_array_index_expression(&mut s.value)?;
+    visitor.visit_expression(&mut s.value)?;
     visitor.visit_expression(&mut s.condition)?;
     visitor.visit_span(&mut s.span)
 }

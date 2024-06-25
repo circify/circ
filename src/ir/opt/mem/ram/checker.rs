@@ -1,168 +1,197 @@
 //! RAM checking
-use super::hash::{MsHasher, UniversalHasher};
+use super::hash::MsHasher;
 use super::*;
 use crate::front::PROVER_VIS;
 use crate::util::ns::Namespace;
 use circ_fields::FieldT;
-use log::trace;
+use log::{debug, trace};
+
+mod permutation;
+pub mod rom;
 
 /// Check a RAM
 pub fn check_ram(c: &mut Computation, ram: Ram) {
-    trace!(
-        "Checking RAM {}, size {}, {} accesses",
+    debug!(
+        "Checking {} {}, size {}, {} accesses, keys {}, values {}",
+        if ram.cfg.covering_rom {
+            "covering ROM"
+        } else {
+            "RAM"
+        },
         ram.id,
         ram.size,
-        ram.accesses.len()
+        ram.accesses.len(),
+        ram.sort,
+        ram.val_sort,
     );
-    let f = ram.cfg.field.clone();
+    let f = &ram.cfg.field;
     let (only_init, default) = match &ram.boundary_conditions {
         BoundaryConditions::Default(d) => (false, d.clone()),
         BoundaryConditions::OnlyInit => (true, ram.cfg.zero.clone()),
         BoundaryConditions::Persistent(..) => panic!(),
     };
     let id = ram.id;
-    let ns = Namespace::new().subspace(&format!("ram{id}"));
+    let ns = Namespace::new().subspace(format!("ram{id}"));
     let f_s = Sort::Field(f.clone());
-    let mut new_var =
-        |name: &str, val: Term| c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val));
+    let v_s = ram.val_sort.clone();
 
-    // (1) sort the transcript
-    let field_tuples: Vec<Term> = ram
-        .accesses
-        .iter()
-        .map(|a| a.to_field_tuple(&ram.cfg))
-        .collect();
-    let sorted_field_tuple_values: Vec<Term> = unmake_array(
-        term![Op::ExtOp(ExtOp::Sort); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())],
-    );
-    let sorted_accesses: Vec<Access> = sorted_field_tuple_values
-        .into_iter()
-        .enumerate()
-        .map(|(i, v)| {
-            Access::declare_trusted(
-                &ram.cfg,
-                |name: &str, term: Term| new_var(&format!("sort_a{i}_{name}"), term),
-                v,
-            )
-        })
-        .collect();
-    let uhf_inputs: Vec<Term> = field_tuples
-        .into_iter()
-        .chain(sorted_accesses.iter().map(|a| a.to_field_tuple(&ram.cfg)))
-        .collect();
-    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), &f, uhf_inputs.clone(), ram.cfg.len());
-    let msh = MsHasher::new(ns.fqn("ms_hash_key"), &f, uhf_inputs);
-
-    // (2) permutation argument
-    let univ_hashes_unsorted: Vec<Term> = ram
-        .accesses
-        .iter()
-        .map(|a| a.universal_hash(&ram.cfg, &uhf))
-        .collect();
-    let univ_hashes_sorted: Vec<Term> = sorted_accesses
-        .iter()
-        .map(|a| a.universal_hash(&ram.cfg, &uhf))
-        .collect();
-    let ms_hash_passes = term![EQ; msh.hash(univ_hashes_unsorted), msh.hash(univ_hashes_sorted)];
-
-    // (3) check the sorted transcript
-    let mut assertions = vec![ms_hash_passes];
-    let n = sorted_accesses.len();
-    let mut accs = sorted_accesses;
-
-    // set c value if needed.
-    if !only_init {
-        accs[0].create = FieldBit::from_bool_lit(&ram.cfg, true);
-        for i in 0..(n - 1) {
-            let create = term![NOT; term![EQ; accs[i].idx.clone(), accs[i+1].idx.clone()]];
-            accs[i + 1].create = FieldBit::from_bool(&ram.cfg, create);
-        }
-    }
-
-    // (3a) v' = ite(a',v',v)
-    for i in 0..(n - 1) {
-        accs[i + 1].val = term_c![Op::Ite; accs[i+1].active.b.clone(), accs[i+1].val, accs[i].val];
-    }
-
-    assertions.push(accs[0].create.b.clone());
-
-    let zero = pf_lit(f.new_v(0));
-    fn sub(a: &Term, b: &Term) -> Term {
-        term![PF_ADD; a.clone(), term![PF_NEG; b.clone()]]
-    }
-
-    let mut deltas = Vec::new();
-    for j in 0..(n - 1) {
-        // previous entry
-        let i = &accs[j].idx;
-        let t = &accs[j].time;
-        let v = &accs[j].val;
-        // this entry
-        let i_n = &accs[j + 1].idx;
-        let t_n = &accs[j + 1].time;
-        let v_n = &accs[j + 1].val;
-        let c_n = &accs[j + 1].create;
-        let w_n = &accs[j + 1].write;
-
-        let v_p = if only_init {
-            v.clone()
-        } else if j == 0 {
-            default.clone()
+    let mut assertions = Vec::new();
+    if ram.cfg.covering_rom && ram.cfg.haboeck {
+        assertions.push(rom::check_covering_rom(c, ns.subspace("haboeck"), ram));
+    } else {
+        // (1) sort the transcript, checking only that we've applied a permutation.
+        let sorted_accesses = if ram.cfg.waksman {
+            let mut new_bit_var =
+                |name: &str, val: Term| c.new_var(&ns.fqn(name), Sort::Bool, PROVER_VIS, Some(val));
+            permutation::waksman(&ram.accesses, &ram.cfg, &v_s, &mut new_bit_var)
         } else {
-            term![ITE; c_n.b.clone(), default.clone(), v.clone()]
+            let mut new_var = |name: &str, val: Term| {
+                c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val))
+            };
+            permutation::msh(
+                &ram.accesses,
+                &ns,
+                &ram.cfg,
+                &mut new_var,
+                &v_s,
+                &mut assertions,
+            )
         };
 
-        // delta = (1 - c')(t' - t)
-        deltas.push(term![PF_MUL; c_n.nf.clone(), sub(t_n, t)]);
+        // (2) check the sorted transcript
+        let n = sorted_accesses.len();
+        let mut accs = sorted_accesses;
 
-        // check c value if not computed: (i' - i)(1 - c') = 0
-        if only_init {
-            assertions.push(term![EQ; term![PF_MUL; sub(i_n, i), c_n.nf.clone()], zero.clone()]);
+        let zero = pf_lit(f.new_v(0));
+        let one = pf_lit(f.new_v(1));
+        fn sub(a: &Term, b: &Term) -> Term {
+            term![PF_ADD; a.clone(), term![PF_NEG; b.clone()]]
         }
-        // writes allow a value change: (v' - v)(1 - w') = 0
-        assertions.push(term![EQ; term![PF_MUL; sub(v_n, &v_p), w_n.nf.clone()], zero.clone()]);
-    }
 
-    // check that index blocks are unique
-    if !only_init {
-        if ram.cfg.sort_indices {
-            let bits = ram.size.next_power_of_two().ilog2() as usize;
-            trace!("Index difference checks ({bits} bits)");
-            assertions.push(term![Op::PfFitsInBits(bits); accs[0].idx.clone()]);
+        if ram.cfg.covering_rom {
+            // the non-Haboeck covering ROM case
+            let mut new_var = |name: &str, val: Term| {
+                c.new_var(&ns.fqn(name), f_s.clone(), PROVER_VIS, Some(val))
+            };
+            assertions.push(term_c![EQ; zero, accs[0].idx]);
             for j in 0..(n - 1) {
-                let d = pf_sub(accs[j + 1].idx.clone(), accs[j].idx.clone());
-                assertions.push(term![Op::PfFitsInBits(bits); d]);
+                // previous entry
+                let i = &accs[j].idx;
+                let v = accs[j].val_hash.as_ref().expect("missing value hash");
+                // this entry
+                let i_n = &accs[j + 1].idx;
+                let v_n = accs[j + 1].val_hash.as_ref().expect("missing value hash");
+
+                let i_d = sub(i_n, i);
+                let v_d = sub(v_n, v);
+
+                // (i' - i)(i' - i - 1) = 0
+                assertions
+                    .push(term![EQ; term![PF_MUL; i_d.clone(), sub(&i_d, &one)], zero.clone()]);
+
+                // r = 1/(i' - i)
+                let r = new_var(&format!("r{}", j), term_c![PF_RECIP; i_d]);
+                // (i' - i)r(v' - v) = v' - v  [v' = v OR i' != i]
+                assertions.push(term![EQ; term![PF_MUL; i_d, r, v_d.clone()], v_d]);
             }
+            assertions.push(term_c![EQ; ram.cfg.pf_lit(ram.size-1), accs[n - 1].idx]);
         } else {
-            derivative_gcd(
+            // the general RAM case
+            // set c value if needed.
+            if !only_init {
+                accs[0].create = FieldBit::from_bool_lit(&ram.cfg, true);
+                for i in 0..(n - 1) {
+                    let create = term![NOT; term![EQ; accs[i].idx.clone(), accs[i+1].idx.clone()]];
+                    accs[i + 1].create = FieldBit::from_bool(&ram.cfg, create);
+                }
+            }
+
+            // (3a) v' = ite(a',v',v)
+            for i in 0..(n - 1) {
+                accs[i + 1].val =
+                    term_c![Op::Ite; accs[i+1].active.b.clone(), accs[i+1].val, accs[i].val];
+            }
+
+            assertions.push(accs[0].create.b.clone());
+
+            let mut deltas = Vec::new();
+            // To: check some condition on the start?
+            for j in 0..(n - 1) {
+                // previous entry
+                let i = &accs[j].idx;
+                let t = &accs[j].time;
+                let v = accs[j].val_hash.as_ref().expect("missing value hash");
+                // this entry
+                let i_n = &accs[j + 1].idx;
+                let t_n = &accs[j + 1].time;
+                let v_n = accs[j + 1].val_hash.as_ref().expect("missing value hash");
+                let c_n = &accs[j + 1].create;
+                let w_n = &accs[j + 1].write;
+
+                let v_p = if only_init {
+                    v.clone()
+                } else {
+                    term![ITE; c_n.b.clone(), default.clone(), v.clone()]
+                };
+
+                // delta = (1 - c')(t' - t)
+                deltas.push(term![PF_MUL; c_n.nf.clone(), sub(t_n, t)]);
+
+                // check c value if not computed: (i' - i)(1 - c') = 0
+                if only_init {
+                    assertions
+                        .push(term![EQ; term![PF_MUL; sub(i_n, i), c_n.nf.clone()], zero.clone()]);
+                }
+                // writes allow a value change: (v' - v)(1 - w') = 0
+                assertions
+                    .push(term![EQ; term![PF_MUL; sub(v_n, &v_p), w_n.nf.clone()], zero.clone()]);
+            }
+
+            // check that index blocks are unique
+            if !only_init {
+                if ram.cfg.sort_indices {
+                    let bits = ram.size.next_power_of_two().ilog2() as usize;
+                    trace!("Index difference checks ({bits} bits)");
+                    assertions.push(term![Op::PfFitsInBits(bits); accs[0].idx.clone()]);
+                    for j in 0..(n - 1) {
+                        let d = pf_sub(accs[j + 1].idx.clone(), accs[j].idx.clone());
+                        assertions.push(term![Op::PfFitsInBits(bits); d]);
+                    }
+                } else {
+                    derivative_gcd(
+                        c,
+                        accs.iter().map(|a| a.idx.clone()).collect(),
+                        accs.iter().map(|a| a.create.b.clone()).collect(),
+                        &ns,
+                        &mut assertions,
+                        f,
+                    );
+                }
+            }
+
+            // check ranges
+            assertions.push(c.outputs[0].clone());
+            #[allow(clippy::type_complexity)]
+            let range_checker: Box<
+                dyn Fn(&mut Computation, Vec<Term>, &Namespace, &mut Vec<Term>, usize, &FieldT),
+            > = if ram.cfg.split_times {
+                Box::new(&bit_split_range_check)
+            } else if ram.cfg.haboeck {
+                Box::new(&haboeck_range_check)
+            } else {
+                Box::new(&range_check)
+            };
+            range_checker(
                 c,
-                accs.iter().map(|a| a.idx.clone()).collect(),
-                accs.iter().map(|a| a.create.b.clone()).collect(),
-                &ns,
+                deltas,
+                &ns.subspace("time"),
                 &mut assertions,
-                &f,
+                ram.next_time + 1,
+                f,
             );
         }
     }
-
-    // check ranges
     assertions.push(c.outputs[0].clone());
-    #[allow(clippy::type_complexity)]
-    let range_checker: Box<
-        dyn Fn(&mut Computation, Vec<Term>, &Namespace, &mut Vec<Term>, usize, &FieldT),
-    > = if ram.cfg.split_times {
-        Box::new(&bit_split_range_check)
-    } else {
-        Box::new(&range_check)
-    };
-    range_checker(
-        c,
-        deltas,
-        &ns.subspace("time"),
-        &mut assertions,
-        ram.next_time + 1,
-        &f,
-    );
     c.outputs[0] = term(AND, assertions);
 }
 
@@ -218,6 +247,21 @@ fn range_check(
     assertions.push(term![EQ; sorted.last().unwrap().clone(), end]);
 }
 
+/// Haboeck range check
+pub fn haboeck_range_check(
+    c: &mut Computation,
+    values: Vec<Term>,
+    ns: &Namespace,
+    assertions: &mut Vec<Term>,
+    n: usize,
+    f: &FieldT,
+) {
+    let ns = ns.subspace("range");
+    let f_sort = Sort::Field(f.clone());
+    let haystack: Vec<Term> = f_sort.elems_iter().take(n).collect();
+    assertions.push(rom::lookup(c, ns, haystack, values));
+}
+
 /// Ensure that each element of `values` is in `[0, n)`.
 ///
 /// Assumes that each value is a field element.
@@ -258,7 +302,10 @@ fn derivative_gcd(
     let ns = ns.subspace("uniq");
     let fs = Sort::Field(f.clone());
     let pairs = term(
-        Op::Array(fs.clone(), Sort::Tuple(Box::new([fs.clone(), Sort::Bool]))),
+        Op::Array(Box::new(ArrayOp {
+            key: fs.clone(),
+            val: Sort::new_tuple(vec![fs.clone(), Sort::Bool]),
+        })),
         values
             .clone()
             .into_iter()
@@ -293,7 +340,7 @@ fn derivative_gcd(
     terms_that_define_all_polys.extend(t_coeffs_skolem.iter().cloned());
     let n = values.len();
     let x = term(
-        Op::PfChallenge(ns.fqn("x"), f.clone()),
+        Op::new_chall(ns.fqn("x"), f.clone()),
         terms_that_define_all_polys,
     );
     let r = values;

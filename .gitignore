@@ -15,3 +15,5 @@ __pycache__
 .mode.txt
 scripts/aby_tests/tests
 /flamegraph*.svg
+/.ccls-cache
+/.vscode

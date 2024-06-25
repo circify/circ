@@ -16,7 +16,7 @@ pub(super) fn eq_type<'ast>(
         (Array(aty), Array(aty2)) => eq_array_type(aty, aty2, zgen),
         (Struct(sty), Struct(sty2)) => eq_struct_type(sty, sty2, zgen),
         _ => Err(ZVisitorError(format!(
-            "type mismatch: expected {ty:?}, found {ty2:?}"
+            "type mismatch:\n\texpected {ty:?},\n\tfound {ty2:?}"
         ))),
     }
 }
@@ -31,7 +31,7 @@ fn eq_basic_type<'ast>(ty: &ast::BasicType<'ast>, ty2: &ast::BasicType<'ast>) ->
         (U32(_), U32(_)) => Ok(()),
         (U64(_), U64(_)) => Ok(()),
         _ => Err(ZVisitorError(format!(
-            "basic type mismatch: expected {ty:?}, found {ty2:?}"
+            "basic type mismatch: \n\texpected {ty:?}, \n\tfound {ty2:?}"
         ))),
     }
 }
@@ -44,7 +44,7 @@ fn eq_array_type<'ast>(
     use ast::BasicOrStructType::*;
     if ty.dimensions.len() != ty2.dimensions.len() {
         return Err(ZVisitorError(format!(
-            "array type mismatch: expected {}-dimensional array, found {}-dimensional array",
+            "array type mismatch: \n\texpected {}-dimensional array, \n\tfound {}-dimensional array",
             ty.dimensions.len(),
             ty2.dimensions.len(),
         )));
@@ -53,7 +53,7 @@ fn eq_array_type<'ast>(
         (Basic(bty), Basic(bty2)) => eq_basic_type(bty, bty2),
         (Struct(sty), Struct(sty2)) => eq_struct_type(sty, sty2, zgen),
         _ => Err(ZVisitorError(format!(
-            "array type mismatch: expected elms of type {:?}, found {:?}",
+            "array type mismatch: \n\texpected elms of type {:?}, \n\tfound {:?}",
             &ty.ty, &ty2.ty,
         ))),
     }
@@ -69,7 +69,7 @@ fn eq_struct_type<'ast>(
     } else if is_struct(&ty.id.value, zgen) && is_struct(&ty2.id.value, zgen) {
         // neither ty nor ty2 is a type alias, so they are really different
         Err(ZVisitorError(format!(
-            "struct type mismatch: expected {:?}, found {:?}",
+            "struct type mismatch: \n\texpected {:?}, \n\tfound {:?}",
             &ty.id.value, &ty2.id.value,
         )))
     } else {

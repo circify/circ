@@ -3,6 +3,7 @@ pub mod binarize;
 pub mod cfold;
 pub mod chall;
 pub mod cstore;
+pub mod fits_in_bits_ip;
 pub mod flat;
 pub mod inline;
 pub mod link;
@@ -12,9 +13,11 @@ pub mod sha;
 pub mod tuple;
 mod visit;
 
+use std::num::NonZero;
+
 use super::term::*;
 
-use log::{debug, trace};
+use log::{debug, info, trace};
 
 #[derive(Clone, Debug)]
 /// An optimization pass
@@ -48,12 +51,24 @@ pub enum Opt {
     PersistentRam,
     /// Eliminate volatile RAM
     VolatileRam,
+    /// Eliminate set membership args
+    SetMembership,
     /// Replace challenge terms with random variables
     SkolemizeChallenges,
+    /// Replace witness terms with variables
+    DeskolemizeWitnesses,
+    /// Check bit-constaints with challenges.
+    FitsInBitsIp,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
+    for c in cs.comps.values() {
+        trace!("Before all opts: {}", text::serialize_computation(c));
+        info!("Before all opts: {} terms", c.stats().main.n_terms);
+        debug!("Before all opts: {:#?}", c.stats());
+        debug!("Before all opts: {:#?}", c.detailed_stats());
+    }
     for i in optimizations {
         debug!("Applying: {:?}", i);
 
@@ -72,12 +87,20 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::ConstantFold(ignore) => {
                     let mut cache = TermCache::with_capacity(TERM_CACHE_LIMIT);
+                    cache.resize(NonZero::new(usize::MAX).unwrap());
                     for a in &mut c.outputs {
-                        // allow unbounded size during a single fold_cache call
-                        cache.resize(std::usize::MAX);
                         *a = cfold::fold_cache(a, &mut cache, &ignore.clone());
-                        // then shrink back down to size between calls
-                        cache.resize(TERM_CACHE_LIMIT);
+                    }
+                    for v in &mut c.precomputes.outputs.values_mut() {
+                        *v = cfold::fold_cache(v, &mut cache, &ignore.clone());
+                    }
+                    c.ram_arrays = c
+                        .ram_arrays
+                        .iter()
+                        .map(|a| cfold::fold_cache(a, &mut cache, &ignore.clone()))
+                        .collect();
+                    for p in &mut c.persistent_arrays {
+                        p.1 = cfold::fold_cache(&p.1, &mut cache, &ignore.clone());
                     }
                 }
                 Opt::Sha => {
@@ -127,20 +150,35 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     let cfg = mem::ram::AccessCfg::from_cfg();
                     mem::ram::persistent::apply(c, &cfg);
                 }
+                Opt::SetMembership => {
+                    mem::ram::set::apply(c);
+                }
                 Opt::VolatileRam => {
                     let cfg = mem::ram::AccessCfg::from_cfg();
                     mem::ram::volatile::apply(c, &cfg);
                 }
+                Opt::DeskolemizeWitnesses => {
+                    chall::deskolemize_witnesses(c);
+                }
                 Opt::SkolemizeChallenges => {
-                    chall::skolemize_challenges(c);
+                    chall::deskolemize_challenges(c);
+                }
+                Opt::FitsInBitsIp => {
+                    fits_in_bits_ip::fits_in_bits_ip(c);
                 }
             }
-            debug!("After {:?}: {} outputs", i, c.outputs.len());
-            trace!("After {:?}: {}", i, c.outputs[0]);
-            //debug!("After {:?}: {}", i, Letified(cs.outputs[0].clone()));
-            debug!("After {:?}: {} terms", i, c.terms());
+            info!("After {:?}: {} terms", i, c.stats().main.n_terms);
+            debug!("After {:?}: {:#?}", i, c.stats());
+            trace!("After {:?}: {}", i, text::serialize_computation(c));
+            #[cfg(debug_assertions)]
+            c.precomputes.check_topo_orderable();
+        }
+        if crate::cfg::cfg().ir.frequent_gc {
+            garbage_collect();
         }
     }
-    garbage_collect();
+    if !crate::cfg::cfg().ir.frequent_gc {
+        garbage_collect();
+    }
     cs
 }

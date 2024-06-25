@@ -176,6 +176,9 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a, F> {
                 }
             }
         }
+        if let Some((_, ref evaluator, _)) = wit_comp.as_mut() {
+            evaluator.print_times();
+        }
 
         for (i, (a, b, c)) in self.0.r1cs.constraints.iter().enumerate() {
             cs.enforce(

@@ -10,9 +10,11 @@ use crate::target::r1cs::*;
 
 use circ_fields::FieldT;
 use circ_opt::FieldDivByZero;
-use log::debug;
+use log::{debug, trace};
 use rug::ops::Pow;
 use rug::Integer;
+
+use fxhash::FxHashMap;
 
 use std::cell::RefCell;
 use std::fmt::Display;
@@ -36,19 +38,6 @@ enum EmbeddedTerm {
     Tuple(Vec<EmbeddedTerm>),
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct Metric {
-    n_constraints: u32,
-    n_vars: u32,
-}
-
-impl std::ops::AddAssign<&Metric> for Metric {
-    fn add_assign(&mut self, rhs: &Metric) {
-        self.n_vars += rhs.n_vars;
-        self.n_constraints += rhs.n_constraints;
-    }
-}
-
 struct ToR1cs<'cfg> {
     r1cs: R1cs,
     cache: TermMap<EmbeddedTerm>,
@@ -59,9 +48,10 @@ struct ToR1cs<'cfg> {
     cfg: &'cfg CircCfg,
     field: FieldT,
     used_vars: HashSet<String>,
-    profiling_data: TermMap<Metric>,
-    metric: Metric,
-    term_in_progress: Option<Term>,
+    /// Map from (operator, arity) to metric.
+    profiling_data: FxHashMap<(Op, usize), (usize, R1csStats)>,
+    old_stats: R1csStats,
+    op_in_progress: Option<(Op, usize)>,
 }
 
 impl<'cfg> ToR1cs<'cfg> {
@@ -82,68 +72,62 @@ impl<'cfg> ToR1cs<'cfg> {
             field,
             cfg,
             profiling_data: Default::default(),
-            term_in_progress: None,
-            metric: Default::default(),
+            op_in_progress: None,
+            old_stats: Default::default(),
         }
     }
 
     fn profile_start_term(&mut self, t: Term) {
         if self.cfg.r1cs.profile {
-            assert!(self.term_in_progress.is_none());
-            self.term_in_progress = Some(t);
-            self.metric = Default::default();
+            assert!(self.op_in_progress.is_none());
+            let key = (t.op().clone(), t.cs().len());
+            // trace!("profile start {:?}", key);
+            self.op_in_progress = Some(key);
+            self.old_stats = self.r1cs.stats().clone();
         }
     }
 
     fn profile_end_term(&mut self) {
         if self.cfg.r1cs.profile {
-            assert!(self.term_in_progress.is_some());
-            let t = self.term_in_progress.take().unwrap();
-            *self.profiling_data.entry(t).or_default() += &self.metric;
-            self.metric = Default::default();
+            assert!(self.op_in_progress.is_some());
+            let t = self.op_in_progress.take().unwrap();
+            // trace!("profile end {:?}", t);
+            let mut current_stats = self.r1cs.stats().clone();
+            current_stats -= &self.old_stats;
+            let data = self.profiling_data.entry(t).or_default();
+            data.1 += &current_stats;
+            data.0 += 1;
+            self.old_stats = Default::default();
         }
     }
 
     fn profile_print(&self) {
         if self.cfg.r1cs.profile {
-            let terms: TermSet = self.profiling_data.keys().cloned().collect();
-            let mut cum_metrics: TermMap<Metric> = Default::default();
-            for t in PostOrderIter::from_roots_and_skips(terms, Default::default()) {
-                let mut cum = Metric::default();
-                if let Some(d) = self.profiling_data.get(&t) {
-                    cum += d;
-                }
-                for c in t.cs() {
-                    cum += cum_metrics.get(c).unwrap();
-                }
-                cum_metrics.insert(t, cum);
-            }
-            let mut data: Vec<(Term, Metric, Metric)> = cum_metrics
-                .into_iter()
-                .map(|(term, cum)| {
-                    let indiv = self
-                        .profiling_data
-                        .get(&term)
-                        .cloned()
-                        .unwrap_or(Default::default());
-                    (term, cum, indiv)
-                })
+            let mut data: Vec<(&Op, usize, usize, &R1csStats)> = self
+                .profiling_data
+                .iter()
+                .map(|((op, arity), (count, stats))| (op, *arity, *count, stats))
                 .collect();
-            data.sort_by(|(t0, c0, i0), (t1, c1, i1)| i0.cmp(i1).then(c0.cmp(c1)).then(t0.cmp(t1)));
+            data.sort_by_key(|(_, _, count, stats)| {
+                (stats.n_entries(), stats.n_constraints, stats.n_vars, *count)
+            });
             data.reverse();
-            for (t, c, i) in data {
-                if c.n_constraints != 0 {
-                    println!(
-                        "{:>8}: {:>8}cs cum, {:>8}vs cum, {:>8}cs, {:>8}vs;   {} {:?}",
-                        format!("{}", t.id()),
-                        c.n_constraints,
-                        c.n_vars,
-                        i.n_constraints,
-                        i.n_vars,
-                        t.op(),
-                        t.cs().iter().map(|c| c.id()).collect::<Vec<_>>(),
-                    )
-                }
+            println!(
+                "r1csstats,entries,constraints,count,vars,a_entries,b_entries,c_entries,op_arity,op"
+            );
+            for (op, arity, count, stats) in data {
+                println!(
+                    "r1csstats,{},{},{},{},{},{},{},{},{}",
+                    stats.n_entries(),
+                    stats.n_constraints,
+                    count,
+                    stats.n_vars,
+                    stats.n_a_entries,
+                    stats.n_b_entries,
+                    stats.n_c_entries,
+                    arity,
+                    op,
+                )
             }
         }
     }
@@ -153,7 +137,7 @@ impl<'cfg> ToR1cs<'cfg> {
         self.r1cs.add_committed_witness(elements.clone());
         for (name, value) in elements {
             let lc = self.r1cs.signal_lc(&name);
-            let var = leaf_term(Op::Var(name, check(&value)));
+            let var = var(name, check(&value));
             self.embed.borrow_mut().insert(var.clone());
             self.cache
                 .insert(var, EmbeddedTerm::Field(TermLc(value, lc)));
@@ -173,7 +157,6 @@ impl<'cfg> ToR1cs<'cfg> {
         self.next_idx += 1;
         debug_assert!(matches!(check(&comp), Sort::Field(_)));
         self.r1cs.add_var(n.clone(), comp.clone(), ty);
-        self.metric.n_vars += 1;
         debug!("fresh: {n:?}");
         TermLc(comp, self.r1cs.signal_lc(&n))
     }
@@ -185,7 +168,6 @@ impl<'cfg> ToR1cs<'cfg> {
 
     /// Create a constraint
     fn constraint(&mut self, a: Lc, b: Lc, c: Lc) {
-        self.metric.n_constraints += 1;
         self.r1cs.constraint(a, b, c);
     }
 
@@ -371,33 +353,34 @@ impl<'cfg> ToR1cs<'cfg> {
         if !self.used_vars.contains(var.as_var_name()) {
             return;
         }
+        debug!("Embed var: {}", var.op());
         self.profile_start_term(var.clone());
         let public = matches!(ty, VarType::Inst);
         match var.op() {
-            Op::Var(name, Sort::Bool) => {
+            Op::Var(v) if matches!(&v.sort, Sort::Bool) => {
                 let comp = term![Op::Ite; var.clone(), self.one.0.clone(), self.zero.0.clone()];
-                let lc = self.fresh_var(name, comp, ty);
+                let lc = self.fresh_var(&v.name, comp, ty);
                 if !public {
                     self.enforce_bit(lc.clone());
                 }
                 self.cache.insert(var.clone(), EmbeddedTerm::Bool(lc));
                 self.embed.borrow_mut().insert(var.clone());
             }
-            Op::Var(name, Sort::BitVector(n_bits)) => {
+            Op::Var(v) if v.sort.is_bv() => {
                 let public = matches!(ty, VarType::Inst);
                 let lc = self.fresh_var(
-                    name,
-                    term![Op::UbvToPf(self.field.clone()); var.clone()],
+                    &v.name,
+                    term![Op::new_ubv_to_pf(self.field.clone()); var.clone()],
                     ty,
                 );
-                self.set_bv_uint(var.clone(), lc, *n_bits);
+                self.set_bv_uint(var.clone(), lc, v.sort.as_bv());
                 if !public {
                     self.get_bv_bits(var);
                 }
             }
-            Op::Var(name, Sort::Field(f)) => {
-                assert_eq!(f, &self.field);
-                let lc = self.fresh_var(name, var.clone(), ty);
+            Op::Var(v) if v.sort.is_pf() => {
+                assert_eq!(v.sort.as_pf(), &self.field);
+                let lc = self.fresh_var(&v.name, var.clone(), ty);
                 self.cache.insert(var.clone(), EmbeddedTerm::Field(lc));
                 self.embed.borrow_mut().insert(var.clone());
             }
@@ -430,7 +413,7 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.embed_bool(c);
                     }
                     Sort::BitVector(_) => {
-                        self.embed_bv_lit(c);
+                        self.embed_bv(c);
                     }
                     Sort::Field(_) => {
                         self.embed_pf(c);
@@ -511,7 +494,7 @@ impl<'cfg> ToR1cs<'cfg> {
         if !self.cache.contains_key(&c) {
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
-                Op::Const(Value::Bool(b)) => self.zero.clone() + *b as isize,
+                Op::Const(v) => self.zero.clone() + v.as_bool() as isize,
                 Op::Eq => self.embed_eq(&c.cs()[0], &c.cs()[1]),
                 Op::Ite => {
                     let a = self.get_bool(&c.cs()[0]).clone();
@@ -528,7 +511,7 @@ impl<'cfg> ToR1cs<'cfg> {
                     //   where i = ab
                     // m = i + c(b + a - 2i)
                     let i = self.mul(a.clone(), b.clone());
-                    self.mul(c, b + &a - &(i.clone() * 2)) - &i
+                    self.mul(c, b + &a - &(i.clone() * 2)) + &i
                 }
                 Op::Not => {
                     let a = self.get_bool(&c.cs()[0]);
@@ -615,7 +598,8 @@ impl<'cfg> ToR1cs<'cfg> {
         let tweak = if strict { -1 } else { 0 };
         let shift = self.r1cs.modulus.new_v(Integer::from(1) << n);
         let sum = a - &b + &shift + tweak;
-        self.decomp("cmp", &sum, n + 1).pop().unwrap()
+        // unwrap does not panic because the length is n + 1
+        self.bitify("cmp", &sum, n + 1, false).pop().unwrap()
     }
 
     /// Returns whether `a` is (`strict`ly) (`signed`ly) greater than `b`.
@@ -717,14 +701,15 @@ impl<'cfg> ToR1cs<'cfg> {
         (some_high_bit, shift_amt)
     }
 
-    fn embed_bv_lit(&mut self, bv: Term) {
+    fn embed_bv(&mut self, bv: Term) {
         //println!("Embed: {}", bv);
         //let bv2=  bv.clone();
         if let Sort::BitVector(n) = check(&bv) {
             if !self.cache.contains_key(&bv) {
                 match &bv.op() {
                     Op::Var(..) => panic!("call embed_var instead"),
-                    Op::Const(Value::BitVector(b)) => {
+                    Op::Const(v) => {
+                        let b = v.as_bv();
                         let bit_lcs = (0..b.width())
                             .map(|i| self.zero.clone() + b.uint().get_bit(i as u32) as isize)
                             .collect();
@@ -855,8 +840,8 @@ impl<'cfg> ToR1cs<'cfg> {
                             BvBinOp::Udiv | BvBinOp::Urem => {
                                 let a_bv_term = term![Op::PfToBv(n); a.0.clone()];
                                 let b_bv_term = term![Op::PfToBv(n); b.0.clone()];
-                                let q_term = term![Op::UbvToPf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
-                                let r_term = term![Op::UbvToPf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
+                                let q_term = term![Op::new_ubv_to_pf(self.field.clone()); term![BV_UDIV; a_bv_term.clone(), b_bv_term.clone()]];
+                                let r_term = term![Op::new_ubv_to_pf(self.field.clone()); term![BV_UREM; a_bv_term, b_bv_term]];
                                 let q = self.fresh_wit("div_q", q_term);
                                 let r = self.fresh_wit("div_r", r_term);
                                 let qb = self.bitify("div_q", &q, n, false);
@@ -915,8 +900,8 @@ impl<'cfg> ToR1cs<'cfg> {
                         let bits = self
                             .get_bv_bits(&bv.cs()[0])
                             .into_iter()
-                            .skip(*low)
-                            .take(*high - *low + 1)
+                            .skip(*low as usize)
+                            .take((*high - *low + 1) as usize)
                             .collect();
                         self.set_bv_bits(bv, bits);
                     }
@@ -1030,9 +1015,9 @@ impl<'cfg> ToR1cs<'cfg> {
             debug!("embed_pf {}", c);
             let lc = match &c.op() {
                 Op::Var(..) => panic!("call embed_var instead"),
-                Op::Const(Value::Field(r)) => TermLc(
+                Op::Const(v) => TermLc(
                     c.clone(),
-                    self.r1cs.constant(r.as_ty_ref(&self.r1cs.modulus)),
+                    self.r1cs.constant(v.as_pf().as_ty_ref(&self.r1cs.modulus)),
                 ),
                 Op::Ite => {
                     let cond = self.get_bool(&c.cs()[0]).clone();
@@ -1043,7 +1028,17 @@ impl<'cfg> ToR1cs<'cfg> {
                 Op::PfNaryOp(o) => {
                     let args = c.cs().iter().map(|c| self.get_pf(c));
                     match o {
-                        PfNaryOp::Add => args.fold(self.zero.clone(), std::ops::Add::add),
+                        PfNaryOp::Add => {
+                            let mut lc = args.fold(self.zero.clone(), std::ops::Add::add);
+                            if lc.1.monomials.len() > self.cfg.r1cs.lc_elim_thresh {
+                                let w = self.fresh_wit("add", lc.0.clone());
+                                lc -= &w;
+                                self.constraint(self.zero.1.clone(), self.zero.1.clone(), lc.1);
+                                w
+                            } else {
+                                lc
+                            }
+                        }
                         PfNaryOp::Mul => {
                             // Needed to end the above closures borrow of self, before the mul call
                             #[allow(clippy::needless_collect)]
@@ -1091,6 +1086,17 @@ impl<'cfg> ToR1cs<'cfg> {
                         self.constraint(z.1, i.1.clone(), self.r1cs.zero());
                         i
                     }
+                },
+                Op::PfDiv => match self.cfg.r1cs.div_by_zero {
+                    FieldDivByZero::Incomplete => {
+                        // ix = y
+                        let y = self.get_pf(&c.cs()[0]).clone();
+                        let x = self.get_pf(&c.cs()[1]).clone();
+                        let div = self.fresh_wit("div", term![PF_DIV; y.0.clone(), x.0.clone()]);
+                        self.constraint(x.1, div.1.clone(), y.1);
+                        div
+                    }
+                    _ => unimplemented!(),
                 },
                 _ => panic!("Non-field in embed_pf: {}", c),
             };
@@ -1196,12 +1202,12 @@ pub mod test {
         .collect();
         let cs = Computation::from_constraint_system_parts(
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                var("a".to_owned(), Sort::Bool),
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool),
             ],
         );
         let r1cs = to_r1cs_mod17(cs);
@@ -1223,7 +1229,7 @@ pub mod test {
     #[quickcheck]
     fn random_bool(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1235,7 +1241,7 @@ pub mod test {
     #[quickcheck]
     fn random_pure_bool_opt(ArbitraryBoolEnv(t, values): ArbitraryBoolEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         let cfg = CircCfg::default();
         let r1cs = to_r1cs(&cs, &cfg);
@@ -1247,7 +1253,7 @@ pub mod test {
     #[quickcheck]
     fn random_bool_opt(ArbitraryTermEnv(t, values): ArbitraryTermEnv) {
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let mut cs = Computation::from_constraint_system_parts(vec![t], Vec::new());
         crate::ir::opt::scalarize_vars::scalarize_inputs(&mut cs);
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1269,8 +1275,8 @@ pub mod test {
 
         let cs = Computation::from_constraint_system_parts(
             vec![term![Op::Not; term![Op::Eq; bv_lit(0b10110, 8),
-                              term![Op::BvUnOp(BvUnOp::Neg); leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))]]]],
-            vec![leaf_term(Op::Var("b".to_owned(), Sort::BitVector(8)))],
+                              term![Op::BvUnOp(BvUnOp::Neg); var("b".to_owned(), Sort::BitVector(8))]]]],
+            vec![var("b".to_owned(), Sort::BitVector(8))],
         );
         let r1cs = to_r1cs_dflt(cs);
         r1cs.check_all(&values);
@@ -1279,12 +1285,12 @@ pub mod test {
     #[test]
     fn not_opt_test() {
         init();
-        let t = term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))];
+        let t = term![Op::Not; var("b".to_owned(), Sort::Bool)];
         let values: FxHashMap<String, Value> = vec![("b".to_owned(), Value::Bool(true))]
             .into_iter()
             .collect();
         let v = eval(&t, &values);
-        let t = term![Op::Eq; t, leaf_term(Op::Const(v))];
+        let t = term![Op::Eq; t, const_(v)];
         let cs = Computation::from_constraint_system_parts(vec![t], vec![]);
         let cfg = CircCfg::default();
         let r1cs = to_r1cs(&cs, &cfg);
@@ -1294,7 +1300,7 @@ pub mod test {
     }
 
     fn pf_dflt(i: isize) -> Term {
-        leaf_term(Op::Const(Value::Field(CircCfg::default().field().new_v(i))))
+        pf_lit(CircCfg::default().field().new_v(i))
     }
 
     fn const_test(term: Term) {
@@ -1414,12 +1420,12 @@ pub mod test {
         .collect();
         let mut cs = Computation::from_constraint_system_parts(
             vec![
-                term![Op::Field(0); term![Op::Tuple; leaf_term(Op::Var("a".to_owned(), Sort::Bool)), leaf_term(Op::Const(Value::Bool(false)))]],
-                term![Op::Not; leaf_term(Op::Var("b".to_owned(), Sort::Bool))],
+                term![Op::Field(0); term![Op::Tuple; var("a".to_owned(), Sort::Bool), bool_lit(false)]],
+                term![Op::Not; var("b".to_owned(), Sort::Bool)],
             ],
             vec![
-                leaf_term(Op::Var("a".to_owned(), Sort::Bool)),
-                leaf_term(Op::Var("b".to_owned(), Sort::Bool)),
+                var("a".to_owned(), Sort::Bool),
+                var("b".to_owned(), Sort::Bool),
             ],
         );
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
@@ -1454,5 +1460,49 @@ pub mod test {
         crate::ir::opt::tuple::eliminate_tuples(&mut cs);
         let r1cs = to_r1cs_mod17(cs);
         r1cs.check_all(&values);
+    }
+
+    fn add_test_instance(args: &[u64], res: u64, bits: usize) {
+        let sum: u64 = args.iter().sum::<u64>() & ((1 << bits) - 1);
+        assert_eq!(sum, res);
+        const_test(
+            term![Op::Eq; term(BV_ADD, args.iter().map(|a| bv_lit(*a, bits)).collect()), bv_lit(res, bits)],
+        );
+    }
+
+    #[test]
+    fn add_test() {
+        init();
+        add_test_instance(&[0b0, 0b0, 0b0, 0b0], 0b0, 1);
+        add_test_instance(&[0b1, 0b0, 0b0, 0b0], 0b1, 1);
+        add_test_instance(&[0b1, 0b1, 0b1, 0b0], 0b1, 1);
+        add_test_instance(&[0b1, 0b1, 0b1, 0b1], 0b0, 1);
+        add_test_instance(&[0b11, 0b11, 0b11, 0b11], 0b00, 2);
+        add_test_instance(&[0b11, 0b11, 0b11, 0b11, 0b11], 0b11, 2);
+    }
+
+    #[test]
+    fn concat_test() {
+        init();
+        const_test(term![
+            Op::Eq;
+            term![BV_CONCAT; bv_lit(0b10,2), bv_lit(0b01,2)],
+            bv_lit(0b1001, 4)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![BV_CONCAT; bv_lit(0b11,2), bv_lit(0b01,2)],
+            bv_lit(0b1101, 4)
+        ]);
+    }
+
+    #[test]
+    fn maj_test() {
+        init();
+        const_test(term![
+            Op::Eq;
+            term![Op::BoolMaj; bool_lit(true), bool_lit(true), bool_lit(true)],
+            bool_lit(true)
+        ]);
     }
 }

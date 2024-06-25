@@ -55,11 +55,11 @@ impl MemManager {
     /// Allocate a new stack array, equal to `array`.
     pub fn allocate(&mut self, array: Term) -> AllocId {
         let s = check(&array);
-        if let Sort::Array(box_addr_width, box_val_width, size) = s {
-            if let Sort::BitVector(addr_width) = *box_addr_width {
-                if let Sort::BitVector(val_width) = *box_val_width {
+        if let Sort::Array(a) = s {
+            if let Sort::BitVector(addr_width) = &a.key {
+                if let Sort::BitVector(val_width) = &a.val {
                     let id = self.take_next_id();
-                    let alloc = Alloc::new(addr_width, val_width, size, array);
+                    let alloc = Alloc::new(*addr_width, *val_width, a.size, array);
                     self.allocs.insert(id, alloc);
                     id
                 } else {
@@ -85,11 +85,11 @@ impl MemManager {
     ///
     /// Returns a (concrete) allocation identifier which can be used to access this allocation.
     pub fn zero_allocate(&mut self, size: usize, addr_width: usize, val_width: usize) -> AllocId {
-        self.allocate(term![Op::Const(Value::Array(Array::default(
+        self.allocate(const_(Value::Array(Array::default(
             Sort::BitVector(addr_width),
             &Sort::BitVector(val_width),
-            size
-        )))])
+            size,
+        ))))
     }
 
     /// Load the value of index `offset` from the allocation `id`.
@@ -130,7 +130,7 @@ impl MemManager {
     }
 }
 
-#[cfg(all(feature = "smt", feature = "test", feature = "zok"))]
+#[cfg(all(feature = "smt", test, feature = "zok"))]
 mod test {
     use super::*;
     use crate::target::smt::check_sat;
@@ -138,20 +138,16 @@ mod test {
     use std::rc::Rc;
 
     fn bv_var(s: &str, w: usize) -> Term {
-        leaf_term(Op::Var(s.to_owned(), Sort::BitVector(w)))
+        var(s.to_owned(), Sort::BitVector(w))
     }
 
+    #[test]
     fn sat_test() {
-        let cs = Rc::new(RefCell::new(Computation::new(false)));
+        let cs = Rc::new(RefCell::new(Computation::new()));
         let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(
-            id0,
-            bv_lit(3, 4),
-            bv_lit(2, 8),
-            leaf_term(Op::Const(Value::Bool(true))),
-        );
+        mem.store(id0, bv_lit(3, 4), bv_lit(2, 8), const_(Value::Bool(true)));
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(1, 4));
         let t = term![Op::BvBinPred(BvBinPred::Ugt); a, b];
@@ -163,17 +159,13 @@ mod test {
         assert!(check_sat(&sys))
     }
 
+    #[test]
     fn unsat_test() {
-        let cs = Rc::new(RefCell::new(Computation::new(false)));
+        let cs = Rc::new(RefCell::new(Computation::new()));
         let mut mem = MemManager::default();
         let id0 = mem.zero_allocate(6, 4, 8);
         let _id1 = mem.zero_allocate(6, 4, 8);
-        mem.store(
-            id0,
-            bv_lit(3, 4),
-            bv_var("a", 8),
-            leaf_term(Op::Const(Value::Bool(true))),
-        );
+        mem.store(id0, bv_lit(3, 4), bv_var("a", 8), const_(Value::Bool(true)));
         let a = mem.load(id0, bv_lit(3, 4));
         let b = mem.load(id0, bv_lit(3, 4));
         let t = term![Op::Not; term![Op::Eq; a, b]];

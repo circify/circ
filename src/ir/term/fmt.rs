@@ -1,7 +1,8 @@
 //! Machinery for formatting IR types
 use super::{
-    ext, Array, ComputationMetadata, Node, Op, PartyId, PostOrderIter, Sort, Term, TermMap, Value,
-    VariableMetadata,
+    check, ext, map::Map, Array, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp, BvUnOp,
+    ComputationMetadata, FpBinOp, FpBinPred, FpUnOp, FpUnPred, IntBinPred, IntNaryOp, Node, Op,
+    PartyId, PfNaryOp, PfUnOp, PostOrderIter, Sort, Term, TermMap, Value, VariableMetadata,
 };
 use crate::cfg::{cfg, is_cfg_set};
 
@@ -11,6 +12,154 @@ use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use itertools::Itertools;
 
 use std::fmt::{Debug, Display, Error as FmtError, Formatter, Result as FmtResult, Write};
+
+impl Display for BoolNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BoolNaryOp::And => write!(f, "and"),
+            BoolNaryOp::Or => write!(f, "or"),
+            BoolNaryOp::Xor => write!(f, "xor"),
+        }
+    }
+}
+
+impl Display for BvBinOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvBinOp::Sub => write!(f, "bvsub"),
+            BvBinOp::Udiv => write!(f, "bvudiv"),
+            BvBinOp::Urem => write!(f, "bvurem"),
+            BvBinOp::Shl => write!(f, "bvshl"),
+            BvBinOp::Ashr => write!(f, "bvashr"),
+            BvBinOp::Lshr => write!(f, "bvlshr"),
+        }
+    }
+}
+
+impl Display for BvBinPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvBinPred::Ult => write!(f, "bvult"),
+            BvBinPred::Ugt => write!(f, "bvugt"),
+            BvBinPred::Ule => write!(f, "bvule"),
+            BvBinPred::Uge => write!(f, "bvuge"),
+            BvBinPred::Slt => write!(f, "bvslt"),
+            BvBinPred::Sgt => write!(f, "bvsgt"),
+            BvBinPred::Sle => write!(f, "bvsle"),
+            BvBinPred::Sge => write!(f, "bvsge"),
+        }
+    }
+}
+
+impl Display for BvNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvNaryOp::Add => write!(f, "bvadd"),
+            BvNaryOp::Mul => write!(f, "bvmul"),
+            BvNaryOp::Or => write!(f, "bvor"),
+            BvNaryOp::And => write!(f, "bvand"),
+            BvNaryOp::Xor => write!(f, "bvxor"),
+        }
+    }
+}
+
+impl Display for BvUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            BvUnOp::Not => write!(f, "bvnot"),
+            BvUnOp::Neg => write!(f, "bvneg"),
+        }
+    }
+}
+
+impl Display for FpBinOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpBinOp::Add => write!(f, "fpadd"),
+            FpBinOp::Mul => write!(f, "fpmul"),
+            FpBinOp::Sub => write!(f, "fpsub"),
+            FpBinOp::Div => write!(f, "fpdiv"),
+            FpBinOp::Rem => write!(f, "fprem"),
+            FpBinOp::Max => write!(f, "fpmax"),
+            FpBinOp::Min => write!(f, "fpmin"),
+        }
+    }
+}
+
+impl Display for FpUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpUnOp::Neg => write!(f, "fpneg"),
+            FpUnOp::Abs => write!(f, "fpabs"),
+            FpUnOp::Sqrt => write!(f, "fpsqrt"),
+            FpUnOp::Round => write!(f, "fpround"),
+        }
+    }
+}
+
+impl Display for FpBinPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpBinPred::Le => write!(f, "fple"),
+            FpBinPred::Lt => write!(f, "fplt"),
+            FpBinPred::Eq => write!(f, "fpeq"),
+            FpBinPred::Ge => write!(f, "fpge"),
+            FpBinPred::Gt => write!(f, "fpgt"),
+        }
+    }
+}
+
+impl Display for FpUnPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            FpUnPred::Normal => write!(f, "fpnormal"),
+            FpUnPred::Subnormal => write!(f, "fpsubnormal"),
+            FpUnPred::Zero => write!(f, "fpzero"),
+            FpUnPred::Infinite => write!(f, "fpinfinite"),
+            FpUnPred::Nan => write!(f, "fpnan"),
+            FpUnPred::Negative => write!(f, "fpnegative"),
+            FpUnPred::Positive => write!(f, "fppositive"),
+        }
+    }
+}
+
+impl Display for PfNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            PfNaryOp::Add => write!(f, "+"),
+            PfNaryOp::Mul => write!(f, "*"),
+        }
+    }
+}
+
+impl Display for PfUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            PfUnOp::Neg => write!(f, "-"),
+            PfUnOp::Recip => write!(f, "pfrecip"),
+        }
+    }
+}
+
+impl Display for IntNaryOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            IntNaryOp::Add => write!(f, "intadd"),
+            IntNaryOp::Mul => write!(f, "intmul"),
+        }
+    }
+}
+
+impl Display for IntBinPred {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            IntBinPred::Lt => write!(f, "<"),
+            IntBinPred::Gt => write!(f, ">"),
+            IntBinPred::Le => write!(f, "<="),
+            IntBinPred::Ge => write!(f, ">="),
+        }
+    }
+}
 
 /// State that influences how IR is formatted.
 struct IrFormatter<'a, 'b> {
@@ -131,21 +280,35 @@ impl DisplayIr for Sort {
             Sort::F32 => write!(f, "f32"),
             Sort::F64 => write!(f, "f64"),
             Sort::Field(fty) => write!(f, "(mod {})", fty.modulus()),
-            Sort::Array(k, v, n) => {
+            Sort::Array(a) => {
                 // we could make our own write macro.
                 write!(f, "(array ")?;
-                k.ir_fmt(f)?;
+                a.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
-                write!(f, " {n})")
+                a.val.ir_fmt(f)?;
+                write!(f, " {})", a.size)
+            }
+            Sort::Map(m) => {
+                // we could make our own write macro.
+                write!(f, "(map ")?;
+                m.key.ir_fmt(f)?;
+                write!(f, " ")?;
+                m.val.ir_fmt(f)?;
+                write!(f, ")")
             }
             Sort::Tuple(fields) => {
-                write!(f, "(tuple")?;
-                for field in fields.iter() {
-                    write!(f, " ")?;
-                    field.ir_fmt(f)?;
+                if fields.len() > 1 && fields[1..].iter().all(|s| s == &fields[0]) {
+                    write!(f, "(tuple {} ", fields.len())?;
+                    fields[0].ir_fmt(f)?;
+                    write!(f, ")")
+                } else {
+                    write!(f, "(tuple")?;
+                    for field in fields.iter() {
+                        write!(f, " ")?;
+                        field.ir_fmt(f)?;
+                    }
+                    write!(f, ")")
                 }
-                write!(f, ")")
             }
         }
     }
@@ -156,7 +319,7 @@ impl DisplayIr for Op {
         match self {
             Op::Ite => write!(f, "ite"),
             Op::Eq => write!(f, "="),
-            Op::Var(n, _) => write!(f, "{n}"),
+            Op::Var(v) => write!(f, "{}", v.name),
             Op::Const(c) => c.ir_fmt(f),
             Op::BvBinOp(a) => write!(f, "{a}"),
             Op::BvBinPred(a) => write!(f, "{a}"),
@@ -183,24 +346,26 @@ impl DisplayIr for Op {
             Op::FpToFp(a) => write!(f, "(fp2fp {a})"),
             Op::PfUnOp(a) => write!(f, "{a}"),
             Op::PfNaryOp(a) => write!(f, "{a}"),
+            Op::PfDiv => write!(f, "/"),
             Op::IntNaryOp(a) => write!(f, "{a}"),
             Op::IntBinPred(a) => write!(f, "{a}"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
-            Op::PfChallenge(n, m) => write!(f, "(challenge {} {})", n, m.modulus()),
+            Op::PfChallenge(c) => write!(f, "(challenge {} {})", c.name, c.field.modulus()),
+            Op::Witness(n) => write!(f, "(witness {})", n),
             Op::PfFitsInBits(n) => write!(f, "(pf_fits_in_bits {})", n),
             Op::Select => write!(f, "select"),
             Op::Store => write!(f, "store"),
             Op::CStore => write!(f, "cstore"),
-            Op::Fill(key_sort, size) => {
+            Op::Fill(fill) => {
                 write!(f, "(fill ")?;
-                key_sort.ir_fmt(f)?;
-                write!(f, " {})", *size)
+                fill.key_sort.ir_fmt(f)?;
+                write!(f, " {})", fill.size)
             }
-            Op::Array(k, v) => {
+            Op::Array(a) => {
                 write!(f, "(array ")?;
-                k.ir_fmt(f)?;
+                a.key.ir_fmt(f)?;
                 write!(f, " ")?;
-                v.ir_fmt(f)?;
+                a.val.ir_fmt(f)?;
                 write!(f, ")")
             }
             Op::Tuple => write!(f, "tuple"),
@@ -211,9 +376,9 @@ impl DisplayIr for Op {
                 op.ir_fmt(f)?;
                 write!(f, "))")
             }
-            Op::Call(name, a, r) => {
-                let arg_sorts = a.iter().map(|x| x.to_string()).join(" ");
-                write!(f, "(call {name} ({arg_sorts}) {r})")
+            Op::Call(c) => {
+                let arg_sorts = c.arg_sorts.iter().map(|x| x.to_string()).join(" ");
+                write!(f, "(call {} ({}) {})", c.name, arg_sorts, c.ret_sort)
             }
             Op::Rot(i) => write!(f, "(rot {i})"),
             Op::PfToBoolTrusted => write!(f, "pf2bool_trusted"),
@@ -224,11 +389,7 @@ impl DisplayIr for Op {
 
 impl DisplayIr for ext::ExtOp {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
-        match self {
-            ext::ExtOp::PersistentRamSplit => write!(f, "persistent_ram_split"),
-            ext::ExtOp::UniqDeriGcd => write!(f, "uniq_deri_gcd"),
-            ext::ExtOp::Sort => write!(f, "sort"),
-        }
+        write!(f, "{}", self.to_str())
     }
 }
 
@@ -250,6 +411,7 @@ impl DisplayIr for Value {
                 write!(f, ")")
             }
             Value::Array(a) => a.ir_fmt(f),
+            Value::Map(a) => a.ir_fmt(f),
         }
     }
 }
@@ -290,6 +452,29 @@ impl DisplayIr for Array {
             }
             write!(f, "))")
         }
+    }
+}
+
+impl DisplayIr for Map {
+    fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
+        write!(f, "(#m ")?;
+        self.key_sort.ir_fmt(f)?;
+        write!(f, " ")?;
+        self.value_sort.ir_fmt(f)?;
+        write!(f, " (")?;
+        let mut first = true;
+        for (k, v) in &self.map {
+            if !first {
+                write!(f, " ")?;
+            }
+            write!(f, "(")?;
+            k.ir_fmt(f)?;
+            write!(f, " ")?;
+            v.ir_fmt(f)?;
+            write!(f, ")")?;
+            first = false;
+        }
+        write!(f, "))")
     }
 }
 
@@ -393,13 +578,7 @@ impl DisplayIr for ComputationMetadata {
 fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     let close_dft_f = if f.cfg.use_default_field && f.default_field.is_none() {
         let fields: HashSet<FieldT> = PostOrderIter::new(t.clone())
-            .filter_map(|c| {
-                if let Op::Const(Value::Field(f)) = &c.op() {
-                    Some(f.ty())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|c| c.as_pf_opt().map(|f| f.ty()))
             .collect();
         if fields.len() == 1 && !f.cfg.hide_field {
             f.default_field = fields.into_iter().next();
@@ -420,15 +599,16 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     for t in PostOrderIter::new(t.clone()) {
         for c in t.cs().iter().cloned() {
             let has_children = !c.cs().is_empty();
+            let non_scalar_const = c.is_const() && !check(&c).is_scalar();
             let count = parent_counts.entry(c).or_insert(0);
             *count += 1;
-            if *count == 2 && has_children {
+            if *count == 2 && (has_children || non_scalar_const) {
                 n_bindings += 1;
             }
         }
-        if let Op::Var(name, sort) = &t.op() {
-            write!(f, "  ({name} ")?;
-            sort.ir_fmt(f)?;
+        if let Op::Var(v) = &t.op() {
+            write!(f, "  ({} ", v.name)?;
+            v.sort.ir_fmt(f)?;
             writeln!(f, ")")?;
         }
     }
@@ -437,7 +617,9 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
         writeln!(f, " (let")?;
         writeln!(f, "  (")?; // let binding list
         for t in PostOrderIter::new(t.clone()) {
-            if parent_counts.get(&t).unwrap_or(&0) > &1 && !t.cs().is_empty() {
+            let non_scalar_const = t.is_const() && !check(&t).is_scalar();
+            if parent_counts.get(&t).unwrap_or(&0) > &1 && (!t.cs().is_empty() || non_scalar_const)
+            {
                 write!(f, "   ('{} ", f.defs.next_id.clone(),)?;
                 t.ir_fmt(f)?;
                 writeln!(f, ")")?;

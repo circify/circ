@@ -1,0 +1,10 @@
+from "EMBED" import reverse_lookup
+
+// Inputs:  0 1 2 3
+// Outputs: 3 0 1 2
+const transcript field[4] ROTATION = [3, 0, 1, 2]
+
+def main(private field y, private field z) -> field:
+  field dy = reverse_lookup(ROTATION, y)
+  field dz = reverse_lookup(ROTATION, z)
+  return dz * dy

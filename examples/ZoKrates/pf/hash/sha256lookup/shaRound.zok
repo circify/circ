@@ -1,0 +1,69 @@
+from "logic_func" import ssig0, ssig1, bsig0, bsig1, ch, maj
+from "utils" import Dual, combine_limbs, dual_limbs_to_sparse_limbs, dual_limbs_to_dense_limbs
+from "basic_op" import sum
+from "const" import K_DD // K_S
+// N = number of limbs
+def one_extend<N, CM>(Dual[4][N] w_input, u32[N] LIMBWIDTH) -> Dual[N]:
+    field[4] addend = [0; 4]
+    addend[0] = ssig1::<N>(dual_limbs_to_sparse_limbs(w_input[0]), LIMBWIDTH)
+    addend[1] = combine_limbs::<N>(dual_limbs_to_dense_limbs(w_input[1]), LIMBWIDTH)
+    addend[2] = ssig0::<N>(dual_limbs_to_sparse_limbs(w_input[2]), LIMBWIDTH)
+    addend[3] = combine_limbs::<N>(dual_limbs_to_dense_limbs(w_input[3]), LIMBWIDTH)
+    return sum::<4, N, 2, CM>(addend, LIMBWIDTH)
+
+// Extension (48 rounds)
+def whole_extend<N, CM>(Dual[16][N] message, u32[N] LIMBWIDTH) -> Dual[64][N]:
+    Dual[64][N] w = [...message, ...[[Dual{s: 0, d: 0}; N]; 48]]
+    for u32 i in 16..64 do
+        w[i] = one_extend::<N, CM>([w[i-2], w[i-7], w[i-15], w[i-16]], LIMBWIDTH)
+    endfor
+    return w
+
+def one_main<N, CM>(Dual[8][N] input, field k, Dual[N] w, u32[N] LIMBWIDTH) -> Dual[8][N]:
+    field[5] t1 = [0; 5]
+    t1[0] = combine_limbs::<N>(dual_limbs_to_dense_limbs(input[7]), LIMBWIDTH)
+    t1[1] = bsig1::<N>(dual_limbs_to_sparse_limbs(input[4]))
+    field[3][N] input_to_ch = [dual_limbs_to_sparse_limbs(input[4]), dual_limbs_to_sparse_limbs(input[5]), dual_limbs_to_sparse_limbs(input[6])]
+    t1[2] = ch::<N>(input_to_ch)
+    t1[3] = k
+    t1[4] = combine_limbs::<N>(dual_limbs_to_dense_limbs(w), LIMBWIDTH)
+
+    field[2] t2 = [0; 2]
+    t2[0] = bsig0::<N>(dual_limbs_to_sparse_limbs(input[0]))
+    field[3][N] input_to_maj = [dual_limbs_to_sparse_limbs(input[0]), dual_limbs_to_sparse_limbs(input[1]), dual_limbs_to_sparse_limbs(input[2])]
+    t2[1] = maj::<N>(input_to_maj)
+
+    Dual[8][N] output = [[Dual{s: 0, d: 0}; N]; 8]
+    for u32 i in 0..8 do
+        u32 j = (i + 7) % 8
+        output[i] = input[j]
+    endfor
+    output[0] = sum::<7, N, 3, CM>([...t1, ...t2], LIMBWIDTH)
+    field d_val = combine_limbs::<N>(dual_limbs_to_dense_limbs(input[3]), LIMBWIDTH)
+    output[4] = sum::<6, N, 3, CM>([d_val, ...t1], LIMBWIDTH)
+    return output
+
+// Round function (64 rounds)
+def whole_main<N, CM>(Dual[8][N] current, Dual[64][N] w, u32[N] LIMBWIDTH) -> Dual[8][N]:
+    Dual[8][N] interm = current
+    for u32 i in 0..64 do
+        interm = one_main::<N, CM>(interm, K_DD[i], w[i], LIMBWIDTH)
+    endfor
+    return interm
+
+// H(i) = H(i-1) + output of main round function
+def compute_final_output<N, CM>(Dual[8][N] interm, Dual[8][N] current, u32[N] LIMBWIDTH) -> Dual[8][N]:
+    Dual[8][N] output = [[Dual{s: 0, d: 0}; N]; 8]
+    for u32 i in 0..8 do
+        field cur_val = combine_limbs::<N>(dual_limbs_to_dense_limbs(current[i]), LIMBWIDTH)
+        field interm_val = combine_limbs::<N>(dual_limbs_to_dense_limbs(interm[i]), LIMBWIDTH)
+        output[i] = sum::<2, N, 1, CM>([cur_val, interm_val], LIMBWIDTH)
+    endfor
+    return output
+
+def main<N>(Dual[16][N] input, Dual[8][N] current, u32[3] LIMBWIDTH) -> Dual[8][N]:
+    u32 CM = 3
+    Dual[64][N] w = whole_extend::<N, CM>(input, LIMBWIDTH)
+    Dual[8][N] interm = whole_main::<N, CM>(current, w, LIMBWIDTH)
+    return compute_final_output::<N, CM>(interm, current, LIMBWIDTH)
+

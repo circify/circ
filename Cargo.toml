@@ -11,6 +11,7 @@ rust-version = "1.65.0"
 circ_fields = { path = "circ_fields" }
 circ_opt = { path = "circ_opt" }
 circ_hc = { path = "circ_hc", default-features = false, features = ["rc", "lru"]}
+circ_waksman = { path = "circ_waksman" }
 rug = { version = "1.11", features = ["serde"] }
 gmp-mpfr-sys = { version = "1.4", optional = true }
 lazy_static = { version = "1.4", optional = true }
@@ -25,6 +26,7 @@ log = "0.4"
 thiserror = "1.0"
 bellman = { git = "https://github.com/alex-ozdemir/bellman.git", branch = "mirage", optional = true }
 rug-polynomial = { version = "0.2.5", optional = true }
+rayon = { version = "1", optional = true }
 ff = { version = "0.12", optional = true }
 fxhash = "0.2"
 good_lp = { version = "1.1", features = ["lp-solvers", "coin_cbc"], default-features = false, optional = true }
@@ -63,18 +65,16 @@ approx = "0.5.0"
 default = []
 # frontends
 c = ["lang-c"]
-zok = ["zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
+zok = ["smt", "zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
 datalog = ["pest", "pest-ast", "pest_derive", "from-pest", "lazy_static"]
 # backends
 smt = ["rsmt2", "ieee754"]
 lp = ["good_lp", "lp-solvers"]
 aby = ["lp"]
-kahip = ["aby"]
-kahypar = ["aby"]
-r1cs = ["bincode"]
+r1cs = ["bincode", "rayon"]
 poly = ["rug-polynomial"]
 spartan = ["r1cs", "dep:spartan", "merlin", "curve25519-dalek", "bincode", "gmp-mpfr-sys"]
-bellman = ["r1cs", "dep:bellman", "ff", "group", "pairing", "serde_bytes", "bincode", "gmp-mpfr-sys", "byteorder"]
+bellman = ["r1cs", "dep:bellman", "ff", "group", "pairing", "serde_bytes", "bincode", "gmp-mpfr-sys", "byteorder", "rayon"]
 
 [[example]]
 name = "circ"

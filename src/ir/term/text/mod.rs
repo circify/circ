@@ -15,7 +15,7 @@
 //!   * `I`: integer (arbitrary-precision)
 //!   * `X`: identifier
 //!     * regex: `[^()0-9#; \t\n\f][^(); \t\n\f#]*`
-//!   * Computation `C`: `(computation M P ARRAYS T)`
+//!   * Computation `C`: `(computation M P PERSISTENT_ARRAYS RAM_ARRAYS T)`
 //!     * Metadata `M`: `(metadata PARTIES INPUTS COMMITMENTS)`
 //!       * PARTIES is `(parties X1 .. Xn)`
 //!       * INPUTS is `(inputs INPUT1 .. INPUTn)`
@@ -28,11 +28,12 @@
 //!       * INPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * OUTPUTS is `((X1 S1) .. (Xn Sn))`
 //!       * TUPLE_TERM is a tuple of the same arity as the output
-//!     * ARRAYS (optional): `(persistent_arrays ARRAY*)`:
+//!     * PERSISTENT_ARRAYS (optional): `(persistent_arrays ARRAY*)`:
 //!       * ARRAY is `(X S T)`
 //!         * X is the name of the inital state
 //!         * S is the size
 //!         * T is the state (final)
+//!     * RAM_ARRAYS (optional): `(ram_arrays T*)`:
 //!   * Sort `S`:
 //!     * `bool`
 //!     * `f32`
@@ -40,7 +41,9 @@
 //!     * `(bv N)`
 //!     * `(mod I)`
 //!     * `(tuple S1 ... Sn)`
+//!     * `(tuple N S)` : N copies of S
 //!     * `(array Sk Sv N)`
+//!     * `(map Sk Sv)`
 //!   * Value `V`:
 //!     * boolean: `true`, `false`
 //!     * integer: `I`
@@ -51,6 +54,7 @@
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!     * list: `(#l Sk (V1 ... Vn))`
 //!       * gives an array with default value sort, length n, and increasing keys for the values
+//!     * map: `(#m Sk Sv ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!   * Term `T`:
 //!     * value: `V`
 //!     * let: `(let ((X1 T1) ... (Xn Tn)) T)`
@@ -170,6 +174,7 @@ enum CtrlOp {
     Declare,
     TupleValue,
     ArrayValue,
+    MapValue,
     ListValue,
     SetDefaultModulus,
 }
@@ -202,10 +207,7 @@ impl<'src> IrInterp<'src> {
 
     /// Takes bindings in order bound, and unbinds
     fn bind(&mut self, key: &'src [u8], value: Term) {
-        self.bindings
-            .entry(key)
-            .or_insert_with(Vec::new)
-            .push(value)
+        self.bindings.entry(key).or_default().push(value)
     }
 
     /// Takes bindings in order bound, and unbinds
@@ -224,6 +226,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"#t") => Err(CtrlOp::TupleValue),
             Leaf(Ident, b"#a") => Err(CtrlOp::ArrayValue),
             Leaf(Ident, b"#l") => Err(CtrlOp::ListValue),
+            Leaf(Ident, b"#m") => Err(CtrlOp::MapValue),
             Leaf(Ident, b"set_default_modulus") => Err(CtrlOp::SetDefaultModulus),
             Leaf(Ident, b"ite") => Ok(Op::Ite),
             Leaf(Ident, b"=") => Ok(Op::Eq),
@@ -283,6 +286,7 @@ impl<'src> IrInterp<'src> {
             Leaf(Ident, b"+") => Ok(Op::PfNaryOp(PfNaryOp::Add)),
             Leaf(Ident, b"*") => Ok(Op::PfNaryOp(PfNaryOp::Mul)),
             Leaf(Ident, b"pfrecip") => Ok(Op::PfUnOp(PfUnOp::Recip)),
+            Leaf(Ident, b"/") => Ok(Op::PfDiv),
             Leaf(Ident, b"-") => Ok(Op::PfUnOp(PfUnOp::Neg)),
             Leaf(Ident, b"<") => Ok(INT_LT),
             Leaf(Ident, b"<=") => Ok(INT_LE),
@@ -303,7 +307,7 @@ impl<'src> IrInterp<'src> {
                 }
             }
             List(tts) => match &tts[..] {
-                [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.usize(a), self.usize(b))),
+                [Leaf(Ident, b"extract"), a, b] => Ok(Op::BvExtract(self.u32(a), self.u32(b))),
                 [Leaf(Ident, b"uext"), a] => Ok(Op::BvUext(self.usize(a))),
                 [Leaf(Ident, b"sext"), a] => Ok(Op::BvSext(self.usize(a))),
                 [Leaf(Ident, b"pf2bv"), a] => Ok(Op::PfToBv(self.usize(a))),
@@ -312,22 +316,29 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
-                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::PfChallenge(
+                [Leaf(Ident, b"challenge"), name, field] => Ok(Op::new_chall(
                     self.ident_string(name),
                     FieldT::from(self.int(field)),
                 )),
-                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(self.sort(k), self.sort(v))),
-                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::UbvToPf(FieldT::from(self.int(a)))),
+                [Leaf(Ident, b"array"), k, v] => Ok(Op::Array(Box::new(ArrayOp {
+                    key: self.sort(k),
+                    val: self.sort(v),
+                }))),
+                [Leaf(Ident, b"bv2pf"), a] => Ok(Op::new_ubv_to_pf(FieldT::from(self.int(a)))),
                 [Leaf(Ident, b"field"), a] => Ok(Op::Field(self.usize(a))),
                 [Leaf(Ident, b"update"), a] => Ok(Op::Update(self.usize(a))),
                 [Leaf(Ident, b"call"), Leaf(Ident, name), arg_sorts, ret_sort] => {
                     let name = from_utf8(name).unwrap().to_owned();
                     let arg_sorts = self.sorts(arg_sorts);
                     let ret_sort = self.sort(ret_sort);
-                    Ok(Op::Call(name, arg_sorts, ret_sort))
+                    Ok(Op::Call(Box::new(CallOp {
+                        name,
+                        arg_sorts,
+                        ret_sort,
+                    })))
                 }
                 [Leaf(Ident, b"fill"), key_sort, size] => {
-                    Ok(Op::Fill(self.sort(key_sort), self.usize(size)))
+                    Ok(Op::new_fill(self.sort(key_sort), self.usize(size)))
                 }
                 _ => todo!("Unparsed op: {}", tt),
             },
@@ -337,7 +348,7 @@ impl<'src> IrInterp<'src> {
     fn value(&mut self, tt: &TokTree<'src>) -> Value {
         let t = self.term(tt);
         match &t.op() {
-            Op::Const(v) => v.clone(),
+            Op::Const(v) => (**v).clone(),
             _ => panic!("Expected value, found term {}", t),
         }
     }
@@ -353,13 +364,21 @@ impl<'src> IrInterp<'src> {
                 match &ls[..] {
                     [Leaf(Ident, b"mod"), m] => Sort::Field(FieldT::from(self.int(m))),
                     [Leaf(Ident, b"bv"), w] => Sort::BitVector(self.usize(w)),
-                    [Leaf(Ident, b"array"), k, v, s] => Sort::Array(
-                        Box::new(self.sort(k)),
-                        Box::new(self.sort(v)),
-                        self.usize(s),
-                    ),
+                    [Leaf(Ident, b"array"), k, v, s] => {
+                        Sort::new_array(self.sort(k), self.sort(v), self.usize(s))
+                    }
+                    [Leaf(Ident, b"map"), k, v] => Sort::new_map(self.sort(k), self.sort(v)),
                     [Leaf(Ident, b"tuple"), ..] => {
-                        Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
+                        if ls.len() > 1 {
+                            if let Some(size) = self.maybe_usize(&ls[1]) {
+                                assert_eq!(ls.len(), 3);
+                                Sort::Tuple(vec![self.sort(&ls[2]); size].into())
+                            } else {
+                                Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
+                            }
+                        } else {
+                            Sort::Tuple(ls[1..].iter().map(|li| self.sort(li)).collect())
+                        }
                     }
                     _ => panic!("Expected sort, found {}", tt),
                 }
@@ -395,9 +414,21 @@ impl<'src> IrInterp<'src> {
         }
     }
     fn usize(&self, tt: &TokTree) -> usize {
+        self.maybe_usize(tt).unwrap()
+    }
+    fn maybe_usize(&self, tt: &TokTree) -> Option<usize> {
         match tt {
-            Leaf(Token::Int, s) => usize::from_str(from_utf8(s).unwrap()).unwrap(),
-            _ => panic!("Expected integer, got {}", tt),
+            Leaf(Token::Int, s) => usize::from_str(from_utf8(s).ok()?).ok(),
+            _ => None,
+        }
+    }
+    fn u32(&self, tt: &TokTree) -> u32 {
+        self.maybe_u32(tt).unwrap()
+    }
+    fn maybe_u32(&self, tt: &TokTree) -> Option<u32> {
+        match tt {
+            Leaf(Token::Int, s) => u32::from_str(from_utf8(s).ok()?).ok(),
+            _ => None,
         }
     }
     /// Parse lets, returning bindings, in-order.
@@ -451,7 +482,7 @@ impl<'src> IrInterp<'src> {
                     List(ls) => match &ls[..] {
                         [Leaf(Token::Ident, name), s] => {
                             let sort = self.sort(s);
-                            let t = leaf_term(Op::Var(from_utf8(name).unwrap().to_owned(), sort));
+                            let t = var(from_utf8(name).unwrap().to_owned(), sort);
                             self.bind(name, t);
                             name.to_vec()
                         }
@@ -467,13 +498,9 @@ impl<'src> IrInterp<'src> {
     fn term(&mut self, tt: &TokTree<'src>) -> Term {
         use Token::*;
         match tt {
-            Leaf(Bin, s) => leaf_term(Op::Const(Value::BitVector(
-                BitVector::from_bin_lit(s).unwrap(),
-            ))),
-            Leaf(Hex, s) => leaf_term(Op::Const(Value::BitVector(
-                BitVector::from_hex_lit(s).unwrap(),
-            ))),
-            Leaf(Int, s) => leaf_term(Op::Const(Value::Int(Integer::parse(s).unwrap().into()))),
+            Leaf(Bin, s) => const_(Value::BitVector(BitVector::from_bin_lit(s).unwrap())),
+            Leaf(Hex, s) => const_(Value::BitVector(BitVector::from_hex_lit(s).unwrap())),
+            Leaf(Int, s) => const_(Value::Int(Integer::parse(s).unwrap().into())),
             Leaf(Field, s) => {
                 let (v, m) = if let Some(i) = s.iter().position(|b| *b == b'm') {
                     (
@@ -490,7 +517,7 @@ impl<'src> IrInterp<'src> {
                         .clone();
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
-                leaf_term(Op::Const(Value::Field(FieldV::new::<Integer>(v, m))))
+                pf_lit(FieldV::new::<Integer>(v, m))
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),
@@ -526,30 +553,37 @@ impl<'src> IrInterp<'src> {
                         let default = self.value(&tts[2]);
                         let size = self.usize(&tts[3]);
                         let vals = self.value_alist(&tts[4]);
-                        leaf_term(Op::Const(Value::Array(Array::new(
+                        const_(Value::Array(Array::new(
                             key_sort,
                             Box::new(default),
                             vals.into_iter().collect(),
                             size,
-                        ))))
+                        )))
+                    }
+                    Err(CtrlOp::MapValue) => {
+                        assert_eq!(tts.len(), 4);
+                        let key_sort = self.sort(&tts[1]);
+                        let value_sort = self.sort(&tts[2]);
+                        let vals = self.value_alist(&tts[3]);
+                        const_(Value::Map(map::Map::new(key_sort, value_sort, vals)))
                     }
                     Err(CtrlOp::ListValue) => {
                         assert_eq!(tts.len(), 3);
                         let key_sort = self.sort(&tts[1]);
                         let vals = self.value_list(&tts[2]);
-                        leaf_term(Op::Const(Value::Array(Array::from_vec(
+                        const_(Value::Array(Array::from_vec(
                             key_sort,
                             vals.first().unwrap().sort(),
                             vals,
-                        ))))
+                        )))
                     }
-                    Err(CtrlOp::TupleValue) => leaf_term(Op::Const(Value::Tuple(
+                    Err(CtrlOp::TupleValue) => const_(Value::Tuple(
                         tts[1..]
                             .iter()
                             .map(|tti| self.value(tti))
                             .collect::<Vec<_>>()
                             .into(),
-                    ))),
+                    )),
                     Err(CtrlOp::SetDefaultModulus) => {
                         assert_eq!(
                             tts.len(),
@@ -726,10 +760,10 @@ impl<'src> IrInterp<'src> {
         let (metadata, input_names) = self.metadata(&tts[0]);
         let precomputes = self.precompute(&tts[1]);
         let mut persistent_arrays = Vec::new();
-        let mut skip_one = false;
-        if let List(tts_inner) = &tts[2] {
+        let mut ram_arrays = Vec::new();
+        let mut num_skipped = 0;
+        while let List(tts_inner) = &tts[2 + num_skipped] {
             if tts_inner[0] == Leaf(Token::Ident, b"persistent_arrays") {
-                skip_one = true;
                 for tti in tts_inner.iter().skip(1) {
                     let ttis = self.unwrap_list(tti, "persistent_arrays");
                     let id = self.ident_string(&ttis[0]);
@@ -737,12 +771,18 @@ impl<'src> IrInterp<'src> {
                     let term = self.term(&ttis[2]);
                     persistent_arrays.push((id, term));
                 }
+                num_skipped += 1;
+            } else if tts_inner[0] == Leaf(Token::Ident, b"ram_arrays") {
+                for tti in tts_inner.iter().skip(1) {
+                    let term = self.term(tti);
+                    ram_arrays.push(term);
+                }
+                num_skipped += 1;
+            } else {
+                break;
             }
         }
-        let mut iter = tts.iter().skip(2);
-        if skip_one {
-            iter.next();
-        }
+        let iter = tts.iter().skip(2 + num_skipped);
         let outputs = iter.map(|tti| self.term(tti)).collect();
         self.unbind(input_names);
         Computation {
@@ -750,6 +790,7 @@ impl<'src> IrInterp<'src> {
             metadata,
             precomputes,
             persistent_arrays,
+            ram_arrays: ram_arrays.into_iter().collect(),
         }
     }
 
@@ -865,7 +906,7 @@ pub fn parse_value_map(src: &[u8]) -> HashMap<String, Value> {
         .map(|(name, term)| {
             let name = std::str::from_utf8(name).unwrap().to_string();
             let val = match term[0].op() {
-                Op::Const(v) => v.clone(),
+                Op::Const(v) => (**v).clone(),
                 _ => panic!("Non-value binding {} associated with {}", term[0], name),
             };
             (name, val)
@@ -903,6 +944,13 @@ pub fn serialize_computation(c: &Computation) -> String {
         for (name, term) in &c.persistent_arrays {
             let size = check(term).as_array().2;
             writeln!(&mut out, "  ({name} {size} {})", serialize_term(term)).unwrap();
+        }
+        writeln!(&mut out, "\n)").unwrap();
+    }
+    if !c.ram_arrays.is_empty() {
+        writeln!(&mut out, "(ram_arrays").unwrap();
+        for term in &c.ram_arrays {
+            writeln!(&mut out, "  {}", serialize_term(term)).unwrap();
         }
         writeln!(&mut out, "\n)").unwrap();
     }
@@ -1009,6 +1057,22 @@ mod test {
                  (B (store A a b))
          ) (xor (select B a)
                 (select (#a (bv 4) false 4 ((#b0000 true))) #b0000))))",
+        );
+        let s = serialize_term(&t);
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn map_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (a bool)
+         (b bool)
+         (A (map bool bool))
+         )
+         (#m bool bool ((true false))))",
         );
         let s = serialize_term(&t);
         let t2 = parse_term(s.as_bytes());
@@ -1224,6 +1288,7 @@ mod test {
                     (tuple (not (and c d)))
                 )
                 (persistent_arrays (AA 2 (#a (bv 4) false 4 ((#b0000 true)))))
+                (ram_arrays (#a (bv 4) false 4 ((#b0001 true))))
                 (let (
                         (B ((update 1) A b))
                 ) (xor ((field 1) B)
@@ -1248,8 +1313,8 @@ mod test {
         let t = parse_term(
             b"
         (declare (
-         (entries (array (mod 17) (tuple (mod 17) (mod 17)) 5))
-         (indices (array (mod 17) (mod 17) 3))
+         (entries (tuple 5 (tuple (mod 17) (mod 17))))
+         (indices (tuple 3 (mod 17)))
         )
          (persistent_ram_split entries indices))",
         );
@@ -1291,6 +1356,20 @@ mod test {
     }
 
     #[test]
+    fn tuple_dup_roundtrip() {
+        let t = parse_term(b"(declare ((a (tuple 4 bool))) a)");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn tuple_nodup_roundtrip() {
+        let t = parse_term(b"(declare ((a (tuple (bv 4) bool))) a)");
+        let t2 = parse_term(serialize_term(&t).as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
     fn pf_fits_in_bits_rountrip() {
         let t = parse_term(b"(declare ((a bool)) ((pf_fits_in_bits 4) (ite a #f1m11 #f0m11)))");
         let t2 = parse_term(serialize_term(&t).as_bytes());
@@ -1305,6 +1384,37 @@ mod test {
          (pairs (array (mod 17) (tuple (mod 17) bool) 5))
         )
          (uniq_deri_gcd pairs))",
+        );
+        let s = serialize_term(&t);
+        println!("{s}");
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn haboeck_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (haystack (tuple 5 (mod 17)))
+         (needles (tuple 8 (mod 17)))
+        )
+         (haboeck haystack needles))",
+        );
+        let s = serialize_term(&t);
+        println!("{s}");
+        let t2 = parse_term(s.as_bytes());
+        assert_eq!(t, t2);
+    }
+
+    #[test]
+    fn pf_batch_inv_roundtrip() {
+        let t = parse_term(
+            b"
+        (declare (
+         (values (tuple (mod 17) (mod 17)))
+        )
+         (pf_batch_inv values))",
         );
         let s = serialize_term(&t);
         println!("{s}");

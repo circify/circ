@@ -8,22 +8,22 @@ use zokrates_parser::Rule;
 extern crate lazy_static;
 
 pub use ast::{
-    Access, AnyString, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType,
-    AssertionStatement, Assignee, AssigneeAccess, BasicOrStructType, BasicType, BinaryExpression,
-    BinaryOperator, BooleanLiteralExpression, BooleanType, CallAccess, CommittedVisibility,
-    CondStoreStatement, ConstantDefinition, ConstantGenericValue, Curve, DecimalLiteralExpression,
-    DecimalNumber, DecimalSuffix, DefinitionStatement, ExplicitGenerics, Expression, FieldSuffix,
-    FieldType, File, FromExpression, FromImportDirective, FunctionDefinition, HexLiteralExpression,
-    HexNumberExpression, IdentifierExpression, ImportDirective, ImportSymbol,
-    InlineArrayExpression, InlineStructExpression, InlineStructMember, IterationStatement,
-    LiteralExpression, MainImportDirective, MemberAccess, NegOperator, NotOperator, Parameter,
-    PosOperator, PostfixExpression, Pragma, PrivateNumber, PrivateVisibility, PublicVisibility,
-    Range, RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement,
-    StrOperator, StructDefinition, StructField, StructType, SymbolDeclaration, TernaryExpression,
-    ToExpression, Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee,
-    U16NumberExpression, U16Suffix, U16Type, U32NumberExpression, U32Suffix, U32Type,
-    U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix, U8Type, UnaryExpression,
-    UnaryOperator, Underscore, Visibility, EOI,
+    Access, AnyString, Arguments, ArrayAccess, ArrayCommitted, ArrayInitializerExpression,
+    ArrayParamMetadata, ArrayTranscript, ArrayType, AssertionStatement, Assignee, AssigneeAccess,
+    BasicOrStructType, BasicType, BinaryExpression, BinaryOperator, BooleanLiteralExpression,
+    BooleanType, CallAccess, CondStoreStatement, ConstantDefinition, ConstantGenericValue, Curve,
+    DecimalLiteralExpression, DecimalNumber, DecimalSuffix, DefinitionStatement, ExplicitGenerics,
+    Expression, FieldSuffix, FieldType, File, FromExpression, FromImportDirective,
+    FunctionDefinition, HexLiteralExpression, HexNumberExpression, IdentifierExpression,
+    ImportDirective, ImportSymbol, InlineArrayExpression, InlineStructExpression,
+    InlineStructMember, IterationStatement, LiteralExpression, MainImportDirective, MemberAccess,
+    NegOperator, NotOperator, Parameter, PosOperator, PostfixExpression, Pragma, PrivateNumber,
+    PrivateVisibility, PublicVisibility, Range, RangeOrExpression, ReturnStatement, Span, Spread,
+    SpreadOrExpression, Statement, StrOperator, StructDefinition, StructField, StructType,
+    SymbolDeclaration, TernaryExpression, ToExpression, Type, TypeDefinition, TypedIdentifier,
+    TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type, U32NumberExpression,
+    U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
+    U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, WitnessStatement, EOI,
 };
 
 mod ast {
@@ -193,6 +193,7 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::const_definition))]
     pub struct ConstantDefinition<'ast> {
+        pub array_metadata: Option<ArrayParamMetadata<'ast>>,
         pub ty: Type<'ast>,
         pub id: IdentifierExpression<'ast>,
         pub expression: Expression<'ast>,
@@ -342,6 +343,7 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::parameter))]
     pub struct Parameter<'ast> {
+        pub array_metadata: Option<ArrayParamMetadata<'ast>>,
         pub visibility: Option<Visibility<'ast>>,
         pub ty: Type<'ast>,
         pub id: IdentifierExpression<'ast>,
@@ -350,10 +352,30 @@ mod ast {
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::array_param_metadata))]
+    pub enum ArrayParamMetadata<'ast> {
+        Committed(ArrayCommitted<'ast>),
+        Transcript(ArrayTranscript<'ast>),
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::apm_committed))]
+    pub struct ArrayCommitted<'ast> {
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::apm_transcript))]
+    pub struct ArrayTranscript<'ast> {
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::vis))]
     pub enum Visibility<'ast> {
         Public(PublicVisibility),
-        Committed(CommittedVisibility),
         Private(PrivateVisibility<'ast>),
     }
 
@@ -371,10 +393,6 @@ mod ast {
     pub struct PublicVisibility {}
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
-    #[pest_ast(rule(Rule::vis_committed))]
-    pub struct CommittedVisibility {}
-
-    #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::vis_private))]
     pub struct PrivateVisibility<'ast> {
         pub number: Option<PrivateNumber<'ast>>,
@@ -388,6 +406,7 @@ mod ast {
     pub enum Statement<'ast> {
         Return(ReturnStatement<'ast>),
         Definition(DefinitionStatement<'ast>),
+        Witness(WitnessStatement<'ast>),
         Assertion(AssertionStatement<'ast>),
         CondStore(CondStoreStatement<'ast>),
         Iteration(IterationStatement<'ast>),
@@ -398,6 +417,7 @@ mod ast {
             match self {
                 Statement::Return(x) => &x.span,
                 Statement::Definition(x) => &x.span,
+                Statement::Witness(x) => &x.span,
                 Statement::Assertion(x) => &x.span,
                 Statement::CondStore(x) => &x.span,
                 Statement::Iteration(x) => &x.span,
@@ -409,6 +429,16 @@ mod ast {
     #[pest_ast(rule(Rule::definition_statement))]
     pub struct DefinitionStatement<'ast> {
         pub lhs: Vec<TypedIdentifierOrAssignee<'ast>>,
+        pub expression: Expression<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::witness_statement))]
+    pub struct WitnessStatement<'ast> {
+        pub ty: Type<'ast>,
+        pub id: IdentifierExpression<'ast>,
         pub expression: Expression<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
@@ -720,6 +750,7 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::typed_identifier))]
     pub struct TypedIdentifier<'ast> {
+        pub array_metadata: Option<ArrayParamMetadata<'ast>>,
         pub ty: Type<'ast>,
         pub identifier: IdentifierExpression<'ast>,
         #[pest_ast(outer())]
@@ -1414,6 +1445,7 @@ mod tests {
                     statements: vec![Statement::Definition(DefinitionStatement {
                         lhs: vec![
                             TypedIdentifierOrAssignee::TypedIdentifier(TypedIdentifier {
+                                array_metadata: None,
                                 ty: Type::Basic(BasicType::Field(FieldType {
                                     span: Span::new(&source, 23, 28).unwrap()
                                 })),

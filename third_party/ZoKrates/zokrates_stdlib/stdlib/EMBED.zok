@@ -75,3 +75,15 @@ def u16_to_u32(u16 i) -> u32:
 
 def u8_to_u16(u8 i) -> u16:
     return 0u16
+
+// the output is sampled uniformly and independently of the inputs
+def sample_challenge<N>(field[N] x) -> field:
+    return 0
+
+// return a key in x that matches y
+def reverse_lookup<N>(field[N] x, field y) -> field:
+    return 0
+
+// check that x contains a value equal to y; the result is only assertable.
+def value_in_array<N>(field y, field[N] x) -> bool:
+    return true

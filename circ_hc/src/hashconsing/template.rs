@@ -50,7 +50,7 @@ impl crate::Table<TemplateOp> for Table {
         "hashconsing"
     }
 
-    fn for_each(f: impl FnMut(&TemplateOp, &[Self::Node])) {
+    fn for_each(_f: impl FnMut(&TemplateOp, &[Self::Node])) {
         panic!()
     }
 

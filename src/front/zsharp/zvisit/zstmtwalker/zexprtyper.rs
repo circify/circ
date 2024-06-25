@@ -25,7 +25,7 @@ impl<'ast, 'ret, 'wlk> ZExpressionTyper<'ast, 'ret, 'wlk> {
 
     fn visit_identifier_expression_t(
         &mut self,
-        ie: &mut ast::IdentifierExpression<'ast>,
+        ie: &ast::IdentifierExpression<'ast>,
     ) -> ZVisitorResult {
         assert!(self.ty.is_none());
         self.walker.lookup_type(ie).map(|t| {
@@ -243,7 +243,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         ise: &mut ast::InlineStructExpression<'ast>,
     ) -> ZVisitorResult {
         // XXX(unimpl) we don't monomorphize struct type here... OK?
-        self.visit_identifier_expression_t(&mut ise.ty)
+        self.visit_identifier_expression_t(&ise.ty)
     }
 
     fn visit_inline_array_expression(

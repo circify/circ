@@ -30,15 +30,4 @@ function com_wit_test {
     rm -rf $init_rand $fin_rand $init_commit $fin_commit
 }
 
-# Test prove workflow, given an example name
-function pf_test {
-    proof_impl=mirage
-    ex_name=$1
-    $BIN --ram true $ex_name r1cs --action setup --proof-impl $proof_impl
-    $ZK_BIN --inputs $ex_name.pin --action prove --proof-impl $proof_impl
-    $ZK_BIN --inputs $ex_name.vin --action verify --proof-impl $proof_impl
-    rm -rf P V pi
-}
-
 com_wit_test ./examples/ZoKrates/pf/mem/tiny.zok
-pf_test ./examples/ZoKrates/pf/mem/volatile.zok

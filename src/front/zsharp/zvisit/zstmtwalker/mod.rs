@@ -26,7 +26,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         prms: &'ret [ast::Parameter<'ast>],
         rets: &'ret [ast::Type<'ast>],
         gens: &'ret [ast::IdentifierExpression<'ast>],
-        zgen: &'ret mut ZGen<'ast>,
+        zgen: &'ret ZGen<'ast>,
     ) -> Self {
         let vars = vec![prms
             .iter()
@@ -295,7 +295,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     fn unify_identifier(
         &self,
         ty: ast::Type<'ast>,
-        ie: &mut ast::IdentifierExpression<'ast>,
+        ie: &ast::IdentifierExpression<'ast>,
     ) -> ZVisitorResult {
         self.lookup_type(ie).and_then(|ity| self.eq_type(&ty, &ity))
     }
@@ -805,6 +805,14 @@ impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
                 span_to_string(&def.span),
             )));
         }
+        self.visit_expression(&mut def.expression)?;
+        self.visit_span(&mut def.span)
+    }
+
+    fn visit_witness_statement(&mut self, def: &mut ast::WitnessStatement<'ast>) -> ZVisitorResult {
+        ZConstLiteralRewriter::new(None).visit_type(&mut def.ty)?;
+        self.insert_var(&def.id.value, def.ty.clone())?;
+        self.unify(Some(def.ty.clone()), &mut def.expression)?;
         self.visit_expression(&mut def.expression)?;
         self.visit_span(&mut def.span)
     }

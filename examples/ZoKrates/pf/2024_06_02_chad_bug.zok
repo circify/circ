@@ -1,0 +1,22 @@
+struct BigNat_init_quotient<Qm1, Lp1> {
+    field[Qm1][Lp1] limbs
+    field last_limb
+}
+
+struct BigNat_init<N, Lp1> {
+    field[N][Lp1] limbs
+}
+struct BigNatModMult_init<Qm1, Lp1, ZG, CL> {
+    BigNat_init_quotient<Qm1, Lp1> quotient_init
+    BigNat_init<ZG, CL> carry_init
+}
+
+const u32 Qm1 = 7
+const u32 Lp1 = 4
+const u32 ZG = 2
+const u32 CL = 5
+
+def main(private BigNatModMult_init<Qm1,Lp1,ZG,CL>[1] intermediate_mod) -> bool:
+    BigNat_init<ZG, CL> carry = intermediate_mod[0].carry_init
+    assert(carry.limbs[0][0] == 1)
+    return true

@@ -28,7 +28,7 @@ use circ::ir::{
     opt::{opt, Opt},
     term::{
         check,
-        text::{parse_value_map, serialize_value_map},
+        text::{parse_computations, parse_value_map, serialize_value_map},
     },
 };
 #[cfg(feature = "aby")]
@@ -120,6 +120,7 @@ enum Language {
     Zsharp,
     Datalog,
     C,
+    CircIr,
     Auto,
 }
 
@@ -127,6 +128,7 @@ enum Language {
 pub enum DeterminedLanguage {
     Zsharp,
     Datalog,
+    CircIr,
     C,
 }
 
@@ -154,6 +156,7 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
     match *l {
         Language::Datalog => DeterminedLanguage::Datalog,
         Language::Zsharp => DeterminedLanguage::Zsharp,
+        Language::CircIr => DeterminedLanguage::CircIr,
         Language::C => DeterminedLanguage::C,
         Language::Auto => {
             let p = input_path.to_str().unwrap();
@@ -161,6 +164,8 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
                 DeterminedLanguage::Zsharp
             } else if p.ends_with(".pl") {
                 DeterminedLanguage::Datalog
+            } else if p.ends_with(".circir") {
+                DeterminedLanguage::CircIr
             } else if p.ends_with(".c") || p.ends_with(".cpp") || p.ends_with(".cc") {
                 DeterminedLanguage::C
             } else {
@@ -180,7 +185,6 @@ fn main() {
     let options = Options::parse();
     circ::cfg::set(&options.circ);
     let path_buf = options.path.clone();
-    println!("{options:?}");
     let mode = match options.backend {
         Backend::R1cs { .. } => match options.frontend.value_threshold {
             Some(t) => Mode::ProofOfHighValue(t),
@@ -200,6 +204,7 @@ fn main() {
             };
             ZSharpFE::gen(inputs)
         }
+        DeterminedLanguage::CircIr => parse_computations(&std::fs::read(&options.path).unwrap()),
         #[cfg(not(all(feature = "smt", feature = "zok")))]
         DeterminedLanguage::Zsharp => {
             panic!("Missing feature: smt,zok");
@@ -261,23 +266,27 @@ fn main() {
         Mode::Proof | Mode::ProofOfHighValue(_) => {
             let mut opts = Vec::new();
 
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opts.push(Opt::DeskolemizeWitnesses);
             opts.push(Opt::ScalarizeVars);
             opts.push(Opt::Flatten);
             opts.push(Opt::Sha);
             opts.push(Opt::ConstantFold(Box::new([])));
             opts.push(Opt::ParseCondStores);
             // Tuples must be eliminated before oblivious array elim
-            opts.push(Opt::Tuple);
             opts.push(Opt::ConstantFold(Box::new([])));
-            opts.push(Opt::Tuple);
             opts.push(Opt::Obliv);
             // The obliv elim pass produces more tuples, that must be eliminated
-            opts.push(Opt::Tuple);
-            if options.circ.ram.enabled {
-                opts.push(Opt::PersistentRam);
-                opts.push(Opt::VolatileRam);
-                opts.push(Opt::SkolemizeChallenges);
+            opts.push(Opt::SetMembership);
+            opts.push(Opt::PersistentRam);
+            opts.push(Opt::VolatileRam);
+            if options.circ.ir.fits_in_bits_ip {
+                opts.push(Opt::FitsInBitsIp);
             }
+            opts.push(Opt::SkolemizeChallenges);
+            opts.push(Opt::ScalarizeVars);
+            opts.push(Opt::ConstantFold(Box::new([])));
+            opts.push(Opt::Obliv);
             opts.push(Opt::LinearScan);
             // The linear scan pass produces more tuples, that must be eliminated
             opts.push(Opt::Tuple);
@@ -301,11 +310,17 @@ fn main() {
             let cs = cs.get("main");
             trace!("IR: {}", circ::ir::term::text::serialize_computation(cs));
             let mut r1cs = to_r1cs(cs, cfg());
+            if cfg().r1cs.profile {
+                println!("R1CS stats: {:#?}", r1cs.stats());
+            }
 
             println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
             r1cs = reduce_linearities(r1cs, cfg());
 
             println!("Final R1cs size: {}", r1cs.constraints().len());
+            if cfg().r1cs.profile {
+                println!("R1CS stats: {:#?}", r1cs.stats());
+            }
             let (prover_data, verifier_data) = r1cs.finalize(cs);
             match action {
                 ProofAction::Count => (),
@@ -389,7 +404,7 @@ fn main() {
                 .ordered_inputs()
                 .iter()
                 .map(|term| match term.op() {
-                    Op::Var(n, s) => (n.clone(), s.clone()),
+                    Op::Var(v) => (v.name.to_string(), v.sort.clone()),
                     _ => unreachable!(),
                 })
                 .collect();

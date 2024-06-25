@@ -168,7 +168,7 @@ impl Default for BuiltinField {
 }
 
 /// Options for the prime field used
-#[derive(Args, Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct IrOpt {
     /// Which field to use
     #[arg(
@@ -178,6 +178,41 @@ pub struct IrOpt {
         default_value = "wrap"
     )]
     pub field_to_bv: FieldToBv,
+    /// Garbage collection after each optimization pass.
+    #[arg(
+        long = "ir-frequent-gc",
+        env = "IR_FREQUENT_GC",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub frequent_gc: bool,
+    /// Use an IP to check bit-constraints
+    #[arg(
+        long = "ir-fits-in-bits-ip",
+        env = "IR_FITS_IN_BITS_IP",
+        action = ArgAction::Set,
+        default_value = "true"
+    )]
+    pub fits_in_bits_ip: bool,
+    /// Time operator evaluations
+    #[arg(
+        long = "ir-time-eval-ops",
+        env = "IR_TIME_EVAL_OPS",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub time_eval_ops: bool,
+}
+
+impl Default for IrOpt {
+    fn default() -> Self {
+        Self {
+            field_to_bv: Default::default(),
+            frequent_gc: Default::default(),
+            fits_in_bits_ip: true,
+            time_eval_ops: false,
+        }
+    }
 }
 
 #[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
@@ -223,6 +258,22 @@ pub struct RamOpt {
         default_value = "uniqueness"
     )]
     pub index: IndexStrategy,
+    /// How to permute accesses
+    #[arg(
+        long = "ram-permutation",
+        env = "RAM_PERMUTATION",
+        value_enum,
+        default_value = "msh"
+    )]
+    pub permutation: PermutationStrategy,
+    /// ROM approach
+    #[arg(
+        long = "ram-rom",
+        env = "RAM_ROM",
+        value_enum,
+        default_value = "haboeck"
+    )]
+    pub rom: RomStrategy,
 }
 
 #[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
@@ -252,6 +303,36 @@ pub enum IndexStrategy {
 impl Default for IndexStrategy {
     fn default() -> Self {
         IndexStrategy::Uniqueness
+    }
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that accesses have been permuted
+pub enum PermutationStrategy {
+    /// Use the AS-Waksman network
+    Waksman,
+    /// Use the (keyed) multi-set hash
+    Msh,
+}
+
+impl Default for PermutationStrategy {
+    fn default() -> Self {
+        PermutationStrategy::Msh
+    }
+}
+
+#[derive(ValueEnum, Debug, PartialEq, Eq, Clone, Copy)]
+/// How to argue that accesses have been permuted
+pub enum RomStrategy {
+    /// Use Haboeck's argument
+    Haboeck,
+    /// Use permute-and-check
+    Permute,
+}
+
+impl Default for RomStrategy {
+    fn default() -> Self {
+        RomStrategy::Haboeck
     }
 }
 

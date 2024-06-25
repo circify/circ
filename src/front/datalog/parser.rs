@@ -1,5 +1,6 @@
 //! Datalog parser
 #![allow(missing_docs)]
+#![allow(clippy::empty_docs)]
 #![allow(clippy::clone_on_copy)]
 
 use pest::error::Error;

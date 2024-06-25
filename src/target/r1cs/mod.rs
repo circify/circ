@@ -4,6 +4,7 @@ use circ_fields::{FieldT, FieldV};
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use log::{debug, trace};
 use paste::paste;
+use rayon::prelude::*;
 use rug::Integer;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -131,6 +132,8 @@ pub struct R1cs {
     /// The contraints themselves
     constraints: Vec<(Lc, Lc, Lc)>,
 
+    stats: R1csStats,
+
     /// Terms for computing them.
     #[serde(with = "crate::ir::term::serde_mods::map")]
     terms: HashMap<Var, Term>,
@@ -221,6 +224,7 @@ impl R1cs {
             num_final_wits: Default::default(),
             challenge_names: Default::default(),
             constraints: Vec::new(),
+            stats: Default::default(),
             terms: Default::default(),
             precompute,
         }
@@ -256,6 +260,7 @@ impl R1cs {
         // could check `t` dependents
         self.idx_to_sig.insert(var, s);
         self.terms.insert(var, t);
+        self.stats.n_vars += 1;
         var
     }
 
@@ -323,6 +328,13 @@ impl R1cs {
         assert_eq!(&self.modulus, &a.modulus);
         assert_eq!(&self.modulus, &b.modulus);
         assert_eq!(&self.modulus, &c.modulus);
+        self.stats.n_constraints += 1;
+        let n_a = a.monomials.len() + !a.constant.is_zero() as usize;
+        let n_b = b.monomials.len() + !b.constant.is_zero() as usize;
+        let n_c = c.monomials.len() + !c.constant.is_zero() as usize;
+        self.stats.n_a_entries += n_a as u32;
+        self.stats.n_b_entries += n_b as u32;
+        self.stats.n_c_entries += n_c as u32;
         debug!(
             "Constraint:\n    {}\n  * {}\n  = {}",
             self.format_lc(&a),
@@ -369,6 +381,37 @@ impl R1cs {
         matches!(var.ty(), VarType::FinalWit)
     }
 
+    /// Can this variable be eliminated within this constraint?
+    ///
+    /// A witness variable can be eliminated iff it is in the *last* round of its constraint.
+    /// We only approximate this.
+    /// We elim if:
+    /// 1) this is a final wit or
+    /// 2) this is a wit with only other wits and insts and it is the last wit
+    ///
+    /// This is an approximation because we comparse witness numbers in (2) instead of witness
+    /// rounds. So, we under-approximate the set of eliminatable variables.
+    pub fn can_eliminate_in(&self, var: Var, constraint: &Lc) -> bool {
+        match var.ty() {
+            VarType::FinalWit => true,
+            VarType::Inst | VarType::Chall | VarType::CWit => false,
+            VarType::RoundWit => {
+                for v in constraint.monomials.keys() {
+                    match v.ty() {
+                        VarType::Inst | VarType::CWit => {}
+                        VarType::Chall | VarType::FinalWit => return false,
+                        VarType::RoundWit => {
+                            if v.number() > var.number() {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                true
+            }
+        }
+    }
+
     /// Get a nice string represenation of the tuple.
     pub fn format_qeq(&self, (a, b, c): &(Lc, Lc, Lc)) -> String {
         format!(
@@ -387,6 +430,69 @@ impl R1cs {
     pub fn constraints(&self) -> &Vec<(Lc, Lc, Lc)> {
         &self.constraints
     }
+
+    /// Statistics for this R1CS instance
+    pub fn stats(&self) -> &R1csStats {
+        &self.stats
+    }
+
+    /// Recalculate statistics for this R1CS instance
+    pub fn update_stats(&mut self) {
+        self.stats = R1csStats::default();
+        self.stats.n_vars = self.num_vars() as u32;
+        let s = &mut self.stats;
+        s.n_constraints = self.constraints.len() as u32;
+        for (a, b, c) in &self.constraints {
+            let n_a = a.monomials.len() + !a.constant.is_zero() as usize;
+            let n_b = b.monomials.len() + !b.constant.is_zero() as usize;
+            let n_c = c.monomials.len() + !c.constant.is_zero() as usize;
+            s.n_a_entries += n_a as u32;
+            s.n_b_entries += n_b as u32;
+            s.n_c_entries += n_c as u32;
+        }
+    }
+}
+
+/// R1CS statistics
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct R1csStats {
+    /// number of constraints
+    pub n_constraints: u32,
+    /// number of variables
+    pub n_vars: u32,
+    /// number of non-zero A matrix entries
+    pub n_a_entries: u32,
+    /// number of non-zero B matrix entries
+    pub n_b_entries: u32,
+    /// number of non-zero C matrix entries
+    pub n_c_entries: u32,
+}
+
+impl R1csStats {
+    /// number of non-zero A, B, and C entries
+    pub fn n_entries(&self) -> u64 {
+        self.n_a_entries as u64 + self.n_b_entries as u64 + self.n_c_entries as u64
+    }
+}
+
+impl std::ops::AddAssign<&R1csStats> for R1csStats {
+    fn add_assign(&mut self, other: &R1csStats) {
+        self.n_constraints += other.n_constraints;
+        self.n_vars += other.n_vars;
+        self.n_a_entries += other.n_a_entries;
+        self.n_b_entries += other.n_b_entries;
+        self.n_c_entries += other.n_c_entries;
+    }
+}
+
+impl std::ops::SubAssign<&R1csStats> for R1csStats {
+    fn sub_assign(&mut self, other: &R1csStats) {
+        self.n_constraints -= other.n_constraints;
+        self.n_vars -= other.n_vars;
+        self.n_a_entries -= other.n_a_entries;
+        self.n_b_entries -= other.n_b_entries;
+        self.n_c_entries -= other.n_c_entries;
+    }
 }
 
 impl R1csFinal {
@@ -396,6 +502,15 @@ impl R1csFinal {
         let bv = self.eval(b, values);
         let cv = self.eval(c, values);
         if (av.clone() * &bv) != cv {
+            let mut vars: HashSet<Var> = Default::default();
+            vars.extend(a.monomials.keys().copied());
+            vars.extend(b.monomials.keys().copied());
+            vars.extend(c.monomials.keys().copied());
+            for (k, v) in values {
+                if vars.contains(k) {
+                    eprintln!("  {} -> {}", self.names.get(k).unwrap(), v);
+                }
+            }
             panic!(
                 "Error! Bad constraint:\n    {} (value {})\n  * {} (value {})\n  = {} (value {})",
                 self.format_lc(a),
@@ -428,7 +543,7 @@ impl R1csFinal {
 
         s.push_str(&format_i(&a.constant));
         for (idx, coeff) in &a.monomials {
-            s.extend(format!(" {} {}", self.names.get(idx).unwrap(), format_i(coeff),).chars());
+            s.extend(format!(" {} {}", format_i(coeff), self.names.get(idx).unwrap()).chars());
         }
         s
     }
@@ -447,15 +562,15 @@ impl R1csFinal {
 
     /// Check all assertions
     fn check_all(&self, values: &HashMap<Var, FieldV>) {
-        for (a, b, c) in &self.constraints {
-            self.check(a, b, c, values)
-        }
+        self.constraints
+            .par_iter()
+            .for_each(|(a, b, c)| self.check(a, b, c, values));
     }
 }
 
 impl ProverData {
-    /// Check all assertions. Puts in 1 for challenges.
-    pub fn check_all(&self, values: &HashMap<String, Value>) {
+    /// Compute an R1CS witness (setting any challenges to 1s)
+    pub fn extend_r1cs_witness(&self, values: &HashMap<String, Value>) -> HashMap<Var, FieldV> {
         // we need to evaluate all R1CS variables
         let mut var_values: HashMap<Var, FieldV> = Default::default();
         let mut eval = wit_comp::StagedWitCompEvaluator::new(&self.precompute);
@@ -470,6 +585,14 @@ impl ProverData {
             // do a round of evaluation
             let value_vec = eval.eval_stage(std::mem::take(&mut inputs));
             for value in value_vec {
+                trace!(
+                    "var {} : {}",
+                    self.r1cs
+                        .names
+                        .get(&self.r1cs.vars[var_values.len()])
+                        .unwrap(),
+                    value.as_pf()
+                );
                 var_values.insert(self.r1cs.vars[var_values.len()], value.as_pf().clone());
             }
             // fill the challenges with 1s
@@ -480,13 +603,18 @@ impl ProverData {
                     }
                     let var = self.r1cs.vars[next_var_i];
                     let name = self.r1cs.names.get(&var).unwrap().clone();
-                    let val = pf_challenge(&name, &self.r1cs.field);
+                    let val = eval_pf_challenge(&name, &self.r1cs.field);
                     var_values.insert(var, val.clone());
                     inputs.insert(name, Value::Field(val));
                 }
             }
         }
-        self.r1cs.check_all(&var_values);
+        eval.print_times();
+        var_values
+    }
+    /// Check all assertions. Puts in 1 for challenges.
+    pub fn check_all(&self, values: &HashMap<String, Value>) {
+        self.r1cs.check_all(&self.extend_r1cs_witness(values));
     }
 
     /// How many commitments?
@@ -869,15 +997,16 @@ impl R1cs {
         // we still need to remove the non-r1cs variables
         //use crate::ir::proof::PROVER_ID;
         //let all_inputs = cs.metadata.get_inputs_for_party(Some(PROVER_ID));
-        let mut precompute_map = precompute.flatten();
+        precompute.flatten();
+        let mut precompute_map = precompute.outputs;
         let mut vars: HashMap<String, Sort> = {
             PostOrderIter::from_roots_and_skips(
                 precompute_map.values().cloned(),
                 Default::default(),
             )
             .filter_map(|t| {
-                if let Op::Var(n, s) = t.op() {
-                    Some((n.clone(), s.clone()))
+                if let Op::Var(v) = t.op() {
+                    Some((v.name.to_string(), v.sort.clone()))
                 } else {
                     None
                 }
@@ -935,8 +1064,8 @@ impl R1cs {
         let vars: HashMap<String, Sort> = {
             PostOrderIter::new(precompute.tuple())
                 .filter_map(|t| {
-                    if let Op::Var(n, s) = t.op() {
-                        Some((n.clone(), s.clone()))
+                    if let Op::Var(v) = t.op() {
+                        Some((v.name.to_string(), v.sort.clone()))
                     } else {
                         None
                     }
@@ -946,7 +1075,8 @@ impl R1cs {
         for c in &self.challenge_names {
             assert!(!vars.contains_key(c));
         }
-        let mut precompute_map = precompute.flatten();
+        precompute.flatten();
+        let mut precompute_map = precompute.outputs;
         let terms = self
             .insts_iter()
             .map(|v| {
@@ -986,7 +1116,7 @@ impl R1cs {
     /// Get an IR term that represents this system.
     pub fn lc_ir_term(&self, lc: &Lc) -> Term {
         term(PF_ADD,
-            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), leaf_term(Op::Var(self.idx_to_sig.get_fwd(i).unwrap().into(), Sort::Field(self.modulus.clone())))])).collect())
+            std::iter::once(pf_lit(lc.constant.clone())).chain(lc.monomials.iter().map(|(i, coeff)| term![PF_MUL; pf_lit(coeff.clone()), var(self.idx_to_sig.get_fwd(i).unwrap().into(), Sort::Field(self.modulus.clone()))])).collect())
     }
 
     /// Get an IR term that represents this system.

@@ -74,7 +74,12 @@ impl LinReducer {
                             let m = e.get_mut();
                             *m += sc.clone() * v;
                             if e.get().is_zero() {
-                                uses.get_mut(i).unwrap().remove(&con_id);
+                                // You might think that removing con_id from `uses.get_mut(i)`
+                                // would be okay here.
+                                //
+                                // But no! Why? Because the constraint has three LCs. Just because
+                                // the variable cancelled in *this* LC doesn't mean that it has
+                                // cancelled in the others.
                                 e.remove_entry();
                             }
                         }
@@ -120,8 +125,9 @@ impl LinReducer {
             if let Some((var, lc)) = as_linear_sub(&self.r1cs.constraints[con_id], &self.r1cs) {
                 if lc.monomials.len() < self.lc_size_thresh {
                     debug!(
-                        "Elim: {} -> {}",
+                        "Elim: {} ({:?}) -> {}",
                         self.r1cs.idx_to_sig.get_fwd(&var).unwrap(),
+                        var,
                         self.r1cs.format_lc(&lc)
                     );
                     self.clear_constraint(con_id);
@@ -133,21 +139,45 @@ impl LinReducer {
                             self.queue.push(use_id);
                         }
                     }
-                    self.r1cs.idx_to_sig.remove_fwd(&var);
-                    self.r1cs.terms.remove(&var);
+                    self.remove_var(var);
                     debug_assert_eq!(0, self.uses[&var].len());
                 }
             }
         }
         self.r1cs.constraints.retain(|c| !constantly_true(c));
+        self.remove_dead_variables();
         self.r1cs
+    }
+
+    fn remove_var(&mut self, var: Var) {
+        self.r1cs.idx_to_sig.remove_fwd(&var);
+        self.r1cs.terms.remove(&var);
+    }
+
+    /// Remove any private dead variables. Run this at the end of optimization.
+    fn remove_dead_variables(&mut self) {
+        let used: HashSet<Var> = self
+            .r1cs
+            .constraints
+            .iter()
+            .flat_map(|c| {
+                c.0.monomials
+                    .keys()
+                    .chain(c.1.monomials.keys().chain(c.2.monomials.keys()))
+            })
+            .copied()
+            .collect();
+        let present: HashSet<Var> = self.r1cs.terms.keys().copied().collect();
+        for to_remove in present.difference(&used) {
+            self.remove_var(*to_remove);
+        }
     }
 }
 
 fn as_linear_sub((a, b, c): &(Lc, Lc, Lc), r1cs: &R1cs) -> Option<(Var, Lc)> {
     if a.is_zero() || b.is_zero() {
         for i in c.monomials.keys() {
-            if r1cs.can_eliminate(*i) {
+            if r1cs.can_eliminate_in(*i, c) {
                 let mut lc = c.clone();
                 let v = lc.monomials.remove(i).unwrap();
                 lc *= v.recip();
@@ -188,7 +218,9 @@ fn constantly_true((a, b, c): &(Lc, Lc, Lc)) -> bool {
 ///   * `lc_size_thresh`: the maximum size LC (number of non-constant monomials) that will be used
 ///   for propagation. `None` means no size limit.
 pub fn reduce_linearities(r1cs: R1cs, cfg: &CircCfg) -> R1cs {
-    LinReducer::new(r1cs, cfg.r1cs.lc_elim_thresh).run()
+    let mut r = LinReducer::new(r1cs, cfg.r1cs.lc_elim_thresh).run();
+    r.update_stats();
+    r
 }
 
 #[cfg(test)]
@@ -217,7 +249,7 @@ mod test {
             for v in &vars {
                 let var = r1cs.add_var(
                     v.clone(),
-                    leaf_term(Op::Var(v.clone(), Sort::Field(field.clone()))),
+                    var(v.clone(), Sort::Field(field.clone())),
                     VarType::FinalWit,
                 );
                 let val = field.random_v(&mut rng);

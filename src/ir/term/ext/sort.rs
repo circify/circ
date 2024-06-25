@@ -5,7 +5,13 @@ use crate::ir::term::*;
 
 /// Type-check [super::ExtOp::Sort].
 pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    array_or(arg_sorts[0], "sort argument").map(|_| arg_sorts[0].clone())
+    let [arg_sort] = ty::count_or_ref(arg_sorts)?;
+    match arg_sort {
+        Sort::Tuple(_) | Sort::Array(..) => Ok((**arg_sort).clone()),
+        _ => Err(TypeErrorReason::Custom(
+            "sort takes an array or tuple".into(),
+        )),
+    }
 }
 
 /// Evaluate [super::ExtOp::Sort].

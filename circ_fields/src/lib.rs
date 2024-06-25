@@ -371,14 +371,22 @@ impl PartialOrd for FieldV {
 impl Ord for FieldV {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.full_cow().cmp(&other.full_cow())
+        if self.is_full() || other.is_full() {
+            self.full_cow().cmp(&other.full_cow())
+        } else {
+            self.inline_i64().cmp(&other.inline_i64())
+        }
     }
 }
 
 impl PartialEq for FieldV {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.full_cow().eq(&other.full_cow())
+        if self.is_full() || other.is_full() {
+            self.full_cow().eq(&other.full_cow())
+        } else {
+            self.inline_i64().eq(&other.inline_i64())
+        }
     }
 }
 

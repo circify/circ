@@ -1,0 +1,10 @@
+from "EMBED" import value_in_array
+
+// square map
+const field[6] SQUARES = [0, 1, 4, 9, 16, 25]
+
+def main(private field y) -> field:
+  assert(value_in_array(y, SQUARES))
+  assert(value_in_array(y * y, SQUARES))
+  assert(value_in_array(y * 4, SQUARES))
+  return y

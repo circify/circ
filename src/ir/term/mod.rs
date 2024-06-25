@@ -11,7 +11,7 @@
 //!       * [Sort]: the type of a term
 //!       * [check]: get the type of a term
 //!    * Term construction
-//!       * [term!]: from an operator and a syntactic list of children
+//!       * [term]: from an operator and a syntactic list of children
 //!       * [leaf_term]: from an operator alone
 //!       * [term()]: from an operator and vector of children
 //!    * Term data-structures and algorithms
@@ -20,32 +20,34 @@
 //!    * [Computation]: a collection of variables and assertions about them
 //!    * [Value]: a variable-free (and evaluated) term
 //!
-use crate::cfg::cfg_or_default as cfg;
 
 use circ_fields::{FieldT, FieldV};
 pub use circ_hc::{Node, Table, Weak};
 use circ_opt::FieldToBv;
 use fxhash::{FxHashMap, FxHashSet};
-use log::{debug, trace};
+use log::debug;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
+use std::sync::Arc;
 
 pub mod bv;
 pub mod dist;
+pub mod eval;
 pub mod ext;
 pub mod extras;
 pub mod fmt;
 pub mod lin;
+pub mod map;
 pub mod precomp;
 pub mod serde_mods;
 pub mod text;
 pub mod ty;
 
 pub use bv::BitVector;
+pub use eval::{eval, eval_cached, eval_op, eval_pf_challenge};
 pub use ext::ExtOp;
 pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 
@@ -53,9 +55,9 @@ pub use ty::{check, check_rec, TypeError, TypeErrorReason};
 /// An operator
 pub enum Op {
     /// a variable
-    Var(String, Sort),
+    Var(Box<Var>),
     /// a constant
-    Const(Value),
+    Const(Box<Value>),
 
     /// if-then-else: ternary
     Ite,
@@ -75,7 +77,7 @@ pub enum Op {
     /// Get bits (high) through (low) from the underlying bit-vector.
     ///
     /// Zero-indexed and inclusive.
-    BvExtract(usize, usize),
+    BvExtract(u32, u32),
     /// bit-vector concatenation. n-ary. Low-index arguements map to high-order bits
     BvConcat,
     /// add this many zero bits
@@ -125,16 +127,23 @@ pub enum Op {
     /// Unsigned bit-vector to prime-field
     ///
     /// Takes the modulus.
-    UbvToPf(FieldT),
+    UbvToPf(Box<FieldT>),
     /// A random value, sampled uniformly and independently of its arguments.
     ///
     /// Takes a name (if deterministically sampled, challenges of different names are sampled
     /// differentely) and a field to sample from.
     ///
     /// In IR evaluation, we sample deterministically based on a hash of the name.
-    PfChallenge(String, FieldT),
+    PfChallenge(Box<ChallengeOp>),
     /// Requires the input pf element to fit in this many (unsigned) bits.
     PfFitsInBits(usize),
+    /// Prime-field division
+    PfDiv,
+
+    /// Receive a value from the prover (in a proof)
+    /// The string is a name for it; does not need to be unique.
+    /// The double box is to get a thin pointer.
+    Witness(Box<Box<str>>),
 
     /// Integer n-ary operator
     IntNaryOp(IntNaryOp),
@@ -155,9 +164,9 @@ pub enum Op {
     /// Otherwise, oupputs `array`.
     CStore,
     /// Makes an array of the indicated key sort with the indicated size, filled with the argument.
-    Fill(Sort, usize),
+    Fill(Box<FillOp>),
     /// Create an array from (contiguous) values.
-    Array(Sort, Sort),
+    Array(Box<ArrayOp>),
 
     /// Assemble n things into a tuple
     Tuple,
@@ -170,10 +179,10 @@ pub enum Op {
     Map(Box<Op>),
 
     /// Call a function (name, argument sorts, return sort)
-    Call(String, Vec<Sort>, Sort),
+    Call(Box<CallOp>),
 
     /// Cyclic right rotation of an array
-    /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
+    /// i.e. `(Rot(1) [1,2,3,4]) --> ([4,1,2,3])`
     Rot(usize),
 
     /// Assume that the field element is 0 or 1, and treat it as a boolean.
@@ -181,6 +190,53 @@ pub enum Op {
 
     /// Extension operators. Used in compilation, but not externally supported
     ExtOp(ext::ExtOp),
+}
+
+/// Variable
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Var {
+    /// Variable name
+    pub name: Box<str>,
+    /// Variable sort
+    pub sort: Sort,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChallengeOp {
+    /// The key sort
+    pub name: Box<str>,
+    /// The size
+    pub field: FieldT,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FillOp {
+    /// The key sort
+    pub key_sort: Sort,
+    /// The size
+    pub size: usize,
+}
+
+/// A function call operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CallOp {
+    /// The function name
+    pub name: String,
+    /// Argument sorts
+    pub arg_sorts: Vec<Sort>,
+    /// Return sorts
+    pub ret_sort: Sort,
+}
+
+/// An array creation operator
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ArrayOp {
+    /// The key sort
+    pub key: Sort,
+    /// The value sort
+    pub val: Sort,
 }
 
 /// Boolean AND
@@ -247,6 +303,8 @@ pub const BV_CONCAT: Op = Op::BvConcat;
 pub const PF_NEG: Op = Op::PfUnOp(PfUnOp::Neg);
 /// prime-field reciprocal
 pub const PF_RECIP: Op = Op::PfUnOp(PfUnOp::Recip);
+/// prime-field division
+pub const PF_DIV: Op = Op::PfDiv;
 /// prime-field addition
 pub const PF_ADD: Op = Op::PfNaryOp(PfNaryOp::Add);
 /// prime-field multiplication
@@ -270,7 +328,7 @@ impl Op {
         match self {
             Op::Ite => Some(3),
             Op::Eq => Some(2),
-            Op::Var(_, _) => Some(0),
+            Op::Var(_) => Some(0),
             Op::Const(_) => Some(0),
             Op::BvBinOp(_) => Some(2),
             Op::BvBinPred(_) => Some(2),
@@ -296,8 +354,10 @@ impl Op {
             Op::SbvToFp(_) => Some(1),
             Op::FpToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
+            Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
-            Op::PfChallenge(_, _) => None,
+            Op::PfChallenge(_) => None,
+            Op::Witness(_) => Some(1),
             Op::PfFitsInBits(..) => Some(1),
             Op::IntNaryOp(_) => None,
             Op::IntBinPred(_) => Some(2),
@@ -311,11 +371,52 @@ impl Op {
             Op::Field(_) => Some(1),
             Op::Update(_) => Some(2),
             Op::Map(op) => op.arity(),
-            Op::Call(_, args, _) => Some(args.len()),
+            Op::Call(c) => Some(c.arg_sorts.len()),
             Op::Rot(_) => Some(1),
             Op::ExtOp(o) => o.arity(),
             Op::PfToBoolTrusted => Some(1),
         }
+    }
+
+    /// Create a new [Op::Fill].
+    pub fn new_fill(key_sort: Sort, size: usize) -> Self {
+        Op::Fill(Box::new(FillOp { key_sort, size }))
+    }
+
+    /// Create a new [Op::PfChallenge].
+    pub fn new_chall(name: String, field: FieldT) -> Self {
+        Op::PfChallenge(Box::new(ChallengeOp {
+            name: name.into_boxed_str(),
+            field,
+        }))
+    }
+
+    /// Create a new [Op::Var].
+    pub fn new_var(name: String, sort: Sort) -> Self {
+        Op::Var(Box::new(Var {
+            name: name.into_boxed_str(),
+            sort,
+        }))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_const(value: Value) -> Self {
+        Op::Const(Box::new(value))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_witness(name: String) -> Self {
+        Op::Witness(Box::new(name.into_boxed_str()))
+    }
+
+    /// Create a new [Op::Const].
+    pub fn new_ubv_to_pf(field: FieldT) -> Self {
+        Op::UbvToPf(Box::new(field))
+    }
+
+    /// Create a new [Op::BvExtract].
+    pub fn new_bv_extract(hi: usize, lo: usize) -> Self {
+        Op::BvExtract(hi as u32, lo as u32)
     }
 }
 
@@ -328,16 +429,6 @@ pub enum BoolNaryOp {
     Xor,
     /// Boolean OR
     Or,
-}
-
-impl Display for BoolNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BoolNaryOp::And => write!(f, "and"),
-            BoolNaryOp::Or => write!(f, "or"),
-            BoolNaryOp::Xor => write!(f, "xor"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -355,19 +446,6 @@ pub enum BvBinOp {
     Ashr,
     /// Bit-vector logical (zero fill) (>>)
     Lshr,
-}
-
-impl Display for BvBinOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvBinOp::Sub => write!(f, "bvsub"),
-            BvBinOp::Udiv => write!(f, "bvudiv"),
-            BvBinOp::Urem => write!(f, "bvurem"),
-            BvBinOp::Shl => write!(f, "bvshl"),
-            BvBinOp::Ashr => write!(f, "bvashr"),
-            BvBinOp::Lshr => write!(f, "bvlshr"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -392,21 +470,6 @@ pub enum BvBinPred {
     Sge,
 }
 
-impl Display for BvBinPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvBinPred::Ult => write!(f, "bvult"),
-            BvBinPred::Ugt => write!(f, "bvugt"),
-            BvBinPred::Ule => write!(f, "bvule"),
-            BvBinPred::Uge => write!(f, "bvuge"),
-            BvBinPred::Slt => write!(f, "bvslt"),
-            BvBinPred::Sgt => write!(f, "bvsgt"),
-            BvBinPred::Sle => write!(f, "bvsle"),
-            BvBinPred::Sge => write!(f, "bvsge"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector n-ary operator
 pub enum BvNaryOp {
@@ -422,18 +485,6 @@ pub enum BvNaryOp {
     Xor,
 }
 
-impl Display for BvNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvNaryOp::Add => write!(f, "bvadd"),
-            BvNaryOp::Mul => write!(f, "bvmul"),
-            BvNaryOp::Or => write!(f, "bvor"),
-            BvNaryOp::And => write!(f, "bvand"),
-            BvNaryOp::Xor => write!(f, "bvxor"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Bit-vector unary operator
 pub enum BvUnOp {
@@ -441,15 +492,6 @@ pub enum BvUnOp {
     Not,
     /// Bit-vector two's complement negation
     Neg,
-}
-
-impl Display for BvUnOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            BvUnOp::Not => write!(f, "bvnot"),
-            BvUnOp::Neg => write!(f, "bvneg"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -471,20 +513,6 @@ pub enum FpBinOp {
     Min,
 }
 
-impl Display for FpBinOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpBinOp::Add => write!(f, "fpadd"),
-            FpBinOp::Mul => write!(f, "fpmul"),
-            FpBinOp::Sub => write!(f, "fpsub"),
-            FpBinOp::Div => write!(f, "fpdiv"),
-            FpBinOp::Rem => write!(f, "fprem"),
-            FpBinOp::Max => write!(f, "fpmax"),
-            FpBinOp::Min => write!(f, "fpmin"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Floating-point unary operator
 pub enum FpUnOp {
@@ -496,17 +524,6 @@ pub enum FpUnOp {
     Sqrt,
     /// Floating-point round
     Round,
-}
-
-impl Display for FpUnOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpUnOp::Neg => write!(f, "fpneg"),
-            FpUnOp::Abs => write!(f, "fpabs"),
-            FpUnOp::Sqrt => write!(f, "fpsqrt"),
-            FpUnOp::Round => write!(f, "fpround"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -522,18 +539,6 @@ pub enum FpBinPred {
     Ge,
     /// Floating-point (>)
     Gt,
-}
-
-impl Display for FpBinPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpBinPred::Le => write!(f, "fple"),
-            FpBinPred::Lt => write!(f, "fplt"),
-            FpBinPred::Eq => write!(f, "fpeq"),
-            FpBinPred::Ge => write!(f, "fpge"),
-            FpBinPred::Gt => write!(f, "fpgt"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -555,20 +560,6 @@ pub enum FpUnPred {
     Positive,
 }
 
-impl Display for FpUnPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            FpUnPred::Normal => write!(f, "fpnormal"),
-            FpUnPred::Subnormal => write!(f, "fpsubnormal"),
-            FpUnPred::Zero => write!(f, "fpzero"),
-            FpUnPred::Infinite => write!(f, "fpinfinite"),
-            FpUnPred::Nan => write!(f, "fpnan"),
-            FpUnPred::Negative => write!(f, "fpnegative"),
-            FpUnPred::Positive => write!(f, "fppositive"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Finite field n-ary operator
 pub enum PfNaryOp {
@@ -576,15 +567,6 @@ pub enum PfNaryOp {
     Add,
     /// Finite field (*)
     Mul,
-}
-
-impl Display for PfNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            PfNaryOp::Add => write!(f, "+"),
-            PfNaryOp::Mul => write!(f, "*"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -596,15 +578,6 @@ pub enum PfUnOp {
     Recip,
 }
 
-impl Display for PfUnOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            PfUnOp::Neg => write!(f, "-"),
-            PfUnOp::Recip => write!(f, "pfrecip"),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
 /// Integer n-ary operator
 pub enum IntNaryOp {
@@ -612,15 +585,6 @@ pub enum IntNaryOp {
     Add,
     /// Finite field (*)
     Mul,
-}
-
-impl Display for IntNaryOp {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            IntNaryOp::Add => write!(f, "intadd"),
-            IntNaryOp::Mul => write!(f, "intmul"),
-        }
-    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, Serialize, Deserialize)]
@@ -634,17 +598,6 @@ pub enum IntBinPred {
     Le,
     /// Integer (>=)
     Ge,
-}
-
-impl Display for IntBinPred {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match self {
-            IntBinPred::Lt => write!(f, "<"),
-            IntBinPred::Gt => write!(f, ">"),
-            IntBinPred::Le => write!(f, "<="),
-            IntBinPred::Ge => write!(f, ">="),
-        }
-    }
 }
 
 impl Serialize for Term {
@@ -684,6 +637,8 @@ pub enum Value {
     Bool(bool),
     /// Array
     Array(Array),
+    /// Map
+    Map(map::Map),
     /// Tuple
     Tuple(Box<[Value]>),
 }
@@ -818,6 +773,7 @@ impl std::hash::Hash for Value {
             Value::Field(bv) => bv.hash(state),
             Value::Bool(bv) => bv.hash(state),
             Value::Array(a) => a.hash(state),
+            Value::Map(a) => a.hash(state),
             Value::Tuple(s) => {
                 s.hash(state);
             }
@@ -843,9 +799,31 @@ pub enum Sort {
     /// Array from one sort to another, of fixed size.
     ///
     /// size presumes an order, and a zero, for the key sort.
-    Array(Box<Sort>, Box<Sort>, usize),
+    Array(Arc<ArraySort>),
+    /// Map from one sort to another.
+    Map(Arc<MapSort>),
     /// A tuple
-    Tuple(Box<[Sort]>),
+    Tuple(Arc<[Sort]>),
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Array sort
+pub struct ArraySort {
+    /// key sort
+    pub key: Sort,
+    /// value sort
+    pub val: Sort,
+    /// size
+    pub size: usize,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+/// Map sort
+pub struct MapSort {
+    /// key sort
+    pub key: Sort,
+    /// value sort
+    pub val: Sort,
 }
 
 impl Default for Sort {
@@ -865,6 +843,11 @@ impl Sort {
         }
     }
 
+    /// Is this a bit-vector?
+    pub fn is_bv(&self) -> bool {
+        matches!(self, Sort::BitVector(..))
+    }
+
     #[track_caller]
     /// Unwrap the modulus of this prime field, panicking otherwise.
     pub fn as_pf(&self) -> &FieldT {
@@ -873,6 +856,11 @@ impl Sort {
         } else {
             panic!("{} is not a field", self)
         }
+    }
+
+    /// Is this a prime field?
+    pub fn is_pf(&self) -> bool {
+        matches!(self, Sort::Field(..))
     }
 
     #[track_caller]
@@ -885,19 +873,49 @@ impl Sort {
         }
     }
 
+    /// Create a new tuple sort
+    pub fn new_tuple(sorts: Vec<Sort>) -> Self {
+        Self::Tuple(Arc::from(sorts.into_boxed_slice()))
+    }
+
     #[track_caller]
     /// Unwrap the constituent sorts of this array, panicking otherwise.
     pub fn as_array(&self) -> (&Sort, &Sort, usize) {
-        if let Sort::Array(k, v, s) = self {
-            (k, v, *s)
+        if let Sort::Array(a) = self {
+            (&a.key, &a.val, a.size)
         } else {
             panic!("{} is not an array", self)
         }
     }
 
+    /// Create a new array sort
+    pub fn new_array(key: Sort, val: Sort, size: usize) -> Self {
+        Self::Array(Arc::new(ArraySort { key, val, size }))
+    }
+
     /// Is this an array?
     pub fn is_array(&self) -> bool {
         matches!(self, Sort::Array(..))
+    }
+
+    #[track_caller]
+    /// Unwrap the constituent sorts of this array, panicking otherwise.
+    pub fn as_map(&self) -> (&Sort, &Sort) {
+        if let Sort::Map(m) = self {
+            (&m.key, &m.val)
+        } else {
+            panic!("{} is not a map", self)
+        }
+    }
+
+    /// Is this a map?
+    pub fn is_map(&self) -> bool {
+        matches!(self, Sort::Map(..))
+    }
+
+    /// Create a new map sort
+    pub fn new_map(key: Sort, val: Sort) -> Self {
+        Self::Map(Arc::new(MapSort { key, val }))
     }
 
     /// The nth element of this sort.
@@ -925,7 +943,7 @@ impl Sort {
     /// Only defined for booleans, bit-vectors, and field elements.
     #[track_caller]
     pub fn elems_iter(&self) -> Box<dyn Iterator<Item = Term>> {
-        Box::new(self.elems_iter_values().map(|v| leaf_term(Op::Const(v))))
+        Box::new(self.elems_iter_values().map(const_))
     }
 
     /// An iterator over the elements of this sort (as IR values).
@@ -976,7 +994,7 @@ impl Sort {
     /// * floats: zero
     /// * tuples/arrays: recursively default
     pub fn default_term(&self) -> Term {
-        leaf_term(Op::Const(self.default_value()))
+        const_(self.default_value())
     }
 
     /// Compute the default value for this sort.
@@ -995,13 +1013,18 @@ impl Sort {
             Sort::F32 => Value::F32(0.0f32),
             Sort::F64 => Value::F64(0.0),
             Sort::Tuple(t) => Value::Tuple(t.iter().map(Sort::default_value).collect()),
-            Sort::Array(k, v, n) => Value::Array(Array::default((**k).clone(), v, *n)),
+            Sort::Array(a) => Value::Array(Array::default(a.key.clone(), &a.val, a.size)),
+            Sort::Map(m) => Value::Map(map::Map::new(
+                m.key.clone(),
+                m.val.clone(),
+                std::iter::empty(),
+            )),
         }
     }
 
     /// Is this a scalar?
     pub fn is_scalar(&self) -> bool {
-        !matches!(self, Sort::Tuple(..) | Sort::Array(..))
+        !matches!(self, Sort::Tuple(..) | Sort::Array(..) | Sort::Map(..))
     }
 }
 
@@ -1040,6 +1063,11 @@ thread_local! {
     static LAST_LEN: Cell<usize> = Default::default();
 }
 
+/// Size of the term table.
+pub fn table_size() -> usize {
+    hc::Table::table_size()
+}
+
 fn should_collect() -> bool {
     let last_len = LAST_LEN.with(|l| l.get());
     let ret = LEN_THRESH_DEN * hc::Table::table_size() > LEN_THRESH_NUM * last_len;
@@ -1064,27 +1092,39 @@ pub fn maybe_garbage_collect() -> bool {
     }
 
     if should_collect() {
-        collect_terms();
-        collect_types();
-        super::opt::cfold::collect();
+        let orig_terms = table_size();
+        let n_collected = collect_terms();
+        if 50 * n_collected > orig_terms {
+            collect_types();
+            super::opt::cfold::collect();
+        }
         true
     } else {
         false
     }
 }
 
-fn collect_terms() {
+fn collect_terms() -> usize {
+    let size_before = hc::Table::table_size();
     hc::Table::gc();
+    let size_after = hc::Table::table_size();
+    let pct_removed = (size_before - size_after) as f64 / size_before as f64 * 100.0;
+    debug!("Term collection: {size_before} -> {size_after} (-{pct_removed}%)");
+    size_before - size_after
 }
 
 fn collect_types() {
+    let size_before = ty::TERM_TYPES.with(|tys| tys.borrow().len());
     ty::TERM_TYPES.with(|tys| tys.borrow_mut().collect());
+    let size_after = ty::TERM_TYPES.with(|tys| tys.borrow().len());
+    let pct_removed = (size_before - size_after) as f64 / size_before as f64 * 100.0;
+    debug!("Type collection: {size_before} -> {size_after} (-{pct_removed}%)");
 }
 
 impl Term {
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
-        if let Op::Const(Value::Bool(b)) = &self.op() {
+        if let Some(Value::Bool(b)) = self.as_value_opt() {
             Some(*b)
         } else {
             None
@@ -1092,7 +1132,7 @@ impl Term {
     }
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
-        if let Op::Const(Value::BitVector(b)) = &self.op() {
+        if let Some(Value::BitVector(b)) = self.as_value_opt() {
             Some(b)
         } else {
             None
@@ -1100,7 +1140,7 @@ impl Term {
     }
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldV> {
-        if let Op::Const(Value::Field(b)) = &self.op() {
+        if let Some(Value::Field(b)) = self.as_value_opt() {
             Some(b)
         } else {
             None
@@ -1109,7 +1149,7 @@ impl Term {
 
     /// Get the underlying tuple constant, if possible.
     pub fn as_tuple_opt(&self) -> Option<&[Value]> {
-        if let Op::Const(Value::Tuple(t)) = &self.op() {
+        if let Some(Value::Tuple(t)) = self.as_value_opt() {
             Some(t)
         } else {
             None
@@ -1118,7 +1158,16 @@ impl Term {
 
     /// Get the underlying array constant, if possible.
     pub fn as_array_opt(&self) -> Option<&Array> {
-        if let Op::Const(Value::Array(a)) = &self.op() {
+        if let Some(Value::Array(a)) = self.as_value_opt() {
+            Some(a)
+        } else {
+            None
+        }
+    }
+
+    /// Get the underlying map constant, if possible.
+    pub fn as_map_opt(&self) -> Option<&map::Map> {
+        if let Some(Value::Map(a)) = self.as_value_opt() {
             Some(a)
         } else {
             None
@@ -1147,8 +1196,8 @@ impl Term {
     /// Get the variable name; panic if not a variable.
     #[track_caller]
     pub fn as_var_name(&self) -> &str {
-        if let Op::Var(n, _) = &self.op() {
-            n
+        if let Op::Var(v) = &self.op() {
+            &v.name
         } else {
             panic!("not a variable")
         }
@@ -1170,7 +1219,12 @@ impl Value {
                 default,
                 size,
                 ..
-            }) => Sort::Array(Box::new(key_sort.clone()), Box::new(default.sort()), *size),
+            }) => Sort::new_array(key_sort.clone(), default.sort(), *size),
+            Value::Map(map::Map {
+                key_sort,
+                value_sort,
+                ..
+            }) => Sort::new_map(key_sort.clone(), value_sort.clone()),
             Value::Tuple(v) => Sort::Tuple(v.iter().map(Value::sort).collect()),
         }
     }
@@ -1230,6 +1284,22 @@ impl Value {
         }
     }
 
+    #[track_caller]
+    /// Unwrap the constituent value of this array, panicking otherwise.
+    pub fn is_array(&self) -> bool {
+        matches!(self, Value::Array(_))
+    }
+
+    #[track_caller]
+    /// Unwrap the constituent value of this map, panicking otherwise.
+    pub fn as_map(&self) -> &map::Map {
+        if let Value::Map(w) = self {
+            w
+        } else {
+            panic!("{} is not a map", self)
+        }
+    }
+
     /// Get the underlying boolean constant, if possible.
     pub fn as_bool_opt(&self) -> Option<bool> {
         if let Value::Bool(b) = self {
@@ -1238,6 +1308,7 @@ impl Value {
             None
         }
     }
+
     /// Get the underlying bit-vector constant, if possible.
     pub fn as_bv_opt(&self) -> Option<&BitVector> {
         if let Value::BitVector(b) = self {
@@ -1259,329 +1330,6 @@ impl Value {
     }
 }
 
-/// Recursively the term `t`, using variable values in `h` and storing intermediate evaluations in
-/// the cache `vs`.
-pub fn eval_cached<'a>(
-    t: &Term,
-    h: &FxHashMap<String, Value>,
-    vs: &'a mut TermMap<Value>,
-) -> &'a Value {
-    // the custom traversal (rather than [PostOrderIter]) allows us to break early based on the cache
-
-    // (children pushed, term)
-    let mut stack = vec![(false, t.clone())];
-    while let Some((children_pushed, node)) = stack.pop() {
-        if vs.contains_key(&node) {
-            continue;
-        }
-        if children_pushed {
-            eval_value(vs, h, node);
-        } else {
-            stack.push((true, node.clone()));
-            for c in node.cs() {
-                // vs doubles as our visited set.
-                if !vs.contains_key(c) {
-                    stack.push((false, c.clone()));
-                }
-            }
-        }
-    }
-    vs.get(t).unwrap()
-}
-
-/// Recursively evaluate the term `t`, using variable values in `h`.
-pub fn eval(t: &Term, h: &FxHashMap<String, Value>) -> Value {
-    let mut vs = TermMap::<Value>::default();
-    eval_cached(t, h, &mut vs).clone()
-}
-
-/// Helper function for eval function. Handles a single term
-fn eval_value(vs: &mut TermMap<Value>, h: &FxHashMap<String, Value>, t: Term) -> Value {
-    let args: Vec<&Value> = t.cs().iter().map(|c| vs.get(c).unwrap()).collect();
-    trace!("Eval {} on {:?}", t.op(), args);
-    let v = eval_op(t.op(), &args, h);
-    trace!("=> {}", v);
-    if let Value::Bool(false) = &v {
-        trace!("term {}", t);
-        for v in extras::free_variables(t.clone()) {
-            trace!("  {} = {}", v, h.get(&v).unwrap());
-        }
-    }
-    vs.insert(t, v.clone());
-    v
-}
-
-/// Helper function for eval function. Handles a single op
-#[allow(clippy::uninlined_format_args)]
-pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) -> Value {
-    match op {
-        Op::Var(n, _) => var_vals
-            .get(n)
-            .unwrap_or_else(|| panic!("Missing var: {} in {:?}", n, var_vals))
-            .clone(),
-        Op::Eq => Value::Bool(args[0] == args[1]),
-        Op::Not => Value::Bool(!args[0].as_bool()),
-        Op::Implies => Value::Bool(!args[0].as_bool() || args[1].as_bool()),
-        Op::BoolNaryOp(BoolNaryOp::Or) => Value::Bool(args.iter().any(|a| a.as_bool())),
-        Op::BoolNaryOp(BoolNaryOp::And) => Value::Bool(args.iter().all(|a| a.as_bool())),
-        Op::BoolNaryOp(BoolNaryOp::Xor) => Value::Bool(
-            args.iter()
-                .map(|a| a.as_bool())
-                .fold(false, std::ops::BitXor::bitxor),
-        ),
-        Op::BvBit(i) => Value::Bool(args[0].as_bv().uint().get_bit(*i as u32)),
-        Op::BoolMaj => {
-            let c0 = args[0].as_bool() as u8;
-            let c1 = args[1].as_bool() as u8;
-            let c2 = args[2].as_bool() as u8;
-            Value::Bool(c0 + c1 + c2 > 1)
-        }
-        Op::BvConcat => Value::BitVector({
-            let mut it = args.iter().map(|a| a.as_bv().clone());
-            let f = it.next().unwrap();
-            it.fold(f, BitVector::concat)
-        }),
-        Op::BvExtract(h, l) => Value::BitVector(args[0].as_bv().clone().extract(*h, *l)),
-        Op::Const(v) => v.clone(),
-        Op::BvBinOp(o) => Value::BitVector({
-            let a = args[0].as_bv().clone();
-            let b = args[1].as_bv().clone();
-            match o {
-                BvBinOp::Udiv => a / &b,
-                BvBinOp::Urem => a % &b,
-                BvBinOp::Sub => a - b,
-                BvBinOp::Ashr => a.ashr(&b),
-                BvBinOp::Lshr => a.lshr(&b),
-                BvBinOp::Shl => a << &b,
-            }
-        }),
-        Op::BvUnOp(o) => Value::BitVector({
-            let a = args[0].as_bv().clone();
-            match o {
-                BvUnOp::Not => !a,
-                BvUnOp::Neg => -a,
-            }
-        }),
-        Op::BvNaryOp(o) => Value::BitVector({
-            let mut xs = args.iter().map(|a| a.as_bv().clone());
-            let f = xs.next().unwrap();
-            xs.fold(
-                f,
-                match o {
-                    BvNaryOp::Add => std::ops::Add::add,
-                    BvNaryOp::Mul => std::ops::Mul::mul,
-                    BvNaryOp::Xor => std::ops::BitXor::bitxor,
-                    BvNaryOp::Or => std::ops::BitOr::bitor,
-                    BvNaryOp::And => std::ops::BitAnd::bitand,
-                },
-            )
-        }),
-        Op::BvSext(w) => Value::BitVector({
-            let a = args[0].as_bv().clone();
-            let mask = ((Integer::from(1) << *w as u32) - 1)
-                * Integer::from(a.uint().get_bit(a.width() as u32 - 1));
-            BitVector::new(a.uint() | (mask << a.width() as u32), a.width() + w)
-        }),
-        Op::PfToBv(w) => Value::BitVector({
-            let i = args[0].as_pf().i();
-            if let FieldToBv::Panic = cfg().ir.field_to_bv {
-                assert!(
-                    (i.significant_bits() as usize) <= *w,
-                    "{}",
-                    "oversized input to Op::PfToBv({w})",
-                );
-            }
-            BitVector::new(i % (Integer::from(1) << *w), *w)
-        }),
-        Op::BvUext(w) => Value::BitVector({
-            let a = args[0].as_bv().clone();
-            BitVector::new(a.uint().clone(), a.width() + w)
-        }),
-        Op::Ite => args[if args[0].as_bool() { 1 } else { 2 }].clone(),
-        Op::BvBinPred(o) => Value::Bool({
-            let a = args[0].as_bv();
-            let b = args[1].as_bv();
-            match o {
-                BvBinPred::Sge => a.as_sint() >= b.as_sint(),
-                BvBinPred::Sgt => a.as_sint() > b.as_sint(),
-                BvBinPred::Sle => a.as_sint() <= b.as_sint(),
-                BvBinPred::Slt => a.as_sint() < b.as_sint(),
-                BvBinPred::Uge => a.uint() >= b.uint(),
-                BvBinPred::Ugt => a.uint() > b.uint(),
-                BvBinPred::Ule => a.uint() <= b.uint(),
-                BvBinPred::Ult => a.uint() < b.uint(),
-            }
-        }),
-        Op::BoolToBv => Value::BitVector(BitVector::new(Integer::from(args[0].as_bool()), 1)),
-        Op::PfUnOp(o) => Value::Field({
-            let a = args[0].as_pf().clone();
-            match o {
-                PfUnOp::Recip => {
-                    if a.is_zero() {
-                        a.ty().zero()
-                    } else {
-                        a.recip()
-                    }
-                }
-                PfUnOp::Neg => -a,
-            }
-        }),
-        Op::PfNaryOp(o) => Value::Field({
-            let mut xs = args.iter().map(|a| a.as_pf().clone());
-            let f = xs.next().unwrap();
-            xs.fold(
-                f,
-                match o {
-                    PfNaryOp::Add => std::ops::Add::add,
-                    PfNaryOp::Mul => std::ops::Mul::mul,
-                },
-            )
-        }),
-        Op::IntBinPred(o) => Value::Bool({
-            let a = args[0].as_int();
-            let b = args[1].as_int();
-            match o {
-                IntBinPred::Ge => a >= b,
-                IntBinPred::Gt => a > b,
-                IntBinPred::Le => a <= b,
-                IntBinPred::Lt => a < b,
-            }
-        }),
-        Op::IntNaryOp(o) => Value::Int({
-            let mut xs = args.iter().map(|a| a.as_int().clone());
-            let f = xs.next().unwrap();
-            xs.fold(
-                f,
-                match o {
-                    IntNaryOp::Add => std::ops::Add::add,
-                    IntNaryOp::Mul => std::ops::Mul::mul,
-                },
-            )
-        }),
-        Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
-        Op::PfChallenge(name, field) => Value::Field(pf_challenge(name, field)),
-        Op::PfFitsInBits(n_bits) => {
-            Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
-        }
-        // tuple
-        Op::Tuple => Value::Tuple(args.iter().map(|a| (*a).clone()).collect()),
-        Op::Field(i) => {
-            let t = args[0].as_tuple();
-            assert!(i < &t.len(), "{} out of bounds for {} on {:?}", i, op, args);
-            t[*i].clone()
-        }
-        Op::Update(i) => {
-            let mut t = Vec::from(args[0].as_tuple()).into_boxed_slice();
-            assert!(i < &t.len(), "{} out of bounds for {} on {:?}", i, op, args);
-            let e = args[1].clone();
-            assert_eq!(t[*i].sort(), e.sort());
-            t[*i] = e;
-            Value::Tuple(t)
-        }
-        // array
-        Op::Store => {
-            let a = args[0].as_array().clone();
-            let i = args[1].clone();
-            let v = args[2].clone();
-            Value::Array(a.store(i, v))
-        }
-        Op::CStore => {
-            let a = args[0].as_array().clone();
-            let i = args[1].clone();
-            let v = args[2].clone();
-            let c = args[3].as_bool();
-            if c {
-                Value::Array(a.store(i, v))
-            } else {
-                Value::Array(a)
-            }
-        }
-        Op::Fill(key_sort, size) => {
-            let v = args[0].clone();
-            Value::Array(Array::new(
-                key_sort.clone(),
-                Box::new(v),
-                Default::default(),
-                *size,
-            ))
-        }
-        Op::Array(key, value) => Value::Array(Array::from_vec(
-            key.clone(),
-            value.clone(),
-            args.iter().cloned().cloned().collect(),
-        )),
-        Op::Select => {
-            let a = args[0].as_array().clone();
-            let i = args[1];
-            a.select(i)
-        }
-        Op::Map(inner_op) => {
-            //  term_vecs[i] will store a vector of all the i-th index entries of the array arguments
-            let mut arg_vecs: Vec<Vec<Value>> = vec![Vec::new(); args[0].as_array().size];
-
-            for arg in args {
-                let arr = arg.as_array().clone();
-                let iter = match arg.sort() {
-                    Sort::Array(k, _, s) => (*k).clone().elems_iter_values().take(s).enumerate(),
-                    _ => panic!("Input type should be Array"),
-                };
-                for (j, jval) in iter {
-                    arg_vecs[j].push(arr.select(&jval))
-                }
-            }
-            let term = term(
-                op.clone(),
-                args.iter()
-                    .map(|a| leaf_term(Op::Const((*a).clone())))
-                    .collect(),
-            );
-            let (mut res, iter) = match check(&term) {
-                Sort::Array(k, v, n) => (
-                    Array::default((*k).clone(), &v, n),
-                    (*k).clone().elems_iter_values().take(n).enumerate(),
-                ),
-                _ => panic!("Output type of map should be array"),
-            };
-
-            for (i, idxval) in iter {
-                let args: Vec<&Value> = arg_vecs[i].iter().collect();
-                let val = eval_op(inner_op, &args, var_vals);
-                res.map.insert(idxval, val);
-            }
-            Value::Array(res)
-        }
-        Op::Rot(i) => {
-            let a = args[0].as_array().clone();
-            let (mut res, iter, len) = match args[0].sort() {
-                Sort::Array(k, v, n) => (
-                    Array::default((*k).clone(), &v, n),
-                    (*k).clone().elems_iter_values().take(n).enumerate(),
-                    n,
-                ),
-                _ => panic!("Input type should be Array"),
-            };
-
-            // calculate new rotation amount
-            let rot = *i % len;
-            for (idx, idx_val) in iter {
-                let w = idx_val.as_bv().width();
-                let new_idx = Value::BitVector(BitVector::new(Integer::from((idx + rot) % len), w));
-                let new_val = a.select(&idx_val);
-                res.map.insert(new_idx, new_val);
-            }
-            Value::Array(res)
-        }
-        Op::PfToBoolTrusted => {
-            let v = args[0].as_pf().i();
-            assert!(v == 0 || v == 1);
-            Value::Bool(v == 1)
-        }
-        Op::ExtOp(o) => o.eval(args),
-
-        o => unimplemented!("eval: {:?}", o),
-    }
-}
-
 /// Make an array from a sequence of terms.
 ///
 /// Requires
@@ -1589,7 +1337,13 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
 /// * a key sort, as all arrays do. This sort must be iterable (i.e., bool, int, bit-vector, or field).
 /// * a value sort, for the array's default
 pub fn make_array(key_sort: Sort, value_sort: Sort, i: Vec<Term>) -> Term {
-    term(Op::Array(key_sort, value_sort), i)
+    term(
+        Op::Array(Box::new(ArrayOp {
+            key: key_sort,
+            val: value_sort,
+        })),
+        i,
+    )
 }
 
 /// Make a sequence of terms from an array.
@@ -1607,9 +1361,32 @@ pub fn unmake_array(a: Term) -> Vec<Term> {
         .collect()
 }
 
+/// Make a sequence of terms from a tuple
+///
+/// Requires
+///
+/// * a tuple term
+pub fn tuple_terms(a: Term) -> Vec<Term> {
+    let sort = check(&a);
+    let size = sort.as_tuple().len();
+    (0..size)
+        .map(|idx| term(Op::Field(idx), vec![a.clone()]))
+        .collect()
+}
+
 /// Make a term with no arguments, just an operator.
 pub fn leaf_term(op: Op) -> Term {
     term(op, Vec::new())
+}
+
+/// Make a variable term.
+pub fn var(name: String, sort: Sort) -> Term {
+    leaf_term(Op::new_var(name, sort))
+}
+
+/// Make a constant term.
+pub fn const_(value: Value) -> Term {
+    leaf_term(Op::new_const(value))
 }
 
 /// Make a term with arguments.
@@ -1624,7 +1401,7 @@ pub fn term(op: Op, cs: Vec<Term>) -> Term {
 
 /// Make a prime-field constant term.
 pub fn pf_lit(elem: FieldV) -> Term {
-    leaf_term(Op::Const(Value::Field(elem)))
+    const_(Value::Field(elem))
 }
 
 /// Make a bit-vector constant term.
@@ -1632,15 +1409,12 @@ pub fn bv_lit<T>(uint: T, width: usize) -> Term
 where
     Integer: From<T>,
 {
-    leaf_term(Op::Const(Value::BitVector(BitVector::new(
-        uint.into(),
-        width,
-    ))))
+    const_(Value::BitVector(BitVector::new(uint.into(), width)))
 }
 
 /// Make a bit-vector constant term.
 pub fn bool_lit(b: bool) -> Term {
-    leaf_term(Op::Const(Value::Bool(b)))
+    const_(Value::Bool(b))
 }
 
 #[macro_export]
@@ -1775,7 +1549,7 @@ pub struct VariableMetadata {
 impl VariableMetadata {
     /// term (cached)
     pub fn term(&self) -> Term {
-        leaf_term(Op::Var(self.name.clone(), self.sort.clone()))
+        var(self.name.clone(), self.sort.clone())
     }
 }
 
@@ -2026,9 +1800,16 @@ impl ComputationMetadata {
             .iter()
             .map(|name| args.get(name).expect("Argument not found: {}").clone())
             .collect::<Vec<Term>>();
-        let ordered_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
+        let arg_sorts = ordered_args.iter().map(check).collect::<Vec<Sort>>();
 
-        term(Op::Call(name, ordered_sorts, ret_sort), ordered_args)
+        term(
+            Op::Call(Box::new(CallOp {
+                name,
+                arg_sorts,
+                ret_sort,
+            })),
+            ordered_args,
+        )
     }
 }
 
@@ -2072,6 +1853,8 @@ pub struct Computation {
     /// * name: a variable name (array type) indicating the input state
     /// * name: a term indicating the output state
     pub persistent_arrays: Vec<(String, Term)>,
+    /// Check these arrays using RAM transcripts
+    pub ram_arrays: TermSet,
 }
 
 impl Computation {
@@ -2102,10 +1885,10 @@ impl Computation {
         );
         self.metadata.new_input(name.to_owned(), party, s.clone());
         if let Some(p) = precompute {
-            assert_eq!(&s, &check(&p));
+            assert_eq!(&s, &check(&p), "precompute {} doesn't match sort {}", p, s);
             self.precomputes.add_output(name.to_owned(), p);
         }
-        leaf_term(Op::Var(name.to_owned(), s))
+        var(name.to_owned(), s)
     }
 
     /// Create a new variable with the given metadata.
@@ -2130,7 +1913,7 @@ impl Computation {
             assert_eq!(&sort, &check(&p));
             self.precomputes.add_output(name.clone(), p);
         }
-        leaf_term(Op::Var(name, sort))
+        var(name, sort)
     }
 
     /// Add a new input `new_input_var` to this computation,
@@ -2168,7 +1951,7 @@ impl Computation {
         party: PartyId,
     ) -> Term {
         let f = Sort::Field(field);
-        let s = Sort::Array(Box::new(f.clone()), Box::new(f), size);
+        let s = Sort::new_array(f.clone(), f, size);
         let md = VariableMetadata {
             name: var.to_owned(),
             vis: Some(party),
@@ -2221,6 +2004,7 @@ impl Computation {
             metadata: ComputationMetadata::default(),
             precomputes: Default::default(),
             persistent_arrays: Default::default(),
+            ram_arrays: Default::default(),
         }
     }
 
@@ -2258,7 +2042,7 @@ impl Computation {
         for v in self.metadata.vars.values() {
             if v.random {
                 let field = v.sort.as_pf();
-                let value = Value::Field(pf_challenge(&v.name, field));
+                let value = Value::Field(eval::eval_pf_challenge(&v.name, field));
                 values.insert(v.name.clone(), value);
             }
         }
@@ -2272,6 +2056,95 @@ impl Computation {
         }
         outputs
     }
+
+    /// Compute statistics for this computation.
+    pub fn stats(&self) -> ComputationStats {
+        ComputationStats {
+            main: DagStats::new(self.terms_postorder()),
+            prec: DagStats::new(self.precomputes.terms_postorder()),
+        }
+    }
+
+    /// Compute detailed stats for this computation.
+    pub fn detailed_stats(&self) -> ComputationDetailedStats {
+        ComputationDetailedStats {
+            main: DagDetailedStats::new(self.terms_postorder()),
+            prec: DagDetailedStats::new(self.precomputes.terms_postorder()),
+        }
+    }
+}
+
+/// Term DAG statistics
+#[derive(Debug, Clone, Default)]
+pub struct DagStats {
+    /// number of terms
+    pub n_terms: usize,
+    /// number of dependencies
+    pub avg_n_children: f64,
+}
+
+impl DagStats {
+    fn new(terms: impl IntoIterator<Item = Term>) -> Self {
+        let mut stats = DagStats::default();
+        for n in terms.into_iter() {
+            stats.n_terms += 1;
+            stats.avg_n_children += n.cs().len() as f64;
+        }
+        stats.avg_n_children /= stats.n_terms as f64;
+        stats
+    }
+}
+
+/// Detailed term DAG statistics
+#[derive(Debug, Clone, Default)]
+pub struct DagDetailedStats {
+    /// number of terms
+    pub n_ops: Vec<(usize, Op)>,
+    /// number of dependencies
+    pub avg_n_children: Vec<(f64, Op)>,
+}
+
+impl DagDetailedStats {
+    fn new(terms: impl IntoIterator<Item = Term>) -> Self {
+        let mut n_ops: FxHashMap<Op, usize> = Default::default();
+        let mut avg_n_children: FxHashMap<Op, f64> = Default::default();
+        for n in terms.into_iter() {
+            if !matches!(n.op(), Op::Var(..) | Op::Const(..)) {
+                *n_ops.entry(n.op().clone()).or_default() += 1;
+                *avg_n_children.entry(n.op().clone()).or_default() += n.cs().len() as f64
+            }
+        }
+        for (op, ct) in &mut avg_n_children {
+            *ct /= *n_ops.get(op).unwrap() as f64;
+        }
+        let mut n_ops: Vec<(usize, Op)> = n_ops.into_iter().map(|(a, b)| (b, a)).collect();
+        let mut avg_n_children: Vec<(f64, Op)> =
+            avg_n_children.into_iter().map(|(a, b)| (b, a)).collect();
+        n_ops.sort_by_key(|(ct, _)| *ct);
+        avg_n_children.sort_by_key(|(ct, _)| (*ct * 100.) as usize);
+        Self {
+            n_ops,
+            avg_n_children,
+        }
+    }
+}
+
+/// Computation statistics
+#[derive(Debug, Clone, Default)]
+pub struct ComputationStats {
+    /// main
+    pub main: DagStats,
+    /// precompute
+    pub prec: DagStats,
+}
+
+/// Detailed computation statistics
+#[derive(Debug, Clone, Default)]
+pub struct ComputationDetailedStats {
+    /// main
+    pub main: DagDetailedStats,
+    /// precompute
+    pub prec: DagDetailedStats,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -2296,23 +2169,6 @@ impl Computations {
             None => panic!("Unknown computation: {}", name),
         }
     }
-}
-
-/// Compute a (deterministic) prime-field challenge.
-pub fn pf_challenge(name: &str, field: &FieldT) -> FieldV {
-    use rand::SeedableRng;
-    use rand_chacha::ChaChaRng;
-    use std::hash::{Hash, Hasher};
-    // hash the string
-    let mut hasher = fxhash::FxHasher::default();
-    name.hash(&mut hasher);
-    let hash: u64 = hasher.finish();
-    // seed ChaCha with the hash
-    let mut seed = [0u8; 32];
-    seed[0..8].copy_from_slice(&hash.to_le_bytes());
-    let mut rng = ChaChaRng::from_seed(seed);
-    // sample from ChaCha
-    field.random_v(&mut rng)
 }
 
 #[cfg(test)]

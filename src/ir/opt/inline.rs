@@ -100,17 +100,17 @@ impl<'a> Inliner<'a> {
     /// Will not return `v` which are protected.
     fn as_fresh_def(&self, t: &Term) -> Option<(Term, Term)> {
         if &EQ == t.op() {
-            if let Op::Var(name, _) = &t.cs()[0].op() {
+            if let Op::Var(v) = &t.cs()[0].op() {
                 if !self.stale_vars.contains(&t.cs()[0])
-                    && !self.protected.contains(name)
+                    && !self.protected.contains(&*v.name)
                     && does_not_contain(t.cs()[1].clone(), &t.cs()[0])
                 {
                     return Some((t.cs()[0].clone(), t.cs()[1].clone()));
                 }
             }
-            if let Op::Var(name, _) = &t.cs()[1].op() {
+            if let Op::Var(v) = &t.cs()[1].op() {
                 if !self.stale_vars.contains(&t.cs()[1])
-                    && !self.protected.contains(name)
+                    && !self.protected.contains(&*v.name)
                     && does_not_contain(t.cs()[0].clone(), &t.cs()[1])
                 {
                     return Some((t.cs()[1].clone(), t.cs()[0].clone()));
@@ -175,13 +175,13 @@ pub fn inline(assertions: &mut Vec<Term>, public_inputs: &FxHashSet<String>) {
     *assertions = new_assertions;
 }
 
-#[cfg(all(feature = "smt", feature = "test"))]
+#[cfg(all(feature = "smt", test))]
 mod test {
     use super::*;
     use crate::target::smt::{check_sat, find_model};
 
     fn b_var(b: &str) -> Term {
-        leaf_term(Op::Var(b.to_string(), Sort::Bool))
+        var(b.to_string(), Sort::Bool)
     }
 
     fn sub_test(xs: Vec<Term>, n: usize) {

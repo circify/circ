@@ -20,7 +20,7 @@ fn main() {
         .format_timestamp(None)
         .init();
     let options = Options::parse();
-    let v = leaf_term(Op::Var("a".to_owned(), Sort::BitVector(32)));
+    let v = var("a".to_owned(), Sort::BitVector(32));
     let mut t = v.clone();
     for _i in 0..options.n_mults {
         t = term![BV_MUL; t.clone(), t.clone()];

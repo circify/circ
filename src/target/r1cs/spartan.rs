@@ -1,5 +1,4 @@
 //! Export circ R1cs to Spartan
-use crate::target::r1cs::wit_comp::StagedWitCompEvaluator;
 use crate::target::r1cs::*;
 use bincode::{deserialize_from, serialize_into};
 use curve25519_dalek::scalar::Scalar;
@@ -10,6 +9,7 @@ use merlin::Transcript;
 use rug::Integer;
 use std::fs::File;
 use std::io;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
 /// Hold Spartan variables
@@ -94,31 +94,42 @@ pub fn r1cs_to_spartan(
         "\nR1CS has modulus \n{s_mod},\n but Spartan CS expects \n{f_mod}",
     );
 
-    let values = eval_inputs(inputs_map, prover_data);
+    let values = prover_data.extend_r1cs_witness(inputs_map);
+    prover_data.r1cs.check_all(&values);
 
     assert_eq!(values.len(), prover_data.r1cs.vars.len());
 
-    for (var, val) in prover_data.r1cs.vars.iter().zip(&values) {
-        let scalar = val_to_scalar(val);
-
-        // input
-        itrans.insert(inp.len(), *var);
-        trans.insert(*var, inp.len());
-        if let VarType::Inst = var.ty() {
-            inp.push(scalar.to_bytes());
-        } else {
-            wit.push(scalar.to_bytes());
+    for var in prover_data.r1cs.vars.iter() {
+        assert!(matches!(var.ty(), VarType::Inst | VarType::FinalWit));
+        if let VarType::FinalWit = var.ty() {
+            // witness
+            let id = wit.len();
+            itrans.insert(id, *var);
+            trans.insert(*var, id);
+            let val = values.get(var).expect("missing R1CS value");
+            wit.push(int_to_scalar(&val.i()).to_bytes());
         }
     }
 
-    assert_eq!(wit.len() + inp.len(), prover_data.r1cs.vars.len());
-
-    let num_vars = wit.len();
     let const_id = wit.len();
 
-    let assn_witness = VarsAssignment::new(&wit).unwrap();
+    for var in prover_data.r1cs.vars.iter() {
+        assert!(matches!(var.ty(), VarType::Inst | VarType::FinalWit));
+        if let VarType::Inst = var.ty() {
+            // input
+            let id = wit.len() + 1 + inp.len();
+            itrans.insert(id, *var);
+            trans.insert(*var, id);
+            let val = values.get(var).expect("missing R1CS value");
+            inp.push(int_to_scalar(&val.i()).to_bytes());
+        }
+    }
 
+    let num_vars = wit.len();
     let num_inputs = inp.len();
+    assert_eq!(wit.len() + inp.len(), prover_data.r1cs.vars.len());
+
+    let assn_witness = VarsAssignment::new(&wit).unwrap();
     let assn_inputs = InputsAssignment::new(&inp).unwrap();
 
     // circuit
@@ -163,31 +174,6 @@ pub fn r1cs_to_spartan(
         num_vars,
         num_inputs,
     )
-}
-
-fn eval_inputs(inputs_map: &HashMap<String, Value>, prover_data: &ProverData) -> Vec<Value> {
-    let mut evaluator = StagedWitCompEvaluator::new(&prover_data.precompute);
-    let mut ffs = Vec::new();
-    ffs.extend(
-        evaluator
-            .eval_stage(inputs_map.clone())
-            .into_iter()
-            .cloned(),
-    );
-    ffs.extend(
-        evaluator
-            .eval_stage(Default::default())
-            .into_iter()
-            .cloned(),
-    );
-    ffs
-}
-
-fn val_to_scalar(v: &Value) -> Scalar {
-    match v.sort() {
-        Sort::Field(_) => return int_to_scalar(&v.as_pf().i()),
-        _ => panic!("Value should be a field"),
-    };
 }
 
 fn int_to_scalar(i: &Integer) -> Scalar {
@@ -244,25 +230,25 @@ pub fn write_data<P1: AsRef<Path>, P2: AsRef<Path>>(
 }
 
 fn write_prover_data<P: AsRef<Path>>(path: P, data: &ProverData) -> io::Result<()> {
-    let mut file = File::create(path)?;
+    let mut file = BufWriter::new(File::create(path)?);
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
 fn read_prover_data<P: AsRef<Path>>(path: P) -> io::Result<ProverData> {
-    let mut file = File::open(path)?;
+    let mut file = BufReader::new(File::open(path)?);
     let data: ProverData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }
 
 fn write_verifier_data<P: AsRef<Path>>(path: P, data: &VerifierData) -> io::Result<()> {
-    let mut file = File::create(path)?;
+    let mut file = BufWriter::new(File::create(path)?);
     serialize_into(&mut file, &data).unwrap();
     Ok(())
 }
 
 fn read_verifier_data<P: AsRef<Path>>(path: P) -> io::Result<VerifierData> {
-    let mut file = File::open(path)?;
+    let mut file = BufReader::new(File::open(path)?);
     let data: VerifierData = deserialize_from(&mut file).unwrap();
     Ok(data)
 }

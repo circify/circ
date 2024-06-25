@@ -167,6 +167,7 @@ mod rc {
         crate::rc::generate_hashcons!(u8);
     }
     use hc_u8::Table;
+    //use crate::rc::example_u8::Table;
 
     mod tiny {
         #[test]

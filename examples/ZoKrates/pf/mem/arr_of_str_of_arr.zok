@@ -1,0 +1,21 @@
+const u32 LEN = 4
+const u32 INNER_LEN = 2
+const u32 ACCESSES = 2
+
+struct Pt {
+    field[INNER_LEN] x
+    field[INNER_LEN] y
+}
+const transcript Pt [LEN] array = [Pt {x: [0; INNER_LEN], y: [5; INNER_LEN]}, ...[Pt {x: [1; INNER_LEN], y: [2; INNER_LEN]}; LEN - 1]]
+
+def main(private field[ACCESSES] idx) -> field:
+    field prod = 1
+    for u32 i in 0..ACCESSES do
+        field access = idx[i]
+        Pt pt = array[access]
+        for u32 j in 0..INNER_LEN do
+            prod = prod * pt.x[j] * pt.y[j]
+        endfor
+    endfor
+    return prod
+

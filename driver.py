@@ -3,14 +3,62 @@
 import argparse
 import subprocess
 import sys
+import os
 
-from util import *
+# Gloable variables
+feature_path = ".features.txt"
+mode_path = ".mode.txt"
+
+cargo_features = {
+    "aby",
+    "c",
+    "lp",
+    "r1cs",
+    "smt",
+    "zok",
+    "datalog",
+    "bellman",
+    "spartan",
+    "poly",
+}
+
+
+def save_mode(mode):
+    """Save mode to file"""
+    with open(mode_path, "w") as f:
+        f.write(mode)
+
+
+def load_mode():
+    """Load mode from file"""
+    if os.path.exists(mode_path):
+        with open(mode_path, "r") as f:
+            return f.read().strip()
+    else:
+        return ""
+
+
+def save_features(features):
+    """Save features to file"""
+    with open(feature_path, "w") as f:
+        feature_str = "\n".join(features)
+        f.write(feature_str)
+
+
+def load_features():
+    """Load features from file"""
+    if os.path.exists(feature_path):
+        with open(feature_path, "r") as f:
+            features = f.read().splitlines()
+            return features
+    else:
+        return []
 
 
 def log_run_check(cmd):
     s = (
         " ".join(f"'{tok}'" if " " in tok else tok for tok in cmd)
-        if type(cmd) == list
+        if isinstance(cmd, list)
         else cmd
     )
     print(f"Running: {s}")
@@ -27,32 +75,9 @@ def install(features):
             set of features required
     """
 
-    def verify_path_empty(path) -> bool:
-        return not os.path.isdir(path) or (os.path.isdir(path) and not os.listdir(path))
-
-    for f in features:
-        if f == "aby":
-            if verify_path_empty(ABY_SOURCE):
-                subprocess.run(
-                    ["git", "clone", "https://github.com/edwjchen/ABY.git", ABY_SOURCE]
-                )
-                subprocess.run(["./scripts/build_aby.zsh"])
-        if f == "kahip":
-            if verify_path_empty(KAHIP_SOURCE):
-                subprocess.run(
-                    ["git", "clone", "https://github.com/KaHIP/KaHIP.git", KAHIP_SOURCE]
-                )
-                subprocess.run(["./scripts/build_kahip.zsh"])
-        if f == "kahypar":
-            if verify_path_empty(KAHYPAR_SOURCE):
-                subprocess.run(
-                    ["git", "clone", "--depth=1", "--recursive",
-                        "https://github.com/SebastianSchlag/kahypar.git", KAHYPAR_SOURCE]
-                )
-                subprocess.run(["./scripts/build_kahypar.zsh"])
-
     # install python requirements
-    subprocess.run(["pip3", "install", "-r", "requirements.txt"])
+    if "aby" in features:
+        subprocess.run(["pip3", "install", "-r", "requirements.txt"])
 
 
 def check(features):
@@ -68,8 +93,6 @@ def check(features):
     cmd = ["cargo", "check", "--tests", "--examples", "--benches", "--bins"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
 
 
@@ -78,8 +101,34 @@ def check_all():
     Run cargo check with every individual feature
     """
     for feature in cargo_features:
-        log_run_check(["cargo", "check", "--tests", "--examples",
-                      "--benches", "--bins", "--features", feature])
+        log_run_check(
+            [
+                "cargo",
+                "check",
+                "--tests",
+                "--examples",
+                "--benches",
+                "--bins",
+                "--features",
+                feature,
+            ]
+        )
+
+
+def doc(features):
+    """
+    Run cargo doc
+
+    Parameters
+    ----------
+        features : set of str
+            set of features required
+    """
+
+    cmd = ["cargo", "doc", "--document-private-items"]
+    if features:
+        cmd = cmd + ["--features"] + [",".join(features)]
+    log_run_check(cmd)
 
 
 def build(features):
@@ -106,8 +155,6 @@ def build(features):
 
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
 
     log_run_check(cmd)
 
@@ -116,7 +163,6 @@ def build(features):
             log_run_check(["./scripts/build_mpc_c_test.zsh"])
         if "smt" in features and "zok" in features:
             log_run_check(["./scripts/build_mpc_zokrates_test.zsh"])
-        log_run_check(["./scripts/build_aby.zsh"])
 
 
 def test(features, extra_args):
@@ -139,9 +185,6 @@ def test(features, extra_args):
     if features:
         test_cmd += ["--features"] + [",".join(features)]
         test_cmd_release += ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            test_cmd += ["--no-default-features"]
-            test_cmd_release += ["--no-default-features"]
     if len(extra_args) > 0:
         test_cmd += [a for a in extra_args if a != "--"]
         test_cmd_release += [a for a in extra_args if a != "--"]
@@ -155,17 +198,17 @@ def test(features, extra_args):
 
     if "zok" in features and "smt" in features:
         if "aby" in features:
-            log_run_check(
-                ["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
+            log_run_check(["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
         if "lp" in features:
             log_run_check(["./scripts/test_zok_to_ilp.zsh"])
         if "r1cs" in features:
-            if "ristretto255" in features:  # spartan field
+            if "spartan" in features:  # spartan field
                 log_run_check(["./scripts/spartan_zok_test.zsh"])
             else:  # bellman field
                 log_run_check(["./scripts/zokrates_test.zsh"])
                 if "poly" in features:
                     log_run_check(["./scripts/cp_test.zsh"])
+                    log_run_check(["./scripts/ram_test.zsh"])
         if "lp" in features and "r1cs" in features:
             log_run_check(["./scripts/test_zok_to_ilp_pf.zsh"])
 
@@ -174,6 +217,7 @@ def test(features, extra_args):
             log_run_check(["python3", "./scripts/aby_tests/c_test_aby.py"])
         if "smt" in features:
             log_run_check(["./scripts/test_c_smt.zsh"])
+    log_run_check(["./scripts/file_tests.zsh", ",".join(features)])
 
 
 def benchmark(features):
@@ -192,8 +236,6 @@ def benchmark(features):
 
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
 
 
@@ -216,17 +258,23 @@ def lint():
     cmd = ["cargo", "clippy", "--tests", "--examples", "--benches", "--bins"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     log_run_check(cmd)
+
+
+def set_default_features(features):
+    cargo_toml = (
+        os.path.dirname(os.path.abspath(os.path.realpath(__file__))) + "/Cargo.toml"
+    )
+    features_array = "[" + ", ".join('"' + f + '"' for f in features) + "]"
+    new_default_line = f"default = {features_array}"
+    print(f"sed -i 's/^default =.*/{new_default_line}/' {cargo_toml}")
+    log_run_check(["sed", "-i", f"s/^default =.*/{new_default_line}/", cargo_toml])
 
 
 def flamegraph(features, extra):
     cmd = ["cargo", "flamegraph"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
-        if "ristretto255" in features:
-            cmd = cmd + ["--no-default-features"]
     cmd += extra
     print("running:", " ".join(cmd))
     log_run_check(cmd)
@@ -246,8 +294,7 @@ def clean(features):
 def set_mode(mode):
     def verify_mode(mode):
         if mode not in ("debug", "release"):
-            raise RuntimeError(
-                f"Unknown mode: {mode}, --mode <debug, release>")
+            raise RuntimeError(f"Unknown mode: {mode}, --mode <debug, release>")
 
     verify_mode(mode)
     save_mode(mode)
@@ -267,13 +314,13 @@ def set_features(features):
         features = set()
 
     def verify_feature(f):
-        if f in cargo_features | {"ristretto255"}:
+        if f in cargo_features:
             return True
         return False
 
     features = set(sorted([f for f in features if verify_feature(f)]))
     save_features(features)
-    print("Feature set:", sorted(list(features)))
+    print(",".join(sorted(features)))
     return features
 
 
@@ -290,6 +337,7 @@ if __name__ == "__main__":
             action="store_true",
             help="install all dependencies from the feature set",
         )
+        parser.add_argument("-d", "--doc", action="store_true", help="run `cargo doc`")
         parser.add_argument(
             "-c", "--check", action="store_true", help="run `cargo check`"
         )
@@ -324,10 +372,16 @@ if __name__ == "__main__":
             "-m", "--mode", type=str, help="set `debug` or `release` mode"
         )
         parser.add_argument(
-            "-A", "--all_features", action="store_true", help="set all features on"
+            "-A", "--all-features", action="store_true", help="set all features on"
         )
         parser.add_argument(
-            "-L", "--list_features", action="store_true", help="print active features"
+            "-L", "--list-features", action="store_true", help="print active features"
+        )
+        parser.add_argument(
+            "-s",
+            "--set-default-features",
+            action="store_true",
+            help="write active features to Cargo.toml's default features; useful for rust tooling",
         )
         parser.add_argument(
             "-F",
@@ -335,8 +389,7 @@ if __name__ == "__main__":
             nargs="+",
             help="set features on <aby, c, lp, r1cs, smt, zok>, reset features with -F none",
         )
-        parser.add_argument(
-            "--benchmark", action="store_true", help="build benchmarks")
+        parser.add_argument("--benchmark", action="store_true", help="build benchmarks")
         parser.add_argument(
             "extra",
             metavar="PASS_THROUGH_ARGS",
@@ -368,7 +421,6 @@ if __name__ == "__main__":
         verify_extra_implies_flamegraph_or_test(args)
 
         features = load_features()
-        set_env(features)
 
         if args.flamegraph:
             if len(args.extra) > 0 and args.extra[0] == "--":
@@ -383,6 +435,9 @@ if __name__ == "__main__":
 
         if args.check_all:
             check_all()
+
+        if args.doc:
+            doc(features)
 
         if args.build:
             build(features)
@@ -409,10 +464,13 @@ if __name__ == "__main__":
             features = set_features(cargo_features)
 
         if args.list_features:
-            print("Feature set:", sorted(list(features)))
+            print(",".join(sorted(features)))
 
         if args.features:
             features = set_features(args.features)
+
+        if args.set_default_features:
+            set_default_features(features)
     except subprocess.CalledProcessError as e:
         print("The command")
         cmd_str = " ".join("'" + a + "'" if " " in a else a for a in e.cmd)

@@ -1,10 +1,13 @@
 //! A multi-stage R1CS witness evaluator.
 
+use crate::cfg::cfg_or_default;
 use crate::ir::term::*;
 use fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use serde::{Deserialize, Serialize};
 
 use log::trace;
+
+use std::time::Duration;
 
 /// A witness computation that proceeds in stages.
 ///
@@ -57,8 +60,8 @@ impl StagedWitComp {
     fn add_step(&mut self, term: Term) {
         debug_assert!(!self.term_to_step.contains_key(&term));
         let step_idx = self.steps.len();
-        if let Op::Var(name, _) = term.op() {
-            debug_assert!(self.vars.contains(name));
+        if let Op::Var(var) = term.op() {
+            debug_assert!(self.vars.contains(&*var.name));
         }
         for child in term.cs() {
             let child_step = self.term_to_step.get(child).unwrap();
@@ -101,6 +104,8 @@ pub struct StagedWitCompEvaluator<'a> {
     step_values: Vec<Value>,
     stages_evaluated: usize,
     outputs_evaluted: usize,
+    op_times: HashMap<(Op, Vec<Sort>), (Duration, usize)>,
+    time_ops: bool,
 }
 
 impl<'a> StagedWitCompEvaluator<'a> {
@@ -112,6 +117,8 @@ impl<'a> StagedWitCompEvaluator<'a> {
             step_values: Default::default(),
             stages_evaluated: Default::default(),
             outputs_evaluted: 0,
+            op_times: Default::default(),
+            time_ops: cfg_or_default().ir.time_eval_ops,
         }
     }
     /// Have all stages been evaluated?
@@ -122,12 +129,27 @@ impl<'a> StagedWitCompEvaluator<'a> {
         let next_step_idx = self.step_values.len();
         assert!(next_step_idx < self.comp.steps.len());
         let op = &self.comp.steps[next_step_idx].0;
+        let step_values = &self.step_values;
+        let op_times = &mut self.op_times;
         let args: Vec<&Value> = self
             .comp
             .step_args(next_step_idx)
-            .map(|i| &self.step_values[i])
+            .map(|i| &step_values[i])
             .collect();
-        let value = eval_op(op, &args, &self.variable_values);
+        let value = if self.time_ops {
+            let start = std::time::Instant::now();
+            let r = eval_op(op, &args, &self.variable_values);
+            let duration = start.elapsed();
+            let (ref mut dur, ref mut ct) = op_times
+                .entry((op.clone(), args.iter().map(|v| v.sort()).collect()))
+                .or_default();
+            *dur += duration;
+            *ct += 1;
+            r
+        } else {
+            eval_op(op, &args, &self.variable_values)
+        };
+
         trace!(
             "Eval step {}: {} on {:?} -> {}",
             next_step_idx,
@@ -147,6 +169,9 @@ impl<'a> StagedWitCompEvaluator<'a> {
         debug_assert!(self.stages_evaluated < self.comp.stages.len());
         let stage = &self.comp.stages[self.stages_evaluated];
         let num_outputs = stage.num_outputs;
+        for (k, v) in &inputs {
+            trace!("Input {}: {}", k, v,);
+        }
         self.variable_values.extend(inputs);
         if num_outputs > 0 {
             let max_step = (0..num_outputs)
@@ -169,6 +194,30 @@ impl<'a> StagedWitCompEvaluator<'a> {
             out.push(&self.step_values[*output_step]);
         }
         out
+    }
+
+    /// Prints out operator evaluation times (if self.time_ops is set)
+    pub fn print_times(&self) {
+        if self.time_ops {
+            // (operator, nanos total, counts, nanos/count, arg sorts (or *))
+            let mut rows: Vec<(String, usize, usize, f64, String)> = Default::default();
+            for ((op, arg_sorts), (time, count)) in &self.op_times {
+                let nanos = time.as_nanos() as usize;
+                let per = nanos as f64 / *count as f64;
+                rows.push((
+                    format!("{}", op),
+                    nanos,
+                    *count,
+                    per,
+                    format!("{:?}", arg_sorts),
+                ));
+            }
+            rows.sort_by_key(|t| t.1);
+            println!("time,op,nanos,counts,nanos_per,arg_sorts");
+            for (op, nanos, counts, nanos_per, arg_sorts) in &rows {
+                println!("time,{op},{nanos},{counts},{nanos_per},{arg_sorts}");
+            }
+        }
     }
 }
 
@@ -253,8 +302,8 @@ mod test {
         let field = FieldT::from(Integer::from(7));
         comp.add_stage(mk_inputs(vec![("a".into(), Sort::Bool), ("b".into(), Sort::Field(field.clone()))]),
         vec![
-            leaf_term(Op::Var("b".into(), Sort::Field(field.clone()))),
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
+            var("b".into(), Sort::Field(field.clone())),
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
         ]);
 
         let mut evaluator = StagedWitCompEvaluator::new(&comp);
@@ -282,16 +331,16 @@ mod test {
         let field = FieldT::from(Integer::from(7));
         comp.add_stage(mk_inputs(vec![("a".into(), Sort::Bool), ("b".into(), Sort::Field(field.clone()))]),
         vec![
-            leaf_term(Op::Var("b".into(), Sort::Field(field.clone()))),
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
+            var("b".into(), Sort::Field(field.clone())),
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
         ]);
         comp.add_stage(mk_inputs(vec![("c".into(), Sort::Field(field.clone()))]),
         vec![
             term![PF_ADD;
-               leaf_term(Op::Var("b".into(), Sort::Field(field.clone()))),
-               leaf_term(Op::Var("c".into(), Sort::Field(field.clone())))],
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
-            term![Op::Ite; leaf_term(Op::Var("a".into(), Sort::Bool)), pf_lit(field.new_v(0)), pf_lit(field.new_v(1))],
+               var("b".into(), Sort::Field(field.clone())),
+               var("c".into(), Sort::Field(field.clone()))],
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(1)), pf_lit(field.new_v(0))],
+            term![Op::Ite; var("a".into(), Sort::Bool), pf_lit(field.new_v(0)), pf_lit(field.new_v(1))],
         ]);
 
         let mut evaluator = StagedWitCompEvaluator::new(&comp);

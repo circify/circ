@@ -1,5 +1,7 @@
 //! Replacing array and tuple variables with scalars.
-use log::debug;
+//!
+//! Also replaces array and tuple *witnesses* with scalars.
+use log::trace;
 
 use crate::ir::opt::visit::RewritePass;
 use crate::ir::term::*;
@@ -30,18 +32,18 @@ fn create_vars(
                 })
                 .collect(),
         ),
-        Sort::Array(key_s, val_s, size) => {
+        Sort::Array(a) => {
             let array_elements = extras::array_elements(&prefix_term);
             make_array(
-                (**key_s).clone(),
-                (**val_s).clone(),
-                (0..*size)
+                a.key.clone(),
+                a.val.clone(),
+                (0..a.size)
                     .zip(array_elements)
                     .map(|(i, element)| {
                         create_vars(
                             &format!("{prefix}.{i}"),
                             element,
-                            val_s,
+                            &a.val,
                             new_var_requests,
                             false,
                         )
@@ -52,11 +54,42 @@ fn create_vars(
         _ => {
             // don't request a new variable if we're not recursing...
             if !top_rec_level {
-                debug!("New scalar var: {}", prefix);
+                trace!("New scalar var: {}", prefix);
                 new_var_requests.push((prefix.into(), prefix_term));
             }
-            leaf_term(Op::Var(prefix.into(), sort.clone()))
+            var(prefix.into(), sort.clone())
         }
+    }
+}
+
+fn create_wits(prefix: &str, prefix_term: Term, sort: &Sort) -> Term {
+    match sort {
+        Sort::Tuple(sorts) => term(
+            Op::Tuple,
+            sorts
+                .iter()
+                .enumerate()
+                .map(|(i, sort)| {
+                    create_wits(
+                        &format!("{prefix}.{i}"),
+                        term![Op::Field(i); prefix_term.clone()],
+                        sort,
+                    )
+                })
+                .collect(),
+        ),
+        Sort::Array(a) => {
+            let array_elements = extras::array_elements(&prefix_term);
+            make_array(
+                a.key.clone(),
+                a.val.clone(),
+                (0..a.size)
+                    .zip(array_elements)
+                    .map(|(i, element)| create_wits(&format!("{prefix}.{i}"), element, &a.val))
+                    .collect(),
+            )
+        }
+        _ => term![Op::new_witness(prefix.into()); prefix_term],
     }
 }
 
@@ -65,21 +98,29 @@ impl RewritePass for Pass {
         &mut self,
         computation: &mut Computation,
         orig: &Term,
-        _rewritten_children: F,
+        rewritten_children: F,
     ) -> Option<Term> {
-        if let Op::Var(name, sort) = &orig.op() {
-            debug!("Considering var: {}", name);
-            if !computation.metadata.lookup(name).committed {
+        if let Op::Var(v) = &orig.op() {
+            trace!("Considering var: {}", v.name);
+            if !computation.metadata.lookup(&*v.name).committed {
                 let mut new_var_reqs = Vec::new();
-                let new = create_vars(name, orig.clone(), sort, &mut new_var_reqs, true);
+                let new = create_vars(&v.name, orig.clone(), &v.sort, &mut new_var_reqs, true);
                 for (name, term) in new_var_reqs {
                     computation.extend_precomputation(name, term);
                 }
                 Some(new)
             } else {
-                debug!("Skipping b/c it is commited.");
+                trace!("Skipping b/c it is commited.");
                 None
             }
+        } else if let Op::Witness(name) = &orig.op() {
+            let sort = check(orig);
+            let mut cs = rewritten_children();
+            debug_assert_eq!(cs.len(), 1);
+            if !sort.is_scalar() {
+                trace!("Considering witness: {}", name);
+            }
+            Some(create_wits(name, cs.pop().unwrap(), &sort))
         } else {
             None
         }
@@ -89,7 +130,7 @@ impl RewritePass for Pass {
 /// Run the tuple elimination pass.
 pub fn scalarize_inputs(cs: &mut Computation) {
     let mut pass = Pass;
-    pass.traverse(cs);
+    pass.traverse_full(cs, false, true);
     #[cfg(debug_assertions)]
     assert_all_vars_are_scalars(cs);
     remove_non_scalar_vars_from_main_computation(cs);
@@ -98,9 +139,9 @@ pub fn scalarize_inputs(cs: &mut Computation) {
 /// Check that every variables is a scalar (or committed)
 pub fn assert_all_vars_are_scalars(cs: &Computation) {
     for t in cs.terms_postorder() {
-        if let Op::Var(name, sort) = &t.op() {
-            if !cs.metadata.lookup(name).committed {
-                match sort {
+        if let Op::Var(v) = &t.op() {
+            if !cs.metadata.lookup(&*v.name).committed {
+                match &v.sort {
                     Sort::Array(..) | Sort::Tuple(..) => {
                         panic!("Variable {} is non-scalar", t);
                     }

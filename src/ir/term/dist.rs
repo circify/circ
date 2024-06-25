@@ -1,5 +1,5 @@
 //! Distributions over terms (useful for fuzz testing)
-
+#![allow(dead_code)]
 use super::*;
 
 use circ_fields::{FieldT, FieldV};
@@ -37,8 +37,8 @@ impl rand::distributions::Distribution<Vec<usize>> for Sum {
 impl rand::distributions::Distribution<Term> for PureBoolDist {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Term {
         let ops = &[
-            Op::Const(Value::Bool(rng.gen())),
-            Op::Var(
+            Op::new_const(Value::Bool(rng.gen())),
+            Op::new_var(
                 std::str::from_utf8(&[b'a' + rng.gen_range(0..26)])
                     .unwrap()
                     .to_owned(),
@@ -91,14 +91,14 @@ impl FixedSizeDist {
         format!("{}_{}", prefix, (b'a' + rng.gen_range(0..26)) as char)
     }
     fn sample_value<R: Rng + ?Sized>(&self, sort: &Sort, rng: &mut R) -> Op {
-        Op::Const(UniformValue(sort).sample(rng))
+        Op::new_const(UniformValue(sort).sample(rng))
     }
     fn sample_op<R: Rng + ?Sized>(&self, sort: &Sort, rng: &mut R) -> Op {
         let mut ops = match sort {
             Sort::Bool => {
                 let mut ops = vec![
                     self.sample_value(sort, rng),
-                    Op::Var(self.sample_ident("b_", rng), sort.clone()),
+                    Op::new_var(self.sample_ident("b_", rng), sort.clone()),
                     Op::Not, // 2
                     Op::Implies,
                     Op::Eq,
@@ -120,7 +120,7 @@ impl FixedSizeDist {
             }
             Sort::BitVector(w) => vec![
                 self.sample_value(sort, rng),
-                Op::Var(self.sample_ident(&format!("bv{w}"), rng), sort.clone()),
+                Op::new_var(self.sample_ident(&format!("bv{w}"), rng), sort.clone()),
                 Op::BvUnOp(BvUnOp::Neg),
                 Op::BvUnOp(BvUnOp::Not),
                 Op::BvUext(rng.gen_range(0..*w)),
@@ -137,7 +137,7 @@ impl FixedSizeDist {
             Sort::Field(_) => {
                 vec![
                     self.sample_value(sort, rng),
-                    Op::Var(self.sample_ident("pf", rng), sort.clone()),
+                    Op::new_var(self.sample_ident("pf", rng), sort.clone()),
                     Op::PfUnOp(PfUnOp::Neg),
                     // Can error
                     // Op::PfUnOp(PfUnOp::Recip),
@@ -150,7 +150,7 @@ impl FixedSizeDist {
                     Op::Tuple,
                     self.sample_value(sort, rng),
                     // No variables!
-                    Op::Var(
+                    Op::new_var(
                         self.sample_ident(
                             &format!("tp_{sort}")
                                 .replace('(', "[")
@@ -176,11 +176,12 @@ impl FixedSizeDist {
         match op {
             Op::Ite => vec![Sort::Bool, sort.clone(), sort.clone()],
             o if o.arity() == Some(0) => vec![],
-            Op::Field(i) => vec![if let Sort::Tuple(mut ss) =
+            Op::Field(i) => vec![if let Sort::Tuple(ss) =
                 self.sample_tuple_sort(*i + 1, self.size - 1, rng)
             {
+                let mut ss = (*ss).to_vec();
                 ss[*i] = sort.clone();
-                Sort::Tuple(ss)
+                Sort::new_tuple(ss)
             } else {
                 unreachable!()
             }],
@@ -303,7 +304,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
                 .collect();
             let excess = self.size.saturating_sub(1 + dists.len());
             let ns = Sum(dists.len(), excess).sample(rng);
-            for (dist, n) in dists.iter_mut().zip(ns.into_iter()) {
+            for (dist, n) in dists.iter_mut().zip(ns) {
                 *dist = dist.clone().with_size(n + 1);
             }
             let children: Vec<Term> = dists.into_iter().map(|d| d.sample(rng)).collect();
@@ -330,8 +331,8 @@ pub mod test {
             let t = PureBoolDist(g.size()).sample(&mut rng);
             let values: FxHashMap<String, Value> = PostOrderIter::new(t.clone())
                 .filter_map(|c| {
-                    if let Op::Var(n, _) = &c.op() {
-                        Some((n.clone(), Value::Bool(bool::arbitrary(g))))
+                    if let Op::Var(v) = &c.op() {
+                        Some((v.name.to_string(), Value::Bool(bool::arbitrary(g))))
                     } else {
                         None
                     }
@@ -395,7 +396,9 @@ pub mod test {
             let t = d.sample(&mut rng);
             let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
                 .filter_map(|c| match &c.op() {
-                    Op::Var(n, Sort::Bool) => Some((n.clone(), Value::Bool(bool::arbitrary(g)))),
+                    Op::Var(var) if matches!(&var.sort, Sort::Bool) => {
+                        Some((var.name.to_string(), Value::Bool(bool::arbitrary(g))))
+                    }
                     _ => None,
                 })
                 .collect();
@@ -436,7 +439,9 @@ pub mod test {
             let t = d.sample(&mut rng);
             let values: HashMap<String, Value> = PostOrderIter::new(t.clone())
                 .filter_map(|c| match &c.op() {
-                    Op::Var(n, s) => Some((n.clone(), UniformValue(s).sample(&mut rng))),
+                    Op::Var(v) => {
+                        Some((v.name.to_string(), UniformValue(&v.sort).sample(&mut rng)))
+                    }
                     _ => None,
                 })
                 .collect();

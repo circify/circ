@@ -2,10 +2,10 @@
 use ::bellman::{groth16, Circuit, ConstraintSystem, LinearCombination, SynthesisError, Variable};
 use ff::{Field, PrimeField, PrimeFieldBits};
 use fxhash::FxHashMap;
-use gmp_mpfr_sys::gmp::limb_t;
 use group::WnafGroup;
 use log::debug;
 use pairing::{Engine, MultiMillerLoop};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -23,15 +23,12 @@ use crate::ir::term::Value;
 
 /// Convert a (rug) integer to a prime field element.
 pub(super) fn int_to_ff<F: PrimeField>(i: Integer) -> F {
-    let mut accumulator = F::from(0);
-    let limb_bits = (std::mem::size_of::<limb_t>() as u64) << 3;
-    let limb_base = F::from(2).pow_vartime([limb_bits]);
-    // as_ref yeilds a least-significant-first array.
-    for digit in i.as_ref().iter().rev() {
-        accumulator *= limb_base;
-        accumulator += F::from(*digit);
-    }
-    accumulator
+    assert!(i >= 0);
+    let digits: Vec<u8> = i.to_digits(rug::integer::Order::LsfLe);
+    let mut repr = F::Repr::default();
+    assert!(digits.len() <= repr.as_ref().len());
+    repr.as_mut()[..digits.len()].copy_from_slice(&digits);
+    F::from_repr_vartime(repr).unwrap()
 }
 
 /// Convert one our our linear combinations to a bellman linear combination.
@@ -112,16 +109,17 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
                 "Bellman doesn't support rounds"
             );
             let public = matches!(var.ty(), VarType::Inst);
-            let name_f = || format!("{var:?}");
+            let name = self.0.r1cs.names.get(&var).unwrap();
+            let name_f = || format!("{name:?}");
             let val_f = || {
                 Ok({
                     let i_val = &values.as_ref().expect("missing values")[i];
                     let ff_val = int_to_ff(i_val.as_pf().into());
-                    debug!("value : {var:?} -> {ff_val:?} ({i_val})");
+                    debug!("value : {name:?} -> {ff_val:?} ({i_val})");
                     ff_val
                 })
             };
-            debug!("var: {:?}, public: {}", var, public);
+            debug!("var: {:?}, public: {}", name, public);
             let v = if public {
                 cs.alloc_input(name_f, val_f)?
             } else {
@@ -129,13 +127,22 @@ impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
             };
             vars.insert(var, v);
         }
-        for (i, (a, b, c)) in self.0.r1cs.constraints.iter().enumerate() {
-            cs.enforce(
-                || format!("con{i}"),
-                |z| lc_to_bellman::<F, CS>(&vars, a, z),
-                |z| lc_to_bellman::<F, CS>(&vars, b, z),
-                |z| lc_to_bellman::<F, CS>(&vars, c, z),
-            );
+        let bellman_lcs: Vec<(_, _, _)> = self
+            .0
+            .r1cs
+            .constraints
+            .par_iter()
+            .map(|(a, b, c)| {
+                (
+                    lc_to_bellman::<F, CS>(&vars, a, LinearCombination::zero()),
+                    lc_to_bellman::<F, CS>(&vars, b, LinearCombination::zero()),
+                    lc_to_bellman::<F, CS>(&vars, c, LinearCombination::zero()),
+                )
+            })
+            .collect();
+
+        for (i, (a, b, c)) in bellman_lcs.into_iter().enumerate() {
+            cs.enforce(|| format!("con{i}"), |_| a, |_| b, |_| c);
         }
         debug!(
             "done with synth: {} vars {} cs",
@@ -264,6 +271,7 @@ where
 
     fn prove(pk: &Self::ProvingKey, witness: &FxHashMap<String, Value>) -> Self::Proof {
         let rng = &mut rand::thread_rng();
+        #[cfg(debug_assertions)]
         pk.0.check_all(witness);
         Proof(groth16::create_random_proof(SynthInput(&pk.0, Some(witness)), &pk.1, rng).unwrap())
     }

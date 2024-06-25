@@ -1,5 +1,7 @@
 //! A LRU cache from terms to values which does not retain its keys.
 
+use std::num::NonZero;
+
 use crate::Table;
 
 /// A LRU cache from terms to values which does not retain its keys.
@@ -11,7 +13,7 @@ impl<Op, T: Table<Op>, V> NodeLruCache<Op, T, V> {
     /// Create an empty cache with room for `n` items.
     pub fn with_capacity(n: usize) -> Self {
         Self {
-            inner: lru::LruCache::new(n),
+            inner: lru::LruCache::new(NonZero::new(n).unwrap()),
         }
     }
 }

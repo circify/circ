@@ -1,0 +1,135 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{comments}[2022/10/11 Inline and margin comments]
+% Written by Alex Ozdemir
+% Inspired by the peanutgallery package of Riad S. Wahby (and possibly others).
+
+\RequirePackage{options}
+\RequirePackage{xcolor}
+\RequirePackage{etoolbox}
+
+\newcounter{commentcoloruse}
+\newcounter{commentcolorsave}
+
+\newlength{\totalmargin}
+\newcommand{\SaveColor}[1]{%
+  \expandafter\def\csname CommentColorNumber\thecommentcolorsave\endcsname{#1}%
+  \stepcounter{commentcolorsave}%
+}
+\newcommand{\GetColor}{%
+  \expandafter\csname CommentColorNumber\thecommentcoloruse\endcsname%
+}
+\newcommand{\NextColor}{%
+  \stepcounter{commentcoloruse}
+}
+\def\primerlist{}
+
+\definecolor{BrewerQualitative0}{HTML}{1b9e77}
+\definecolor{BrewerQualitative1}{HTML}{d95f02}
+\definecolor{BrewerQualitative2}{HTML}{7570b3}
+\definecolor{BrewerQualitative3}{HTML}{e7298a}
+\definecolor{BrewerQualitative4}{HTML}{66a61e}
+\definecolor{BrewerQualitative5}{HTML}{e6ab02}
+\definecolor{BrewerQualitative6}{HTML}{a6761d}
+\definecolor{BrewerQualitative7}{HTML}{666666}
+\SaveColor{BrewerQualitative0}
+\SaveColor{BrewerQualitative1}
+\SaveColor{BrewerQualitative2}
+\SaveColor{BrewerQualitative3}
+\SaveColor{BrewerQualitative4}
+\SaveColor{BrewerQualitative5}
+\SaveColor{BrewerQualitative6}
+\SaveColor{BrewerQualitative7}
+
+\options{
+  /comments/.new family,
+  /comments/hide/.new toggle = false,
+  /comments/marginparsep/.new dim = \dimexpr1pt\relax,
+  /comments/marginparpush/.new dim = \dimexpr0.5em\relax,
+  /comments/marginparwidth/.new dim = \dimexpr0.5\totalmargin-2pt\relax,
+}
+
+\options@ProcessOptions{/comments}
+
+\iftoggle{/comments/hide}{%
+  \newcommand{\InlineComment}[2]{}
+  \newcommand{\MarginComment}[2]{\unskip}
+  \newcommand{\changebars}[2]{[{\color{magenta}\em\begingroup{#1}\endgroup}][{\color{magenta}\sout{#2}}]}
+}{%
+  \newcommand{\InlineComment}[2]{\begingroup \color{#1}{#2}\endgroup}
+  \newcommand{\MarginComment}[2]{\unskip{\color{#1}\vrule\vrule}{\marginpar{\raggedright\color{#1}\sffamily\selectfont\scriptsize #2}}}
+  \newcommand{\changebars}[2]{[{\color{magenta}\em\begingroup{#1}\endgroup}][{\color{magenta}\sout{#2}}]}
+}
+
+% \CommenterWithColor{INITIALS_ANYCASE}{COLORNAME}
+\newcommand{\CommenterWithColor}[2]{
+  \uppercase{\def\commentcsuppercase{#1}}%
+  \lowercase{\def\commentcslowercase{#1}}%
+  \expandafter\newcommand\csname \commentcslowercase\endcsname[1]{%
+    \InlineComment{#2}{\uppercase{#1}: ##1}}
+  \expandafter\newcommand\csname \commentcsuppercase\endcsname[1]{%
+    \MarginComment{#2}{\uppercase{#1}: ##1}}
+  \expandafter\def\expandafter\primerlist\expandafter{\primerlist
+
+    \noindent\texttt{-} {\small\color{#2} \texttt{\textbackslash \lowercase{#1}\{Test\}}} creates an
+    inline comment:
+    \lowercase{\csname#1\endcsname}{Test}
+
+    \noindent\texttt{-} {\small\color{#2} \texttt{\textbackslash \uppercase{#1}\{Test\}}}
+    creates a margin comment:
+    \uppercase{\csname#1\endcsname}{Test}
+  }
+}
+
+\def\commentprimer{
+  \subsection*{Comment System}
+
+  \noindent Welcome to \texttt{comments.sty}.
+
+  \noindent Macros:
+
+  \noindent\texttt{-} {\small\texttt{\textbackslash Commenter\{AO\}}}
+  creates macros
+  {\small\texttt{\textbackslash ao}}
+  and
+  {\small\texttt{\textbackslash AO}}.
+
+  \noindent\texttt{-} {\small\texttt{\textbackslash
+    CommenterWithColor\{AO\}\{COLOR\_NAME\}}}
+    is similar.
+
+  \noindent\texttt{-} {\small\texttt{\textbackslash changebars\{new\}\{old\}}} yields
+  \changebars{new}{old}.
+
+  \noindent\texttt{-} {\small\texttt{\textbackslash commentprimer}}
+    outputs this help message.
+
+  \primerlist
+
+
+  \noindent Package options:
+
+  \noindent\texttt{-} \texttt{\small hide} hide all comments and apply changes
+
+  \noindent\texttt{-} \texttt{\small marginparpush=LEN} distance between comments
+
+  \noindent\texttt{-} \texttt{\small marginparsep=LEN} distance from column
+
+  \noindent\texttt{-} \texttt{\small marginparwidth=LEN} width
+}
+
+% Utility for expanding macro arguments to text before expanding the macro
+\long\gdef\expandargumentsof#1#2\stopexpansion{%
+  \edef\tmp{\noexpand#1#2}\tmp%
+}
+
+\newcommand{\Commenter}[1]{
+  \expandargumentsof\CommenterWithColor{#1}{\GetColor}\stopexpansion
+  \NextColor
+}
+
+\AtEndPreamble{
+  \setlength{\totalmargin}{\dimexpr\paperwidth-\textwidth\relax}
+  \setlength{\marginparsep}{\option{/comments/marginparsep}}
+  \setlength{\marginparpush}{\option{/comments/marginparpush}}
+  \setlength{\marginparwidth}{\option{/comments/marginparwidth}}
+}

@@ -1,0 +1,33 @@
+\section{Sparse Persistent}
+We want to use (nearly) the whole field
+as our index space, without cost.
+\begin{outline}
+  \1 What if you want $\vec a$ and $\vec b$ to be index-value pairs, where the
+  indices are from a large space (rather than $[N]$)?
+\1 params
+  \2 Now, $N$ becomes the capacity
+  \2 $C$ is the number of creations
+\1 Three operations:
+  \2 read
+  \2 conditional write
+  \2 create
+    \3 these happen *before* the reads/writes
+\1 approach
+  \2 use a dummy key value to indicate dead spots
+     \3 zero is a natural choice
+  \2 essentially, you inject creates into the initial store,
+     and filter out some dummies afterwards
+  \2 you just add a conditional uniqueness check
+    \3 uniqueness check: \csPerN{4}
+    \3 with a condition: \csPerN{2}
+    \3 computing the condition (field eq): \csPerN{2}
+  \2 base cost of the permutation: \csPerN{4}
+    \3 one from initial coefficient hash
+    \3 one from root hash
+    \3 one from root hash again
+    \3 one from coefficient hash again
+\1 accounting
+  \2 \csPerN{12}
+  \2 very similar dependence on $A$
+  \2 some dependence on $C$ too (like 10--30)
+\end{outline}

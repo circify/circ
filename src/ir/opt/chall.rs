@@ -28,10 +28,53 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use crate::ir::opt::visit::RewritePass;
+use crate::ir::proof::PROVER_ID;
 use crate::ir::term::*;
+use crate::util::ns::Uniquer;
+
+/// Replace witness terms with new variables.
+pub fn deskolemize_witnesses(comp: &mut Computation) {
+    // skip pass if no witnesses
+    if !comp
+        .terms_postorder()
+        .any(|t| matches!(t.op(), Op::Witness(..)))
+    {
+        return;
+    }
+
+    struct WitPass(Uniquer);
+
+    impl RewritePass for WitPass {
+        fn visit<F: Fn() -> Vec<Term>>(
+            &mut self,
+            computation: &mut Computation,
+            orig: &Term,
+            _rewritten_children: F,
+        ) -> Option<Term> {
+            if let Op::Witness(prefix) = orig.op() {
+                let name = self.0.mk_uniq(prefix);
+                let sort = check(orig);
+                let var =
+                    computation.new_var(&name, sort, Some(PROVER_ID), Some(orig.cs()[0].clone()));
+                Some(var)
+            } else {
+                None
+            }
+        }
+    }
+
+    let names_iterator = comp
+        .terms_postorder()
+        .filter(|t| t.is_var())
+        .map(|t| t.as_var_name().to_string())
+        .chain(comp.precomputes.outputs().iter().map(|o| o.0.clone()))
+        .chain(comp.precomputes.inputs().iter().map(|o| o.0.clone()));
+    let uniqer = Uniquer::new(names_iterator);
+    WitPass(uniqer).traverse_full(comp, true, true);
+}
 
 /// Replace the challenge terms in this computation with random inputs.
-pub fn skolemize_challenges(comp: &mut Computation) {
+pub fn deskolemize_challenges(comp: &mut Computation) {
     for var in comp.metadata.ordered_input_names() {
         let md = comp.metadata.lookup(&var);
         assert_eq!(md.round, 0, "There are already rounds");
@@ -57,9 +100,12 @@ pub fn skolemize_challenges(comp: &mut Computation) {
             .max()
             .unwrap_or(0);
         let round = match t.op() {
-            Op::Var(n, _) => {
-                if let Some(v) = comp.precomputes.outputs().get(n) {
-                    *min_round.borrow().get(v).unwrap()
+            Op::Var(v) => {
+                if let Some(v) = comp.precomputes.outputs().get(&*v.name) {
+                    *min_round
+                        .borrow()
+                        .get(v)
+                        .unwrap_or_else(|| panic!("missing key: {}", v))
                 } else {
                     0
                 }
@@ -103,8 +149,8 @@ pub fn skolemize_challenges(comp: &mut Computation) {
     for t in terms.into_iter().rev() {
         let round = match t.op() {
             Op::PfChallenge(..) => min_round.get(&t).unwrap().checked_sub(1).unwrap(),
-            Op::Var(name, _) if comp.metadata.is_input_public(name) => 0,
-            Op::Var(name, _) if comp.metadata.lookup(name).committed => 0,
+            Op::Var(v) if comp.metadata.is_input_public(&v.name) => 0,
+            Op::Var(v) if comp.metadata.lookup(&*v.name).committed => 0,
             _ => parents
                 .get(&t)
                 .unwrap()
@@ -134,13 +180,16 @@ pub fn skolemize_challenges(comp: &mut Computation) {
 
     let mut challs = TermMap::default();
     for t in comp.terms_postorder() {
-        if let Op::PfChallenge(name, field) = t.op() {
+        if let Op::PfChallenge(c) = t.op() {
+            let round = *actual_round.get(&t).unwrap();
+            debug!("challenge {}: round = {round}", c.name);
+            trace!("challenge term {t}");
             let md = VariableMetadata {
-                name: name.clone(),
+                name: c.name.to_string(),
                 random: true,
                 vis: None,
-                sort: Sort::Field(field.clone()),
-                round: *actual_round.get(&t).unwrap(),
+                sort: Sort::Field(c.field.clone()),
+                round,
                 ..Default::default()
             };
             let var = comp.new_var_metadata(md, None);
@@ -205,7 +254,12 @@ impl RewritePass for Pass {
         _rewritten_children: F,
     ) -> Option<Term> {
         if let Op::PfChallenge(..) = orig.op() {
-            Some(self.0.get(orig).unwrap().clone())
+            Some(
+                self.0
+                    .get(orig)
+                    .unwrap_or_else(|| panic!("missing key: {}", orig))
+                    .clone(),
+            )
         } else {
             None
         }
@@ -256,7 +310,7 @@ mod test {
         super::super::mem::ram::persistent::apply(&mut cs, &cfg);
         println!("{}", text::serialize_computation(&cs));
         assert_eq!(vec![Value::Bool(true)], cs.eval_all(&values));
-        skolemize_challenges(&mut cs);
+        deskolemize_challenges(&mut cs);
         println!("{}", text::serialize_computation(&cs));
         assert_eq!(vec![Value::Bool(true)], cs.eval_all(&values));
     }

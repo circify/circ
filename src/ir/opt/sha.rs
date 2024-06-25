@@ -6,6 +6,8 @@ use std::collections::HashSet;
 
 /// Detects common C-language SHA patterns and rewrites them.
 pub fn sha_rewrites(term_: &Term) -> Term {
+    let mut ch_count = 0;
+    let mut maj_count = 0;
     // what does a term rewrite to?
     let mut cache = TermMap::<Term>::default();
     for t in PostOrderIter::new(term_.clone()) {
@@ -54,7 +56,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                             });
                         if let Some((c, t, f)) = opt_match {
                             if let Sort::BitVector(w) = check(t) {
-                                debug!("SHA CH");
+                                ch_count += 1;
                                 Some(term(
                                 BV_CONCAT,
                                 (0..w)
@@ -93,7 +95,7 @@ pub fn sha_rewrites(term_: &Term) -> Term {
                             && s1.intersection(&s2).count() == 1
                             && s2.intersection(&s0).count() == 1
                         {
-                            debug!("SHA MAJ");
+                            maj_count += 1;
                             let items = s0.union(&s1).collect::<Vec<_>>();
                             let w = check(c0).as_bv();
                             Some(term(
@@ -131,6 +133,8 @@ pub fn sha_rewrites(term_: &Term) -> Term {
         });
         cache.insert(t, new_t);
     }
+    debug!("SHA MAJ count: {}", maj_count);
+    debug!("SHA CH count: {}", ch_count);
     cache.get(term_).unwrap().clone()
 }
 

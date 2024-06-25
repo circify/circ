@@ -4,32 +4,63 @@ use crate::ir::term::*;
 
 use super::visit::RewritePass;
 
-/// Parse `ite` as a conditional store (arr, idx, val, guard)
-fn parse_cond_store(ite: &Term) -> Option<ConditionalStore> {
-    if ite.op() == &Op::Ite && ite.cs()[1].op() == &Op::Store && ite.cs()[1].cs()[0] == ite.cs()[2]
-    {
-        // (ite COND (store ARR IDX VAL) ARR)
-        Some(ConditionalStore {
-            arr: ite.cs()[2].clone(),
-            idx: ite.cs()[1].cs()[1].clone(),
-            val: ite.cs()[1].cs()[2].clone(),
-            guard: ite.cs()[0].clone(),
-        })
-    } else if ite.op() == &Op::Ite
-        && ite.cs()[2].op() == &Op::Store
-        && ite.cs()[2].cs()[0] == ite.cs()[1]
-    {
-        // (ite COND ARR (store ARR IDX VAL))
-        Some(ConditionalStore {
-            arr: ite.cs()[1].clone(),
-            idx: ite.cs()[2].cs()[1].clone(),
-            val: ite.cs()[2].cs()[2].clone(),
-            guard: term![NOT; ite.cs()[0].clone()],
-        })
-        // could do things like: (store ARR IDX (ite COND VAL (select ARR IDX)))
-    } else {
-        None
+/// Parse `ite` or `store` as a conditional store (arr, idx, val, guard)
+fn parse_cond_store(term: &Term) -> Option<ConditionalStore> {
+    if let (&Op::Ite, [guard, true_, false_]) = term.parts() {
+        match true_.parts() {
+            (&Op::Store, [arr, idx, val]) if arr == false_ => {
+                // (ite COND (store ARR IDX VAL) ARR)
+                return Some(ConditionalStore {
+                    arr: arr.clone(),
+                    idx: idx.clone(),
+                    val: val.clone(),
+                    guard: guard.clone(),
+                });
+            }
+            _ => {}
+        }
+        match false_.parts() {
+            (&Op::Store, [arr, idx, val]) if arr == false_ => {
+                // (ite COND ARR (store ARR IDX VAL))
+                return Some(ConditionalStore {
+                    arr: arr.clone(),
+                    idx: idx.clone(),
+                    val: val.clone(),
+                    guard: term![NOT; guard.clone()],
+                });
+            }
+            _ => {}
+        }
     }
+    if let (&Op::Store, [arr, idx, val]) = term.parts() {
+        if let (&Op::Ite, [guard, true_, false_]) = val.parts() {
+            match false_.parts() {
+                (&Op::Select, [arr2, idx2]) if arr == arr2 && idx == idx2 => {
+                    // (store ARR IDX (ite COND VAL (select ARR IDX)))
+                    return Some(ConditionalStore {
+                        arr: arr.clone(),
+                        idx: idx.clone(),
+                        val: true_.clone(),
+                        guard: guard.clone(),
+                    });
+                }
+                _ => {}
+            }
+            match true_.parts() {
+                (&Op::Select, [arr2, idx2]) if arr == arr2 && idx == idx2 => {
+                    // (store ARR IDX (ite COND (select ARR IDX) VAL))
+                    return Some(ConditionalStore {
+                        arr: arr.clone(),
+                        idx: idx.clone(),
+                        val: false_.clone(),
+                        guard: term![NOT; guard.clone()],
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    None
 }
 
 #[derive(Debug)]

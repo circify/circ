@@ -71,7 +71,7 @@ impl CTermData {
     pub fn term(&self, ctx: &CirCtx) -> Term {
         let ts = self.terms(ctx);
         assert!(ts.len() == 1);
-        ts.get(0).unwrap().clone()
+        ts.first().unwrap().clone()
     }
 
     pub fn simple_term(&self) -> Term {
@@ -499,8 +499,8 @@ pub fn uge(a: CTerm, b: CTerm) -> Result<CTerm, String> {
 
 pub fn const_int(a: CTerm) -> Integer {
     let s = match &a.term {
-        CTermData::Int(s, _, i) => match &i.op() {
-            Op::Const(Value::BitVector(f)) => {
+        CTermData::Int(s, _, i) => match i.as_value_opt() {
+            Some(Value::BitVector(f)) => {
                 if *s {
                     f.as_sint()
                 } else {
@@ -622,7 +622,7 @@ impl Embeddable for Ct {
                 };
                 for (i, t) in v.iter().enumerate() {
                     let val = t.term.term(ctx);
-                    let t_term = leaf_term(Op::Const(Value::Bool(true)));
+                    let t_term = bool_lit(true);
                     mem.store(id, bv_lit(i, 32), val, t_term);
                 }
                 arr

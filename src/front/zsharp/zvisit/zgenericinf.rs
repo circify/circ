@@ -2,7 +2,7 @@
 
 use super::super::term::{cond, const_val, Ty, T};
 use super::super::{span_to_string, ZGen};
-use crate::ir::term::{bv_lit, leaf_term, term, BoolNaryOp, Op, Sort, Term, Value};
+use crate::ir::term::{bv_lit, const_, term, var, BoolNaryOp, Op, Sort, Term, Value};
 #[cfg(feature = "smt")]
 use crate::target::smt::find_unique_model;
 
@@ -184,7 +184,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                     g_name.truncate(self.gens[idx].value.len());
                     g_name.shrink_to_fit();
                     assert!(res
-                        .insert(g_name, T::new(Ty::Uint(32), term![Op::Const(g_val)]))
+                        .insert(g_name, T::new(Ty::Uint(32), const_(g_val)))
                         .is_none());
                 }
             });
@@ -469,5 +469,5 @@ fn make_varname_str(id: &str, sfx: &str) -> String {
 
 fn make_varname(id: &str, sfx: &str) -> Term {
     let tmp = make_varname_str(id, sfx);
-    term![Op::Var(tmp, Sort::BitVector(32))]
+    var(tmp, Sort::BitVector(32))
 }
