@@ -16,8 +16,8 @@
 //!
 //! The relation holds when for i in 1..C:
 //!
-//! * common_cmts[i] = Commit(common_ck, data[i]) AND
-//! * cmts[i] = Commit(cks[i], data[i])
+//! * `common_cmts[i] = Commit(common_ck, data[i])` AND
+//! * `cmts[i] = Commit(cks[i], data[i])`
 //!
 //! Thus, the relation "links" the commitments cmts under different keys to the commitments
 //! common_cmts under the same key.
@@ -27,11 +27,11 @@
 //! We build a matrix containing commit keys. Let N be the new data length and C be the number of
 //! commitments. Our KW15 scheme is (0-)indexed as follows. The matrix is 2C by (N+2) C
 //!
-//! * For i in 0..C: commitment i is common_cmts[i]
-//! * For i in 0..C: commitment C + i is cmts[i]
-//! * For i in 0..C: for j in 0..N: scalar i * N + j is data[i][j]
-//! * For i in 0..C: scalar N * C + i is common_rands[i]
-//! * For i in 0..C: scalar N * C + C + i is rands[i]
+//! * For i in 0..C: `commitment i is common_cmts[i]`
+//! * For i in 0..C: `commitment C + i is cmts[i]`
+//! * For i in 0..C: `for j in 0..N: scalar i * N + j is data[i][j]`
+//! * For i in 0..C: `scalar N * C + i is common_rands[i]`
+//! * For i in 0..C: `scalar N * C + C + i is rands[i]`
 
 use ff::{Field, PrimeFieldBits};
 use group::Group;

@@ -1,4 +1,4 @@
-//! Implementation of ROM checking based on https://eprint.iacr.org/2022/1530.pdf
+//! Implementation of ROM checking based on <https://eprint.iacr.org/2022/1530.pdf>
 //!
 //! Cost: about (N + A)(L + 1) where the ROM size is N, there are A reads, and values have size L.
 //! If the ROM contents are fixed, cost drops to N + A(L + 1)

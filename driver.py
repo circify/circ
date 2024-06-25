@@ -115,6 +115,22 @@ def check_all():
         )
 
 
+def doc(features):
+    """
+    Run cargo doc
+
+    Parameters
+    ----------
+        features : set of str
+            set of features required
+    """
+
+    cmd = ["cargo", "doc", "--document-private-items"]
+    if features:
+        cmd = cmd + ["--features"] + [",".join(features)]
+    log_run_check(cmd)
+
+
 def build(features):
     """
     Run cargo build and any test cases in the feature list
@@ -321,6 +337,7 @@ if __name__ == "__main__":
             action="store_true",
             help="install all dependencies from the feature set",
         )
+        parser.add_argument("-d", "--doc", action="store_true", help="run `cargo doc`")
         parser.add_argument(
             "-c", "--check", action="store_true", help="run `cargo check`"
         )
@@ -418,6 +435,9 @@ if __name__ == "__main__":
 
         if args.check_all:
             check_all()
+
+        if args.doc:
+            doc(features)
 
         if args.build:
             build(features)

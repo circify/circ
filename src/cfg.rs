@@ -4,9 +4,9 @@
 //! * A type [CircCfg] for configuration information.
 //! * Static configuration storage
 //!    * set with [set] and [set_cfg]
-//!    * read with [cfg]
+//!    * read with [cfg()]
 //!    * it can only be set once per process
-//!       * if you want to unit-test your component, we recommend that it **should not** use [cfg].
+//!       * if you want to unit-test your component, we recommend that it **should not** use [cfg()].
 
 use circ_fields::FieldT;
 

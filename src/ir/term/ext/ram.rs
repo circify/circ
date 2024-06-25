@@ -28,8 +28,8 @@ pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
 ///
 /// Takes two arguments:
 ///
-/// * entries: [(val_init_i, val_fin_i)] (len E)
-/// * indices: [idx_i] (len I)
+/// * entries: `[(val_init_i, val_fin_i)]` (len E)
+/// * indices: `[idx_i]` (len I)
 ///
 /// assumes I < E and 0 <= idx_i < E.
 ///

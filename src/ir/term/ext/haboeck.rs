@@ -1,6 +1,6 @@
 //! Witness computation for Haboeck's lookup argument
 //!
-//! https://eprint.iacr.org/2022/1530.pdf
+//! <https://eprint.iacr.org/2022/1530.pdf>
 //!
 //! Given a haystack array of values h1, ..., hN and an array of needles v1, ..., vA, outputs
 //! an array of counts c1, ..., cN such that hI occurs cI times in v1, ..., vA.

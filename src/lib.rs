@@ -4,6 +4,7 @@
 
 #![warn(missing_docs)]
 #![deny(warnings)]
+#![allow(rustdoc::private_intra_doc_links)]
 
 #[macro_use]
 pub mod ir;

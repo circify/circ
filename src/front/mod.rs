@@ -52,7 +52,7 @@ impl Display for Mode {
     }
 }
 
-/// This module contains [FieldList].
+/// This module contains [field_list::FieldList].
 ///
 /// It gets its own module so that its member can be private.
 mod field_list {

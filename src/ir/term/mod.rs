@@ -11,7 +11,7 @@
 //!       * [Sort]: the type of a term
 //!       * [check]: get the type of a term
 //!    * Term construction
-//!       * [term!]: from an operator and a syntactic list of children
+//!       * [term]: from an operator and a syntactic list of children
 //!       * [leaf_term]: from an operator alone
 //!       * [term()]: from an operator and vector of children
 //!    * Term data-structures and algorithms
@@ -182,7 +182,7 @@ pub enum Op {
     Call(Box<CallOp>),
 
     /// Cyclic right rotation of an array
-    /// i.e. (Rot(1) [1,2,3,4]) --> ([4,1,2,3])
+    /// i.e. `(Rot(1) [1,2,3,4]) --> ([4,1,2,3])`
     Rot(usize),
 
     /// Assume that the field element is 0 or 1, and treat it as a boolean.
