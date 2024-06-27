@@ -25,7 +25,7 @@ fn uniq_deri_gcd_eval() {
     let t = text::parse_term(
         b"
         (declare (
-         (pairs (array (mod 17) (tuple (mod 17) bool) 5))
+         (pairs (tuple 5 (tuple (mod 17) bool)))
         )
          (uniq_deri_gcd pairs))",
     );
@@ -35,7 +35,7 @@ fn uniq_deri_gcd_eval() {
         (set_default_modulus 17
         (let
         (
-            (pairs (#l (mod 17) ( (#t #f0 false) (#t #f1 false) (#t #f2 true) (#t #f3 false) (#t #f4 true) )))
+            (pairs (#t (#t #f0 false) (#t #f1 false) (#t #f2 true) (#t #f3 false) (#t #f4 true) ))
         ) false))
         ",
     );
@@ -46,8 +46,8 @@ fn uniq_deri_gcd_eval() {
         (let
         (
           (output (#t
-            (#l (mod 17) ( #f16 #f0 #f0 #f0 #f0 ) ) ; s, from sage
-            (#l (mod 17) ( #f7 #f9 #f0 #f0 #f0 ) ) ; t, from sage
+            (#t #f16 #f0 #f0 #f0 #f0 ) ; s, from sage
+            (#t #f7 #f9 #f0 #f0 #f0 ) ; t, from sage
           ))
         ) false))
         ",
@@ -59,7 +59,7 @@ fn uniq_deri_gcd_eval() {
         (set_default_modulus 17
         (let
         (
-            (pairs (#l (mod 17) ( (#t #f0 true) (#t #f1 true) (#t #f2 true) (#t #f3 false) (#t #f4 true) )))
+            (pairs (#t (#t #f0 true) (#t #f1 true) (#t #f2 true) (#t #f3 false) (#t #f4 true)))
         ) false))
         ",
     );
@@ -70,8 +70,8 @@ fn uniq_deri_gcd_eval() {
         (let
         (
           (output (#t
-            (#l (mod 17) ( #f8 #f9 #f16 #f0 #f0 ) ) ; s, from sage
-            (#l (mod 17) ( #f2 #f16 #f9 #f13 #f0 ) ) ; t, from sage
+            (#t #f8 #f9 #f16 #f0 #f0 ) ; s, from sage
+            (#t #f2 #f16 #f9 #f13 #f0 ) ; t, from sage
           ))
         ) false))
         ",

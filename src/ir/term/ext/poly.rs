@@ -11,40 +11,24 @@ use crate::ir::term::*;
 
 /// Type-check [super::ExtOp::UniqDeriGcd].
 pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
-    if let &[pairs] = arg_sorts {
-        let (key, value, size) = ty::array_or(pairs, "UniqDeriGcd pairs")?;
-        let f = pf_or(key, "UniqDeriGcd pairs: indices must be field")?;
-        let value_tup = ty::tuple_or(value, "UniqDeriGcd entries: value must be a tuple")?;
-        if let &[root, cond] = &value_tup {
-            eq_or(f, root, "UniqDeriGcd pairs: first element must be a field")?;
-            eq_or(
-                cond,
-                &Sort::Bool,
-                "UniqDeriGcd pairs: second element must be a bool",
-            )?;
-            let arr = Sort::new_array(f.clone(), f.clone(), size);
-            Ok(Sort::new_tuple(vec![arr.clone(), arr]))
-        } else {
-            // non-pair entries value
-            Err(TypeErrorReason::Custom(
-                "UniqDeriGcd: pairs value must be a pair".into(),
-            ))
-        }
-    } else {
-        // wrong arg count
-        Err(TypeErrorReason::ExpectedArgs(2, arg_sorts.len()))
-    }
+    let [pairs] = ty::count_or_ref(arg_sorts)?;
+    let (size, value) = ty::homogenous_tuple_or(pairs, "UniqDeriGcd")?;
+    let [root, cond] = ty::count_or(ty::tuple_or(value, "UniqDeriGcd")?)?;
+    let f = pf_or(root, "UniqDeriGcd: first is field")?;
+    eq_or(cond, &Sort::Bool, "UniqDeriGcd pairs: second is bool")?;
+    let coeffs = Sort::new_tuple(vec![f.clone(); size]);
+    Ok(Sort::new_tuple(vec![coeffs.clone(), coeffs]))
 }
 
 /// Evaluate [super::ExtOp::UniqDeriGcd].
 #[cfg(feature = "poly")]
 pub fn eval(args: &[&Value]) -> Value {
     use rug_polynomial::ModPoly;
-    let sort = args[0].sort().as_array().0.clone();
+    let sort = args[0].sort().as_tuple()[0].as_tuple()[0].clone();
     let field = sort.as_pf().clone();
     let mut roots: Vec<Integer> = Vec::new();
-    let deg = args[0].as_array().size;
-    for t in args[0].as_array().values() {
+    let deg = args[0].as_tuple().len();
+    for t in args[0].as_tuple() {
         let tuple = t.as_tuple();
         let cond = tuple[1].as_bool();
         if cond {
@@ -60,7 +44,7 @@ pub fn eval(args: &[&Value]) -> Value {
         let v: Vec<Value> = (0..deg)
             .map(|i| Value::Field(field.new_v(s.get_coefficient(i))))
             .collect();
-        Value::Array(Array::from_vec(sort.clone(), sort.clone(), v))
+        Value::Tuple(v.into())
     };
     let s_cs = coeff_arr(s);
     let t_cs = coeff_arr(t);

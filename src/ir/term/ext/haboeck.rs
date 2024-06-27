@@ -10,7 +10,7 @@
 use crate::ir::term::ty::*;
 use crate::ir::term::*;
 
-/// Type-check [super::ExtOp::UniqDeriGcd].
+/// Type-check [super::ExtOp::Haboeck].
 pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
     let &[haystack, needles] = ty::count_or_ref(arg_sorts)?;
     let (_n, value0) = ty::homogenous_tuple_or(haystack, "haystack must be a tuple")?;
@@ -21,7 +21,7 @@ pub fn check(arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
     Ok(haystack.clone())
 }
 
-/// Evaluate [super::ExtOp::UniqDeriGcd].
+/// Evaluate [super::ExtOp::Haboeck].
 pub fn eval(args: &[&Value]) -> Value {
     let haystack: Vec<FieldV> = args[0]
         .as_tuple()

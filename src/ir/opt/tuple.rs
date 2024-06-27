@@ -143,6 +143,7 @@ impl TupleTree {
             }
         }
     }
+    #[track_caller]
     fn unwrap_non_tuple(self) -> Term {
         match self {
             TupleTree::NonTuple(t) => t,
@@ -245,9 +246,13 @@ fn tuple_free(t: Term) -> bool {
 /// Run the tuple elimination pass.
 pub fn eliminate_tuples(cs: &mut Computation) {
     let mut lifted: TermMap<TupleTree> = TermMap::default();
-    let terms =
-        PostOrderIter::from_roots_and_skips(cs.outputs().iter().cloned(), Default::default());
-    // .chain(cs.precomputes.outputs().values().cloned()),
+    let terms = PostOrderIter::from_roots_and_skips(
+        cs.outputs()
+            .iter()
+            .cloned()
+            .chain(cs.precomputes.outputs().values().cloned()),
+        Default::default(),
+    );
     for t in terms {
         let mut cs: Vec<TupleTree> = t
             .cs()
@@ -269,6 +274,14 @@ pub fn eliminate_tuples(cs: &mut Computation) {
                 debug_assert!(cs.is_empty());
                 let eqs = zip_eq(a.flatten(), b.flatten()).map(|(a, b)| term![Op::Eq; a, b]);
                 TupleTree::NonTuple(term(AND, eqs.collect()))
+            }
+            Op::CStore => {
+                let c = cs.pop().unwrap().unwrap_non_tuple();
+                let v = cs.pop().unwrap();
+                let i = cs.pop().unwrap().unwrap_non_tuple();
+                let a = cs.pop().unwrap();
+                debug_assert!(cs.is_empty());
+                a.bimap(|a, v| term![Op::CStore; a, i.clone(), v, c.clone()], &v)
             }
             Op::Store => {
                 let v = cs.pop().unwrap();
@@ -321,11 +334,11 @@ pub fn eliminate_tuples(cs: &mut Computation) {
         .into_iter()
         .flat_map(|o| lifted.get(&o).unwrap().clone().flatten())
         .collect();
-    //    let os = cs.precomputes.outputs().clone();
-    //    for (name, old_term) in os {
-    //        let new_term = lifted.get(&old_term).unwrap().clone().as_term();
-    //        cs.precomputes.change_output(&name, new_term);
-    //    }
+    let os = cs.precomputes.outputs().clone();
+    for (name, old_term) in os {
+        let new_term = lifted.get(&old_term).unwrap().clone().as_term();
+        cs.precomputes.change_output(&name, new_term);
+    }
     #[cfg(debug_assertions)]
     for o in &cs.outputs {
         if let Some(t) = find_tuple_term(o.clone()) {

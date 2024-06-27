@@ -1381,7 +1381,7 @@ mod test {
         let t = parse_term(
             b"
         (declare (
-         (pairs (array (mod 17) (tuple (mod 17) bool) 5))
+         (pairs (tuple 5 (tuple (mod 17) bool)))
         )
          (uniq_deri_gcd pairs))",
         );

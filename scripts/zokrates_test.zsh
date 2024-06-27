@@ -72,8 +72,6 @@ function pf_test_isolate {
     done
 }
 
-pf_test 2024_05_24_benny_bug
-pf_test 2024_05_31_benny_bug
 r1cs_test_count ./examples/ZoKrates/pf/mm4_cond.zok 120
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
@@ -109,5 +107,8 @@ pf_test arr_str_arr_str
 pf_test var_idx_arr_str_arr_str
 pf_test mm
 pf_test unused_var
+
+pf_test 2024_05_24_benny_bug
+pf_test 2024_05_31_benny_bug
 
 scripts/zx_tests/run_tests.sh

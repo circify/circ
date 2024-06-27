@@ -213,9 +213,7 @@ fn range_check(
     debug_assert!(values.iter().all(|v| check(v) == f_sort));
     let mut ms_hash_inputs = values.clone();
     values.extend(f_sort.elems_iter().take(n));
-    let sorted_term = unmake_array(
-        term![Op::ExtOp(ExtOp::Sort); make_array(f_sort.clone(), f_sort.clone(), values.clone())],
-    );
+    let sorted_term = tuple_terms(term![Op::ExtOp(ExtOp::Sort); term(Op::Tuple, values.clone())]);
     let sorted: Vec<Term> = sorted_term
         .into_iter()
         .enumerate()
@@ -302,10 +300,7 @@ fn derivative_gcd(
     let ns = ns.subspace("uniq");
     let fs = Sort::Field(f.clone());
     let pairs = term(
-        Op::Array(Box::new(ArrayOp {
-            key: fs.clone(),
-            val: Sort::new_tuple(vec![fs.clone(), Sort::Bool]),
-        })),
+        Op::Tuple,
         values
             .clone()
             .into_iter()
@@ -314,8 +309,8 @@ fn derivative_gcd(
             .collect(),
     );
     let two_polys = term![Op::ExtOp(ExtOp::UniqDeriGcd); pairs];
-    let s_coeffs = unmake_array(term![Op::Field(0); two_polys.clone()]);
-    let t_coeffs = unmake_array(term![Op::Field(1); two_polys]);
+    let s_coeffs = tuple_terms(term![Op::Field(0); two_polys.clone()]);
+    let t_coeffs = tuple_terms(term![Op::Field(1); two_polys]);
     let mut decl_poly = |coeffs: Vec<Term>, poly_name: &str| -> Vec<Term> {
         coeffs
             .into_iter()
