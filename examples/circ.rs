@@ -195,6 +195,7 @@ fn main() {
         Backend::Smt { .. } => Mode::Proof,
     };
     let language = determine_language(&options.frontend.language, &options.path);
+    println!("Running frontend");
     let cs = match language {
         #[cfg(all(feature = "smt", feature = "zok"))]
         DeterminedLanguage::Zsharp => {
@@ -233,6 +234,7 @@ fn main() {
             panic!("Missing feature: c");
         }
     };
+    println!("Running IR optimizations");
     let cs = match mode {
         Mode::Opt => opt(
             cs,
@@ -295,8 +297,7 @@ fn main() {
             opt(cs, opts)
         }
     };
-    println!("Done with IR optimization");
-
+    println!("Running backend");
     match options.backend {
         #[cfg(feature = "r1cs")]
         Backend::R1cs {
@@ -306,7 +307,6 @@ fn main() {
             proof_impl,
             ..
         } => {
-            println!("Converting to r1cs");
             let cs = cs.get("main");
             trace!("IR: {}", circ::ir::term::text::serialize_computation(cs));
             let mut r1cs = to_r1cs(cs, cfg());
@@ -314,7 +314,7 @@ fn main() {
                 println!("R1CS stats: {:#?}", r1cs.stats());
             }
 
-            println!("Pre-opt R1cs size: {}", r1cs.constraints().len());
+            println!("Running r1cs optimizations ");
             r1cs = reduce_linearities(r1cs, cfg());
 
             println!("Final R1cs size: {}", r1cs.constraints().len());
@@ -326,7 +326,7 @@ fn main() {
                 ProofAction::Count => (),
                 #[cfg(feature = "bellman")]
                 ProofAction::Setup => {
-                    println!("Generating Parameters");
+                    println!("Running Setup");
                     match proof_impl {
                         ProofImpl::Groth16 => Bellman::<Bls12>::setup_fs(
                             prover_data,
@@ -348,7 +348,7 @@ fn main() {
                 ProofAction::Setup => panic!("Missing feature: bellman"),
                 #[cfg(feature = "bellman")]
                 ProofAction::CpSetup => {
-                    println!("Generating Parameters");
+                    println!("Running CpSetup");
                     match proof_impl {
                         ProofImpl::Groth16 => panic!("Groth16 is not CP"),
                         ProofImpl::Mirage => Mirage::<Bls12>::cp_setup_fs(

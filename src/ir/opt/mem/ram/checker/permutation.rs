@@ -11,19 +11,15 @@ pub(super) fn waksman(
     val_sort: &Sort,
     new_var: &mut impl FnMut(&str, Term) -> Term,
 ) -> Vec<Access> {
-    let f = &cfg.field;
-    let f_s = Sort::Field(f.clone());
     // (1) sort the transcript
     let field_tuples: Vec<Term> = accesses.iter().map(|a| a.to_field_tuple(cfg)).collect();
-    let switch_settings_tuple = term![Op::ExtOp(ExtOp::Waksman); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())];
-    let n = check(&switch_settings_tuple).as_tuple().len();
-    let mut switch_settings: VecDeque<Term> = (0..n)
-        .map(|i| {
-            new_var(
-                &format!("sw{}", i),
-                term![Op::Field(i); switch_settings_tuple.clone()],
-            )
-        })
+    let switch_settings_tuple =
+        term![Op::ExtOp(ExtOp::Waksman); term(Op::Tuple, field_tuples.clone())];
+    let switch_settings_terms = tuple_terms(switch_settings_tuple);
+    let mut switch_settings: VecDeque<Term> = switch_settings_terms
+        .into_iter()
+        .enumerate()
+        .map(|(i, t)| new_var(&format!("sw{}", i), t))
         .collect();
 
     let sorted_field_tuple_values: Vec<Term> =
@@ -69,12 +65,10 @@ pub(super) fn msh(
     assertions: &mut Vec<Term>,
 ) -> Vec<Access> {
     let f = &cfg.field;
-    let f_s = Sort::Field(f.clone());
     // (1) sort the transcript
     let field_tuples: Vec<Term> = accesses.iter().map(|a| a.to_field_tuple(cfg)).collect();
-    let sorted_field_tuple_values: Vec<Term> = unmake_array(
-        term![Op::ExtOp(ExtOp::Sort); make_array(f_s.clone(), check(&field_tuples[0]), field_tuples.clone())],
-    );
+    let sorted_field_tuple_values: Vec<Term> =
+        tuple_terms(term![Op::ExtOp(ExtOp::Sort); term(Op::Tuple, field_tuples.clone())]);
     let mut sorted_accesses: Vec<Access> = sorted_field_tuple_values
         .into_iter()
         .enumerate()

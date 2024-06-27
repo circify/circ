@@ -215,7 +215,7 @@ impl<'a> StagedWitCompEvaluator<'a> {
             rows.sort_by_key(|t| t.1);
             println!("time,op,nanos,counts,nanos_per,arg_sorts");
             for (op, nanos, counts, nanos_per, arg_sorts) in &rows {
-                println!("time,{op},{nanos},{counts},{nanos_per},{arg_sorts}");
+                println!("time,{op},{nanos},{counts},{nanos_per},\"{arg_sorts}\"");
             }
         }
     }

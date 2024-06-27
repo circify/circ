@@ -463,6 +463,7 @@ where
     ) -> Self::Proof {
         assert_eq!(rand.len(), pk.data.num_commitments());
         let rng = &mut rand::thread_rng();
+        #[cfg(debug_assertions)]
         pk.data.check_all(witness);
         let rands: Vec<E::Fr> = rand.iter().map(|r| r.0).collect();
         let mut rng = &mut rand::thread_rng();

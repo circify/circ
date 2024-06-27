@@ -106,7 +106,7 @@ impl ArrayGraph {
                 .collect();
             while let Some(top) = stack.pop() {
                 if ram_terms.insert(top.clone()) {
-                    trace!("Maybe RAM: {}", top);
+                    trace!("Maybe RAM: {}", top.op());
                     for p in ps.get(&top).unwrap() {
                         if right_sort(p, field) {
                             stack.push(p.clone());
