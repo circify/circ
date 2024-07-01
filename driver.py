@@ -125,7 +125,7 @@ def doc(features):
             set of features required
     """
 
-    cmd = ["cargo", "doc", "--document-private-items"]
+    cmd = ["cargo", "doc", "--document-private-items", "--no-deps"]
     if features:
         cmd = cmd + ["--features"] + [",".join(features)]
     log_run_check(cmd)
