@@ -83,8 +83,14 @@ impl OblivRewriter {
                 (
                     if let Some(aa) = self.tups.get(a) {
                         if suitable_const(i) {
-                            trace!("simplify store at {}", i);
-                            Some(term![Op::Update(get_const(i)); aa.clone(), self.get_t(v).clone()])
+                            if matches!(check(aa), Sort::Tuple(..)) {
+                                trace!("simplify store at {}", i);
+                                Some(
+                                    term![Op::Update(get_const(i)); aa.clone(), self.get_t(v).clone()],
+                                )
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
@@ -99,16 +105,20 @@ impl OblivRewriter {
                 let i = &t.cs()[1];
                 if let Some(aa) = self.tups.get(a) {
                     if suitable_const(i) {
-                        trace!("simplify select at {}", i);
-                        let tt = term![Op::Field(get_const(i)); aa.clone()];
-                        (
-                            Some(tt.clone()),
-                            if check(&tt).is_scalar() {
-                                Some(tt)
-                            } else {
-                                None
-                            },
-                        )
+                        if matches!(check(aa), Sort::Tuple(..)) {
+                            trace!("simplify select at {}", i);
+                            let tt = term![Op::Field(get_const(i)); aa.clone()];
+                            (
+                                Some(tt.clone()),
+                                if check(&tt).is_scalar() {
+                                    Some(tt)
+                                } else {
+                                    None
+                                },
+                            )
+                        } else {
+                            (None, None)
+                        }
                     } else {
                         (None, None)
                     }
