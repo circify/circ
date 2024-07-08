@@ -50,6 +50,7 @@ pub fn apply(c: &mut Computation) {
             ns.subspace(format!("setmem{}", i)),
             haystack,
             keys,
+            None,
         ));
     }
     to_assert.push(c.outputs[0].clone());

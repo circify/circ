@@ -16,7 +16,16 @@ use log::debug;
 ///
 /// Takes haystack, needles, and returns a term which should be asserted to ensure that each needle
 /// is in haystack.
-pub fn lookup(c: &mut Computation, ns: Namespace, haystack: Vec<Term>, needles: Vec<Term>) -> Term {
+///
+/// If `original_data` is set, then the keys will be independent of it; otherwise, of
+/// needles/haystack.
+pub fn lookup(
+    c: &mut Computation,
+    ns: Namespace,
+    haystack: Vec<Term>,
+    needles: Vec<Term>,
+    original_data: Option<Vec<Term>>,
+) -> Term {
     debug!(
         "Haboeck lookup haystack {}, needles {}",
         haystack.len(),
@@ -45,12 +54,14 @@ pub fn lookup(c: &mut Computation, ns: Namespace, haystack: Vec<Term>, needles: 
         .collect();
     let key = term(
         Op::new_chall(ns.fqn("key"), f.clone()),
-        haystack
-            .iter()
-            .chain(&needles)
-            .chain(&counts)
-            .cloned()
-            .collect(),
+        original_data.unwrap_or_else(|| {
+            haystack
+                .iter()
+                .chain(&needles)
+                .chain(&counts)
+                .cloned()
+                .collect()
+        }),
     );
     // x_i + k
     let needle_shifts: Vec<Term> = needles
@@ -137,13 +148,15 @@ pub fn check_covering_rom(c: &mut Computation, ns: Namespace, ram: Ram) -> Term 
         }
     }
     assert!(!writes.is_empty());
-    let uhf = UniversalHasher::new(
-        ns.fqn("uhf_key"),
-        f,
-        reads.iter().chain(&writes).flatten().cloned().collect(),
-        writes[0].len(),
-    );
+    let inputs: Vec<_> = reads.iter().chain(&writes).flatten().cloned().collect();
+    let uhf = UniversalHasher::new(ns.fqn("uhf_key"), f, inputs.clone(), writes[0].len());
     let write_hashes = writes.into_iter().map(|a| uhf.hash(a)).collect();
     let read_hashes = reads.into_iter().map(|a| uhf.hash(a)).collect();
-    lookup(c, ns.subspace("scalar"), write_hashes, read_hashes)
+    lookup(
+        c,
+        ns.subspace("scalar"),
+        write_hashes,
+        read_hashes,
+        Some(inputs),
+    )
 }

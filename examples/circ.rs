@@ -322,6 +322,10 @@ fn main() {
                 println!("R1CS stats: {:#?}", r1cs.stats());
             }
             let (prover_data, verifier_data) = r1cs.finalize(cs);
+            println!(
+                "Final R1cs rounds: {}",
+                prover_data.precompute.stage_sizes().count() - 1
+            );
             match action {
                 ProofAction::Count => (),
                 #[cfg(feature = "bellman")]

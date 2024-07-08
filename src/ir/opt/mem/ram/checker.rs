@@ -257,7 +257,7 @@ pub fn haboeck_range_check(
     let ns = ns.subspace("range");
     let f_sort = Sort::Field(f.clone());
     let haystack: Vec<Term> = f_sort.elems_iter().take(n).collect();
-    assertions.push(rom::lookup(c, ns, haystack, values));
+    assertions.push(rom::lookup(c, ns, haystack, values, None));
 }
 
 /// Ensure that each element of `values` is in `[0, n)`.
