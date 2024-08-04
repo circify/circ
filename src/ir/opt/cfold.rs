@@ -47,7 +47,7 @@ fn new_tuple(children: Vec<Term>) -> Term {
         .map(|c| c.as_value_opt().cloned())
         .collect::<Option<_>>()
         .map(|v| const_(Value::Tuple(v)))
-        .unwrap_or(term(Op::Tuple, children))
+        .unwrap_or_else(|| term(Op::Tuple, children))
 }
 
 /// Fold away operators over constants.
