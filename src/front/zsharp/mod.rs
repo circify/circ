@@ -1251,7 +1251,7 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{e}"))
             }
             ast::Statement::Assertion(e) => {
-                match self.expr_impl_::<true>(&e.expression).and_then(|v| {
+                match self.expr_impl_::<false>(&e.expression).and_then(|v| {
                     const_bool(v)
                         .ok_or_else(|| "interpreting expr as const bool failed".to_string())
                 }) {
