@@ -73,6 +73,7 @@ function pf_test_isolate {
 }
 
 r1cs_test_count ./examples/ZoKrates/pf/mm4_cond.zok 120
+r1cs_test_count ./examples/ZoKrates/pf/const_linear_lookup.zok 20
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
 r1cs_test ./third_party/ZoKrates/zokrates_stdlib/stdlib/ecc/edwardsOrderCheck.zok

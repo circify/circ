@@ -1026,6 +1026,93 @@ impl Sort {
     pub fn is_scalar(&self) -> bool {
         !matches!(self, Sort::Tuple(..) | Sort::Array(..) | Sort::Map(..))
     }
+
+    /// Is this sort a group?
+    pub fn is_group(&self) -> bool {
+        match self {
+            Sort::BitVector(_) | Sort::Int | Sort::Field(_) | Sort::Bool => true,
+            Sort::F32 | Sort::F64 | Sort::Array(_) | Sort::Map(_) => false,
+            Sort::Tuple(fields) => fields.iter().all(|f| f.is_group()),
+        }
+    }
+
+    /// The (n-ary) group operation for these terms.
+    pub fn group_add_nary(&self, ts: Vec<Term>) -> Term {
+        debug_assert!(ts.iter().all(|t| &check(t) == self));
+        match self {
+            Sort::BitVector(_) => term(BV_ADD, ts),
+            Sort::Bool => term(XOR, ts),
+            Sort::Field(_) => term(PF_ADD, ts),
+            Sort::Int => term(INT_ADD, ts),
+            Sort::Tuple(sorts) => term(
+                Op::Tuple,
+                sorts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, sort)| {
+                        sort.group_add_nary(
+                            ts.iter()
+                                .map(|t| term(Op::Field(i), vec![t.clone()]))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
+            _ => panic!("Not a group: {}", self),
+        }
+    }
+
+    /// Group inverse
+    pub fn group_neg(&self, t: Term) -> Term {
+        debug_assert_eq!(&check(&t), self);
+        match self {
+            Sort::BitVector(_) => term(BV_NEG, vec![t]),
+            Sort::Bool => term(NOT, vec![t]),
+            Sort::Field(_) => term(PF_NEG, vec![t]),
+            Sort::Int => term(
+                INT_MUL,
+                vec![leaf_term(Op::new_const(Value::Int(Integer::from(-1i8)))), t],
+            ),
+            Sort::Tuple(sorts) => term(
+                Op::Tuple,
+                sorts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, sort)| sort.group_neg(term(Op::Field(i), vec![t.clone()])))
+                    .collect(),
+            ),
+            _ => panic!("Not a group: {}", self),
+        }
+    }
+
+    /// Group identity
+    pub fn group_identity(&self) -> Term {
+        match self {
+            Sort::BitVector(n_bits) => bv_lit(0, *n_bits),
+            Sort::Bool => bool_lit(false),
+            Sort::Field(f) => pf_lit(f.new_v(0)),
+            Sort::Int => leaf_term(Op::new_const(Value::Int(Integer::from(0i8)))),
+            Sort::Tuple(sorts) => term(
+                Op::Tuple,
+                sorts.iter().map(|sort| sort.group_identity()).collect(),
+            ),
+            _ => panic!("Not a group: {}", self),
+        }
+    }
+
+    /// Group operation
+    pub fn group_add(&self, s: Term, t: Term) -> Term {
+        debug_assert_eq!(&check(&s), self);
+        debug_assert_eq!(&check(&t), self);
+        self.group_add_nary(vec![s, t])
+    }
+
+    /// Group elimination
+    pub fn group_sub(&self, s: Term, t: Term) -> Term {
+        debug_assert_eq!(&check(&s), self);
+        debug_assert_eq!(&check(&t), self);
+        self.group_add(s, self.group_neg(t))
+    }
 }
 
 mod hc {
