@@ -65,7 +65,10 @@ pub enum Opt {
 pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) -> Computations {
     for c in cs.comps.values() {
         trace!("Before all opts: {}", text::serialize_computation(c));
-        info!("Before all opts: {} terms", c.stats().main.n_terms);
+        info!(
+            "Before all opts: {} terms",
+            c.stats().main.n_terms + c.stats().prec.n_terms
+        );
         debug!("Before all opts: {:#?}", c.stats());
         debug!("Before all opts: {:#?}", c.detailed_stats());
     }
@@ -167,7 +170,11 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                     fits_in_bits_ip::fits_in_bits_ip(c);
                 }
             }
-            info!("After {:?}: {} terms", i, c.stats().main.n_terms);
+            info!(
+                "After {:?}: {} terms",
+                i,
+                c.stats().main.n_terms + c.stats().prec.n_terms
+            );
             debug!("After {:?}: {:#?}", i, c.stats());
             trace!("After {:?}: {}", i, text::serialize_computation(c));
             #[cfg(debug_assertions)]

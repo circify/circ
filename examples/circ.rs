@@ -326,6 +326,11 @@ fn main() {
                 "Final R1cs rounds: {}",
                 prover_data.precompute.stage_sizes().count() - 1
             );
+            println!(
+                "Final Witext steps: {}, arguments: {}",
+                prover_data.precompute.num_steps(),
+                prover_data.precompute.num_step_args()
+            );
             match action {
                 ProofAction::Count => (),
                 #[cfg(feature = "bellman")]

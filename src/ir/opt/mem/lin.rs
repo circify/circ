@@ -64,11 +64,47 @@ impl RewritePass for Linearizer {
                                 .unwrap_or_else(|| a.val.default_term()),
                         )
                     } else {
-                        let mut fields = (0..a.size).map(|idx| term![Op::Field(idx); tup.clone()]);
-                        let first = fields.next().unwrap();
-                        Some(a.key.elems_iter().take(a.size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
-                            term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
-                        }))
+                        let value_sort = check(tup).as_tuple()[0].clone();
+                        if value_sort.is_group() {
+                            // if values are a group
+                            // then emit v0 + ite(idx == i1, v1 - v0, 0) + ... it(idx = iN, vN - v0, 0)
+                            // where  +, -, 0 are defined by the group.
+                            //
+                            // we do this because if the values are constant, then the above sum is
+                            // linear, which is very nice for most backends.
+                            let mut fields =
+                                (0..a.size).map(|idx| term![Op::Field(idx); tup.clone()]);
+                            let first = fields.next().unwrap();
+                            let zero = value_sort.group_identity();
+                            Some(
+                                value_sort.group_add_nary(
+                                    std::iter::once(first.clone())
+                                        .chain(
+                                            a.key
+                                                .elems_iter()
+                                                .take(a.size)
+                                                .skip(1)
+                                                .zip(fields)
+                                                .map(|(idx_c, field)| {
+                                                    term![Op::Ite;
+                                                        term![Op::Eq; idx.clone(), idx_c],
+                                                        value_sort.group_sub(field, first.clone()),
+                                                        zero.clone()
+                                                    ]
+                                                }),
+                                        )
+                                        .collect(),
+                                ),
+                            )
+                        } else {
+                            // otherwise, ite(idx == iN, vN, ... ite(idx == i1, v1, v0) ... )
+                            let mut fields =
+                                (0..a.size).map(|idx| term![Op::Field(idx); tup.clone()]);
+                            let first = fields.next().unwrap();
+                            Some(a.key.elems_iter().take(a.size).skip(1).zip(fields).fold(first, |acc, (idx_c, field)| {
+                                term![Op::Ite; term![Op::Eq; idx.clone(), idx_c], field, acc]
+                            }))
+                        }
                     }
                 } else {
                     unreachable!()

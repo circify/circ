@@ -80,6 +80,16 @@ impl StagedWitComp {
     pub fn num_stage_inputs(&self, n: usize) -> usize {
         self.stages[n].inputs.len()
     }
+
+    /// Number of steps
+    pub fn num_steps(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// Number of step arguments
+    pub fn num_step_args(&self) -> usize {
+        self.step_args.len()
+    }
 }
 
 /// Evaluator interface

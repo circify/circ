@@ -1,0 +1,23 @@
+struct T {
+    field v
+    field w
+    field x
+    field y
+    field z
+}
+
+const T[9] TABLE = [
+    T { v: 1, w: 12, x: 13, y: 14, z: 15 },
+    T { v: 2, w: 22, x: 23, y: 24, z: 25 },
+    T { v: 3, w: 32, x: 33, y: 34, z: 35 },
+    T { v: 4, w: 42, x: 43, y: 44, z: 45 },
+    T { v: 5, w: 52, x: 53, y: 54, z: 55 },
+    T { v: 6, w: 62, x: 63, y: 64, z: 65 },
+    T { v: 7, w: 72, x: 73, y: 74, z: 75 },
+    T { v: 8, w: 82, x: 83, y: 84, z: 85 },
+    T { v: 9, w: 92, x: 93, y: 94, z: 95 }
+]
+
+def main(field i) -> field:
+    T t = TABLE[i]
+    return t.v + t.w + t.x + t.y + t.z

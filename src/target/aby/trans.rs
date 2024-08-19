@@ -904,8 +904,6 @@ pub fn to_aby(cs: Computations, path: &Path, lang: &str, cm: &str, ss: &str) {
                 panic!("Unsupported sharing scheme: {}", ss);
             }
         };
-        #[cfg(feature = "bench")]
-        println!("LOG: Assignment {}: {:?}", name, now.elapsed());
         s_map.insert(name.to_string(), assignments);
     }
 

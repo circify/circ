@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use circ::cfg::clap::{self, Parser};
 use circ::ir::term::*;
 use circ::target::aby::assignment::ilp;
