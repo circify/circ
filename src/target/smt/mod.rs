@@ -365,9 +365,7 @@ pub fn check_sat(t: &Term) -> bool {
     let mut solver = make_solver((), false, false);
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(v) = &c.op() {
-            solver
-                .declare_const(&SmtSymDisp(&*v.name), &v.sort)
-                .unwrap();
+            solver.declare_const(SmtSymDisp(&*v.name), &v.sort).unwrap();
         }
     }
     assert!(check(t) == Sort::Bool);
@@ -380,9 +378,7 @@ fn get_model_solver(t: &Term, inc: bool) -> rsmt2::Solver<Parser> {
     //solver.path_tee("solver_com").unwrap();
     for c in PostOrderIter::new(t.clone()) {
         if let Op::Var(v) = &c.op() {
-            solver
-                .declare_const(&SmtSymDisp(&*v.name), &v.sort)
-                .unwrap();
+            solver.declare_const(SmtSymDisp(&*v.name), &v.sort).unwrap();
         }
     }
     assert!(check(t) == Sort::Bool);
@@ -590,13 +586,13 @@ mod test {
         let mut solver = make_solver((), false, false);
         for (v, val) in vs {
             let s = val.sort();
-            solver.declare_const(&SmtSymDisp(&v), &s).unwrap();
+            solver.declare_const(SmtSymDisp(&v), &s).unwrap();
             solver
-                .assert(&term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
+                .assert(term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
                 .unwrap();
         }
         let val = eval(&t, vs);
-        solver.assert(&term![Op::Eq; t, const_(val)]).unwrap();
+        solver.assert(term![Op::Eq; t, const_(val)]).unwrap();
         solver.check_sat().unwrap()
     }
 
@@ -605,14 +601,14 @@ mod test {
         let mut solver = make_solver((), false, false);
         for (v, val) in vs {
             let s = val.sort();
-            solver.declare_const(&SmtSymDisp(&v), &s).unwrap();
+            solver.declare_const(SmtSymDisp(&v), &s).unwrap();
             solver
-                .assert(&term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
+                .assert(term![Op::Eq; var(v.to_string(), s), const_(val.clone())])
                 .unwrap();
         }
         let val = eval(&t, vs);
         solver
-            .assert(&term![Op::Not; term![Op::Eq; t, const_(val)]])
+            .assert(term![Op::Not; term![Op::Eq; t, const_(val)]])
             .unwrap();
         solver.check_sat().unwrap()
     }

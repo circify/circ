@@ -18,10 +18,6 @@
 //!
 //! Each challenge term c that depends on t is replaced with a variable v.
 //! Let t' denote a rewritten term.
-//!
-//! Rules:
-//! * round(v) >=
-//! round(v
 use log::{debug, trace};
 
 use std::cell::RefCell;

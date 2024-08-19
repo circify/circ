@@ -339,7 +339,7 @@ pub trait Embeddable {
     ///    * `name`: the name
     ///    * `visibility`: who knows it
     ///    * `precompute`: an optional term for pre-computing the values of this input. If a party
-    ///    knows the inputs to the precomputation, they can use the precomputation.
+    ///      knows the inputs to the precomputation, they can use the precomputation.
     fn declare_input(
         &self,
         ctx: &mut CirCtx,
