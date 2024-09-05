@@ -118,6 +118,9 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 Ty::Field => Ok(ast::DecimalSuffix::Field(ast::FieldSuffix {
                     span: dle.span,
                 })),
+                Ty::Integer => Ok(ast::DecimalSuffix::Integer(ast::IntegerSuffix {
+                    span: dle.span
+                })),
                 _ => Err(
                     "ZConstLiteralRewriter: rewriting DecimalLiteralExpression to incompatible type"
                         .to_string(),
@@ -344,6 +347,15 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 .into());
         }
         walk_u32_type(self, u32ty)
+    }
+
+    fn visit_integer_type(&mut self, integerty: &mut ast::IntegerType<'ast>) -> ZVisitorResult {
+        if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Integer)) {
+            return Err("ZConstLiteralRewriter: integerty type mismatch"
+                .to_string()
+                .into());
+        }
+        walk_integer_type(self, integerty)
     }
 
     fn visit_u64_type(&mut self, u64ty: &mut ast::U64Type<'ast>) -> ZVisitorResult {

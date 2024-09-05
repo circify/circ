@@ -171,7 +171,7 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 [[package]]
 name = "bellman"
 version = "0.13.1"
-source = "git+https://github.com/alex-ozdemir/bellman.git?branch=mirage#94b292b20bcef1db9d8ee1704a93cd4920088388"
+source = "git+https://github.com/alex-ozdemir/bellman.git?branch=mirage#51b112df363ef5e894bc0c8da42fcb19962b9b02"
 dependencies = [
  "bitvec",
  "blake2s_simd",
@@ -187,6 +187,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "rayon",
+ "serde",
  "subtle",
 ]
 

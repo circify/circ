@@ -414,7 +414,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             },
             Pow => match &bt {
                 // XXX does POW operator really require U32 RHS?
-                Field(_) => Ok((Basic(bt), Basic(U32(ast::U32Type { span: be.span })))),
+                Field(_) | Integer(_) => Ok((Basic(bt), Basic(U32(ast::U32Type { span: be.span })))),
                 _ => Err(ZVisitorError(
                     "ZStatementWalker: pow operator must take Field LHS and U32 RHS".to_owned(),
                 )),
@@ -515,6 +515,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                         (DS::U16(_), U16(_)) => Ok(()),
                         (DS::U32(_), U32(_)) => Ok(()),
                         (DS::U64(_), U64(_)) => Ok(()),
+                        (DS::Integer(_), Integer(_)) => Ok(()),
                         _ => Err(ZVisitorError(format!(
                             "ZStatementWalker: DecimalLiteral wanted {:?} found {:?}:\n{}",
                             &bt,
@@ -532,6 +533,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                         U16(_) => Ok(DS::U16(ast::U16Suffix { span: dle.span })),
                         U32(_) => Ok(DS::U32(ast::U32Suffix { span: dle.span })),
                         U64(_) => Ok(DS::U64(ast::U64Suffix { span: dle.span })),
+                        Integer(_) => Ok(DS::Integer(ast::IntegerSuffix { span: dle.span })),
                     }
                     .map(|ds| {
                         dle.suffix.replace(ds);

@@ -17,7 +17,7 @@ pub fn extract(
     scalar_input_values: &mut HashMap<String, Value>,
 ) -> Result<T, String> {
     match ty {
-        Ty::Bool | Ty::Field | Ty::Uint(..) => {
+        Ty::Bool | Ty::Field | Ty::Uint(..) | Ty::Integer => {
             let ir_val = scalar_input_values
                 .remove(name)
                 .ok_or_else(|| format!("Could not find scalar variable {name} in the input map"))?;

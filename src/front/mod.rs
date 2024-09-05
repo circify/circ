@@ -58,7 +58,7 @@ impl Display for Mode {
 mod field_list {
     use std::collections::BTreeMap;
 
-    #[derive(Clone, PartialEq, Eq)]
+    #[derive(Clone, PartialEq, Eq, Hash)]
     pub struct FieldList<T> {
         // must be kept in sorted order
         list: Vec<(String, T)>,

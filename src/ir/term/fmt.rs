@@ -1,8 +1,9 @@
 //! Machinery for formatting IR types
 use super::{
     check, ext, map::Map, Array, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp, BvUnOp,
-    ComputationMetadata, FpBinOp, FpBinPred, FpUnOp, FpUnPred, IntBinPred, IntNaryOp, Node, Op,
-    PartyId, PfNaryOp, PfUnOp, PostOrderIter, Sort, Term, TermMap, Value, VariableMetadata,
+    ComputationMetadata, FpBinOp, FpBinPred, FpUnOp, FpUnPred, IntBinOp, IntBinPred, IntNaryOp,
+    IntUnOp, Node, Op, PartyId, PfNaryOp, PfUnOp, PostOrderIter, Sort, Term, TermMap, Value,
+    VariableMetadata,
 };
 use crate::cfg::{cfg, is_cfg_set};
 
@@ -146,6 +147,25 @@ impl Display for IntNaryOp {
         match self {
             IntNaryOp::Add => write!(f, "intadd"),
             IntNaryOp::Mul => write!(f, "intmul"),
+        }
+    }
+}
+
+impl Display for IntBinOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            IntBinOp::Div => write!(f, "intdiv"),
+            IntBinOp::Sub => write!(f, "intsub"),
+            IntBinOp::Rem => write!(f, "intrem"),
+            IntBinOp::ModInv => write!(f, "intmodinv"),
+        }
+    }
+}
+
+impl Display for IntUnOp {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match self {
+            IntUnOp::Neg => write!(f, "intneg"),
         }
     }
 }
@@ -348,7 +368,13 @@ impl DisplayIr for Op {
             Op::PfNaryOp(a) => write!(f, "{a}"),
             Op::PfDiv => write!(f, "/"),
             Op::IntNaryOp(a) => write!(f, "{a}"),
+            Op::IntBinOp(a) => write!(f, "{a}"),
+            Op::IntSize => write!(f, "intsize"),
+            Op::IntToBv(a) => write!(f, "(int2bv {a})"),
+            Op::IntUnOp(a) => write!(f, "{a}"),
             Op::IntBinPred(a) => write!(f, "{a}"),
+            Op::IntToPf(a) => write!(f, "(int-to-pf {})", a.modulus()),
+            Op::PfToInt => write!(f, "pf-to-int"),
             Op::UbvToPf(a) => write!(f, "(bv2pf {})", a.modulus()),
             Op::PfChallenge(c) => write!(f, "(challenge {} {})", c.name, c.field.modulus()),
             Op::Witness(n) => write!(f, "(witness {})", n),

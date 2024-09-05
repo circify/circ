@@ -21,6 +21,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 use zokrates_pest_ast as ast;
+use std::time;
 
 use term::*;
 use zvisit::{ZConstLiteralRewriter, ZGenericInf, ZStatementWalker, ZVisitorMut};
@@ -34,6 +35,31 @@ pub struct Inputs {
     pub file: PathBuf,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
+}
+
+
+#[allow(dead_code)]
+fn const_value_simple(term: &Term) -> Option<Value> {
+    match term.op() {
+        Op::Const(v) => Some((**v).clone()),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+fn const_bool_simple(t: T) -> Option<bool> {
+   match const_value_simple(&t.term) {
+      Some(Value::Bool(b)) => Some(b),
+      _ => None
+   } 
+}
+
+#[allow(dead_code)]
+fn const_val_simple(a: T) -> Result<T, String> {
+    match const_value_simple(&a.term) {
+        Some(v) => Ok(T::new(a.ty, leaf_term(Op::new_const(v)))),
+        _ => Err(format!("{} is not a constant value", &a)),
+    }
 }
 
 /// The Z# front-end. Implements [FrontEnd].
@@ -102,7 +128,11 @@ struct ZGen<'ast> {
     challenge_count: Cell<usize>,
     isolate_asserts: bool,
     in_witness_gen: Cell<bool>,
+    fn_call_memoization: RefCell<HashMap<FnCallImplInput, T>>,
 }
+
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+struct FnCallImplInput(bool, Vec<T>, Vec<(String,T)>, PathBuf, String);
 
 impl<'ast> Drop for ZGen<'ast> {
     fn drop(&mut self) {
@@ -115,6 +145,7 @@ impl<'ast> Drop for ZGen<'ast> {
         drop(self.crets_stack.take());
         drop(self.lhs_ty.take());
         drop(self.ret_ty_stack.take());
+        drop(self.fn_call_memoization.take());
 
         // force garbage collection
         garbage_collect();
@@ -179,6 +210,7 @@ impl<'ast> ZGen<'ast> {
             challenge_count: Cell::new(0),
             isolate_asserts,
             in_witness_gen: Cell::new(false),
+            fn_call_memoization: Default::default(),
         };
         this.circ
             .borrow()
@@ -229,6 +261,101 @@ impl<'ast> ZGen<'ast> {
                     ))
                 } else {
                     uint_to_bits(args.pop().unwrap())
+                }
+            }
+
+            "integer_to_field" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 1",
+                        args.len(),
+                        f_name
+                    ))
+                } else if generics.len() != 0 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 0",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    integer_to_field(args.pop().unwrap())
+                }
+            }
+            "field_to_integer" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 1",
+                        args.len(),
+                        f_name
+                    ))
+                } else if generics.len() != 0 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 0",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    field_to_integer(args.pop().unwrap())
+                }
+            }
+            "int_to_bits" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 1",
+                        args.len(),
+                        f_name
+                    ))
+                } else if generics.len() != 1 {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 1",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    let nbits =
+                        const_int(generics.pop().unwrap())?
+                            .to_usize()
+                            .ok_or_else(|| {
+                                "builtin_call failed to convert unpack's N to usize".to_string()
+                            })?;
+                    int_to_bits(args.pop().unwrap(), nbits)
+                }
+            }
+            "int_size" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 1",
+                        args.len(),
+                        f_name
+                    ))
+                } else if !generics.is_empty() {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 0",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    int_size(args.pop().unwrap())
+                }
+            }
+
+            "int_modinv" => {
+                if args.len() != 2 {
+                    Err(format!(
+                        "Got {} args to EMBED/{}, expected 2",
+                        args.len(),
+                        f_name
+                    ))
+                } else if !generics.is_empty() {
+                    Err(format!(
+                        "Got {} generic args to EMBED/{}, expected 0",
+                        generics.len(),
+                        f_name
+                    ))
+                } else {
+                    let modulus = args.pop().unwrap();
+                    let value = args.pop().unwrap();
+                    int_modinv(value, modulus)
                 }
             }
             "u8_from_bits" | "u16_from_bits" | "u32_from_bits" | "u64_from_bits" => {
@@ -350,6 +477,21 @@ impl<'ast> ZGen<'ast> {
                     Ok(uint_lit(cfg().field().modulus().significant_bits(), 32))
                 }
             }
+            "get_field_modulus" => {
+                if !args.is_empty() {
+                    Err(format!(
+                        "Got {} args to EMBED/get_field_size, expected 0",
+                        args.len()
+                    ))
+                } else if !generics.is_empty() {
+                    Err(format!(
+                        "Got {} generic args to EMBED/get_field_size, expected 0",
+                        generics.len()
+                    ))
+                } else {
+                    Ok(T::new_integer(cfg().field().modulus()))
+                }
+            }
             "sample_challenge" => {
                 if args.len() != 1 {
                     Err(format!(
@@ -435,7 +577,8 @@ impl<'ast> ZGen<'ast> {
         };
         let new =
             loc_store(old, &zaccs[..], val)
-                .and_then(|n| if strict { const_val(n) } else { Ok(n) })?;
+                .map(const_fold)
+                .and_then(|n| if strict { const_val_simple(n) } else { Ok(n) })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -483,6 +626,9 @@ impl<'ast> ZGen<'ast> {
                     }
                     Some(ast::DecimalSuffix::Field(_)) => {
                         Ok(field_lit(Integer::from_str_radix(vstr, 10).unwrap()))
+                    }
+                    Some(ast::DecimalSuffix::Integer(_)) => {
+                        Ok(T::new_integer(vstr.parse::<Integer>().unwrap()))
                     }
                     _ => Err("Could not infer literal type. Annotation needed.".to_string()),
                 }
@@ -570,7 +716,7 @@ impl<'ast> ZGen<'ast> {
             .map(|cgv| match cgv {
                 ast::ConstantGenericValue::Value(l) => self.literal_(l),
                 ast::ConstantGenericValue::Identifier(i) => {
-                    self.identifier_impl_::<IS_CNST>(i).and_then(const_val)
+                    self.identifier_impl_::<IS_CNST>(i).and_then(const_val_simple)
                 }
                 ast::ConstantGenericValue::Underscore(_) => Err(
                     "explicit_generic_values got non-monomorphized generic argument".to_string(),
@@ -580,6 +726,7 @@ impl<'ast> ZGen<'ast> {
             .map(|(g, n)| Ok((n.value, g?)))
             .collect()
     }
+
 
     fn function_call_impl_<const IS_CNST: bool>(
         &self,
@@ -604,6 +751,38 @@ impl<'ast> ZGen<'ast> {
         let generics = ZGenericInf::<IS_CNST>::new(self, f, &f_path, &f_name)
             .unify_generic(egv, exp_ty, arg_tys)?;
 
+        let mut generic_vec = generics.clone().into_iter().collect::<Vec<_>>();
+        generic_vec.sort_by(|(a,_), (b,_)| a.cmp(&b));
+        let before = time::Instant::now();
+
+        let input = FnCallImplInput(IS_CNST, args.clone(), generic_vec.clone(), f_path.clone(), f_name.clone());
+        let cached_value = self.fn_call_memoization.borrow().get(&input).cloned();
+
+        let ret = if let Some(value) = cached_value {
+            Ok(value)
+        } else {
+            debug!("successfully memoized {} {:?}", f_name, f_path);
+            self.function_call_impl_inner_::<IS_CNST>(f, args, generics, f_path.clone(), f_name.clone())
+                .map(|v| {
+                    self.fn_call_memoization.borrow_mut().insert(input, v.clone());
+                    v
+                })
+        };
+        let dur = (time::Instant::now() - before).as_millis();
+        if dur > 50 {
+            info!("{} ms to process {} {:?}", dur, &f_name, &f_path);
+        }
+        ret
+    }
+
+    fn function_call_impl_inner_<const IS_CNST: bool>(
+        &self,
+        f: &ast::FunctionDefinition<'ast>,
+        args: Vec<T>,
+        generics: HashMap<String,T>,
+        f_path: PathBuf,
+        f_name: String,
+    ) -> Result<T, String> {
         if self.stdlib.is_embed(&f_path) {
             let mut generics = generics;
             let generics = f
@@ -696,11 +875,11 @@ impl<'ast> ZGen<'ast> {
                 }
             }
 
-            self.maybe_garbage_collect();
             Ok(ret)
         }
     }
 
+    #[allow(dead_code)]
     fn maybe_garbage_collect(&self) {
         let est = self.gc_depth_estimate.get();
         let cur = self.file_stack_depth();
@@ -1067,8 +1246,16 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
+    fn expr_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T,String> {
+        self.expr_impl_inner_::<IS_CNST>(e)
+            .map(const_fold)
+            .and_then(|v| if IS_CNST {const_val_simple(v)} else {Ok(v)})
+            .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
+    }
+
+
     // XXX(rsw) make Result<T, (String, Span)> to give more precise error messages?
-    fn expr_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
+    fn expr_impl_inner_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
         if IS_CNST {
             debug!("Const expr: {}", e.span().as_str());
         } else {
@@ -1077,7 +1264,7 @@ impl<'ast> ZGen<'ast> {
 
         match e {
             ast::Expression::Ternary(u) => {
-                match self.expr_impl_::<true>(&u.first).ok().and_then(const_bool) {
+                match self.expr_impl_::<false>(&u.first).ok().and_then(const_bool_simple) {
                     Some(true) => self.expr_impl_::<IS_CNST>(&u.second),
                     Some(false) => self.expr_impl_::<IS_CNST>(&u.third),
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),
@@ -1177,8 +1364,6 @@ impl<'ast> ZGen<'ast> {
                 .collect::<Result<Vec<_>, String>>()
                 .and_then(|members| Ok(T::new_struct(self.canon_struct(&u.ty.value)?, members))),
         }
-        .and_then(|res| if IS_CNST { const_val(res) } else { Ok(res) })
-        .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
     fn canon_struct(&self, id: &str) -> Result<String, String> {
@@ -1251,12 +1436,10 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{e}"))
             }
             ast::Statement::Assertion(e) => {
-                match self.expr_impl_::<true>(&e.expression).and_then(|v| {
-                    const_bool(v)
-                        .ok_or_else(|| "interpreting expr as const bool failed".to_string())
-                }) {
-                    Ok(true) => Ok(()),
-                    Ok(false) => Err(format!(
+                let expr = self.expr_impl_::<false>(&e.expression);
+                match expr.clone().ok().and_then(const_bool_simple) {
+                    Some(true) => Ok(()),
+                    Some(false) => Err(format!(
                         "Const assert failed: {} at\n{}",
                         e.message
                             .as_ref()
@@ -1264,13 +1447,12 @@ impl<'ast> ZGen<'ast> {
                             .unwrap_or("(no error message given)"),
                         span_to_string(e.expression.span()),
                     )),
-                    Err(err) if IS_CNST => Err(format!(
-                        "Const assert expression eval failed {} at\n{}",
-                        err,
+                    None if IS_CNST => Err(format!(
+                        "Const assert expression eval failed at\n{}",
                         span_to_string(e.expression.span()),
                     )),
                     _ => {
-                        let b = bool(self.expr_impl_::<false>(&e.expression)?)?;
+                        let b = bool(expr?)?;
                         self.assert(b)?;
                         Ok(())
                     }
@@ -1299,6 +1481,7 @@ impl<'ast> ZGen<'ast> {
                     Ty::Uint(16) => T::new_u16,
                     Ty::Uint(32) => T::new_u32,
                     Ty::Uint(64) => T::new_u64,
+                    Ty::Integer => T::new_integer,
                     _ => {
                         return Err(format!(
                             "Iteration variable must be Field or Uint, got {ty}"
@@ -1657,6 +1840,7 @@ impl<'ast> ZGen<'ast> {
             ast::Type::Basic(ast::BasicType::U64(_)) => Ok(Ty::Uint(64)),
             ast::Type::Basic(ast::BasicType::Boolean(_)) => Ok(Ty::Bool),
             ast::Type::Basic(ast::BasicType::Field(_)) => Ok(Ty::Field),
+            ast::Type::Basic(ast::BasicType::Integer(_)) => Ok(Ty::Integer),
             ast::Type::Array(a) => {
                 let b = self.type_impl_::<IS_CNST>(&lift(&a.ty));
                 a.dimensions
@@ -2128,6 +2312,7 @@ fn type_span<'ast, 'a>(ty: &'a ast::Type<'ast>) -> &'a ast::Span<'ast> {
             U16(u) => &u.span,
             U32(u) => &u.span,
             U64(u) => &u.span,
+            Integer(u) => &u.span,
         },
     }
 }

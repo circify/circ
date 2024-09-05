@@ -2,8 +2,8 @@
 
 use super::{
     check, const_, extras, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
-    BvUnOp, FieldToBv, FxHashMap, IntBinPred, IntNaryOp, Integer, Node, Op, PfNaryOp, PfUnOp, Sort,
-    Term, TermMap, Value,
+    BvUnOp, FieldToBv, FxHashMap, IntBinOp, IntBinPred, IntNaryOp, IntUnOp, Integer, Node, Op,
+    PfNaryOp, PfUnOp, Sort, Term, TermMap, Value,
 };
 use crate::cfg::cfg_or_default;
 
@@ -214,6 +214,30 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                     IntNaryOp::Mul => std::ops::Mul::mul,
                 },
             )
+        }),
+
+        Op::IntBinOp(o) => Value::Int({
+            let a = args[0].as_int().clone();
+            let b = args[1].as_int().clone();
+            match o {
+                IntBinOp::Sub => a - b,
+                IntBinOp::Div => a / b,
+                IntBinOp::Rem => a % b,
+                IntBinOp::ModInv => a.invert(&b).expect("unable to find modular inverse"),
+            }
+        }),
+        Op::IntSize => Value::BitVector(BitVector::new(
+            Integer::from(args[0].as_int().significant_bits()),
+            32,
+        )),
+        Op::IntToBv(a) => Value::BitVector(BitVector::new(args[0].as_int().clone(), *a)),
+        Op::IntToPf(fty) => Value::Field(fty.new_v(args[0].as_int())),
+        Op::PfToInt => Value::Int(args[0].as_pf().i()),
+        Op::IntUnOp(o) => Value::Int({
+            let a = args[0].as_int().clone();
+            match o {
+                IntUnOp::Neg => -a,
+            }
         }),
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
         Op::PfChallenge(c) => Value::Field(eval_pf_challenge(&c.name, &c.field)),

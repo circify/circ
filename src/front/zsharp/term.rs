@@ -10,8 +10,9 @@ use crate::front::field_list::FieldList;
 use crate::ir::opt::cfold::fold as constant_fold;
 use crate::ir::term::*;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
+    Integer,
     Uint(usize),
     Bool,
     Field,
@@ -44,6 +45,7 @@ impl Display for Ty {
                 dims.iter().try_for_each(|d| write!(f, "[{d}]"))
             }
             Ty::MutArray(n) => write!(f, "MutArray({n})"),
+            Ty::Integer => write!(f, "integer"),
         }
     }
 }
@@ -73,6 +75,7 @@ impl Ty {
             Self::Struct(_name, fs) => {
                 Sort::Tuple(fs.fields().map(|(_f_name, f_ty)| f_ty.sort()).collect())
             }
+            Self::Integer => Sort::Int,
         }
     }
     fn default_ir_term(&self) -> Term {
@@ -102,7 +105,7 @@ impl Ty {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct T {
     pub ty: Ty,
     pub term: Term,
@@ -222,6 +225,13 @@ impl T {
         T::new(Ty::Uint(64), bv_lit(v, 64))
     }
 
+    pub fn new_integer<I>(v: I) -> Self
+    where 
+        Integer: From<I>
+    {
+        T::new(Ty::Integer, int_lit(v))
+    }
+
     pub fn pretty<W: std::io::Write>(&self, f: &mut W) -> Result<(), std::io::Error> {
         use std::io::{Error, ErrorKind};
         let val = match &self.term.op() {
@@ -294,20 +304,24 @@ fn wrap_bin_op(
     fu: Option<fn(Term, Term) -> Term>,
     ff: Option<fn(Term, Term) -> Term>,
     fb: Option<fn(Term, Term) -> Term>,
+    fun: Option<fn(Term, Term) -> Term>,
     a: T,
     b: T,
 ) -> Result<T, String> {
-    match (&a.ty, &b.ty, fu, ff, fb) {
-        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _) if na == nb => {
+    match (&a.ty, &b.ty, fu, ff, fb, fun) {
+        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _, _) if na == nb => {
             Ok(T::new(Ty::Uint(*na), fu(a.term.clone(), b.term.clone())))
         }
-        (Ty::Bool, Ty::Bool, _, _, Some(fb)) => {
+        (Ty::Bool, Ty::Bool, _, _, Some(fb), _) => {
             Ok(T::new(Ty::Bool, fb(a.term.clone(), b.term.clone())))
         }
-        (Ty::Field, Ty::Field, _, Some(ff), _) => {
+        (Ty::Field, Ty::Field, _, Some(ff), _, _) => {
             Ok(T::new(Ty::Field, ff(a.term.clone(), b.term.clone())))
         }
-        (x, y, _, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
+        (Ty::Integer, Ty::Integer, _, _, _, Some(fun)) => {
+            Ok(T::new(Ty::Integer, fun(a.term.clone(), b.term.clone())))
+        }
+        (x, y, _, _, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -316,20 +330,24 @@ fn wrap_bin_pred(
     fu: Option<fn(Term, Term) -> Term>,
     ff: Option<fn(Term, Term) -> Term>,
     fb: Option<fn(Term, Term) -> Term>,
+    fi: Option<fn(Term, Term) -> Term>,
     a: T,
     b: T,
 ) -> Result<T, String> {
-    match (&a.ty, &b.ty, fu, ff, fb) {
-        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _) if na == nb => {
+    match (&a.ty, &b.ty, fu, ff, fb, fi) {
+        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _,_) if na == nb => {
             Ok(T::new(Ty::Bool, fu(a.term.clone(), b.term.clone())))
         }
-        (Ty::Bool, Ty::Bool, _, _, Some(fb)) => {
+        (Ty::Bool, Ty::Bool, _, _, Some(fb), _) => {
             Ok(T::new(Ty::Bool, fb(a.term.clone(), b.term.clone())))
         }
-        (Ty::Field, Ty::Field, _, Some(ff), _) => {
+        (Ty::Field, Ty::Field, _, Some(ff), _, _) => {
             Ok(T::new(Ty::Bool, ff(a.term.clone(), b.term.clone())))
         }
-        (x, y, _, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
+        (Ty::Integer, Ty::Integer, _, _, _, Some(fi)) => {
+            Ok(T::new(Ty::Bool, fi(a.term.clone(), b.term.clone())))
+        }
+        (x, y, _, _, _, _) => Err(format!("Cannot perform op '{name}' on {x} and {y}")),
     }
 }
 
@@ -341,8 +359,12 @@ fn add_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Add); a, b]
 }
 
+fn add_integer(a: Term, b: Term) -> Term {
+    term![Op::IntNaryOp(IntNaryOp::Add); a, b]
+}
+
 pub fn add(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("+", Some(add_uint), Some(add_field), None, a, b)
+    wrap_bin_op("+", Some(add_uint), Some(add_field), None, Some(add_integer), a, b)
 }
 
 fn sub_uint(a: Term, b: Term) -> Term {
@@ -353,8 +375,12 @@ fn sub_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Add); a, term![Op::PfUnOp(PfUnOp::Neg); b]]
 }
 
+fn sub_integer(a: Term, b: Term) -> Term {
+    term![Op::IntBinOp(IntBinOp::Sub); a, b]
+}
+
 pub fn sub(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("-", Some(sub_uint), Some(sub_field), None, a, b)
+    wrap_bin_op("-", Some(sub_uint), Some(sub_field), None, Some(sub_integer), a, b)
 }
 
 fn mul_uint(a: Term, b: Term) -> Term {
@@ -365,8 +391,12 @@ fn mul_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Mul); a, b]
 }
 
+fn mul_integer(a: Term, b: Term) -> Term {
+    term![Op::IntNaryOp(IntNaryOp::Mul); a, b]
+}
+
 pub fn mul(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("*", Some(mul_uint), Some(mul_field), None, a, b)
+    wrap_bin_op("*", Some(mul_uint), Some(mul_field), None, Some(mul_integer), a, b)
 }
 
 fn div_uint(a: Term, b: Term) -> Term {
@@ -377,8 +407,12 @@ fn div_field(a: Term, b: Term) -> Term {
     term![Op::PfNaryOp(PfNaryOp::Mul); a, term![Op::PfUnOp(PfUnOp::Recip); b]]
 }
 
+fn div_integer(a: Term, b: Term) -> Term {
+    term![Op::IntBinOp(IntBinOp::Div); a, b]
+}
+
 pub fn div(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("/", Some(div_uint), Some(div_field), None, a, b)
+    wrap_bin_op("/", Some(div_uint), Some(div_field), None, Some(div_integer), a, b)
 }
 
 fn to_dflt_f(t: Term) -> Term {
@@ -396,8 +430,12 @@ fn rem_uint(a: Term, b: Term) -> Term {
     term![Op::BvBinOp(BvBinOp::Urem); a, b]
 }
 
+fn rem_integer(a: Term, b: Term) -> Term {
+    term![Op::IntBinOp(IntBinOp::Rem); a, b]
+}
+
 pub fn rem(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("%", Some(rem_uint), Some(rem_field), None, a, b)
+    wrap_bin_op("%", Some(rem_uint), Some(rem_field), None, Some(rem_integer), a, b)
 }
 
 fn bitand_uint(a: Term, b: Term) -> Term {
@@ -405,7 +443,7 @@ fn bitand_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn bitand(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("&", Some(bitand_uint), None, None, a, b)
+    wrap_bin_op("&", Some(bitand_uint), None, None, None, a, b)
 }
 
 fn bitor_uint(a: Term, b: Term) -> Term {
@@ -413,7 +451,7 @@ fn bitor_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn bitor(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("|", Some(bitor_uint), None, None, a, b)
+    wrap_bin_op("|", Some(bitor_uint), None, None, None, a, b)
 }
 
 fn bitxor_uint(a: Term, b: Term) -> Term {
@@ -421,7 +459,7 @@ fn bitxor_uint(a: Term, b: Term) -> Term {
 }
 
 pub fn bitxor(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("^", Some(bitxor_uint), None, None, a, b)
+    wrap_bin_op("^", Some(bitxor_uint), None, None, None, a, b)
 }
 
 fn or_bool(a: Term, b: Term) -> Term {
@@ -429,7 +467,7 @@ fn or_bool(a: Term, b: Term) -> Term {
 }
 
 pub fn or(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("||", None, None, Some(or_bool), a, b)
+    wrap_bin_op("||", None, None, Some(or_bool), None, a, b)
 }
 
 fn and_bool(a: Term, b: Term) -> Term {
@@ -437,7 +475,7 @@ fn and_bool(a: Term, b: Term) -> Term {
 }
 
 pub fn and(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("&&", None, None, Some(and_bool), a, b)
+    wrap_bin_op("&&", None, None, Some(and_bool), None, a, b)
 }
 
 fn eq_base(a: T, b: T) -> Result<Term, String> {
@@ -477,8 +515,12 @@ fn ult_field(a: Term, b: Term) -> Term {
     field_comp(a, b, BvBinPred::Ult)
 }
 
+fn ult_integer(a: Term, b:Term) -> Term {
+    term![Op::IntBinPred(IntBinPred::Lt); a,b]
+}
+
 pub fn ult(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred("<", Some(ult_uint), Some(ult_field), None, a, b)
+    wrap_bin_pred("<", Some(ult_uint), Some(ult_field), None, Some(ult_integer), a, b)
 }
 
 fn ule_uint(a: Term, b: Term) -> Term {
@@ -489,8 +531,12 @@ fn ule_field(a: Term, b: Term) -> Term {
     field_comp(a, b, BvBinPred::Ule)
 }
 
+fn ule_integer(a: Term, b:Term) -> Term {
+    term![Op::IntBinPred(IntBinPred::Le); a, b]
+}
+
 pub fn ule(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred("<=", Some(ule_uint), Some(ule_field), None, a, b)
+    wrap_bin_pred("<=", Some(ule_uint), Some(ule_field), None, Some(ule_integer), a, b)
 }
 
 fn ugt_uint(a: Term, b: Term) -> Term {
@@ -501,8 +547,12 @@ fn ugt_field(a: Term, b: Term) -> Term {
     field_comp(a, b, BvBinPred::Ugt)
 }
 
+fn ugt_integer(a: Term, b: Term) -> Term {
+    term![Op::IntBinPred(IntBinPred::Gt); a, b]
+}
+
 pub fn ugt(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred(">", Some(ugt_uint), Some(ugt_field), None, a, b)
+    wrap_bin_pred(">", Some(ugt_uint), Some(ugt_field), None, Some(ugt_integer), a, b)
 }
 
 fn uge_uint(a: Term, b: Term) -> Term {
@@ -513,32 +563,35 @@ fn uge_field(a: Term, b: Term) -> Term {
     field_comp(a, b, BvBinPred::Uge)
 }
 
-pub fn uge(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred(">=", Some(uge_uint), Some(uge_field), None, a, b)
+fn uge_integer(a: Term, b: Term) -> Term {
+    term![Op::IntBinPred(IntBinPred::Ge); a, b]
 }
 
+pub fn uge(a: T, b: T) -> Result<T, String> {
+    wrap_bin_pred(">=", Some(uge_uint), Some(uge_field), None, Some(uge_integer), a, b)
+}
+
+
 pub fn pow(a: T, b: T) -> Result<T, String> {
-    if a.ty != Ty::Field || b.ty != Ty::Uint(32) {
-        return Err(format!("Cannot compute {a} ** {b} : must be Field ** U32"));
+    if (a.ty != Ty::Field && a.ty != Ty::Integer) || b.ty != Ty::Uint(32) {
+        return Err(format!("Cannot compute {a} ** {b} : must be Field/Integer ** U32"));
     }
 
-    let a = a.term;
     let b = const_int(b)?;
     if b == 0 {
-        return Ok(field_lit(1));
+        return Ok((if a.ty == Ty::Field {T::new_field} else {T::new_integer})(1))
     }
 
-    let res = (0..b.significant_bits() - 1)
+    Ok((0..b.significant_bits() - 1)
         .rev()
         .fold(a.clone(), |acc, ix| {
-            let acc = mul_field(acc.clone(), acc);
+            let acc = mul(acc.clone(), acc).unwrap();
             if b.get_bit(ix) {
-                mul_field(acc, a.clone())
+                mul(acc, a.clone()).unwrap()
             } else {
                 acc
             }
-        });
-    Ok(T::new(Ty::Field, res))
+        }))
 }
 
 fn wrap_un_op(
@@ -546,13 +599,15 @@ fn wrap_un_op(
     fu: Option<fn(Term) -> Term>,
     ff: Option<fn(Term) -> Term>,
     fb: Option<fn(Term) -> Term>,
+    fun: Option<fn(Term) -> Term>,
     a: T,
 ) -> Result<T, String> {
-    match (&a.ty, fu, ff, fb) {
-        (Ty::Uint(_), Some(fu), _, _) => Ok(T::new(a.ty.clone(), fu(a.term.clone()))),
-        (Ty::Bool, _, _, Some(fb)) => Ok(T::new(Ty::Bool, fb(a.term.clone()))),
-        (Ty::Field, _, Some(ff), _) => Ok(T::new(Ty::Field, ff(a.term.clone()))),
-        (x, _, _, _) => Err(format!("Cannot perform op '{name}' on {x}")),
+    match (&a.ty, fu, ff, fb, fun) {
+        (Ty::Uint(_), Some(fu), _, _, _) => Ok(T::new(a.ty.clone(), fu(a.term.clone()))),
+        (Ty::Bool, _, _, Some(fb), _) => Ok(T::new(Ty::Bool, fb(a.term.clone()))),
+        (Ty::Field, _, Some(ff), _, _) => Ok(T::new(Ty::Field, ff(a.term.clone()))),
+        (Ty::Integer, _, _, _, Some(fun)) => Ok(T::new(Ty::Integer, fun(a.term.clone()))),
+        (x, _, _, _, _) => Err(format!("Cannot perform op '{name}' on {x}")),
     }
 }
 
@@ -564,9 +619,13 @@ fn neg_uint(a: Term) -> Term {
     term![Op::BvUnOp(BvUnOp::Neg); a]
 }
 
+fn neg_integer(a: Term) -> Term {
+    term![Op::IntUnOp(IntUnOp::Neg); a]
+}
+
 // Missing from ZoKrates.
 pub fn neg(a: T) -> Result<T, String> {
-    wrap_un_op("unary-", Some(neg_uint), Some(neg_field), None, a)
+    wrap_un_op("unary-", Some(neg_uint), Some(neg_field), None, Some(neg_integer), a)
 }
 
 fn not_bool(a: Term) -> Term {
@@ -578,7 +637,7 @@ fn not_uint(a: Term) -> Term {
 }
 
 pub fn not(a: T) -> Result<T, String> {
-    wrap_un_op("!", Some(not_uint), None, Some(not_bool), a)
+    wrap_un_op("!", Some(not_uint), None, Some(not_bool), None, a)
 }
 
 pub fn const_int(a: T) -> Result<Integer, String> {
@@ -589,11 +648,17 @@ pub fn const_int(a: T) -> Result<Integer, String> {
     }
 }
 
+#[allow(dead_code)]
 pub fn const_bool(a: T) -> Option<bool> {
     match const_value(&a.term) {
         Some(Value::Bool(b)) => Some(b),
         _ => None,
     }
+}
+
+pub fn const_fold(t: T) -> T {
+    let folded = constant_fold(&t.term, &[]);
+    return T::new(t.ty, folded)
 }
 
 pub fn const_val(a: T) -> Result<T, String> {
@@ -677,6 +742,7 @@ where
 {
     T::new(Ty::Uint(bits), bv_lit(v, bits))
 }
+
 
 pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
     match &arr.ty {
@@ -822,6 +888,42 @@ pub fn uint_to_field(u: T) -> Result<T, String> {
     match &u.ty {
         Ty::Uint(_) => Ok(T::new(Ty::Field, to_dflt_f(u.term))),
         u => Err(format!("Cannot do uint-to-field on {u}")),
+    }
+}
+
+pub fn integer_to_field(u: T) -> Result<T, String> {
+    match &u.ty {
+        Ty::Integer => Ok(T::new(Ty::Field, term![Op::IntToPf(default_field()); u.term])),
+        u => Err(format!("Cannot do int-to-field on {u}")),
+    }
+}
+
+pub fn field_to_integer(u: T) -> Result<T, String> {
+    match &u.ty {
+        Ty::Field => Ok(T::new(Ty::Integer, term![Op::PfToInt; u.term])),
+        u => Err(format!("Cannot do int-to-field on {u}")),
+    }
+}
+
+
+pub fn int_to_bits(i: T, n: usize) -> Result<T,String> {
+    match &i.ty {
+        Ty::Integer => uint_to_bits(T::new(Ty::Uint(n), term![Op::IntToBv(n); i.term])),
+        u => Err(format!("Cannot do uint-to-bits on {u}")),
+    }
+}
+
+pub fn int_size(i: T) -> Result<T, String> {
+    match &i.ty {
+        Ty::Integer => Ok(T::new(Ty::Uint(32), term![Op::IntSize; i.term])),
+        u => Err(format!("Cannot do sizeof on {u}")),
+    }
+}
+
+pub fn int_modinv(i: T, m: T) -> Result<T, String> {
+    match (&i.ty, &m.ty) {
+        (Ty::Integer, Ty::Integer) => Ok(T::new(Ty::Integer, term![Op::IntBinOp(IntBinOp::ModInv); i.term, m.term])),
+        u => Err(format!("Cannot do modinv on {:?}", u)),
     }
 }
 
@@ -985,6 +1087,15 @@ impl Embeddable for ZSharp {
                 ctx.cs.borrow_mut().new_var(
                     &name,
                     Sort::BitVector(*w),
+                    visibility,
+                    precompute.map(|p| p.term),
+                ),
+            ),
+            Ty::Integer => T::new(
+                Ty::Integer,
+                ctx.cs.borrow_mut().new_var(
+                    &name,
+                    Sort::Int,
                     visibility,
                     precompute.map(|p| p.term),
                 ),

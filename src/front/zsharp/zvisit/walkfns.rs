@@ -252,6 +252,7 @@ pub fn walk_basic_type<'ast, Z: ZVisitorMut<'ast>>(
         U16(u) => visitor.visit_u16_type(u),
         U32(u) => visitor.visit_u32_type(u),
         U64(u) => visitor.visit_u64_type(u),
+        Integer(u) => visitor.visit_integer_type(u),
     }
 }
 
@@ -295,6 +296,13 @@ pub fn walk_u64_type<'ast, Z: ZVisitorMut<'ast>>(
     u64ty: &mut ast::U64Type<'ast>,
 ) -> ZVisitorResult {
     visitor.visit_span(&mut u64ty.span)
+}
+
+pub fn walk_integer_type<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    integerty: &mut ast::IntegerType<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_span(&mut integerty.span)
 }
 
 pub fn walk_array_type<'ast, Z: ZVisitorMut<'ast>>(
@@ -393,6 +401,7 @@ pub fn walk_decimal_suffix<'ast, Z: ZVisitorMut<'ast>>(
         U32(u32s) => visitor.visit_u32_suffix(u32s),
         U64(u64s) => visitor.visit_u64_suffix(u64s),
         Field(fs) => visitor.visit_field_suffix(fs),
+        Integer(integers) => visitor.visit_integer_suffix(integers),
     }
 }
 
@@ -429,6 +438,13 @@ pub fn walk_field_suffix<'ast, Z: ZVisitorMut<'ast>>(
     fs: &mut ast::FieldSuffix<'ast>,
 ) -> ZVisitorResult {
     visitor.visit_span(&mut fs.span)
+}
+
+pub fn walk_integer_suffix<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    integers: &mut ast::IntegerSuffix<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_span(&mut integers.span)
 }
 
 pub fn walk_boolean_literal_expression<'ast, Z: ZVisitorMut<'ast>>(

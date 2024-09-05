@@ -187,5 +187,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
     if !crate::cfg::cfg().ir.frequent_gc {
         garbage_collect();
     }
+
+    for (_, c) in cs.comps.iter() {
+        info!("{:?}", c.outputs);
+    }
     cs
 }

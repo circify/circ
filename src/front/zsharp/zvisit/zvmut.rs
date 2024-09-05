@@ -171,6 +171,10 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_u64_type(self, u64ty)
     }
 
+    fn visit_integer_type(&mut self, integerty: &mut ast::IntegerType<'ast>) -> ZVisitorResult {
+        walk_integer_type(self, integerty)
+    }
+
     fn visit_array_type(&mut self, aty: &mut ast::ArrayType<'ast>) -> ZVisitorResult {
         walk_array_type(self, aty)
     }
@@ -237,6 +241,10 @@ pub trait ZVisitorMut<'ast>: Sized {
 
     fn visit_field_suffix(&mut self, fs: &mut ast::FieldSuffix<'ast>) -> ZVisitorResult {
         walk_field_suffix(self, fs)
+    }
+
+    fn visit_integer_suffix(&mut self, integers: &mut ast::IntegerSuffix<'ast>) -> ZVisitorResult {
+        walk_integer_suffix(self, integers)
     }
 
     fn visit_boolean_literal_expression(

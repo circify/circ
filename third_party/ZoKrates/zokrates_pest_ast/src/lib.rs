@@ -22,7 +22,7 @@ pub use ast::{
     SpreadOrExpression, Statement, StrOperator, StructDefinition, StructField, StructType,
     SymbolDeclaration, TernaryExpression, ToExpression, Type, TypeDefinition, TypedIdentifier,
     TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type, U32NumberExpression,
-    U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
+    U32Suffix, U32Type, IntegerSuffix, IntegerType, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
     U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, WitnessStatement, EOI,
 };
 
@@ -271,6 +271,7 @@ mod ast {
         U16(U16Type<'ast>),
         U32(U32Type<'ast>),
         U64(U64Type<'ast>),
+        Integer(IntegerType<'ast>)
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
@@ -327,6 +328,13 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::ty_u64))]
     pub struct U64Type<'ast> {
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::ty_integer))]
+    pub struct IntegerType<'ast> {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
@@ -947,6 +955,7 @@ mod ast {
         U32(U32Suffix<'ast>),
         U64(U64Suffix<'ast>),
         Field(FieldSuffix<'ast>),
+        Integer(IntegerSuffix<'ast>)
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
@@ -973,6 +982,13 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::decimal_suffix_u64))]
     pub struct U64Suffix<'ast> {
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::decimal_suffix_integer))]
+    pub struct IntegerSuffix<'ast> {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }

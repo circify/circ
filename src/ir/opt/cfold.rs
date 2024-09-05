@@ -30,6 +30,16 @@ pub(in super::super) fn collect() {
     })
 }
 
+/// Create a tuple from children. If all children are const, then make the whole tuple const
+fn new_tuple(children: Vec<Term>) -> Term {
+    children
+        .iter()
+        .map(|c| c.as_value_opt().cloned())
+        .collect::<Option<_>>()
+        .map(|v| leaf_term(Op::new_const(Value::Tuple(v))))
+        .unwrap_or_else(|| term(Op::Tuple, children))
+}
+
 /// Create a constant boolean
 fn cbool(b: bool) -> Option<Term> {
     Some(bool_lit(b))
@@ -353,21 +363,34 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     (Some(arr), Some(idx)) => Some(const_(arr.select(idx))),
                     _ => None,
                 },
-                Op::Tuple => t
-                    .cs()
-                    .iter()
-                    .map(|c| c_get(c).as_value_opt().cloned())
-                    .collect::<Option<_>>()
-                    .map(|v| const_(Value::Tuple(v))),
-                Op::Field(n) => get(0).as_tuple_opt().map(|t| const_(t[*n].clone())),
-                Op::Update(n) => match (get(0).as_tuple_opt(), get(1).as_value_opt()) {
-                    (Some(t), Some(v)) => {
-                        let mut new_vec = Vec::from(t).into_boxed_slice();
-                        assert_eq!(new_vec[*n].sort(), v.sort());
-                        new_vec[*n] = v.clone();
-                        Some(const_(Value::Tuple(new_vec)))
+                Op::Tuple => {
+                    Some(new_tuple(t
+                            .cs()
+                            .iter()
+                            .map(c_get).collect::<Vec<_>>()))
+                },
+                Op::Field(n) => {
+                    match get(0).op() {
+                        Op::Tuple => {
+                            let term = get(0).cs()[*n].clone();
+                            Some(term.as_value_opt()
+                                .cloned()
+                                .map(|t| leaf_term(Op::new_const(t)))
+                                .unwrap_or(term))
+                        }
+                        _ => None
                     }
-                    _ => None,
+                },
+                Op::Update(n) => {
+                    match get(0).op() {
+                        Op::Tuple => {
+                            let mut children = get(0).cs().to_vec();
+                            children[*n] = get(1).clone();
+                            Some(new_tuple(children))
+
+                        }
+                        _ => None
+                    }
                 },
                 Op::BvConcat => t
                     .cs()

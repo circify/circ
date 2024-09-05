@@ -58,7 +58,13 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::PfUnOp(_) => vec![t.cs()[0].clone()],
         Op::PfDiv => vec![t.cs()[0].clone()],
         Op::PfNaryOp(_) => vec![t.cs()[0].clone()],
+        Op::IntSize => Vec::new(),
+        Op::IntToBv(_) => Vec::new(),
         Op::IntNaryOp(_) => Vec::new(),
+        Op::IntToPf(_) => Vec::new(),
+        Op::PfToInt => Vec::new(),
+        Op::IntBinOp(_) => Vec::new(),
+        Op::IntUnOp(_) => Vec::new(),
         Op::IntBinPred(_) => Vec::new(),
         Op::UbvToPf(_) => Vec::new(),
         Op::PfChallenge(_) => Vec::new(),
@@ -136,8 +142,13 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::PfUnOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfDiv => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfNaryOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
+        Op::IntSize => Ok(Sort::BitVector(32)),
         Op::IntNaryOp(_) => Ok(Sort::Int),
+        Op::IntBinOp(_) => Ok(Sort::Int),
+        Op::IntUnOp(_) => Ok(Sort::Int),
         Op::IntBinPred(_) => Ok(Sort::Bool),
+        Op::IntToPf(m) => Ok(Sort::Field(m.clone())),
+        Op::PfToInt => Ok(Sort::Int),
         Op::UbvToPf(m) => Ok(Sort::Field((**m).clone())),
         Op::PfChallenge(c) => Ok(Sort::Field(c.field.clone())),
         Op::Witness(_) => Ok(get_ty(&t.cs()[0]).clone()),
@@ -362,12 +373,24 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::PfFitsInBits(_), &[a]) => pf_or(a, "pf fits in bits").map(|_| Sort::Bool),
         (Op::PfUnOp(_), &[a]) => pf_or(a, "pf unary op").cloned(),
         (Op::PfDiv, &[a, b]) => eq_or(&pf_or(a, "pf / op").cloned()?, b, "pf / op").cloned(),
+
+        (Op::IntToBv(a), &[Sort::Int]) => Ok(Sort::BitVector(*a)),
+        (Op::IntToPf(m), &[a]) => int_or(a, "int-to-pf").map(|_| Sort::Field(m.clone())),
+        (Op::PfToInt, &[a]) => pf_or(a, "pf-to-int").map(|_| Sort::Int),
+        (Op::IntSize, &[a]) => int_or(a, "int size").cloned().map(|_| Sort::BitVector(32)),
         (Op::IntNaryOp(_), a) => {
             let ctx = "int nary op";
             all_eq_or(a.iter().cloned(), ctx)
                 .and_then(|t| int_or(t, ctx))
                 .cloned()
         }
+        (Op::IntBinOp(_), &[a, b]) => {
+            let ctx = "int binary op";
+            int_or(a, ctx)
+                .and_then(|_| int_or(b, ctx))
+                .map(|_| a.clone())
+        }
+        (Op::IntUnOp(_), &[a]) => int_or(a, "int unary op").cloned(),
         (Op::IntBinPred(_), &[a, b]) => int_or(a, "int bin pred")
             .and_then(|_| int_or(b, "int bin pred"))
             .map(|_| Sort::Bool),

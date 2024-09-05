@@ -30,6 +30,7 @@ fn eq_basic_type<'ast>(ty: &ast::BasicType<'ast>, ty2: &ast::BasicType<'ast>) ->
         (U16(_), U16(_)) => Ok(()),
         (U32(_), U32(_)) => Ok(()),
         (U64(_), U64(_)) => Ok(()),
+        (Integer(_), Integer(_)) => Ok(()),
         _ => Err(ZVisitorError(format!(
             "basic type mismatch: \n\texpected {ty:?}, \n\tfound {ty2:?}"
         ))),

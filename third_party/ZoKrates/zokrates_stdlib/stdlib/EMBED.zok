@@ -4,7 +4,11 @@
 def get_field_size() -> u32:
     return 0u32
 
+def get_field_modulus() -> integer:
+    return 0int
+
 const u32 FIELD_SIZE_IN_BITS = get_field_size()
+const integer FIELD_MODULUS = get_field_modulus()
 
 // XXX(unimpl)
 //sha256round
@@ -76,6 +80,12 @@ def u16_to_u32(u16 i) -> u32:
 def u8_to_u16(u8 i) -> u16:
     return 0u16
 
+def int_to_bits<N>(integer i) -> bool[N]:
+    return [false; N]
+
+def int_size(integer i) -> u32:
+    return 0u32
+
 // the output is sampled uniformly and independently of the inputs
 def sample_challenge<N>(field[N] x) -> field:
     return 0
@@ -87,3 +97,13 @@ def reverse_lookup<N>(field[N] x, field y) -> field:
 // check that x contains a value equal to y; the result is only assertable.
 def value_in_array<N>(field y, field[N] x) -> bool:
     return true
+
+// find inverse of a mod b
+def int_modinv(integer a, integer b) -> integer:
+    return 0int
+
+def integer_to_field(integer a) -> field:
+    return 0
+
+def field_to_integer(field a) -> integer:
+    return 0
