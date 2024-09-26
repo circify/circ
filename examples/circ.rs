@@ -44,7 +44,7 @@ use circ::target::r1cs::{
     proof::{CommitProofSystem, ProofSystem},
 };
 #[cfg(feature = "r1cs")]
-use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs};
+use circ::target::r1cs::{opt::reduce_linearities, trans::to_r1cs, R1csStats};
 #[cfg(feature = "smt")]
 use circ::target::smt::find_model;
 use circ_fields::FieldT;
@@ -311,19 +311,26 @@ fn main() {
             trace!("IR: {}", circ::ir::term::text::serialize_computation(cs));
             let mut r1cs = to_r1cs(cs, cfg());
             if cfg().r1cs.profile {
-                println!("R1CS stats: {:#?}", r1cs.stats());
+                println!("Pre-opt  r1cs stats: {:#?}", r1cs.stats());
             }
 
             println!("Running r1cs optimizations ");
             r1cs = reduce_linearities(r1cs, cfg());
 
-            println!("Final R1cs size: {}", r1cs.constraints().len());
             if cfg().r1cs.profile {
-                println!("R1CS stats: {:#?}", r1cs.stats());
+                println!("Post-opt r1cs stats: {:#?}", r1cs.stats());
             }
+            let n_constraints = r1cs.stats().n_constraints;
+            let n_vars = r1cs.stats().n_vars;
+            let n_entries = r1cs.stats().n_entries();
+
             let (prover_data, verifier_data) = r1cs.finalize(cs);
+
             println!(
-                "Final R1cs rounds: {}",
+                "Final r1cs: {} constraints, {} variables, {} entries, {} rounds",
+                n_constraints,
+                n_vars,
+                n_entries,
                 prover_data.precompute.stage_sizes().count() - 1
             );
             println!(
@@ -331,6 +338,7 @@ fn main() {
                 prover_data.precompute.num_steps(),
                 prover_data.precompute.num_step_args()
             );
+
             match action {
                 ProofAction::Count => (),
                 #[cfg(feature = "bellman")]
