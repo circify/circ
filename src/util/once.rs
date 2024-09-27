@@ -29,9 +29,8 @@ impl<T: Eq + Hash + Clone> OnceQueue<T> {
     }
     /// Remove the oldest element from the queue.
     pub fn pop(&mut self) -> Option<T> {
-        self.queue.pop_front().map(|t| {
-            self.set.remove(&t);
-            t
+        self.queue.pop_front().inspect(|t| {
+            self.set.remove(t);
         })
     }
     /// Make an empty queue.

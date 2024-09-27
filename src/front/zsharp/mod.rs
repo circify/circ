@@ -772,11 +772,10 @@ impl<'ast> ZGen<'ast> {
                 f_path.clone(),
                 f_name.clone(),
             )
-            .map(|v| {
+            .inspect(|v| {
                 self.fn_call_memoization
                     .borrow_mut()
                     .insert(input, v.clone());
-                v
             })
         };
         let dur = (time::Instant::now() - before).as_millis();
