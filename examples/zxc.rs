@@ -140,7 +140,7 @@ fn main() {
         );
         reduce_linearities(r1cs, cfg())
     };
-    println!("Final R1cs size: {}", r1cs.constraints().len());
+    println!("Final r1cs: {} constraints", r1cs.constraints().len());
     match action {
         ProofAction::Count => {
             if !options.quiet {
