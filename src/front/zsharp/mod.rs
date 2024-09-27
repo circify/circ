@@ -20,8 +20,8 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
-use zokrates_pest_ast as ast;
 use std::time;
+use zokrates_pest_ast as ast;
 
 use term::*;
 use zvisit::{ZConstLiteralRewriter, ZGenericInf, ZStatementWalker, ZVisitorMut};
@@ -37,7 +37,6 @@ pub struct Inputs {
     pub mode: Mode,
 }
 
-
 #[allow(dead_code)]
 fn const_value_simple(term: &Term) -> Option<Value> {
     match term.op() {
@@ -48,10 +47,10 @@ fn const_value_simple(term: &Term) -> Option<Value> {
 
 #[allow(dead_code)]
 fn const_bool_simple(t: T) -> Option<bool> {
-   match const_value_simple(&t.term) {
-      Some(Value::Bool(b)) => Some(b),
-      _ => None
-   } 
+    match const_value_simple(&t.term) {
+        Some(Value::Bool(b)) => Some(b),
+        _ => None,
+    }
 }
 
 #[allow(dead_code)]
@@ -132,7 +131,7 @@ struct ZGen<'ast> {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-struct FnCallImplInput(bool, Vec<T>, Vec<(String,T)>, PathBuf, String);
+struct FnCallImplInput(bool, Vec<T>, Vec<(String, T)>, PathBuf, String);
 
 impl<'ast> Drop for ZGen<'ast> {
     fn drop(&mut self) {
@@ -271,7 +270,7 @@ impl<'ast> ZGen<'ast> {
                         args.len(),
                         f_name
                     ))
-                } else if generics.len() != 0 {
+                } else if !generics.is_empty() {
                     Err(format!(
                         "Got {} generic args to EMBED/{}, expected 0",
                         generics.len(),
@@ -288,7 +287,7 @@ impl<'ast> ZGen<'ast> {
                         args.len(),
                         f_name
                     ))
-                } else if generics.len() != 0 {
+                } else if !generics.is_empty() {
                     Err(format!(
                         "Got {} generic args to EMBED/{}, expected 0",
                         generics.len(),
@@ -575,10 +574,9 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{e}"))?
                 .unwrap_term()
         };
-        let new =
-            loc_store(old, &zaccs[..], val)
-                .map(const_fold)
-                .and_then(|n| if strict { const_val_simple(n) } else { Ok(n) })?;
+        let new = loc_store(old, &zaccs[..], val)
+            .map(const_fold)
+            .and_then(|n| if strict { const_val_simple(n) } else { Ok(n) })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -715,9 +713,9 @@ impl<'ast> ZGen<'ast> {
         egv.iter()
             .map(|cgv| match cgv {
                 ast::ConstantGenericValue::Value(l) => self.literal_(l),
-                ast::ConstantGenericValue::Identifier(i) => {
-                    self.identifier_impl_::<IS_CNST>(i).and_then(const_val_simple)
-                }
+                ast::ConstantGenericValue::Identifier(i) => self
+                    .identifier_impl_::<IS_CNST>(i)
+                    .and_then(const_val_simple),
                 ast::ConstantGenericValue::Underscore(_) => Err(
                     "explicit_generic_values got non-monomorphized generic argument".to_string(),
                 ),
@@ -726,7 +724,6 @@ impl<'ast> ZGen<'ast> {
             .map(|(g, n)| Ok((n.value, g?)))
             .collect()
     }
-
 
     fn function_call_impl_<const IS_CNST: bool>(
         &self,
@@ -752,21 +749,35 @@ impl<'ast> ZGen<'ast> {
             .unify_generic(egv, exp_ty, arg_tys)?;
 
         let mut generic_vec = generics.clone().into_iter().collect::<Vec<_>>();
-        generic_vec.sort_by(|(a,_), (b,_)| a.cmp(&b));
+        generic_vec.sort_by(|(a, _), (b, _)| a.cmp(b));
         let before = time::Instant::now();
 
-        let input = FnCallImplInput(IS_CNST, args.clone(), generic_vec.clone(), f_path.clone(), f_name.clone());
+        let input = FnCallImplInput(
+            IS_CNST,
+            args.clone(),
+            generic_vec.clone(),
+            f_path.clone(),
+            f_name.clone(),
+        );
         let cached_value = self.fn_call_memoization.borrow().get(&input).cloned();
 
         let ret = if let Some(value) = cached_value {
             Ok(value)
         } else {
             debug!("successfully memoized {} {:?}", f_name, f_path);
-            self.function_call_impl_inner_::<IS_CNST>(f, args, generics, f_path.clone(), f_name.clone())
-                .map(|v| {
-                    self.fn_call_memoization.borrow_mut().insert(input, v.clone());
-                    v
-                })
+            self.function_call_impl_inner_::<IS_CNST>(
+                f,
+                args,
+                generics,
+                f_path.clone(),
+                f_name.clone(),
+            )
+            .map(|v| {
+                self.fn_call_memoization
+                    .borrow_mut()
+                    .insert(input, v.clone());
+                v
+            })
         };
         let dur = (time::Instant::now() - before).as_millis();
         if dur > 50 {
@@ -779,7 +790,7 @@ impl<'ast> ZGen<'ast> {
         &self,
         f: &ast::FunctionDefinition<'ast>,
         args: Vec<T>,
-        generics: HashMap<String,T>,
+        generics: HashMap<String, T>,
         f_path: PathBuf,
         f_name: String,
     ) -> Result<T, String> {
@@ -1246,16 +1257,18 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn expr_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T,String> {
+    fn expr_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
         self.expr_impl_inner_::<IS_CNST>(e)
             .map(const_fold)
-            .and_then(|v| if IS_CNST {const_val_simple(v)} else {Ok(v)})
+            .and_then(|v| if IS_CNST { const_val_simple(v) } else { Ok(v) })
             .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
-
     // XXX(rsw) make Result<T, (String, Span)> to give more precise error messages?
-    fn expr_impl_inner_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
+    fn expr_impl_inner_<const IS_CNST: bool>(
+        &self,
+        e: &ast::Expression<'ast>,
+    ) -> Result<T, String> {
         if IS_CNST {
             debug!("Const expr: {}", e.span().as_str());
         } else {
@@ -1264,7 +1277,11 @@ impl<'ast> ZGen<'ast> {
 
         match e {
             ast::Expression::Ternary(u) => {
-                match self.expr_impl_::<false>(&u.first).ok().and_then(const_bool_simple) {
+                match self
+                    .expr_impl_::<false>(&u.first)
+                    .ok()
+                    .and_then(const_bool_simple)
+                {
                     Some(true) => self.expr_impl_::<IS_CNST>(&u.second),
                     Some(false) => self.expr_impl_::<IS_CNST>(&u.third),
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),

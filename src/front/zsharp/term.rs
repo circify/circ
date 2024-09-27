@@ -226,8 +226,8 @@ impl T {
     }
 
     pub fn new_integer<I>(v: I) -> Self
-    where 
-        Integer: From<I>
+    where
+        Integer: From<I>,
     {
         T::new(Ty::Integer, int_lit(v))
     }
@@ -335,7 +335,7 @@ fn wrap_bin_pred(
     b: T,
 ) -> Result<T, String> {
     match (&a.ty, &b.ty, fu, ff, fb, fi) {
-        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _,_) if na == nb => {
+        (Ty::Uint(na), Ty::Uint(nb), Some(fu), _, _, _) if na == nb => {
             Ok(T::new(Ty::Bool, fu(a.term.clone(), b.term.clone())))
         }
         (Ty::Bool, Ty::Bool, _, _, Some(fb), _) => {
@@ -364,7 +364,15 @@ fn add_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn add(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("+", Some(add_uint), Some(add_field), None, Some(add_integer), a, b)
+    wrap_bin_op(
+        "+",
+        Some(add_uint),
+        Some(add_field),
+        None,
+        Some(add_integer),
+        a,
+        b,
+    )
 }
 
 fn sub_uint(a: Term, b: Term) -> Term {
@@ -380,7 +388,15 @@ fn sub_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn sub(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("-", Some(sub_uint), Some(sub_field), None, Some(sub_integer), a, b)
+    wrap_bin_op(
+        "-",
+        Some(sub_uint),
+        Some(sub_field),
+        None,
+        Some(sub_integer),
+        a,
+        b,
+    )
 }
 
 fn mul_uint(a: Term, b: Term) -> Term {
@@ -396,7 +412,15 @@ fn mul_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn mul(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("*", Some(mul_uint), Some(mul_field), None, Some(mul_integer), a, b)
+    wrap_bin_op(
+        "*",
+        Some(mul_uint),
+        Some(mul_field),
+        None,
+        Some(mul_integer),
+        a,
+        b,
+    )
 }
 
 fn div_uint(a: Term, b: Term) -> Term {
@@ -412,7 +436,15 @@ fn div_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn div(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("/", Some(div_uint), Some(div_field), None, Some(div_integer), a, b)
+    wrap_bin_op(
+        "/",
+        Some(div_uint),
+        Some(div_field),
+        None,
+        Some(div_integer),
+        a,
+        b,
+    )
 }
 
 fn to_dflt_f(t: Term) -> Term {
@@ -435,7 +467,15 @@ fn rem_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn rem(a: T, b: T) -> Result<T, String> {
-    wrap_bin_op("%", Some(rem_uint), Some(rem_field), None, Some(rem_integer), a, b)
+    wrap_bin_op(
+        "%",
+        Some(rem_uint),
+        Some(rem_field),
+        None,
+        Some(rem_integer),
+        a,
+        b,
+    )
 }
 
 fn bitand_uint(a: Term, b: Term) -> Term {
@@ -515,12 +555,20 @@ fn ult_field(a: Term, b: Term) -> Term {
     field_comp(a, b, BvBinPred::Ult)
 }
 
-fn ult_integer(a: Term, b:Term) -> Term {
+fn ult_integer(a: Term, b: Term) -> Term {
     term![Op::IntBinPred(IntBinPred::Lt); a,b]
 }
 
 pub fn ult(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred("<", Some(ult_uint), Some(ult_field), None, Some(ult_integer), a, b)
+    wrap_bin_pred(
+        "<",
+        Some(ult_uint),
+        Some(ult_field),
+        None,
+        Some(ult_integer),
+        a,
+        b,
+    )
 }
 
 fn ule_uint(a: Term, b: Term) -> Term {
@@ -531,12 +579,20 @@ fn ule_field(a: Term, b: Term) -> Term {
     field_comp(a, b, BvBinPred::Ule)
 }
 
-fn ule_integer(a: Term, b:Term) -> Term {
+fn ule_integer(a: Term, b: Term) -> Term {
     term![Op::IntBinPred(IntBinPred::Le); a, b]
 }
 
 pub fn ule(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred("<=", Some(ule_uint), Some(ule_field), None, Some(ule_integer), a, b)
+    wrap_bin_pred(
+        "<=",
+        Some(ule_uint),
+        Some(ule_field),
+        None,
+        Some(ule_integer),
+        a,
+        b,
+    )
 }
 
 fn ugt_uint(a: Term, b: Term) -> Term {
@@ -552,7 +608,15 @@ fn ugt_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn ugt(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred(">", Some(ugt_uint), Some(ugt_field), None, Some(ugt_integer), a, b)
+    wrap_bin_pred(
+        ">",
+        Some(ugt_uint),
+        Some(ugt_field),
+        None,
+        Some(ugt_integer),
+        a,
+        b,
+    )
 }
 
 fn uge_uint(a: Term, b: Term) -> Term {
@@ -568,18 +632,31 @@ fn uge_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn uge(a: T, b: T) -> Result<T, String> {
-    wrap_bin_pred(">=", Some(uge_uint), Some(uge_field), None, Some(uge_integer), a, b)
+    wrap_bin_pred(
+        ">=",
+        Some(uge_uint),
+        Some(uge_field),
+        None,
+        Some(uge_integer),
+        a,
+        b,
+    )
 }
-
 
 pub fn pow(a: T, b: T) -> Result<T, String> {
     if (a.ty != Ty::Field && a.ty != Ty::Integer) || b.ty != Ty::Uint(32) {
-        return Err(format!("Cannot compute {a} ** {b} : must be Field/Integer ** U32"));
+        return Err(format!(
+            "Cannot compute {a} ** {b} : must be Field/Integer ** U32"
+        ));
     }
 
     let b = const_int(b)?;
     if b == 0 {
-        return Ok((if a.ty == Ty::Field {T::new_field} else {T::new_integer})(1))
+        return Ok((if a.ty == Ty::Field {
+            T::new_field
+        } else {
+            T::new_integer
+        })(1));
     }
 
     Ok((0..b.significant_bits() - 1)
@@ -625,7 +702,14 @@ fn neg_integer(a: Term) -> Term {
 
 // Missing from ZoKrates.
 pub fn neg(a: T) -> Result<T, String> {
-    wrap_un_op("unary-", Some(neg_uint), Some(neg_field), None, Some(neg_integer), a)
+    wrap_un_op(
+        "unary-",
+        Some(neg_uint),
+        Some(neg_field),
+        None,
+        Some(neg_integer),
+        a,
+    )
 }
 
 fn not_bool(a: Term) -> Term {
@@ -658,7 +742,7 @@ pub fn const_bool(a: T) -> Option<bool> {
 
 pub fn const_fold(t: T) -> T {
     let folded = constant_fold(&t.term, &[]);
-    return T::new(t.ty, folded)
+    T::new(t.ty, folded)
 }
 
 pub fn const_val(a: T) -> Result<T, String> {
@@ -742,7 +826,6 @@ where
 {
     T::new(Ty::Uint(bits), bv_lit(v, bits))
 }
-
 
 pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, String> {
     match &arr.ty {
@@ -893,7 +976,10 @@ pub fn uint_to_field(u: T) -> Result<T, String> {
 
 pub fn integer_to_field(u: T) -> Result<T, String> {
     match &u.ty {
-        Ty::Integer => Ok(T::new(Ty::Field, term![Op::IntToPf(default_field()); u.term])),
+        Ty::Integer => Ok(T::new(
+            Ty::Field,
+            term![Op::IntToPf(default_field()); u.term],
+        )),
         u => Err(format!("Cannot do int-to-field on {u}")),
     }
 }
@@ -905,8 +991,7 @@ pub fn field_to_integer(u: T) -> Result<T, String> {
     }
 }
 
-
-pub fn int_to_bits(i: T, n: usize) -> Result<T,String> {
+pub fn int_to_bits(i: T, n: usize) -> Result<T, String> {
     match &i.ty {
         Ty::Integer => uint_to_bits(T::new(Ty::Uint(n), term![Op::IntToBv(n); i.term])),
         u => Err(format!("Cannot do uint-to-bits on {u}")),
@@ -922,7 +1007,10 @@ pub fn int_size(i: T) -> Result<T, String> {
 
 pub fn int_modinv(i: T, m: T) -> Result<T, String> {
     match (&i.ty, &m.ty) {
-        (Ty::Integer, Ty::Integer) => Ok(T::new(Ty::Integer, term![Op::IntBinOp(IntBinOp::ModInv); i.term, m.term])),
+        (Ty::Integer, Ty::Integer) => Ok(T::new(
+            Ty::Integer,
+            term![Op::IntBinOp(IntBinOp::ModInv); i.term, m.term],
+        )),
         u => Err(format!("Cannot do modinv on {:?}", u)),
     }
 }

@@ -363,34 +363,26 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                     (Some(arr), Some(idx)) => Some(const_(arr.select(idx))),
                     _ => None,
                 },
-                Op::Tuple => {
-                    Some(new_tuple(t
-                            .cs()
-                            .iter()
-                            .map(c_get).collect::<Vec<_>>()))
-                },
-                Op::Field(n) => {
-                    match get(0).op() {
-                        Op::Tuple => {
-                            let term = get(0).cs()[*n].clone();
-                            Some(term.as_value_opt()
+                Op::Tuple => Some(new_tuple(t.cs().iter().map(c_get).collect::<Vec<_>>())),
+                Op::Field(n) => match get(0).op() {
+                    Op::Tuple => {
+                        let term = get(0).cs()[*n].clone();
+                        Some(
+                            term.as_value_opt()
                                 .cloned()
                                 .map(|t| leaf_term(Op::new_const(t)))
-                                .unwrap_or(term))
-                        }
-                        _ => None
+                                .unwrap_or(term),
+                        )
                     }
+                    _ => None,
                 },
-                Op::Update(n) => {
-                    match get(0).op() {
-                        Op::Tuple => {
-                            let mut children = get(0).cs().to_vec();
-                            children[*n] = get(1).clone();
-                            Some(new_tuple(children))
-
-                        }
-                        _ => None
+                Op::Update(n) => match get(0).op() {
+                    Op::Tuple => {
+                        let mut children = get(0).cs().to_vec();
+                        children[*n] = get(1).clone();
+                        Some(new_tuple(children))
                     }
+                    _ => None,
                 },
                 Op::BvConcat => t
                     .cs()
