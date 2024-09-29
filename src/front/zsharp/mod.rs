@@ -1277,7 +1277,7 @@ impl<'ast> ZGen<'ast> {
         match e {
             ast::Expression::Ternary(u) => {
                 match self
-                    .expr_impl_::<false>(&u.first)
+                    .expr_impl_::<IS_CNST>(&u.first)
                     .ok()
                     .and_then(const_bool_simple)
                 {
@@ -1452,8 +1452,8 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{e}"))
             }
             ast::Statement::Assertion(e) => {
-                let expr = self.expr_impl_::<false>(&e.expression);
-                match expr.clone().ok().and_then(const_bool_simple) {
+                let expr = self.expr_impl_::<IS_CNST>(&e.expression)?;
+                match const_bool_simple(expr.clone()) {
                     Some(true) => Ok(()),
                     Some(false) => Err(format!(
                         "Const assert failed: {} at\n{}",
@@ -1464,11 +1464,11 @@ impl<'ast> ZGen<'ast> {
                         span_to_string(e.expression.span()),
                     )),
                     None if IS_CNST => Err(format!(
-                        "Const assert expression eval failed at\n{}",
+                        "Const assert failed (non-const expression) at\n{}",
                         span_to_string(e.expression.span()),
                     )),
                     _ => {
-                        let b = bool(expr?)?;
+                        let b = bool(expr)?;
                         self.assert(b)?;
                         Ok(())
                     }

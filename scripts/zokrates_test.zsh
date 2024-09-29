@@ -29,7 +29,7 @@ function r1cs_test_count {
     zpath=$1
     threshold=$2
     o=$($BIN $zpath r1cs --action count)
-    n_constraints=$(echo $o | grep 'Final r1cs: \d+' -o | grep -Eo '\b[0-9]+\b')
+    n_constraints=$(echo $o | grep -E 'Final r1cs: [0-9]+' -o | grep -Eo '\b[0-9]+\b')
     [[ $n_constraints -lt $threshold ]] || (echo "Got $n_constraints, expected < $threshold" && exit 1)
 }
 
