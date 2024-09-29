@@ -16,14 +16,15 @@ pub use ast::{
     Expression, FieldSuffix, FieldType, File, FromExpression, FromImportDirective,
     FunctionDefinition, HexLiteralExpression, HexNumberExpression, IdentifierExpression,
     ImportDirective, ImportSymbol, InlineArrayExpression, InlineStructExpression,
-    InlineStructMember, IterationStatement, LiteralExpression, MainImportDirective, MemberAccess,
-    NegOperator, NotOperator, Parameter, PosOperator, PostfixExpression, Pragma, PrivateNumber,
-    PrivateVisibility, PublicVisibility, Range, RangeOrExpression, ReturnStatement, Span, Spread,
-    SpreadOrExpression, Statement, StrOperator, StructDefinition, StructField, StructType,
-    SymbolDeclaration, TernaryExpression, ToExpression, Type, TypeDefinition, TypedIdentifier,
-    TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type, U32NumberExpression,
-    U32Suffix, U32Type, IntegerSuffix, IntegerType, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
-    U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, WitnessStatement, EOI,
+    InlineStructMember, IntegerSuffix, IntegerType, IterationStatement, LiteralExpression,
+    MainImportDirective, MemberAccess, NegOperator, NotOperator, Parameter, PosOperator,
+    PostfixExpression, Pragma, PrivateNumber, PrivateVisibility, PublicVisibility, Range,
+    RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement, StrOperator,
+    StructDefinition, StructField, StructType, SymbolDeclaration, TernaryExpression, ToExpression,
+    Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee, U16NumberExpression,
+    U16Suffix, U16Type, U32NumberExpression, U32Suffix, U32Type, U64NumberExpression, U64Suffix,
+    U64Type, U8NumberExpression, U8Suffix, U8Type, UnaryExpression, UnaryOperator, Underscore,
+    Visibility, WitnessStatement, EOI,
 };
 
 mod ast {
@@ -271,7 +272,7 @@ mod ast {
         U16(U16Type<'ast>),
         U32(U32Type<'ast>),
         U64(U64Type<'ast>),
-        Integer(IntegerType<'ast>)
+        Integer(IntegerType<'ast>),
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]
@@ -955,7 +956,7 @@ mod ast {
         U32(U32Suffix<'ast>),
         U64(U64Suffix<'ast>),
         Field(FieldSuffix<'ast>),
-        Integer(IntegerSuffix<'ast>)
+        Integer(IntegerSuffix<'ast>),
     }
 
     #[derive(Debug, FromPest, PartialEq, Clone)]

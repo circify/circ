@@ -191,11 +191,43 @@ pub fn dump_op_stats() {
     }
 }
 
+/// An iterator over a term's children.
+/// It goes in reverse order.
+pub struct TermCsRevIter {
+    term: Term,
+    last_cs: usize,
+}
+
+impl TermCsRevIter {
+    /// Create an iterator over this term's children.
+    pub fn new(term: Term) -> Self {
+        Self {
+            last_cs: term.cs().len(),
+            term,
+        }
+    }
+    /// Get the term.
+    pub fn term(self) -> Term {
+        self.term
+    }
+}
+impl Iterator for TermCsRevIter {
+    type Item = Term;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.last_cs > 0 {
+            self.last_cs -= 1;
+            Some(self.term.cs()[self.last_cs].clone())
+        } else {
+            None
+        }
+    }
+}
+
 /// Iterator over descendents in child-first order.
 pub struct PostOrderSkipIter<'a, F: Fn(&Term) -> bool + 'a> {
     // (cs stacked, term)
-    stack: Vec<(bool, Term)>,
-    visited: TermSet,
+    stack: Vec<TermCsRevIter>,
+    outputed: TermSet,
     skip_if: &'a F,
 }
 
@@ -203,8 +235,8 @@ impl<'a, F: Fn(&Term) -> bool + 'a> PostOrderSkipIter<'a, F> {
     /// Make an iterator over the descendents of `root`.
     pub fn new(root: Term, skip_if: &'a F) -> Self {
         Self {
-            stack: vec![(false, root)],
-            visited: TermSet::default(),
+            stack: vec![TermCsRevIter::new(root)],
+            outputed: TermSet::default(),
             skip_if,
         }
     }
@@ -213,22 +245,27 @@ impl<'a, F: Fn(&Term) -> bool + 'a> PostOrderSkipIter<'a, F> {
 impl<'a, F: Fn(&Term) -> bool + 'a> std::iter::Iterator for PostOrderSkipIter<'a, F> {
     type Item = Term;
     fn next(&mut self) -> Option<Term> {
-        while let Some((children_pushed, t)) = self.stack.last() {
-            if self.visited.contains(t) || (self.skip_if)(t) {
-                self.stack.pop();
-            } else if !children_pushed {
-                self.stack.last_mut().unwrap().0 = true;
-                let last = self.stack.last().unwrap().1.clone();
-                self.stack
-                    .extend(last.cs().iter().map(|c| (false, c.clone())));
-            } else {
-                break;
+        #[allow(clippy::while_let_on_iterator)]
+        while let Some(iter) = self.stack.last_mut() {
+            let mut empty = true;
+            while let Some(n) = iter.next() {
+                if !self.outputed.contains(&n) && !(self.skip_if)(&n) {
+                    self.stack.push(TermCsRevIter::new(n));
+                    empty = false;
+                    break;
+                }
+            }
+            if empty {
+                let term = self.stack.pop().unwrap().term;
+                if !(self.skip_if)(&term) {
+                    // If it is newly inserted
+                    if self.outputed.insert(term.clone()) {
+                        return Some(term);
+                    }
+                }
             }
         }
-        self.stack.pop().map(|(_, t)| {
-            self.visited.insert(t.clone());
-            t
-        })
+        None
     }
 }
 
@@ -250,6 +287,92 @@ pub fn collect_asserted_ops(
 /// Iterator over a node's children.
 pub fn node_cs_iter(node: Term) -> impl Iterator<Item = Term> {
     (0..node.cs().len()).map(move |i| node.cs()[i].clone())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::ir::term::dist::test::*;
+    use itertools::Itertools;
+    use quickcheck_macros::quickcheck;
+    /// Iterator over descendents in child-first order.
+    pub struct PostOrderSkipIterNaive<'a, F: Fn(&Term) -> bool + 'a> {
+        // (cs stacked, term)
+        stack: Vec<(bool, Term)>,
+        visited: TermSet,
+        skip_if: &'a F,
+    }
+
+    impl<'a, F: Fn(&Term) -> bool + 'a> PostOrderSkipIterNaive<'a, F> {
+        /// Make an iterator over the descendents of `root`.
+        pub fn new(root: Term, skip_if: &'a F) -> Self {
+            Self {
+                stack: vec![(false, root)],
+                visited: TermSet::default(),
+                skip_if,
+            }
+        }
+    }
+
+    impl<'a, F: Fn(&Term) -> bool + 'a> std::iter::Iterator for PostOrderSkipIterNaive<'a, F> {
+        type Item = Term;
+        fn next(&mut self) -> Option<Term> {
+            while let Some((children_pushed, t)) = self.stack.last() {
+                if self.visited.contains(t) || (self.skip_if)(t) {
+                    self.stack.pop();
+                } else if !children_pushed {
+                    self.stack.last_mut().unwrap().0 = true;
+                    let last = self.stack.last().unwrap().1.clone();
+                    self.stack
+                        .extend(last.cs().iter().map(|c| (false, c.clone())));
+                } else {
+                    break;
+                }
+            }
+            self.stack.pop().map(|(_, t)| {
+                self.visited.insert(t.clone());
+                t
+            })
+        }
+    }
+
+    fn traversal_crosscheck_skipif(t: Term, skips: Vec<Term>) {
+        let skip_set: TermSet = skips.into_iter().collect();
+        let skip_if = |t: &Term| skip_set.contains(t);
+        let list1 = PostOrderSkipIter::new(t.clone(), &skip_if).collect_vec();
+        let list2 = PostOrderSkipIterNaive::new(t.clone(), &skip_if).collect_vec();
+        assert_eq!(list1, list2, "term: {}\nskips: {:#?}", t, skip_set);
+    }
+
+    #[test]
+    fn traverse_const() {
+        traversal_crosscheck_skipif(bool_lit(true), vec![]);
+    }
+
+    #[test]
+    fn traverse_const_empty() {
+        traversal_crosscheck_skipif(bool_lit(true), vec![bool_lit(true)]);
+    }
+
+    #[test]
+    fn traverse_bool() {
+        traversal_crosscheck_skipif(
+            text::parse_term(
+                b"
+        (declare (
+            (a bool)
+            (b bool)
+        ) (and a b a (or a b a true) false (and a b)))
+        ",
+            ),
+            vec![bool_lit(true)],
+        );
+    }
+
+    #[quickcheck]
+    fn random_bool_opt(ArbitraryTermEnv(t, _values): ArbitraryTermEnv) {
+        traversal_crosscheck_skipif(t, vec![]);
+    }
 }
 
 // impl ChildrenIter {

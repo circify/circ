@@ -204,7 +204,9 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
             DS::Field(s) => self
                 .ty
                 .replace(Basic(Field(ast::FieldType { span: s.span }))),
-            DS::Integer(s) => self.ty.replace(Basic(Integer(ast::IntegerType {span: s.span }))),
+            DS::Integer(s) => self
+                .ty
+                .replace(Basic(Integer(ast::IntegerType { span: s.span }))),
         };
         Ok(())
     }

@@ -443,12 +443,12 @@ impl R1cs {
         let s = &mut self.stats;
         s.n_constraints = self.constraints.len() as u32;
         for (a, b, c) in &self.constraints {
-            let n_a = a.monomials.len() + !a.constant.is_zero() as usize;
-            let n_b = b.monomials.len() + !b.constant.is_zero() as usize;
-            let n_c = c.monomials.len() + !c.constant.is_zero() as usize;
-            s.n_a_entries += n_a as u32;
-            s.n_b_entries += n_b as u32;
-            s.n_c_entries += n_c as u32;
+            let n_a = a.monomials.len() as u32 + !a.constant.is_zero() as u32;
+            let n_b = b.monomials.len() as u32 + !b.constant.is_zero() as u32;
+            let n_c = c.monomials.len() as u32 + !c.constant.is_zero() as u32;
+            s.n_a_entries += n_a;
+            s.n_b_entries += n_b;
+            s.n_c_entries += n_c;
         }
     }
 }

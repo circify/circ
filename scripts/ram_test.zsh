@@ -55,7 +55,7 @@ function cs_count_test {
     cs_upper_bound=$2
     rm -rf P V pi
     output=$($BIN $ex_name r1cs --action count |& cat)
-    n_constraints=$(echo "$output" | grep 'Final R1cs size:' | grep -Eo '\b[0-9]+\b')
+    n_constraints=$(echo "$output" | grep -E 'Final r1cs: [0-9]+' -o | grep -Eo '\b[0-9]+\b')
     [[ $n_constraints -lt $cs_upper_bound ]] || (echo "Got $n_constraints, expected < $cs_upper_bound" && exit 1)
 }
 

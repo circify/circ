@@ -414,7 +414,9 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             },
             Pow => match &bt {
                 // XXX does POW operator really require U32 RHS?
-                Field(_) | Integer(_) => Ok((Basic(bt), Basic(U32(ast::U32Type { span: be.span })))),
+                Field(_) | Integer(_) => {
+                    Ok((Basic(bt), Basic(U32(ast::U32Type { span: be.span }))))
+                }
                 _ => Err(ZVisitorError(
                     "ZStatementWalker: pow operator must take Field LHS and U32 RHS".to_owned(),
                 )),
