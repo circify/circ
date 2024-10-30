@@ -1,1 +1,5 @@
-from "EMBED" import u8_to_u16 as main
+from "EMBED" import u8_to_u16;
+
+def main(u8 a) -> u16 {
+    return u8_to_u16(a);
+}

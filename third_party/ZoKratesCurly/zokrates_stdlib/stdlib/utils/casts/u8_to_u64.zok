@@ -1,1 +1,5 @@
-from "EMBED" import u8_to_u64 as main
+from "EMBED" import u8_to_u64;
+
+def main(u8 a) -> u64 {
+    return u8_to_u64(a);
+}

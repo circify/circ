@@ -1,1 +1,5 @@
-from "EMBED" import u32_from_bits as main
+from "EMBED" import u32_from_bits;
+
+def main(bool[32] a) -> u32 {
+    return u32_from_bits(a);
+}
