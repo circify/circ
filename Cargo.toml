@@ -20,6 +20,8 @@ rsmt2 = { version = "0.14", optional = true }
 ieee754 = { version = "0.2", optional = true}
 zokrates_parser = { path = "third_party/ZoKrates/zokrates_parser", optional = true }
 zokrates_pest_ast = { path = "third_party/ZoKrates/zokrates_pest_ast", optional = true }
+zokrates_curly_parser = { package = "zokrates_parser", path = "third_party/ZoKratesCurly/zokrates_parser", optional = true }
+zokrates_curly_pest_ast = { package = "zokrates_pest_ast", path = "third_party/ZoKratesCurly/zokrates_pest_ast", optional = true }
 typed-arena = { version = "2.0", optional = true }
 log = "0.4"
 thiserror = "1.0"
@@ -65,6 +67,7 @@ default = []
 # frontends
 c = ["lang-c"]
 zok = ["smt", "zokrates_parser", "zokrates_pest_ast", "typed-arena", "petgraph"]
+zokc = ["smt", "zokrates_curly_parser", "zokrates_curly_pest_ast", "typed-arena", "petgraph"]
 datalog = ["pest", "pest-ast", "pest_derive", "from-pest", "lazy_static"]
 # backends
 smt = ["rsmt2", "ieee754"]

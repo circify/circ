@@ -1,0 +1,10 @@
+def u8log2(u8 x) -> u8:
+  u8 acc = 0x00
+  for field i in 0..8 do
+      acc = acc + if x != 0x00 then 0x01 else 0x00 fi
+      x = x >> 1
+  endfor
+  return acc
+
+def main(private u8 x) -> u8:
+  return x + u8log2(x)

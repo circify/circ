@@ -1,0 +1,2 @@
+def main(private<1> u32 a, private<2> u32 b) -> bool:
+    return a == b

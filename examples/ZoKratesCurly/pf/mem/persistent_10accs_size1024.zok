@@ -1,0 +1,16 @@
+// persistent RAM
+// TEST_FILE
+// FEATURES: r1cs poly
+// CMD: $circ $file r1cs --proof-impl mirage --action count
+const u32 LEN = 1024
+const field ACC = 10
+
+def main(committed field[LEN] array, private field x, private field y, private bool b) -> field:
+    field x_pow = 1f
+    for field i in 0..(ACC-1) do
+        cond_store(array, x+i, x_pow, b)
+        x_pow = x * x_pow
+    endfor
+    return array[y]
+
+

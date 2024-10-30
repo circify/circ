@@ -1,0 +1,11 @@
+struct Foo<N, M> {
+    field[N] n
+    field[M] m
+}
+
+type Bar<N> = Foo<N, N>
+
+def main() -> bool:
+    Foo<5, 5> q = Foo { n: [0; 5], m: [0; 5] }
+    Bar<5> u = Bar { n: [0; 5], m: [0; 5] }
+    return q == u

@@ -6,6 +6,8 @@ pub mod c;
 pub mod datalog;
 #[cfg(all(feature = "smt", feature = "zok"))]
 pub mod zsharp;
+#[cfg(all(feature = "smt", feature = "zokc"))]
+pub mod zsharpcurly;
 
 use crate::ir::proof;
 use crate::ir::term::{Computations, PartyId};

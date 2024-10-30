@@ -1,0 +1,118 @@
+// Examples of different SHA-esque operations being performed using sparse form
+// and lookup arguments
+
+
+// python -c "b=8;dtos=lambda d: sum(4**i*int(b) for i, b in enumerate(bin(d)[2:][::-1]));print(f'const transcript field[{2**b}] D_TO_S_{b} = [', ', '.join(str(dtos(i)) for i in range(2**b)), ']', sep='')"
+const transcript field[256] D_TO_S_8 = [0, 1, 4, 5, 16, 17, 20, 21, 64, 65, 68, 69, 80, 81, 84, 85, 256, 257, 260, 261, 272, 273, 276, 277, 320, 321, 324, 325, 336, 337, 340, 341, 1024, 1025, 1028, 1029, 1040, 1041, 1044, 1045, 1088, 1089, 1092, 1093, 1104, 1105, 1108, 1109, 1280, 1281, 1284, 1285, 1296, 1297, 1300, 1301, 1344, 1345, 1348, 1349, 1360, 1361, 1364, 1365, 4096, 4097, 4100, 4101, 4112, 4113, 4116, 4117, 4160, 4161, 4164, 4165, 4176, 4177, 4180, 4181, 4352, 4353, 4356, 4357, 4368, 4369, 4372, 4373, 4416, 4417, 4420, 4421, 4432, 4433, 4436, 4437, 5120, 5121, 5124, 5125, 5136, 5137, 5140, 5141, 5184, 5185, 5188, 5189, 5200, 5201, 5204, 5205, 5376, 5377, 5380, 5381, 5392, 5393, 5396, 5397, 5440, 5441, 5444, 5445, 5456, 5457, 5460, 5461, 16384, 16385, 16388, 16389, 16400, 16401, 16404, 16405, 16448, 16449, 16452, 16453, 16464, 16465, 16468, 16469, 16640, 16641, 16644, 16645, 16656, 16657, 16660, 16661, 16704, 16705, 16708, 16709, 16720, 16721, 16724, 16725, 17408, 17409, 17412, 17413, 17424, 17425, 17428, 17429, 17472, 17473, 17476, 17477, 17488, 17489, 17492, 17493, 17664, 17665, 17668, 17669, 17680, 17681, 17684, 17685, 17728, 17729, 17732, 17733, 17744, 17745, 17748, 17749, 20480, 20481, 20484, 20485, 20496, 20497, 20500, 20501, 20544, 20545, 20548, 20549, 20560, 20561, 20564, 20565, 20736, 20737, 20740, 20741, 20752, 20753, 20756, 20757, 20800, 20801, 20804, 20805, 20816, 20817, 20820, 20821, 21504, 21505, 21508, 21509, 21520, 21521, 21524, 21525, 21568, 21569, 21572, 21573, 21584, 21585, 21588, 21589, 21760, 21761, 21764, 21765, 21776, 21777, 21780, 21781, 21824, 21825, 21828, 21829, 21840, 21841, 21844, 21845]
+
+const transcript field[8] D_TO_S_3 = [0, 1, 4, 5, 16, 17, 20, 21]
+
+const transcript field[8] D_3 = [0, 1, 2, 3, 4, 5, 6, 7]
+
+// python -c "b=8;dtos=lambda d: sum(4**i*int(b) for i, b in enumerate(bin(d)[2:][::-1]));print(f'const field S_ONES_{b} = {dtos(2**b-1)}');print(f'const field D_ONES_{b} = {2**b-1}')"
+const field S_ONES_8 = 21845
+const field D_ONES_8 = 255
+
+from "EMBED" import unpack, value_in_array, reverse_lookup, fits_in_bits
+
+// split a number into (unchecked) high and low bits
+def unsafe_split<LOW_BITS,HIGH_BITS>(field x) -> field[2]:
+  bool[LOW_BITS+HIGH_BITS] bits = unpack(x)
+  field low = 0
+  field high = 0
+  for u32 i in 0..LOW_BITS do
+    low = low + 2 ** i * (if bits[LOW_BITS+HIGH_BITS-1-i] then 1 else 0 fi)
+  endfor
+  for u32 i in LOW_BITS..HIGH_BITS do
+    high = high + 2 ** i * (if bits[LOW_BITS+HIGH_BITS-1-i] then 1 else 0 fi)
+  endfor
+  return [low, high]
+
+// split a 2N bit number into (unchecked) even and odd bits (in sparse form)
+def unsafe_separate_sparse<N>(field x) -> field[2]:
+  bool[2*N] bits = unpack(x)
+  field even = 0
+  field odd = 0
+  for u32 i in 0..N do
+    even = even + 4 ** i * (if bits[2*N-1-(2*i)] then 1 else 0 fi)
+    odd = odd + 4 ** i * (if bits[2*N-1-(2*i+1)] then 1 else 0 fi)
+  endfor
+  return [even, odd]
+
+struct Dual {
+    field s
+    field d
+}
+
+// convert a dense 8-bit value to dual form; ensures the value fits in 8 bits.
+def dense_to_dual_8(field x) -> Dual:
+  field s = D_TO_S_8[x]
+  return Dual {s: s, d: x}
+
+// get the even bits of a 16-bit value in dual form; ensures the value fits in 16 bits.
+def split_even_dual_8(field x) -> Dual:
+  unsafe witness field[2] split = unsafe_separate_sparse::<8>(x)
+  field even = split[0]
+  field odd = split[1]
+  assert(x == 2 * odd + even)
+  field even_d = reverse_lookup(D_TO_S_8, even)
+  assert(value_in_array(odd, D_TO_S_8))
+  return Dual { s: even, d: even_d }
+
+// get the odd bits of a 16-bit value in dual form; ensures the value fits in 16 bits.
+def split_odd_dual_8(field x) -> Dual:
+  unsafe witness field[2] split = unsafe_separate_sparse::<8>(x)
+  field even = split[0]
+  field odd = split[1]
+  assert(x == 2 * odd + even)
+  field odd_d = reverse_lookup(D_TO_S_8, odd)
+  assert(value_in_array(even, D_TO_S_8))
+  return Dual { s: odd, d: odd_d }
+
+// get the even and odd bits of a 16-bit value in dual form; ensures the value fits in 16 bits.
+def split_both_dual_8(field x) -> Dual[2]:
+  unsafe witness field[2] split = unsafe_separate_sparse::<8>(x)
+  field even = split[0]
+  field odd = split[1]
+  field odd_d = reverse_lookup(D_TO_S_8, odd)
+  field even_d = reverse_lookup(D_TO_S_8, even)
+  return [Dual { s: even, d: even_d }, Dual { s: odd, d: odd_d }]
+
+def and_8(Dual x, Dual y) -> Dual:
+  return split_odd_dual_8(x.s + y.s)
+
+def maj_8(Dual x, Dual y, Dual z) -> Dual:
+  return split_odd_dual_8(x.s + y.s + z.s)
+
+def xor_8(Dual x, Dual y, Dual z) -> Dual:
+  return split_even_dual_8(x.s + y.s + z.s)
+
+def not_8(Dual x) -> Dual:
+  return Dual { s: S_ONES_8 - x.s, d: D_ONES_8 - x.d }
+
+def or_8(Dual x, Dual y) -> Dual:
+  return not_8(and_8(not_8(x), not_8(y)))
+
+// split s into 8 low bits and 3 high bits, and return the low bits
+// in dual form.
+def normalize_sum_8(field s) -> Dual:
+  unsafe witness field[2] split = unsafe_split::<8, 3>(s)
+  field low = split[0]
+  field high = split[1]
+  assert(value_in_array(high, D_3))
+  return dense_to_dual_8(low)
+
+//do a bitwise AND.
+def main(private field dense_x, private field dense_y) -> field:
+  Dual z = dense_to_dual_8(0)
+  Dual x = dense_to_dual_8(dense_x) // 10001000 (136)
+  Dual y = dense_to_dual_8(dense_y) // 10000001 (129)
+  Dual a = and_8(x, y)              // 10000000
+  Dual b = or_8(x, y)               // 10001001
+  Dual c = xor_8(x, y, z)           // 00001001
+  Dual d = maj_8(x, y, c)           // 10001001
+  Dual s = normalize_sum_8(d.d + c.d + b.d + a.d) // 10011011 (128+27=155)
+  return s.d
+
+
+

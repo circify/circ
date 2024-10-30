@@ -1,0 +1,14 @@
+const u32 LEN = 4
+const u32 ACCESSES = 2
+
+const transcript field[LEN] array = [0, ...[100; LEN-1]]
+
+def main(private field[ACCESSES] y) -> field:
+    field result = 0
+
+    for u32 i in 0..ACCESSES do
+        assert(array[y[i]] == 0)
+    endfor
+    return result
+
+

@@ -1,0 +1,10 @@
+struct Foo {
+    u32 a
+}
+
+struct Foo {
+    u32 b
+}
+
+def main() -> bool:
+    return true

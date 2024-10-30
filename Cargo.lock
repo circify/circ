@@ -365,8 +365,10 @@ dependencies = [
  "spartan",
  "thiserror",
  "typed-arena",
- "zokrates_parser",
- "zokrates_pest_ast",
+ "zokrates_parser 0.2.4",
+ "zokrates_parser 0.2.4-curly",
+ "zokrates_pest_ast 0.2.3",
+ "zokrates_pest_ast 0.2.3-curly",
 ]
 
 [[package]]
@@ -1891,10 +1893,29 @@ dependencies = [
 
 [[package]]
 name = "zokrates_parser"
+version = "0.2.4-curly"
+dependencies = [
+ "pest",
+ "pest_derive",
+]
+
+[[package]]
+name = "zokrates_parser"
 version = "0.2.4"
 dependencies = [
  "pest",
  "pest_derive",
+]
+
+[[package]]
+name = "zokrates_pest_ast"
+version = "0.2.3-curly"
+dependencies = [
+ "from-pest",
+ "lazy_static",
+ "pest",
+ "pest-ast",
+ "zokrates_parser 0.2.4-curly",
 ]
 
 [[package]]
@@ -1905,5 +1926,5 @@ dependencies = [
  "lazy_static",
  "pest",
  "pest-ast",
- "zokrates_parser",
+ "zokrates_parser 0.2.4",
 ]

@@ -1,0 +1,2 @@
+def main(private u8 x) -> u8:
+    return 0x02 * x

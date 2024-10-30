@@ -1,0 +1,9 @@
+struct P {
+    field x
+    field[2] y
+}
+
+def main(field[2] a, field b, P c) -> field:
+    return a[0] + a[1] + b + c.x + c.y[0] + c.y[1]
+
+

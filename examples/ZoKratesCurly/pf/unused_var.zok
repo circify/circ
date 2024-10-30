@@ -1,0 +1,2 @@
+def main(u64 x0, u64 x1, u64 x2) -> u64:
+    return x0 * x1

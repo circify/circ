@@ -1,0 +1,11 @@
+// volatile RAM
+const u32 LEN = 8196
+const field ACC = 10
+
+def main(private field x, private field y, private bool b) -> field:
+    transcript field[LEN] array = [0; LEN]
+    for field i in 0..ACC do
+        cond_store(array, x+i, 1f, b)
+    endfor
+    return array[y]
+

@@ -1,0 +1,10 @@
+def u16log2(u16 x) -> u16:
+  u16 acc = 0x0000
+  for field i in 0..16 do
+      acc = acc + if x != 0x0000 then 0x0001 else 0x0000 fi
+      x = x >> 1
+  endfor
+  return acc
+
+def main(private u16 x) -> u16:
+  return x + u16log2(x)

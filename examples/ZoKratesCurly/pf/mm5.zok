@@ -1,0 +1,12 @@
+def main(private field[5][5] A, private field[5][5] B) -> field[5][5]:
+    field [5][5] AB = [[0; 5]; 5]
+    for field i in 0..5 do
+        for field j in 0..5 do
+            for field k in 0..5 do
+                AB[i][j] = AB[i][j] + A[i][k] * B[k][j]
+            endfor
+        endfor
+    endfor
+    return AB
+
+

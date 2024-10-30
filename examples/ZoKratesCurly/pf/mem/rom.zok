@@ -1,0 +1,22 @@
+const u32 VAL_LEN = 3
+const u32 RAM_LEN = 20
+const u32 ACCESSES = 400
+
+struct Val {
+    field x
+    field y
+}
+
+const transcript Val[RAM_LEN] array = [Val{x: 0, y: 0}, ...[Val{x: 10, y: 10}; RAM_LEN-1]]
+
+def main(private field[ACCESSES] y) -> field:
+    field result = 0
+
+    for u32 i in 0..ACCESSES do
+        Val v = array[y[i]]
+        result = result + v.x + v.y
+    endfor
+    return result
+
+
+

@@ -1,0 +1,125 @@
+// from "certificate" import Certificate
+
+struct BigNatParams {
+    field max_words //max value for each limb
+    //u32 limb_width//should be no need now
+    //u64 n_limbs
+}
+
+struct BigNatb<N, W> {
+    bool[N][W] limbs
+    //BigNatParams bparams
+}
+
+struct BigNatb_v2<Nm1, W, W2> {
+    bool[Nm1][W] limbs
+    bool[W2] limb
+}
+
+struct BigNat<N> {
+    field[N] limbs
+    //BigNatParams bparams
+}
+
+struct GpBigNats<NG> {
+    BigNat<NG> left
+    BigNat<NG> right
+}
+
+struct BigNatModMult<W, A, Z, ZG, CW, Q, V> {
+    BigNat<Z> z
+    BigNat<V> v
+    BigNatb<Q, W> quotientb
+    bool[ZG][CW] carry
+    BigNatb<A, W> res
+}
+
+struct BigNatModMult_v4<W, A, Z, CW, Q, V> { // be careful of the generics
+    BigNat<Z> z
+    BigNat<V> v
+    BigNatb<Q, W> quotientb
+    bool[CW] carry
+    BigNatb<A, W> res
+}
+
+struct BigNatModMult_v5<W, W2, A, Z, CW, Qm1, V> { // be careful of the generics
+    BigNat<Z> z
+    BigNat<V> v
+    BigNatb_v2<Qm1, W, W2> quotientb
+    // BigNatb<Q, W> quotientb
+    bool[CW] carry
+    BigNatb<A, W> res
+}
+
+struct BigNatModMult_v6<W, W2, A, Z, ZG, Qm1, V> { // be careful of the generics
+    BigNat<Z> z
+    BigNat<V> v
+    BigNatb_v2<Qm1, W, W2> quotientb
+    // BigNatb<Q, W> quotientb
+    // bool[CW] carry
+    field[ZG] carry
+    BigNatb<A, W> res
+}
+
+struct BigNatModMultwores_v5<W, W2, Z, V, Qm1, CW> { // be careful of the generics
+    BigNat<Z> z
+    BigNat<V> v
+    BigNatb_v2<Qm1, W, W2> quotientb
+    bool[CW] carry
+}
+
+struct BigNatModMult_v2<W, W2, Am1, Z, ZG, CW, Qm1, V> {
+    BigNat<Z> z
+    BigNat<V> v
+    BigNatb_v2<Qm1, W, W2> quotientb
+    bool[ZG][CW] carry
+    BigNatb_v2<Am1, W, W2> res
+}
+
+struct BigNatMod<W, A, ZG, CW, Q, V> {
+    BigNat<V> v
+    BigNatb<Q, W> quotientb
+    bool[ZG][CW] carry
+    BigNatb<A, W> res
+}
+
+
+// BigNatMont<W, Z, ZG, CW, P, Q, V>[EXPBITS] mont
+//     def MonPro<W, Z, ZG, ZGW, P, Q, QW, V, CW>(BigNat<P> a, BigNat<P> b, BigNat<P> modulus, BigNat<Q> mod_prim, BigNatb<P, W>[3] res, BigNatModMult<W, Z, ZG, CW, Q, V>[3] mm, bool greaterthanp, bool[ZG][ZGW] carry) -> BigNat<P>: //assume we know the number of limbs at compile time
+//     BigNat<P> cur_x = MonPro::<W, Z, ZG, ZGW, P, Q, W, V, CW>(init_mont, x, modul, mod_prim, mont[0].res, mont[0].mm, mont[0].greaterthanp, mont[0].carry) // compute MonPro(a~, x~) // assume A = P
+
+
+
+struct BigNatMont<W, Z, ZG, CW, P, Q, V> {
+    BigNatb<P, W>[3] res
+    BigNatModMult<W, Z, ZG, CW, Q, V>[3] mm
+    bool greaterthanp
+    bool[ZG][CW] carry
+}
+
+struct BigNatAdd<Z, ZG, ZGW, Q, QW, V> {
+    BigNat<V> v
+    BigNatb<Q, QW> quotientb
+    bool[ZG][ZGW] carry
+}
+
+// u32 AC = NG+1
+// u32 ZG = NG-1
+struct ModuloConst<ZG, NG, AC>{
+    u8[ZG] CW_list
+    field[NG] gp_maxword
+    field[AC] aux_const
+}
+
+struct ModuloHelperConst<ZG, NG, AC>{
+    ModuloConst<ZG, NG, AC> moduloconst
+    field shift
+}
+
+// r = 2^4096
+const BigNat<34> r = BigNat {limbs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10141204801825835211973625643008]}
+// const BigNat<NLIMBSP1> r = BigNat {limbs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]}
+
+
+def main(BigNatb<10, 256> a, BigNat<10> b) -> bool:
+    return true

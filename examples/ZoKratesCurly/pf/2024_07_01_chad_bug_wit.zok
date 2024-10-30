@@ -1,0 +1,19 @@
+// TEST_FILE
+// FEATURES: r1cs poly
+// CMD: $circ $file r1cs --proof-impl mirage --action count
+def unsafe_baz<M>(field input) -> field[M]:
+    return [input; M]
+
+def foo<M>(field input) -> field[M]:
+    unsafe witness field[M] inputs = unsafe_baz::<M>(input)
+    assert(inputs[0] == input)
+    return inputs
+
+def bar<N,M>(field[N][M] input) -> field[M]:
+    return foo::<M>(input[0][0])
+
+def main(field[8] a) -> bool:
+    field[8] x = bar::<2,8>([a, a])
+    field[8] y = bar::<2,8>([x, a])
+    //field[8] y = foo::<8>(x[0])
+    return true

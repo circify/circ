@@ -1,0 +1,5 @@
+const u32 A = 1
+const u32 A = 2
+
+def main() -> bool:
+    return false

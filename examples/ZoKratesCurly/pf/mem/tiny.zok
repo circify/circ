@@ -1,0 +1,5 @@
+// persistent RAM
+def main(committed field[4] array, private field x) -> field:
+    field y = array[x]
+    cond_store(array, x, 0f, true)
+    return y

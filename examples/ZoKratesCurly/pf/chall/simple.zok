@@ -1,0 +1,7 @@
+from "EMBED" import sample_challenge
+
+def main(private field x, private field y) -> field:
+    field a = sample_challenge([x, y])
+    assert(a * x == a * y)
+    return x
+

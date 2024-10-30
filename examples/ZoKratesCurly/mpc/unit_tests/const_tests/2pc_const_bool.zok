@@ -1,0 +1,3 @@
+def main(private<1> bool a, private<2> bool b) -> bool:
+  bool c = true
+  return a == c 
