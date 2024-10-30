@@ -761,7 +761,7 @@ pub fn const_bool(a: T) -> Option<bool> {
 
 pub fn const_fold(t: T) -> T {
     let folded = constant_fold(&t.term, &[]);
-    return T::new(t.ty, folded);
+    T::new(t.ty, folded)
 }
 
 pub fn const_val(a: T) -> Result<T, String> {
@@ -1266,7 +1266,7 @@ impl Embeddable for ZSharp {
                     term(
                         Op::Tuple,
                         tys.iter()
-                            .zip(ps.into_iter())
+                            .zip(ps)
                             .enumerate()
                             .map(|(i, (ty, p))| {
                                 self.declare_input(

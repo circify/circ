@@ -1134,12 +1134,11 @@ impl CGen {
                     }
                 };
             }
-            Statement::Expression(expr) => match expr {
-                Some(e) => {
+            Statement::Expression(expr) => {
+                if let Some(e) = expr {
                     self.gen_expr(&e.node);
                 }
-                None => {}
-            },
+            }
             Statement::For(for_stmt) => {
                 // TODO: Add enter_breakable
                 self.circ_enter_scope();

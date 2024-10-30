@@ -265,7 +265,7 @@ impl<'ast> ZGen<'ast> {
                         args.len(),
                         f_name
                     ))
-                } else if generics.len() != 0 {
+                } else if !generics.is_empty() {
                     Err(format!(
                         "Got {} generic args to EMBED/{}, expected 0",
                         generics.len(),
@@ -282,7 +282,7 @@ impl<'ast> ZGen<'ast> {
                         args.len(),
                         f_name
                     ))
-                } else if generics.len() != 0 {
+                } else if !generics.is_empty() {
                     Err(format!(
                         "Got {} generic args to EMBED/{}, expected 0",
                         generics.len(),
@@ -830,7 +830,7 @@ impl<'ast> ZGen<'ast> {
             .unify_generic(egv, exp_ty, arg_tys)?;
 
         let mut generic_vec = generics.clone().into_iter().collect::<Vec<_>>();
-        generic_vec.sort_by(|(a, _), (b, _)| a.cmp(&b));
+        generic_vec.sort_by(|(a, _), (b, _)| a.cmp(b));
         let before = time::Instant::now();
 
         let input = FnCallImplInput(
@@ -1129,23 +1129,18 @@ impl<'ast> ZGen<'ast> {
                         .push(cmp);
                 }
             }
-        } else {
-            match self.mode {
-                Mode::Proof => {
-                    // set ret_eq to true
-                    let ret_eq = term![Op::Const(Box::new(Value::Bool(true)))];
-                    let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
-                    let to_assert = if assertions.is_empty() {
-                        ret_eq
-                    } else {
-                        assertions.push(ret_eq);
-                        term(AND, assertions)
-                    };
-                    debug!("Assertion: {}", to_assert);
-                    self.circ.borrow_mut().assert(to_assert);
-                }
-                _ => {}
-            }
+        } else if let Mode::Proof = self.mode {
+            // set ret_eq to true
+            let ret_eq = term![Op::Const(Box::new(Value::Bool(true)))];
+            let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
+            let to_assert = if assertions.is_empty() {
+                ret_eq
+            } else {
+                assertions.push(ret_eq);
+                term(AND, assertions)
+            };
+            debug!("Assertion: {}", to_assert);
+            self.circ.borrow_mut().assert(to_assert);
         }
     }
 
