@@ -113,10 +113,7 @@ pub trait ZVisitorMut<'ast>: Sized {
         Ok(())
     }
 
-    fn visit_private_visibility(
-        &mut self,
-        _pr: &mut ast::PrivateVisibility,
-    ) -> ZVisitorResult {
+    fn visit_private_visibility(&mut self, _pr: &mut ast::PrivateVisibility) -> ZVisitorResult {
         Ok(())
     }
 
@@ -288,10 +285,7 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_ternary_expression(self, te)
     }
 
-    fn visit_if_else_expression(
-        &mut self,
-        ie: &mut ast::IfElseExpression<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_if_else_expression(&mut self, ie: &mut ast::IfElseExpression<'ast>) -> ZVisitorResult {
         walk_if_else_expression(self, ie)
     }
 
@@ -327,9 +321,12 @@ pub trait ZVisitorMut<'ast>: Sized {
         Ok(())
     }
 
-    fn visit_assign_constrain_operator(&mut self, _aco: &mut ast::AssignConstrainOperator) -> ZVisitorResult {
+    fn visit_assign_constrain_operator(
+        &mut self,
+        _aco: &mut ast::AssignConstrainOperator,
+    ) -> ZVisitorResult {
         Ok(())
-    }  
+    }
 
     fn visit_postfix_expression(
         &mut self,
@@ -384,7 +381,10 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_dot_access(self, ma)
     }
 
-    fn visit_identifier_or_decimal(&mut self, ido: &mut ast::IdentifierOrDecimal<'ast>) -> ZVisitorResult {
+    fn visit_identifier_or_decimal(
+        &mut self,
+        ido: &mut ast::IdentifierOrDecimal<'ast>,
+    ) -> ZVisitorResult {
         walk_identifier_or_decimal(self, ido)
     }
 

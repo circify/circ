@@ -443,12 +443,8 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             ArrayInitializer(_) => {
                 Err("ZGenericInf: got ArrayInitializer in array dim expr (unimpl)".into())
             }
-            IfElse(_) => {
-                Err("ZGenericInf: got IfElse in array dim expr (unimpl)".into())
-            },
-            InlineTuple(_) => {
-                Err("ZGenericInf: got InlineTuple in array dim expr (unimpl)".into())
-            }
+            IfElse(_) => Err("ZGenericInf: got IfElse in array dim expr (unimpl)".into()),
+            InlineTuple(_) => Err("ZGenericInf: got InlineTuple in array dim expr (unimpl)".into()),
         }
     }
 }

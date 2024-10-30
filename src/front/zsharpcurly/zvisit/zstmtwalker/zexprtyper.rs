@@ -107,10 +107,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         Ok(())
     }
 
-    fn visit_if_else_expression(
-        &mut self,
-        ie: &mut ast::IfElseExpression<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_if_else_expression(&mut self, ie: &mut ast::IfElseExpression<'ast>) -> ZVisitorResult {
         self.visit_expression(&mut ie.consequence)?;
         let ty2 = self.take()?;
         self.visit_expression(&mut ie.alternative)?;
@@ -131,7 +128,14 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         use ast::{BasicType::*, Type::*};
         assert!(self.ty.is_none());
         match &be.op {
-            ast::BinaryOperator::Or | ast::BinaryOperator::And | ast::BinaryOperator::Eq | ast::BinaryOperator::NotEq | ast::BinaryOperator::Lt | ast::BinaryOperator::Gt | ast::BinaryOperator::Lte | ast::BinaryOperator::Gte => {
+            ast::BinaryOperator::Or
+            | ast::BinaryOperator::And
+            | ast::BinaryOperator::Eq
+            | ast::BinaryOperator::NotEq
+            | ast::BinaryOperator::Lt
+            | ast::BinaryOperator::Gt
+            | ast::BinaryOperator::Lte
+            | ast::BinaryOperator::Gte => {
                 self.ty
                     .replace(Basic(Boolean(ast::BooleanType { span: be.span })));
             }
@@ -139,7 +143,16 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                 self.ty
                     .replace(Basic(Field(ast::FieldType { span: be.span })));
             }
-            ast::BinaryOperator::BitXor | ast::BinaryOperator::BitAnd | ast::BinaryOperator::BitOr | ast::BinaryOperator::RightShift | ast::BinaryOperator::LeftShift | ast::BinaryOperator::Add | ast::BinaryOperator::Sub | ast::BinaryOperator::Mul | ast::BinaryOperator::Div | ast::BinaryOperator::Rem => {
+            ast::BinaryOperator::BitXor
+            | ast::BinaryOperator::BitAnd
+            | ast::BinaryOperator::BitOr
+            | ast::BinaryOperator::RightShift
+            | ast::BinaryOperator::LeftShift
+            | ast::BinaryOperator::Add
+            | ast::BinaryOperator::Sub
+            | ast::BinaryOperator::Mul
+            | ast::BinaryOperator::Div
+            | ast::BinaryOperator::Rem => {
                 self.visit_expression(&mut be.left)?;
                 let ty_l = self.take()?;
                 self.visit_expression(&mut be.right)?;
@@ -164,8 +177,14 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                                 .to_string(),
                         ));
                     }
-                    if matches!(&be.op, ast::BinaryOperator::BitXor | ast::BinaryOperator::BitAnd | ast::BinaryOperator::BitOr | ast::BinaryOperator::RightShift | ast::BinaryOperator::LeftShift)
-                        && matches!(&ty, Basic(Field(_)))
+                    if matches!(
+                        &be.op,
+                        ast::BinaryOperator::BitXor
+                            | ast::BinaryOperator::BitAnd
+                            | ast::BinaryOperator::BitOr
+                            | ast::BinaryOperator::RightShift
+                            | ast::BinaryOperator::LeftShift
+                    ) && matches!(&ty, Basic(Field(_)))
                     {
                         return Err(ZVisitorError(
                             "ZExpressionTyper: got Field for a binop that cannot support it"

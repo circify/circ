@@ -45,6 +45,10 @@ pub fn extract(
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         )),
-        Ty::Tuple(tys) => Ok(T::new_tuple(tys.iter().map(|ty| extract(name, ty, scalar_input_values)).collect::<Result<Vec<_>, _>>()?)),
+        Ty::Tuple(tys) => Ok(T::new_tuple(
+            tys.iter()
+                .map(|ty| extract(name, ty, scalar_input_values))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
     }
 }

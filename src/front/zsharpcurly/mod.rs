@@ -20,8 +20,8 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
-use zokrates_curly_pest_ast as ast;
 use std::time;
+use zokrates_curly_pest_ast as ast;
 
 use term::*;
 use zvisit::{ZConstLiteralRewriter, ZGenericInf, ZStatementWalker, ZVisitorMut};
@@ -37,7 +37,6 @@ pub struct Inputs {
     pub mode: Mode,
 }
 
-
 #[allow(dead_code)]
 fn const_value_simple(term: &Term) -> Option<Value> {
     match term.op() {
@@ -51,7 +50,7 @@ fn const_bool_simple(t: T) -> Option<bool> {
     match const_value_simple(&t.term) {
         Some(Value::Bool(b)) => Some(b),
         _ => None,
-    } 
+    }
 }
 
 #[allow(dead_code)]
@@ -132,7 +131,7 @@ struct ZGen<'ast> {
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-struct FnCallImplInput(bool, Vec<T>, Vec<(String,T)>, PathBuf, String);
+struct FnCallImplInput(bool, Vec<T>, Vec<(String, T)>, PathBuf, String);
 
 impl<'ast> Drop for ZGen<'ast> {
     fn drop(&mut self) {
@@ -570,10 +569,9 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{e}"))?
                 .unwrap_term()
         };
-        let new =
-            loc_store(old, &zaccs[..], val)
-                .map(const_fold)
-                .and_then(|n| if strict { const_val_simple(n) } else { Ok(n) })?;
+        let new = loc_store(old, &zaccs[..], val)
+            .map(const_fold)
+            .and_then(|n| if strict { const_val_simple(n) } else { Ok(n) })?;
         debug!("Assign: {}", name);
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -591,7 +589,7 @@ impl<'ast> ZGen<'ast> {
         // Get the variable name and accesses from the assignee
         let name = &assign.assignee.id.value;
         let accs = &assign.assignee.accesses;
-    
+
         // Convert AST accesses to IR accesses
         let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
         // Get the current value
@@ -610,9 +608,9 @@ impl<'ast> ZGen<'ast> {
         let new = loc_store(old, &zaccs[..], val)
             .map(const_fold)
             .and_then(|n| if IS_CNST { const_val_simple(n) } else { Ok(n) })?;
-    
+
         debug!("Assembly Assign: {}", name);
-    
+
         // Store the result
         if IS_CNST {
             self.cvar_assign(name, new)
@@ -623,25 +621,28 @@ impl<'ast> ZGen<'ast> {
         }
     }
 
-    fn assembly_constraint_<const IS_CNST: bool>(&self, c: &ast::AssemblyConstraint) -> Result<(), String> {
+    fn assembly_constraint_<const IS_CNST: bool>(
+        &self,
+        c: &ast::AssemblyConstraint,
+    ) -> Result<(), String> {
         // Get expressions for both sides
         let lhs = self.expr_impl_::<IS_CNST>(&c.lhs)?;
         let rhs = self.expr_impl_::<IS_CNST>(&c.rhs)?;
-        
+
         // Create equality comparison
         let eq_expr = term![EQ; lhs.term, rhs.term];
-        
+
         // Similar to assertion logic, check if it's a constant expression
         match const_bool_simple(T::new(Ty::Bool, eq_expr.clone())) {
             Some(true) => Ok(()),
             Some(false) => Err(format!(
-                "Const assembly constraint failed: {} == {} at\n{}", 
+                "Const assembly constraint failed: {} == {} at\n{}",
                 c.lhs.span().as_str(),
                 c.rhs.span().as_str(),
                 span_to_string(&c.span),
             )),
             None if IS_CNST => Err(format!(
-                "Const assembly constraint eval failed at\n{}", 
+                "Const assembly constraint eval failed at\n{}",
                 span_to_string(&c.span),
             )),
             _ => {
@@ -661,7 +662,10 @@ impl<'ast> ZGen<'ast> {
             .map(|acc| match acc {
                 ast::AssigneeAccess::Dot(m) => match &m.inner {
                     ast::IdentifierOrDecimal::Identifier(i) => Ok(ZAccess::Member(i.value.clone())),
-                    ast::IdentifierOrDecimal::Decimal(_) => Err(format!("Unsupported access of struct field by value: {}", span_to_string(&m.span))),
+                    ast::IdentifierOrDecimal::Decimal(_) => Err(format!(
+                        "Unsupported access of struct field by value: {}",
+                        span_to_string(&m.span)
+                    )),
                 },
                 ast::AssigneeAccess::Select(m) => match &m.expression {
                     ast::RangeOrExpression::Expression(e) => {
@@ -702,9 +706,11 @@ impl<'ast> ZGen<'ast> {
                         // otherwise we should return an error
                         match Integer::from_str_radix(vstr, 10) {
                             Ok(val) => Ok(field_lit(val)),
-                            Err(_) => Err("Could not infer literal type. Annotation needed.".to_string())
+                            Err(_) => {
+                                Err("Could not infer literal type. Annotation needed.".to_string())
+                            }
                         }
-                    },
+                    }
                 }
             }
             ast::LiteralExpression::BooleanLiteral(b) => {
@@ -828,11 +834,11 @@ impl<'ast> ZGen<'ast> {
         let before = time::Instant::now();
 
         let input = FnCallImplInput(
-            IS_CNST, 
-            args.clone(), 
-            generic_vec.clone(), 
-            f_path.clone(), 
-            f_name.clone()
+            IS_CNST,
+            args.clone(),
+            generic_vec.clone(),
+            f_path.clone(),
+            f_name.clone(),
         );
         let cached_value = self.fn_call_memoization.borrow().get(&input).cloned();
 
@@ -841,12 +847,13 @@ impl<'ast> ZGen<'ast> {
         } else {
             debug!("successfully memoized {} {:?}", f_name, f_path);
             self.function_call_impl_inner_::<IS_CNST>(
-                f, 
-                args, 
-                generics, 
-                f_path.clone(), 
+                f,
+                args,
+                generics,
+                f_path.clone(),
                 f_name.clone(),
-            ).inspect(|v| {
+            )
+            .inspect(|v| {
                 self.fn_call_memoization
                     .borrow_mut()
                     .insert(input, v.clone());
@@ -907,8 +914,8 @@ impl<'ast> ZGen<'ast> {
 
             // XXX(unimpl) multi-return unimplemented
             let ret_ty = f
-                .return_type 
-                .map(|r| self.type_impl_::<IS_CNST>(&r)) 
+                .return_type
+                .map(|r| self.type_impl_::<IS_CNST>(&r))
                 .transpose()?;
             let ret_ty = if IS_CNST {
                 self.cvar_enter_function();
@@ -1074,13 +1081,7 @@ impl<'ast> ZGen<'ast> {
                     let name = "return".to_owned();
                     let ret_val = r.unwrap_term();
                     let ret_var_val = self
-                        .circ_declare_input(
-                            name,
-                            ty,
-                            ZVis::Public,
-                            Some(ret_val.clone()),
-                            false,
-                        )
+                        .circ_declare_input(name, ty, ZVis::Public, Some(ret_val.clone()), false)
                         .expect("circ_declare return");
                     let ret_eq = eq(ret_val, ret_var_val).unwrap().term;
                     let mut assertions = std::mem::take(&mut *self.assertions.borrow_mut());
@@ -1152,9 +1153,7 @@ impl<'ast> ZGen<'ast> {
         match visibility {
             None | Some(ast::Visibility::Public(_)) => ZVis::Public,
             Some(ast::Visibility::Private(_)) => match self.mode {
-                Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => {
-                    ZVis::Private(PROVER_ID)
-                }
+                Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => ZVis::Private(PROVER_ID),
                 Mode::Mpc(_n_parties) => {
                     // XXX(unimpl) party number
                     panic!("Mpc mode is not implemented");
@@ -1298,11 +1297,10 @@ impl<'ast> ZGen<'ast> {
             .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
 
-
     // XXX(rsw) make Result<T, (String, Span)> to give more precise error messages?
     fn expr_impl_inner_<const IS_CNST: bool>(
-        &self, 
-        e: &ast::Expression<'ast>
+        &self,
+        e: &ast::Expression<'ast>,
     ) -> Result<T, String> {
         if IS_CNST {
             debug!("Const expr: {}", e.span().as_str());
@@ -1312,7 +1310,11 @@ impl<'ast> ZGen<'ast> {
 
         match e {
             ast::Expression::Ternary(u) => {
-                match self.expr_impl_::<IS_CNST>(&u.condition).ok().and_then(const_bool_simple) {
+                match self
+                    .expr_impl_::<IS_CNST>(&u.condition)
+                    .ok()
+                    .and_then(const_bool_simple)
+                {
                     Some(true) => self.expr_impl_::<IS_CNST>(&u.consequence),
                     Some(false) => self.expr_impl_::<IS_CNST>(&u.alternative),
                     None if IS_CNST => Err("ternary condition not const bool".to_string()),
@@ -1396,8 +1398,10 @@ impl<'ast> ZGen<'ast> {
                     (res, &p.accesses[1..])
                 } else {
                     match &*p.base {
-                        ast::Expression::Identifier(id) =>(self.identifier_impl_::<IS_CNST>(id)?, &p.accesses[..]), 
-                        _ => panic!("Expected identifier in postfix expression base")
+                        ast::Expression::Identifier(id) => {
+                            (self.identifier_impl_::<IS_CNST>(id)?, &p.accesses[..])
+                        }
+                        _ => panic!("Expected identifier in postfix expression base"),
                     }
                 };
                 accs.iter().try_fold(val, |v, acc| match acc {
@@ -1410,9 +1414,11 @@ impl<'ast> ZGen<'ast> {
                             ast::IdentifierOrDecimal::Identifier(id) => field_select(&v, &id.value),
                             ast::IdentifierOrDecimal::Decimal(idx) => {
                                 if let Ty::Tuple(tys) = &v.ty {
-                                    let idx_val = idx.span.as_str().parse::<usize>().map_err(|_| {
-                                        "Invalid tuple index".to_string()
-                                    })?;
+                                    let idx_val = idx
+                                        .span
+                                        .as_str()
+                                        .parse::<usize>()
+                                        .map_err(|_| "Invalid tuple index".to_string())?;
                                     if idx_val < tys.len() {
                                         Ok(T::new(
                                             tys[idx_val].clone(),
@@ -1426,11 +1432,14 @@ impl<'ast> ZGen<'ast> {
                                         ))
                                     }
                                 } else {
-                                    Err(format!("Cannot use decimal index on non-tuple type: {:?}", v.ty))
+                                    Err(format!(
+                                        "Cannot use decimal index on non-tuple type: {:?}",
+                                        v.ty
+                                    ))
                                 }
                             }
                         }
-                    },
+                    }
                     ast::Access::Select(s) => self.array_access_impl_::<IS_CNST>(s, v),
                 })
             }
@@ -1443,9 +1452,18 @@ impl<'ast> ZGen<'ast> {
                 })
                 .collect::<Result<Vec<_>, String>>()
                 .and_then(|members| Ok(T::new_struct(self.canon_struct(&u.ty.value)?, members))),
-            ast::Expression::InlineTuple(ite) => Ok(T::new_tuple(ite.elements.iter().map(|e| self.expr_impl_::<IS_CNST>(e)).collect::<Result<Vec<_>, _>>()?)),
+            ast::Expression::InlineTuple(ite) => Ok(T::new_tuple(
+                ite.elements
+                    .iter()
+                    .map(|e| self.expr_impl_::<IS_CNST>(e))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )),
             ast::Expression::IfElse(u) => {
-                match self.expr_impl_::<IS_CNST>(&u.condition).ok().and_then(const_bool_simple) {
+                match self
+                    .expr_impl_::<IS_CNST>(&u.condition)
+                    .ok()
+                    .and_then(const_bool_simple)
+                {
                     Some(true) => self.expr_impl_::<IS_CNST>(&u.consequence),
                     Some(false) => self.expr_impl_::<IS_CNST>(&u.alternative),
                     None if IS_CNST => Err("IfElse condition not const bool".to_string()),
@@ -1524,16 +1542,14 @@ impl<'ast> ZGen<'ast> {
         // XXX(unimpl) condstore, and witness from old zokrates
         // XXX(unimpl) log from new zokrates
         match s {
-            ast::Statement::Return(r) => {
-                if let Some(e) = r.expression.as_ref() {
-                    self.set_lhs_ty_ret(r);
-                    let ret = self.expr_impl_::<IS_CNST>(e)?;
-                    self.ret_impl_::<IS_CNST>(Some(ret))
-                } else {
-                    self.ret_impl_::<IS_CNST>(None)
-                }
-                .map_err(|e| format!("{e}"))
+            ast::Statement::Return(r) => if let Some(e) = r.expression.as_ref() {
+                self.set_lhs_ty_ret(r);
+                let ret = self.expr_impl_::<IS_CNST>(e)?;
+                self.ret_impl_::<IS_CNST>(Some(ret))
+            } else {
+                self.ret_impl_::<IS_CNST>(None)
             }
+            .map_err(|e| format!("{e}")),
             ast::Statement::Assertion(e) => {
                 let expr = self.expr_impl_::<IS_CNST>(&e.expression)?;
                 match const_bool_simple(expr.clone()) {
@@ -1580,7 +1596,12 @@ impl<'ast> ZGen<'ast> {
                 self.decl_impl_::<IS_CNST>(v_name, &ty)?;
                 for j in s..e {
                     self.enter_scope_impl_::<IS_CNST>();
-                    self.assign_impl_::<IS_CNST>(&i.index.identifier.value, &[][..], ival_cons(j), false)?;
+                    self.assign_impl_::<IS_CNST>(
+                        &i.index.identifier.value,
+                        &[][..],
+                        ival_cons(j),
+                        false,
+                    )?;
                     for s in &i.statements {
                         self.stmt_impl_::<IS_CNST>(s)?;
                     }
@@ -1605,11 +1626,7 @@ impl<'ast> ZGen<'ast> {
                                 "Assignment type mismatch: {decl_ty} annotated vs {ty} actual",
                             ));
                         }
-                        self.declare_init_impl_::<IS_CNST>(
-                            l.identifier.value.clone(),
-                            decl_ty,
-                            e,
-                        )?;
+                        self.declare_init_impl_::<IS_CNST>(l.identifier.value.clone(), decl_ty, e)?;
                         Ok(())
                     }
                 }
@@ -1630,9 +1647,7 @@ impl<'ast> ZGen<'ast> {
                 }
                 Ok(())
             }
-            ast::Statement::Log(_) => {
-                Err("Log statement is not implemented".to_string())
-            }
+            ast::Statement::Log(_) => Err("Log statement is not implemented".to_string()),
         }
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(s.span())))
     }
@@ -1680,18 +1695,19 @@ impl<'ast> ZGen<'ast> {
                     ast::AssigneeAccess::Dot(sa) => {
                         let id_value = match &sa.inner {
                             ast::IdentifierOrDecimal::Identifier(id) => &id.value,
-                            _ => panic!("Expected an Identifier, but got a non-Identifier value in sa"),
-                        }; 
+                            _ => panic!(
+                                "Expected an Identifier, but got a non-Identifier value in sa"
+                            ),
+                        };
                         match ty {
-                            Ty::Struct(nm, map) => map
-                                .search(id_value)
-                                .map(|r| r.1.clone())
-                                .ok_or_else(|| {
+                            Ty::Struct(nm, map) => {
+                                map.search(id_value).map(|r| r.1.clone()).ok_or_else(|| {
                                     format!("No such member {} of struct {nm}", id_value)
-                                }),
+                                })
+                            }
                             ty => Err(format!("Attempted member access on non-Struct type {ty}")),
                         }
-                    },
+                    }
                 })
             }
             TypedIdentifier(t) => self.type_impl_::<IS_CNST>(&t.ty),
@@ -1831,7 +1847,10 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or(false)
         {
             self.err(
-                format!("Constant {} clashes with import of same name", &c.id.identifier.value),
+                format!(
+                    "Constant {} clashes with import of same name",
+                    &c.id.identifier.value
+                ),
                 &c.span,
             );
         }
@@ -1877,7 +1896,10 @@ impl<'ast> ZGen<'ast> {
             .insert(c.id.identifier.value.clone(), (c.id.ty.clone(), value))
             .is_some()
         {
-            self.err(format!("Constant {} redefined", &c.id.identifier.value), &c.span);
+            self.err(
+                format!("Constant {} redefined", &c.id.identifier.value),
+                &c.span,
+            );
         }
     }
 
@@ -1945,7 +1967,10 @@ impl<'ast> ZGen<'ast> {
                         sdef.fields
                             .iter()
                             .map::<Result<_, String>, _>(|f| {
-                                Ok((f.id.identifier.value.clone(), self.type_impl_::<IS_CNST>(&f.id.ty)?))
+                                Ok((
+                                    f.id.identifier.value.clone(),
+                                    self.type_impl_::<IS_CNST>(&f.id.ty)?,
+                                ))
                             })
                             .collect::<Result<Vec<_>, _>>()?,
                     ),
@@ -1955,13 +1980,12 @@ impl<'ast> ZGen<'ast> {
                 self.file_stack_pop();
                 Ok(ty)
             }
-            ast::Type::Tuple(t) => {
-                t.elements
-                    .iter()
-                    .map(|element_type| self.type_impl_::<IS_CNST>(element_type))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map(Ty::Tuple)
-            }
+            ast::Type::Tuple(t) => t
+                .elements
+                .iter()
+                .map(|element_type| self.type_impl_::<IS_CNST>(element_type))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Ty::Tuple),
         }
     }
 
@@ -1993,38 +2017,39 @@ impl<'ast> ZGen<'ast> {
             for d in f.declarations.iter() {
                 // XXX(opt) retain() declarations instead? if we don't need them, saves allocs
                 if let ast::SymbolDeclaration::Import(i) = d {
-                    let (src_path, src_names, dst_names, i_span) = match i {
-                        ast::ImportDirective::Main(m) => (
-                            m.source.raw.value.clone(),
-                            vec!["main".to_owned()],
-                            vec![m
-                                .alias
-                                .as_ref()
-                                .map(|a| a.value.clone())
-                                .unwrap_or_else(|| {
-                                    PathBuf::from(m.source.raw.value.clone())
-                                        .file_stem()
-                                        .unwrap_or_else(|| panic!("Bad import: {}", m.source.raw.value))
-                                        .to_string_lossy()
-                                        .to_string()
-                                })],
-                            &m.span,
-                        ),
-                        ast::ImportDirective::From(m) => (
-                            m.source.raw.value.clone(),
-                            m.symbols.iter().map(|s| s.id.value.clone()).collect(),
-                            m.symbols
-                                .iter()
-                                .map(|s| {
-                                    s.alias
-                                        .as_ref()
-                                        .map(|a| a.value.clone())
-                                        .unwrap_or_else(|| s.id.value.clone())
-                                })
-                                .collect(),
-                            &m.span,
-                        ),
-                    };
+                    let (src_path, src_names, dst_names, i_span) =
+                        match i {
+                            ast::ImportDirective::Main(m) => (
+                                m.source.raw.value.clone(),
+                                vec!["main".to_owned()],
+                                vec![m.alias.as_ref().map(|a| a.value.clone()).unwrap_or_else(
+                                    || {
+                                        PathBuf::from(m.source.raw.value.clone())
+                                            .file_stem()
+                                            .unwrap_or_else(|| {
+                                                panic!("Bad import: {}", m.source.raw.value)
+                                            })
+                                            .to_string_lossy()
+                                            .to_string()
+                                    },
+                                )],
+                                &m.span,
+                            ),
+                            ast::ImportDirective::From(m) => (
+                                m.source.raw.value.clone(),
+                                m.symbols.iter().map(|s| s.id.value.clone()).collect(),
+                                m.symbols
+                                    .iter()
+                                    .map(|s| {
+                                        s.alias
+                                            .as_ref()
+                                            .map(|a| a.value.clone())
+                                            .unwrap_or_else(|| s.id.value.clone())
+                                    })
+                                    .collect(),
+                                &m.span,
+                            ),
+                        };
                     assert!(!src_names.is_empty());
                     let abs_src_path = self.stdlib.canonicalize(&self.cur_dir(), src_path.as_str());
                     debug!(
@@ -2122,7 +2147,11 @@ impl<'ast> ZGen<'ast> {
             for d in t.get_mut(&p).unwrap().declarations.iter_mut() {
                 match d {
                     ast::SymbolDeclaration::Constant(c) => {
-                        debug!("processing decl: const {} in {}", c.id.identifier.value, p.display());
+                        debug!(
+                            "processing decl: const {} in {}",
+                            c.id.identifier.value,
+                            p.display()
+                        );
                         self.const_decl_(c);
                     }
                     ast::SymbolDeclaration::Struct(s) => {
@@ -2190,7 +2219,10 @@ impl<'ast> ZGen<'ast> {
                         // go through stmts typechecking and rewriting literals
                         let mut sw = ZStatementWalker::new(
                             f_ast.parameters.as_ref(),
-                            f_ast.return_type.as_ref().map_or(&[], |ty| std::slice::from_ref(ty)),
+                            f_ast
+                                .return_type
+                                .as_ref()
+                                .map_or(&[], |ty| std::slice::from_ref(ty)),
                             f_ast.generics.as_ref(),
                             self,
                         );

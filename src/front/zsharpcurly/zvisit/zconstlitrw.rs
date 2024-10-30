@@ -75,10 +75,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         self.visit_span(&mut te.span)
     }
 
-    fn visit_if_else_expression(
-        &mut self,
-        ie: &mut ast::IfElseExpression<'ast>,
-    ) -> ZVisitorResult {
+    fn visit_if_else_expression(&mut self, ie: &mut ast::IfElseExpression<'ast>) -> ZVisitorResult {
         // first expression in a ternary should have type bool
         let to_ty = self.replace(Some(Ty::Bool));
         self.visit_expression(&mut ie.condition)?;
@@ -91,8 +88,15 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
     fn visit_binary_expression(&mut self, be: &mut ast::BinaryExpression<'ast>) -> ZVisitorResult {
         let (ty_l, ty_r) = {
             match be.op {
-                ast::BinaryOperator::Pow | ast::BinaryOperator::RightShift | ast::BinaryOperator::LeftShift => (self.to_ty.clone(), Some(Ty::Uint(32))),
-                ast::BinaryOperator::Eq | ast::BinaryOperator::NotEq | ast::BinaryOperator::Lt | ast::BinaryOperator::Gt | ast::BinaryOperator::Lte | ast::BinaryOperator::Gte => (None, None),
+                ast::BinaryOperator::Pow
+                | ast::BinaryOperator::RightShift
+                | ast::BinaryOperator::LeftShift => (self.to_ty.clone(), Some(Ty::Uint(32))),
+                ast::BinaryOperator::Eq
+                | ast::BinaryOperator::NotEq
+                | ast::BinaryOperator::Lt
+                | ast::BinaryOperator::Gt
+                | ast::BinaryOperator::Lte
+                | ast::BinaryOperator::Gte => (None, None),
                 _ => (self.to_ty.clone(), self.to_ty.clone()),
             }
         };
@@ -267,7 +271,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
     ) -> ZVisitorResult {
         use ast::Expression;
         match *pe.base {
-            Expression::Identifier(ref mut id) =>self.visit_identifier_expression(id)?,
+            Expression::Identifier(ref mut id) => self.visit_identifier_expression(id)?,
             _ => panic!("Expected identifier in postfix expression base"),
         }
         //self.visit_identifier_expression(&mut pe.base.id)?;
