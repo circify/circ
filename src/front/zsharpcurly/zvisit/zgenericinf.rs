@@ -131,7 +131,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         }
 
         // 3. unify the return type
-        match (rty, self.fdef.returns.first()) {
+        match (rty, self.fdef.return_type.as_ref()) {
             (Some(rty), Some(ret)) => self.fdef_gen_ty(rty, ret),
             (Some(rty), None) if rty != Ty::Bool => Err(format!(
                 "Function {} expected implicit Bool ret, but got {}",
@@ -204,6 +204,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             TT::Basic(dty_b) => self.fdef_gen_ty_basic(arg_ty, dty_b),
             TT::Array(dty_a) => self.fdef_gen_ty_array(arg_ty, dty_a),
             TT::Struct(dty_s) => self.fdef_gen_ty_struct_or_type(arg_ty, dty_s),
+            TT::Tuple(_) => todo!("Tuple type is not handled!"),
         }
     }
 
@@ -270,10 +271,11 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             };
         }
 
-        use ast::BasicOrStructType as BoST;
+        use ast::BasicOrStructOrTupleType as BoST;
         match &def_ty.ty {
             BoST::Struct(dty_s) => self.fdef_gen_ty_struct_or_type(arg_ty, dty_s),
             BoST::Basic(dty_b) => self.fdef_gen_ty_basic(arg_ty, dty_b),
+            BoST::Tuple(_) => todo!("Tuple type is not handled"),
         }
     }
 
@@ -364,13 +366,13 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                         "Type mismatch unifying generics: got {arg_ty}, decl was Struct",
                     )),
                 }?;
-                for ast::StructField { ty, id, .. } in strdef.fields.iter() {
-                    if let Some(t) = aty_map.remove(&id.value) {
-                        self.fdef_gen_ty(t, ty)?;
+                for ast::StructField { id, .. } in strdef.fields.iter() {
+                    if let Some(t) = aty_map.remove(&id.identifier.value) {
+                        self.fdef_gen_ty(t, &id.ty)?;
                     } else {
                         return Err(format!(
                             "ZGenericInf: missing member {} in struct {} value",
-                            &id.value, &def_ty.id.value,
+                            &id.identifier.value, &def_ty.id.value,
                         ));
                     }
                 }
@@ -409,9 +411,9 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         use ast::Expression::*;
         match expr {
             Ternary(te) => {
-                let cnd = self.expr(&te.first)?;
-                let csq = self.expr(&te.second)?;
-                let alt = self.expr(&te.third)?;
+                let cnd = self.expr(&te.condition)?;
+                let csq = self.expr(&te.consequence)?;
+                let alt = self.expr(&te.alternative)?;
                 cond(cnd, csq, alt)
             }
             Binary(be) => {
@@ -440,6 +442,12 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             }
             ArrayInitializer(_) => {
                 Err("ZGenericInf: got ArrayInitializer in array dim expr (unimpl)".into())
+            }
+            IfElse(_) => {
+                Err("ZGenericInf: got IfElse in array dim expr (unimpl)".into())
+            },
+            InlineTuple(_) => {
+                Err("ZGenericInf: got InlineTuple in array dim expr (unimpl)".into())
             }
         }
     }

@@ -54,8 +54,8 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_from_import_directive(self, fimport)
     }
 
-    fn visit_any_string(&mut self, is: &mut ast::AnyString<'ast>) -> ZVisitorResult {
-        walk_any_string(self, is)
+    fn visit_raw_string(&mut self, is: &mut ast::RawString<'ast>) -> ZVisitorResult {
+        walk_raw_string(self, is)
     }
 
     fn visit_import_symbol(&mut self, is: &mut ast::ImportSymbol<'ast>) -> ZVisitorResult {
@@ -105,7 +105,7 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_parameter(self, param)
     }
 
-    fn visit_visibility(&mut self, vis: &mut ast::Visibility<'ast>) -> ZVisitorResult {
+    fn visit_visibility(&mut self, vis: &mut ast::Visibility) -> ZVisitorResult {
         walk_visibility(self, vis)
     }
 
@@ -113,30 +113,11 @@ pub trait ZVisitorMut<'ast>: Sized {
         Ok(())
     }
 
-    fn visit_array_param_metadata(
-        &mut self,
-        vis: &mut ast::ArrayParamMetadata<'ast>,
-    ) -> ZVisitorResult {
-        walk_array_param_metadata(self, vis)
-    }
-
-    fn visit_array_committed(&mut self, _c: &mut ast::ArrayCommitted<'ast>) -> ZVisitorResult {
-        Ok(())
-    }
-
-    fn visit_array_transcript(&mut self, _c: &mut ast::ArrayTranscript<'ast>) -> ZVisitorResult {
-        Ok(())
-    }
-
     fn visit_private_visibility(
         &mut self,
-        pr: &mut ast::PrivateVisibility<'ast>,
+        _pr: &mut ast::PrivateVisibility,
     ) -> ZVisitorResult {
-        walk_private_visibility(self, pr)
-    }
-
-    fn visit_private_number(&mut self, pn: &mut ast::PrivateNumber<'ast>) -> ZVisitorResult {
-        walk_private_number(self, pn)
+        Ok(())
     }
 
     fn visit_type(&mut self, ty: &mut ast::Type<'ast>) -> ZVisitorResult {
@@ -171,23 +152,23 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_u64_type(self, u64ty)
     }
 
-    fn visit_integer_type(&mut self, integerty: &mut ast::IntegerType<'ast>) -> ZVisitorResult {
-        walk_integer_type(self, integerty)
-    }
-
     fn visit_array_type(&mut self, aty: &mut ast::ArrayType<'ast>) -> ZVisitorResult {
         walk_array_type(self, aty)
     }
 
     fn visit_basic_or_struct_type(
         &mut self,
-        bsty: &mut ast::BasicOrStructType<'ast>,
+        bsty: &mut ast::BasicOrStructOrTupleType<'ast>,
     ) -> ZVisitorResult {
-        walk_basic_or_struct_type(self, bsty)
+        walk_basic_or_struct_or_tuple_type(self, bsty)
     }
 
     fn visit_struct_type(&mut self, sty: &mut ast::StructType<'ast>) -> ZVisitorResult {
         walk_struct_type(self, sty)
+    }
+
+    fn visit_tuple_type(&mut self, sty: &mut ast::TupleType<'ast>) -> ZVisitorResult {
+        walk_tuple_type(self, sty)
     }
 
     fn visit_explicit_generics(&mut self, eg: &mut ast::ExplicitGenerics<'ast>) -> ZVisitorResult {
@@ -241,10 +222,6 @@ pub trait ZVisitorMut<'ast>: Sized {
 
     fn visit_field_suffix(&mut self, fs: &mut ast::FieldSuffix<'ast>) -> ZVisitorResult {
         walk_field_suffix(self, fs)
-    }
-
-    fn visit_integer_suffix(&mut self, integers: &mut ast::IntegerSuffix<'ast>) -> ZVisitorResult {
-        walk_integer_suffix(self, integers)
     }
 
     fn visit_boolean_literal_expression(
@@ -311,6 +288,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_ternary_expression(self, te)
     }
 
+    fn visit_if_else_expression(
+        &mut self,
+        ie: &mut ast::IfElseExpression<'ast>,
+    ) -> ZVisitorResult {
+        walk_if_else_expression(self, ie)
+    }
+
     fn visit_binary_expression(&mut self, be: &mut ast::BinaryExpression<'ast>) -> ZVisitorResult {
         walk_binary_expression(self, be)
     }
@@ -339,9 +323,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         Ok(())
     }
 
-    fn visit_strict_operator(&mut self, _so: &mut ast::StrOperator) -> ZVisitorResult {
+    fn visit_assign_operator(&mut self, _ao: &mut ast::AssignOperator) -> ZVisitorResult {
         Ok(())
     }
+
+    fn visit_assign_constrain_operator(&mut self, _aco: &mut ast::AssignConstrainOperator) -> ZVisitorResult {
+        Ok(())
+    }  
 
     fn visit_postfix_expression(
         &mut self,
@@ -392,8 +380,12 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_to_expression(self, to)
     }
 
-    fn visit_member_access(&mut self, ma: &mut ast::MemberAccess<'ast>) -> ZVisitorResult {
-        walk_member_access(self, ma)
+    fn visit_dot_access(&mut self, ma: &mut ast::DotAccess<'ast>) -> ZVisitorResult {
+        walk_dot_access(self, ma)
+    }
+
+    fn visit_identifier_or_decimal(&mut self, ido: &mut ast::IdentifierOrDecimal<'ast>) -> ZVisitorResult {
+        walk_identifier_or_decimal(self, ido)
     }
 
     fn visit_inline_array_expression(
@@ -428,6 +420,13 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_inline_struct_member(self, ism)
     }
 
+    fn visit_inline_tuple_expression(
+        &mut self,
+        ite: &mut ast::InlineTupleExpression<'ast>,
+    ) -> ZVisitorResult {
+        walk_inline_tuple_expression(self, ite)
+    }
+
     fn visit_array_initializer_expression(
         &mut self,
         aie: &mut ast::ArrayInitializerExpression<'ast>,
@@ -450,8 +449,32 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_definition_statement(self, def)
     }
 
-    fn visit_witness_statement(&mut self, def: &mut ast::WitnessStatement<'ast>) -> ZVisitorResult {
-        walk_witness_statement(self, def)
+    fn visit_assembly_statement(
+        &mut self,
+        asm: &mut ast::AssemblyStatement<'ast>,
+    ) -> ZVisitorResult {
+        walk_assembly_statement(self, asm)
+    }
+
+    fn visit_assembly_statement_inner(
+        &mut self,
+        inner: &mut ast::AssemblyStatementInner<'ast>,
+    ) -> ZVisitorResult {
+        walk_assembly_statement_inner(self, inner)
+    }
+
+    fn visit_assembly_assignment(
+        &mut self,
+        a: &mut ast::AssemblyAssignment<'ast>,
+    ) -> ZVisitorResult {
+        walk_assembly_assignment(self, a)
+    }
+
+    fn visit_assembly_constraint(
+        &mut self,
+        c: &mut ast::AssemblyConstraint<'ast>,
+    ) -> ZVisitorResult {
+        walk_assembly_constraint(self, c)
     }
 
     fn visit_typed_identifier_or_assignee(
@@ -469,6 +492,10 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_assignee(self, asgn)
     }
 
+    fn visit_assignment_operator(&mut self, ao: &mut ast::AssignmentOperator) -> ZVisitorResult {
+        walk_assignment_operator(self, ao)
+    }
+
     fn visit_assignee_access(&mut self, acc: &mut ast::AssigneeAccess<'ast>) -> ZVisitorResult {
         walk_assignee_access(self, acc)
     }
@@ -478,13 +505,6 @@ pub trait ZVisitorMut<'ast>: Sized {
         asrt: &mut ast::AssertionStatement<'ast>,
     ) -> ZVisitorResult {
         walk_assertion_statement(self, asrt)
-    }
-
-    fn visit_cond_store_statement(
-        &mut self,
-        s: &mut ast::CondStoreStatement<'ast>,
-    ) -> ZVisitorResult {
-        walk_cond_store_statement(self, s)
     }
 
     fn visit_iteration_statement(

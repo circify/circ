@@ -15,6 +15,7 @@ pub(super) fn eq_type<'ast>(
         (Basic(bty), Basic(bty2)) => eq_basic_type(bty, bty2),
         (Array(aty), Array(aty2)) => eq_array_type(aty, aty2, zgen),
         (Struct(sty), Struct(sty2)) => eq_struct_type(sty, sty2, zgen),
+        (Tuple(t1), Tuple(t2)) => eq_tuple_type(t1, t2, zgen),
         _ => Err(ZVisitorError(format!(
             "type mismatch:\n\texpected {ty:?},\n\tfound {ty2:?}"
         ))),
@@ -30,7 +31,6 @@ fn eq_basic_type<'ast>(ty: &ast::BasicType<'ast>, ty2: &ast::BasicType<'ast>) ->
         (U16(_), U16(_)) => Ok(()),
         (U32(_), U32(_)) => Ok(()),
         (U64(_), U64(_)) => Ok(()),
-        (Integer(_), Integer(_)) => Ok(()),
         _ => Err(ZVisitorError(format!(
             "basic type mismatch: \n\texpected {ty:?}, \n\tfound {ty2:?}"
         ))),
@@ -42,7 +42,7 @@ fn eq_array_type<'ast>(
     ty2: &ast::ArrayType<'ast>,
     zgen: &ZGen<'ast>,
 ) -> ZVisitorResult {
-    use ast::BasicOrStructType::*;
+    use ast::BasicOrStructOrTupleType::*;
     if ty.dimensions.len() != ty2.dimensions.len() {
         return Err(ZVisitorError(format!(
             "array type mismatch: \n\texpected {}-dimensional array, \n\tfound {}-dimensional array",
@@ -76,6 +76,26 @@ fn eq_struct_type<'ast>(
     } else {
         eq_type(&canon_type(ty, zgen)?, &canon_type(ty2, zgen)?, zgen)
     }
+}
+
+fn eq_tuple_type<'ast>(
+    ty: &ast::TupleType<'ast>,
+    ty2: &ast::TupleType<'ast>,
+    zgen: &ZGen<'ast>,
+) -> ZVisitorResult {
+    if ty.elements.len() != ty2.elements.len() {
+        return Err(ZVisitorError(format!(
+            "tuple type mismatch: \n\texpected tuple with {} elements, \n\tfound tuple with {} elements",
+            ty.elements.len(),
+            ty2.elements.len(),
+        )));
+    }
+
+    for (elem1, elem2) in ty.elements.iter().zip(ty2.elements.iter()) {
+        eq_type(elem1, elem2, zgen)?;
+    }
+
+    Ok(())
 }
 
 fn is_struct(id: &str, zgen: &ZGen<'_>) -> bool {

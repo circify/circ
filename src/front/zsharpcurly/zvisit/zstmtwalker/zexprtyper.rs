@@ -46,12 +46,17 @@ impl<'ast, 'ret, 'wlk> ZExpressionTyper<'ast, 'ret, 'wlk> {
                 aty
             }
             Basic(bty) => ast::ArrayType {
-                ty: ast::BasicOrStructType::Basic(bty),
+                ty: ast::BasicOrStructOrTupleType::Basic(bty),
                 dimensions: vec![cnt],
                 span: *spn,
             },
             Struct(sty) => ast::ArrayType {
-                ty: ast::BasicOrStructType::Struct(sty),
+                ty: ast::BasicOrStructOrTupleType::Struct(sty),
+                dimensions: vec![cnt],
+                span: *spn,
+            },
+            Tuple(tt) => ast::ArrayType {
+                ty: ast::BasicOrStructOrTupleType::Tuple(tt),
                 dimensions: vec![cnt],
                 span: *spn,
             },
@@ -77,6 +82,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
             InlineArray(iae) => self.visit_inline_array_expression(iae),
             InlineStruct(ise) => self.visit_inline_struct_expression(ise),
             ArrayInitializer(aie) => self.visit_array_initializer_expression(aie),
+            IfElse(_) | InlineTuple(_) => todo!("IfElse and InlineTuple are not supported"),
         }
     }
 
@@ -85,9 +91,29 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
         te: &mut ast::TernaryExpression<'ast>,
     ) -> ZVisitorResult {
         assert!(self.ty.is_none());
-        self.visit_expression(&mut te.second)?;
+        self.visit_expression(&mut te.consequence)?;
         let ty2 = self.take()?;
-        self.visit_expression(&mut te.third)?;
+        self.visit_expression(&mut te.alternative)?;
+        let ty3 = self.take()?;
+        match (ty2, ty3) {
+            (Some(t), None) => self.ty.replace(t),
+            (None, Some(t)) => self.ty.replace(t),
+            (Some(t1), Some(t2)) => {
+                eq_type(&t1, &t2, self.walker.zgen)?;
+                self.ty.replace(t2)
+            }
+            (None, None) => None,
+        };
+        Ok(())
+    }
+
+    fn visit_if_else_expression(
+        &mut self,
+        ie: &mut ast::IfElseExpression<'ast>,
+    ) -> ZVisitorResult {
+        self.visit_expression(&mut ie.consequence)?;
+        let ty2 = self.take()?;
+        self.visit_expression(&mut ie.alternative)?;
         let ty3 = self.take()?;
         match (ty2, ty3) {
             (Some(t), None) => self.ty.replace(t),
@@ -102,18 +128,18 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
     }
 
     fn visit_binary_expression(&mut self, be: &mut ast::BinaryExpression<'ast>) -> ZVisitorResult {
-        use ast::{BasicType::*, BinaryOperator::*, Type::*};
+        use ast::{BasicType::*, Type::*};
         assert!(self.ty.is_none());
         match &be.op {
-            Or | And | Eq | NotEq | Lt | Gt | Lte | Gte => {
+            ast::BinaryOperator::Or | ast::BinaryOperator::And | ast::BinaryOperator::Eq | ast::BinaryOperator::NotEq | ast::BinaryOperator::Lt | ast::BinaryOperator::Gt | ast::BinaryOperator::Lte | ast::BinaryOperator::Gte => {
                 self.ty
                     .replace(Basic(Boolean(ast::BooleanType { span: be.span })));
             }
-            Pow => {
+            ast::BinaryOperator::Pow => {
                 self.ty
                     .replace(Basic(Field(ast::FieldType { span: be.span })));
             }
-            BitXor | BitAnd | BitOr | RightShift | LeftShift | Add | Sub | Mul | Div | Rem => {
+            ast::BinaryOperator::BitXor | ast::BinaryOperator::BitAnd | ast::BinaryOperator::BitOr | ast::BinaryOperator::RightShift | ast::BinaryOperator::LeftShift | ast::BinaryOperator::Add | ast::BinaryOperator::Sub | ast::BinaryOperator::Mul | ast::BinaryOperator::Div | ast::BinaryOperator::Rem => {
                 self.visit_expression(&mut be.left)?;
                 let ty_l = self.take()?;
                 self.visit_expression(&mut be.right)?;
@@ -138,7 +164,7 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                                 .to_string(),
                         ));
                     }
-                    if matches!(&be.op, BitXor | BitAnd | BitOr | RightShift | LeftShift)
+                    if matches!(&be.op, ast::BinaryOperator::BitXor | ast::BinaryOperator::BitAnd | ast::BinaryOperator::BitOr | ast::BinaryOperator::RightShift | ast::BinaryOperator::LeftShift)
                         && matches!(&ty, Basic(Field(_)))
                     {
                         return Err(ZVisitorError(
@@ -177,7 +203,6 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
                     }
                 }
             }
-            Strict(_) => (),
         }
         Ok(())
     }
@@ -204,9 +229,6 @@ impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> 
             DS::Field(s) => self
                 .ty
                 .replace(Basic(Field(ast::FieldType { span: s.span }))),
-            DS::Integer(s) => self
-                .ty
-                .replace(Basic(Integer(ast::IntegerType { span: s.span }))),
         };
         Ok(())
     }

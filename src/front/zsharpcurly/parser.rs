@@ -41,7 +41,7 @@ impl ZStdLib {
         assert!(p.is_absolute());
         let stdlib_subdirs = vec![
             "ZoKrates/zokrates_stdlib/stdlib",
-            "third_party/ZoKrates/zokrates_stdlib/stdlib",
+            "third_party/ZoKratesCurly/zokrates_stdlib/stdlib",
         ];
         for a in p.ancestors() {
             for subdir in &stdlib_subdirs {
@@ -139,8 +139,8 @@ impl<'a> Loader for &'a ZLoad {
             .filter_map(|d| {
                 if let ast::SymbolDeclaration::Import(i) = d {
                     let ext = match i {
-                        ast::ImportDirective::Main(m) => &m.source.value,
-                        ast::ImportDirective::From(m) => &m.source.value,
+                        ast::ImportDirective::Main(m) => &m.source.raw.value,
+                        ast::ImportDirective::From(m) => &m.source.raw.value,
                     };
                     Some(self.stdlib.canonicalize(&c, ext))
                 } else {

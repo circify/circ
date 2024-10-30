@@ -68,19 +68,31 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
     ) -> ZVisitorResult {
         // first expression in a ternary should have type bool
         let to_ty = self.replace(Some(Ty::Bool));
-        self.visit_expression(&mut te.first)?;
+        self.visit_expression(&mut te.condition)?;
         self.replace(to_ty);
-        self.visit_expression(&mut te.second)?;
-        self.visit_expression(&mut te.third)?;
+        self.visit_expression(&mut te.consequence)?;
+        self.visit_expression(&mut te.alternative)?;
         self.visit_span(&mut te.span)
+    }
+
+    fn visit_if_else_expression(
+        &mut self,
+        ie: &mut ast::IfElseExpression<'ast>,
+    ) -> ZVisitorResult {
+        // first expression in a ternary should have type bool
+        let to_ty = self.replace(Some(Ty::Bool));
+        self.visit_expression(&mut ie.condition)?;
+        self.replace(to_ty);
+        self.visit_expression(&mut ie.consequence)?;
+        self.visit_expression(&mut ie.alternative)?;
+        self.visit_span(&mut ie.span)
     }
 
     fn visit_binary_expression(&mut self, be: &mut ast::BinaryExpression<'ast>) -> ZVisitorResult {
         let (ty_l, ty_r) = {
-            use ast::BinaryOperator::*;
             match be.op {
-                Pow | RightShift | LeftShift => (self.to_ty.clone(), Some(Ty::Uint(32))),
-                Eq | NotEq | Lt | Gt | Lte | Gte => (None, None),
+                ast::BinaryOperator::Pow | ast::BinaryOperator::RightShift | ast::BinaryOperator::LeftShift => (self.to_ty.clone(), Some(Ty::Uint(32))),
+                ast::BinaryOperator::Eq | ast::BinaryOperator::NotEq | ast::BinaryOperator::Lt | ast::BinaryOperator::Gt | ast::BinaryOperator::Lte | ast::BinaryOperator::Gte => (None, None),
                 _ => (self.to_ty.clone(), self.to_ty.clone()),
             }
         };
@@ -117,9 +129,6 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 ),
                 Ty::Field => Ok(ast::DecimalSuffix::Field(ast::FieldSuffix {
                     span: dle.span,
-                })),
-                Ty::Integer => Ok(ast::DecimalSuffix::Integer(ast::IntegerSuffix {
-                    span: dle.span
                 })),
                 _ => Err(
                     "ZConstLiteralRewriter: rewriting DecimalLiteralExpression to incompatible type"
@@ -256,7 +265,12 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         &mut self,
         pe: &mut ast::PostfixExpression<'ast>,
     ) -> ZVisitorResult {
-        self.visit_identifier_expression(&mut pe.id)?;
+        use ast::Expression;
+        match *pe.base {
+            Expression::Identifier(ref mut id) =>self.visit_identifier_expression(id)?,
+            _ => panic!("Expected identifier in postfix expression base"),
+        }
+        //self.visit_identifier_expression(&mut pe.base.id)?;
 
         // descend into accesses. we do not know expected type for these expressions
         // (but we may end up descending into an ArrayAccess, which would get typed)
@@ -347,15 +361,6 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                 .into());
         }
         walk_u32_type(self, u32ty)
-    }
-
-    fn visit_integer_type(&mut self, integerty: &mut ast::IntegerType<'ast>) -> ZVisitorResult {
-        if self.to_ty.is_some() && !matches!(self.to_ty, Some(Ty::Integer)) {
-            return Err("ZConstLiteralRewriter: integerty type mismatch"
-                .to_string()
-                .into());
-        }
-        walk_integer_type(self, integerty)
     }
 
     fn visit_u64_type(&mut self, u64ty: &mut ast::U64Type<'ast>) -> ZVisitorResult {

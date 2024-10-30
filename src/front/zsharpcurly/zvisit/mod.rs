@@ -25,10 +25,11 @@ impl From<String> for ZVisitorError {
     }
 }
 
-fn bos_to_type(bos: ast::BasicOrStructType) -> ast::Type {
-    use ast::{BasicOrStructType::*, Type};
+fn bos_to_type(bos: ast::BasicOrStructOrTupleType) -> ast::Type {
+    use ast::{BasicOrStructOrTupleType::*, Type};
     match bos {
         Struct(st) => Type::Struct(st),
         Basic(bt) => Type::Basic(bt),
+        Tuple(tt) => Type::Tuple(tt),
     }
 }

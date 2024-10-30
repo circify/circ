@@ -35,6 +35,7 @@ impl<'ast> ZVisitorMut<'ast> for ZExpressionRewriter<'ast> {
                     self.visit_identifier_expression(ie)
                 }
             }
+            IfElse(ie) => self.visit_if_else_expression(ie),
         }
     }
 }
