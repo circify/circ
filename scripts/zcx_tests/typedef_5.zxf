@@ -1,5 +1,8 @@
-from "./typedef_3" import Bar
+import "./typedef_3" {
+    Bar
+}
 
-def main() -> bool:
-    Bar q = Bar { n: [0; 5] }
-    return q.n[0] == 0
+def main() -> bool {
+    Bar q = Bar { n: [0; 5] };
+    return q.n[0] == 0;
+}

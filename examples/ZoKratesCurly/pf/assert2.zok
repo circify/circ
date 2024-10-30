@@ -1,3 +1,4 @@
-def main(private field A, private field B) -> bool:
-  assert(A+B == 123)
-  return true
+def main(private field A, private field B) -> bool {
+    assert(A + B == 123);
+    return true;
+}

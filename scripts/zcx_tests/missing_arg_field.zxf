@@ -1,9 +1,8 @@
 struct P {
-    field x
-    field y
+    field x;
+    field y;
 }
 
-def main(field a, P b) -> field:
-    return a + b.x + b.y
-
-
+def main(field a, P b) -> field {
+    return a + b.x + b.y;
+}

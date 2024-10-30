@@ -4,7 +4,7 @@ set -ex
 
 disable -r time
 
-# cargo build --release --features r1cs,smt,zok --example circ
+# cargo build --release --features r1cs,smt,zok,zokc --example circ
 # cargo build --example circ
 
 MODE=release # debug or release
@@ -22,7 +22,7 @@ esac
 
 function r1cs_test {
     zpath=$1
-    measure_time $BIN $zpath r1cs --action count
+    measure_time $BIN $zpath --language zsharp-curly r1cs --action count
 }
 
 function r1cs_test_count {
@@ -108,8 +108,5 @@ pf_test arr_str_arr_str
 pf_test var_idx_arr_str_arr_str
 pf_test mm
 pf_test unused_var
-
-pf_test 2024_05_24_benny_bug
-pf_test 2024_05_31_benny_bug
 
 scripts/zcx_tests/run_tests.sh

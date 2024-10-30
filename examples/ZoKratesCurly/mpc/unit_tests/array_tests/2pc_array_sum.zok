@@ -1,3 +1,4 @@
-def main(private<1> u32 a, private<2> u32 b) -> u32:
-    u32[2] c = [a, b]
-    return c[0] + c[1] 
+def main(private u32 a, private u32 b) -> u32 {
+    u32[2] c = [a, b];
+    return c[0] + c[1];
+}

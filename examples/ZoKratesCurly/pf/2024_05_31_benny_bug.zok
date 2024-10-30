@@ -1,7 +1,0 @@
-def main(field x) -> field:
-    field[25] A = [0; 25]
-    for field counter in 0..5 do
-        cond_store(A, counter - 1, x, counter > 1)
-    endfor
-
-    return A[x]

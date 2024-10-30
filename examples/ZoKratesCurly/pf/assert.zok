@@ -1,3 +1,4 @@
-def main(private field A, private field B) -> field:
-    assert(A != B)
-    return A * B
+def main(private field A, private field B) -> field {
+    assert(A != B);
+    return A * B;
+}

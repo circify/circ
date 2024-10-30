@@ -1,6 +1,7 @@
-from "EMBED" import FIELD_SIZE_IN_BITS as A
+from "EMBED" import FIELD_SIZE_IN_BITS as A;
 
-const u32 A = 2
+const u32 A = 2;
 
-def main() -> bool:
-    return false
+def main() -> bool {
+    return false;
+}

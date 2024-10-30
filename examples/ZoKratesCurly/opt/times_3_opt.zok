@@ -1,2 +1,3 @@
-def main(private u8 x) -> u8:
-    return 0x03 * x
+def main(private u8 x) -> u8 {
+    return 0x03 * x;
+}

@@ -1,10 +1,11 @@
 struct Foo {
-    u32 a
+    u32 a;
 }
 
 struct Foo {
-    u32 b
+    u32 b;
 }
 
-def main() -> bool:
-    return true
+def main() -> bool {
+    return true;
+}

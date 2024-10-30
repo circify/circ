@@ -1,4 +1,5 @@
-type Foo = u8
+type Foo = u8;
 
-def main() -> Foo:
-    return 0
+def main() -> Foo {
+    return 0;
+}

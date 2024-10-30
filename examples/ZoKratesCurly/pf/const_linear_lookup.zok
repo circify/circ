@@ -1,9 +1,9 @@
 struct T {
-    field v
-    field w
-    field x
-    field y
-    field z
+    field v;
+    field w;
+    field x;
+    field y;
+    field z;
 }
 
 const T[9] TABLE = [
@@ -16,8 +16,9 @@ const T[9] TABLE = [
     T { v: 7, w: 72, x: 73, y: 74, z: 75 },
     T { v: 8, w: 82, x: 83, y: 84, z: 85 },
     T { v: 9, w: 92, x: 93, y: 94, z: 95 }
-]
+];
 
-def main(field i) -> field:
-    T t = TABLE[i]
-    return t.v + t.w + t.x + t.y + t.z
+def main(field i) -> field {
+    T t = TABLE[i];
+    return t.v + t.w + t.x + t.y + t.z;
+}

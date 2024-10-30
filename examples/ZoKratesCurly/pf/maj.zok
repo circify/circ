@@ -1,2 +1,3 @@
-def main(u8 a, u8 b, u8 c) -> u8:
-    return (a & b) ^ (a & c) ^ (b & c)
+def main(u8 a, u8 b, u8 c) -> u8 {
+    return (a & b) ^ (a & c) ^ (b & c);
+}

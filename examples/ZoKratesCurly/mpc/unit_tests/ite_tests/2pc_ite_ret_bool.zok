@@ -1,2 +1,3 @@
-def main(private<1> bool a, private<2> bool b, public bool sel) -> bool:
-    return if sel then a else b fi 
+def main(private bool a, private bool b, public bool sel) -> bool {
+    return if sel { a } else { b };
+}
