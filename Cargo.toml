@@ -94,6 +94,10 @@ name = "zxi"
 required-features = ["smt", "zok"]
 
 [[example]]
+name = "zcxi"
+required-features = ["smt", "zokc"]
+
+[[example]]
 name = "zxc"
 required-features = ["smt", "zok"]
 
