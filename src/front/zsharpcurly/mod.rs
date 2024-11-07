@@ -1152,7 +1152,7 @@ impl<'ast> ZGen<'ast> {
                 Mode::Proof | Mode::Opt | Mode::ProofOfHighValue(_) => ZVis::Private(PROVER_ID),
                 Mode::Mpc(_n_parties) => {
                     // XXX(unimpl) party number
-                    panic!("Mpc mode is not implemented");
+                    panic!("Mpc mode is not implemented in ZSharpCurly (ZoKrates newer syntax)");
                 }
             },
         }
