@@ -1,0 +1,5 @@
+def main(private field[2] arr, private bool b) -> (field[2], bool) {
+    (field[2], bool) mut v = (arr, b);
+    v.0[0] = v.0[0] * 2;
+    return v;
+}

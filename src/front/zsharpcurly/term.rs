@@ -267,22 +267,28 @@ impl T {
                 64 => write!(f, "0x{:016x}", bv.uint()),
                 _ => unreachable!(),
             },
-            Value::Tuple(vs) => {
-                let (n, fl) = if let Ty::Struct(n, fl) = &self.ty {
-                    Ok((n, fl))
-                } else {
-                    Err(Error::new(
-                        ErrorKind::Other,
-                        "expected struct, got something else",
-                    ))
-                }?;
-                write!(f, "{n} {{ ")?;
-                fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
-                    write!(f, "{n}: ")?;
-                    T::new(ty.clone(), const_(v.clone())).pretty(f)?;
-                    write!(f, ", ")
-                })?;
-                write!(f, "}}")
+            Value::Tuple(vs) => match &self.ty {
+                Ty::Struct(n, fl) => {
+                    write!(f, "{n} {{ ")?;
+                    fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
+                        write!(f, "{n}: ")?;
+                        T::new(ty.clone(), const_(v.clone())).pretty(f)?;
+                        write!(f, ", ")
+                    })?;
+                    write!(f, "}}")
+                }
+                Ty::Tuple(tys) => {
+                    write!(f, "(")?;
+                    tys.iter().zip(vs.iter()).try_for_each(|(ty, v)| {
+                        T::new(ty.clone(), const_(v.clone())).pretty(f)?;
+                        write!(f, ", ")
+                    })?;
+                    write!(f, ")")
+                }
+                _ => Err(Error::new(
+                    ErrorKind::Other,
+                    "expected struct or tuple, got something else",
+                ))
             }
             Value::Array(arr) => {
                 let inner_ty = if let Ty::Array(_, ty) = &self.ty {
@@ -862,30 +868,39 @@ pub fn slice(arr: T, start: Option<usize>, end: Option<usize>) -> Result<T, Stri
     }
 }
 
-pub fn field_select(struct_: &T, field: &str) -> Result<T, String> {
-    match &struct_.ty {
+pub fn field_select(struct_tuple_: &T, field: &str) -> Result<T, String> {
+    match &struct_tuple_.ty {
         Ty::Struct(_, map) => {
             if let Some((idx, ty)) = map.search(field) {
                 Ok(T::new(
                     ty.clone(),
-                    term![Op::Field(idx); struct_.term.clone()],
+                    term![Op::Field(idx); struct_tuple_.term.clone()],
                 ))
             } else {
                 Err(format!("No field '{field}'"))
             }
         }
-        a => Err(format!("{a} is not a struct")),
+
+        Ty::Tuple(tys) => {
+            let idx = field.parse::<usize>().map_err(|_| format!("Invalid tuple index: {field}"))?;
+            if idx < tys.len() {
+                Ok(T::new(tys[idx].clone(), term![Op::Field(idx); struct_tuple_.term.clone()]))
+            } else {
+                Err(format!("Tuple index out of bounds: {idx}"))
+            }
+        }
+        a => Err(format!("{a} is not a struct or tuple")),
     }
 }
 
-pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
-    match &struct_.ty {
+pub fn field_store(struct_tuple_: T, field: &str, val: T) -> Result<T, String> {
+    match &struct_tuple_.ty {
         Ty::Struct(_, map) => {
             if let Some((idx, ty)) = map.search(field) {
                 if ty == &val.ty {
                     Ok(T::new(
-                        struct_.ty.clone(),
-                        term![Op::Update(idx); struct_.term.clone(), val.term],
+                        struct_tuple_.ty.clone(),
+                        term![Op::Update(idx); struct_tuple_.term.clone(), val.term],
                     ))
                 } else {
                     Err(format!(
@@ -897,7 +912,25 @@ pub fn field_store(struct_: T, field: &str, val: T) -> Result<T, String> {
                 Err(format!("No field '{field}'"))
             }
         }
-        a => Err(format!("{a} is not a struct")),
+        Ty::Tuple(tys) => {
+            // Parse the field as a numeric index
+            let idx = field.parse::<usize>()
+                .map_err(|_| format!("Invalid tuple index: {field}"))?;
+            if idx >= tys.len() {
+                Err(format!("Tuple index out of bounds: {idx}"))
+            } else if &tys[idx] != &val.ty {
+                Err(format!(
+                    "Type mismatch: cannot assign {} to tuple element {} of type {}",
+                    val.ty, idx, tys[idx]
+                ))
+            } else {
+                Ok(T::new(
+                    struct_tuple_.ty.clone(),
+                    term![Op::Update(idx); struct_tuple_.term.clone(), val.term],
+                ))
+            }
+        }
+        a => Err(format!("{a} is not a struct or tuple")),
     }
 }
 

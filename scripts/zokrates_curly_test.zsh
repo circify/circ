@@ -108,5 +108,6 @@ pf_test arr_str_arr_str
 pf_test var_idx_arr_str_arr_str
 pf_test mm
 pf_test unused_var
+pf_test tuple
 
 scripts/zcx_tests/run_tests.sh

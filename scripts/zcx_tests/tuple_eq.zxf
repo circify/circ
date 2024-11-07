@@ -1,0 +1,15 @@
+def create_values() -> ((u32[7], field, u64, (u8, u16)), (u8, u16)) {
+    (u8, u16) w = (0, 0);
+    (u32[7], field, u64, (u8, u16)) x = ([7; 7], 1, 0, w);
+    return (x, w);
+}
+
+def main() -> bool {
+    ((u32[7], field, u64, (u8, u16)), (u8, u16)) vals = create_values();
+    
+    // Try to access vals.2 which doesn't exist (tuple only has elements 0 and 1)
+    assert(vals.2 != vals.0);
+    assert(!(vals.0 == vals.1));
+    
+    return vals.0 == vals.1 || vals.0 != vals.1;
+}

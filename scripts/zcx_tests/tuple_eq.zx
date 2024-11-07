@@ -1,0 +1,20 @@
+struct Point {
+    field x;
+    field y;
+}
+
+def create_input_values(private Point p, private (field, field) t) -> (Point, (field, field)) {
+    return (p, t);
+}
+
+def main(private Point p, private (field, field) t) -> (Point, (field, field)) {
+    (Point, (field, field)) w = create_input_values(p, t);
+    assert(w == w);
+
+    (Point, (field, field)) x = w;
+    (Point, (field, field)) y = (Point { x: 5, y: 6 }, (7, 8));
+
+    assert(x != y);
+    assert(!(x == y));
+    return x;
+}

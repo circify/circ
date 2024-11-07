@@ -47,7 +47,8 @@ pub fn extract(
         )),
         Ty::Tuple(tys) => Ok(T::new_tuple(
             tys.iter()
-                .map(|ty| extract(name, ty, scalar_input_values))
+                .enumerate()
+                .map(|(i, t_ty)| extract(&format!("{name}.{i}"), t_ty, scalar_input_values))
                 .collect::<Result<Vec<_>, _>>()?,
         )),
     }

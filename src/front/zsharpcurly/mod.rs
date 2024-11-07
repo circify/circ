@@ -156,18 +156,18 @@ enum ZAccess {
     Idx(T),
 }
 
-fn loc_store(struct_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
+fn loc_store(struct_tuple_: T, loc: &[ZAccess], val: T) -> Result<T, String> {
     match loc.first() {
         None => Ok(val),
         Some(ZAccess::Member(field)) => {
-            let inner = field_select(&struct_, field)?;
+            let inner = field_select(&struct_tuple_, field)?;
             let new_inner = loc_store(inner, &loc[1..], val)?;
-            field_store(struct_, field, new_inner)
+            field_store(struct_tuple_, field, new_inner)
         }
         Some(ZAccess::Idx(idx)) => {
-            let old_inner = array_select(struct_.clone(), idx.clone())?;
+            let old_inner = array_select(struct_tuple_.clone(), idx.clone())?;
             let new_inner = loc_store(old_inner, &loc[1..], val)?;
-            array_store(struct_, idx.clone(), new_inner)
+            array_store(struct_tuple_, idx.clone(), new_inner)
         }
     }
 }
@@ -662,10 +662,11 @@ impl<'ast> ZGen<'ast> {
             .map(|acc| match acc {
                 ast::AssigneeAccess::Dot(m) => match &m.inner {
                     ast::IdentifierOrDecimal::Identifier(i) => Ok(ZAccess::Member(i.value.clone())),
-                    ast::IdentifierOrDecimal::Decimal(_) => Err(format!(
-                        "Unsupported access of struct field by value: {}",
-                        span_to_string(&m.span)
-                    )),
+                    ast::IdentifierOrDecimal::Decimal(d) => {
+                        // Here we handle tuple access by position
+                        let index = d.span.as_str().trim();
+                        Ok(ZAccess::Member(index.to_string()))
+                    }
                 },
                 ast::AssigneeAccess::Select(m) => match &m.expression {
                     ast::RangeOrExpression::Expression(e) => {
