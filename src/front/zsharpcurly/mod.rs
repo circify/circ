@@ -1877,13 +1877,6 @@ impl<'ast> ZGen<'ast> {
             );
         }
 
-        // if let Some(ast::ArrayParamMetadata::Transcript(_)) = &c.array_metadata {
-        //     if !value.type_().is_array() {
-        //         self.err(format!("Non-array transcript {}", &c.id.value), &c.span);
-        //     }
-        //     self.mark_array_as_transcript(&c.id.value, value.clone());
-        // }
-
         // insert into constant map
         if self
             .constants
