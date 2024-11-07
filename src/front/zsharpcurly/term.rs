@@ -924,7 +924,7 @@ pub fn field_store(struct_tuple_: T, field: &str, val: T) -> Result<T, String> {
                 .map_err(|_| format!("Invalid tuple index: {field}"))?;
             if idx >= tys.len() {
                 Err(format!("Tuple index out of bounds: {idx}"))
-            } else if &tys[idx] != &val.ty {
+            } else if tys[idx] != val.ty {
                 Err(format!(
                     "Type mismatch: cannot assign {} to tuple element {} of type {}",
                     val.ty, idx, tys[idx]
