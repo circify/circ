@@ -288,8 +288,8 @@ impl T {
                 _ => Err(Error::new(
                     ErrorKind::Other,
                     "expected struct or tuple, got something else",
-                ))
-            }
+                )),
+            },
             Value::Array(arr) => {
                 let inner_ty = if let Ty::Array(_, ty) = &self.ty {
                     Ok(ty)
@@ -882,9 +882,14 @@ pub fn field_select(struct_tuple_: &T, field: &str) -> Result<T, String> {
         }
 
         Ty::Tuple(tys) => {
-            let idx = field.parse::<usize>().map_err(|_| format!("Invalid tuple index: {field}"))?;
+            let idx = field
+                .parse::<usize>()
+                .map_err(|_| format!("Invalid tuple index: {field}"))?;
             if idx < tys.len() {
-                Ok(T::new(tys[idx].clone(), term![Op::Field(idx); struct_tuple_.term.clone()]))
+                Ok(T::new(
+                    tys[idx].clone(),
+                    term![Op::Field(idx); struct_tuple_.term.clone()],
+                ))
             } else {
                 Err(format!("Tuple index out of bounds: {idx}"))
             }
@@ -914,7 +919,8 @@ pub fn field_store(struct_tuple_: T, field: &str, val: T) -> Result<T, String> {
         }
         Ty::Tuple(tys) => {
             // Parse the field as a numeric index
-            let idx = field.parse::<usize>()
+            let idx = field
+                .parse::<usize>()
                 .map_err(|_| format!("Invalid tuple index: {field}"))?;
             if idx >= tys.len() {
                 Err(format!("Tuple index out of bounds: {idx}"))
