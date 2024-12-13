@@ -1640,9 +1640,6 @@ impl<'ast> ZGen<'ast> {
             ast::Statement::Assembly(a) => {
                 for inner in &a.inner {
                     match inner {
-                        // xxx(unimpl): I think that here we also add constraints to the circuit
-                        // when we shouldn't. Specifically, atm we don't handle the operator
-                        // in the assignment.
                         ast::AssemblyStatementInner::Assignment(l) => {
                             self.assembly_assign_impl_::<IS_CNST>(l)?;
                         }
