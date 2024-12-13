@@ -16,7 +16,7 @@ for i in ${TESTDIR}/*.zx; do
             error=1
         else
             outfile="${i}.out"
-            if [ $(cat $outfile) != "$output" ]; then
+            if [ "$(cat "$outfile")" != "$output" ]; then
                 echo "[failure: should-pass] $i"
                 echo "expected output: "
                 cat $outfile
