@@ -586,8 +586,6 @@ impl<'ast> ZGen<'ast> {
         &self,
         assign: &ast::AssemblyAssignment<'ast>,
     ) -> Result<(), String> {
-        println!("Assembly assign");
-        println!("assign: {:?}", assign);
         let name = &assign.assignee.id.value;
         let accs = &assign.assignee.accesses;
 
