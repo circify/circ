@@ -109,5 +109,7 @@ pf_test var_idx_arr_str_arr_str
 pf_test mm
 pf_test unused_var
 pf_test tuple
+pf_test assembly_constraint
+pf_test assembly_unconstraint
 
 scripts/zcx_tests/run_tests.sh

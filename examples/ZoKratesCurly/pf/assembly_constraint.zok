@@ -1,0 +1,10 @@
+def main(private field a, private field b, private field c) -> field{
+    field d = a * b;
+    field e = 7;
+    asm {
+        e <-- a * c;
+        20 === a * c;
+    }
+    assert(d == e);
+    return 1;
+}

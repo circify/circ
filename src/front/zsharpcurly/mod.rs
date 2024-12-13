@@ -586,35 +586,45 @@ impl<'ast> ZGen<'ast> {
         &self,
         assign: &ast::AssemblyAssignment<'ast>,
     ) -> Result<(), String> {
-        // Get the variable name and accesses from the assignee
         let name = &assign.assignee.id.value;
         let accs = &assign.assignee.accesses;
 
-        // Convert AST accesses to IR accesses
-        let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
-        // Get the current value
-        let old = if IS_CNST {
-            self.cvar_lookup(name)
-                .ok_or_else(|| format!("Assembly assignment failed: no const variable {name}"))?
-        } else {
-            self.circ_get_value(Loc::local(name.to_string()))
-                .map_err(|e| format!("{e}"))?
-                .unwrap_term()
-        };
-        // Evaluate the expression and store at location
-        let wval = self.expr_impl_::<IS_CNST>(&assign.expression);
-        //if error panic with it here
-        let val = wval.unwrap();
-        let new = loc_store(old, &zaccs[..], val)
-            .map(const_fold)
-            .and_then(|n| if IS_CNST { const_val_simple(n) } else { Ok(n) })?;
-
-        debug!("Assembly Assign: {}", name);
-
-        // Store the result
+        // Will it ever go in the constant case?
         if IS_CNST {
+            let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
+            let old = self
+                .cvar_lookup(name)
+                .ok_or_else(|| format!("Assembly assignment failed: no const variable {name}"))?;
+            let val = self.expr_impl_::<IS_CNST>(&assign.expression)?;
+            let new = loc_store(old, &zaccs[..], val)
+                .map(const_fold)
+                .and_then(const_val_simple)?;
+
+            debug!("Assembly Const Assign: {}", name);
             self.cvar_assign(name, new)
         } else {
+            if self.in_witness_gen.get() {
+                return Err("already in witness generation".into());
+            }
+
+            // Get current value and location info
+            let zaccs = self.zaccs_impl_::<IS_CNST>(accs)?;
+            let old = self
+                .circ_get_value(Loc::local(name.to_string()))
+                .map_err(|e| format!("{e}"))?
+                .unwrap_term();
+
+            // Compute the value
+            let val = self.expr_impl_::<IS_CNST>(&assign.expression)?;
+
+            // Create a witness term with the computed value
+            let mut new_val = val;
+            new_val.term = term![Op::new_witness("assembly".into()); new_val.term];
+
+            // Store at the correct location
+            let new = loc_store(old, &zaccs[..], new_val).map(const_fold)?;
+
+            debug!("Assembly Witness Assign: {}", name);
             self.circ_assign(Loc::local(name.to_string()), Val::Term(new))
                 .map_err(|e| format!("{e}"))
                 .map(|_| ())
