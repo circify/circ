@@ -586,6 +586,8 @@ impl<'ast> ZGen<'ast> {
         &self,
         assign: &ast::AssemblyAssignment<'ast>,
     ) -> Result<(), String> {
+        println!("Assembly assign");
+        println!("assign: {:?}", assign);
         let name = &assign.assignee.id.value;
         let accs = &assign.assignee.accesses;
 
@@ -1642,6 +1644,17 @@ impl<'ast> ZGen<'ast> {
                     match inner {
                         ast::AssemblyStatementInner::Assignment(l) => {
                             self.assembly_assign_impl_::<IS_CNST>(l)?;
+                            if matches!(l.operator, ast::AssignmentOperator::AssignConstrain(_)) {
+                                // we need to first create an AST assembly constraint
+                                let lhs = self.assignee_to_expression(&l.assignee);
+                                let rhs = l.expression.clone();
+                                let c = ast::AssemblyConstraint {
+                                    lhs: lhs,
+                                    rhs: rhs,
+                                    span: l.span.clone(),
+                                };
+                                self.assembly_constraint_::<IS_CNST>(&c)?;
+                            }
                         }
                         ast::AssemblyStatementInner::Constraint(l) => {
                             self.assembly_constraint_::<IS_CNST>(l)?;
@@ -1653,6 +1666,37 @@ impl<'ast> ZGen<'ast> {
             ast::Statement::Log(_) => Err("Log statement is not implemented".to_string()),
         }
         .map_err(|err| format!("{}; context:\n{}", err, span_to_string(s.span())))
+    }
+
+    fn assignee_to_expression(&self, assignee: &ast::Assignee<'ast>) -> ast::Expression<'ast> {
+        let base = Box::new(ast::Expression::Identifier(assignee.id.clone()));
+
+        let accesses: Vec<ast::Access> = assignee
+            .accesses
+            .iter()
+            .map(|access| match access {
+                ast::AssigneeAccess::Dot(dot_access) => ast::Access::Dot(ast::DotAccess {
+                    inner: dot_access.inner.clone(),
+                    span: dot_access.span.clone(),
+                }),
+                ast::AssigneeAccess::Select(array_access) => {
+                    ast::Access::Select(ast::ArrayAccess {
+                        expression: array_access.expression.clone(),
+                        span: array_access.span.clone(),
+                    })
+                }
+            })
+            .collect();
+
+        if accesses.is_empty() {
+            *base
+        } else {
+            ast::Expression::Postfix(ast::PostfixExpression {
+                base,
+                accesses,
+                span: assignee.span.clone(),
+            })
+        }
     }
 
     fn set_lhs_ty_defn<const IS_CNST: bool>(
