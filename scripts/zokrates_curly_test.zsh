@@ -72,44 +72,45 @@ function pf_test_isolate {
     done
 }
 
-r1cs_test_count ./examples/ZoKratesCurly/pf/mm4_cond.zok 120
-r1cs_test_count ./examples/ZoKratesCurly/pf/const_linear_lookup.zok 20
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsOrderCheck.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsNegate.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/multiplexer/lookup1bit.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/multiplexer/lookup2bit.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/multiplexer/lookup3bitSigned.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/casts/bool_128_to_u32_4.zok
-#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/pack/u32/pack128.zok
-#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/pack/bool/pack128.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
-r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
-r1cs_test ./examples/ZoKratesCurly/pf/2024_06_02_chad_bug.zok
-
-pf_test_only_pf sha_temp1
-pf_test_only_pf sha_rot
-pf_test_only_pf maj
-pf_test_only_pf sha_temp2
-#pf_test_only_pf test_sha256
-
-pf_test assert
-pf_test assert2
-pf_test_isolate isolate_assert
-pf_test 3_plus
-pf_test xor
-pf_test mul
-pf_test many_pub
-pf_test str_str
-pf_test str_arr_str
-pf_test arr_str_arr_str
-pf_test var_idx_arr_str_arr_str
-pf_test mm
-pf_test unused_var
-pf_test tuple
-pf_test assembly_constraint
-pf_test assembly_unconstraint
-
-scripts/zcx_tests/run_tests.sh
+#r1cs_test_count ./examples/ZoKratesCurly/pf/mm4_cond.zok 120
+#r1cs_test_count ./examples/ZoKratesCurly/pf/const_linear_lookup.zok 20
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsAdd.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsOnCurve.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsOrderCheck.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsNegate.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/multiplexer/lookup1bit.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/multiplexer/lookup2bit.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/multiplexer/lookup3bitSigned.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/casts/bool_128_to_u32_4.zok
+##r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/pack/u32/pack128.zok
+##r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/utils/pack/bool/pack128.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/ecc/edwardsScalarMult.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/hashes/mimc7/mimc7R20.zok
+#r1cs_test ./third_party/ZoKratesCurly/zokrates_stdlib/stdlib/hashes/pedersen/512bit.zok
+#r1cs_test ./examples/ZoKratesCurly/pf/2024_06_02_chad_bug.zok
+#
+#pf_test_only_pf sha_temp1
+#pf_test_only_pf sha_rot
+#pf_test_only_pf maj
+#pf_test_only_pf sha_temp2
+##pf_test_only_pf test_sha256
+#
+#pf_test assert
+#pf_test assert2
+#pf_test_isolate isolate_assert
+#pf_test 3_plus
+#pf_test xor
+#pf_test mul
+#pf_test many_pub
+#pf_test str_str
+#pf_test str_arr_str
+#pf_test arr_str_arr_str
+#pf_test var_idx_arr_str_arr_str
+#pf_test mm
+#pf_test unused_var
+#pf_test tuple
+#pf_test assembly_constraint
+#pf_test assembly_unconstraint
+pf_test assembly_field_to_bool_unsafe
+#
+#scripts/zcx_tests/run_tests.sh

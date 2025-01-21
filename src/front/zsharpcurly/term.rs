@@ -1110,6 +1110,27 @@ pub fn field_to_bits(f: T, n: usize) -> Result<T, String> {
     }
 }
 
+pub fn field_to_bool_unsafe(f: T) -> Result<T, String> {
+    match &f.ty {
+
+        Ty::Field => { 
+            // convert field to boolean in a hacky way
+            // create a new constant field with value 0
+            // then perform eq on the field and the constant
+            // and then apply not into it.
+            // Example 1: f = 0, then 0 == 0 is true, then not true is false
+            // Example 2: f = 1, then 1 == 0 is false, then not false is true
+            // All of that should be witnessed in the circuit as we don't
+            // apply constraints in this operation
+            let const_0 = const_(Value::Field(cfg().field().new_v(0)));
+            let eq = term![Op::Eq; f.term, const_0];
+            let not = term![Op::Not; eq];
+            Ok(T::new(Ty::Bool, term![Op::new_witness("assembly".into()); not]))
+        },
+        u => Err(format!("Cannot do field-to-bool on {u}")),
+    }
+}
+
 fn bv_from_bits(barr: Term, size: usize) -> Term {
     term(
         Op::BvConcat,

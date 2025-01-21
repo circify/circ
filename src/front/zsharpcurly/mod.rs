@@ -549,6 +549,16 @@ impl<'ast> ZGen<'ast> {
                     Ok(T::new(Ty::Field, key_witness))
                 }
             }
+            "field_to_bool_unsafe" => {
+                if args.len() != 1 {
+                    Err(format!(
+                        "Got {} args to EMBED/field_to_bool_unsafe, expected 1",
+                        args.len()
+                    ))
+                } else {
+                    field_to_bool_unsafe(args.pop().unwrap())
+                }
+            }
             _ => Err(format!("Unknown or unimplemented builtin '{f_name}'")),
         }
     }

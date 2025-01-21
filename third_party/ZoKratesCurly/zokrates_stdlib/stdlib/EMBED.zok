@@ -103,6 +103,10 @@ def u8_to_u16(u8 i) -> u16 {
     return 0u16;
 }
 
+def field_to_bool_unsafe(field i) -> bool {
+    return true;
+}
+
 //def int_to_bits<N>(integer i) -> bool[N] {
 //    return [false; N];
 //}
