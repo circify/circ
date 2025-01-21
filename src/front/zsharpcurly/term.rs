@@ -1112,8 +1112,7 @@ pub fn field_to_bits(f: T, n: usize) -> Result<T, String> {
 
 pub fn field_to_bool_unsafe(f: T) -> Result<T, String> {
     match &f.ty {
-
-        Ty::Field => { 
+        Ty::Field => {
             // convert field to boolean in a hacky way
             // create a new constant field with value 0
             // then perform eq on the field and the constant
@@ -1125,8 +1124,11 @@ pub fn field_to_bool_unsafe(f: T) -> Result<T, String> {
             let const_0 = const_(Value::Field(cfg().field().new_v(0)));
             let eq = term![Op::Eq; f.term, const_0];
             let not = term![Op::Not; eq];
-            Ok(T::new(Ty::Bool, term![Op::new_witness("assembly".into()); not]))
-        },
+            Ok(T::new(
+                Ty::Bool,
+                term![Op::new_witness("assembly".into()); not],
+            ))
+        }
         u => Err(format!("Cannot do field-to-bool on {u}")),
     }
 }
