@@ -94,7 +94,7 @@ enum TokTree<'src> {
 
 use TokTree::*;
 
-impl<'src> Display for TokTree<'src> {
+impl Display for TokTree<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Leaf(_, l) => write!(f, "{}", from_utf8(l).unwrap()),
@@ -115,7 +115,7 @@ impl<'src> Display for TokTree<'src> {
     }
 }
 
-impl<'src> Debug for TokTree<'src> {
+impl Debug for TokTree<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Leaf(_, l) => write!(f, "{}", from_utf8(l).unwrap()),

@@ -72,7 +72,7 @@ pub(super) fn get_modulus<F: Field + PrimeField>() -> Integer {
 /// bellman prover.
 pub struct SynthInput<'a>(&'a ProverData, Option<&'a FxHashMap<String, Value>>);
 
-impl<'a, F: PrimeField> Circuit<F> for SynthInput<'a> {
+impl<F: PrimeField> Circuit<F> for SynthInput<'_> {
     #[track_caller]
     fn synthesize<CS>(self, cs: &mut CS) -> std::result::Result<(), SynthesisError>
     where

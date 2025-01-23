@@ -61,7 +61,7 @@ pub fn name_from_decl(decl: &Declarator) -> String {
 
 pub fn compress_type(ts: Vec<Option<Ty>>) -> Option<Ty> {
     if ts.len() == 1 {
-        return ts.first().unwrap().clone();
+        ts.first().unwrap().clone()
     } else {
         let mut signed: bool = true;
         let mut _void: bool = false;

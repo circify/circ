@@ -267,7 +267,7 @@ impl rand::distributions::Distribution<BitVector> for UniformBitVector {
 
 pub(crate) struct UniformFieldV<'a>(&'a FieldT);
 
-impl<'a> rand::distributions::Distribution<FieldV> for UniformFieldV<'a> {
+impl rand::distributions::Distribution<FieldV> for UniformFieldV<'_> {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> FieldV {
         self.0.random_v(rng)
     }
@@ -275,7 +275,7 @@ impl<'a> rand::distributions::Distribution<FieldV> for UniformFieldV<'a> {
 
 pub(crate) struct UniformValue<'a>(pub &'a Sort);
 
-impl<'a> rand::distributions::Distribution<Value> for UniformValue<'a> {
+impl rand::distributions::Distribution<Value> for UniformValue<'_> {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Value {
         match self.0 {
             Sort::Bool => Value::Bool(rng.gen()),

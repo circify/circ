@@ -64,7 +64,7 @@ impl<'ast, 'ret, 'wlk> ZExpressionTyper<'ast, 'ret, 'wlk> {
     }
 }
 
-impl<'ast, 'ret, 'wlk> ZVisitorMut<'ast> for ZExpressionTyper<'ast, 'ret, 'wlk> {
+impl<'ast, > ZVisitorMut<'ast> for ZExpressionTyper<'ast, '_, '_> {
     fn visit_expression(&mut self, expr: &mut ast::Expression<'ast>) -> ZVisitorResult {
         use ast::Expression::*;
         if self.ty.is_some() {

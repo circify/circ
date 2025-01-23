@@ -133,7 +133,7 @@ struct ZGen<'ast> {
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 struct FnCallImplInput(bool, Vec<T>, Vec<(String, T)>, PathBuf, String);
 
-impl<'ast> Drop for ZGen<'ast> {
+impl Drop for ZGen<'_> {
     fn drop(&mut self) {
         use std::mem::take;
 

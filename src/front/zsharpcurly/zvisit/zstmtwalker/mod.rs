@@ -818,7 +818,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
     }
 }
 
-impl<'ast, 'ret> ZVisitorMut<'ast> for ZStatementWalker<'ast, 'ret> {
+impl<'ast> ZVisitorMut<'ast> for ZStatementWalker<'ast, '_> {
     fn visit_return_statement(&mut self, ret: &mut ast::ReturnStatement<'ast>) -> ZVisitorResult {
         // XXX(unimpl) multi-return statements not supported
         if self.rets.len() > 1 {

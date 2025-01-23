@@ -34,7 +34,7 @@ pub struct Error<'ast> {
     pub span: Option<Span<'ast>>,
 }
 
-impl<'ast> Display for Error<'ast> {
+impl Display for Error<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         writeln!(f, "Error: {}", self.kind)?;
         if let Some(s) = &self.span {
@@ -47,7 +47,7 @@ impl<'ast> Display for Error<'ast> {
     }
 }
 
-impl<'ast> From<ErrorKind> for Error<'ast> {
+impl From<ErrorKind> for Error<'_> {
     fn from(error_kind: ErrorKind) -> Self {
         Error {
             kind: error_kind,
@@ -56,7 +56,7 @@ impl<'ast> From<ErrorKind> for Error<'ast> {
     }
 }
 
-impl<'ast> From<crate::circify::CircError> for Error<'ast> {
+impl From<crate::circify::CircError> for Error<'_> {
     fn from(circ: crate::circify::CircError) -> Self {
         Error {
             kind: ErrorKind::Circify(circ),
