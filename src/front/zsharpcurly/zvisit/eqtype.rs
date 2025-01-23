@@ -37,7 +37,7 @@ pub(super) fn eq_type<'ast>(
                     "type mismatch:\n\texpected {ty:?},\n\tfound {ty2:?}"
                 )))
             }
-        },
+        }
     }
 }
 
