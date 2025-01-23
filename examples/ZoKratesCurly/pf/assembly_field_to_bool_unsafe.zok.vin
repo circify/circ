@@ -2,7 +2,7 @@
 
 (let (
 
-  (return false)
+  (return true)
 
 ) true; ignored
 

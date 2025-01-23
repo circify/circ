@@ -313,6 +313,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
     }
 }
 
+/// Test helpers for dist.
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -322,6 +323,7 @@ pub mod test {
     use rand::distributions::Distribution;
     use rand::SeedableRng;
 
+    /// PureBool struct for testing.
     #[derive(Clone, Debug)]
     pub struct PureBool(pub Term, pub FxHashMap<String, Value>);
 
@@ -352,6 +354,7 @@ pub mod test {
         }
     }
 
+    /// ArbitraryTerm struct for testing.
     #[derive(Clone)]
     pub struct ArbitraryTerm(pub Term);
 
