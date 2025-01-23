@@ -1657,9 +1657,9 @@ impl<'ast> ZGen<'ast> {
                                 let lhs = self.assignee_to_expression(&l.assignee);
                                 let rhs = l.expression.clone();
                                 let c = ast::AssemblyConstraint {
-                                    lhs: lhs,
-                                    rhs: rhs,
-                                    span: l.span.clone(),
+                                    lhs,
+                                    rhs,
+                                    span: l.span,
                                 };
                                 self.assembly_constraint_::<IS_CNST>(&c)?;
                             }
@@ -1685,12 +1685,12 @@ impl<'ast> ZGen<'ast> {
             .map(|access| match access {
                 ast::AssigneeAccess::Dot(dot_access) => ast::Access::Dot(ast::DotAccess {
                     inner: dot_access.inner.clone(),
-                    span: dot_access.span.clone(),
+                    span: dot_access.span,
                 }),
                 ast::AssigneeAccess::Select(array_access) => {
                     ast::Access::Select(ast::ArrayAccess {
                         expression: array_access.expression.clone(),
-                        span: array_access.span.clone(),
+                        span: array_access.span,
                     })
                 }
             })
@@ -1702,7 +1702,7 @@ impl<'ast> ZGen<'ast> {
             ast::Expression::Postfix(ast::PostfixExpression {
                 base,
                 accesses,
-                span: assignee.span.clone(),
+                span: assignee.span,
             })
         }
     }
