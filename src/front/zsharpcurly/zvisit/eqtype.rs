@@ -16,9 +16,28 @@ pub(super) fn eq_type<'ast>(
         (Array(aty), Array(aty2)) => eq_array_type(aty, aty2, zgen),
         (Struct(sty), Struct(sty2)) => eq_struct_type(sty, sty2, zgen),
         (Tuple(t1), Tuple(t2)) => eq_tuple_type(t1, t2, zgen),
-        _ => Err(ZVisitorError(format!(
-            "type mismatch:\n\texpected {ty:?},\n\tfound {ty2:?}"
-        ))),
+        _ => {
+            let resolve_type_alias = |ty: &ast::Type<'ast>| -> ZResult<(ast::Type<'ast>, bool)> {
+                match ty {
+                    Struct(s) => {
+                        let resolved_ty = canon_type(s, zgen)?;
+                        Ok((resolved_ty, true))
+                    }
+                    _ => Ok((ty.clone(), false)),
+                }
+            };
+
+            let (ty, type_alias) = resolve_type_alias(ty)?;
+            let (ty2, type_alias2) = resolve_type_alias(ty2)?;
+
+            if type_alias || type_alias2 {
+                eq_type(&ty, &ty2, zgen)
+            } else {
+                Err(ZVisitorError(format!(
+                    "type mismatch:\n\texpected {ty:?},\n\tfound {ty2:?}"
+                )))
+            }
+        },
     }
 }
 
