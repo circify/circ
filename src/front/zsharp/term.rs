@@ -174,9 +174,7 @@ impl T {
             Ty::Struct(_, map) => Ok(FieldList::new(
                 map.fields()
                     .map(|(field, _)| {
-                        let (idx, _) = map
-                            .search(field)
-                            .expect(&format!("No field '{field}'"));
+                        let (idx, _) = map.search(field).expect(&format!("No field '{field}'"));
                         (field.clone(), term![Op::Field(idx); self.term.clone()])
                     })
                     .collect(),
@@ -188,19 +186,19 @@ impl T {
         match &self.ty {
             Ty::Struct(_, fields) => {
                 let fields = (*fields).clone();
-                Ok(FieldList::new(self
-                    .unwrap_struct_ir()?
-                    .fields()
-                    .map(|(field, t)| {
-                        let f_ty = fields
-                            .search(field)
-                            .expect(&format!("No field '{field}'"))
-                            .1
-                            .clone();
+                Ok(FieldList::new(
+                    self.unwrap_struct_ir()?
+                        .fields()
+                        .map(|(field, t)| {
+                            let f_ty = fields
+                                .search(field)
+                                .expect(&format!("No field '{field}'"))
+                                .1
+                                .clone();
 
-                        (field.clone(), T::new(f_ty, t.clone()))
-                    })
-                    .collect(),
+                            (field.clone(), T::new(f_ty, t.clone()))
+                        })
+                        .collect(),
                 ))
             }
             s => Err(format!("Not a struct: {s}")),
@@ -1246,11 +1244,9 @@ impl Embeddable for ZSharp {
                     None => std::iter::repeat(None).take(*n).collect(),
                 };
                 debug_assert_eq!(*n, ps.len());
-                array(
-                    ps.into_iter().enumerate().map(|(i, p)| {
-                        self.declare_input(ctx, &Ty::Field, idx_name(&name, i), visibility, p)
-                    }),
-                )
+                array(ps.into_iter().enumerate().map(|(i, p)| {
+                    self.declare_input(ctx, &Ty::Field, idx_name(&name, i), visibility, p)
+                }))
                 .unwrap()
             }
 
@@ -1272,13 +1268,13 @@ impl Embeddable for ZSharp {
                                     f_ty,
                                     field_name(&name, f_name),
                                     visibility,
-                                    ps.search(f_name).map(|(_, p)| p.clone())
+                                    ps.search(f_name).map(|(_, p)| p.clone()),
                                 ),
                             )
                         })
                         .collect(),
                 )
-            },
+            }
         }
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
