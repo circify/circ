@@ -169,6 +169,43 @@ impl T {
             s => Err(format!("Not an array: {s}")),
         }
     }
+    fn unwrap_struct_ir(self) -> Result<FieldList<Term>, String> {
+        match &self.ty {
+            Ty::Struct(_, map) => Ok(FieldList::new(
+                map.fields()
+                    .map(|(field, _)| {
+                        let (idx, _) = map
+                            .search(field)
+                            .expect(&format!("No field '{field}'"));
+                        (field.clone(), term![Op::Field(idx); self.term.clone()])
+                    })
+                    .collect(),
+            )),
+            s => Err(format!("{s} is not a struct")),
+        }
+    }
+    pub fn unwrap_struct(self) -> Result<FieldList<T>, String> {
+        match &self.ty {
+            Ty::Struct(_, fields) => {
+                let fields = (*fields).clone();
+                Ok(FieldList::new(self
+                    .unwrap_struct_ir()?
+                    .fields()
+                    .map(|(field, t)| {
+                        let f_ty = fields
+                            .search(field)
+                            .expect(&format!("No field '{field}'"))
+                            .1
+                            .clone();
+
+                        (field.clone(), T::new(f_ty, t.clone()))
+                    })
+                    .collect(),
+                ))
+            }
+            s => Err(format!("Not a struct: {s}")),
+        }
+    }
     pub fn new_array(v: Vec<T>) -> Result<T, String> {
         array(v)
     }
@@ -1216,23 +1253,32 @@ impl Embeddable for ZSharp {
                 )
                 .unwrap()
             }
-            Ty::Struct(n, fs) => T::new_struct(
-                n.clone(),
-                fs.fields()
-                    .map(|(f_name, f_ty)| {
-                        (
-                            f_name.clone(),
-                            self.declare_input(
-                                ctx,
-                                f_ty,
-                                field_name(&name, f_name),
-                                visibility,
-                                precompute.as_ref().map(|_| unimplemented!("precomputations for declared inputs that are Z# structures")),
-                            ),
-                        )
-                    })
-                    .collect(),
-            ),
+
+            Ty::Struct(n, fs) => {
+                let ps = match precompute.map(|p| p.unwrap_struct()) {
+                    Some(Ok(fl)) => fl,
+                    Some(Err(e)) => panic!("{}", e),
+                    None => FieldList::new(vec![]),
+                };
+
+                Self::T::new_struct(
+                    n.clone(),
+                    fs.fields()
+                        .map(|(f_name, f_ty)| {
+                            (
+                                f_name.clone(),
+                                self.declare_input(
+                                    ctx,
+                                    f_ty,
+                                    field_name(&name, f_name),
+                                    visibility,
+                                    ps.search(f_name).map(|(_, p)| p.clone())
+                                ),
+                            )
+                        })
+                        .collect(),
+                )
+            },
         }
     }
     fn ite(&self, _ctx: &mut CirCtx, cond: Term, t: Self::T, f: Self::T) -> Self::T {
