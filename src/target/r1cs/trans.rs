@@ -1167,6 +1167,7 @@ pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
 }
 
 #[cfg(test)]
+/// Tests for this module.
 pub mod test {
     use super::*;
 

@@ -183,7 +183,7 @@ impl CGen {
 
     /// TODO: Refactor with s_type_ / d_type_
     fn type_(&mut self, t: &TypeSpecifier) -> Option<Ty> {
-        return match t {
+        match t {
             TypeSpecifier::Void => None,
             TypeSpecifier::Int => Some(Ty::Int(true, 32)),
             TypeSpecifier::Unsigned => Some(Ty::Int(false, 32)),
@@ -244,7 +244,7 @@ impl CGen {
                 }
             }
             _ => unimplemented!("Type {:#?} not implemented yet.", t),
-        };
+        }
     }
 
     fn get_inner_derived_type(&mut self, base_ty: &Ty, d: &DerivedDeclarator) -> Ty {
@@ -1134,12 +1134,11 @@ impl CGen {
                     }
                 };
             }
-            Statement::Expression(expr) => match expr {
-                Some(e) => {
+            Statement::Expression(expr) => {
+                if let Some(e) = expr {
                     self.gen_expr(&e.node);
                 }
-                None => {}
-            },
+            }
             Statement::For(for_stmt) => {
                 // TODO: Add enter_breakable
                 self.circ_enter_scope();

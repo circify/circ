@@ -45,7 +45,7 @@ pub fn link_one(callee: &Computation, values: Vec<Term>) -> Term {
     )
 }
 
-impl<'f> Linker<'f> {
+impl Linker<'_> {
     /// Ensure that a totally linked version of `name` is in the cache.
     fn link_all(&mut self, name: &str) {
         if !self.cache.contains_key(name) {
@@ -66,7 +66,7 @@ impl<'f> Linker<'f> {
 /// Rewrites a term, inlining function calls along the way.
 ///
 /// Assumes that the callees are already inlined. Panics otherwise.
-impl<'f> RewritePass for Linker<'f> {
+impl RewritePass for Linker<'_> {
     fn visit<F: Fn() -> Vec<Term>>(
         &mut self,
         _computation: &mut Computation,

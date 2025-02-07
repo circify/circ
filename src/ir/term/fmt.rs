@@ -281,7 +281,7 @@ impl<'a, 'b> IrFormatter<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Write for IrFormatter<'a, 'b> {
+impl Write for IrFormatter<'_, '_> {
     fn write_str(&mut self, s: &str) -> FmtResult {
         self.writer.write_str(s)
     }
@@ -666,13 +666,13 @@ fn fmt_term_with_bindings(t: &Term, f: &mut IrFormatter) -> FmtResult {
     Ok(())
 }
 
-impl<'a> Display for IrWrapper<'a, Term> {
+impl Display for IrWrapper<'_, Term> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "{self:?}")
     }
 }
 
-impl<'a> Debug for IrWrapper<'a, Term> {
+impl Debug for IrWrapper<'_, Term> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let cfg = IrCfg::from_circ_cfg();
         let f = &mut IrFormatter::new(f, &cfg);
