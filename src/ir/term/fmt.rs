@@ -508,8 +508,7 @@ impl DisplayIr for FieldV {
     fn ir_fmt(&self, f: &mut IrFormatter) -> FmtResult {
         let omit_field = f.cfg.hide_field
             || f.default_field
-                .as_ref()
-                .map_or(false, |field| field == &self.ty());
+                .as_ref().is_some_and(|field| field == &self.ty());
         let mut i = self.i();
         let mod_bits = self.modulus().significant_bits();
         if i.significant_bits() + 1 >= mod_bits {
