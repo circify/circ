@@ -315,6 +315,7 @@ impl rand::distributions::Distribution<Term> for FixedSizeDist {
 
 /// Test helpers for dist.
 #[cfg(test)]
+/// Utilities for random testing.
 pub mod test {
     use super::*;
 
@@ -325,6 +326,7 @@ pub mod test {
 
     /// PureBool struct for testing.
     #[derive(Clone, Debug)]
+    /// A random term with only Boolean descendents and values for its variables.
     pub struct PureBool(pub Term, pub FxHashMap<String, Value>);
 
     impl Arbitrary for PureBool {
@@ -356,6 +358,7 @@ pub mod test {
 
     /// ArbitraryTerm struct for testing.
     #[derive(Clone)]
+    /// A random term and values for its variables.
     pub struct ArbitraryTerm(pub Term);
 
     impl std::fmt::Debug for ArbitraryTerm {

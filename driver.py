@@ -166,7 +166,7 @@ def build(features):
             log_run_check(["./scripts/build_mpc_zokrates_test.zsh"])
 
 
-def test(features, extra_args):
+def test(features, ci: bool, extra_args):
     """
     Run cargo tests and any test cases in the feature list
 
@@ -177,6 +177,9 @@ def test(features, extra_args):
 
         extra_args: list of str
             extra arguments to pass to cargo
+
+        ci: bool
+            whether to disable some tests b/c of CI limitations
     """
 
     build(features)
@@ -198,7 +201,7 @@ def test(features, extra_args):
         log_run_check(["./scripts/test_datalog.zsh"])
 
     if "zok" in features and "smt" in features:
-        if "aby" in features:
+        if "aby" in features and not ci:
             log_run_check(["python3", "./scripts/aby_tests/zokrates_test_aby.py"])
         if "lp" in features:
             log_run_check(["./scripts/test_zok_to_ilp.zsh"])
@@ -214,7 +217,7 @@ def test(features, extra_args):
             log_run_check(["./scripts/test_zok_to_ilp_pf.zsh"])
 
     if "c" in features:
-        if "aby" in features:
+        if "aby" in features and not ci:
             log_run_check(["python3", "./scripts/aby_tests/c_test_aby.py"])
         if "smt" in features:
             log_run_check(["./scripts/test_c_smt.zsh"])
@@ -364,6 +367,11 @@ if __name__ == "__main__":
             "-l", "--lint", action="store_true", help="run `cargo clippy`"
         )
         parser.add_argument(
+            "--ci",
+            action="store_true",
+            help="customize commands for CI, where some things are hard to run",
+        )
+        parser.add_argument(
             "--flamegraph", action="store_true", help="run `cargo flamegraph`"
         )
         parser.add_argument(
@@ -403,7 +411,9 @@ if __name__ == "__main__":
             actions = [
                 k
                 for k, v in vars(args).items()
-                if (type(v) is bool or k in ["features", "mode"]) and bool(v)
+                if (type(v) is bool or k in ["features", "mode"])
+                and bool(v)
+                and k not in ["ci"]
             ]
             if len(actions) != 1:
                 parser.error(
@@ -444,7 +454,7 @@ if __name__ == "__main__":
             build(features)
 
         if args.test:
-            test(features, args.extra)
+            test(features, args.ci, args.extra)
 
         if args.benchmark:
             benchmark(features)
