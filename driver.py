@@ -366,7 +366,9 @@ if __name__ == "__main__":
             "-l", "--lint", action="store_true", help="run `cargo clippy`"
         )
         parser.add_argument(
-            "--ci", action="store_true", help="customize commands for CI, where some things are hard to run"
+            "--ci",
+            action="store_true",
+            help="customize commands for CI, where some things are hard to run",
         )
         parser.add_argument(
             "--flamegraph", action="store_true", help="run `cargo flamegraph`"
@@ -408,7 +410,9 @@ if __name__ == "__main__":
             actions = [
                 k
                 for k, v in vars(args).items()
-                if (type(v) is bool or k in ["features", "mode"]) and bool(v)
+                if (type(v) is bool or k in ["features", "mode"])
+                and bool(v)
+                and k not in ["ci"]
             ]
             if len(actions) != 1:
                 parser.error(
