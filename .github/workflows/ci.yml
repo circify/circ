@@ -37,4 +37,4 @@ jobs:
             - name: Document
               run: python3 driver.py --doc
             - name: Build, then Test
-              run: python3 driver.py --test
+              run: python3 driver.py --test --ci
