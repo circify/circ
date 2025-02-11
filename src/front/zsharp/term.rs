@@ -174,7 +174,7 @@ impl T {
             Ty::Struct(_, map) => Ok(FieldList::new(
                 map.fields()
                     .map(|(field, _)| {
-                        let (idx, _) = map.search(field).expect(&format!("No field '{field}'"));
+                        let (idx, _) = map.search(field).unwrap_or_else(|| panic!("{}", "No field '{field}'"));
                         (field.clone(), term![Op::Field(idx); self.term.clone()])
                     })
                     .collect(),
@@ -192,7 +192,7 @@ impl T {
                         .map(|(field, t)| {
                             let f_ty = fields
                                 .search(field)
-                                .expect(&format!("No field '{field}'"))
+                                .unwrap_or_else(|| panic!("{}", "No field '{field}'"))
                                 .1
                                 .clone();
 
