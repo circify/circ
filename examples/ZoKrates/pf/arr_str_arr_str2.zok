@@ -1,0 +1,10 @@
+struct Pt {
+    field x
+    field y
+}
+struct Pts {
+    Pt[2] pts
+}
+
+def main(private Pts[1] pts) -> Pt:
+    return Pt {x: pts[0].pts[0].x * pts[0].pts[1].x, y: pts[0].pts[0].y * pts[0].pts[1].y}
