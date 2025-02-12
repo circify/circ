@@ -1,0 +1,12 @@
+def u8log2(u8 x) -> u8 {
+    u8 mut acc = 0x00;
+    for field i in 0..8 {
+        acc = acc + if x != 0x00 { 0x01 } else { 0x00 };
+        x = x >> 1;
+    }
+    return acc;
+}
+
+def main(private u8 x) -> u8 {
+    return x + u8log2(x);
+}

@@ -1,0 +1,5 @@
+// One-bit window lookup table using one constraint
+def main(bool selector, field[2] target) -> field {
+    field out = selector ? target[1] : target[0];
+    return out;
+}

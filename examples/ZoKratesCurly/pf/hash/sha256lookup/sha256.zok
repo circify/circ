@@ -1,0 +1,13 @@
+def main<N, NL>(field[N][16][NL] message) -> field[8] {
+    u32[NL] LIMBWIDTH = [11, 11, 10];
+    Dual[8][NL] current = IV_S;
+    for u32 i in 0..N {
+        Dual[16][NL] cur_msg = dense_limbs_to_dual_limbs::<16, NL>(message[i], LIMBWIDTH);
+        current = shaRound::<NL>(cur_msg, current, LIMBWIDTH);
+    }
+    field[8] output = [0; 8];
+    for u32 i in 0..8 {
+        output[i] = combine_limbs(dual_limbs_to_dense_limbs(current[i]), LIMBWIDTH);
+    }
+    return output;
+}

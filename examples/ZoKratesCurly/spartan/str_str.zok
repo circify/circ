@@ -1,0 +1,11 @@
+def main(field x, field y) -> field {
+    struct Pt {
+        field x;
+        field y;
+    }
+    struct PtWr {
+        Pt p;
+    }
+    PtWr p = PtWr { p: Pt { x: x, y: y } };
+    return p.p.x * p.p.y;
+}

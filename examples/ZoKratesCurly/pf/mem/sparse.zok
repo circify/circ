@@ -1,0 +1,11 @@
+def main(private field dense_x, private field dense_y) -> field {
+    Dual z = dense_to_dual_8(0);
+    Dual x = dense_to_dual_8(dense_x); // 10001000 (136)
+    Dual y = dense_to_dual_8(dense_y); // 10000001 (129)
+    Dual a = and_8(x, y);              // 10000000
+    Dual b = or_8(x, y);               // 10001001
+    Dual c = xor_8(x, y, z);           // 00001001
+    Dual d = maj_8(x, y, c);           // 10001001
+    Dual s = normalize_sum_8(d.d + c.d + b.d + a.d); // 10011011 (128+27=155)
+    return s.d;
+}

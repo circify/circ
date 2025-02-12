@@ -1,0 +1,11 @@
+def foo() -> u32 {
+    return 1;
+}
+
+def foo() -> u32 {
+    return 2;
+}
+
+def main() -> u32 {
+    return foo();
+}

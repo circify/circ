@@ -1,0 +1,3 @@
+def main(BigNatb<10, 256> a, BigNat<10> b) -> bool {
+    return true;
+}

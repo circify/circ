@@ -1,0 +1,5 @@
+def main(private field y, private field i, private field j, private field k) -> field {
+    Pt p = Pt {x: y, y: y};
+    Pts[1] pts = [Pts { pts: [p, p] }];
+    return pts[i].pts[j].y * pts[i].pts[j].x;
+}

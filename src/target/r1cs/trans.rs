@@ -1166,6 +1166,7 @@ pub fn to_r1cs(cs: &Computation, cfg: &CircCfg) -> R1cs {
     converter.r1cs
 }
 
+/// Test helpers for r1cs trans.
 #[cfg(test)]
 /// Tests for this module.
 pub mod test {

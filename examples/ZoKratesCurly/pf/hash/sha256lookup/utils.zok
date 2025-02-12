@@ -1,0 +1,131 @@
+```rust
+use "assert_well_formed"::fits_in_bits_sparse;
+use "EMBED"::{unpack, reverse_lookup};
+use "const_range_check"::{D_TO_S_10, D_TO_S_11};
+
+struct Dual {
+    s: field,
+    d: field,
+}
+
+fn ceildiv(x: u32, y: u32) -> u32 {
+    (x + y - 1) / y
+}
+
+fn reverse_limbs<const N: usize>(input: [field; N]) -> [field; N] {
+    let mut output = [0; N];
+    for i in 0..N {
+        output[i] = input[N - 1 - i];
+    }
+    output
+}
+
+fn combine_limbs<const N: usize>(input: [field; N], limbw: [u32; N]) -> field {
+    let mut output = 0;
+    let mut cur_width = 0;
+    for (limb, &width) in input.iter().zip(limbw.iter()) {
+        output += limb * (2 ** cur_width);
+        cur_width += width;
+    }
+    output
+}
+
+fn combine_sparse_limbs<const N: usize>(input: [field; N], limbw: [u32; N]) -> field {
+    let sparse_limbw: [u32; N] = array::from_fn(|i| 2 * limbw[i]);
+    combine_limbs(input, sparse_limbw)
+}
+
+fn unsafe_split<const LOW_BITS: u32, const HIGH_BITS: u32>(x: field) -> [field; 2] {
+    let total_bits = LOW_BITS + HIGH_BITS;
+    let bits = unpack(x);
+    let (mut low, mut high) = (0, 0);
+    for i in 0..LOW_BITS {
+        low += (2 ** i) * bits[total_bits - 1 - i] as field;
+    }
+    for i in LOW_BITS..total_bits {
+        high += (2 ** (i - LOW_BITS)) * bits[total_bits - 1 - i] as field;
+    }
+    [low, high]
+}
+
+fn unsafe_split_dyn<const N: usize>(x: field, limbw: [u32; N]) -> [field; N] {
+    let total_width = limbw.iter().sum::<u32>();
+    let bits = unpack(x);
+    let mut output = [0; N];
+    let mut idx = total_width - 1;
+    for (out_limb, &width) in output.iter_mut().zip(limbw.iter()) {
+        for j in 0..width {
+            *out_limb += 2 ** j * bits[idx] as field;
+            idx -= 1;
+        }
+    }
+    output
+}
+
+fn unsafe_split_dyn_sparse<const N: usize>(x: field, limbw: [u32; N]) -> [field; N] {
+    let sparse_limbw: [u32; N] = array::from_fn(|i| 2 * limbw[i]);
+    unsafe_split_dyn(x, sparse_limbw)
+}
+
+fn unsafe_separate_sparse<const N: u32>(x: field) -> [field; 2] {
+    let bits = unpack(x);
+    let (mut even, mut odd) = (0, 0);
+    for i in 0..N {
+        even += 4 ** i * bits[2 * N - 1 - 2 * i] as field;
+        odd += 4 ** i * bits[2 * N - 2 * i] as field;
+    }
+    [even, odd]
+}
+
+fn split_limbs_in_sparse<const N: usize>(input: field, limbw: [u32; N]) -> [field; N] {
+    let output_limbs = unsafe_split_dyn_sparse(input, limbw);
+    let mut safe_output_limbs = [0; N];
+    
+    safe_output_limbs[0..].copy_from_slice(&output_limbs[1..]);
+    let nm1 = N - 1;
+    safe_output_limbs[0] = input - combine_sparse_limbs(safe_output_limbs[1..].try_into().unwrap(), limbw[1..].try_into().unwrap()) * (2 ** (2 * limbw[0]));
+    
+    for (limb, &width) in output_limbs.iter().zip(limbw.iter()) {
+        assert!(fits_in_bits_sparse(*limb, width));
+    }
+    output_limbs
+}
+
+fn split_even_dual_10(x: field) -> Dual {
+    let split = split_both_sparse_inner::<10>(x);
+    let (even, even_d) = (split[0], reverse_lookup(D_TO_S_10, split[0]));
+    assert!(fits_in_bits_sparse(split[1], 10));
+    Dual { s: even, d: even_d }
+}
+
+fn split_odd_dual_10(x: field) -> Dual {
+    let split = split_both_sparse_inner::<10>(x);
+    let (odd, odd_d) = (split[1], reverse_lookup(D_TO_S_10, split[1]));
+    assert!(fits_in_bits_sparse(split[0], 10));
+    Dual { s: odd, d: odd_d }
+}
+
+fn split_even_dual_11(x: field) -> Dual {
+    let split = split_both_sparse_inner::<11>(x);
+    let (even, even_d) = (split[0], reverse_lookup(D_TO_S_11, split[0]));
+    assert!(fits_in_bits_sparse(split[1], 11));
+    Dual { s: even, d: even_d }
+}
+
+fn dense_to_dual<const W: u32>(x: field) -> Dual {
+    let s = match W {
+        10 => reverse_lookup(D_TO_S_10, x),
+        11 => reverse_lookup(D_TO_S_11, x),
+        _ => panic!(),
+    };
+    Dual { s, d: x }
+}
+
+fn dense_limbs_to_dual_limbs<const N: usize, const NL: usize>(input: [[field; NL]; N], limbw: [u32; NL]) -> [[Dual; NL]; N] {
+    let mut output = array::from_fn(|_| array::from_fn(|_| Dual { s: 0, d: 0 }));
+    for (i, each) in input.iter().enumerate() {
+        output[i] = dense_limb_to_dual_limb(each, limbw);
+    }
+    output
+}
+```

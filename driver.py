@@ -16,6 +16,7 @@ cargo_features = {
     "r1cs",
     "smt",
     "zok",
+    "zokc",
     "datalog",
     "bellman",
     "spartan",

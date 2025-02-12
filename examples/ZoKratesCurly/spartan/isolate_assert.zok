@@ -1,0 +1,8 @@
+def mult(field x, field y) -> field {
+    assert(x != y);
+    return x * y;
+}
+
+def main(private field x, private field y) -> field {
+    return if x == y { x * x } else { mult(x, y) };
+}

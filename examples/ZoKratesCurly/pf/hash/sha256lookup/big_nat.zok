@@ -1,0 +1,105 @@
+struct BigNatParams {
+    field max_words;
+}
+
+struct BigNatb<N, W> {
+    bool[N][W] limbs;
+}
+
+struct BigNatb_v2<Nm1, W, W2> {
+    bool[Nm1][W] limbs;
+    bool[W2] limb;
+}
+
+struct BigNat<N> {
+    field[N] limbs;
+}
+
+struct GpBigNats<NG> {
+    BigNat<NG> left;
+    BigNat<NG> right;
+}
+
+struct BigNatModMult<W, A, Z, ZG, CW, Q, V> {
+    BigNat<Z> z;
+    BigNat<V> v;
+    BigNatb<Q, W> quotientb;
+    bool[ZG][CW] carry;
+    BigNatb<A, W> res;
+}
+
+struct BigNatModMult_v4<W, A, Z, CW, Q, V> {
+    BigNat<Z> z;
+    BigNat<V> v;
+    BigNatb<Q, W> quotientb;
+    bool[CW] carry;
+    BigNatb<A, W> res;
+}
+
+struct BigNatModMult_v5<W, W2, A, Z, CW, Qm1, V> {
+    BigNat<Z> z;
+    BigNat<V> v;
+    BigNatb_v2<Qm1, W, W2> quotientb;
+    bool[CW] carry;
+    BigNatb<A, W> res;
+}
+
+struct BigNatModMult_v6<W, W2, A, Z, ZG, Qm1, V> {
+    BigNat<Z> z;
+    BigNat<V> v;
+    BigNatb_v2<Qm1, W, W2> quotientb;
+    field[ZG] carry;
+    BigNatb<A, W> res;
+}
+
+struct BigNatModMultwores_v5<W, W2, Z, V, Qm1, CW> {
+    BigNat<Z> z;
+    BigNat<V> v;
+    BigNatb_v2<Qm1, W, W2> quotientb;
+    bool[CW] carry;
+}
+
+struct BigNatModMult_v2<W, W2, Am1, Z, ZG, CW, Qm1, V> {
+    BigNat<Z> z;
+    BigNat<V> v;
+    BigNatb_v2<Qm1, W, W2> quotientb;
+    bool[ZG][CW] carry;
+    BigNatb_v2<Am1, W, W2> res;
+}
+
+struct BigNatMod<W, A, ZG, CW, Q, V> {
+    BigNat<V> v;
+    BigNatb<Q, W> quotientb;
+    bool[ZG][CW] carry;
+    BigNatb<A, W> res;
+}
+
+struct BigNatMont<W, Z, ZG, CW, P, Q, V> {
+    BigNatb<P, W>[3] res;
+    BigNatModMult<W, Z, ZG, CW, Q, V>[3] mm;
+    bool greaterthanp;
+    bool[ZG][CW] carry;
+}
+
+struct BigNatAdd<Z, ZG, ZGW, Q, QW, V> {
+    BigNat<V> v;
+    BigNatb<Q, QW> quotientb;
+    bool[ZG][ZGW] carry;
+}
+
+struct ModuloConst<ZG, NG, AC>{
+    u8[ZG] CW_list;
+    field[NG] gp_maxword;
+    field[AC] aux_const;
+}
+
+struct ModuloHelperConst<ZG, NG, AC>{
+    ModuloConst<ZG, NG, AC> moduloconst;
+    field shift;
+}
+
+const BigNat<34> r = {limbs: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10141204801825835211973625643008]};
+
+def main(BigNatb<10, 256> a, BigNat<10> b) -> bool {
+    return true;
+}

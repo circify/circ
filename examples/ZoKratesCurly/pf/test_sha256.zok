@@ -1,0 +1,4 @@
+def main(private u32[1][16] padded_message) -> u32[8] {
+    u32[8] hash = sha256(padded_message);
+    return hash;
+}

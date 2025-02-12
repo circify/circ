@@ -1,0 +1,8 @@
+import "EMBED" {
+    FIELD_SIZE_IN_BITS as A;
+    u16_to_bits as A;
+}
+
+def main() -> bool {
+    return false;
+}

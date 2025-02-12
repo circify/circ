@@ -1,0 +1,82 @@
+- error messages: (String, &Span) instead of String to avoid recursively
+  expanding Spans on error?
+
+- talk to AO about bit-split
+  - generalized bit-split, i.e., into vector-of-bitvectors?
+    goes nicely with lookup table--based range checks...
+
+- add explicit-generic-expr to parser, e,g., foo::<(N+1)>(5)
+  - maybe not necessary: can just say `u32 Np1 = N + 1 ; foo::<Np1>(5)`
+
+- POW width - allow full-width rhs? (const only? in that case, easy)
+
+- correctness: bit width for field comparisons, etc
+  - when lowering to r1cs, enforce MSB=0?
+
+- correctness: when lowering IR arrays, enforce bounds checks!
+
+- optimization: for a < b, only expand a to b's bit width;
+  a < b is (a_expansion == a) && (a_expansion < b_expansion)
+
+--
+wants
+
+--> fix field up-front?
+
+- cc-snarks/examples/sha3/keccakf-zxc.zok
+
+--
+
+== done ==
+
+[x] generic inf: monomorphize at call time
+    [x] make sure we got a UNIQUE solution! find_unique_model() fn
+
+- stdlib rename to avoid confusion with parallel ZoK checkouts
+    [x] and/or: check ZSHARP_STDLIB_PATH envvar
+
+[WONTFIX] remove ret requirement for fns
+  - typecheck with bool if no type? (and test function_call() for compatibility)
+  - add () or nil type?
+
+[x] unify_inline_array revisit
+
+[x] field `%`
+    [x] unsigned
+    - divrem? (is this necessary for efficiency? can just do r=a%b, c=(a-r)/b
+    - signed?
+
+[x] const / non-const cleanup
+
+[x] tuples: Box<[_]> rather than Vec<_>
+
+[x] tuple typecheck on update
+
+[x] multi-returns?
+  - no. if we need tuples, we'll add them to the type system properly
+
+[x] oob array read fix
+
+[x] solver-related optimizations
+  [x] duh, don't call the solver if not needed
+  [x] cache generic inf results
+
+[x] array construction optimization
+
+[x] lints
+
+[x] pretty-printing T
+
+[x] improve speed (atomics?)
+  - shake is fast in zxi but slow in zxc (linearity reduction)
+
+[x] casts
+    - widening casts are free!
+    - check narrowing cast correctness!
+    - look at unpack functions again
+    - look at pack: advantage to builtin?
+
+    u8:             | u16 u32 u64 field
+    u16: u8         |     u32 u64 field
+    u32: u8 u16     |         u64 field
+    u64: u8 u16 u32 |             field

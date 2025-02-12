@@ -1,0 +1,8 @@
+def main(private field[ACCESSES][2] idx) -> field {
+    field sum = 0;
+    for u32 i in 0..ACCESSES {
+        field[2] access = idx[i];
+        sum = sum + array[access[1]][access[0]].x[0];
+    }
+    return sum;
+}

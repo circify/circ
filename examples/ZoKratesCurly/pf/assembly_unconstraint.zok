@@ -1,0 +1,10 @@
+// Here we miss the constraint so we can give different values than 5 to b and c
+def main(private field a, private field b, private field c) -> field{
+    field d = a * b;
+    field e = 7;
+    asm {
+        e <-- a * c;
+    }
+    assert(d == e);
+    return 1;
+}

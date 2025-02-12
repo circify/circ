@@ -1,0 +1,7 @@
+def main(private field x, private field y, private bool b) -> field {
+    field[LEN] mut array = [0; LEN];
+    for field i in 0..ACC {
+        cond_store(array, x + i, 1, b);
+    }
+    return array[y];
+}

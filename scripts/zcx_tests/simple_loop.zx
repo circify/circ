@@ -1,0 +1,8 @@
+def main() -> bool {
+    u32 total = 0;
+    for u32 j in 0..7 {
+        total = total + j;
+    }
+    assert(total == 21);
+    return true;
+}

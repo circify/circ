@@ -1,0 +1,5 @@
+def main(private field y, private field z) -> field {
+    field dy = reverse_lookup(ROTATION, y);
+    field dz = reverse_lookup(ROTATION, z);
+    return dz * dy;
+}

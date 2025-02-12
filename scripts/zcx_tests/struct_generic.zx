@@ -1,0 +1,16 @@
+struct Bar<N> {
+    field[N] c;
+    bool d;
+}
+
+struct Foo<P> {
+    Bar<P> a;
+    bool b;
+}
+
+def main() -> Foo<2> {
+    Bar<2> var_b = Bar{ c: [0, 0], d: false };
+    Foo<2> f = Foo { a: var_b, b: true };
+    f.a.c = [42, 43];
+    return f;
+}

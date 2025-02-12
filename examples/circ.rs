@@ -22,6 +22,8 @@ use circ::front::c::{self, C};
 use circ::front::datalog::{self, Datalog};
 #[cfg(all(feature = "smt", feature = "zok"))]
 use circ::front::zsharp::{self, ZSharpFE};
+#[cfg(all(feature = "smt", feature = "zokc"))]
+use circ::front::zsharpcurly::{self, ZSharpCurlyFE};
 use circ::front::{FrontEnd, Mode};
 use circ::ir::term::{Node, Op, BV_LSHR, BV_SHL};
 use circ::ir::{
@@ -118,6 +120,7 @@ enum Backend {
 #[derive(PartialEq, Eq, Debug, Clone, ValueEnum)]
 enum Language {
     Zsharp,
+    ZsharpCurly,
     Datalog,
     C,
     CircIr,
@@ -127,6 +130,7 @@ enum Language {
 #[derive(PartialEq, Eq, Debug)]
 pub enum DeterminedLanguage {
     Zsharp,
+    ZsharpCurly,
     Datalog,
     CircIr,
     C,
@@ -156,10 +160,12 @@ fn determine_language(l: &Language, input_path: &Path) -> DeterminedLanguage {
     match *l {
         Language::Datalog => DeterminedLanguage::Datalog,
         Language::Zsharp => DeterminedLanguage::Zsharp,
+        Language::ZsharpCurly => DeterminedLanguage::ZsharpCurly,
         Language::CircIr => DeterminedLanguage::CircIr,
         Language::C => DeterminedLanguage::C,
         Language::Auto => {
             let p = input_path.to_str().unwrap();
+            // xxx(unimpl) check if the are semicolons to switch to ZsharpCurly
             if p.ends_with(".zok") {
                 DeterminedLanguage::Zsharp
             } else if p.ends_with(".pl") {
@@ -205,10 +211,22 @@ fn main() {
             };
             ZSharpFE::gen(inputs)
         }
+        #[cfg(all(feature = "smt", feature = "zokc"))]
+        DeterminedLanguage::ZsharpCurly => {
+            let inputs = zsharpcurly::Inputs {
+                file: options.path,
+                mode,
+            };
+            ZSharpCurlyFE::gen(inputs)
+        }
         DeterminedLanguage::CircIr => parse_computations(&std::fs::read(&options.path).unwrap()),
         #[cfg(not(all(feature = "smt", feature = "zok")))]
         DeterminedLanguage::Zsharp => {
             panic!("Missing feature: smt,zok");
+        }
+        #[cfg(not(all(feature = "smt", feature = "zokc")))]
+        DeterminedLanguage::ZsharpCurly => {
+            panic!("Missing feature: smt,zokc");
         }
         #[cfg(all(feature = "smt", feature = "datalog"))]
         DeterminedLanguage::Datalog => {
@@ -401,6 +419,7 @@ fn main() {
             let lang_str = match language {
                 DeterminedLanguage::C => "c".to_string(),
                 DeterminedLanguage::Zsharp => "zok".to_string(),
+                DeterminedLanguage::ZsharpCurly => "zok".to_string(),
                 _ => panic!("Language isn't supported by MPC backend: {:#?}", language),
             };
             println!("Cost model: {cost_model}");

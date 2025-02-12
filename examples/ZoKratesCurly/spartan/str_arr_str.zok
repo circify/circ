@@ -1,0 +1,5 @@
+def main(field y) -> field {
+    Pt p = Pt { x: 2, y: y };
+    Pts pts = Pts { pts: [p, p] };
+    return pts.pts[0].y + pts.pts[1].x;
+}

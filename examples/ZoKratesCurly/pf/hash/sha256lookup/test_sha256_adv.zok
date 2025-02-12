@@ -1,0 +1,5 @@
+def test_sha256<N, NL>(field[8] expected_hash, field[N][16][NL] padded_message) -> bool {
+    field[8] actual_hash = sha256::<N, NL>(padded_message);
+    assert(expected_hash == actual_hash);
+    return true;
+}

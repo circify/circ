@@ -1,0 +1,6 @@
+def main(private u32 a, private u32 b) -> u32 {
+    for u32 i in 0..4 {
+        a = a + b;
+    }
+    return a;
+}
