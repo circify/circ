@@ -1,2 +1,2 @@
-def main(u8 a, u8 b, u8 c) -> u8:
+def main(private u8 a, private u8 b, private u8 c) -> u8:
     return (a & b) ^ (a & c) ^ (b & c)

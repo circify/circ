@@ -26,6 +26,10 @@ On Ubuntu `coinor-cbc` and `coinor-libcbc-dev`.
 
 You'll also need a stable Rust compiler.
 
+## Quickstart
+
+For an example of doing ZKP compilation, look [here](./doc/zkp.md).
+
 ## Architecture
 
 * Components:
