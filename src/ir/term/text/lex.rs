@@ -19,7 +19,8 @@ pub enum Token {
     Bin,
     #[regex(br"#f-?[0-9]+(m[0-9]+)?")]
     Field,
-    // TODO: Float
+    #[regex(br"#fp(?i:nan|-?inf|-?\d+(?:\.\d+)?)?(?:[eE][+-]?\d+)?(f32|f64)?")]
+    Float,
 
     // Identifiers
     #[regex(br"#t|#a|#l|#m|[^()0-9#; \t\n\f][^(); \t\n\f#]*")]
@@ -43,7 +44,7 @@ mod test {
 
     #[test]
     fn all_tokens() {
-        let l = Token::lexer(b"(let ((a true)(b true)) (add (sub #b01 #xFf) (div 15 -16)))");
+        let l = Token::lexer(b"(let ((a true)(b true)) (add (sub #b01 #xFf) (div 15 -16)) (add #fpnan #fp0) (add #fp-inf #fpinf) (add #fp31.415926e-1f32 #fp0.31415926e+1f64))");
         let tokens: Vec<_> = l.into_iter().collect();
         assert_eq!(
             &tokens,
@@ -72,6 +73,21 @@ mod test {
                 Token::Int,
                 Token::Int,
                 Token::Close,
+                Token::Close,
+                Token::Open,
+                Token::Ident,
+                Token::Float,
+                Token::Float,
+                Token::Close,
+                Token::Open,
+                Token::Ident,
+                Token::Float,
+                Token::Float,
+                Token::Close,
+                Token::Open,
+                Token::Ident,
+                Token::Float,
+                Token::Float,
                 Token::Close,
                 Token::Close,
             ]

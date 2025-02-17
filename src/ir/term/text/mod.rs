@@ -50,6 +50,8 @@
 //!     * bit-vector: `#xFFFF...`, `#bBBBB...`
 //!     * field literal: `#fDD` or `#fDDmDD`.
 //!       * In the former case, an ambient modulus must be set.
+//!     * floating-point literals: `#fpNan`, `#fpInf`, `#fpDD.DD`
+//!       * In all cases, a precision can be specified as a suffix `f32` or `f64`.
 //!     * tuple: `(#t V1 ... Vn)`
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!     * list: `(#l Sk (V1 ... Vn))`
@@ -413,6 +415,38 @@ impl<'src> IrInterp<'src> {
             _ => panic!("Expected integer, got {}", tt),
         }
     }
+
+    /// Parse this text as a double-precision floating-point number and return the value
+    /// with a boolean indicating whether it was marked as 'f32'.
+    fn parse_fp_literal(&mut self, lit: &str) -> (f64, bool) {
+        let _lit = lit.to_lowercase();
+        if _lit == "inf" {
+            return (f64::INFINITY, false);
+        }
+        if _lit == "-inf" {
+            return (-f64::INFINITY, false);
+        }
+        if _lit == "nan" {
+            return (f64::NAN, false);
+        }
+        // Parse as f32 or (by default) as f64
+        if let Some(end) = _lit.find("f32") {
+            let num_part = &lit[..end];
+            let val = num_part.parse::<f64>()
+                .unwrap_or_else(|_| panic!("Invalid F32 literal '{}'", lit));
+            return (val, true);
+        } else if let Some(end) = _lit.find("f64") {
+            let num_part = &lit[..end];
+            let val = num_part.parse::<f64>()
+                .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
+            return (val, false);
+        } else {
+            let val = lit.parse::<f64>()
+                .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
+            (val, false)
+        }
+    }
+
     fn usize(&self, tt: &TokTree) -> usize {
         self.maybe_usize(tt).unwrap()
     }
@@ -518,6 +552,15 @@ impl<'src> IrInterp<'src> {
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
                 pf_lit(FieldV::new::<Integer>(v, m))
+            }
+            Leaf(Token::Float, bytes) => {
+                let lit = std::str::from_utf8(&bytes[3..]).unwrap();
+                let (f64_val, is_f32) = self.parse_fp_literal(lit);
+                if is_f32 {
+                    const_(Value::F32(f64_val as f32))
+                } else {
+                    const_(Value::F64(f64_val))
+                }
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),
