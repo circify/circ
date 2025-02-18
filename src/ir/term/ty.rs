@@ -55,6 +55,7 @@ fn check_dependencies(t: &Term) -> Vec<Term> {
         Op::UbvToFp(_) => Vec::new(),
         Op::SbvToFp(_) => Vec::new(),
         Op::FpToFp(_) => Vec::new(),
+        Op::PfToFp(_) => Vec::new(),
         Op::PfUnOp(_) => vec![t.cs()[0].clone()],
         Op::PfDiv => vec![t.cs()[0].clone()],
         Op::PfNaryOp(_) => vec![t.cs()[0].clone()],
@@ -139,6 +140,8 @@ fn check_raw_step(t: &Term, tys: &TypeTable) -> Result<Sort, TypeErrorReason> {
         Op::SbvToFp(32) => Ok(Sort::F32),
         Op::FpToFp(64) => Ok(Sort::F64),
         Op::FpToFp(32) => Ok(Sort::F32),
+        Op::PfToFp(64) => Ok(Sort::F64),
+        Op::PfToFp(32) => Ok(Sort::F32),
         Op::PfUnOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfDiv => Ok(get_ty(&t.cs()[0]).clone()),
         Op::PfNaryOp(_) => Ok(get_ty(&t.cs()[0]).clone()),
@@ -361,6 +364,8 @@ pub fn rec_check_raw_helper(oper: &Op, a: &[&Sort]) -> Result<Sort, TypeErrorRea
         (Op::SbvToFp(32), &[a]) => bv_or(a, "sbv-to-fp").map(|_| Sort::F32),
         (Op::FpToFp(64), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F64),
         (Op::FpToFp(32), &[a]) => fp_or(a, "fp-to-fp").map(|_| Sort::F32),
+        (Op::PfToFp(64), &[a]) => pf_or(a, "pf-to-fp").map(|_| Sort::F64),
+        (Op::PfToFp(32), &[a]) => pf_or(a, "pf-to-fp").map(|_| Sort::F32),
         (Op::PfNaryOp(_), a) => {
             let ctx = "pf nary op";
             all_eq_or(a.iter().cloned(), ctx)

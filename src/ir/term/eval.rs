@@ -165,6 +165,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             }
         }),
         Op::BoolToBv => Value::BitVector(BitVector::new(Integer::from(args[0].as_bool()), 1)),
+
         Op::PfUnOp(o) => Value::Field({
             let a = args[0].as_pf().clone();
             match o {
@@ -215,6 +216,16 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 },
             )
         }),
+
+        Op::FpBinOp(o) => unimplemented!("Op::FpBinOp({o}) not implemented"),
+        Op::FpBinPred(o) => unimplemented!("Op::FpBinPred({o}) not implemented"),
+        Op::FpUnPred(o) => unimplemented!("Op::FpUnPred({o}) not implemented"),
+        Op::FpUnOp(o) => unimplemented!("Op::FpUnOp({o}) not implemented"),
+        Op::BvToFp => unimplemented!("Op::BvToFp not implemented"),
+        Op::UbvToFp(w) => unimplemented!("Op::UbvToFp({w}) not implemented"),
+        Op::SbvToFp(w) => unimplemented!("Op::SbvToFp({w}) not implemented"),
+        Op::FpToFp(w) => unimplemented!("Op::FpToFp({w}) not implemented"),
+        Op::PfToFp(w) => unimplemented!("Op::PfToFp({w}) not implemented"),
 
         Op::IntBinOp(o) => Value::Int({
             let a = args[0].as_int().clone();

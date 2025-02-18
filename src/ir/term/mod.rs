@@ -119,6 +119,9 @@ pub enum Op {
     // dest width
     /// translate the number represented by the argument to a floating-point value of this width.
     FpToFp(usize),
+    /// translate the prime-field number represented by the argument to a floating-point value
+    /// of this width.
+    PfToFp(usize),
 
     /// Prime-field unary operator
     PfUnOp(PfUnOp),
@@ -365,6 +368,7 @@ impl Op {
             Op::UbvToFp(_) => Some(1),
             Op::SbvToFp(_) => Some(1),
             Op::FpToFp(_) => Some(1),
+            Op::PfToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,

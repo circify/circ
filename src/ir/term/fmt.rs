@@ -364,6 +364,7 @@ impl DisplayIr for Op {
             Op::UbvToFp(a) => write!(f, "(ubv2fp {a})"),
             Op::SbvToFp(a) => write!(f, "(sbv2fp {a})"),
             Op::FpToFp(a) => write!(f, "(fp2fp {a})"),
+            Op::PfToFp(a) => write!(f, "(pf2fp {a})"),
             Op::PfUnOp(a) => write!(f, "{a}"),
             Op::PfNaryOp(a) => write!(f, "{a}"),
             Op::PfDiv => write!(f, "/"),

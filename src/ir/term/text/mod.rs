@@ -51,7 +51,7 @@
 //!     * field literal: `#fDD` or `#fDDmDD`.
 //!       * In the former case, an ambient modulus must be set.
 //!     * floating-point literals: `#fpNan`, `#fpInf`, `#fpDD.DD`
-//!       * In all cases, a precision can be specified as a suffix `f32` or `f64`.
+//!       * In all cases, a precision can be specified by appending the suffix `f32` or `f64`.
 //!     * tuple: `(#t V1 ... Vn)`
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!     * list: `(#l Sk (V1 ... Vn))`
@@ -318,6 +318,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
+                [Leaf(Ident, b"pf2fp"), a] => Ok(Op::PfToFp(self.usize(a))),
                 [Leaf(Ident, b"challenge"), name, field] => Ok(Op::new_chall(
                     self.ident_string(name),
                     FieldT::from(self.int(field)),
