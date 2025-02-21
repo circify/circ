@@ -872,7 +872,7 @@ fn fpmax_tests() {
             &text::parse_term(b"(fpmax #fp-0 #fp0)"),
             &FxHashMap::default()
         )),
-        text::parse_term(b"#fp0")
+        text::parse_term(b"#fp-0") // interesting
     );
 }
 
@@ -1030,7 +1030,7 @@ fn fpgt_tests() {
     );
     assert_eq!(
         const_(eval(
-            &text::parse_term(b"(fplt #fpInf #fp0)"),
+            &text::parse_term(b"(fpgt #fpInf #fp0)"),
             &FxHashMap::default()
         )),
         text::parse_term(b"true")
