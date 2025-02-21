@@ -417,35 +417,38 @@ impl<'src> IrInterp<'src> {
         }
     }
 
-    /// Parse this text as a double-precision floating-point number and return the value
-    /// with a boolean indicating whether it was marked as 'f32'.
-    fn parse_fp_literal(&mut self, lit: &str) -> (f64, bool) {
+    /// Parse this text as a [Value::F32] or [Value::F64] literal.
+    fn parse_fp_literal(&mut self, lit: &str) -> Value {
         let _lit = lit.to_lowercase();
+    
         if _lit == "inf" {
-            return (f64::INFINITY, false);
+            return Value::F64(f64::INFINITY);
         }
         if _lit == "-inf" {
-            return (-f64::INFINITY, false);
+            return Value::F64(f64::NEG_INFINITY);
         }
         if _lit == "nan" {
-            return (f64::NAN, false);
+            return Value::F64(f64::NAN);
         }
-        // Parse as f32 or (by default) as f64
+    
+        // Parse as F32 when "f32" is found
         if let Some(end) = _lit.find("f32") {
             let num_part = &lit[..end];
-            let val = num_part.parse::<f64>()
+            let val = num_part.parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid F32 literal '{}'", lit));
-            return (val, true);
-        } else if let Some(end) = _lit.find("f64") {
+            return Value::F32(val);
+        } 
+        // Parse as F64 when "f64" is found
+        else if let Some(end) = _lit.find("f64") {
             let num_part = &lit[..end];
             let val = num_part.parse::<f64>()
                 .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
-            return (val, false);
-        } else {
-            let val = lit.parse::<f64>()
-                .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
-            (val, false)
+            return Value::F64(val);
         }
+        // Default: parse as F64
+        let val = lit.parse::<f64>()
+            .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
+        Value::F64(val)
     }
 
     fn usize(&self, tt: &TokTree) -> usize {
@@ -556,12 +559,7 @@ impl<'src> IrInterp<'src> {
             }
             Leaf(Token::Float, bytes) => {
                 let lit = std::str::from_utf8(&bytes[3..]).unwrap();
-                let (f64_val, is_f32) = self.parse_fp_literal(lit);
-                if is_f32 {
-                    const_(Value::F32(f64_val as f32))
-                } else {
-                    const_(Value::F64(f64_val))
-                }
+                const_(self.parse_fp_literal(lit))
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),

@@ -3,7 +3,7 @@
 use super::{
     check, const_, extras, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
     BvUnOp, FieldToBv, FxHashMap, IntBinOp, IntBinPred, IntNaryOp, IntUnOp, Integer, Node, Op,
-    PfNaryOp, PfUnOp, Sort, Term, TermMap, Value,
+    PfNaryOp, PfUnOp, Sort, Term, TermMap, Value, Float, FpBinOp, FpBinPred, FpUnPred, FpUnOp,
 };
 use crate::cfg::cfg_or_default;
 
@@ -216,17 +216,6 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 },
             )
         }),
-
-        Op::FpBinOp(o) => unimplemented!("Op::FpBinOp({o}) not implemented"),
-        Op::FpBinPred(o) => unimplemented!("Op::FpBinPred({o}) not implemented"),
-        Op::FpUnPred(o) => unimplemented!("Op::FpUnPred({o}) not implemented"),
-        Op::FpUnOp(o) => unimplemented!("Op::FpUnOp({o}) not implemented"),
-        Op::BvToFp => unimplemented!("Op::BvToFp not implemented"),
-        Op::UbvToFp(w) => unimplemented!("Op::UbvToFp({w}) not implemented"),
-        Op::SbvToFp(w) => unimplemented!("Op::SbvToFp({w}) not implemented"),
-        Op::FpToFp(w) => unimplemented!("Op::FpToFp({w}) not implemented"),
-        Op::PfToFp(w) => unimplemented!("Op::PfToFp({w}) not implemented"),
-
         Op::IntBinOp(o) => Value::Int({
             let a = args[0].as_int().clone();
             let b = args[1].as_int().clone();
@@ -250,6 +239,119 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 IntUnOp::Neg => -a,
             }
         }),
+        Op::FpBinOp(o) => {
+            // Promote to f64 if either operand is f64
+            let promote_to_f64 = matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
+            fn comp<T: Float>(a: T, b: T, op: FpBinOp) -> T {
+                match op {
+                    FpBinOp::Add => a + b,
+                    FpBinOp::Sub => a - b,
+                    FpBinOp::Mul => a * b,
+                    FpBinOp::Div => a / b,
+                    FpBinOp::Rem => a % b,
+                    FpBinOp::Max => a.max(b),
+                    FpBinOp::Min => a.min(b),
+                }
+            }
+            if promote_to_f64 {
+                Value::F64(comp(args[0].as_f64(), args[1].as_f64(), *o))
+            } else {
+                Value::F32(comp(args[0].as_f32(), args[1].as_f32(), *o))
+            }
+        }
+        Op::FpBinPred(o) => Value::Bool({
+            // Promote to f64 if either operand is f64
+            let promote_to_f64 = matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
+            fn comp<T: Float>(a: T, b: T, op: FpBinPred) -> bool {
+                match op {
+                    FpBinPred::Le => a <= b,
+                    FpBinPred::Lt => a < b,
+                    FpBinPred::Eq => a == b,
+                    FpBinPred::Ge => a >= b,
+                    FpBinPred::Gt => a > b,
+                }
+            }
+            if promote_to_f64 {
+                comp(args[0].as_f64(), args[1].as_f64(), *o)
+            } else {
+                comp(args[0].as_f32(), args[1].as_f32(), *o)
+            }
+        }),
+        Op::FpUnPred(o) => Value::Bool({
+            fn comp<T: Float>(a: T, op: FpUnPred) -> bool {
+                match op {
+                    FpUnPred::Normal => a.is_normal(),
+                    FpUnPred::Subnormal => a.is_subnormal(),
+                    FpUnPred::Zero => a == T::zero(),
+                    FpUnPred::Infinite => a.is_infinite(),
+                    FpUnPred::Nan => a.is_nan(),
+                    FpUnPred::Negative => a.is_sign_negative(),
+                    FpUnPred::Positive => a.is_sign_positive(),
+                }
+            }
+            match args[0] {
+                Value::F32(a) => comp(*a, *o),
+                Value::F64(a) => comp(*a, *o),
+                _ => panic!("Expected F32 or F64, got {}", args[0]),
+            }
+        }),
+        Op::FpUnOp(o) => {
+            fn comp<T: Float>(a: T, op: FpUnOp) -> T {
+                match op {
+                    FpUnOp::Neg => -a,
+                    FpUnOp::Abs => a.abs(),
+                    FpUnOp::Sqrt => a.sqrt(),
+                    FpUnOp::Round => a.round(),
+                }
+            }
+            match args[0] {
+                Value::F32(a) => Value::F32(comp(*a, *o)),
+                Value::F64(a) => Value::F64(comp(*a, *o)),
+                _ => panic!("Expected F32 or F64, got {}", args[0]),
+            }
+        }
+        Op::BvToFp => {
+            let bv = args[0].as_bv();
+            let val = bv.uint();
+            let w = bv.width();
+            match w {
+                32 => Value::F32(f32::from_bits(val.to_u32().unwrap())),
+                64 => Value::F64(f64::from_bits(val.to_u64().unwrap())),
+                _ => panic!("{} out of bounds for {} on {:?}", w, op, args),
+            }
+        }
+        Op::UbvToFp(w) => {
+            let val = args[0].as_bv().uint();
+            match w {
+                0..=32 => Value::F32(val.to_f32()),
+                33..=64 => Value::F64(val.to_f64()),
+                _ => panic!("{} out of bounds for {} on {:?}", w, op, args),
+            }
+        }
+        Op::SbvToFp(w) => {
+            let val = args[0].as_bv().as_sint();
+            match w {
+                0..=32 => Value::F32(val.to_f32()),
+                33..=64 => Value::F64(val.to_f64()),
+                _ => panic!("{} out of bounds for {} on {:?}", w, op, args),
+            }
+        }
+        Op::FpToFp(w) => {
+            match (args[0], w) {
+                (Value::F32(v), 64) => Value::F64(*v as f64), // Promote F32 to F64
+                (Value::F64(v), 32) => Value::F32(*v as f32), // Truncate F64 to F32
+                (Value::F32(_), 32) | (Value::F64(_), 64) => args[0].clone(),
+                _ => panic!("Invalid conversion width {} (expected 32 or 64)", w),
+            }
+        }
+        Op::PfToFp(w) => {
+            let val = args[0].as_pf().i();
+            match w {
+                32 => Value::F32(val.to_f32()),
+                64 => Value::F64(val.to_f64()),
+                _ => panic!("{} out of bounds for {} on {:?} (expected 32 or 64)", w, op, args),
+            }
+        }
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
         Op::PfChallenge(c) => Value::Field(eval_pf_challenge(&c.name, &c.field)),
         Op::Witness(_) => args[0].clone(),
