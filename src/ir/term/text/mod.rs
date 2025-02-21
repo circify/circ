@@ -420,7 +420,7 @@ impl<'src> IrInterp<'src> {
     /// Parse this text as a [Value::F32] or [Value::F64] literal.
     fn parse_fp_literal(&mut self, lit: &str) -> Value {
         let _lit = lit.to_lowercase();
-    
+
         if _lit == "inf" {
             return Value::F64(f64::INFINITY);
         }
@@ -430,23 +430,26 @@ impl<'src> IrInterp<'src> {
         if _lit == "nan" {
             return Value::F64(f64::NAN);
         }
-    
+
         // Parse as F32 when "f32" is found
         if let Some(end) = _lit.find("f32") {
             let num_part = &lit[..end];
-            let val = num_part.parse::<f32>()
+            let val = num_part
+                .parse::<f32>()
                 .unwrap_or_else(|_| panic!("Invalid F32 literal '{}'", lit));
             return Value::F32(val);
-        } 
+        }
         // Parse as F64 when "f64" is found
         else if let Some(end) = _lit.find("f64") {
             let num_part = &lit[..end];
-            let val = num_part.parse::<f64>()
+            let val = num_part
+                .parse::<f64>()
                 .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
             return Value::F64(val);
         }
         // Default: parse as F64
-        let val = lit.parse::<f64>()
+        let val = lit
+            .parse::<f64>()
             .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
         Value::F64(val)
     }

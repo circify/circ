@@ -2,8 +2,9 @@
 
 use super::{
     check, const_, extras, term, Array, BitVector, BoolNaryOp, BvBinOp, BvBinPred, BvNaryOp,
-    BvUnOp, FieldToBv, FxHashMap, IntBinOp, IntBinPred, IntNaryOp, IntUnOp, Integer, Node, Op,
-    PfNaryOp, PfUnOp, Sort, Term, TermMap, Value, Float, FpBinOp, FpBinPred, FpUnPred, FpUnOp,
+    BvUnOp, FieldToBv, Float, FpBinOp, FpBinPred, FpUnOp, FpUnPred, FxHashMap, IntBinOp,
+    IntBinPred, IntNaryOp, IntUnOp, Integer, Node, Op, PfNaryOp, PfUnOp, Sort, Term, TermMap,
+    Value,
 };
 use crate::cfg::cfg_or_default;
 
@@ -241,7 +242,8 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         }),
         Op::FpBinOp(o) => {
             // Promote to f64 if either operand is f64
-            let promote_to_f64 = matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
+            let promote_to_f64 =
+                matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
             fn comp<T: Float>(a: T, b: T, op: FpBinOp) -> T {
                 match op {
                     FpBinOp::Add => a + b,
@@ -261,7 +263,8 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         }
         Op::FpBinPred(o) => Value::Bool({
             // Promote to f64 if either operand is f64
-            let promote_to_f64 = matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
+            let promote_to_f64 =
+                matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
             fn comp<T: Float>(a: T, b: T, op: FpBinPred) -> bool {
                 match op {
                     FpBinPred::Le => a <= b,
@@ -349,7 +352,10 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             match w {
                 32 => Value::F32(val.to_f32()),
                 64 => Value::F64(val.to_f64()),
-                _ => panic!("{} out of bounds for {} on {:?} (expected 32 or 64)", w, op, args),
+                _ => panic!(
+                    "{} out of bounds for {} on {:?} (expected 32 or 64)",
+                    w, op, args
+                ),
             }
         }
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
