@@ -26,6 +26,7 @@ pub use circ_hc::{Node, Table, Weak};
 use circ_opt::FieldToBv;
 use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
+use num_traits::Float;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
@@ -119,6 +120,9 @@ pub enum Op {
     // dest width
     /// translate the number represented by the argument to a floating-point value of this width.
     FpToFp(usize),
+    /// translate the prime-field number represented by the argument to a floating-point value
+    /// of this width.
+    PfToFp(usize),
 
     /// Prime-field unary operator
     PfUnOp(PfUnOp),
@@ -333,6 +337,7 @@ pub const INT_LE: Op = Op::IntBinPred(IntBinPred::Le);
 pub const INT_GT: Op = Op::IntBinPred(IntBinPred::Gt);
 /// integer greater than or equal
 pub const INT_GE: Op = Op::IntBinPred(IntBinPred::Ge);
+// TODO: add floating-point operator abbreviations
 
 impl Op {
     /// Number of arguments for this operator. `None` if n-ary.
@@ -365,6 +370,7 @@ impl Op {
             Op::UbvToFp(_) => Some(1),
             Op::SbvToFp(_) => Some(1),
             Op::FpToFp(_) => Some(1),
+            Op::PfToFp(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
@@ -1263,6 +1269,21 @@ impl Term {
             None
         }
     }
+    /// Get the underlying 32-bit floating-point constant, if possible.
+    pub fn as_f32_opt(&self) -> Option<f32> {
+        if let Some(Value::F32(v)) = self.as_value_opt() {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+    /// Get the underlying 64-bit floating-point constant, if possible.
+    pub fn as_f64_opt(&self) -> Option<f64> {
+        match self.as_value_opt()? {
+            Value::F64(v) => Some(*v),
+            _ => None,
+        }
+    }
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldV> {
         if let Some(Value::Field(b)) = self.as_value_opt() {
@@ -1378,6 +1399,23 @@ impl Value {
             b
         } else {
             panic!("Not an int: {}", self)
+        }
+    }
+    #[track_caller]
+    /// Get the underlying 32-bit floating-point constant, or panic!
+    pub fn as_f32(&self) -> f32 {
+        if let Value::F32(v) = self {
+            *v
+        } else {
+            panic!("Not a f32: {}", self)
+        }
+    }
+    #[track_caller]
+    /// Get the underlying 64-bit floating-point constant, or panic!
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            Value::F64(v) => *v,
+            _ => panic!("Not a f64 or f32: {}", self),
         }
     }
     #[track_caller]
