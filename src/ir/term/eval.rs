@@ -241,9 +241,6 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
             }
         }),
         Op::FpBinOp(o) => {
-            // Promote to f64 if either operand is f64
-            let promote_to_f64 =
-                matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
             fn comp<T: Float>(a: T, b: T, op: FpBinOp) -> T {
                 match op {
                     FpBinOp::Add => a + b,
@@ -255,16 +252,20 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                     FpBinOp::Min => a.min(b),
                 }
             }
-            if promote_to_f64 {
-                Value::F64(comp(args[0].as_f64(), args[1].as_f64(), *o))
-            } else {
-                Value::F32(comp(args[0].as_f32(), args[1].as_f32(), *o))
+            match (args[0], args[1]) {
+                (Value::F32(_), Value::F32(_)) => {
+                    Value::F32(comp(args[0].as_f32(), args[1].as_f32(), *o))
+                }
+                (Value::F64(_), Value::F64(_)) => {
+                    Value::F64(comp(args[0].as_f64(), args[1].as_f64(), *o))
+                }
+                _ => panic!(
+                    "Expected two F32 or F64, got LHS {} and RHS {}",
+                    args[0], args[1]
+                ),
             }
         }
         Op::FpBinPred(o) => Value::Bool({
-            // Promote to f64 if either operand is f64
-            let promote_to_f64 =
-                matches!(args[0], Value::F64(_)) || matches!(args[1], Value::F64(_));
             fn comp<T: Float>(a: T, b: T, op: FpBinPred) -> bool {
                 match op {
                     FpBinPred::Le => a <= b,
@@ -274,10 +275,13 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                     FpBinPred::Gt => a > b,
                 }
             }
-            if promote_to_f64 {
-                comp(args[0].as_f64(), args[1].as_f64(), *o)
-            } else {
-                comp(args[0].as_f32(), args[1].as_f32(), *o)
+            match (args[0], args[1]) {
+                (Value::F32(_), Value::F32(_)) => comp(args[0].as_f32(), args[1].as_f32(), *o),
+                (Value::F64(_), Value::F64(_)) => comp(args[0].as_f64(), args[1].as_f64(), *o),
+                _ => panic!(
+                    "Expected two F32 or F64, got LHS {} and RHS {}",
+                    args[0], args[1]
+                ),
             }
         }),
         Op::FpUnPred(o) => Value::Bool({
