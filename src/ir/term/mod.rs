@@ -1281,7 +1281,6 @@ impl Term {
     pub fn as_f64_opt(&self) -> Option<f64> {
         match self.as_value_opt()? {
             Value::F64(v) => Some(*v),
-            Value::F32(v) => Some(*v as f64), // Floating-point promotion
             _ => None,
         }
     }
@@ -1415,7 +1414,6 @@ impl Value {
     /// Get the underlying 64-bit floating-point constant, or panic!
     pub fn as_f64(&self) -> f64 {
         match self {
-            Value::F32(v) => *v as f64, // Floating-point promotion
             Value::F64(v) => *v,
             _ => panic!("Not a f64 or f32: {}", self),
         }
