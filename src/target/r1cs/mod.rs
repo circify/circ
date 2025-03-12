@@ -168,7 +168,7 @@ impl Var {
             VarType::Chall => 0b011,
             VarType::FinalWit => 0b100,
         };
-        Var(ty_repr << Self::NUMBER_BITS | number)
+        Var((ty_repr << Self::NUMBER_BITS) | number)
     }
     fn ty(&self) -> VarType {
         match self.0 >> Self::NUMBER_BITS {
