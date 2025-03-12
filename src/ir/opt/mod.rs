@@ -5,6 +5,7 @@ pub mod chall;
 pub mod cstore;
 pub mod fits_in_bits_ip;
 pub mod flat;
+pub mod fp;
 pub mod inline;
 pub mod link;
 pub mod mem;
@@ -59,6 +60,8 @@ pub enum Opt {
     DeskolemizeWitnesses,
     /// Check bit-constaints with challenges.
     FitsInBitsIp,
+    /// Replace floats with IEEE 754 constructions using lookup arguments
+    Float,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -168,6 +171,9 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 }
                 Opt::FitsInBitsIp => {
                     fits_in_bits_ip::fits_in_bits_ip(c);
+                }
+                Opt::Float => {
+                    fp::construct_floats(c);
                 }
             }
             info!(

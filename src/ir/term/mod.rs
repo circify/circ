@@ -123,6 +123,8 @@ pub enum Op {
     /// translate the prime-field number represented by the argument to a floating-point value
     /// of this width.
     PfToFp(usize),
+    /// Floating-point value to Field
+    FpToPf(FieldT),
 
     /// Prime-field unary operator
     PfUnOp(PfUnOp),
@@ -337,7 +339,52 @@ pub const INT_LE: Op = Op::IntBinPred(IntBinPred::Le);
 pub const INT_GT: Op = Op::IntBinPred(IntBinPred::Gt);
 /// integer greater than or equal
 pub const INT_GE: Op = Op::IntBinPred(IntBinPred::Ge);
-// TODO: add floating-point operator abbreviations
+/// floating-point addition
+pub const FP_ADD: Op = Op::FpBinOp(FpBinOp::Add);
+/// floating-point multiplication
+pub const FP_MUL: Op = Op::FpBinOp(FpBinOp::Mul);
+/// floating-point subtraction
+pub const FP_SUB: Op = Op::FpBinOp(FpBinOp::Sub);
+/// floating-point division
+pub const FP_DIV: Op = Op::FpBinOp(FpBinOp::Div);
+/// floating-point remainder
+pub const FP_REM: Op = Op::FpBinOp(FpBinOp::Rem);
+/// floating-point maximum
+pub const FP_MAX: Op = Op::FpBinOp(FpBinOp::Max);
+/// floating-point minimum
+pub const FP_MIN: Op = Op::FpBinOp(FpBinOp::Min);
+/// floating-point less than or equal
+pub const FP_LE: Op = Op::FpBinPred(FpBinPred::Le);
+/// floating-point less than
+pub const FP_LT: Op = Op::FpBinPred(FpBinPred::Lt);
+/// floating-point equal to
+pub const FP_EQ: Op = Op::FpBinPred(FpBinPred::Eq);
+/// floating-point greater than or equal
+pub const FP_GE: Op = Op::FpBinPred(FpBinPred::Ge);
+/// floating-point greater than
+pub const FP_GT: Op = Op::FpBinPred(FpBinPred::Gt);
+/// floating-point is normal
+pub const FP_IS_NORM: Op = Op::FpUnPred(FpUnPred::Normal);
+/// floating-point is subnormal
+pub const FP_IS_SUBNORM: Op = Op::FpUnPred(FpUnPred::Subnormal);
+/// floating-point is zero
+pub const FP_IS_ZERO: Op = Op::FpUnPred(FpUnPred::Zero);
+/// floating-point is infinite
+pub const FP_IS_INF: Op = Op::FpUnPred(FpUnPred::Infinite);
+/// floating-point is not-a-number
+pub const FP_IS_NAN: Op = Op::FpUnPred(FpUnPred::Nan);
+/// floating-point is negative
+pub const FP_IS_NEG: Op = Op::FpUnPred(FpUnPred::Negative);
+/// floating-point is positive
+pub const FP_IS_POS: Op = Op::FpUnPred(FpUnPred::Positive);
+/// floating-point unary negation
+pub const FP_NEG: Op = Op::FpUnOp(FpUnOp::Neg);
+/// floating-point absolute value
+pub const FP_ABS: Op = Op::FpUnOp(FpUnOp::Abs);
+/// floating-point square root
+pub const FP_SQRT: Op = Op::FpUnOp(FpUnOp::Sqrt);
+/// floating-point round
+pub const FP_ROUND: Op = Op::FpUnOp(FpUnOp::Round);
 
 impl Op {
     /// Number of arguments for this operator. `None` if n-ary.
@@ -371,6 +418,7 @@ impl Op {
             Op::SbvToFp(_) => Some(1),
             Op::FpToFp(_) => Some(1),
             Op::PfToFp(_) => Some(1),
+            Op::FpToPf(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,

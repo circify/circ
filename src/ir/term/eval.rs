@@ -362,6 +362,17 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
                 ),
             }
         }
+        Op::FpToPf(fty) => {
+            let val = match args[0] {
+                Value::F32(f) => rug::Integer::from(f.to_bits()),
+                Value::F64(f) => rug::Integer::from(f.to_bits()),
+                _ => panic!(
+                    "Expected floating-point value for {} but got {:?}",
+                    op, args[0]
+                ),
+            };
+            Value::Field(fty.new_v(val))
+        }
         Op::UbvToPf(fty) => Value::Field(fty.new_v(args[0].as_bv().uint())),
         Op::PfChallenge(c) => Value::Field(eval_pf_challenge(&c.name, &c.field)),
         Op::Witness(_) => args[0].clone(),
