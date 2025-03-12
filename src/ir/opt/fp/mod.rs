@@ -4,7 +4,7 @@
 //! The floats themselves are stored as a tuple of components.
 //!
 //! A tuple elimination pass should be run afterwards.
-//! Based on the implementation of https://github.com/tumberger/zk-Location
+//! Based on the implementation of <https://github.com/tumberger/zk-Location>
 
 mod extras;
 
