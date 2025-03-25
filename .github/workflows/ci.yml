@@ -28,6 +28,12 @@ jobs:
               run: python3 driver.py --all-features
             - name: Install python reqs
               run: python3 driver.py --install
+            - name: List dependencies and version
+              run: |
+                cargo --version
+                rustc --version
+                cargo clippy --version
+                cargo tree
             - name: Format
               run: cargo fmt -- --check
             - name: Check
