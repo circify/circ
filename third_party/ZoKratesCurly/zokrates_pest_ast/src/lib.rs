@@ -11,24 +11,24 @@ use zokrates_parser::Rule;
 extern crate lazy_static;
 
 pub use ast::{
-    Access, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType, AssemblyStatement,
-    AssemblyStatementInner, AssertionStatement, Assignee, AssigneeAccess, AssignmentOperator,
-    BasicOrStructOrTupleType, BasicType, BinaryExpression, BinaryOperator, CallAccess,
-    ConstantDefinition, ConstantGenericValue, DecimalLiteralExpression, DecimalNumber,
-    DecimalSuffix, DefinitionStatement, ExplicitGenerics, Expression, FieldType, File,
-    FromExpression, FunctionDefinition, HexLiteralExpression, HexNumberExpression,
+    Access, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType, AssemblyAssignment,
+    AssemblyConstraint, AssemblyStatement, AssemblyStatementInner, AssertionStatement,
+    AssignConstrainOperator, AssignOperator, Assignee, AssigneeAccess, AssignmentOperator,
+    BasicOrStructOrTupleType, BasicType, BinaryExpression, BinaryOperator,
+    BooleanLiteralExpression, BooleanType, CallAccess, ConstantDefinition, ConstantGenericValue,
+    Curve, DecimalLiteralExpression, DecimalNumber, DecimalSuffix, DefinitionStatement, DotAccess,
+    ExplicitGenerics, Expression, FieldSuffix, FieldType, File, FromExpression,
+    FromImportDirective, FunctionDefinition, HexLiteralExpression, HexNumberExpression,
     IdentifierExpression, IdentifierOrDecimal, IfElseExpression, ImportDirective, ImportSymbol,
     InlineArrayExpression, InlineStructExpression, InlineStructMember, InlineTupleExpression,
-    IterationStatement, LiteralExpression, LogStatement, Parameter, PostfixExpression, Range,
-    RangeOrExpression, ReturnStatement, Span, Spread, SpreadOrExpression, Statement,
-    StructDefinition, StructField, SymbolDeclaration, TernaryExpression, ToExpression, Type,
-    TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee, UnaryExpression, UnaryOperator,
-    Underscore, Visibility, Pragma, Curve, EOI, MainImportDirective, FromImportDirective, 
-    RawString, PublicVisibility, PrivateVisibility, BooleanType, U8Type, U16Type, U32Type, U64Type,
-    StructType, TupleType, U8Suffix, U16Suffix, U32Suffix, U64Suffix, FieldSuffix,
-    BooleanLiteralExpression, U8NumberExpression, U16NumberExpression, U32NumberExpression, U64NumberExpression,
-    PosOperator, NegOperator, NotOperator, DotAccess, AssemblyAssignment, AssemblyConstraint,
-    AssignOperator, AssignConstrainOperator
+    IterationStatement, LiteralExpression, LogStatement, MainImportDirective, NegOperator,
+    NotOperator, Parameter, PosOperator, PostfixExpression, Pragma, PrivateVisibility,
+    PublicVisibility, Range, RangeOrExpression, RawString, ReturnStatement, Span, Spread,
+    SpreadOrExpression, Statement, StructDefinition, StructField, StructType, SymbolDeclaration,
+    TernaryExpression, ToExpression, TupleType, Type, TypeDefinition, TypedIdentifier,
+    TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type, U32NumberExpression,
+    U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
+    U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, EOI,
 };
 
 mod ast {
