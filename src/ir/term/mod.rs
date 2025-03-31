@@ -26,6 +26,7 @@ pub use circ_hc::{Node, Table, Weak};
 use circ_opt::FieldToBv;
 use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
+use num_traits::Float;
 use rug::Integer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
@@ -119,6 +120,11 @@ pub enum Op {
     // dest width
     /// translate the number represented by the argument to a floating-point value of this width.
     FpToFp(usize),
+    /// translate the prime-field number represented by the argument to a floating-point value
+    /// of this width.
+    PfToFp(usize),
+    /// Floating-point value to Field
+    FpToPf(FieldT),
 
     /// Prime-field unary operator
     PfUnOp(PfUnOp),
@@ -333,6 +339,52 @@ pub const INT_LE: Op = Op::IntBinPred(IntBinPred::Le);
 pub const INT_GT: Op = Op::IntBinPred(IntBinPred::Gt);
 /// integer greater than or equal
 pub const INT_GE: Op = Op::IntBinPred(IntBinPred::Ge);
+/// floating-point addition
+pub const FP_ADD: Op = Op::FpBinOp(FpBinOp::Add);
+/// floating-point multiplication
+pub const FP_MUL: Op = Op::FpBinOp(FpBinOp::Mul);
+/// floating-point subtraction
+pub const FP_SUB: Op = Op::FpBinOp(FpBinOp::Sub);
+/// floating-point division
+pub const FP_DIV: Op = Op::FpBinOp(FpBinOp::Div);
+/// floating-point remainder
+pub const FP_REM: Op = Op::FpBinOp(FpBinOp::Rem);
+/// floating-point maximum
+pub const FP_MAX: Op = Op::FpBinOp(FpBinOp::Max);
+/// floating-point minimum
+pub const FP_MIN: Op = Op::FpBinOp(FpBinOp::Min);
+/// floating-point less than or equal
+pub const FP_LE: Op = Op::FpBinPred(FpBinPred::Le);
+/// floating-point less than
+pub const FP_LT: Op = Op::FpBinPred(FpBinPred::Lt);
+/// floating-point equal to
+pub const FP_EQ: Op = Op::FpBinPred(FpBinPred::Eq);
+/// floating-point greater than or equal
+pub const FP_GE: Op = Op::FpBinPred(FpBinPred::Ge);
+/// floating-point greater than
+pub const FP_GT: Op = Op::FpBinPred(FpBinPred::Gt);
+/// floating-point is normal
+pub const FP_IS_NORM: Op = Op::FpUnPred(FpUnPred::Normal);
+/// floating-point is subnormal
+pub const FP_IS_SUBNORM: Op = Op::FpUnPred(FpUnPred::Subnormal);
+/// floating-point is zero
+pub const FP_IS_ZERO: Op = Op::FpUnPred(FpUnPred::Zero);
+/// floating-point is infinite
+pub const FP_IS_INF: Op = Op::FpUnPred(FpUnPred::Infinite);
+/// floating-point is not-a-number
+pub const FP_IS_NAN: Op = Op::FpUnPred(FpUnPred::Nan);
+/// floating-point is negative
+pub const FP_IS_NEG: Op = Op::FpUnPred(FpUnPred::Negative);
+/// floating-point is positive
+pub const FP_IS_POS: Op = Op::FpUnPred(FpUnPred::Positive);
+/// floating-point unary negation
+pub const FP_NEG: Op = Op::FpUnOp(FpUnOp::Neg);
+/// floating-point absolute value
+pub const FP_ABS: Op = Op::FpUnOp(FpUnOp::Abs);
+/// floating-point square root
+pub const FP_SQRT: Op = Op::FpUnOp(FpUnOp::Sqrt);
+/// floating-point round
+pub const FP_ROUND: Op = Op::FpUnOp(FpUnOp::Round);
 
 impl Op {
     /// Number of arguments for this operator. `None` if n-ary.
@@ -365,6 +417,8 @@ impl Op {
             Op::UbvToFp(_) => Some(1),
             Op::SbvToFp(_) => Some(1),
             Op::FpToFp(_) => Some(1),
+            Op::PfToFp(_) => Some(1),
+            Op::FpToPf(_) => Some(1),
             Op::PfUnOp(_) => Some(1),
             Op::PfDiv => Some(2),
             Op::PfNaryOp(_) => None,
@@ -1263,6 +1317,21 @@ impl Term {
             None
         }
     }
+    /// Get the underlying 32-bit floating-point constant, if possible.
+    pub fn as_f32_opt(&self) -> Option<f32> {
+        if let Some(Value::F32(v)) = self.as_value_opt() {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+    /// Get the underlying 64-bit floating-point constant, if possible.
+    pub fn as_f64_opt(&self) -> Option<f64> {
+        match self.as_value_opt()? {
+            Value::F64(v) => Some(*v),
+            _ => None,
+        }
+    }
     /// Get the underlying prime field constant, if possible.
     pub fn as_pf_opt(&self) -> Option<&FieldV> {
         if let Some(Value::Field(b)) = self.as_value_opt() {
@@ -1378,6 +1447,23 @@ impl Value {
             b
         } else {
             panic!("Not an int: {}", self)
+        }
+    }
+    #[track_caller]
+    /// Get the underlying 32-bit floating-point constant, or panic!
+    pub fn as_f32(&self) -> f32 {
+        if let Value::F32(v) = self {
+            *v
+        } else {
+            panic!("Not a f32: {}", self)
+        }
+    }
+    #[track_caller]
+    /// Get the underlying 64-bit floating-point constant, or panic!
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            Value::F64(v) => *v,
+            _ => panic!("Not a f64 or f32: {}", self),
         }
     }
     #[track_caller]
