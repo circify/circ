@@ -29,7 +29,7 @@ pub enum ErrorKind {
 /// An error with an optional span
 pub struct Error<'ast> {
     /// The error
-    pub kind: ErrorKind,
+    pub kind: Box<ErrorKind>,
     /// The span
     pub span: Option<Span<'ast>>,
 }
@@ -50,7 +50,7 @@ impl Display for Error<'_> {
 impl From<ErrorKind> for Error<'_> {
     fn from(error_kind: ErrorKind) -> Self {
         Error {
-            kind: error_kind,
+            kind: Box::new(error_kind),
             span: None,
         }
     }
@@ -59,7 +59,7 @@ impl From<ErrorKind> for Error<'_> {
 impl From<crate::circify::CircError> for Error<'_> {
     fn from(circ: crate::circify::CircError) -> Self {
         Error {
-            kind: ErrorKind::Circify(circ),
+            kind: Box::new(ErrorKind::Circify(circ)),
             span: None,
         }
     }
@@ -76,7 +76,7 @@ impl<'ast> Error<'ast> {
     /// New error, with span
     pub fn new(kind: ErrorKind, span: Span<'ast>) -> Self {
         Error {
-            kind,
+            kind: Box::new(kind),
             span: Some(span),
         }
     }

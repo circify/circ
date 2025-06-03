@@ -6,7 +6,7 @@ use std::path::Path;
 
 /// Given Path `path` and String denominator `lang`, return the filename of the path
 pub fn get_path(path: &Path, lang: &str, t: &str, create: bool) -> String {
-    let filename = Path::new(&path.iter().last().unwrap())
+    let filename = Path::new(path.iter().next_back().unwrap())
         .file_stem()
         .unwrap()
         .to_os_string()

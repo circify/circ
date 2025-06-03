@@ -252,10 +252,10 @@ impl T {
     }
 
     pub fn pretty<W: std::io::Write>(&self, f: &mut W) -> Result<(), std::io::Error> {
-        use std::io::{Error, ErrorKind};
+        use std::io::Error;
         let val = match &self.term.op() {
             Op::Const(v) => Ok(v),
-            _ => Err(Error::new(ErrorKind::Other, "not a const val")),
+            _ => Err(Error::other("not a const val")),
         }?;
         match &**val {
             Value::Bool(b) => write!(f, "{b}"),
@@ -285,19 +285,13 @@ impl T {
                     })?;
                     write!(f, ")")
                 }
-                _ => Err(Error::new(
-                    ErrorKind::Other,
-                    "expected struct or tuple, got something else",
-                )),
+                _ => Err(Error::other("expected struct or tuple, got something else")),
             },
             Value::Array(arr) => {
                 let inner_ty = if let Ty::Array(_, ty) = &self.ty {
                     Ok(ty)
                 } else {
-                    Err(Error::new(
-                        ErrorKind::Other,
-                        "expected array, got something else",
-                    ))
+                    Err(Error::other("expected array, got something else"))
                 }?;
                 write!(f, "[")?;
                 arr.key_sort
@@ -1246,7 +1240,7 @@ impl Embeddable for ZSharp {
                 let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
                     Some(Ok(v)) => v.into_iter().map(Some).collect(),
                     Some(Err(e)) => panic!("{}", e),
-                    None => std::iter::repeat(None).take(*n).collect(),
+                    None => std::iter::repeat_n(None, *n).collect(),
                 };
                 debug_assert_eq!(*n, ps.len());
                 array(
@@ -1260,7 +1254,7 @@ impl Embeddable for ZSharp {
                 let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
                     Some(Ok(v)) => v.into_iter().map(Some).collect(),
                     Some(Err(e)) => panic!("{}", e),
-                    None => std::iter::repeat(None).take(*n).collect(),
+                    None => std::iter::repeat_n(None, *n).collect(),
                 };
                 debug_assert_eq!(*n, ps.len());
                 array(
@@ -1304,7 +1298,7 @@ impl Embeddable for ZSharp {
                             panic!("Precompute type doesn't match expected tuple type");
                         }
                     },
-                    None => std::iter::repeat(None).take(tys.len()).collect(),
+                    None => std::iter::repeat_n(None, tys.len()).collect(),
                 };
                 debug_assert_eq!(tys.len(), ps.len());
                 T::new(

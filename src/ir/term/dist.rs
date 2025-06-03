@@ -4,7 +4,7 @@ use super::*;
 
 use circ_fields::{FieldT, FieldV};
 use rand::{distributions::Distribution, prelude::SliceRandom, Rng};
-use std::iter::repeat;
+use std::iter::repeat_n;
 
 // A distribution of boolean terms with some size.
 // All subterms are booleans.
@@ -210,9 +210,9 @@ impl FixedSizeDist {
                 let s = Sort::BitVector(self.bv_width.unwrap());
                 vec![s.clone(), s]
             }
-            o if o.arity().is_none() && o != &Op::BvConcat => repeat(sort.clone())
-                .take(rng.gen_range(1..self.size))
-                .collect(),
+            o if o.arity().is_none() && o != &Op::BvConcat => {
+                repeat_n(sort.clone(), rng.gen_range(1..self.size)).collect()
+            }
             // perhaps allow concat?
             Op::BvBinOp(_) => vec![sort.clone(), sort.clone()],
             Op::BvUnOp(_) => vec![sort.clone()],

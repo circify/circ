@@ -270,10 +270,10 @@ impl T {
     }
 
     pub fn pretty<W: std::io::Write>(&self, f: &mut W) -> Result<(), std::io::Error> {
-        use std::io::{Error, ErrorKind};
+        use std::io::Error;
         let val = match &self.term.op() {
             Op::Const(v) => Ok(v),
-            _ => Err(Error::new(ErrorKind::Other, "not a const val")),
+            _ => Err(Error::other("not a const val")),
         }?;
         match &**val {
             Value::Bool(b) => write!(f, "{b}"),
@@ -289,10 +289,7 @@ impl T {
                 let (n, fl) = if let Ty::Struct(n, fl) = &self.ty {
                     Ok((n, fl))
                 } else {
-                    Err(Error::new(
-                        ErrorKind::Other,
-                        "expected struct, got something else",
-                    ))
+                    Err(Error::other("expected struct, got something else"))
                 }?;
                 write!(f, "{n} {{ ")?;
                 fl.fields().zip(vs.iter()).try_for_each(|((n, ty), v)| {
@@ -306,10 +303,7 @@ impl T {
                 let inner_ty = if let Ty::Array(_, ty) = &self.ty {
                     Ok(ty)
                 } else {
-                    Err(Error::new(
-                        ErrorKind::Other,
-                        "expected array, got something else",
-                    ))
+                    Err(Error::other("expected array, got something else"))
                 }?;
                 write!(f, "[")?;
                 arr.key_sort
@@ -1229,7 +1223,7 @@ impl Embeddable for ZSharp {
                 let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
                     Some(Ok(v)) => v.into_iter().map(Some).collect(),
                     Some(Err(e)) => panic!("{}", e),
-                    None => std::iter::repeat(None).take(*n).collect(),
+                    None => std::iter::repeat_n(None, *n).collect(),
                 };
                 debug_assert_eq!(*n, ps.len());
                 array(
@@ -1243,7 +1237,7 @@ impl Embeddable for ZSharp {
                 let ps: Vec<Option<T>> = match precompute.map(|p| p.unwrap_array()) {
                     Some(Ok(v)) => v.into_iter().map(Some).collect(),
                     Some(Err(e)) => panic!("{}", e),
-                    None => std::iter::repeat(None).take(*n).collect(),
+                    None => std::iter::repeat_n(None, *n).collect(),
                 };
                 debug_assert_eq!(*n, ps.len());
                 array(ps.into_iter().enumerate().map(|(i, p)| {
