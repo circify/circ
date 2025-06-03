@@ -291,7 +291,7 @@ impl ToMilp {
                     Op::BvUext(extra_n) => {
                         if self.bv_has_bits(&bv.cs()[0]) {
                             let bits = self.get_bv_bits(&bv.cs()[0]);
-                            let ext_bits = std::iter::repeat(Expression::from(0)).take(*extra_n);
+                            let ext_bits = std::iter::repeat_n(Expression::from(0), *extra_n);
                             self.set_bv_bits(bv, bits.into_iter().chain(ext_bits).collect());
                         } else {
                             let x = self.get_bv_uint(&bv.cs()[0]);
@@ -300,9 +300,8 @@ impl ToMilp {
                     }
                     Op::BvSext(extra_n) => {
                         let mut bits = self.get_bv_bits(&bv.cs()[0]).into_iter().rev();
-                        let ext_bits = std::iter::repeat(bits.next().expect("sign ext empty"))
-                            .take(extra_n + 1);
-
+                        let ext_bits =
+                            std::iter::repeat_n(bits.next().expect("sign ext empty"), extra_n + 1);
                         self.set_bv_bits(bv, bits.rev().chain(ext_bits).collect());
                     }
                     Op::BoolToBv => {

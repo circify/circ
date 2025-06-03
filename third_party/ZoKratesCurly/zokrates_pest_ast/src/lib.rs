@@ -1,5 +1,5 @@
 // disable a clippy lint as pest_ast generates improper code
-#![allow(clippy::clone_on_copy)]
+#![allow(clippy::clone_on_copy, deprecated)]
 
 use from_pest::FromPest;
 use pest::error::Error as PestError;
