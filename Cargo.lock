@@ -319,6 +319,7 @@ dependencies = [
  "logos",
  "lp-solvers 0.0.4",
  "merlin",
+ "num-traits",
  "once_cell",
  "pairing",
  "paste",

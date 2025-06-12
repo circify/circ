@@ -634,3 +634,766 @@ fn pf2bool_eval() {
     let expected_output = text::parse_value_map(b"(let ((output false)) false)");
     assert_eq!(&actual_output, expected_output.get("output").unwrap());
 }
+
+#[test]
+fn fpsub_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsub #fp3 #fp2)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsub #fp3.333333f32 #fp0.191741f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3.141592f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsub #fp3.333333333333333 #fp0.19174067974354)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3.141592653589793")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsub #fp-3.402823466e+38f32 #fp2e31f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-Inff32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsub #fp-1.7976931348623158e+308 #fp1e292)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-Inf")
+    );
+}
+
+#[test]
+fn fpadd_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp1 #fp2)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp1.1111 #fp-1.1111)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp1e-324 #fp-1e-324)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp3.402823466e+38f32 #fp2e31f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInff32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp1.7976931348623158e+308 #fp1e+292)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInf")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fpInf #fp1)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInf")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp-Inf #fp1)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-Inf")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpadd #fpInff32 #fp-Inff32)"),
+        &FxHashMap::default()
+    ))
+    .as_f32_opt()
+    .unwrap()
+    .is_nan());
+    assert!(const_(eval(
+        &text::parse_term(b"(fpadd #fpNaN #fp2)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+    assert!(const_(eval(
+        &text::parse_term(b"(fpadd #fpNaN #fpNaN)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpadd #fp1.0000001f32 #fp1e-7f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0000002f32")
+    );
+}
+
+#[test]
+fn fpmul_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmul #fp3 #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp0")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpmul #fp-Inf #fp0)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmul #fpInf #fp2)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInf")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmul #fpInf #fp-1)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-Inf")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpmul #fpNaN #fp2)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+    assert!(const_(eval(
+        &text::parse_term(b"(fpmul #fpNaN #fpNaN)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+}
+
+#[test]
+fn fpdiv_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpdiv #fp1 #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInf")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpdiv #fp-1 #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-Inf")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpdiv #fpNaN #fp2)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+}
+
+#[test]
+fn fprem_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fprem #fp3.1415 #fp3)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp0.14150000000000018")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fprem #fp3 #fp0)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+    assert!(const_(eval(
+        &text::parse_term(b"(fprem #fpInf #fp2)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+}
+
+#[test]
+fn fpmax_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmax #fp2 #fp5)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp5")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmax #fpNaN #fp3)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmax #fp-0 #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-0") // interesting
+    );
+}
+
+#[test]
+fn fpmin_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpmin #fp-3 #fp2)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-3")
+    );
+}
+
+#[test]
+fn fpneg_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpneg #fp3)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-3")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpneg #fp-4.5)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp4.5")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpneg #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpneg #fpInf)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-Inf")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpneg #fp-Inf)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInf")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpneg #fpNan)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+}
+
+#[test]
+fn fpabs_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpabs #fp-7)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp7")
+    );
+}
+
+#[test]
+fn fpsqrt_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsqrt #fp12.25)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3.5")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpsqrt #fp-4)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+}
+
+#[test]
+fn fpround_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpround #fp2.5)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpround #fp2.3)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp2")
+    );
+    assert!(const_(eval(
+        &text::parse_term(b"(fpround #fpNan)"),
+        &FxHashMap::default()
+    ))
+    .as_f64_opt()
+    .unwrap()
+    .is_nan());
+}
+
+#[test]
+fn fpge_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpge #fp5 #fp3)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpge #fp3 #fp5)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpge #fp4 #fp4)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpge #fpNaN #fp2)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+}
+
+#[test]
+fn fpgt_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpgt #fp4 #fp4)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpgt #fpInf #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+}
+
+#[test]
+fn fple_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fple #fpNaN #fp2)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+}
+
+#[test]
+fn fplt_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fplt #fp-Inf #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+}
+
+#[test]
+fn fpeq_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpeq #fp1.0 #fp1)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpeq (fpadd #fp0.1 #fp0.2) #fp0.3)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpeq #fpNaN #fpNaN)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+}
+
+#[test]
+fn fpnormal_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnormal #fp0.01)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnormal #fp1.17549435e-39f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+}
+
+#[test]
+fn fpsubnormal_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsubnormal #fp0.01)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpsubnormal #fp1.17549435e-39f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+}
+
+#[test]
+fn fpzero_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpzero #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpzero #fp-0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpzero #fp1e-45f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+}
+
+#[test]
+fn fpinfinite_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpinfinite #fpInf)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpinfinite #fp-Inf)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpinfinite #fp1.7976931348623158e+308)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpinfinite #fp1.7976931348623159e+308)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+}
+
+#[test]
+fn fpnan_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnan #fpNaN)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnan #fpInf)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnan #fp3.14)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"false")
+    );
+}
+
+#[test]
+fn fpnegative_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnegative #fp-2.5)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fpnegative #fp-0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+}
+
+#[test]
+fn fppositive_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fppositive #fp3.7)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(fppositive #fp0)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"true")
+    );
+}
+
+#[test]
+fn bv2fp_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(bv2fp #b00111111100000000000000000000000)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(bv2fp #b00000000000000000000000000000000)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp0f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(
+                b"(bv2fp #b0011111111110000000000000000000000000000000000000000000000000000)"
+            ),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(
+                b"(bv2fp #b0000000000000000000000000000000000000000000000000000000000000000)"
+            ),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(
+                b"(bv2fp #b1000000000000000000000000000000000000000000000000000000000000000)"
+            ),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-0")
+    );
+}
+
+#[test]
+fn ubv2fp_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((ubv2fp 32) #x0001)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((ubv2fp 64) #x0001)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((ubv2fp 64) #xffffffff)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp4294967295.0")
+    );
+}
+
+#[test]
+fn sbv2fp_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((sbv2fp 64) #xffffffffffffffff)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp-1.0")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((sbv2fp 64) #x7fffffff)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp2147483647.0")
+    );
+}
+
+#[test]
+fn fp2fp_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((fp2fp 64) #fp1.0f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0f64")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((fp2fp 32) #fp16777217.0f64)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp16777216.0f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"((fp2fp 32) #fp2.5f32)"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp2.5f32")
+    );
+}
+
+#[test]
+fn pf2fp_tests() {
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(set_default_modulus 17 ((pf2fp 32) #f1))"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp1.0f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(set_default_modulus 17 ((pf2fp 32) #f20))"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp3.0f32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(b"(set_default_modulus 17 ((pf2fp 32) #f17))"),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp17f32") // shouldn't this be 0?
+    );
+    let p: Integer = Integer::from(1) << (512 - 1); // Mersenne prime
+    let overflow_f32: Integer = p.clone() - 1;
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(
+                format!("(set_default_modulus {p} ((pf2fp 32) #f{overflow_f32}))").as_bytes()
+            ),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fpInff32")
+    );
+    assert_eq!(
+        const_(eval(
+            &text::parse_term(
+                format!("(set_default_modulus {p} ((pf2fp 64) #f{overflow_f32}))").as_bytes()
+            ),
+            &FxHashMap::default()
+        )),
+        text::parse_term(b"#fp6.703903964971298e+153")
+    );
+}
