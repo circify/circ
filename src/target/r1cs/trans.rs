@@ -644,9 +644,11 @@ impl<'cfg> ToR1cs<'cfg> {
         acc
     }
 
-    /// Shift `x` left by `2^y`, if bit-valued `c` is true.
+    /// Shift `x` left by `2^(2^y)`, if bit-valued `c` is true.
     fn const_pow_shift_bv_lit(&mut self, x: &TermLc, y: usize, c: TermLc) -> TermLc {
-        self.ite(c, x.clone() * (1 << (1 << y)), x)
+        let two_to_the_y = 1usize.checked_shl(y as u32).unwrap();
+        let multiple = self.r1cs.modulus.new_v(Integer::from(1) << two_to_the_y);
+        self.ite(c, x.clone() * &multiple, x)
     }
 
     /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
@@ -677,12 +679,17 @@ impl<'cfg> ToR1cs<'cfg> {
     ) -> Vec<TermLc> {
         let y_w = y.len();
         let mask: TermLc = match ext_bit.as_ref() {
-            Some(e) => e.clone() * &self.r1cs.modulus.new_v((1 << x_w) - 1),
+            Some(e) => e.clone() * &self.r1cs.modulus.new_v((Integer::from(1) << x_w) - 1),
             None => self.zero.clone(),
         };
         let s = self.shift_bv_lit(x, y, ext_bit);
         let masked_s = self.ite(c, mask, &s);
-        let mut bits = self.bitify("shift", &masked_s, (1 << y_w) + x_w - 1, false);
+        let mut bits = self.bitify(
+            "shift",
+            &masked_s,
+            1usize.checked_shl(y_w as u32).unwrap() + x_w - 1,
+            false,
+        );
         bits.truncate(x_w);
         bits
     }
@@ -1388,6 +1395,56 @@ pub mod test {
             Op::Eq;
             term![Op::BvBinOp(BvBinOp::Lshr); bv_lit(0b1111,4), bv_lit(0b0011,4)],
             bv_lit(0b0001, 4)
+        ]);
+    }
+
+    #[test]
+    fn sh32_test() {
+        init();
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Shl); bv_lit(0b1,32), bv_lit(3,32)],
+            bv_lit(0b1000, 32)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b1,32), bv_lit(3,32)],
+            bv_lit(0, 32)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(u32::MAX,32), bv_lit(3,32)],
+            bv_lit(u32::MAX, 32)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b1,32), bv_lit(3,32)],
+            bv_lit(0, 32)
+        ]);
+    }
+
+    #[test]
+    fn sh64_test() {
+        init();
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Shl); bv_lit(0b1,64), bv_lit(3,64)],
+            bv_lit(0b1000, 64)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b1,64), bv_lit(3,64)],
+            bv_lit(0, 64)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(u64::MAX,64), bv_lit(3,64)],
+            bv_lit(u64::MAX, 64)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b1,64), bv_lit(3,64)],
+            bv_lit(0, 64)
         ]);
     }
 

@@ -12,7 +12,7 @@ circ_opt = { path = "circ_opt" }
 circ_hc = { path = "circ_hc", default-features = false, features = ["rc", "lru"]}
 circ_waksman = { path = "circ_waksman" }
 rug = { version = "1.11", features = ["serde"] }
-gmp-mpfr-sys = { version = "1.4", optional = true }
+gmp-mpfr-sys = { version = "1.6", optional = true }
 lazy_static = { version = "1.4", optional = true }
 rand = "0.8"
 rand_chacha = "0.3"
@@ -26,7 +26,7 @@ typed-arena = { version = "2.0", optional = true }
 log = "0.4"
 thiserror = "1.0"
 bellman = { git = "https://github.com/alex-ozdemir/bellman.git", branch = "mirage", optional = true }
-rug-polynomial = { version = "0.2.5", optional = true }
+rug-polynomial = { version = "0.2.6", optional = true }
 rayon = { version = "1", optional = true }
 ff = { version = "0.12", optional = true }
 fxhash = "0.2"
