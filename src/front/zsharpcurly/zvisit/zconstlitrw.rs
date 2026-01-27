@@ -113,6 +113,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         &mut self,
         dle: &mut ast::DecimalLiteralExpression<'ast>,
     ) -> ZVisitorResult {
+        #![allow(clippy::unnecessary_unwrap)]
         if dle.suffix.is_none() && self.to_ty.is_some() {
             self.found = true;
             dle.suffix.replace(match self.to_ty.as_ref().unwrap() {

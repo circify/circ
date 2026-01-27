@@ -20,6 +20,7 @@
 //!    * [Computation]: a collection of variables and assertions about them
 //!    * [Value]: a variable-free (and evaluated) term
 //!
+#![allow(clippy::derive_ord_xor_partial_ord)]
 
 use circ_fields::{FieldT, FieldV};
 pub use circ_hc::{Node, Table, Weak};
@@ -795,7 +796,6 @@ impl Array {
 impl std::cmp::Eq for Value {}
 // We walk in danger here, intentionally. One day we may fix it.
 // FP is the heart of the problem.
-#[allow(clippy::derive_ord_xor_partial_ord)]
 impl std::cmp::Ord for Value {
     fn cmp(&self, o: &Self) -> std::cmp::Ordering {
         self.partial_cmp(o).expect("broken Value cmp")
