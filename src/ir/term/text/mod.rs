@@ -50,6 +50,8 @@
 //!     * bit-vector: `#xFFFF...`, `#bBBBB...`
 //!     * field literal: `#fDD` or `#fDDmDD`.
 //!       * In the former case, an ambient modulus must be set.
+//!     * floating-point literals: `#fpNan`, `#fpInf`, `#fpDD.DD`
+//!       * In all cases, a precision can be specified by appending the suffix `f32` or `f64`.
 //!     * tuple: `(#t V1 ... Vn)`
 //!     * array: `(#a Sk V N ((Vk1 Vv1) ... (Vkn Vvn)))`
 //!     * list: `(#l Sk (V1 ... Vn))`
@@ -316,6 +318,7 @@ impl<'src> IrInterp<'src> {
                 [Leaf(Ident, b"ubv2fp"), a] => Ok(Op::UbvToFp(self.usize(a))),
                 [Leaf(Ident, b"sbv2fp"), a] => Ok(Op::SbvToFp(self.usize(a))),
                 [Leaf(Ident, b"fp2fp"), a] => Ok(Op::FpToFp(self.usize(a))),
+                [Leaf(Ident, b"pf2fp"), a] => Ok(Op::PfToFp(self.usize(a))),
                 [Leaf(Ident, b"challenge"), name, field] => Ok(Op::new_chall(
                     self.ident_string(name),
                     FieldT::from(self.int(field)),
@@ -413,6 +416,44 @@ impl<'src> IrInterp<'src> {
             _ => panic!("Expected integer, got {}", tt),
         }
     }
+
+    /// Parse this text as a [Value::F32] or [Value::F64] literal.
+    fn parse_fp_literal(&mut self, lit: &str) -> Value {
+        let _lit = lit.to_lowercase();
+
+        if _lit == "inf" {
+            return Value::F64(f64::INFINITY);
+        }
+        if _lit == "-inf" {
+            return Value::F64(f64::NEG_INFINITY);
+        }
+        if _lit == "nan" {
+            return Value::F64(f64::NAN);
+        }
+
+        // Parse as F32 when "f32" is found
+        if let Some(end) = _lit.find("f32") {
+            let num_part = &lit[..end];
+            let val = num_part
+                .parse::<f32>()
+                .unwrap_or_else(|_| panic!("Invalid F32 literal '{}'", lit));
+            return Value::F32(val);
+        }
+        // Parse as F64 when "f64" is found
+        else if let Some(end) = _lit.find("f64") {
+            let num_part = &lit[..end];
+            let val = num_part
+                .parse::<f64>()
+                .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
+            return Value::F64(val);
+        }
+        // Default: parse as F64
+        let val = lit
+            .parse::<f64>()
+            .unwrap_or_else(|_| panic!("Invalid F64 literal '{}'", lit));
+        Value::F64(val)
+    }
+
     fn usize(&self, tt: &TokTree) -> usize {
         self.maybe_usize(tt).unwrap()
     }
@@ -518,6 +559,10 @@ impl<'src> IrInterp<'src> {
                     (Integer::parse(&s[2..]).unwrap().into(), m)
                 };
                 pf_lit(FieldV::new::<Integer>(v, m))
+            }
+            Leaf(Token::Float, bytes) => {
+                let lit = std::str::from_utf8(&bytes[3..]).unwrap();
+                const_(self.parse_fp_literal(lit))
             }
             Leaf(Ident, b"false") => bool_lit(false),
             Leaf(Ident, b"true") => bool_lit(true),
