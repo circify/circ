@@ -1308,7 +1308,9 @@ impl<'ast> ZGen<'ast> {
 
     fn expr_impl_<const IS_CNST: bool>(&self, e: &ast::Expression<'ast>) -> Result<T, String> {
         self.expr_impl_inner_::<IS_CNST>(e)
-            .map(const_fold)
+            // Only fold during const evaluation; for normal paths, folding is deferred
+            // to statement boundaries to avoid O(n^2) re-traversal of the term DAG.
+            .map(|v| if IS_CNST { const_fold(v) } else { v })
             .and_then(|v| if IS_CNST { const_val_simple(v) } else { Ok(v) })
             .map_err(|err| format!("{}; context:\n{}", err, span_to_string(e.span())))
     }
@@ -1560,14 +1562,14 @@ impl<'ast> ZGen<'ast> {
         match s {
             ast::Statement::Return(r) => if let Some(e) = r.expression.as_ref() {
                 self.set_lhs_ty_ret(r);
-                let ret = self.expr_impl_::<IS_CNST>(e)?;
+                let ret = const_fold(self.expr_impl_::<IS_CNST>(e)?);
                 self.ret_impl_::<IS_CNST>(Some(ret))
             } else {
                 self.ret_impl_::<IS_CNST>(None)
             }
             .map_err(|e| format!("{e}")),
             ast::Statement::Assertion(e) => {
-                let expr = self.expr_impl_::<IS_CNST>(&e.expression)?;
+                let expr = const_fold(self.expr_impl_::<IS_CNST>(&e.expression)?);
                 match const_bool_simple(expr.clone()) {
                     Some(true) => Ok(()),
                     Some(false) => Err(format!(
@@ -1628,7 +1630,7 @@ impl<'ast> ZGen<'ast> {
             }
             ast::Statement::Definition(d) => {
                 self.set_lhs_ty_defn::<IS_CNST>(d)?;
-                let e = self.expr_impl_::<IS_CNST>(&d.expression)?;
+                let e = const_fold(self.expr_impl_::<IS_CNST>(&d.expression)?);
 
                 match &d.lhs {
                     ast::TypedIdentifierOrAssignee::Assignee(l) => {

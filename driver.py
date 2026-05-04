@@ -147,10 +147,8 @@ def build(features):
     install(features)
 
     cmd = ["cargo", "build"]
-    if mode:
-        cmd += ["--" + mode]
-    else:
-        # default to release mode
+    if mode != "debug":
+        # debug is cargo's default; only pass --release when needed
         cmd += ["--release"]
     cmd += ["--examples"]
 
@@ -231,10 +229,8 @@ def benchmark(features):
     install(features)
 
     cmd = ["cargo", "build"]
-    if mode:
-        cmd += ["--" + mode]
-    else:
-        # default to release mode
+    if mode != "debug":
+        # debug is cargo's default; only pass --release when needed
         cmd += ["--release"]
     cmd += ["--examples"]
 

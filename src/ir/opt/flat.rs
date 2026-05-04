@@ -110,13 +110,24 @@ pub fn flatten_nary_ops_cached(term_: Term, Cache(ref mut rewritten): &mut Cache
                     None,
                 )
             }
-            _ => Entry::Term(Rc::new(term(
-                t.op().clone(),
-                t.cs()
-                    .iter()
-                    .map(|c| rewritten.get_mut(c).unwrap().as_term())
-                    .collect(),
-            ))),
+            _ => {
+                if t.cs().iter().all(|c| {
+                    rewritten.get(c).and_then(|e| match e {
+                        Entry::Term(t) => Some(&**t),
+                        _ => None,
+                    }) == Some(c)
+                }) {
+                    Entry::Term(Rc::new(t.clone()))
+                } else {
+                    Entry::Term(Rc::new(term(
+                        t.op().clone(),
+                        t.cs()
+                            .iter()
+                            .map(|c| rewritten.get_mut(c).unwrap().as_term())
+                            .collect(),
+                    )))
+                }
+            }
         };
         rewritten.insert(t, entry);
     }
