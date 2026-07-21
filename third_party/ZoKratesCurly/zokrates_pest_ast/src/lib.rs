@@ -11,7 +11,8 @@ use zokrates_parser::Rule;
 extern crate lazy_static;
 
 pub use ast::{
-    Access, Arguments, ArrayAccess, ArrayInitializerExpression, ArrayType, AssemblyAssignment,
+    Access, Arguments, ArrayAccess, ArrayCommitted, ArrayInitializerExpression, ArrayParamMetadata,
+    ArrayTranscript, ArrayType, AssemblyAssignment,
     AssemblyConstraint, AssemblyStatement, AssemblyStatementInner, AssertionStatement,
     AssignConstrainOperator, AssignOperator, Assignee, AssigneeAccess, AssignmentOperator,
     BasicOrStructOrTupleType, BasicType, BinaryExpression, BinaryOperator,
@@ -343,10 +344,32 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::parameter))]
     pub struct Parameter<'ast> {
+        pub array_metadata: Option<ArrayParamMetadata<'ast>>,
         pub visibility: Option<Visibility>,
         pub ty: Type<'ast>,
         pub mutable: Option<Mutable>,
         pub id: IdentifierExpression<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::array_param_metadata))]
+    pub enum ArrayParamMetadata<'ast> {
+        Committed(ArrayCommitted<'ast>),
+        Transcript(ArrayTranscript<'ast>),
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::apm_committed))]
+    pub struct ArrayCommitted<'ast> {
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::apm_transcript))]
+    pub struct ArrayTranscript<'ast> {
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }

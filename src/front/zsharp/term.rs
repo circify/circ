@@ -779,7 +779,7 @@ pub fn const_fold(t: T) -> T {
 pub fn const_val(a: T) -> Result<T, String> {
     match const_value(&a.term) {
         Some(v) => Ok(T::new(a.ty, const_(v))),
-        _ => Err(format!("{} is not a constant value", &a)),
+        _ => Err(format!("{} is not a constant value", a)),
     }
 }
 
@@ -917,7 +917,7 @@ fn coerce_to_field(i: T) -> Result<Term, String> {
     match &i.ty {
         Ty::Uint(_) => Ok(to_dflt_f(i.term)),
         Ty::Field => Ok(i.term),
-        _ => Err(format!("Cannot coerce {} to a field element", &i)),
+        _ => Err(format!("Cannot coerce {} to a field element", i)),
     }
 }
 
@@ -931,7 +931,7 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
             let iterm = coerce_to_field(idx).unwrap();
             Ok(T::new(Ty::Field, term![Op::Select; array.term, iterm]))
         }
-        _ => Err(format!("Cannot index {} using {}", &array.ty, &idx.ty)),
+        _ => Err(format!("Cannot index {} using {}", array.ty, idx.ty)),
     }
 }
 
@@ -959,7 +959,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
             term![Op::Store; array.term, iterm, val.term],
         ))
     } else {
-        Err(format!("Cannot index {} using {}", &array.ty, &idx.ty))
+        Err(format!("Cannot index {} using {}", array.ty, idx.ty))
     }
 }
 
@@ -1120,7 +1120,7 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
                 Ok(())
             }
         }
-        _ => Err(format!("Cannot do bit-array-le on ({}, {})", &a.ty, &b.ty)),
+        _ => Err(format!("Cannot do bit-array-le on ({}, {})", a.ty, b.ty)),
     }?;
 
     let at = bv_from_bits(a.term, n);

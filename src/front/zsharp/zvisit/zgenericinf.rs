@@ -115,7 +115,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                     Ty::Uint(32) => Ok(v.term),
                     ty => Err(format!(
                         "ZGenericInf: ConstantGenericValue for {} had type {}, expected u32",
-                        &id.value, ty
+                        id.value, ty
                     )),
                 }?;
                 self.add_constraint(var, val);
@@ -135,7 +135,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             (Some(rty), Some(ret)) => self.fdef_gen_ty(rty, ret),
             (Some(rty), None) if rty != Ty::Bool => Err(format!(
                 "Function {} expected implicit Bool ret, but got {}",
-                &self.fdef.id.value, rty
+                self.fdef.id.value, rty
             )),
             (Some(_), None) => Ok(()),
             (None, _) => Ok(()),
@@ -155,7 +155,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         {
             assert!(self.gens.len() == res.len());
             assert!(self.gens.iter().all(|g| res.contains_key(&g.value)));
-            debug!("done (cached result for {})", &self.sfx);
+            debug!("done (cached result for {})", self.sfx);
             return Ok(res);
         }
         let g_names = self
@@ -285,7 +285,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         let (stdef, stpath) = self
             .zgen
             .get_struct_or_type(&def_ty.id.value)
-            .ok_or_else(|| format!("ZGenericInf: no struct struct or type {}", &def_ty.id.value))?;
+            .ok_or_else(|| format!("ZGenericInf: no struct struct or type {}", def_ty.id.value))?;
         let generics = match &stdef {
             Ok(strdef) => &strdef.generics[..],
             Err(tydef) => &tydef.generics[..],
@@ -296,7 +296,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
             return if def_ty.explicit_generics.is_some() {
                 Err(format!(
                     "Unifying generics: got explicit generics for non-generic struct type {}:\n{}",
-                    &def_ty.id.value,
+                    def_ty.id.value,
                     span_to_string(&def_ty.span),
                 ))
             } else {
@@ -314,8 +314,8 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
         {
             return Err(format!(
                 "Cannot infer generic values for struct {} arg to function {}\nGeneric structs in fn defns must have explicit generics (in terms of fn generic vars)",
-                &def_ty.id.value,
-                &self.fdef.id.value,
+                def_ty.id.value,
+                self.fdef.id.value,
             ));
         }
 
@@ -358,7 +358,7 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                     }
                     Ty::Struct(aty_n, _) => Err(format!(
                         "Type mismatch: got struct {aty_n}, decl was struct {}",
-                        &def_ty.id.value
+                        def_ty.id.value
                     )),
                     arg_ty => Err(format!(
                         "Type mismatch unifying generics: got {arg_ty}, decl was Struct",
@@ -370,14 +370,14 @@ impl<'ast, 'gen, const IS_CNST: bool> ZGenericInf<'ast, 'gen, IS_CNST> {
                     } else {
                         return Err(format!(
                             "ZGenericInf: missing member {} in struct {} value",
-                            &id.value, &def_ty.id.value,
+                            id.value, def_ty.id.value,
                         ));
                     }
                 }
                 if !aty_map.is_empty() {
                     return Err(format!(
                         "ZGenericInf: struct {} value had extra members: {:?}",
-                        &def_ty.id.value,
+                        def_ty.id.value,
                         aty_map.keys().collect::<Vec<_>>(),
                     ));
                 }

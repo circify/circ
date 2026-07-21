@@ -257,14 +257,14 @@ impl Display for BitVector {
             write!(
                 f,
                 "#x{:0>width$}",
-                &format!("{:x}", self.uint).as_str(),
+                format!("{:x}", self.uint).as_str(),
                 width = self.width / 4
             )?;
         } else {
             write!(
                 f,
                 "#b{:0>width$}",
-                &format!("{:b}", self.uint).as_str(),
+                format!("{:b}", self.uint).as_str(),
                 width = self.width
             )?;
         }

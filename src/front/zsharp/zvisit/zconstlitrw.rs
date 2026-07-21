@@ -168,7 +168,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         let ty_map = if let Some(t) = to_ty.as_ref() {
             if let Ty::Struct(name, ty_map) = t {
                 if name != &ise.ty.value {
-                    Err(format!("ZConstLiteralRewriter: got struct {}, expected {} visiting inline struct expression", &ise.ty.value, name))
+                    Err(format!("ZConstLiteralRewriter: got struct {}, expected {} visiting inline struct expression", ise.ty.value, name))
                 } else {
                     Ok(Some(ty_map.clone()))
                 }
@@ -190,7 +190,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
                     .remove(&m.id.value)
                     .ok_or_else(|| ZVisitorError(format!(
                         "ZConstLiteralRewriter: no member {} in struct {}, or duplicate member in inline expression",
-                        &m.id.value,
+                        m.id.value,
                         str_name,
                     )))
                     .and_then(|ty| {
@@ -202,7 +202,7 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
             if !ty_map.is_empty() {
                 return Err(format!(
                     "ZConstLiteralRewriter: inline expression for struct {} has extra fields: {:?}",
-                    &ise.ty.value,
+                    ise.ty.value,
                     ty_map.keys().collect::<Vec<_>>(),
                 )
                 .into());

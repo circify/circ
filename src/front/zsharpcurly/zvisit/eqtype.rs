@@ -74,7 +74,7 @@ fn eq_array_type<'ast>(
         (Struct(sty), Struct(sty2)) => eq_struct_type(sty, sty2, zgen),
         _ => Err(ZVisitorError(format!(
             "array type mismatch: \n\texpected elms of type {:?}, \n\tfound {:?}",
-            &ty.ty, &ty2.ty,
+            ty.ty, ty2.ty,
         ))),
     }
 }
@@ -90,7 +90,7 @@ fn eq_struct_type<'ast>(
         // neither ty nor ty2 is a type alias, so they are really different
         Err(ZVisitorError(format!(
             "struct type mismatch: \n\texpected {:?}, \n\tfound {:?}",
-            &ty.id.value, &ty2.id.value,
+            ty.id.value, ty2.id.value,
         )))
     } else {
         eq_type(&canon_type(ty, zgen)?, &canon_type(ty2, zgen)?, zgen)
@@ -136,7 +136,7 @@ fn canon_type<'ast>(ty: &ast::StructType<'ast>, zgen: &ZGen<'ast>) -> ZResult<as
         .ok_or_else(|| {
             ZVisitorError(format!(
                 "eqtype: unknown struct or type alias {}",
-                &ty.id.value
+                ty.id.value
             ))
         })
 }

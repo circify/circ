@@ -57,7 +57,7 @@ fn const_bool_simple(t: T) -> Option<bool> {
 fn const_val_simple(a: T) -> Result<T, String> {
     match const_value_simple(&a.term) {
         Some(v) => Ok(T::new(a.ty, leaf_term(Op::new_const(v)))),
-        _ => Err(format!("{} is not a constant value", &a)),
+        _ => Err(format!("{} is not a constant value", a)),
     }
 }
 
@@ -741,9 +741,9 @@ impl<'ast> ZGen<'ast> {
         let f = self
             .functions
             .get(&f_path)
-            .ok_or_else(|| format!("No file '{:?}' attempting fn call", &f_path))?
+            .ok_or_else(|| format!("No file '{:?}' attempting fn call", f_path))?
             .get(&f_name)
-            .ok_or_else(|| format!("No function '{}' attempting fn call", &f_name))?;
+            .ok_or_else(|| format!("No function '{}' attempting fn call", f_name))?;
         let arg_tys = args.iter().map(|arg| arg.type_().clone());
         let generics = ZGenericInf::<IS_CNST>::new(self, f, &f_path, &f_name)
             .unify_generic(egv, exp_ty, arg_tys)?;
@@ -780,7 +780,7 @@ impl<'ast> ZGen<'ast> {
         };
         let dur = (time::Instant::now() - before).as_millis();
         if dur > 50 {
-            info!("{} ms to process {} {:?}", dur, &f_name, &f_path);
+            info!("{} ms to process {} {:?}", dur, f_name, f_path);
         }
         ret
     }
@@ -802,7 +802,7 @@ impl<'ast> ZGen<'ast> {
                     generics.remove(&gid.value).ok_or_else(|| {
                         format!(
                             "Failed to find generic argument {} for builtin call {}",
-                            &gid.value, &f_name,
+                            gid.value, f_name,
                         )
                     })
                 })
@@ -814,7 +814,7 @@ impl<'ast> ZGen<'ast> {
             if f.generics.len() != generics.len() {
                 return Err(format!(
                     "Wrong number of generic params calling {} (got {}, expected {})",
-                    &f.id.value,
+                    f.id.value,
                     generics.len(),
                     f.generics.len()
                 ));
@@ -822,7 +822,7 @@ impl<'ast> ZGen<'ast> {
             if f.parameters.len() != args.len() {
                 return Err(format!(
                     "Wrong nimber of arguments calling {} (got {}, expected {})",
-                    &f.id.value,
+                    f.id.value,
                     args.len(),
                     f.parameters.len()
                 ));
@@ -940,7 +940,7 @@ impl<'ast> ZGen<'ast> {
         } else {
             panic!(
                 "No function '{:?}//{}' attempting const_entry_fn",
-                &f_file, &f_name
+                f_file, f_name
             )
         }
     }
@@ -952,9 +952,9 @@ impl<'ast> ZGen<'ast> {
         let f = self
             .functions
             .get(&f_file)
-            .unwrap_or_else(|| panic!("No file '{:?}'", &f_file))
+            .unwrap_or_else(|| panic!("No file '{:?}'", f_file))
             .get(&f_name)
-            .unwrap_or_else(|| panic!("No function '{}'", &f_name))
+            .unwrap_or_else(|| panic!("No function '{}'", f_name))
             .clone();
         // XXX(unimpl) tuple returns not supported
         assert!(f.returns.len() <= 1);
@@ -1195,7 +1195,7 @@ impl<'ast> ZGen<'ast> {
             None if IS_CNST => self.cvar_lookup(&i.value).ok_or_else(|| {
                 format!(
                     "Undefined const identifier {} in {}",
-                    &i.value,
+                    i.value,
                     self.cur_path().to_string_lossy()
                 )
             }),
@@ -1204,7 +1204,7 @@ impl<'ast> ZGen<'ast> {
                 .map_err(|e| format!("{e}"))?
             {
                 Val::Term(t) => Ok(t),
-                _ => Err(format!("Non-Term identifier {}", &i.value)),
+                _ => Err(format!("Non-Term identifier {}", i.value)),
             },
         }
     }
@@ -1338,13 +1338,7 @@ impl<'ast> ZGen<'ast> {
                 assert!(!p.accesses.is_empty());
                 let (val, accs) = if let Some(ast::Access::Call(c)) = p.accesses.first() {
                     let (f_path, f_name) = self.deref_import(&p.id.value);
-                    let exp_ty = self.lhs_ty_take().and_then(|ty| {
-                        if p.accesses.len() > 1 {
-                            None
-                        } else {
-                            Some(ty)
-                        }
-                    });
+                    let exp_ty = self.lhs_ty_take().filter(|_ty| p.accesses.len() <= 1);
                     let args = c
                         .arguments
                         .expressions
@@ -1640,7 +1634,7 @@ impl<'ast> ZGen<'ast> {
                             .search(&sa.id.value)
                             .map(|r| r.1.clone())
                             .ok_or_else(|| {
-                                format!("No such member {} of struct {nm}", &sa.id.value)
+                                format!("No such member {} of struct {nm}", sa.id.value)
                             }),
                         ty => Err(format!("Attempted member access on non-Struct type {ty}")),
                     },
@@ -1783,7 +1777,7 @@ impl<'ast> ZGen<'ast> {
             .unwrap_or(false)
         {
             self.err(
-                format!("Constant {} clashes with import of same name", &c.id.value),
+                format!("Constant {} clashes with import of same name", c.id.value),
                 &c.span,
             );
         }
@@ -1816,7 +1810,7 @@ impl<'ast> ZGen<'ast> {
 
         if let Some(ast::ArrayParamMetadata::Transcript(_)) = &c.array_metadata {
             if !value.type_().is_array() {
-                self.err(format!("Non-array transcript {}", &c.id.value), &c.span);
+                self.err(format!("Non-array transcript {}", c.id.value), &c.span);
             }
             self.mark_array_as_transcript(&c.id.value, value.clone());
         }
@@ -1829,7 +1823,7 @@ impl<'ast> ZGen<'ast> {
             .insert(c.id.value.clone(), (c.ty.clone(), value))
             .is_some()
         {
-            self.err(format!("Constant {} redefined", &c.id.value), &c.span);
+            self.err(format!("Constant {} redefined", c.id.value), &c.span);
         }
     }
 
@@ -1869,7 +1863,7 @@ impl<'ast> ZGen<'ast> {
                 let (def, path) = self.get_struct_or_type(&s.id.value).ok_or_else(|| {
                     format!(
                         "No such struct {} (did you bring it into scope?)",
-                        &s.id.value
+                        s.id.value
                     )
                 })?;
                 let generics = match def {
@@ -1886,7 +1880,7 @@ impl<'ast> ZGen<'ast> {
                 if generics.len() != g_len {
                     return Err(format!(
                         "Struct {} is not monomorphized or wrong number of generic parameters",
-                        &s.id.value
+                        s.id.value
                     ));
                 }
                 self.file_stack_push(path);
@@ -2086,7 +2080,7 @@ impl<'ast> ZGen<'ast> {
                             .is_some()
                         {
                             self.err(
-                                format!("Struct {} defined over existing name", &s.id.value),
+                                format!("Struct {} defined over existing name", s.id.value),
                                 &s.span,
                             );
                         }
@@ -2111,7 +2105,7 @@ impl<'ast> ZGen<'ast> {
                             .is_some()
                         {
                             self.err(
-                                format!("Type {} defined over existing name", &t.id.value),
+                                format!("Type {} defined over existing name", t.id.value),
                                 &t.span,
                             );
                         }
@@ -2132,7 +2126,7 @@ impl<'ast> ZGen<'ast> {
                             self.err(
                                 format!(
                                     "Functions must return exactly 1 value; {} returns {}",
-                                    &f_ast.id.value,
+                                    f_ast.id.value,
                                     f_ast.returns.len(),
                                 ),
                                 &f.span,
@@ -2164,7 +2158,7 @@ impl<'ast> ZGen<'ast> {
                             .insert(f.id.value.clone(), f_ast)
                             .is_some()
                         {
-                            self.err(format!("Function {} redefined", &f.id.value), &f.span);
+                            self.err(format!("Function {} redefined", f.id.value), &f.span);
                         }
                     }
                     ast::SymbolDeclaration::Import(_) => (), // already handled in visit_imports

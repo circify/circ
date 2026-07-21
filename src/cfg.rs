@@ -81,7 +81,7 @@ impl From<CircOpt> for CircCfg {
     fn from(opt: CircOpt) -> Self {
         let field = if !opt.field.custom_modulus.is_empty() {
             let error =
-                |r: &str| panic!("The field modulus '{}' is {}", &opt.field.custom_modulus, r);
+                |r: &str| panic!("The field modulus '{}' is {}", opt.field.custom_modulus, r);
             let i = Integer::from_str_radix(&opt.field.custom_modulus, 10)
                 .unwrap_or_else(|_| error("not an integer"));
             if i.is_probably_prime(30) == rug::integer::IsPrime::No {

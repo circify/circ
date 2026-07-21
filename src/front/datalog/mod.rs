@@ -318,7 +318,7 @@ impl<'ast> Gen<'ast> {
             let mut bug_in_rule_if_any = Vec::new();
             for cond in &rule.conds {
                 let mut bug_conditions = Vec::new();
-                debug!("Start case: {}", &rule.name.value);
+                debug!("Start case: {}", rule.name.value);
                 self.circ.enter_scope();
                 if let Some(decls) = cond.existential.as_ref() {
                     for d in &decls.declarations {

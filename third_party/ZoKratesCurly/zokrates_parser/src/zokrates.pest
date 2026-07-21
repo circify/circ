@@ -20,7 +20,11 @@ constant_generics_declaration = _{ "<" ~ constant_generics_list ~ ">" }
 constant_generics_list = _{ identifier ~ ("," ~ identifier)* }
 
 parameter_list = _{(parameter ~ ("," ~ parameter)*)?}
-parameter = { vis? ~ ty ~ _mut? ~ identifier }
+parameter = { array_param_metadata? ~ vis? ~ ty ~ _mut? ~ identifier }
+
+array_param_metadata = { apm_committed | apm_transcript }
+apm_committed = { "committed" }
+apm_transcript = { "transcript" }
 
 // basic types
 ty_field = {"field"}
