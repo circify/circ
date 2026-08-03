@@ -132,11 +132,10 @@ pub fn fold_cache(node: &Term, cache: &mut TermCache<TTerm>, ignore: &[Op]) -> T
                         Some(if *flattened.op() == OR {
                             let mut dedup_children = TermSet::default();
                             for t in flattened.cs().iter() {
-                                if dedup_children.contains(&term![Op::Not; t.clone()]) {
-                                    dedup_children.remove(&term![Op::Not; t.clone()]);
-                                } else {
-                                    dedup_children.insert(t.clone());
+                                if dedup_children.contains(&neg_bool(t.clone())) {
+                                    return bool_lit(true);
                                 }
+                                dedup_children.insert(t.clone());
                             }
 
                             match dedup_children.len().cmp(&1) {
@@ -735,6 +734,13 @@ mod test {
     #[test]
     fn b_or() {
         assert_eq!(fold(&term![OR; bool(false), bool(true)], &[]), bool(true),);
+    }
+
+    #[test]
+    fn b_or_complement() {
+        let a = var("a".to_owned(), Sort::Bool);
+        assert_eq!(fold(&term![OR; a.clone(), term![NOT; a.clone()]], &[]), bool(true));
+        assert_eq!(fold(&term![OR; term![NOT; a.clone()], a], &[]), bool(true));
     }
 
     #[test]
