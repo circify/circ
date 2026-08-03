@@ -158,12 +158,18 @@ impl RewritePass for Linearizer {
                                 .unwrap_or_else(|| tup.clone()),
                         )
                     } else {
-                        let mut updates =
+                        let updates =
                             (0..a.size).map(|idx| term![Op::Update(idx); tup.clone(), val.clone()]);
-                        let first = updates.next().unwrap();
-                        Some(a.key.elems_iter().take(a.size).skip(1).zip(updates).fold(first, |acc, (idx_c, update)| {
-                        term![Op::Ite; term![AND; term![Op::Eq; idx.clone(), idx_c], cond.clone()], update, acc]
-                    }))
+                        Some(a.key.elems_iter().take(a.size).zip(updates).fold(
+                            tup.clone(),
+                            |acc, (idx_c, update)| {
+                                term![Op::Ite;
+                                    term![AND; term![Op::Eq; idx.clone(), idx_c], cond.clone()],
+                                    update,
+                                    acc
+                                ]
+                            },
+                        ))
                     }
                 } else {
                     unreachable!()
@@ -184,6 +190,7 @@ pub fn linearize(c: &mut Computation) {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ir::opt::cfold;
 
     fn array_free(t: &Term) -> bool {
         for c in PostOrderIter::new(t.clone()) {
@@ -290,5 +297,25 @@ mod test {
         linearize(&mut c);
         assert!(array_free(&c.outputs[0]));
         assert_eq!(3 + 1 + 3, count_ites(&c.outputs[0]));
+    }
+
+    #[test]
+    fn false_dynamic_conditional_store_preserves_array() {
+        let mut c = text::parse_computation(
+            b"
+            (computation
+                (metadata (parties ) (inputs (idx (bv 4))) (commitments))
+                (precompute () () (#t ))
+                (select
+                    (cstore (#a (bv 4) #x0 2 ()) idx #xf false)
+                    #x0
+                )
+            )
+        ",
+        );
+
+        linearize(&mut c);
+
+        assert_eq!(cfold::fold(&c.outputs[0], &[]), bv_lit(0, 4));
     }
 }
