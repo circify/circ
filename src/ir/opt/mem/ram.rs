@@ -660,11 +660,56 @@ impl Ram {
             }
         }
         for access in self.accesses.iter().skip(self.size) {
-            if access.write.b != bool_lit(false) && access.active.b != bool_lit(false) {
+            // The covering-ROM checker does not encode the active flag. Even a write with a
+            // statically false guard would therefore be included in its lookup haystack.
+            if access.write.b != bool_lit(false) {
                 trace!("non-ROM because of a late write to {}", access.idx);
                 return false;
             }
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn covering_rom_rejects_inactive_late_write() {
+        let field = FieldT::from(rug::Integer::from(11));
+        let cfg = AccessCfg::default_from_field(field.clone());
+        let value = |n| pf_lit(field.new_v(n));
+        let mut ram = Ram::new(
+            0,
+            2,
+            cfg.clone(),
+            Sort::Field(field.clone()),
+            BoundaryConditions::Default(value(0)),
+        );
+
+        ram.accesses.push_back(Access::new_write(
+            &cfg,
+            value(0),
+            value(10),
+            bool_lit(true),
+            value(0),
+        ));
+        ram.accesses.push_back(Access::new_write(
+            &cfg,
+            value(1),
+            value(11),
+            bool_lit(true),
+            value(1),
+        ));
+        ram.accesses.push_back(Access::new_write(
+            &cfg,
+            var("dead_index".into(), Sort::Field(field.clone())),
+            var("dead_value".into(), Sort::Field(field.clone())),
+            bool_lit(false),
+            value(2),
+        ));
+
+        assert!(!ram.is_covering_rom());
     }
 }
