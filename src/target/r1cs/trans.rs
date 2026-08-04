@@ -644,6 +644,37 @@ impl<'cfg> ToR1cs<'cfg> {
         acc
     }
 
+    /// Add equally sized, least-significant-bit-first bit vectors modulo their width.
+    fn bv_add_bits(&mut self, xs: &[TermLc], ys: &[TermLc]) -> Vec<TermLc> {
+        assert_eq!(xs.len(), ys.len());
+        let mut carry = self.zero.clone();
+        let mut sum = Vec::with_capacity(xs.len());
+        for (x, y) in xs.iter().zip(ys) {
+            sum.push(self.nary_xor(vec![x.clone(), y.clone(), carry.clone()].into_iter()));
+
+            // Majority(x, y, carry) = xy + carry * (x + y - 2xy).
+            let xy = self.mul(x.clone(), y.clone());
+            carry = self.mul(carry, x.clone() + y - &(xy.clone() * 2)) + &xy;
+        }
+        sum
+    }
+
+    /// Multiply equally sized bit vectors modulo their width without packing an oversized
+    /// intermediate into the scalar field.
+    fn bv_mul_bits(&mut self, xs: &[TermLc], ys: &[TermLc]) -> Vec<TermLc> {
+        assert_eq!(xs.len(), ys.len());
+        let width = xs.len();
+        let mut product = vec![self.zero.clone(); width];
+        for (shift, y) in ys.iter().enumerate() {
+            let mut partial = vec![self.zero.clone(); width];
+            for i in shift..width {
+                partial[i] = self.mul(xs[i - shift].clone(), y.clone());
+            }
+            product = self.bv_add_bits(&product, &partial);
+        }
+        product
+    }
+
     /// Shift `x` left by `2^(2^y)`, if bit-valued `c` is true.
     fn const_pow_shift_bv_lit(&mut self, x: &TermLc, y: usize, c: TermLc) -> TermLc {
         let two_to_the_y = 1usize.checked_shl(y as u32).unwrap();
@@ -792,42 +823,55 @@ impl<'cfg> ToR1cs<'cfg> {
                             let res = bits_bv_idx.into_iter().map(f).collect();
                             self.set_bv_bits(bv, res);
                         }
-                        BvNaryOp::Add | BvNaryOp::Mul => {
+                        BvNaryOp::Add => {
                             let f_width = self.r1cs.modulus().significant_bits() as usize - 1;
-                            let values = bv
-                                .cs()
-                                .iter()
-                                .map(|c| self.get_bv_uint(c))
-                                .collect::<Vec<_>>();
-                            let (res, width) = match o {
-                                BvNaryOp::Add => {
-                                    let sum =
-                                        values.into_iter().fold(self.zero.clone(), |s, v| s + &v);
-                                    let extra_width = bitsize(bv.cs().len().saturating_sub(1));
-                                    (sum, n + extra_width)
+                            let extra_width = bitsize(bv.cs().len().saturating_sub(1));
+                            let bits = if n + extra_width <= f_width {
+                                let values = bv
+                                    .cs()
+                                    .iter()
+                                    .map(|c| self.get_bv_uint(c))
+                                    .collect::<Vec<_>>();
+                                let sum = values.into_iter().fold(self.zero.clone(), |s, v| s + &v);
+                                let mut bits = self.bitify("arith", &sum, n + extra_width, false);
+                                bits.truncate(n);
+                                bits
+                            } else {
+                                let mut sum = vec![self.zero.clone(); n];
+                                for child in bv.cs() {
+                                    let bits = self.get_bv_bits(child);
+                                    sum = self.bv_add_bits(&sum, &bits);
                                 }
-                                BvNaryOp::Mul => {
-                                    if bv.cs().len() * n < f_width {
-                                        let z = self.zero.clone() + 1;
-                                        (
-                                            values.into_iter().fold(z, |acc, v| self.mul(acc, v)),
-                                            bv.cs().len() * n,
-                                        )
-                                    } else {
-                                        let z = self.zero.clone() + 1;
-                                        let p = values.into_iter().fold(z, |acc, v| {
-                                            let p = self.mul(acc, v);
-                                            let mut bits = self.bitify("binMul", &p, 2 * n, false);
-                                            bits.truncate(n);
-                                            self.debitify(bits.into_iter(), false)
-                                        });
-                                        (p, n)
-                                    }
-                                }
-                                _ => unreachable!(),
+                                sum
                             };
-                            let mut bits = self.bitify("arith", &res, width, false);
-                            bits.truncate(n);
+                            self.set_bv_bits(bv, bits);
+                        }
+                        BvNaryOp::Mul => {
+                            let f_width = self.r1cs.modulus().significant_bits() as usize - 1;
+                            let bits = if bv.cs().len() * n < f_width {
+                                let values = bv
+                                    .cs()
+                                    .iter()
+                                    .map(|c| self.get_bv_uint(c))
+                                    .collect::<Vec<_>>();
+                                let one = self.zero.clone() + 1;
+                                let product =
+                                    values.into_iter().fold(one, |acc, v| self.mul(acc, v));
+                                let mut bits =
+                                    self.bitify("arith", &product, bv.cs().len() * n, false);
+                                bits.truncate(n);
+                                bits
+                            } else {
+                                let mut children = bv.cs().iter();
+                                let mut product = self.get_bv_bits(
+                                    children.next().expect("bit-vector multiplication is empty"),
+                                );
+                                for child in children {
+                                    let bits = self.get_bv_bits(child);
+                                    product = self.bv_mul_bits(&product, &bits);
+                                }
+                                product
+                            };
                             self.set_bv_bits(bv, bits);
                         }
                     },
@@ -1537,6 +1581,24 @@ pub mod test {
         add_test_instance(&[0b1, 0b1, 0b1, 0b1], 0b0, 1);
         add_test_instance(&[0b11, 0b11, 0b11, 0b11], 0b00, 2);
         add_test_instance(&[0b11, 0b11, 0b11, 0b11, 0b11], 0b11, 2);
+    }
+
+    #[test]
+    fn wide_arithmetic_test() {
+        init();
+        let u128_max: Integer = (Integer::from(1) << 128) - 1;
+        const_test(term![
+            Op::Eq;
+            term![BV_MUL; bv_lit(u128_max.clone(), 128), bv_lit(u128_max, 128)],
+            bv_lit(1, 128)
+        ]);
+
+        let high_u255: Integer = Integer::from(1) << 254;
+        const_test(term![
+            Op::Eq;
+            term![BV_ADD; bv_lit(high_u255.clone(), 255), bv_lit(high_u255, 255)],
+            bv_lit(0, 255)
+        ]);
     }
 
     #[test]
