@@ -644,54 +644,47 @@ impl<'cfg> ToR1cs<'cfg> {
         acc
     }
 
-    /// Shift `x` left by `2^(2^y)`, if bit-valued `c` is true.
-    fn const_pow_shift_bv_lit(&mut self, x: &TermLc, y: usize, c: TermLc) -> TermLc {
-        let two_to_the_y = 1usize.checked_shl(y as u32).unwrap();
-        let multiple = self.r1cs.modulus.new_v(Integer::from(1) << two_to_the_y);
-        self.ite(c, x.clone() * &multiple, x)
-    }
-
-    /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
-    /// Returns an *oversized* number
-    fn shift_bv_lit(&mut self, x: TermLc, y: Vec<TermLc>, ext_bit: Option<TermLc>) -> TermLc {
-        if let Some(b) = ext_bit {
-            let left = self.shift_bv_lit(x, y.clone(), None);
-            let right = self.shift_bv_lit(b.clone(), y, None) - 1;
-            left + &self.mul(b, right)
-        } else {
-            y.into_iter()
-                .enumerate()
-                .fold(x, |x, (i, yi)| self.const_pow_shift_bv_lit(&x, i, yi))
-        }
-    }
-
-    /// Shift `x` left by `y`, filling the blank spots with bit-valued `ext_bit`.
-    /// Returns a bit sequence.
+    /// Shift `bits` by the amount in `y`, filling blank positions with `ext_bit`.
+    /// Both input and output use least-significant-bit-first order. If `c` is true, the shift
+    /// amount is at least the data width, so every output bit is the extension bit.
     ///
-    /// If `c` is true, returns bit sequence which is just a copy of `ext_bit`.
+    /// Routing bits directly is important here: packing an oversized intermediate into a field
+    /// element before decomposing it silently reduces wide shifts modulo the scalar field.
     fn shift_bv_bits(
         &mut self,
-        x: TermLc,
+        mut bits: Vec<TermLc>,
         y: Vec<TermLc>,
         ext_bit: Option<TermLc>,
-        x_w: usize,
         c: TermLc,
+        left: bool,
     ) -> Vec<TermLc> {
-        let y_w = y.len();
-        let mask: TermLc = match ext_bit.as_ref() {
-            Some(e) => e.clone() * &self.r1cs.modulus.new_v((Integer::from(1) << x_w) - 1),
-            None => self.zero.clone(),
-        };
-        let s = self.shift_bv_lit(x, y, ext_bit);
-        let masked_s = self.ite(c, mask, &s);
-        let mut bits = self.bitify(
-            "shift",
-            &masked_s,
-            1usize.checked_shl(y_w as u32).unwrap() + x_w - 1,
-            false,
-        );
-        bits.truncate(x_w);
-        bits
+        let width = bits.len();
+        let ext_bit = ext_bit.unwrap_or_else(|| self.zero.clone());
+
+        for (stage, select) in y.into_iter().enumerate() {
+            let distance = 1usize.checked_shl(stage as u32).unwrap();
+            let shifted = (0..width)
+                .map(|i| {
+                    let source = if left {
+                        i.checked_sub(distance)
+                    } else {
+                        i.checked_add(distance).filter(|&j| j < width)
+                    };
+                    source
+                        .map(|j| bits[j].clone())
+                        .unwrap_or_else(|| ext_bit.clone())
+                })
+                .collect::<Vec<_>>();
+            bits = shifted
+                .into_iter()
+                .zip(bits)
+                .map(|(shifted, original)| self.ite(select.clone(), shifted, &original))
+                .collect();
+        }
+
+        bits.into_iter()
+            .map(|bit| self.ite(c.clone(), ext_bit.clone(), &bit))
+            .collect()
     }
 
     /// Given a shift amount expressed as a bit-sequence, splits that shift into low bits and high
@@ -875,18 +868,17 @@ impl<'cfg> ToR1cs<'cfg> {
                                 let rb = self.get_bv_bits(&bv.cs()[1]);
                                 let (high, low) = self.split_shift_amt(n, rb);
                                 let bits = match o {
-                                    BvBinOp::Shl => self.shift_bv_bits(a, low, None, n, high),
+                                    BvBinOp::Shl => {
+                                        let bits = self.get_bv_bits(&bv.cs()[0]);
+                                        self.shift_bv_bits(bits, low, None, high, true)
+                                    }
                                     BvBinOp::Lshr | BvBinOp::Ashr => {
-                                        let mut lb = self.get_bv_bits(&bv.cs()[0]);
-                                        lb.reverse();
+                                        let lb = self.get_bv_bits(&bv.cs()[0]);
                                         let ext_bit = match o {
-                                            BvBinOp::Ashr => Some(lb.first().unwrap().clone()),
+                                            BvBinOp::Ashr => Some(lb.last().unwrap().clone()),
                                             _ => None,
                                         };
-                                        let l = self.debitify(lb.into_iter(), false);
-                                        let mut bits = self.shift_bv_bits(l, low, ext_bit, n, high);
-                                        bits.reverse();
-                                        bits
+                                        self.shift_bv_bits(lb, low, ext_bit, high, false)
                                     }
                                     _ => unreachable!(),
                                 };
@@ -1445,6 +1437,27 @@ pub mod test {
             Op::Eq;
             term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(0b1,64), bv_lit(3,64)],
             bv_lit(0, 64)
+        ]);
+    }
+
+    #[test]
+    fn sh128_test() {
+        init();
+        let max: Integer = (Integer::from(1) << 128) - 1;
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Shl); bv_lit(max.clone(), 128), bv_lit(127, 128)],
+            bv_lit(Integer::from(1) << 127, 128)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Lshr); bv_lit(max.clone(), 128), bv_lit(127, 128)],
+            bv_lit(1, 128)
+        ]);
+        const_test(term![
+            Op::Eq;
+            term![Op::BvBinOp(BvBinOp::Ashr); bv_lit(max.clone(), 128), bv_lit(127, 128)],
+            bv_lit(max, 128)
         ]);
     }
 
