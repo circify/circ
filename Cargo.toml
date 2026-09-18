@@ -111,3 +111,15 @@ required-features = ["smt", "zokc", "bellman"]
 
 [profile.release]
 debug = true
+
+[[test]]
+name = "inmem"
+required-features = ["smt", "zokc", "bellman"]
+
+[[test]]
+name = "ztest_e2e"
+required-features = ["smt", "zokc", "bellman"]
+
+[[test]]
+name = "zok_test_inputs"
+required-features = ["smt", "zokc"]
