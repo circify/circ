@@ -105,5 +105,9 @@ required-features = ["smt", "zok", "r1cs"]
 name = "opa_bench"
 required-features = ["lp", "aby"]
 
+[[example]]
+name = "ztest"
+required-features = ["smt", "zokc", "bellman"]
+
 [profile.release]
 debug = true
