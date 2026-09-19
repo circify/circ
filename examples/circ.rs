@@ -215,6 +215,7 @@ fn main() {
         DeterminedLanguage::ZsharpCurly => {
             let inputs = zsharpcurly::Inputs {
                 file: options.path,
+                entry: "main".to_string(),
                 mode,
             };
             ZSharpCurlyFE::gen(inputs)
