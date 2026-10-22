@@ -1,0 +1,11 @@
+// Matrix multiply: the verifier's products are replaced by prover-supplied
+// products checked at a random vector (--ir-matmul-ip, on by default). Compiled
+// both ways here; scripts/matmul_test.zsh proves and verifies them.
+// TEST_FILE
+// FEATURES: r1cs poly zok
+// CMD: $circ $file r1cs --proof-impl mirage --action count
+// CMD: $circ --ir-matmul-ip false $file r1cs --proof-impl mirage --action count
+// CMD: $circ --ir-share-challenges true $file r1cs --proof-impl mirage --action count
+def main(public field[3][3] A, public field[3][3] B, public field[3][3] C, public field[3][3] P) -> bool:
+    assert(P == ((A * B) * C))
+    return true

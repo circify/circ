@@ -1061,29 +1061,30 @@ impl R1cs {
         self.extend_precomputation(&mut precompute, true);
         let public_inputs = cs.metadata.get_inputs_for_party(None);
         precompute.restrict_to_inputs(public_inputs);
-        let vars: HashMap<String, Sort> = {
-            PostOrderIter::new(precompute.tuple())
-                .filter_map(|t| {
-                    if let Op::Var(v) = t.op() {
-                        Some((v.name.to_string(), v.sort.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-        for c in &self.challenge_names {
-            assert!(!vars.contains_key(c));
-        }
         precompute.flatten();
         let mut precompute_map = precompute.outputs;
-        let terms = self
+        let terms: Vec<Term> = self
             .insts_iter()
             .map(|v| {
                 let name = self.idx_to_sig.get_fwd(&v).unwrap();
                 precompute_map.remove(name).unwrap()
             })
             .collect();
+        // The inputs of the instance's terms, not of every public precompute step: a prover input
+        // may be computed from public inputs and challenges.
+        let vars: HashMap<String, Sort> = PostOrderIter::new(term(Op::Tuple, terms.clone()))
+            .filter_map(|t| match t.op() {
+                Op::Var(v) => Some((v.name.to_string(), v.sort.clone())),
+                _ => None,
+            })
+            .collect();
+        for c in &self.challenge_names {
+            assert!(
+                !vars.contains_key(c),
+                "the instance depends on challenge {}",
+                c
+            );
+        }
         let mut comp = wit_comp::StagedWitComp::default();
         comp.add_stage(vars, terms);
         VerifierData {

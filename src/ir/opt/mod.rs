@@ -7,6 +7,7 @@ pub mod fits_in_bits_ip;
 pub mod flat;
 pub mod inline;
 pub mod link;
+pub mod mat;
 pub mod mem;
 pub mod scalarize_vars;
 pub mod sha;
@@ -53,12 +54,18 @@ pub enum Opt {
     VolatileRam,
     /// Eliminate set membership args
     SetMembership,
+    /// Merge, or rename apart, challenges that share a name
+    ShareChallenges(bool),
     /// Replace challenge terms with random variables
     SkolemizeChallenges,
     /// Replace witness terms with variables
     DeskolemizeWitnesses,
     /// Check bit-constaints with challenges.
     FitsInBitsIp,
+    /// Check matrix products with challenges (Freivalds)
+    MatMulIp,
+    /// Expand the remaining matrix operators into field arithmetic
+    MatLower,
 }
 
 /// Run optimizations on `cs`, in this order, returning the new constraint system.
@@ -163,8 +170,17 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
                 Opt::DeskolemizeWitnesses => {
                     chall::deskolemize_witnesses(c);
                 }
+                Opt::ShareChallenges(share) => {
+                    chall::share_challenges(c, share);
+                }
                 Opt::SkolemizeChallenges => {
                     chall::deskolemize_challenges(c);
+                }
+                Opt::MatMulIp => {
+                    mat::mat_ip(c);
+                }
+                Opt::MatLower => {
+                    mat::mat_lower(c);
                 }
                 Opt::FitsInBitsIp => {
                     fits_in_bits_ip::fits_in_bits_ip(c);

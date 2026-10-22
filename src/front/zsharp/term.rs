@@ -8,6 +8,7 @@ use crate::cfg::cfg;
 use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::front::field_list::FieldList;
 use crate::ir::opt::cfold::fold as constant_fold;
+use crate::ir::term::ext::ExtOp;
 use crate::ir::term::*;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -394,7 +395,36 @@ fn add_integer(a: Term, b: Term) -> Term {
     term![Op::IntNaryOp(IntNaryOp::Add); a, b]
 }
 
+/// The shape of a `field[R][C]`, if this is one.
+fn matrix_shape(ty: &Ty) -> Option<(usize, usize)> {
+    match ty {
+        Ty::Array(r, inner) => match &**inner {
+            Ty::Array(c, entry) if matches!(**entry, Ty::Field) => Some((*r, *c)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The Z# type of an `r` by `c` matrix.
+fn matrix_ty(r: usize, c: usize) -> Ty {
+    Ty::Array(r, Box::new(Ty::Array(c, Box::new(Ty::Field))))
+}
+
 pub fn add(a: T, b: T) -> Result<T, String> {
+    // Matrix sum: `field[R][C] + field[R][C]`.
+    if let (Some(sa), Some(sb)) = (matrix_shape(&a.ty), matrix_shape(&b.ty)) {
+        if sa != sb {
+            return Err(format!(
+                "Cannot add a {}x{} matrix to a {}x{} one",
+                sa.0, sa.1, sb.0, sb.1
+            ));
+        }
+        return Ok(T::new(
+            matrix_ty(sa.0, sa.1),
+            term![Op::ExtOp(ExtOp::MatAdd); a.term, b.term],
+        ));
+    }
     wrap_bin_op(
         "+",
         Some(add_uint),
@@ -443,6 +473,18 @@ fn mul_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn mul(a: T, b: T) -> Result<T, String> {
+    // Matrix product: `field[R][K] * field[K][C]`.
+    if let (Some((r, k)), Some((k2, c))) = (matrix_shape(&a.ty), matrix_shape(&b.ty)) {
+        if k != k2 {
+            return Err(format!(
+                "Cannot multiply a {r}x{k} matrix by a {k2}x{c} one"
+            ));
+        }
+        return Ok(T::new(
+            matrix_ty(r, c),
+            term![Op::ExtOp(ExtOp::MatMul); a.term, b.term],
+        ));
+    }
     wrap_bin_op(
         "*",
         Some(mul_uint),
@@ -779,7 +821,7 @@ pub fn const_fold(t: T) -> T {
 pub fn const_val(a: T) -> Result<T, String> {
     match const_value(&a.term) {
         Some(v) => Ok(T::new(a.ty, const_(v))),
-        _ => Err(format!("{} is not a constant value", &a)),
+        _ => Err(format!("{} is not a constant value", a)),
     }
 }
 
@@ -917,7 +959,7 @@ fn coerce_to_field(i: T) -> Result<Term, String> {
     match &i.ty {
         Ty::Uint(_) => Ok(to_dflt_f(i.term)),
         Ty::Field => Ok(i.term),
-        _ => Err(format!("Cannot coerce {} to a field element", &i)),
+        _ => Err(format!("Cannot coerce {} to a field element", i)),
     }
 }
 
@@ -931,7 +973,7 @@ pub fn array_select(array: T, idx: T) -> Result<T, String> {
             let iterm = coerce_to_field(idx).unwrap();
             Ok(T::new(Ty::Field, term![Op::Select; array.term, iterm]))
         }
-        _ => Err(format!("Cannot index {} using {}", &array.ty, &idx.ty)),
+        _ => Err(format!("Cannot index {} using {}", array.ty, idx.ty)),
     }
 }
 
@@ -959,7 +1001,7 @@ pub fn array_store(array: T, idx: T, val: T) -> Result<T, String> {
             term![Op::Store; array.term, iterm, val.term],
         ))
     } else {
-        Err(format!("Cannot index {} using {}", &array.ty, &idx.ty))
+        Err(format!("Cannot index {} using {}", array.ty, idx.ty))
     }
 }
 
@@ -1120,7 +1162,7 @@ pub fn bit_array_le(a: T, b: T, n: usize) -> Result<T, String> {
                 Ok(())
             }
         }
-        _ => Err(format!("Cannot do bit-array-le on ({}, {})", &a.ty, &b.ty)),
+        _ => Err(format!("Cannot do bit-array-le on ({}, {})", a.ty, b.ty)),
     }?;
 
     let at = bv_from_bits(a.term, n);

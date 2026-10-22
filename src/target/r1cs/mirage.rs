@@ -204,7 +204,22 @@ impl<'a, F: PrimeField + PrimeFieldBits> CcCircuit<F> for SynthInput<'a, F> {
     }
 
     fn num_aux_blocks(&self) -> usize {
-        self.0.precompute.stage_sizes().count() - 2 + self.0.r1cs.commitments.len()
+        // One block per stage that has variables of its own *and* is followed by
+        // challenges: exactly the stages `synthesize` closes a block for.
+        //
+        // A stage can end up empty -- R1CS linearity reduction may eliminate
+        // every variable in it, as it does when a witnessed matrix product is
+        // asserted equal to a public one -- and an empty block is not a thing
+        // the prover can commit to. Skipping it is sound: the challenges that
+        // follow are still drawn from a transcript carrying the public inputs
+        // and every earlier commitment, and an empty stage adds nothing to it.
+        let sizes: Vec<usize> = self.0.precompute.stage_sizes().collect();
+        (0..sizes.len())
+            .filter(|&i| {
+                sizes[i] > 0 && i + 1 < sizes.len() && self.0.precompute.num_stage_inputs(i + 1) > 0
+            })
+            .count()
+            + self.0.r1cs.commitments.len()
     }
 }
 

@@ -288,6 +288,15 @@ fn main() {
 
             opts.push(Opt::ConstantFold(Box::new([])));
             opts.push(Opt::DeskolemizeWitnesses);
+            // Matrix passes run while matrices are still arrays: before
+            // ScalarizeVars and Obliv, and before the challenges they introduce
+            // are skolemized. Deskolemization has already moved the prover's
+            // computations into precomputes, so what is left in the constraints
+            // is exactly the verifier's matrix work.
+            if options.circ.ir.matmul_ip {
+                opts.push(Opt::MatMulIp);
+            }
+            opts.push(Opt::MatLower);
             opts.push(Opt::ScalarizeVars);
             opts.push(Opt::Flatten);
             opts.push(Opt::Sha);
@@ -303,6 +312,8 @@ fn main() {
             if options.circ.ir.fits_in_bits_ip {
                 opts.push(Opt::FitsInBitsIp);
             }
+            // Resolve same-named challenges before they become variables.
+            opts.push(Opt::ShareChallenges(options.circ.ir.share_challenges));
             opts.push(Opt::SkolemizeChallenges);
             opts.push(Opt::ScalarizeVars);
             opts.push(Opt::ConstantFold(Box::new([])));
