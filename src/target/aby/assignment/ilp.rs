@@ -103,7 +103,7 @@ fn build_ilp(c: &Computation, costs: &CostModel) -> SharingMap {
                         vars.push(v);
                     }
                 } else {
-                    panic!("No cost for op {}", &t.op())
+                    panic!("No cost for op {}", t.op())
                 }
             }
         }

@@ -172,17 +172,12 @@ pub fn assign_arithmetic_and_boolean(c: &Computation, cm: &str) -> SharingMap {
                 (
                     term.clone(),
                     if let Some(costs) = cost_model.ops.get(term.op()) {
-                        let mut min_ty: ShareType = ShareType::Boolean;
-                        let mut min_cost: f64 = costs[&min_ty];
-                        for ty in &[ShareType::Arithmetic] {
-                            if let Some(c) = costs.get(ty) {
-                                if *c < min_cost {
-                                    min_ty = *ty;
-                                    min_cost = *c;
-                                }
-                            }
+                        let default_ty = ShareType::Boolean;
+                        let default_cost: f64 = costs[&default_ty];
+                        match costs.get(&ShareType::Arithmetic) {
+                            Some(c) if *c < default_cost => ShareType::Arithmetic,
+                            _ => default_ty,
                         }
-                        min_ty
                     } else {
                         ShareType::Boolean
                     },
@@ -202,17 +197,12 @@ pub fn assign_arithmetic_and_yao(c: &Computation, cm: &str) -> SharingMap {
                 (
                     term.clone(),
                     if let Some(costs) = cost_model.ops.get(term.op()) {
-                        let mut min_ty: ShareType = ShareType::Yao;
-                        let mut min_cost: f64 = costs[&min_ty];
-                        for ty in &[ShareType::Arithmetic] {
-                            if let Some(c) = costs.get(ty) {
-                                if *c < min_cost {
-                                    min_ty = *ty;
-                                    min_cost = *c;
-                                }
-                            }
+                        let default_ty = ShareType::Yao;
+                        let default_cost: f64 = costs[&default_ty];
+                        match costs.get(&ShareType::Arithmetic) {
+                            Some(c) if *c < default_cost => ShareType::Arithmetic,
+                            _ => default_ty,
                         }
-                        min_ty
                     } else {
                         ShareType::Yao
                     },

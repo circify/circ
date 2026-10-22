@@ -633,7 +633,7 @@ impl<'src> IrInterp<'src> {
             prefix,
             "Expected list head '{}', but found {}",
             prefix,
-            &tts[0]
+            tts[0]
         );
         &tts[1..]
     }

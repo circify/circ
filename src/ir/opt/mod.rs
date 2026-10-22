@@ -80,7 +80,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
             continue;
         }
 
-        for (_, c) in cs.comps.iter_mut() {
+        for c in cs.comps.values_mut() {
             match i.clone() {
                 Opt::ParseCondStores => {
                     cstore::parse(c);
@@ -188,7 +188,7 @@ pub fn opt<I: IntoIterator<Item = Opt>>(mut cs: Computations, optimizations: I) 
         garbage_collect();
     }
 
-    for (_, c) in cs.comps.iter() {
+    for c in cs.comps.values() {
         info!("{:?}", c.outputs);
     }
     cs
