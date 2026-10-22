@@ -98,7 +98,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         if call.arguments.expressions.len() != fdef.parameters.len() {
             return Err(format!(
                 "ZStatementWalker: wrong number of arguments to fn {}:\n{}",
-                &fdef.id.value,
+                fdef.id.value,
                 span_to_string(&call.span),
             )
             .into());
@@ -106,7 +106,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         if fdef.generics.is_empty() && call.explicit_generics.is_some() {
             return Err(format!(
                 "ZStatementWalker: got explicit generics for non-generic fn call {}:\n{}",
-                &fdef.id.value,
+                fdef.id.value,
                 span_to_string(&call.span),
             )
             .into());
@@ -119,7 +119,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         {
             return Err(format!(
                 "ZStatementWalker: wrong number of generic args to fn {}:\n{}",
-                &fdef.id.value,
+                fdef.id.value,
                 span_to_string(&call.span),
             )
             .into());
@@ -162,13 +162,13 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                     // XXX(unimpl) fn without return type not supported
                     Err(ZVisitorError(format!(
                         "ZStatementWalker: fn {} has no return type",
-                        &id.value,
+                        id.value,
                     )))
                 } else if fdef.returns.len() > 1 {
                     // XXX(unimpl) multiple return types not implemented
                     Err(ZVisitorError(format!(
                         "ZStatementWalker: fn {} has multiple returns",
-                        &id.value,
+                        id.value,
                     )))
                 } else {
                     let rty = if alen == 1 { rty } else { None };
@@ -204,7 +204,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         } else {
             return Err(ZVisitorError(format!(
                 "ZStatementWalker: array initializer expression wanted type {:?}:\n{}",
-                &ty,
+                ty,
                 span_to_string(&ai.span),
             )));
         };
@@ -234,7 +234,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         } else {
             return Err(ZVisitorError(format!(
                 "ZStatementWalker: inline struct wanted type {:?}:\n{}",
-                &ty,
+                ty,
                 span_to_string(&is.span),
             )));
         };
@@ -254,7 +254,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 .ok_or_else(|| {
                     ZVisitorError(format!(
                         "ZStatementWalker: struct {} has no member {}, or duplicate member in expression",
-                        &st.id.value, &ism.id.value,
+                        st.id.value, ism.id.value,
                     ))
                 })
                 .and_then(|sm_ty| self.unify_expression(sm_ty, &mut ism.expression))
@@ -264,7 +264,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         if !sm_types.is_empty() {
             Err(ZVisitorError(format!(
                 "ZStatementWalker: struct {} inline decl missing members {:?}\n",
-                &st.id.value,
+                st.id.value,
                 sm_types.keys().collect::<Vec<_>>()
             )))
         } else {
@@ -283,7 +283,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         } else {
             return Err(ZVisitorError(format!(
                 "ZStatementWalker: inline array wanted type {:?}:\n{}",
-                &ty,
+                ty,
                 span_to_string(&ia.span),
             )));
         };
@@ -383,8 +383,8 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                                 .map_err(|e|
                                 ZVisitorError(format!(
                                     "ZStatementWalker: got differing types {:?}, {:?} for lhs, rhs of expr:\n{}\n{}",
-                                    &lty,
-                                    &rty,
+                                    lty,
+                                    rty,
                                     e.0,
                                     span_to_string(&be.span),
                                 )))
@@ -489,7 +489,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                 } else {
                     Err(ZVisitorError(format!(
                         "ZStatementWalker: expected {:?}, found BooleanLiteral:\n{}",
-                        &bt,
+                        bt,
                         span_to_string(le.span()),
                     )))
                 }
@@ -503,7 +503,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                     HNE::U64(_) if matches!(&bt, U64(_)) => Ok(()),
                     _ => Err(ZVisitorError(format!(
                         "ZStatementWalker: HexLiteral seemed to want type {:?}:\n{}",
-                        &bt,
+                        bt,
                         span_to_string(&hle.span),
                     ))),
                 }
@@ -520,7 +520,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                         (DS::Integer(_), Integer(_)) => Ok(()),
                         _ => Err(ZVisitorError(format!(
                             "ZStatementWalker: DecimalLiteral wanted {:?} found {:?}:\n{}",
-                            &bt,
+                            bt,
                             ds,
                             span_to_string(&dle.span),
                         ))),
@@ -597,7 +597,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
                             .ok_or_else(|| {
                                 ZVisitorError(format!(
                                     "ZStatementWalker: struct {} has no member {}",
-                                    &sty.id.value, &macc.id.value,
+                                    sty.id.value, macc.id.value,
                                 ))
                             })
                             .map(|f| f.ty.clone())?
@@ -674,7 +674,7 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
             self.lookup_var(&id.value).ok_or_else(|| {
                 ZVisitorError(format!(
                     "ZStatementWalker: identifier {} undefined",
-                    &id.value
+                    id.value
                 ))
             })
         }
@@ -849,7 +849,7 @@ impl<'ast> ZVisitorMut<'ast> for ZStatementWalker<'ast, '_> {
         if !self.var_defined(&asgn.id.value) {
             Err(ZVisitorError(format!(
                 "ZStatementWalker: assignment to undeclared variable {}",
-                &asgn.id.value
+                asgn.id.value
             )))
         } else {
             walk_assignee(self, asgn)
