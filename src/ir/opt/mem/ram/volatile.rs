@@ -301,7 +301,8 @@ impl RewritePass for Extactor {
                 // Rewrite select's whose array is a RAM term
                 Op::Select if self.graph.ram_terms.contains(&t.cs()[0]) => {
                     let array = &t.cs()[0];
-                    let idx = &t.cs()[1];
+                    // The index as rewritten, since it may itself read a RAM.
+                    let idx = rewritten_children()[1].clone();
                     // If we're based on a leaf
                     let ram_id = if array_leaf(array) {
                         // check if that leaf has a RAM already
@@ -318,7 +319,7 @@ impl RewritePass for Extactor {
                         *self.term_ram.get(array).unwrap()
                     };
                     let ram = &mut self.rams[ram_id];
-                    let read_value = ram.new_read(idx.clone(), computation, t.clone());
+                    let read_value = ram.new_read(idx, computation, t.clone());
                     self.read_terms.insert(t.clone(), read_value.clone());
                     Some(read_value)
                 }
