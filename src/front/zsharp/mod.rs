@@ -759,7 +759,14 @@ impl<'ast> ZGen<'ast> {
             f_path.clone(),
             f_name.clone(),
         );
-        let cached_value = self.fn_call_memoization.borrow().get(&input).cloned();
+        // `sample_challenge` is effectful: each call must draw a *fresh* coin, so
+        // it must not be memoized. Without this, a protocol that samples a vector
+        // of coins from one set of inputs -- the natural way to write a Freivalds
+        // check -- silently gets one coin repeated.
+        let memoizable = !(self.stdlib.is_embed(&f_path) && f_name == "sample_challenge");
+        let cached_value = memoizable
+            .then(|| self.fn_call_memoization.borrow().get(&input).cloned())
+            .flatten();
 
         let ret = if let Some(value) = cached_value {
             Ok(value)
@@ -773,9 +780,11 @@ impl<'ast> ZGen<'ast> {
                 f_name.clone(),
             )
             .inspect(|v| {
-                self.fn_call_memoization
-                    .borrow_mut()
-                    .insert(input, v.clone());
+                if memoizable {
+                    self.fn_call_memoization
+                        .borrow_mut()
+                        .insert(input, v.clone());
+                }
             })
         };
         let dur = (time::Instant::now() - before).as_millis();

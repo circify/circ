@@ -21,12 +21,13 @@
 use log::{debug, trace};
 
 use std::cell::RefCell;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ir::opt::visit::RewritePass;
 use crate::ir::proof::PROVER_ID;
 use crate::ir::term::*;
 use crate::util::ns::Uniquer;
+use circ_fields::FieldT;
 
 /// Replace witness terms with new variables.
 pub fn deskolemize_witnesses(comp: &mut Computation) {
@@ -67,6 +68,143 @@ pub fn deskolemize_witnesses(comp: &mut Computation) {
         .chain(comp.precomputes.inputs().iter().map(|o| o.0.clone()));
     let uniqer = Uniquer::new(names_iterator);
     WitPass(uniqer).traverse_full(comp, true, true);
+}
+
+/// Resolve challenges that share a name.
+///
+/// A transform declares that two coins may be the same by giving them the same
+/// name; this pass decides what to do about it. With `share`, same-named
+/// challenges of the same field become one coin, drawn after everything any of
+/// them depended on (its children are the union of theirs). Without it, they are
+/// renamed apart, so each is its own coin.
+///
+/// Either way the pass restores the invariant [deskolemize_challenges] needs --
+/// distinct challenge terms have distinct names -- which is otherwise only a
+/// `debug_assert` in [ComputationMetadata::new_input_from_meta]: in release, two
+/// same-named challenges silently become one variable, keeping whichever
+/// metadata was written last. So this runs whether or not sharing is on.
+///
+/// The independence information a merge has to respect is already in the IR: a
+/// challenge's arguments are what it is sampled independently of ([Op::PfChallenge]),
+/// so a coin with another coin among its dependents must not be identified with
+/// it. This pass takes the conservative version of that test and never merges a
+/// challenge that has a challenge below it at all -- doing so would union in a
+/// child that mentions a challenge, which can build a cycle. Such a challenge
+/// still gets a name of its own if merging leaves its old one taken; it just
+/// never joins a merge. The coins a transform wants to share are drawn from
+/// witnesses, not from other coins, so this costs nothing in practice.
+///
+/// What the *name* adds is the grouping: which coins a transform is willing to
+/// identify. That claim cannot be read off the dependents, because two coins can
+/// have identical dependents and still need to differ -- the RAM checker's
+/// `uhf_key` and `ms_hash_key` are built over the same inputs, and sharing them
+/// would collapse the compression randomness into the multiset evaluation point.
+/// Sharing is therefore opt-in: a transform asks for it by naming coins alike.
+pub fn share_challenges(comp: &mut Computation, share: bool) {
+    // Every challenge with this (name, field), whether or not it is eligible to
+    // merge -- a name collision among these has to be resolved either way.
+    let mut groups: BTreeMap<(Box<str>, FieldT), Vec<Term>> = BTreeMap::new();
+    // A challenge with another challenge below it cannot be merged; see above.
+    let mut chall_below: TermMap<bool> = TermMap::default();
+    for t in comp.terms_postorder() {
+        let below = t
+            .cs()
+            .iter()
+            .any(|c| matches!(c.op(), Op::PfChallenge(..)) || chall_below[c]);
+        if let Op::PfChallenge(c) = t.op() {
+            groups
+                .entry((c.name.clone(), c.field.clone()))
+                .or_default()
+                .push(t.clone());
+        }
+        chall_below.insert(t, below);
+    }
+
+    // The name each challenge term ends up with, and the merged children of the
+    // groups that are being shared.
+    let mut names: TermMap<String> = TermMap::default();
+    let mut merged: TermMap<Vec<Term>> = TermMap::default();
+    let mut uniquer = Uniquer::new(
+        comp.terms_postorder()
+            .filter_map(|t| match t.op() {
+                Op::PfChallenge(c) => Some(c.name.to_string()),
+                _ => None,
+            })
+            .chain(comp.metadata.ordered_input_names()),
+    );
+    for ((name, _field), mut members) in groups {
+        if members.len() < 2 {
+            continue;
+        }
+        // Stable across runs, so the merged term is too.
+        members.sort_by_key(|t| t.id());
+        let (eligible, ineligible): (Vec<Term>, Vec<Term>) =
+            members.into_iter().partition(|m| !chall_below[m]);
+        if share && eligible.len() >= 2 {
+            let mut children: Vec<Term> = Vec::new();
+            let mut seen = TermSet::default();
+            for m in &eligible {
+                for c in m.cs() {
+                    if seen.insert(c.clone()) {
+                        children.push(c.clone());
+                    }
+                }
+            }
+            debug!(
+                "sharing {} challenges named {} over {} inputs",
+                eligible.len(),
+                name,
+                children.len()
+            );
+            for m in eligible {
+                names.insert(m.clone(), name.to_string());
+                merged.insert(m, children.clone());
+            }
+            // These share the name but could not join the merge: they still
+            // need a name of their own.
+            for m in ineligible {
+                names.insert(m, uniquer.mk_uniq(&name));
+            }
+        } else {
+            // Nothing in this group merges (sharing is off, or fewer than two
+            // members qualify): keep one member's name, rename everyone else in
+            // the group apart, eligible or not.
+            for m in eligible.into_iter().chain(ineligible).skip(1) {
+                names.insert(m, uniquer.mk_uniq(&name));
+            }
+        }
+    }
+    if names.is_empty() {
+        return;
+    }
+    SharePass { names, merged }.traverse_full(comp, true, true);
+}
+
+struct SharePass {
+    names: TermMap<String>,
+    merged: TermMap<Vec<Term>>,
+}
+
+impl RewritePass for SharePass {
+    fn visit<F: Fn() -> Vec<Term>>(
+        &mut self,
+        _computation: &mut Computation,
+        orig: &Term,
+        rewritten_children: F,
+    ) -> Option<Term> {
+        let Op::PfChallenge(c) = orig.op() else {
+            return None;
+        };
+        let name = self.names.get(orig)?;
+        // A merged group's children contain no challenges, so they need no
+        // rewriting; a renamed challenge keeps its own (rewritten) children.
+        let children = self
+            .merged
+            .get(orig)
+            .cloned()
+            .unwrap_or_else(rewritten_children);
+        Some(term(Op::new_chall(name.clone(), c.field.clone()), children))
+    }
 }
 
 /// Replace the challenge terms in this computation with random inputs.
@@ -192,6 +330,7 @@ pub fn deskolemize_challenges(comp: &mut Computation) {
             challs.insert(t, var);
         }
     }
+    debug!("{} challenge(s) skolemized", challs.len());
     compact_rounds(&mut comp.metadata);
 
     Pass(challs).traverse_full(comp, true, false);
@@ -266,6 +405,101 @@ impl RewritePass for Pass {
 mod test {
     use super::*;
     use circ_fields::FieldT;
+
+    /// Two same-named challenges over disjoint dependents: `share` merges them
+    /// into one variable whose dependents are the union; without it, they are
+    /// renamed apart into two variables.
+    #[test]
+    fn share_merges_same_named_challenges() {
+        env_logger::try_init().ok();
+        let src = b"
+            (computation
+                (metadata
+                    (parties P)
+                    (inputs (x (mod 11) (party 0)) (y (mod 11) (party 0)))
+                    (commitments)
+                )
+                (precompute () () (#t ))
+                (=
+                    (= (* ((challenge same 11) x) x) #f1m11)
+                    (= (* ((challenge same 11) y) y) #f1m11)
+                )
+            )
+            ";
+        for share in [false, true] {
+            let mut cs = text::parse_computation(src);
+            share_challenges(&mut cs, share);
+            let names: Vec<String> = cs
+                .terms_postorder()
+                .filter_map(|t| match t.op() {
+                    Op::PfChallenge(c) => Some(c.name.to_string()),
+                    _ => None,
+                })
+                .collect();
+            if share {
+                // one term left, and its children cover both x and y
+                assert_eq!(names, vec!["same".to_string()]);
+                let chall = cs
+                    .terms_postorder()
+                    .find(|t| matches!(t.op(), Op::PfChallenge(..)))
+                    .unwrap();
+                assert_eq!(chall.cs().len(), 2, "expected the union of dependents");
+            } else {
+                // two terms, renamed apart
+                assert_eq!(names.len(), 2);
+                assert_ne!(names[0], names[1]);
+            }
+            // Distinct challenge names never collide as variables.
+            deskolemize_challenges(&mut cs);
+        }
+    }
+
+    /// A challenge with another challenge among its dependents refuses to merge
+    /// with same-named challenges, even when asked to share: doing so would
+    /// union in a child that is itself a challenge, which can create a cycle.
+    #[test]
+    fn share_refuses_challenges_below_challenges() {
+        env_logger::try_init().ok();
+        let src = "
+            (computation
+                (metadata
+                    (parties P)
+                    (inputs (x (mod 11) (party 0)))
+                    (commitments)
+                )
+                (precompute () () (#t ))
+                (=
+                    (= (* ((challenge same 11) x) x) #f1m11)
+                    (= (* ((challenge same 11) ((challenge other 11) x)) x) #f1m11)
+                )
+            )
+            ";
+        let mut cs = text::parse_computation(src.as_bytes());
+        share_challenges(&mut cs, true);
+        let names: Vec<String> = cs
+            .terms_postorder()
+            .filter_map(|t| match t.op() {
+                Op::PfChallenge(c) => Some(c.name.to_string()),
+                _ => None,
+            })
+            .collect();
+        // three challenges (same, same, other), and the two `same`s were
+        // renamed apart rather than merged, since one sits below the other.
+        assert_eq!(names.len(), 3);
+        let same_count = names.iter().filter(|n| n.starts_with("same")).count();
+        assert_eq!(same_count, 2);
+        assert_ne!(
+            names
+                .iter()
+                .filter(|n| n.starts_with("same"))
+                .collect::<Vec<_>>()[0],
+            names
+                .iter()
+                .filter(|n| n.starts_with("same"))
+                .collect::<Vec<_>>()[1]
+        );
+        deskolemize_challenges(&mut cs);
+    }
 
     #[test]
     fn length_4() {

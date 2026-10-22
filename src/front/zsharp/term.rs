@@ -8,6 +8,7 @@ use crate::cfg::cfg;
 use crate::circify::{CirCtx, Embeddable, Typed};
 use crate::front::field_list::FieldList;
 use crate::ir::opt::cfold::fold as constant_fold;
+use crate::ir::term::ext::ExtOp;
 use crate::ir::term::*;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -394,7 +395,36 @@ fn add_integer(a: Term, b: Term) -> Term {
     term![Op::IntNaryOp(IntNaryOp::Add); a, b]
 }
 
+/// The shape of a `field[R][C]`, if this is one.
+fn matrix_shape(ty: &Ty) -> Option<(usize, usize)> {
+    match ty {
+        Ty::Array(r, inner) => match &**inner {
+            Ty::Array(c, entry) if matches!(**entry, Ty::Field) => Some((*r, *c)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The Z# type of an `r` by `c` matrix.
+fn matrix_ty(r: usize, c: usize) -> Ty {
+    Ty::Array(r, Box::new(Ty::Array(c, Box::new(Ty::Field))))
+}
+
 pub fn add(a: T, b: T) -> Result<T, String> {
+    // Matrix sum: `field[R][C] + field[R][C]`.
+    if let (Some(sa), Some(sb)) = (matrix_shape(&a.ty), matrix_shape(&b.ty)) {
+        if sa != sb {
+            return Err(format!(
+                "Cannot add a {}x{} matrix to a {}x{} one",
+                sa.0, sa.1, sb.0, sb.1
+            ));
+        }
+        return Ok(T::new(
+            matrix_ty(sa.0, sa.1),
+            term![Op::ExtOp(ExtOp::MatAdd); a.term, b.term],
+        ));
+    }
     wrap_bin_op(
         "+",
         Some(add_uint),
@@ -443,6 +473,18 @@ fn mul_integer(a: Term, b: Term) -> Term {
 }
 
 pub fn mul(a: T, b: T) -> Result<T, String> {
+    // Matrix product: `field[R][K] * field[K][C]`.
+    if let (Some((r, k)), Some((k2, c))) = (matrix_shape(&a.ty), matrix_shape(&b.ty)) {
+        if k != k2 {
+            return Err(format!(
+                "Cannot multiply a {r}x{k} matrix by a {k2}x{c} one"
+            ));
+        }
+        return Ok(T::new(
+            matrix_ty(r, c),
+            term![Op::ExtOp(ExtOp::MatMul); a.term, b.term],
+        ));
+    }
     wrap_bin_op(
         "*",
         Some(mul_uint),

@@ -7,7 +7,7 @@ use fxhash::{FxHashMap, FxHashSet};
 /// A namespace. Used to create unique names.
 ///
 /// Doesn't check for uniqueness: just a helper.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Namespace(String);
 
 impl Namespace {

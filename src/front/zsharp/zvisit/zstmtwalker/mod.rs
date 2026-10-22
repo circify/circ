@@ -9,7 +9,7 @@ use super::walkfns::*;
 use super::{
     bos_to_type, ZConstLiteralRewriter, ZResult, ZVisitorError, ZVisitorMut, ZVisitorResult,
 };
-use zexprtyper::ZExpressionTyper;
+use zexprtyper::{is_matrix, ZExpressionTyper};
 
 use std::collections::HashMap;
 use zokrates_pest_ast as ast;
@@ -330,6 +330,24 @@ impl<'ast, 'ret> ZStatementWalker<'ast, 'ret> {
         be: &mut ast::BinaryExpression<'ast>,
     ) -> ZVisitorResult {
         use ast::{BasicType::*, BinaryOperator::*, Type::*};
+        // Matrix sum and product. The result type does not fix the operands' --
+        // a product's inner dimension is invisible in `field[R][C]` -- so take
+        // the operands' types from the expression typer.
+        if matches!(&be.op, Add | Mul) && is_matrix(&ty) {
+            let mut expr_walker = ZExpressionTyper::new(self);
+            let lty = self.type_expression(&mut be.left, &mut expr_walker)?;
+            let rty = self.type_expression(&mut be.right, &mut expr_walker)?;
+            return match (lty, rty) {
+                (Some(l), Some(r)) => {
+                    self.unify_expression(l, &mut be.left)?;
+                    self.unify_expression(r, &mut be.right)
+                }
+                _ => Err(ZVisitorError(format!(
+                    "ZStatementWalker: could not infer the operand types of a matrix op:\n{}",
+                    span_to_string(&be.span),
+                ))),
+            };
+        }
         let bt = if let Basic(bt) = ty {
             bt
         } else {

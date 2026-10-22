@@ -118,6 +118,22 @@ impl<'ast> ZVisitorMut<'ast> for ZExpressionTyper<'ast, '_, '_> {
                 let ty_l = self.take()?;
                 self.visit_expression(&mut be.right)?;
                 let ty_r = self.take()?;
+                // Matrix sum and product: `field[R][C]`-typed operands. The
+                // shapes need not match (`field[R][K] * field[K][C]`), so these
+                // skip the equal-types check below; term::{add,mul} checks them.
+                if matches!(&be.op, Add | Mul) {
+                    if let (Some(l), Some(r)) = (&ty_l, &ty_r) {
+                        if is_matrix(l) && is_matrix(r) {
+                            let ty = if matches!(&be.op, Mul) {
+                                matrix_product_ty(l, r)
+                            } else {
+                                l.clone()
+                            };
+                            self.ty.replace(ty);
+                            return Ok(());
+                        }
+                    }
+                }
                 if let Some(ty) = match (ty_l, ty_r) {
                     (Some(t), None) => Some(t),
                     (None, Some(t)) => Some(t),
@@ -323,5 +339,25 @@ impl<'ast> ZVisitorMut<'ast> for ZExpressionTyper<'ast, '_, '_> {
         assert!(self.ty.is_none());
         self.ty.replace(self.walker.get_postfix_ty(pfe, None)?);
         Ok(())
+    }
+}
+
+/// Is this the type of a matrix, `field[R][C]`?
+pub(super) fn is_matrix(ty: &ast::Type) -> bool {
+    matches!(ty, ast::Type::Array(a)
+        if a.dimensions.len() == 2
+            && matches!(&a.ty, ast::BasicOrStructType::Basic(ast::BasicType::Field(_))))
+}
+
+/// The type of `l * r`, for matrices `l: field[R][K]` and `r: field[K][C]`:
+/// `field[R][C]`. The inner dimensions are checked when the product is built.
+fn matrix_product_ty<'ast>(l: &ast::Type<'ast>, r: &ast::Type<'ast>) -> ast::Type<'ast> {
+    match (l, r) {
+        (ast::Type::Array(l), ast::Type::Array(r)) => {
+            let mut out = l.clone();
+            out.dimensions = vec![l.dimensions[0].clone(), r.dimensions[1].clone()];
+            ast::Type::Array(out)
+        }
+        _ => unreachable!("matrix_product_ty on non-arrays"),
     }
 }

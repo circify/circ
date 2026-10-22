@@ -17,3 +17,6 @@ scripts/aby_tests/tests
 /flamegraph*.svg
 /.ccls-cache
 /.vscode
+
+# scripts/matmul_bench.py output
+/matmul_bench/

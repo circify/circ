@@ -194,6 +194,23 @@ pub struct IrOpt {
         default_value = "true"
     )]
     pub fits_in_bits_ip: bool,
+    /// Use an IP (Freivalds) to check matrix products
+    #[arg(
+        long = "ir-matmul-ip",
+        env = "IR_MATMUL_IP",
+        action = ArgAction::Set,
+        default_value = "true"
+    )]
+    pub matmul_ip: bool,
+    /// Merge challenges that a transform named alike, so they share one coin.
+    /// Cuts verifier coins; not proven sound in the paper, so off by default.
+    #[arg(
+        long = "ir-share-challenges",
+        env = "IR_SHARE_CHALLENGES",
+        action = ArgAction::Set,
+        default_value = "false"
+    )]
+    pub share_challenges: bool,
     /// Time operator evaluations
     #[arg(
         long = "ir-time-eval-ops",
@@ -210,6 +227,8 @@ impl Default for IrOpt {
             field_to_bv: Default::default(),
             frequent_gc: Default::default(),
             fits_in_bits_ip: true,
+            matmul_ip: true,
+            share_challenges: false,
             time_eval_ops: false,
         }
     }

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 mod haboeck;
 mod map;
+pub mod mat;
 mod pf_batch_inv;
 mod poly;
 mod ram;
@@ -20,6 +21,10 @@ mod waksman;
 pub enum ExtOp {
     /// See [haboeck].
     Haboeck,
+    /// Matrix sum. See [mat].
+    MatAdd,
+    /// Matrix product. See [mat].
+    MatMul,
     /// See [pf_batch_inv].
     PfBatchInv,
     /// See [ram::eval]
@@ -45,6 +50,8 @@ impl ExtOp {
     pub fn arity(&self) -> Option<usize> {
         match self {
             ExtOp::Haboeck => Some(2),
+            ExtOp::MatAdd => Some(2),
+            ExtOp::MatMul => Some(2),
             ExtOp::PfBatchInv => Some(1),
             ExtOp::PersistentRamSplit => Some(2),
             ExtOp::Sort => Some(1),
@@ -60,6 +67,8 @@ impl ExtOp {
     pub fn check(&self, arg_sorts: &[&Sort]) -> Result<Sort, TypeErrorReason> {
         match self {
             ExtOp::Haboeck => haboeck::check(arg_sorts),
+            ExtOp::MatAdd => mat::check_add(arg_sorts),
+            ExtOp::MatMul => mat::check_mul(arg_sorts),
             ExtOp::PfBatchInv => pf_batch_inv::check(arg_sorts),
             ExtOp::PersistentRamSplit => ram::check(arg_sorts),
             ExtOp::Sort => sort::check(arg_sorts),
@@ -75,6 +84,8 @@ impl ExtOp {
     pub fn eval(&self, args: &[&Value]) -> Value {
         match self {
             ExtOp::Haboeck => haboeck::eval(args),
+            ExtOp::MatAdd => mat::eval_add(args),
+            ExtOp::MatMul => mat::eval_mul(args),
             ExtOp::PfBatchInv => pf_batch_inv::eval(args),
             ExtOp::PersistentRamSplit => ram::eval(args),
             ExtOp::Sort => sort::eval(args),
@@ -94,6 +105,8 @@ impl ExtOp {
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         match bytes {
             b"haboeck" => Some(ExtOp::Haboeck),
+            b"matadd" => Some(ExtOp::MatAdd),
+            b"matmul" => Some(ExtOp::MatMul),
             b"pf_batch_inv" => Some(ExtOp::PfBatchInv),
             b"persistent_ram_split" => Some(ExtOp::PersistentRamSplit),
             b"uniq_deri_gcd" => Some(ExtOp::UniqDeriGcd),
@@ -110,6 +123,8 @@ impl ExtOp {
     pub fn to_str(&self) -> &'static str {
         match self {
             ExtOp::Haboeck => "haboeck",
+            ExtOp::MatAdd => "matadd",
+            ExtOp::MatMul => "matmul",
             ExtOp::PfBatchInv => "pf_batch_inv",
             ExtOp::PersistentRamSplit => "persistent_ram_split",
             ExtOp::UniqDeriGcd => "uniq_deri_gcd",

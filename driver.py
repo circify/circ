@@ -213,6 +213,7 @@ def test(features, ci: bool, extra_args):
                 if "poly" in features:
                     log_run_check(["./scripts/cp_test.zsh"])
                     log_run_check(["./scripts/ram_test.zsh"])
+                    log_run_check(["./scripts/matmul_test.zsh"])
         if "lp" in features and "r1cs" in features:
             log_run_check(["./scripts/test_zok_to_ilp_pf.zsh"])
 
