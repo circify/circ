@@ -86,6 +86,10 @@ name = "zk"
 required-features = ["r1cs"]
 
 [[example]]
+name = "zkpi_ir"
+required-features = ["r1cs"]
+
+[[example]]
 name = "cp"
 required-features = ["bellman", "poly"]
 
