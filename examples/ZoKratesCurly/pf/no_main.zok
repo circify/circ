@@ -1,0 +1,7 @@
+def add(private field a, public field b) -> field {
+    return a + b;
+}
+
+def square(private field x) -> field {
+    return x * x;
+}

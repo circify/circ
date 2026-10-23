@@ -14,6 +14,14 @@
 pub mod ir;
 pub mod cfg;
 pub mod circify;
+#[cfg(feature = "r1cs")]
+pub mod compile;
 pub mod front;
 pub mod target;
 pub mod util;
+
+/// Orchestrates the ZoKratesCurly `@test` pipeline (frontend -> compile ->
+/// proof backend). Gated on the features it needs: the SMT frontend, the curly
+/// frontend, and R1CS.
+#[cfg(all(feature = "smt", feature = "zokc", feature = "r1cs"))]
+pub mod test_runner;

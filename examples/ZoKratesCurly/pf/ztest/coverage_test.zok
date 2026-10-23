@@ -1,0 +1,99 @@
+// Simple @test coverage: backend selection, scalar, array, and tuple inputs,
+// and private/public visibility. All tests pass. Run:
+//   cargo run --example ztest --features smt,zokc,bellman -- examples/ZoKratesCurly/pf/ztest/coverage_test.zok
+
+// ---- scalar inputs ----
+
+@test x = 5;
+def test_field(private field x) {
+    assert(x == 5);
+}
+
+@test(backend = mirage) a = 4, b = 6;
+def test_add(private field a, private field b) {
+    assert(a + b == 10);
+}
+
+@test b = true;
+def test_bool(private bool b) {
+    assert(b);
+}
+
+@test x = 7u32;
+def test_u32(private u32 x) {
+    assert(x * 2 == 14u32);
+}
+
+// ---- scalar visibility corners ----
+
+@test a = 3, b = 4;
+def test_all_public(public field a, public field b) {
+    assert(a + b == 7);
+}
+
+@test a = 3, b = 4;
+def test_mixed_visibility(private field a, public field b) {
+    assert(a + b == 7);
+}
+
+// ---- array inputs ----
+
+@test xs = [1, 2, 3];
+def test_array(private field[3] xs) {
+    assert(xs[0] + xs[1] == xs[2]);
+}
+
+@test A = [[1, 2], [3, 4]];
+def test_nested_array(private field[2][2] A) {
+    assert(A[0][0] == 1);
+    assert(A[1][1] == 4);
+}
+
+@test xs = [1, 2];
+def test_public_array(public field[2] xs) {
+    assert(xs[0] + xs[1] == 3);
+}
+
+// ---- array + scalar together ----
+
+@test k = 10, xs = [1, 2];
+def test_array_and_scalar(private field k, public field[2] xs) {
+    assert(k + xs[0] == 11);
+    assert(k + xs[1] == 12);
+}
+
+// ---- tuple inputs ----
+
+@test t = (4, true);
+def test_tuple(private (field, bool) t) {
+    assert(t.0 == 4);
+    assert(t.1);
+}
+
+// A singleton tuple needs the trailing comma: (5,) is a 1-tuple, (5) is
+// just a parenthesized expression.
+@test t = (5,);
+def test_singleton_tuple(private (field,) t) {
+    assert(t.0 == 5);
+}
+
+@test t = ([1, 2], (true, 3));
+def test_nested_tuple(private (field[2], (bool, u32)) t) {
+    assert(t.0[0] + t.0[1] == 3);
+    assert(t.1.0);
+    assert(t.1.1 == 3u32);
+}
+
+@test pairs = [(1, 2), (3, 4)];
+def test_array_of_tuples(private (field, u32)[2] pairs) {
+    assert(pairs[0].0 == 1);
+    assert(pairs[0].1 == 2u32);
+    assert(pairs[1].0 == 3);
+    assert(pairs[1].1 == 4u32);
+}
+
+@test t = (7, 9);
+def test_public_tuple(public (field, u32) t) {
+    assert(t.0 == 7);
+    assert(t.1 == 9u32);
+}

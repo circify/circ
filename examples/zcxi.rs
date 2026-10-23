@@ -34,6 +34,7 @@ fn main() {
     circ::cfg::set(&options.circ);
     let inputs = Inputs {
         file: options.zsharp_path,
+        entry: "main".to_string(),
         mode: Mode::Proof,
     };
     let scalar_input_values = match options.inputs_path.as_ref() {
