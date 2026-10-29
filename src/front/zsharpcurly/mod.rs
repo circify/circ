@@ -18,7 +18,7 @@ use rug::Integer;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time;
 use zokrates_curly_pest_ast as ast;
@@ -31,10 +31,128 @@ const GC_INC: usize = 32;
 
 /// Inputs to the Z# compiler
 pub struct Inputs {
-    /// The file to look for `main` in.
+    /// The file containing the entry function.
     pub file: PathBuf,
+    /// The function to compile as the entry point.
+    pub entry: String,
     /// The mode to generate for (MPC or proof). Effects visibility.
     pub mode: Mode,
+}
+
+//TODO: Add support for Spartan and Dorian Proof Backend.
+/// Proof backend selected for an `@test` function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TestBackend {
+    /// Groth16 through Bellman.
+    #[default]
+    Groth16,
+    /// Mirage over BLS12-381.
+    Mirage,
+}
+
+impl Display for TestBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Groth16 => f.write_str("groth16"),
+            Self::Mirage => f.write_str("mirage"),
+        }
+    }
+}
+
+/// Settings attached to an `@test` function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TestSettings {
+    backend: TestBackend,
+}
+
+impl TestSettings {
+    /// The proof backend used to run the test.
+    pub fn backend(&self) -> TestBackend {
+        self.backend
+    }
+}
+
+/// A function marked `@test` with validated, evaluated inputs.
+///
+/// Input names and types must match the function parameters, and each input
+/// must evaluate to a constant. Return-typed tests are rejected before a
+/// `TestCase` is created.
+///
+/// Only [`ZSharpCurlyFE::eval_test_inputs`] creates `TestCase` values. Its
+/// private fields prevent callers from changing inputs after validation.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct TestCase {
+    name: String,
+    settings: TestSettings,
+    inputs: Vec<TestCaseInput>,
+    /// The source file this test was discovered in — used to recompile it as
+    /// an entry point, keeping the case bound to its origin.
+    file: PathBuf,
+}
+
+impl TestCase {
+    /// The test function's name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// The settings from the test annotation.
+    pub fn settings(&self) -> &TestSettings {
+        &self.settings
+    }
+    /// The function's evaluated annotation inputs, in parameter order.
+    pub fn inputs(&self) -> &[TestCaseInput] {
+        &self.inputs
+    }
+    /// The source file this test was discovered in.
+    pub fn file(&self) -> &Path {
+        &self.file
+    }
+}
+
+/// One evaluated `@test` annotation input, e.g. `y = 3 * 3`.
+///
+/// Fields are private with read-only accessors; constructed only by the
+/// validated door ([`ZSharpCurlyFE::eval_test_inputs`]). External code can
+/// neither build nor mutate one, so [`Self::flat_entries`] can trust that
+/// [`Self::value`] is a supported scalar, array, or tuple.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct TestCaseInput {
+    name: String,
+    public: bool,
+    source: String,
+    value: Value,
+}
+
+impl TestCaseInput {
+    /// The input's name (the `y` in `y = 3 * 3`).
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Whether the input is public. Parameters without a visibility keyword
+    /// are public by default.
+    pub fn public(&self) -> bool {
+        self.public
+    }
+    /// The input expression exactly as written in the source (`3 * 3`).
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+    /// The concrete value the expression evaluates to (`9`). Arrays and tuples
+    /// are stored whole; use [`Self::flat_entries`] to get their scalar entries.
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+
+    /// Returns the scalar entries used by the proof pipeline.
+    ///
+    /// Scalars keep their parameter name. Array and tuple elements use dotted
+    /// indices, such as `A.0.0` or `t.1`. The parameter's visibility applies
+    /// to every element.
+    pub fn flat_entries(&self) -> Vec<(String, Value)> {
+        interp::flatten(&self.name, &self.value)
+    }
 }
 
 #[allow(dead_code)]
@@ -67,17 +185,19 @@ pub struct ZSharpCurlyFE;
 impl FrontEnd for ZSharpCurlyFE {
     type Inputs = Inputs;
     fn gen(i: Inputs) -> Computations {
+        let Inputs { file, entry, mode } = i;
+
         debug!(
             "Starting Z# front-end, field: {}",
             Sort::Field(cfg().field().clone())
         );
         let loader = parser::ZLoad::new();
-        let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
+        let asts = loader.load(&file);
+        let mut g = ZGen::new(asts, mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
         g.visit_files();
-        g.file_stack_push(i.file);
+        g.file_stack_push(file);
         g.generics_stack_push(HashMap::new());
-        g.entry_fn("main");
+        g.entry_fn(&entry);
         g.generics_stack_pop();
         g.file_stack_pop();
 
@@ -85,22 +205,312 @@ impl FrontEnd for ZSharpCurlyFE {
         let main_comp = std::rc::Rc::try_unwrap(g.into_circify().consume())
             .unwrap_or_else(|rc| (*rc).clone())
             .into_inner();
-        cs.comps.insert("main".to_string(), main_comp);
+        cs.comps.insert(entry, main_comp);
         cs
     }
 }
 
 impl ZSharpCurlyFE {
+    /// Parse and typecheck a Z# curly file without compiling an entry function.
+    pub fn check(file: PathBuf, mode: Mode) {
+        let loader = parser::ZLoad::new();
+        let asts = loader.load(&file);
+        let mut g = ZGen::new(asts, mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
+        g.visit_files();
+    }
     /// Execute the Z# front-end interpreter on the supplied file with the supplied inputs
     pub fn interpret(i: Inputs, input_scalar_values: FxHashMap<String, Value>) -> T {
+        let Inputs { file, entry, mode } = i;
+
         let loader = parser::ZLoad::new();
-        let asts = loader.load(&i.file);
-        let mut g = ZGen::new(asts, i.mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
+        let asts = loader.load(&file);
+        let mut g = ZGen::new(asts, mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
         g.visit_files();
-        g.file_stack_push(i.file);
+        g.file_stack_push(file);
         g.generics_stack_push(HashMap::new());
-        g.const_entry_fn("main", input_scalar_values)
+        g.const_entry_fn(&entry, input_scalar_values)
     }
+
+    /// Finds every `@test` function in `file` and evaluates its inputs.
+    ///
+    /// Inputs must match the function parameters by name and type and evaluate to
+    /// constants. Scalars, nested arrays, and tuples composed of those types are
+    /// supported. Generic and return-typed test functions are rejected. Functions
+    /// without `@test` are ignored. This method discovers tests but does not run
+    /// them.
+    ///
+    /// `Err` only represents annotation errors; existing parser/frontend errors
+    /// may still panic or exit.
+    pub fn eval_test_inputs(file: PathBuf, mode: Mode) -> Result<Vec<TestCase>, String> {
+        // Load and typecheck the file (and its imports), exactly like `check`.
+        // visit_files() also evaluates every `const` definition, so annotation
+        // inputs that name a constant can resolve it below.
+        let loader = parser::ZLoad::new();
+        let asts = loader.load(&file);
+        let mut g = ZGen::new(asts, mode, loader.stdlib(), cfg().zsharp.isolate_asserts);
+        g.visit_files();
+
+        // Enter the entry file's scope, like `interpret` does, so identifier
+        // lookups during evaluation know which file's constants and imports
+        // to search.
+        g.file_stack_push(file.clone());
+        g.generics_stack_push(HashMap::new());
+
+        let mut tests = Vec::new();
+        let ast = g
+            .asts
+            .get(&file)
+            .ok_or_else(|| format!("no AST loaded for {}", file.display()))?;
+        for decl in &ast.declarations {
+            // Only functions can be tests, and only those marked @test count.
+            let ast::SymbolDeclaration::Function(f) = decl else {
+                continue;
+            };
+            let Some(ann) = &f.test else {
+                continue;
+            };
+            tests.push(eval_test_case(&g, &file, f, ann)?);
+        }
+
+        g.generics_stack_pop();
+        g.file_stack_pop();
+        Ok(tests)
+    }
+}
+
+/// Returns true for scalar, array, and tuple inputs supported by `@test`.
+fn is_supported_test_input_type(ty: &Ty) -> bool {
+    match ty {
+        Ty::Uint(_) | Ty::Field | Ty::Bool | Ty::Integer => true,
+        Ty::Array(_, elem) => is_supported_test_input_type(elem),
+        Ty::Tuple(elements) => elements.iter().all(is_supported_test_input_type),
+        Ty::MutArray(_) | Ty::Struct(..) => false,
+    }
+}
+
+/// Returns true if an array or tuple input contains no values.
+///
+/// Empty inputs produce no circuit inputs, so they are rejected separately.
+fn has_empty_test_input(ty: &Ty) -> bool {
+    match ty {
+        Ty::Array(n, elem) => *n == 0 || has_empty_test_input(elem),
+        Ty::Tuple(elements) => elements.is_empty() || elements.iter().any(has_empty_test_input),
+        Ty::Uint(_) | Ty::Field | Ty::Bool | Ty::Integer | Ty::MutArray(_) | Ty::Struct(..) => {
+            false
+        }
+    }
+}
+
+/// Validate one `@test` function's annotation against its signature and
+/// evaluate each input to a concrete value. See [ZSharpCurlyFE::eval_test_inputs]
+/// for the rules enforced here.
+///
+/// Errors are rendered to owned strings (path + offending source line)
+/// before returning, because AST spans borrow the loader's source text and
+/// cannot outlive `eval_test_inputs`.
+fn eval_test_case<'ast>(
+    g: &ZGen<'ast>,
+    file: &std::path::Path,
+    f: &ast::FunctionDefinition<'ast>,
+    ann: &ast::TestAnnotation<'ast>,
+) -> Result<TestCase, String> {
+    let diag = |msg: String, span: &ast::Span| {
+        format!(
+            "{}\nIn {}:\n  {}",
+            msg,
+            file.display(),
+            span_to_string(span)
+        )
+    };
+
+    let mut settings = TestSettings::default();
+    let mut backend_seen = false;
+    for setting in &ann.settings {
+        match setting.name.value.as_str() {
+            "backend" if backend_seen => {
+                return Err(diag(
+                    format!("duplicate @test setting backend for {}", f.id.value),
+                    &setting.span,
+                ));
+            }
+            "backend" => {
+                backend_seen = true;
+                settings.backend = match setting.value.value.as_str() {
+                    "groth16" => TestBackend::Groth16,
+                    "mirage" => TestBackend::Mirage,
+                    backend => {
+                        return Err(diag(
+                            format!(
+                                "unsupported @test backend {} for {}; supported backends: groth16, mirage",
+                                backend, f.id.value
+                            ),
+                            &setting.value.span,
+                        ));
+                    }
+                };
+            }
+            name => {
+                return Err(diag(
+                    format!(
+                        "unknown @test setting {} for {}; supported settings: backend",
+                        name, f.id.value
+                    ),
+                    &setting.name.span,
+                ));
+            }
+        }
+    }
+
+    // Generic test functions have no way to receive generic arguments from
+    // an annotation, so reject them outright.
+    if !f.generics.is_empty() {
+        return Err(diag(
+            format!("@test function {} cannot be generic", f.id.value),
+            &ann.span,
+        ));
+    }
+    if f.return_type.is_some() {
+        return Err(diag(
+            format!(
+                "@test function {} cannot declare a return type; use assert(...) instead",
+                f.id.value
+            ),
+            &ann.span,
+        ));
+    }
+
+    // Index the annotation inputs by name, rejecting duplicates: collecting
+    // silently would keep only the last value for a repeated name.
+    let mut inputs_by_name = HashMap::new();
+    for input in &ann.inputs {
+        if inputs_by_name
+            .insert(input.name.value.as_str(), input)
+            .is_some()
+        {
+            return Err(diag(
+                format!(
+                    "duplicate @test input {} for {}",
+                    input.name.value, f.id.value
+                ),
+                &input.span,
+            ));
+        }
+    }
+
+    // Every input must name one of the function's parameters.
+    for input in &ann.inputs {
+        if !f.parameters.iter().any(|p| p.id.value == input.name.value) {
+            return Err(diag(
+                format!(
+                    "@test input {} does not match any parameter of {}",
+                    input.name.value, f.id.value
+                ),
+                &input.span,
+            ));
+        }
+    }
+
+    // Walk the parameters in signature order; each must be scalar and have
+    // exactly one input. This also fixes the output order to parameter order.
+    let mut inputs = Vec::new();
+    for p in &f.parameters {
+        // Resolve the declared type to a canonical Ty *first*, then apply the
+        // scalar restriction to that. Checking the AST syntax directly would
+        // wrongly reject scalar aliases (e.g. `type Word = u32`), which parse
+        // as a named type but resolve to Ty::Uint(32).
+        let ty = g
+            .type_impl_::<true>(&p.ty)
+            .map_err(|e| diag(e, type_span(&p.ty)))?;
+
+        if !is_supported_test_input_type(&ty) {
+            return Err(diag(
+                format!(
+                    "parameter {} of @test function {} has unsupported type {}; \
+                     only scalars (field, bool, u8..u64), arrays, and tuples \
+                     composed of those types are supported",
+                    p.id.value, f.id.value, ty
+                ),
+                &p.span,
+            ));
+        }
+        if has_empty_test_input(&ty) {
+            return Err(diag(
+                format!(
+                    "parameter {} of @test function {} has an empty array or tuple \
+                     in type {}; empty test inputs are not supported",
+                    p.id.value, f.id.value, ty
+                ),
+                &p.span,
+            ));
+        }
+
+        let input = inputs_by_name.remove(p.id.value.as_str()).ok_or_else(|| {
+            diag(
+                format!(
+                    "@test on {} is missing a value for parameter {}",
+                    f.id.value, p.id.value
+                ),
+                &ann.span,
+            )
+        })?;
+
+        // Type unsuffixed literals by the parameter they bind to, exactly as
+        // const_decl_ types them by the constant's declared type. Without
+        // this, `x = 2` would always evaluate as a field element, even for a
+        // u32 parameter.
+        let mut expr = input.value.clone();
+        let mut rw = ZConstLiteralRewriter::new(Some(ty.clone()));
+        rw.visit_expression(&mut expr)
+            .map_err(|e| diag(e.0, &input.span))?;
+
+        // The const evaluator: reduces the expression tree to a single
+        // constant term, or errors (with source context).
+        let t = g
+            .expr_impl_::<true>(&expr)
+            .map_err(|e| format!("{}\nIn {}", e, file.display()))?;
+
+        // The evaluated type must be exactly the parameter's type; the
+        // interpreter downstream trusts this and does not re-check.
+        if t.type_() != &ty {
+            return Err(diag(
+                format!(
+                    "@test input {} for {}: expected type {}, but {} evaluates to {}",
+                    input.name.value,
+                    f.id.value,
+                    ty,
+                    input.value.span().as_str(),
+                    t.type_()
+                ),
+                &input.span,
+            ));
+        }
+
+        // Pull the concrete Value out of the constant term.
+        let value = const_value_simple(&t.term).ok_or_else(|| {
+            diag(
+                format!(
+                    "@test input {} of {} did not evaluate to a constant",
+                    input.name.value, f.id.value
+                ),
+                &input.span,
+            )
+        })?;
+        inputs.push(TestCaseInput {
+            name: input.name.value.clone(),
+            // No visibility keyword defaults to public, matching
+            // interpret_visibility.
+            public: !matches!(p.visibility, Some(ast::Visibility::Private(_))),
+            source: input.value.span().as_str().to_string(),
+            value,
+        });
+    }
+
+    Ok(TestCase {
+        name: f.id.value.clone(),
+        settings,
+        inputs,
+        file: file.to_path_buf(),
+    })
 }
 
 struct ZGen<'ast> {

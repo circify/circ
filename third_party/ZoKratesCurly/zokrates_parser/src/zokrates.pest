@@ -13,7 +13,14 @@ from_import_directive = { "from" ~ quoted_string ~ "import" ~ import_symbol_list
 main_import_directive = { "import" ~ quoted_string ~ ("as" ~ identifier)? }
 import_symbol = { identifier ~ ("as" ~ identifier)? }
 import_symbol_list = _{ import_symbol ~ ("," ~ import_symbol)* }
-function_definition = {"def" ~ identifier ~ constant_generics_declaration? ~ "(" ~ parameter_list ~ ")" ~ ("->" ~ ty)? ~ block_statement }
+function_definition = { test_annotation? ~ "def" ~ identifier ~ constant_generics_declaration? ~ "(" ~ parameter_list ~ ")" ~ ("->" ~ ty)? ~ block_statement }
+test_annotation = { "@test" ~ ("(" ~ test_settings? ~ ")")? ~ test_inputs? ~ ";" }
+test_settings = _{ test_setting ~ ("," ~ test_setting)* }
+test_setting = { test_setting_name ~ "=" ~ test_setting_value }
+test_setting_name = @{ identifier }
+test_setting_value = @{ identifier }
+test_inputs = _{ test_input ~ ("," ~ test_input)* }
+test_input = { identifier ~ "=" ~ expression }
 const_definition = {"const" ~ typed_identifier ~ "=" ~ expression }
 type_definition = {"type" ~ identifier ~ constant_generics_declaration? ~ "=" ~ ty }
 constant_generics_declaration = _{ "<" ~ constant_generics_list ~ ">" }

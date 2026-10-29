@@ -53,3 +53,40 @@ pub fn extract(
         )),
     }
 }
+
+/// Converts a scalar, array, or tuple test input into the named scalar values
+/// expected by the proof pipeline.
+///
+/// This reverses [`extract`]. Scalars keep their names, while array and tuple
+/// elements use dotted indices. For example, a tuple named `t` becomes `t.0`,
+/// `t.1`, and so on.
+///
+/// [`Array::values`] expands repeated arrays such as `[0; 4]`.
+///
+/// Structs are not supported. `eval_test_case` rejects them before the inputs
+/// reach this function.
+pub fn flatten(name: &str, value: &Value) -> Vec<(String, Value)> {
+    match value {
+        Value::Array(arr) => arr
+            .values()
+            .into_iter()
+            .enumerate()
+            .flat_map(|(i, v)| flatten(&format!("{name}.{i}"), &v))
+            .collect(),
+        Value::Tuple(values) => values
+            .iter()
+            .enumerate()
+            .flat_map(|(i, value)| flatten(&format!("{name}.{i}"), value))
+            .collect(),
+        // The scalar leaf kinds a validated @test input can hold — the same
+        // set interp::extract accepts.
+        Value::Field(_) | Value::BitVector(_) | Value::Bool(_) | Value::Int(_) => {
+            vec![(name.to_string(), value.clone())]
+        }
+        other => unreachable!(
+            "unsupported value {:?} in @test input {}; \
+             eval_test_inputs rejects unsupported parameter types",
+            other, name
+        ),
+    }
+}

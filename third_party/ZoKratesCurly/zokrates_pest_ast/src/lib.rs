@@ -25,10 +25,11 @@ pub use ast::{
     NotOperator, Parameter, PosOperator, PostfixExpression, Pragma, PrivateVisibility,
     PublicVisibility, Range, RangeOrExpression, RawString, ReturnStatement, Span, Spread,
     SpreadOrExpression, Statement, StructDefinition, StructField, StructType, SymbolDeclaration,
-    TernaryExpression, ToExpression, TupleType, Type, TypeDefinition, TypedIdentifier,
-    TypedIdentifierOrAssignee, U16NumberExpression, U16Suffix, U16Type, U32NumberExpression,
-    U32Suffix, U32Type, U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix,
-    U8Type, UnaryExpression, UnaryOperator, Underscore, Visibility, EOI,
+    TernaryExpression, TestAnnotation, TestInput, TestSetting, TestSettingName, TestSettingValue,
+    ToExpression, TupleType, Type, TypeDefinition, TypedIdentifier, TypedIdentifierOrAssignee,
+    U16NumberExpression, U16Suffix, U16Type, U32NumberExpression, U32Suffix, U32Type,
+    U64NumberExpression, U64Suffix, U64Type, U8NumberExpression, U8Suffix, U8Type, UnaryExpression,
+    UnaryOperator, Underscore, Visibility, EOI,
 };
 
 mod ast {
@@ -182,11 +183,57 @@ mod ast {
     #[derive(Debug, FromPest, PartialEq, Clone)]
     #[pest_ast(rule(Rule::function_definition))]
     pub struct FunctionDefinition<'ast> {
+        pub test: Option<TestAnnotation<'ast>>,
         pub id: IdentifierExpression<'ast>,
         pub generics: Vec<IdentifierExpression<'ast>>,
         pub parameters: Vec<Parameter<'ast>>,
         pub return_type: Option<Type<'ast>>,
         pub statements: Vec<Statement<'ast>>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::test_annotation))]
+    pub struct TestAnnotation<'ast> {
+        pub settings: Vec<TestSetting<'ast>>,
+        pub inputs: Vec<TestInput<'ast>>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+    #[pest_ast(rule(Rule::test_setting))]
+    pub struct TestSetting<'ast> {
+        pub name: TestSettingName<'ast>,
+        pub value: TestSettingValue<'ast>,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+    #[pest_ast(rule(Rule::test_setting_name))]
+    pub struct TestSettingName<'ast> {
+        #[pest_ast(outer(with(span_into_str)))]
+        pub value: String,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Eq, Clone)]
+    #[pest_ast(rule(Rule::test_setting_value))]
+    pub struct TestSettingValue<'ast> {
+        #[pest_ast(outer(with(span_into_str)))]
+        pub value: String,
+        #[pest_ast(outer())]
+        pub span: Span<'ast>,
+    }
+
+    #[derive(Debug, FromPest, PartialEq, Clone)]
+    #[pest_ast(rule(Rule::test_input))]
+    pub struct TestInput<'ast> {
+        pub name: IdentifierExpression<'ast>,
+        pub value: Expression<'ast>,
         #[pest_ast(outer())]
         pub span: Span<'ast>,
     }
@@ -1269,6 +1316,7 @@ mod tests {
                         span: Span::new(source, 9, 21).unwrap()
                     })),
                     SymbolDeclaration::Function(FunctionDefinition {
+                        test: None,
                         generics: vec![],
                         id: IdentifierExpression {
                             value: String::from("main"),
@@ -1337,6 +1385,7 @@ mod tests {
                         span: Span::new(source, 9, 21).unwrap()
                     })),
                     SymbolDeclaration::Function(FunctionDefinition {
+                        test: None,
                         generics: vec![],
                         id: IdentifierExpression {
                             value: String::from("main"),
@@ -1429,6 +1478,7 @@ mod tests {
                         span: Span::new(source, 9, 21).unwrap()
                     })),
                     SymbolDeclaration::Function(FunctionDefinition {
+                        test: None,
                         generics: vec![],
                         id: IdentifierExpression {
                             value: String::from("main"),
@@ -1489,6 +1539,7 @@ mod tests {
             Ok(File {
                 pragma: None,
                 declarations: vec![SymbolDeclaration::Function(FunctionDefinition {
+                    test: None,
                     generics: vec![],
                     id: IdentifierExpression {
                         value: String::from("main"),
@@ -1559,5 +1610,99 @@ mod tests {
 "#;
         let res = generate_ast(source);
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn parses_bare_test_marker() {
+        let source = r#"@test;
+        def is_a_test() -> bool {
+            return true;
+        }
+
+        def not_a_test() -> bool {
+            return true;
+        }
+"#;
+        let ast = generate_ast(source).unwrap();
+        let funcs: Vec<&FunctionDefinition> = ast
+            .declarations
+            .iter()
+            .filter_map(|d| match d {
+                SymbolDeclaration::Function(f) => Some(f),
+                _ => None,
+            })
+            .collect();
+
+        assert!(funcs[0].test.is_some(), "is_a_test should carry @test");
+        assert!(
+            funcs[1].test.is_none(),
+            "not_a_test should have no annotation"
+        );
+    }
+    #[test]
+    fn parses_test_inputs() {
+        let source = r#"@test a = 3, b = 3 * 3;
+        def test_sq(private field a, private field b) -> bool {
+            return true;
+        }
+"#;
+        let ast = generate_ast(source).unwrap();
+        let f = match &ast.declarations[0] {
+            SymbolDeclaration::Function(f) => f,
+            _ => panic!("expected a function"),
+        };
+        let ann = f.test.as_ref().expect("should carry @test");
+        assert_eq!(ann.inputs.len(), 2);
+        assert_eq!(ann.inputs[0].name.value, "a");
+        assert_eq!(ann.inputs[0].value.span().as_str(), "3");
+
+        assert_eq!(ann.inputs[1].name.value, "b");
+        assert_eq!(ann.inputs[1].value.span().as_str(), "3 * 3");
+    }
+
+    #[test]
+    fn parses_test_settings_and_inputs() {
+        let source = r#"@test(backend = mirage) a = 3, b = 4;
+        def test_backend(private field a, private field b) {
+            assert(a + b == 7);
+        }
+"#;
+        let ast = generate_ast(source).unwrap();
+        let f = match &ast.declarations[0] {
+            SymbolDeclaration::Function(f) => f,
+            _ => panic!("expected a function"),
+        };
+        let ann = f.test.as_ref().expect("should carry @test");
+
+        assert_eq!(ann.settings.len(), 1);
+        assert_eq!(ann.settings[0].name.value, "backend");
+        assert_eq!(ann.settings[0].value.value, "mirage");
+        assert_eq!(ann.inputs.len(), 2);
+        assert_eq!(ann.inputs[0].name.value, "a");
+        assert_eq!(ann.inputs[1].name.value, "b");
+    }
+
+    #[test]
+    fn parses_array_test_inputs() {
+        // The value slot is a full expression, so every array form parses:
+        // nested inline arrays, initializers, and spreads.
+        let source = r#"@test A = [[1, 0], [0, 1]], xs = [0; 4], ys = [...[1, 2], 3];
+        def test_arrays(private field[2][2] A, private field[4] xs, private field[3] ys) -> bool {
+            return true;
+        }
+"#;
+        let ast = generate_ast(source).unwrap();
+        let f = match &ast.declarations[0] {
+            SymbolDeclaration::Function(f) => f,
+            _ => panic!("expected a function"),
+        };
+        let ann = f.test.as_ref().expect("should carry @test");
+        assert_eq!(ann.inputs.len(), 3);
+        assert!(matches!(ann.inputs[0].value, Expression::InlineArray(_)));
+        assert!(matches!(
+            ann.inputs[1].value,
+            Expression::ArrayInitializer(_)
+        ));
+        assert!(matches!(ann.inputs[2].value, Expression::InlineArray(_)));
     }
 }

@@ -157,6 +157,10 @@ pub fn walk_function_definition<'ast, Z: ZVisitorMut<'ast>>(
     visitor: &mut Z,
     fundef: &mut ast::FunctionDefinition<'ast>,
 ) -> ZVisitorResult {
+    // Visit the @test annotation when the function has one.
+    if let Some(t) = fundef.test.as_mut() {
+        visitor.visit_test_annotation(t)?;
+    }
     visitor.visit_identifier_expression(&mut fundef.id)?;
     fundef
         .generics
@@ -174,6 +178,39 @@ pub fn walk_function_definition<'ast, Z: ZVisitorMut<'ast>>(
         .iter_mut()
         .try_for_each(|s| visitor.visit_statement(s))?;
     visitor.visit_span(&mut fundef.span)
+}
+
+pub fn walk_test_annotation<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    testann: &mut ast::TestAnnotation<'ast>,
+) -> ZVisitorResult {
+    testann
+        .settings
+        .iter_mut()
+        .try_for_each(|s| visitor.visit_test_setting(s))?;
+    testann
+        .inputs
+        .iter_mut()
+        .try_for_each(|i| visitor.visit_test_input(i))?;
+    visitor.visit_span(&mut testann.span)
+}
+
+pub fn walk_test_setting<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    setting: &mut ast::TestSetting<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_span(&mut setting.name.span)?;
+    visitor.visit_span(&mut setting.value.span)?;
+    visitor.visit_span(&mut setting.span)
+}
+
+pub fn walk_test_input<'ast, Z: ZVisitorMut<'ast>>(
+    visitor: &mut Z,
+    testinput: &mut ast::TestInput<'ast>,
+) -> ZVisitorResult {
+    visitor.visit_identifier_expression(&mut testinput.name)?;
+    visitor.visit_expression(&mut testinput.value)?;
+    visitor.visit_span(&mut testinput.span)
 }
 
 pub fn walk_parameter<'ast, Z: ZVisitorMut<'ast>>(
