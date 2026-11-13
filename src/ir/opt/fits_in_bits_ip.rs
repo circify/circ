@@ -153,3 +153,51 @@ fn collect_constraints(t: &Term, constraints: &mut Vec<Term>) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::ir::proof::PROVER_ID;
+    use rug::Integer;
+
+    /// Assert that each of `xs` fits in `n_bits`, apply [fits_in_bits_ip], and check that the
+    /// assertions still hold.
+    fn check_fits_in_bits_ip(n_bits: usize, xs: &[Integer]) {
+        let field = FieldT::FBls12381;
+        let mut c = Computation::new();
+        let mut values = HashMap::default();
+        let mut assertions = Vec::new();
+        for (i, x) in xs.iter().enumerate() {
+            let name = format!("x{i}");
+            let v = c.new_var(&name, Sort::Field(field.clone()), Some(PROVER_ID), None);
+            values.insert(name, Value::Field(field.new_v(x)));
+            assertions.push(term![Op::PfFitsInBits(n_bits); v]);
+        }
+        c.outputs = vec![term(AND, assertions)];
+        fits_in_bits_ip(&mut c);
+        assert_eq!(c.eval_all(&values), vec![Value::Bool(true)]);
+    }
+
+    /// Ten 20-bit values use five 4-bit subranges; these values only touch the lowest.
+    #[test]
+    fn low_subrange_only() {
+        let xs: Vec<Integer> = (0..10).map(Integer::from).collect();
+        check_fits_in_bits_ip(20, &xs);
+    }
+
+    /// Ten 20-bit values use five 4-bit subranges.
+    #[test]
+    fn all_subranges() {
+        let xs: Vec<Integer> = (0..10).map(|i| (Integer::from(1) << 20) - 1 - i).collect();
+        check_fits_in_bits_ip(20, &xs);
+    }
+
+    /// Ten 34-bit values use eight 4-bit subranges and a 2-bit end at bit 32; these values only
+    /// touch the lowest subrange and the end.
+    #[test]
+    fn end_past_32_bits() {
+        let xs: Vec<Integer> = (0..10).map(|i| (Integer::from(1) << 32) + i).collect();
+        check_fits_in_bits_ip(34, &xs);
+    }
+}

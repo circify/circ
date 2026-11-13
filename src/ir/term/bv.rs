@@ -301,4 +301,35 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn ashr_past_width() {
+        let bv = |i: u32| BitVector::new(Integer::from(i), 4);
+        assert_eq!(bv(0b1000).ashr(&bv(5)), bv(0b1111));
+        assert_eq!(bv(0b0100).ashr(&bv(5)), bv(0b0000));
+    }
+
+    /// A 64-bit shift amount that does not fit in a [u32].
+    fn big_shift() -> BitVector {
+        BitVector::new(Integer::from(1) << 40, 64)
+    }
+
+    #[test]
+    fn shl_past_u32() {
+        let x = BitVector::new(Integer::from(1), 64);
+        assert_eq!(x << &big_shift(), BitVector::new(Integer::from(0), 64));
+    }
+
+    #[test]
+    fn lshr_past_u32() {
+        let x = BitVector::new(Integer::from(1) << 63, 64);
+        assert_eq!(x.lshr(&big_shift()), BitVector::new(Integer::from(0), 64));
+    }
+
+    #[test]
+    fn ashr_past_u32() {
+        let x = BitVector::new(Integer::from(1) << 63, 64);
+        let ones = BitVector::new((Integer::from(1) << 64) - 1, 64);
+        assert_eq!(x.ashr(&big_shift()), ones);
+    }
 }
