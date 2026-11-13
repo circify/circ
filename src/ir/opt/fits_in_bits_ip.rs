@@ -6,6 +6,7 @@ use crate::util::ns::Namespace;
 use circ_fields::FieldT;
 use fxhash::FxHashMap as HashMap;
 use log::debug;
+use rug::Integer;
 
 /// Replace [Op::PfFitsInBits] with an interactive protocol.
 pub fn fits_in_bits_ip(c: &mut Computation) {
@@ -71,7 +72,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                             Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
                         pf_summands.push(
-                        term![PF_MUL.clone(); pf_lit(field.new_v(1).pow(k as u64 * ii as u64)), sub_f.clone()],
+                        term![PF_MUL.clone(); pf_lit(field.new_v(Integer::from(1) << (k as usize * ii))), sub_f.clone()],
                     );
                         subterms.push(sub_f);
                     }
@@ -84,7 +85,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                             Some(super::super::proof::PROVER_ID),
                             Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
-                        pf_summands.push(term![PF_MUL.clone(); pf_lit(field.new_v(1 << end_start)), sub_f.clone()]);
+                        pf_summands.push(term![PF_MUL.clone(); pf_lit(field.new_v(Integer::from(1) << end_start)), sub_f.clone()]);
                         new_assertions.push(term![Op::PfFitsInBits(end_length); sub_f]);
                     }
                     new_assertions.push(term![EQ; t, term(PF_ADD.clone(), pf_summands)]);
@@ -159,7 +160,6 @@ mod test {
     use super::*;
 
     use crate::ir::proof::PROVER_ID;
-    use rug::Integer;
 
     /// Assert that each of `xs` fits in `n_bits`, apply [fits_in_bits_ip], and check that the
     /// assertions still hold.

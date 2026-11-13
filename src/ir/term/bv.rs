@@ -92,8 +92,9 @@ impl std::ops::Shl<&Self> for BitVector {
     type Output = Self;
     fn shl(self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
+        let n = self.shift_amount(other);
         let r = BitVector {
-            uint: (self.uint.shl(other.uint.to_u32().unwrap())).keep_bits(self.width as u32),
+            uint: (self.uint.shl(n)).keep_bits(self.width as u32),
             width: self.width,
         };
         r.check("shl");
@@ -146,10 +147,15 @@ impl BitVector {
             location
         );
     }
+    /// The shift amount `other`, capped at our width.
+    fn shift_amount(&self, other: &Self) -> u32 {
+        let w = self.width as u32;
+        other.uint.to_u32().map_or(w, |n| n.min(w))
+    }
     /// arithmetic right shift
     pub fn ashr(mut self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
-        let n = other.uint.to_u32().unwrap();
+        let n = self.shift_amount(other);
         let b = self.uint.get_bit(self.width as u32 - 1);
         self.uint >>= n;
         for i in 0..n {
@@ -161,8 +167,9 @@ impl BitVector {
     /// logical right shift
     pub fn lshr(self, other: &Self) -> Self {
         assert_eq!(self.width, other.width);
+        let n = self.shift_amount(other);
         let r = BitVector {
-            uint: (self.uint >> other.uint.to_u32().unwrap()).keep_bits(self.width as u32),
+            uint: (self.uint >> n).keep_bits(self.width as u32),
             width: self.width,
         };
         r.check("lshr");
