@@ -30,10 +30,8 @@ pub enum Token {
     // We can also use this variant to define whitespace,
     // or any other matches we wish to skip.
     #[error]
-    // Skip space
-    #[regex(br"[ \t\n\f]+", logos::skip)]
-    // Skip comments
-    #[regex(br";[^\n]*\n", logos::skip)]
+    // Skip space and comments
+    #[regex(br"[ \t\n\f]+|;[^\n]*\n", logos::skip)]
     Error,
 }
 

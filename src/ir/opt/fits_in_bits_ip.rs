@@ -6,6 +6,7 @@ use crate::util::ns::Namespace;
 use circ_fields::FieldT;
 use fxhash::FxHashMap as HashMap;
 use log::debug;
+use rug::Integer;
 
 /// Replace [Op::PfFitsInBits] with an interactive protocol.
 pub fn fits_in_bits_ip(c: &mut Computation) {
@@ -71,7 +72,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                             Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
                         pf_summands.push(
-                        term![PF_MUL.clone(); pf_lit(field.new_v(1).pow(k as u64 * ii as u64)), sub_f.clone()],
+                        term![PF_MUL.clone(); pf_lit(field.new_v(Integer::from(1) << (k as usize * ii))), sub_f.clone()],
                     );
                         subterms.push(sub_f);
                     }
@@ -84,7 +85,7 @@ pub fn fits_in_bits_ip(c: &mut Computation) {
                             Some(super::super::proof::PROVER_ID),
                             Some(term![Op::new_ubv_to_pf(field.clone()); sub_bv]),
                         );
-                        pf_summands.push(term![PF_MUL.clone(); pf_lit(field.new_v(1 << end_start)), sub_f.clone()]);
+                        pf_summands.push(term![PF_MUL.clone(); pf_lit(field.new_v(Integer::from(1) << end_start)), sub_f.clone()]);
                         new_assertions.push(term![Op::PfFitsInBits(end_length); sub_f]);
                     }
                     new_assertions.push(term![EQ; t, term(PF_ADD.clone(), pf_summands)]);
@@ -151,5 +152,52 @@ fn collect_constraints(t: &Term, constraints: &mut Vec<Term>) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::ir::proof::PROVER_ID;
+
+    /// Assert that each of `xs` fits in `n_bits`, apply [fits_in_bits_ip], and check that the
+    /// assertions still hold.
+    fn check_fits_in_bits_ip(n_bits: usize, xs: &[Integer]) {
+        let field = FieldT::FBls12381;
+        let mut c = Computation::new();
+        let mut values = HashMap::default();
+        let mut assertions = Vec::new();
+        for (i, x) in xs.iter().enumerate() {
+            let name = format!("x{i}");
+            let v = c.new_var(&name, Sort::Field(field.clone()), Some(PROVER_ID), None);
+            values.insert(name, Value::Field(field.new_v(x)));
+            assertions.push(term![Op::PfFitsInBits(n_bits); v]);
+        }
+        c.outputs = vec![term(AND, assertions)];
+        fits_in_bits_ip(&mut c);
+        assert_eq!(c.eval_all(&values), vec![Value::Bool(true)]);
+    }
+
+    /// Ten 20-bit values use five 4-bit subranges; these values only touch the lowest.
+    #[test]
+    fn low_subrange_only() {
+        let xs: Vec<Integer> = (0..10).map(Integer::from).collect();
+        check_fits_in_bits_ip(20, &xs);
+    }
+
+    /// Ten 20-bit values use five 4-bit subranges.
+    #[test]
+    fn all_subranges() {
+        let xs: Vec<Integer> = (0..10).map(|i| (Integer::from(1) << 20) - 1 - i).collect();
+        check_fits_in_bits_ip(20, &xs);
+    }
+
+    /// Ten 34-bit values use eight 4-bit subranges and a 2-bit end at bit 32; these values only
+    /// touch the lowest subrange and the end.
+    #[test]
+    fn end_past_32_bits() {
+        let xs: Vec<Integer> = (0..10).map(|i| (Integer::from(1) << 32) + i).collect();
+        check_fits_in_bits_ip(34, &xs);
     }
 }

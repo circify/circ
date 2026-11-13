@@ -243,7 +243,7 @@ pub fn eval_op(op: &Op, args: &[&Value], var_vals: &FxHashMap<String, Value>) ->
         Op::PfChallenge(c) => Value::Field(eval_pf_challenge(&c.name, &c.field)),
         Op::Witness(_) => args[0].clone(),
         Op::PfFitsInBits(n_bits) => {
-            Value::Bool(args[0].as_pf().i().signed_bits() <= *n_bits as u32)
+            Value::Bool(args[0].as_pf().i().significant_bits() <= *n_bits as u32)
         }
         // tuple
         Op::Tuple => Value::Tuple(args.iter().map(|a| (*a).clone()).collect()),

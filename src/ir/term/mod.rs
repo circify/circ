@@ -964,7 +964,7 @@ impl Sort {
                 bool_lit([false, true][n])
             }
             Sort::BitVector(w) => {
-                assert!(n < (1 << w));
+                assert!(Integer::from(n).significant_bits() as usize <= *w);
                 bv_lit(n, *w)
             }
             Sort::Field(f) => {
