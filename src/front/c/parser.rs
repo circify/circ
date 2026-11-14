@@ -10,12 +10,27 @@ pub struct CParser {
 
 impl CParser {
     pub fn new() -> Self {
-        Self {
-            config: Config::default(),
-        }
+        let mut config = Config::default();
+        // lang-c parses C11; keep the preprocessor in the same language mode.
+        config.cpp_options.push("-std=gnu11".into());
+        Self { config }
     }
 
     pub fn parse_file(&self, path: &Path) -> Result<Parse, Error> {
         parse(&self.config, path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_stdbool_example() {
+        CParser::new()
+            .parse_file(Path::new(
+                "examples/C/mpc/unit_tests/arithmetic_tests/2pc_int_equals.c",
+            ))
+            .unwrap();
     }
 }
