@@ -1,4 +1,4 @@
-//! In-memory compilation helpers.
+//! In-memory R1CS compilation helpers.
 //!
 //! These let callers (such as the unit-test runner) turn a compiled
 //! [`Computation`] into the data a proof system needs — without writing files.
@@ -12,9 +12,9 @@ use crate::target::r1cs::{ProverData, R1csStats, VerifierData};
 
 /// Runs the proof-mode optimizations required before R1CS lowering.
 ///
-/// This must run before [`to_proof_data`] to remove arrays and tuples because
+/// This must run before [`to_r1cs_proof_data`] to remove arrays and tuples because
 /// the R1CS lowering step accepts only scalar values.
-pub fn opt_for_proof(cs: Computations, cfg: &CircCfg) -> Computations {
+pub fn opt_for_r1cs_proof(cs: Computations, cfg: &CircCfg) -> Computations {
     let mut opts = vec![
         Opt::ConstantFold(Box::new([])),
         Opt::DeskolemizeWitnesses,
@@ -54,7 +54,10 @@ pub fn opt_for_proof(cs: Computations, cfg: &CircCfg) -> Computations {
 ///
 /// Also returns the final [`R1csStats`], and honors the `--r1cs-profile` flag by
 /// printing the R1CS size before and after optimization.
-pub fn to_proof_data(cs: &Computation, cfg: &CircCfg) -> (ProverData, VerifierData, R1csStats) {
+pub fn to_r1cs_proof_data(
+    cs: &Computation,
+    cfg: &CircCfg,
+) -> (ProverData, VerifierData, R1csStats) {
     let mut r1cs = to_r1cs(cs, cfg);
     if cfg.r1cs.profile {
         println!("Pre-opt  r1cs stats: {:#?}", r1cs.stats());

@@ -11,7 +11,7 @@ use bls12_381::Bls12;
 use circ::front::zsharpcurly::{TestBackend, TestCase, ZSharpCurlyFE};
 use circ::front::Mode;
 use circ::target::r1cs::{bellman::Bellman, mirage::Mirage};
-use circ::test_runner::{run_test, Outcome};
+use circ::test_runner::{run_r1cs_test, Outcome};
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 
@@ -52,8 +52,8 @@ fn discover(path: &Path) -> Vec<TestCase> {
 
 fn run_selected(test: &TestCase) -> Outcome {
     match test.settings().backend() {
-        TestBackend::Groth16 => run_test::<Bellman<Bls12>>(test),
-        TestBackend::Mirage => run_test::<Mirage<Bls12>>(test),
+        TestBackend::Groth16 => run_r1cs_test::<Bellman<Bls12>>(test),
+        TestBackend::Mirage => run_r1cs_test::<Mirage<Bls12>>(test),
     }
 }
 
@@ -243,7 +243,7 @@ def test_img(private field[2][2] A) {
     );
     let tests = discover(&path);
     assert_eq!(tests.len(), 1);
-    let outcome = run_test::<Bellman<Bls12>>(&tests[0]);
+    let outcome = run_r1cs_test::<Bellman<Bls12>>(&tests[0]);
     assert!(matches!(outcome, Outcome::Pass), "got {:?}", outcome);
 }
 

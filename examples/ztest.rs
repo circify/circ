@@ -16,7 +16,7 @@ use circ::front::zsharpcurly::{TestBackend, ZSharpCurlyFE};
 use circ::front::Mode;
 use circ::ir::term::Value;
 use circ::target::r1cs::{bellman::Bellman, mirage::Mirage};
-use circ::test_runner::{catch, run_test, Outcome};
+use circ::test_runner::{catch, run_r1cs_test, Outcome};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -129,8 +129,8 @@ fn main() {
             }
         };
         let outcome = match t.settings().backend() {
-            TestBackend::Groth16 => run_test::<Bellman<Bls12>>(t),
-            TestBackend::Mirage => run_test::<Mirage<Bls12>>(t),
+            TestBackend::Groth16 => run_r1cs_test::<Bellman<Bls12>>(t),
+            TestBackend::Mirage => run_r1cs_test::<Mirage<Bls12>>(t),
         };
         match outcome {
             Outcome::Pass => {

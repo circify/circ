@@ -1,5 +1,5 @@
-//! Runs a ZoKrates `@test` through compilation, assertion checking, setup,
-//! proving, and verification.
+//! Runs a ZoKrates `@test` through R1CS compilation, assertion checking,
+//! setup, proving, and verification.
 //!
 //! The runner is generic over [`ProofSystem`](crate::target::r1cs::proof::ProofSystem).
 //! Bellman and Mirage implement
@@ -7,7 +7,7 @@
 //! a separate interface and is not supported here. CLI output remains in `ztest`.
 
 use crate::cfg::cfg;
-use crate::compile::{opt_for_proof, to_proof_data};
+use crate::compile::{opt_for_r1cs_proof, to_r1cs_proof_data};
 use crate::front::zsharpcurly::{Inputs, TestCase, ZSharpCurlyFE};
 use crate::front::{FrontEnd, Mode};
 use crate::ir::term::{eval, Value};
@@ -87,7 +87,7 @@ pub fn catch<R>(f: impl FnOnce() -> R) -> Result<R, String> {
 /// case stays bound to the file it was discovered in. The config is read from
 /// the process-global [`cfg()`]; the caller must have set it (via `circ::cfg::set`
 /// or `set_default`) and it fixes the field and compiler options for the process.
-pub fn run_test<PS: ProofSystem>(test: &TestCase) -> Outcome {
+pub fn run_r1cs_test<PS: ProofSystem>(test: &TestCase) -> Outcome {
     // Compile the test function as its own entry point, from the file it was
     // discovered in. A failure here means the test never became a circuit.
     let name = test.name().to_string();
@@ -139,15 +139,13 @@ pub fn run_test<PS: ProofSystem>(test: &TestCase) -> Outcome {
         Err(e) => return Outcome::CompileError(e),
     }
 
-    // Lower to prover/verifier data: the canonical proof-mode IR optimization
-    // pipeline (shared with the CLI driver via opt_for_proof — required so
-    // array/tuple terms are scalarized before R1CS lowering) followed by
-    // R1CS lowering.
+    // Lower to prover/verifier data: proof-mode IR optimization (required so
+    // array/tuple terms are scalarized before R1CS lowering), then R1CS lowering.
     let name = test.name().to_string();
     let lowered = catch(move || {
-        let comps = opt_for_proof(comps, cfg());
+        let comps = opt_for_r1cs_proof(comps, cfg());
         let cs = comps.get(&name);
-        let (p_data, v_data, _stats) = to_proof_data(cs, cfg());
+        let (p_data, v_data, _stats) = to_r1cs_proof_data(cs, cfg());
         (p_data, v_data)
     });
     let (p_data, v_data) = match lowered {

@@ -7,7 +7,7 @@ Each test is compiled to R1CS on its own and its assertions are checked with a
 proof backend, so a test passes only if the circuit is satisfiable for the given
 inputs.
 
-**Step 1: Write tests**
+### Step 1: Write tests
 
 Annotate test functions with:
 
@@ -25,7 +25,7 @@ Rules for an annotated function:
 - It behaves like `main`: it must have no generics and no return value.
 - It must make assertions (that is what the test verifies).
 
-**Step 2: Run tests**
+### Step 2: Run tests
 
 Build with the features the backends need, then point `ztest` at a file:
 
