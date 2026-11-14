@@ -30,10 +30,8 @@ pub enum Token {
     // We can also use this variant to define whitespace,
     // or any other matches we wish to skip.
     #[error]
-    // Skip space
-    #[regex(br"[ \t\n\f]+", logos::skip)]
-    // Skip comments
-    #[regex(br";[^\n]*\n", logos::skip)]
+    // Skip whitespace and comments ending at a newline.
+    #[regex(br"[ \t\n\f]+|;[^\n]*\n", logos::skip)]
     Error,
 }
 
@@ -76,5 +74,14 @@ mod test {
                 Token::Close,
             ]
         )
+    }
+
+    #[test]
+    fn skips_whitespace_and_comments() {
+        let tokens: Vec<_> = Token::lexer(b"(foo \t; comment\n bar)").collect();
+        assert_eq!(
+            tokens,
+            [Token::Open, Token::Ident, Token::Ident, Token::Close]
+        );
     }
 }
