@@ -101,6 +101,18 @@ pub trait ZVisitorMut<'ast>: Sized {
         walk_function_definition(self, fundef)
     }
 
+    fn visit_test_annotation(&mut self, testann: &mut ast::TestAnnotation<'ast>) -> ZVisitorResult {
+        walk_test_annotation(self, testann)
+    }
+
+    fn visit_test_setting(&mut self, setting: &mut ast::TestSetting<'ast>) -> ZVisitorResult {
+        walk_test_setting(self, setting)
+    }
+
+    fn visit_test_input(&mut self, testinput: &mut ast::TestInput<'ast>) -> ZVisitorResult {
+        walk_test_input(self, testinput)
+    }
+
     fn visit_parameter(&mut self, param: &mut ast::Parameter<'ast>) -> ZVisitorResult {
         walk_parameter(self, param)
     }
