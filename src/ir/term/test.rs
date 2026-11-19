@@ -634,3 +634,19 @@ fn pf2bool_eval() {
     let expected_output = text::parse_value_map(b"(let ((output false)) false)");
     assert_eq!(&actual_output, expected_output.get("output").unwrap());
 }
+
+#[test]
+fn nth_elem_64_bits() {
+    assert_eq!(Sort::BitVector(64).nth_elem(5), bv_lit(5, 64));
+}
+
+#[test]
+fn pf_fits_in_bits() {
+    let fits = |i: u32| {
+        let x = pf_lit(FieldT::FBls12381.new_v(i));
+        eval(&term![Op::PfFitsInBits(4); x], &FxHashMap::default())
+    };
+    assert_eq!(fits(7), Value::Bool(true));
+    assert_eq!(fits(15), Value::Bool(true));
+    assert_eq!(fits(16), Value::Bool(false));
+}
