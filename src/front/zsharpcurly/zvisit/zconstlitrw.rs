@@ -266,6 +266,52 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         self.visit_span(&mut iae.span)
     }
 
+    fn visit_inline_tuple_expression(
+        &mut self,
+        ite: &mut ast::InlineTupleExpression<'ast>,
+    ) -> ZVisitorResult {
+        // Validate against self.to_ty by reference so the error returns below
+        // leave the hint in place for the caller.
+        let element_types = match self.to_ty.as_ref() {
+            Some(Ty::Tuple(types)) if types.len() == ite.elements.len() => Some(types.clone()),
+            Some(Ty::Tuple(types)) => {
+                let n = ite.elements.len();
+                return Err(format!(
+                    "ZConstLiteralRewriter: tuple has {} element{}, expected {}",
+                    n,
+                    if n == 1 { "" } else { "s" },
+                    types.len()
+                )
+                .into());
+            }
+            Some(ty) => {
+                return Err(format!(
+                    "ZConstLiteralRewriter: tuple expression used where {ty} is expected"
+                )
+                .into())
+            }
+            None => None,
+        };
+
+        let previous_ty = self.replace(None);
+        let result = (|| {
+            if let Some(types) = element_types {
+                for (element, ty) in ite.elements.iter_mut().zip(types) {
+                    self.to_ty = Some(ty);
+                    self.visit_expression(element)?;
+                }
+            } else {
+                for element in &mut ite.elements {
+                    self.visit_expression(element)?;
+                }
+            }
+            self.visit_span(&mut ite.span)
+        })();
+
+        self.to_ty = previous_ty;
+        result
+    }
+
     fn visit_postfix_expression(
         &mut self,
         pe: &mut ast::PostfixExpression<'ast>,
@@ -273,9 +319,16 @@ impl<'ast> ZVisitorMut<'ast> for ZConstLiteralRewriter {
         use ast::Expression;
         match *pe.base {
             Expression::Identifier(ref mut id) => self.visit_identifier_expression(id)?,
-            _ => panic!("Expected identifier in postfix expression base"),
+            _ => {
+                return Err(
+                    "ZConstLiteralRewriter: postfix expression base must be a named \
+                     identifier; the CirC ZoKrates frontend does not support accessing \
+                     a literal such as (1, 2).0; bind the value to a constant first"
+                        .to_string()
+                        .into(),
+                )
+            }
         }
-        //self.visit_identifier_expression(&mut pe.base.id)?;
 
         // descend into accesses. we do not know expected type for these expressions
         // (but we may end up descending into an ArrayAccess, which would get typed)
