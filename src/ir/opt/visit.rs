@@ -65,14 +65,18 @@ pub trait RewritePass {
                 } else {
                     let new_t_opt = self.visit_cache(computation, &top, &cache);
                     let new_t = new_t_opt.unwrap_or_else(|| {
-                        term(
-                            top.op().clone(),
-                            top.cs()
-                                .iter()
-                                .map(|c| cache.get(c).unwrap())
-                                .cloned()
-                                .collect(),
-                        )
+                        if top.cs().iter().all(|c| cache.get(c).unwrap() == c) {
+                            top.clone()
+                        } else {
+                            term(
+                                top.op().clone(),
+                                top.cs()
+                                    .iter()
+                                    .map(|c| cache.get(c).unwrap())
+                                    .cloned()
+                                    .collect(),
+                            )
+                        }
                     });
                     cache.insert(top.clone(), new_t);
                 }
